@@ -393,13 +393,19 @@ export async function GetLatestVersion(
         // version, and `find` would offer it as the upgrade target. Order by semver precedence
         // instead — but ONLY across tag names that really are repo-wide versions. A scoped release
         // name (`@scope/pkg@1.3.0`) is not one; running the comparator over those reshuffles
-        // meaningless values into a different meaningless answer, so they keep GitHub's own order.
+        // meaningless values into a different meaningless answer.
+        //
+        // When NOTHING here is a repo-wide version, this path has no answer to give and must say
+        // so. Returning the first scoped release instead hands back a string that is not a version
+        // at all (`@memberjunction/connector-nimble-ams@1.3.2`), which can never equal the app's
+        // installed version — so it reads as a permanent "update available" pointing at a target
+        // `mj app upgrade` would then act on. Falling through to the tag path is the honest
+        // outcome: for a repo-wide app that path matches only `v?<semver>` tags and correctly
+        // resolves to null when a repo tags nothing repo-wide.
         const stableReleases = releases.filter(r => !r.PreRelease && !r.Draft);
         const versioned = stableReleases.filter(r => IsPlainVersionTag(r.TagName));
-        const stable = versioned.length > 0
-            ? versioned.sort((a, b) => CompareSemver(b.TagName, a.TagName))[0]
-            : stableReleases[0];
-        if (stable) {
+        if (versioned.length > 0) {
+            const stable = versioned.sort((a, b) => CompareSemver(b.TagName, a.TagName))[0];
             return stable.TagName.replace(/^v/, '');
         }
     }
@@ -446,10 +452,8 @@ export async function ListGitHubTags(
         : new RegExp(`^(v?${semver})$`);
 
     try {
-        const octokit = CreateOctokit(repoUrl, options);
-        const data = await octokit.paginate(octokit.repos.listTags, { owner: parsed.Owner, repo: parsed.Repo, per_page: 100 });
-        return data
-            .map(t => t.name.match(pattern)?.[1])
+        return (await FetchRepoTagNames(repoUrl, parsed, options))
+            .map(name => name.match(pattern)?.[1])
             .filter((v): v is string => v != null)
             .sort((a, b) => CompareSemver(b, a));
     }
@@ -459,6 +463,59 @@ export async function ListGitHubTags(
         ThrowIfRateLimitedOrForbidden(error, 'listing tags');
         return [];
     }
+}
+
+/**
+ * How long a fetched tag list stays reusable. Deliberately short: this exists to collapse the
+ * redundant fetches inside ONE sweep, not to act as a durable cache. A newly pushed tag becomes
+ * visible within this window, so a long-lived process cannot pin a stale answer.
+ */
+const TAG_CACHE_TTL_MS = 60_000;
+
+/** Cached raw tag names, keyed by repository AND resolved token. */
+const tagListCache = new Map<string, { ExpiresAt: number; TagNames: string[] }>();
+
+/**
+ * Drops every cached tag list. Exported for tests and for any caller that has just pushed a tag
+ * and needs the next lookup to reflect it immediately.
+ */
+export function ClearGitHubTagCache(): void {
+    tagListCache.clear();
+}
+
+/**
+ * Fetches every page of a repository's tag names, reusing a recent result for the same repository.
+ *
+ * The filtering above is per-app (each app matches its own `<prefix>@<semver>` line) but the fetch
+ * is per-REPOSITORY, so a sweep like `mj app check-updates` over several apps that share one repo
+ * was paying for the full paginated walk once per app. Against `MemberJunction/Integrations` — 9
+ * installed apps, 4 pages of tags — that measured 36 HTTP requests where 4 suffice, and the cost
+ * grows with the repo's tag count on every release.
+ *
+ * The key includes the RESOLVED token, not just the repository: a list fetched with a token that
+ * can see a private repository must never be served to a caller who did not supply that token.
+ * Only successful fetches are stored, so a rate-limited or forbidden call is never cached and
+ * still surfaces through {@link ThrowIfRateLimitedOrForbidden} on the next attempt.
+ */
+async function FetchRepoTagNames(
+    repoUrl: string,
+    parsed: { Owner: string; Repo: string },
+    options: GitHubClientOptions
+): Promise<string[]> {
+    const cacheKey = `${parsed.Owner}/${parsed.Repo} ${ResolveToken(repoUrl, options) ?? ''}`;
+    const now = Date.now();
+
+    const cached = tagListCache.get(cacheKey);
+    if (cached && cached.ExpiresAt > now) {
+        return cached.TagNames;
+    }
+
+    const octokit = CreateOctokit(repoUrl, options);
+    const data = await octokit.paginate(octokit.repos.listTags, { owner: parsed.Owner, repo: parsed.Repo, per_page: 100 });
+    const tagNames = data.map(t => t.name);
+
+    tagListCache.set(cacheKey, { ExpiresAt: now + TAG_CACHE_TTL_MS, TagNames: tagNames });
+    return tagNames;
 }
 
 /**

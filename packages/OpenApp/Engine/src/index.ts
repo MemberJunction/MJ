@@ -62,7 +62,8 @@ export {
     ParseGitHubUrl,
     GitHubAccessError,
     CompareSemver,
-    IsPrereleaseVersion
+    IsPrereleaseVersion,
+    ClearGitHubTagCache
 } from './github/github-client.js';
 export type {
     GitHubClientOptions,

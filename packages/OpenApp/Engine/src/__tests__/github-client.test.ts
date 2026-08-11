@@ -54,6 +54,7 @@ import {
     FetchManifestFromGitHub,
     CompareSemver,
     IsPrereleaseVersion,
+    ClearGitHubTagCache,
 } from '../github/github-client.js';
 import type { GitHubClientOptions } from '../github/github-client.js';
 
@@ -70,6 +71,10 @@ function fileResponse(text: string) {
 
 beforeEach(() => {
     Object.values(mocks).forEach((m) => m.mockReset());
+    // The tag-list cache is module state that outlives a single test. Without this, a test that
+    // stubs `listTags` could be served the PREVIOUS test's tag list and pass for the wrong reason
+    // — or assert a call count that a cache hit had silently absorbed.
+    ClearGitHubTagCache();
 });
 
 describe('ParseGitHubUrl', () => {
@@ -216,21 +221,39 @@ describe('GetLatestVersion', () => {
         expect(await GetLatestVersion('https://github.com/Acme/App', {})).toBe('2.0.0');
     });
 
-    it('leaves scoped release tag names in GitHub order rather than reshuffling them', async () => {
+    it('never returns a scoped release NAME as if it were a version', async () => {
         // `@scope/pkg@1.2.3` is not a repo-wide version — ParseSemver reads the `-` inside
         // `wild-apricot` as a prerelease delimiter, so ordering these by semver produces a
-        // different meaningless answer. Verified live against MemberJunction/Integrations, where
-        // sorting all 144 scoped releases moved the result from connector-wild-apricot@1.3.0 to
-        // connector-zendesk@1.1.2. Behavior here must match `next` exactly.
+        // meaningless answer. Neither is taking GitHub's first one, which is what `next` does:
+        // that returns '@memberjunction/connector-wild-apricot@1.3.0' as this app's "latest
+        // version". It can never equal the installed version, so it reads as a permanent
+        // "update available" pointing at a target `mj app upgrade` would act on. Verified live:
+        // GetLatestVersion(MemberJunction/Integrations) returns
+        // '@memberjunction/connector-nimble-ams@1.3.2' on next.
+        //
+        // With nothing repo-wide-versioned to report, the honest answer is to fall through to the
+        // tag path — which matches only `v?<semver>` for a repo-wide app — and resolve to null.
         mocks.listReleases.mockResolvedValueOnce({
             data: [
                 { tag_name: '@memberjunction/connector-wild-apricot@1.3.0', prerelease: false, draft: false, created_at: '2026-07-28T00:00:00Z' },
                 { tag_name: '@memberjunction/connector-orcid@1.1.3', prerelease: false, draft: false, created_at: '2026-07-28T00:00:00Z' },
             ],
         });
+        mocks.listTags.mockResolvedValueOnce({ data: [{ name: '@memberjunction/connector-orcid@1.1.3' }] });
 
-        expect(await GetLatestVersion('https://github.com/Acme/App', {}))
-            .toBe('@memberjunction/connector-wild-apricot@1.3.0');
+        expect(await GetLatestVersion('https://github.com/Acme/App', {})).toBeNull();
+    });
+
+    it('still prefers a real repo-wide version when the release list MIXES both shapes', async () => {
+        // The scoped names must not suppress a genuine repo-wide release that is present.
+        mocks.listReleases.mockResolvedValueOnce({
+            data: [
+                { tag_name: '@memberjunction/connector-wild-apricot@9.9.9', prerelease: false, draft: false, created_at: '2026-07-28T00:00:00Z' },
+                { tag_name: 'v1.4.0', prerelease: false, draft: false, created_at: '2026-07-01T00:00:00Z' },
+            ],
+        });
+
+        expect(await GetLatestVersion('https://github.com/Acme/App', {})).toBe('1.4.0');
     });
 
     it('returns null when neither releases nor tags exist', async () => {
@@ -435,6 +458,71 @@ describe('tag listing — prerelease sorting and pagination', () => {
         expect(mocks.listReleases).toHaveBeenCalledTimes(2);
         expect(releases).toHaveLength(101);
         expect(releases.some(r => !r.PreRelease)).toBe(true);
+    });
+});
+
+describe('tag listing — one paginated fetch per repository, not per app', () => {
+    /**
+     * Pagination is required for correctness, but the fetch is per-REPOSITORY while the filtering
+     * is per-app. A sweep like `mj app check-updates` over several apps sharing one repo was
+     * paying for the whole paginated walk once per app: measured against
+     * `MemberJunction/Integrations` (9 installed apps, 4 pages of tags) that is 36 HTTP requests
+     * where 4 suffice — and it grows with the repo's tag count on every release.
+     */
+    const REPO = 'https://github.com/MemberJunction/Integrations';
+
+    function twoPagesOfScopedTags() {
+        const page1 = Array.from({ length: 100 }, (_, i) => ({ name: `Filler-App@1.0.${i}` }));
+        mocks.listTags
+            .mockResolvedValueOnce({ data: page1 })
+            .mockResolvedValueOnce({ data: [{ name: 'CRM-HubSpot@1.1.2' }, { name: 'Platform-ORCID@1.2.0' }] });
+    }
+
+    it('fetches the repo ONCE across lookups for different apps in it', async () => {
+        twoPagesOfScopedTags();
+
+        const hubspot = await ListGitHubTags(REPO, {}, 'CRM/HubSpot');
+        const orcid = await ListGitHubTags(REPO, {}, 'Platform/ORCID');
+
+        // Each app still gets its OWN filtered answer...
+        expect(hubspot).toEqual(['1.1.2']);
+        expect(orcid).toEqual(['1.2.0']);
+        // ...from a single 2-page walk, not two.
+        expect(mocks.listTags).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not serve one token\'s tag list to a caller with a different token', async () => {
+        // A private repo's tags fetched with a privileged token must not leak to a caller who
+        // did not supply it, so the cache key includes the resolved token.
+        mocks.listTags.mockResolvedValueOnce({ data: [{ name: 'v1.0.0' }] });
+        await ListGitHubTags('https://github.com/Acme/Private', { Token: 'privileged' });
+
+        mocks.listTags.mockResolvedValueOnce({ data: [] });
+        const anonymous = await ListGitHubTags('https://github.com/Acme/Private', {});
+
+        expect(anonymous).toEqual([]);
+        expect(mocks.listTags).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not cache a failed fetch', async () => {
+        // A rate-limited call must not pin an empty answer for the rest of the sweep.
+        mocks.listTags.mockRejectedValueOnce(Object.assign(new Error('rate limited'), { status: 403 }));
+        await expect(ListGitHubTags('https://github.com/Acme/App', {})).rejects.toThrow();
+
+        mocks.listTags.mockResolvedValueOnce({ data: [{ name: 'v1.0.0' }] });
+        expect(await ListGitHubTags('https://github.com/Acme/App', {})).toEqual(['v1.0.0']);
+    });
+
+    it('ClearGitHubTagCache forces the next lookup to refetch', async () => {
+        mocks.listTags.mockResolvedValueOnce({ data: [{ name: 'v1.0.0' }] });
+        await ListGitHubTags('https://github.com/Acme/App', {});
+
+        ClearGitHubTagCache();
+        mocks.listTags.mockResolvedValueOnce({ data: [{ name: 'v1.0.0' }, { name: 'v1.1.0' }] });
+        const after = await ListGitHubTags('https://github.com/Acme/App', {});
+
+        expect(after).toEqual(['v1.1.0', 'v1.0.0']);
+        expect(mocks.listTags).toHaveBeenCalledTimes(2);
     });
 });
 
