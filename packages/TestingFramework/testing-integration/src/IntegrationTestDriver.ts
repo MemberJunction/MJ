@@ -32,7 +32,7 @@ import {
 } from '@memberjunction/testing-engine';
 import { Metadata, ProviderType } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import type sql from 'mssql';
 import {
     getActiveIntegrationStorage,
