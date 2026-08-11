@@ -4,6 +4,7 @@
 "@memberjunction/server": patch
 "@memberjunction/codegen-lib": patch
 "@memberjunction/cli": patch
+"@memberjunction/ai-cli": patch
 "@memberjunction/metadata-sync": patch
 "@memberjunction/core-actions": patch
 "@memberjunction/actions": patch
@@ -50,6 +51,9 @@ of callers of `Refresh`. Anything that imports `UserCache` merely to call `Users
 Packages that import `UserCache` must also declare `@memberjunction/generic-database-provider`
 as a dependency — pnpm resolves strictly, so an undeclared import fails rather than falling
 through to a hoisted copy.
+
+**Check for dynamic imports too**, not just static ones. `await import('@memberjunction/sqlserver-dataprovider')`
+destructuring `UserCache` breaks the same way, and a grep for `import { … } from` will not find it.
 
 **Unchanged:** the read surface (`Users`, `GetSystemUser`, `UserByName`, `SYSTEM_USER_ID`), and
 the class name. The name is load-bearing — `BaseSingleton` keys its global store on the

@@ -303,6 +303,9 @@ importers:
       '@memberjunction/core-entities-server':
         specifier: 6.1.0-edge.1
         version: link:../../MJCoreEntitiesServer
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.1
+        version: link:../../GenericDatabaseProvider
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.1.0-edge.1
         version: link:../../SQLServerDataProvider
