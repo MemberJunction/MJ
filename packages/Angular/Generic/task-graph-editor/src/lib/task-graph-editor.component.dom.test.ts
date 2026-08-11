@@ -91,7 +91,7 @@ describe('TaskGraphEditorComponent (DOM)', () => {
     });
 
     it('pluralizes the problem count', () => {
-        const f = render({ Spec: spec({ workflowName: '', tasks: [{ tempId: 'a', name: 'A', description: 'a', dependsOn: ['ghost'] }] }) });
+        const f = render({ Spec: spec({ workflowName: '', tasks: [{ tempId: 'a', name: 'A', description: 'a', kind: 'Agent' as const, configuration: {}, dependsOn: ['ghost'] }] }) });
         expect(host(f).querySelector('.mj-tge__validation')!.textContent).toMatch(/problems to fix/);
     });
 
