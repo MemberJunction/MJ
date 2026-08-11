@@ -282,3 +282,9 @@
   padding-left: 4px;
   border-left: 1px solid color-mix(in srgb, currentColor 30%, transparent);
 }
+
+/* A step that has not started shows an em dash, not a time. Muted so the eye skips it — the
+   absence of a timestamp is the information, and it should not read as a value. */
+.timeline-time--none {
+  color: var(--mj-text-disabled);
+}

@@ -94,23 +94,25 @@ describe('ProjectRunTreeToTimeline', () => {
         expect(subrun?.level).toBe(4);
     });
 
-    it('maps each node kind to its own row type, so provenance is styleable', () => {
+    it('renders a task as a STEP, because that is what every existing branch keys on', () => {
         const items = ProjectRunTreeToTimeline(sampleTree());
         const types = Object.fromEntries(items.map((i) => [i.id, i.type]));
 
-        // Tasks map onto the SAME row vocabulary as run steps, so they pick up the same displayers.
-        // These fixtures carry no SourceKind, so they fall back to the generic row type.
+        // A task is a `step`, not a type of its own. The run timeline routes on `type === 'step'`
+        // plus `data.StepType`, so a task that claimed a distinct row type got the right icon and
+        // then missed the detail panel, the action link and loop expansion — everything that makes
+        // the row useful. Provenance is what marks it as workflow work; the type does not.
         expect(types).toEqual({
             run: 'subrun',
             step: 'step',
             graph: 'taskgraph',
-            'task-a': 'task',
-            'task-b': 'task',
+            'task-a': 'step',
+            'task-b': 'step',
             subrun: 'subrun',
         });
     });
 
-    it('renders a task by its KIND, so an action gets the action displayer', () => {
+    it('translates a task into the STEP vocabulary the run timeline speaks', () => {
         const tree = node({
             NodeID: 'g', NodeType: 'TaskGraph', Name: 'Graph',
             Children: [
@@ -120,11 +122,13 @@ describe('ProjectRunTreeToTimeline', () => {
             ],
         });
         const items = ProjectRunTreeToTimeline(tree);
-        const typeOf = (id: string) => items.find((i) => i.id === id)?.type;
+        const stepTypeOf = (id: string) => items.find((i) => i.id === id)?.data?.StepType;
 
-        expect(typeOf('a')).toBe('action');
-        expect(typeOf('p')).toBe('prompt');
-        expect(typeOf('s')).toBe('subrun');
+        // The graph says 'Action'; a run step says 'Actions'. Translating is what lets one set of
+        // branches serve both, instead of the panel needing to learn a second vocabulary.
+        expect(stepTypeOf('a')).toBe('Actions');
+        expect(stepTypeOf('p')).toBe('Prompt');
+        expect(stepTypeOf('s')).toBe('Sub-Agent');
         // …while still being marked as dispatcher work.
         expect(items.filter((i) => i.provenance === 'workflow')).toHaveLength(4);
     });
@@ -185,10 +189,13 @@ describe('ProjectRunTreeToTimeline', () => {
         expect(items.find((i) => i.id === 'graph')?.hasNoChildren).toBe(false);
     });
 
-    it('sorts an unstarted node last rather than to the epoch', () => {
+    it('reports NO start time for a node that has not started, rather than inventing one', () => {
+        // This used to be the maximum Date, chosen so unstarted rows sorted last — and it RENDERED.
+        // Every Pending task in a workflow showed the same fabricated clock time, identical on every
+        // row and indistinguishable from real data. Ordering is the query's job.
         const items = ProjectRunTreeToTimeline(node({ NodeID: 'x', StartedAt: null, CompletedAt: null }));
 
-        expect(items[0].startTime.getTime()).toBeGreaterThan(Date.now());
+        expect(items[0].startTime).toBeNull();
     });
 
     it('gives each task kind its OWN icon, instead of one glyph for every workflow step', () => {

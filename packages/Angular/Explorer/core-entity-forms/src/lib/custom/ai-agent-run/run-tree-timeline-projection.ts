@@ -81,22 +81,87 @@ const NODE_ITEM_TYPE: Record<AgentRunTreeNodeType, TimelineItem['type']> = {
     Task: 'task',
 };
 
-/** A task's own kind, mapped onto the row types the timeline already knows how to render. */
-const TASK_KIND_TO_ITEM_TYPE: Record<string, TimelineItem['type']> = {
-    Action: 'action',
-    Prompt: 'prompt',
-    Agent: 'subrun',
-    ForEach: 'step',
-    While: 'step',
-    Human: 'step',
-    External: 'step',
+/**
+ * A workflow step's kind, in the vocabulary an agent run STEP uses.
+ *
+ * The two vocabularies exist because the same work is described twice: a task graph calls it
+ * `Action`, a run step calls it `Actions`. Translating one into the other is what lets a graph's
+ * steps reuse the run timeline wholesale instead of needing a parallel set of branches.
+ */
+const TASK_KIND_TO_STEP_TYPE: Record<string, string> = {
+    Action: 'Actions',
+    Prompt: 'Prompt',
+    Agent: 'Sub-Agent',
+    ForEach: 'ForEach',
+    While: 'While',
+    Human: 'Human',
+    External: 'External',
 };
 
-/** The row type for a node: a task by its kind, anything else by its structural role. */
+/**
+ * A graph task, described the way an agent run step is described.
+ *
+ * **Why translate rather than teach the UI a second language.** Everything in the run timeline
+ * routes on a step's shape — `StepType` picks the icon and every detail tab, `TargetLogID` is what
+ * a row opens (a prompt run, an action log, or a sub-agent run, by type), and `ParentID` is what
+ * makes a loop's iterations render as its children. A task node carried none of it, so a workflow's
+ * steps fell through every branch: the detail panel dumped raw JSON instead of the prompt run, an
+ * action offered no link to its log, and a ForEach showed nothing to expand even though its passes
+ * were loaded and sitting right there.
+ *
+ * Mapping the node into this shape lights all of that up at once, with no changes to the panel.
+ *
+ * **This is a view-model, NOT an entity.** It is deliberately not typed as `MJAIAgentRunStepEntity`
+ * and must never be passed anywhere that would try to `.Save()` it — it is a projection of a Task
+ * row, and the Task row remains the record of truth.
+ */
+export type WorkflowStepView = {
+    ID: string;
+    StepType: string;
+    StepName: string;
+    StepNumber: number;
+    Status: string;
+    /** What this row opens: a prompt run, an action execution log, or a sub-agent run — by type. */
+    TargetLogID: string | null;
+    /** The entity `TargetLogID` lives in, so a resolver does not have to re-derive it from StepType. */
+    TargetEntity: string;
+    ParentID: string | null;
+    StartedAt: Date | null;
+    CompletedAt: Date | null;
+    /** Marks this as dispatcher work for anything that wants to say so. */
+    IsWorkflowStep: true;
+};
+
+/** Translates a graph task into the step shape the run timeline already understands. */
+export function ProjectTaskToStepView(node: AgentRunTreeNode, stepNumber: number): WorkflowStepView {
+    return {
+        ID: node.NodeID,
+        StepType: (node.SourceKind && TASK_KIND_TO_STEP_TYPE[node.SourceKind]) || 'Actions',
+        StepName: node.Name,
+        StepNumber: stepNumber,
+        Status: node.Status,
+        // The tree already resolves this per kind: a Prompt task's SourceID is its prompt run, an
+        // Agent task descends to its run, an Action task its execution log. Null when the node IS
+        // its own record (the Task row), which is what a Human or External step is.
+        TargetLogID: node.SourceEntity === 'MJ: Tasks' ? null : node.SourceID,
+        TargetEntity: node.SourceEntity,
+        ParentID: node.ParentNodeID,
+        StartedAt: node.StartedAt,
+        CompletedAt: node.CompletedAt,
+        IsWorkflowStep: true,
+    };
+}
+
+/**
+ * The row type for a node.
+ *
+ * A task is a **`step`** — the same row type an agent run's own steps use — because that is what
+ * makes every existing branch apply to it. What marks it as workflow work is `provenance`, not a
+ * different type. Mapping tasks to distinct types (`prompt`, `action`) is what previously made them
+ * render with the right icon and then miss every behaviour keyed on `type === 'step'`.
+ */
 function itemTypeOf(node: AgentRunTreeNode): TimelineItem['type'] {
-    if (node.NodeType === 'Task' && node.SourceKind) {
-        return TASK_KIND_TO_ITEM_TYPE[node.SourceKind] ?? 'task';
-    }
+    if (node.NodeType === 'Task') return 'step';
     return NODE_ITEM_TYPE[node.NodeType] ?? 'step';
 }
 
@@ -119,9 +184,16 @@ export function ProjectRunTreeToTimeline(
     if (!root) return [];
 
     const items: TimelineItem[] = [];
+    // Per-parent counters, so a step's number is its position among ITS siblings rather than its
+    // position in the whole flattened list — which is what `StepNumber` means for a run's own steps.
+    const positions = new Map<string, number>();
 
     const visit = (node: AgentRunTreeNode, level: number, parentID: string | undefined): void => {
-        items.push(toTimelineItem(node, level, parentID));
+        const key = parentID ?? '(root)';
+        const position = (positions.get(key) ?? 0) + 1;
+        positions.set(key, position);
+
+        items.push(toTimelineItem(node, level, parentID, position));
         for (const child of node.Children) {
             visit(child, level + 1, node.NodeID);
         }
@@ -137,7 +209,12 @@ export function ProjectRunTreeToTimeline(
 }
 
 /** One node as a timeline row. */
-function toTimelineItem(node: AgentRunTreeNode, level: number, parentID: string | undefined): TimelineItem {
+function toTimelineItem(
+    node: AgentRunTreeNode,
+    level: number,
+    parentID: string | undefined,
+    position: number,
+): TimelineItem {
     const presentation = presentationOf(node);
 
     return {
@@ -145,19 +222,32 @@ function toTimelineItem(node: AgentRunTreeNode, level: number, parentID: string 
         type: itemTypeOf(node),
         // Marks the row as dispatcher work WITHOUT changing what it is. Styling keys off this, so a
         // workflow's action still renders as an action and still reads as part of the workflow.
+        //
+        // Set only for Task and TaskGraph — deliberately NOT for a Run nested under a task. Once the
+        // tree descends into an agent run, that run and everything under it is ordinary agent work
+        // again and reverts to the normal styling, which is what a reader needs to know about where
+        // to look when it fails.
         provenance: node.NodeType === 'Task' || node.NodeType === 'TaskGraph' ? 'workflow' : undefined,
         title: node.Name,
         subtitle: describeNode(node),
         status: node.Status,
-        // The timeline's contract wants a Date. A node that has not started yet has no honest one,
-        // and the epoch would sort it to the top of a run it has not joined — so it borrows its
-        // completion time, and failing that sorts last rather than first.
-        startTime: node.StartedAt ?? node.CompletedAt ?? new Date(8_640_000_000_000_000),
+        // NULL when a node has not started — never a fabricated instant.
+        //
+        // This used to be `StartedAt ?? CompletedAt ?? new Date(8_640_000_000_000_000)`, chosen so
+        // unstarted rows sorted last. The sentinel RENDERED: every Pending task in a workflow showed
+        // the same invented clock time, identical on every row, looking exactly like data. Ordering
+        // is the query's job (see the ORDER BY in get-agent-run-tree.sql); a row that has not run
+        // shows no time at all, because it has none.
+        startTime: node.StartedAt,
         endTime: node.CompletedAt ?? undefined,
         duration: formatDuration(node.DurationMs),
         icon: presentation.icon,
         color: presentation.color,
-        data: node,
+        // A task is handed to the UI as a STEP — see ProjectTaskToStepView. Everything downstream
+        // routes on this shape, so translating here is what makes a workflow's steps reuse the run
+        // timeline instead of falling through every branch to a raw JSON dump. Non-task nodes keep
+        // the tree node, which is what their own rendering reads.
+        data: node.NodeType === 'Task' ? ProjectTaskToStepView(node, position) : node,
         level,
         parentId: parentID,
         // Everything is already loaded — the whole tree arrived in one query — so nothing here is

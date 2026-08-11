@@ -73,7 +73,9 @@ WITH Tree AS (
         -- 'ForEach', 'While', 'Human', …). Carried because every visual consumer colours and
         -- icons by kind — without it a renderer can only draw undifferentiated boxes, which is
         -- what forced the visualizations to keep reading raw step rows.
-        CAST(NULL AS NVARCHAR(50))                           AS SourceKind
+        CAST(NULL AS NVARCHAR(50))                           AS SourceKind,
+        -- Authoring order, used as the sort tiebreak. See the ORDER BY at the bottom.
+        r.__mj_CreatedAt                                     AS CreatedAt
     FROM [__mj].[vwAIAgentRuns] r
     WHERE r.ID = '{{ agentRunID }}'
 
@@ -100,7 +102,8 @@ WITH Tree AS (
         CAST('MJ: AI Agent Run Steps' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
         CAST(NULL AS NVARCHAR(MAX)),
-        CAST(s.StepType AS NVARCHAR(50))
+        CAST(s.StepType AS NVARCHAR(50)),
+        s.__mj_CreatedAt
     FROM Tree t
     INNER JOIN [__mj].[vwAIAgentRunSteps] s
         ON s.AgentRunID = t.NodeID
@@ -129,7 +132,8 @@ WITH Tree AS (
         CAST('MJ: Tasks' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
         CAST(NULL AS NVARCHAR(MAX)),
-        CAST('TaskGraph' AS NVARCHAR(50))
+        CAST('TaskGraph' AS NVARCHAR(50)),
+        tk.__mj_CreatedAt
     FROM Tree t
     INNER JOIN [__mj].[vwAIAgentRunSteps] s
         ON s.ID = t.NodeID
@@ -162,7 +166,8 @@ WITH Tree AS (
         CAST(JSON_VALUE(tk.Configuration, '$.runtime.promptRunID') AS NVARCHAR(50)),
         -- JSON_QUERY, not JSON_VALUE: this is an ARRAY, and JSON_VALUE returns NULL for one.
         CAST(JSON_QUERY(tk.Configuration, '$.runtime.iterations') AS NVARCHAR(MAX)),
-        CAST(tk.StepType AS NVARCHAR(50))
+        CAST(tk.StepType AS NVARCHAR(50)),
+        tk.__mj_CreatedAt
     FROM Tree t
     INNER JOIN [__mj].[vwTasks] tk
         ON tk.ParentID = t.NodeID
@@ -195,7 +200,8 @@ WITH Tree AS (
         CAST('MJ: AI Agent Runs' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
         CAST(NULL AS NVARCHAR(MAX)),
-        CAST(NULL AS NVARCHAR(50))
+        CAST(NULL AS NVARCHAR(50)),
+        r.__mj_CreatedAt
     FROM Tree t
     INNER JOIN [__mj].[vwAIAgentRunSteps] s
         ON s.ID = t.NodeID
@@ -227,7 +233,8 @@ WITH Tree AS (
         CAST('MJ: AI Agent Runs' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
         CAST(NULL AS NVARCHAR(MAX)),
-        CAST(NULL AS NVARCHAR(50))
+        CAST(NULL AS NVARCHAR(50)),
+        r.__mj_CreatedAt
     FROM Tree t
     INNER JOIN [__mj].[vwTasks] tk
         ON tk.ID = t.NodeID
@@ -277,7 +284,11 @@ SELECT
     -- record, and a prompt task whose run is missing falls back to its Task rather than to nothing.
     CASE WHEN pr.ID IS NOT NULL THEN 'MJ: AI Prompt Runs' ELSE t.SourceEntity END AS SourceEntity,
     t.SourceKind,
-    CASE WHEN pr.ID IS NOT NULL THEN CAST(pr.ID AS NVARCHAR(50)) ELSE t.NodeID END AS SourceID
+    CASE WHEN pr.ID IS NOT NULL THEN CAST(pr.ID AS NVARCHAR(50)) ELSE t.NodeID END AS SourceID,
+    t.CreatedAt                                             AS CreatedAt,
+    -- Sort helper only. A UNION forbids an expression in ORDER BY, so "has this started?" has to be
+    -- a real column. Consumers ignore it; the loader projects by name.
+    CASE WHEN t.StartedAt IS NULL THEN 1 ELSE 0 END          AS NotStarted
 FROM Tree t
 LEFT JOIN [__mj].[vwAIPromptRuns] pr
     ON pr.ID = t.PromptRunID
@@ -334,7 +345,9 @@ SELECT
     COALESCE(ipr.TokensCompletion, iar.TotalCompletionTokensUsed) AS CompletionTokens,
     CAST(CASE WHEN ipr.ID IS NOT NULL THEN 'MJ: AI Prompt Runs' ELSE 'MJ: AI Agent Runs' END AS NVARCHAR(100)) AS SourceEntity,
     CAST(CASE WHEN ipr.ID IS NOT NULL THEN 'Prompt' ELSE 'Sub-Agent' END AS NVARCHAR(50)) AS SourceKind,
-    CAST(COALESCE(CAST(ipr.ID AS NVARCHAR(50)), CAST(iar.ID AS NVARCHAR(50)), t.NodeID) AS NVARCHAR(50)) AS SourceID
+    CAST(COALESCE(CAST(ipr.ID AS NVARCHAR(50)), CAST(iar.ID AS NVARCHAR(50)), t.NodeID) AS NVARCHAR(50)) AS SourceID,
+    t.CreatedAt                                             AS CreatedAt,
+    CASE WHEN ipr.RunAt IS NULL AND iar.StartedAt IS NULL THEN 1 ELSE 0 END AS NotStarted
 FROM Tree t
 CROSS APPLY OPENJSON(t.Iterations)
     WITH (
@@ -347,5 +360,30 @@ LEFT JOIN [__mj].[vwAIPromptRuns] ipr ON ipr.ID = it.promptRunID
 LEFT JOIN [__mj].[vwAIAgentRuns]  iar ON iar.ID = it.agentRunID
 WHERE t.Iterations IS NOT NULL
 
-ORDER BY Depth, Sequence, StartedAt, NodeID
+-- Ordering, and the two things that were wrong with it.
+--
+-- 1. NULLS SORT FIRST in T-SQL, so `ORDER BY StartedAt` put every task that had NOT started ABOVE
+--    the work that ran. On a settled Content Pipeline the skipped `Close out: gave up` led the
+--    list, above the research that actually executed. The CASE pins unstarted work to the bottom,
+--    where "hasn't happened" belongs.
+--
+-- 2. Every task in a graph carries Sequence 0 (a Task row has no ordering column), so with no
+--    StartedAt the sort fell through to NodeID — a GUID. That is why a Pending graph listed its
+--    steps in random order, "Step 3" above "Step 2" on a workflow whose author numbered them.
+--    CreatedAt is persist order, which is at least stable and reproducible.
+--
+-- ⚠️ Persist order is NOT the author's numbering. The compiler emits tasks in its own walk order
+-- (the Demo Flow Agent persists 2(a), 2(b), 1, 3), so a graph that has not started yet reads in a
+-- deterministic order that is nobody's intent. Genuine ordering for an unstarted graph is
+-- TOPOLOGICAL — dependency order, which is the order it will actually run in — and that needs the
+-- dependency edges, which this query does not carry. Stated rather than papered over: today the
+-- order is stable and honest about execution once work begins, and arbitrary-but-deterministic
+-- before it does.
+ORDER BY
+    Depth,
+    Sequence,
+    NotStarted,
+    StartedAt,
+    CreatedAt,
+    NodeID
 OPTION (MAXRECURSION 0);
