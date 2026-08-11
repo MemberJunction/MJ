@@ -185,7 +185,12 @@ describe('GetRecordsAction', () => {
             expect(contextUser).toBe(params.ContextUser);
         });
 
-        it('threads Filter, OrderBy, and MaxRows into the RunView config and the result message', async () => {
+        // The action's `Filter` INPUT parameter must reach RunView as `ExtraFilter` — the only filter
+        // field RunViewParams has. It was previously assigned to a `Filter` property through an
+        // `any`-typed config, which RunView ignored: every caller asking for a filtered set silently
+        // received the whole entity, capped only by MaxRows. Asserting the wire name is the point of
+        // this test, so it is spelled out rather than folded into the object below.
+        it('threads Filter (as ExtraFilter), OrderBy, and MaxRows into the RunView config and the result message', async () => {
             runViewSpy.mockResolvedValue(okResult([{ ID: '1' }], 1));
             const params = makeParams([
                 { Name: 'EntityName', Value: 'Events' },
@@ -202,9 +207,12 @@ describe('GetRecordsAction', () => {
                 EntityName: 'Events',
                 MaxRows: 25,
                 ResultType: 'simple',
-                Filter: "Status = 'Active'",
+                ExtraFilter: "Status = 'Active'",
                 OrderBy: 'StartDate ASC',
             });
+            // Guard the regression directly: a `Filter` key here means the predicate is being handed
+            // to a property RunView does not read, and the filter is silently gone again.
+            expect(config).not.toHaveProperty('Filter');
             expect(r.Message).toContain("with filter: Status = 'Active'");
             expect(r.Message).toContain('ordered by: StartDate ASC');
         });

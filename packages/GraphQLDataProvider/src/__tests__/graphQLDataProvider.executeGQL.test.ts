@@ -14,6 +14,7 @@ vi.mock('graphql-request', async () => {
 });
 
 import { GraphQLDataProvider, GraphQLProviderConfigData } from '../graphQLDataProvider';
+import { SafeGraphQLError } from '../sanitizeGraphQLError';
 import { FakeGraphQLResponseError, GraphQLWire } from './support/graphQLWire';
 import {
     BuildTestConfig,
@@ -23,6 +24,27 @@ import {
 } from './support/wireTestHarness';
 
 const QUERY = 'query Ping { Ping { Pong } }';
+
+/**
+ * Awaits a rejection from ExecuteGQL and asserts the SECURITY contract on what came out.
+ *
+ * ExecuteGQL deliberately does NOT rethrow the error the wire raised: the upstream ClientError
+ * embeds the serialised request in its `message` and `stack`, and ~178 call sites catch it, many
+ * of which stringify it into a log. So every exit path rethrows a `SafeGraphQLError` instead —
+ * a different object carrying only what consumers read. Asserting identity against `raw` here
+ * would re-pin the leak this replaced, so these tests assert the substitution instead.
+ */
+async function expectSafeRejection(promise: Promise<unknown>, raw: Error): Promise<SafeGraphQLError> {
+    const thrown: unknown = await promise.then(
+        () => {
+            throw new Error('ExecuteGQL resolved; expected it to reject');
+        },
+        (e: unknown) => e,
+    );
+    expect(thrown).toBeInstanceOf(SafeGraphQLError);
+    expect(thrown).not.toBe(raw); // the raw, payload-bearing error must NOT propagate
+    return thrown as SafeGraphQLError;
+}
 
 describe('GraphQLDataProvider.ExecuteGQL', () => {
     let provider: WireTestGraphQLProvider;
@@ -84,7 +106,10 @@ describe('GraphQLDataProvider.ExecuteGQL', () => {
             const error = new FakeGraphQLResponseError('Field does not exist', 'GRAPHQL_VALIDATION_FAILED');
             GraphQLWire.EnqueueError(error);
 
-            await expect(provider.ExecuteGQL(QUERY, null)).rejects.toBe(error);
+            const safe = await expectSafeRejection(provider.ExecuteGQL(QUERY, null), error);
+            // The classification the caller acts on survives sanitisation.
+            expect(safe.message).toBe('Field does not exist');
+            expect(safe.Code).toBe('GRAPHQL_VALIDATION_FAILED');
             expect(refreshSpy).not.toHaveBeenCalled();
             expect(GraphQLWire.Requests).toHaveLength(1);
         });
@@ -94,15 +119,24 @@ describe('GraphQLDataProvider.ExecuteGQL', () => {
             const error = new FakeGraphQLResponseError('boom');
             GraphQLWire.EnqueueError(error);
 
-            await expect(provider.ExecuteGQL(QUERY, null)).rejects.toBe(error);
+            const safe = await expectSafeRejection(provider.ExecuteGQL(QUERY, null), error);
+            expect(safe.message).toBe('boom');
+            expect(safe.Code).toBeUndefined();
         });
 
-        it('rethrows plain network errors (no response payload)', async () => {
+        it('rethrows plain network errors, but with a generic message — there is no response to sanitise', async () => {
             provider = CreateWireTestProvider();
             const networkError = new Error('ECONNREFUSED 127.0.0.1:4000');
             GraphQLWire.EnqueueError(networkError);
 
-            await expect(provider.ExecuteGQL(QUERY, null)).rejects.toBe(networkError);
+            const safe = await expectSafeRejection(provider.ExecuteGQL(QUERY, null), networkError);
+            // Real behavior worth knowing: a transport error carries no `response.errors`, so the
+            // sanitiser has no server message to derive from and falls back to the status form with
+            // an unknown status. The original text ('ECONNREFUSED …') does NOT survive — anything
+            // diagnosing a connection failure must read the log, not the propagated error.
+            expect(safe.message).toBe('GraphQL Error (Code: unknown)');
+            expect(safe.Code).toBeUndefined();
+            expect(safe.response?.errors).toBeUndefined();
         });
     });
 
@@ -138,7 +172,9 @@ describe('GraphQLDataProvider.ExecuteGQL', () => {
             const error = new FakeGraphQLResponseError('jwt expired', 'JWT_EXPIRED');
             GraphQLWire.EnqueueError(error);
 
-            await expect(provider.ExecuteGQL(QUERY, null, false)).rejects.toBe(error);
+            const safe = await expectSafeRejection(provider.ExecuteGQL(QUERY, null, false), error);
+            // JWT_EXPIRED still reaches the caller — opting out of refresh must not hide WHY.
+            expect(safe.Code).toBe('JWT_EXPIRED');
             expect(refreshSpy).not.toHaveBeenCalled();
             expect(GraphQLWire.Requests).toHaveLength(1);
         });
@@ -151,7 +187,9 @@ describe('GraphQLDataProvider.ExecuteGQL', () => {
             GraphQLWire.EnqueueError(new FakeGraphQLResponseError('jwt expired', 'JWT_EXPIRED'));
             GraphQLWire.EnqueueError(secondError);
 
-            await expect(provider.ExecuteGQL(QUERY, null)).rejects.toBe(secondError);
+            const safe = await expectSafeRejection(provider.ExecuteGQL(QUERY, null), secondError);
+            // It is the SECOND failure that surfaces, not the first — proof the retry actually ran.
+            expect(safe.message).toBe('still expired');
             expect(refreshSpy).toHaveBeenCalledTimes(1); // no second refresh — retry runs with refresh disabled
             expect(GraphQLWire.Requests).toHaveLength(2);
         });

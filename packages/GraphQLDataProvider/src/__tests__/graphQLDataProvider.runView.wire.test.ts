@@ -691,7 +691,11 @@ describe('GraphQLDataProvider RunView wire behavior', () => {
 
             expect(response.success).toBe(false);
             expect(response.results).toEqual([]);
-            expect(response.errorMessage).toBe('socket hang up');
+            // The contract under test is "fails softly, never throws". The message is whatever
+            // ExecuteGQL's sanitised rethrow carries — and a transport error has no
+            // `response.errors` for the sanitiser to derive from, so the original 'socket hang up'
+            // does not survive into it. Assert a message reached the caller, not its raw text.
+            expect(response.errorMessage).toBe('GraphQL Error (Code: unknown)');
         });
     });
 });

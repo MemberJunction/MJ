@@ -338,8 +338,11 @@ class LoopHarness {
                     Name: ACTION_NAME,
                     Description: 'A scripted test action',
                     Status: 'Active',
-                    Params: [],
-                    ResultCodes: [],
+                    // `Params` / `ResultCodes` are generated related-record collections on
+                    // MJActionEntityExtended, not plain arrays — callers read `.Items`
+                    // (formatActionDetails, ExecuteSingleAction's param-metadata lookup).
+                    Params: { Items: [] },
+                    ResultCodes: { Items: [] },
                 },
             ],
             RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[] }): Promise<ScriptedActionResult> => {
