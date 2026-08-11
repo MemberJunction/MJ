@@ -68,7 +68,13 @@ export class ResolverBase {
    * @param contextUser - Optional user context for decryption (required for encrypted fields)
    * @returns The processed data object
    */
-  protected async MapFieldNamesToCodeNames(entityName: string, dataObject: any, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<any> {
+  protected async MapFieldNamesToCodeNames(
+    entityName: string,
+    dataObject: any,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+    deniedReadFields?: Set<string>
+  ): Promise<any> {
     // Return null for empty objects (e.g. when no rows found due to RLS filtering)
     if (!dataObject || Object.keys(dataObject).length === 0) {
       return null;
@@ -84,11 +90,35 @@ export class ResolverBase {
       const entityInfo = md.EntityByName(entityName);
       if (!entityInfo) throw new Error(`Entity ${entityName} not found in metadata`);
       // const fields = entityInfo.Fields.filter((f) => f.Name !== f.CodeName || f.Name.startsWith('__mj_'));
+      // FIELD-LEVEL SECURITY — this is the authoritative read boundary for every GraphQL
+      // return path (single-record resolvers, external-data-source loads, and anything else
+      // routed through here), sitting exactly where encryption masking already lives.
+      //
+      // The denied set is normally computed ONCE per (entity, user) by the caller and passed
+      // in: this method runs once per ROW, so resolving it here would cost fields x rows
+      // aggregations. We fall back to computing it when a caller doesn't supply it (the
+      // single-record resolvers, where "once per row" and "once per request" are the same
+      // thing) rather than failing open — a missing argument must never mean missing security.
+      const denied = deniedReadFields ?? (
+        entityInfo.EnableFieldLevelSecurity && contextUser
+          ? entityInfo.GetDeniedReadFields(contextUser)
+          : null
+      );
+
       const mapper = new FieldMapper();
       entityInfo.Fields.forEach((f) => {
         if (dataObject.hasOwnProperty(f.Name)) {
           // GraphQL doesn't allow us to pass back fields with __ so we are mapping our special field cases that start with __mj_ to _mj__ for transport - they are converted back on the other side automatically
           const mappedFieldName = mapper.MapFieldName(f.CodeName);
+          if (denied?.has(f.Name.trim().toLowerCase())) {
+            // Omit entirely rather than nulling — a null is indistinguishable from a real
+            // null value, and the client should see the field as absent, not as empty.
+            // Both key shapes are removed because callers reach this method with rows keyed
+            // either way depending on whether mapping has already run.
+            delete dataObject[f.Name];
+            delete dataObject[mappedFieldName];
+            return;
+          }
           if (mappedFieldName !== f.Name) {
             dataObject[mappedFieldName] = dataObject[f.Name];
             delete dataObject[f.Name];
@@ -185,11 +215,27 @@ export class ResolverBase {
     return true;
   }
 
-  protected async ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[], contextUser?: UserInfo): Promise<any[]> {
+  protected async ArrayMapFieldNamesToCodeNames(
+    entityName: string,
+    dataObjectArray: any[],
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider
+  ): Promise<any[]> {
     // iterate through the array and call MapFieldNamesToCodeNames for each element
     if (dataObjectArray && dataObjectArray.length > 0) {
+      // Resolve the field-security denied set ONCE for the whole array and pass it into the
+      // per-row mapper. MapFieldNamesToCodeNames runs once per row, so computing this inside
+      // the loop would be fields x rows aggregations — 40,000 for a 1,000-row x 40-column
+      // result, each re-scanning the user's roles and allocating. Gated on the entity-level
+      // flag so non-FLS entities (nearly all of them) don't even resolve the entity twice.
+      const md = provider ?? new Metadata();
+      const entityInfo = md.EntityByName(entityName);
+      const deniedReadFields = entityInfo?.EnableFieldLevelSecurity && contextUser
+        ? entityInfo.GetDeniedReadFields(contextUser)
+        : undefined;
+
       for (const element of dataObjectArray) {
-        await this.MapFieldNamesToCodeNames(entityName, element, contextUser);
+        await this.MapFieldNamesToCodeNames(entityName, element, contextUser, provider, deniedReadFields);
       }
     }
     return dataObjectArray;
@@ -1237,8 +1283,17 @@ export class ResolverBase {
         }
       });
 
-      if (entityInfo.TrackRecordChanges || !input.OldValues___) {
-        // We get here because EITHER the entity tracks record changes OR the client did not provide OldValues, so we need to load the old values from the DB
+      // Field-level security: any value the client sends for a field it cannot READ is
+      // fabricated by construction (the field was stripped from every payload the client ever
+      // received), so strip such values before anything applies them. When any field is
+      // denied we also force the truth-load branch below — client OldValues for denied fields
+      // are equally fabricated, so hydrating from them (the no-DB-load path) would write
+      // fabricated state into the denied columns on save.
+      const hasDeniedReadFields = this.StripDeniedReadFieldsFromClientInput(entityInfo, userInfo, input, clientNewValues);
+
+      if (entityInfo.TrackRecordChanges || !input.OldValues___ || hasDeniedReadFields) {
+        // We get here because the entity tracks record changes, OR the client did not provide OldValues,
+        // OR field-level security denies this user read on some field — in every case we need the true old values from the DB
         const cKey = new CompositeKey(
           entityInfo.PrimaryKeys.map((pk) => {
             return {
@@ -1301,6 +1356,71 @@ export class ResolverBase {
       });
   }
   
+  /**
+   * Field-level security guard for the update path.
+   *
+   * Every denied-read field is stripped — new values AND OldValues. A field the user cannot
+   * read was absent from every payload that client ever received, so any value coming back for
+   * it is the transport's invention rather than user intent, and applying it would silently
+   * overwrite the real column. Stripping is what makes "load a record, edit an unrelated field,
+   * save" safe for a restricted user.
+   *
+   * There is no split by update permission: Read is required for Update, so a user denied read
+   * is denied update too and denied-read ∩ denied-update is just denied-read.
+   *
+   * Silent narrowing, not rejection — consistent with the output projection the client already
+   * experiences, and with the ambiguous-error rule (naming the field would confirm it exists
+   * and is restricted).
+   *
+   * Returns true when the user has a non-empty denied-read set on this entity. The caller
+   * must then hydrate the entity from the DATABASE (never from client OldValues), so denied
+   * fields hold true values that an omitted key leaves untouched.
+   */
+  protected StripDeniedReadFieldsFromClientInput(
+    entityInfo: EntityInfo,
+    userInfo: UserInfo,
+    input: { OldValues___?: Array<{ Key: string; Value: unknown }> } & Record<string, unknown>,
+    clientNewValues: Record<string, unknown>
+  ): boolean {
+    if (!entityInfo.EnableFieldLevelSecurity || !userInfo) {
+      return false;
+    }
+    const deniedReadNames = entityInfo.GetDeniedReadFields(userInfo);
+    if (deniedReadNames.size === 0) {
+      return false;
+    }
+
+    // Input keys are entity CodeNames (post ReverseMapInputFieldNames); the denied set holds
+    // lowercased field Names — bridge via the field metadata once.
+    const deniedReadCodeNames = new Set<string>();
+    for (const field of entityInfo.Fields) {
+      if (deniedReadNames.has(field.Name.trim().toLowerCase())) {
+        deniedReadCodeNames.add(field.CodeName.trim().toLowerCase());
+      }
+    }
+
+    const stripped: string[] = [];
+    for (const key of Object.keys(clientNewValues)) {
+      if (deniedReadCodeNames.has(key.trim().toLowerCase())) {
+        delete clientNewValues[key];
+        delete input[key];
+        stripped.push(key);
+      }
+    }
+    if (Array.isArray(input.OldValues___)) {
+      input.OldValues___ = input.OldValues___.filter(
+        (item) => !deniedReadCodeNames.has(String(item.Key).trim().toLowerCase())
+      );
+    }
+    if (stripped.length > 0) {
+      LogDebug(
+        `[FieldSecurity] UpdateRecord on '${entityInfo.Name}' for user ${userInfo.Email}: ` +
+          `stripped client-sent value(s) for denied-read field(s) ${stripped.join(', ')}`
+      );
+    }
+    return true;
+  }
+
   /**
    * This routine compares the OldValues property in the input object to the values in the DB that we just loaded. If there are differences, we need to check to see if the client
    * is trying to update any of those fields (e.g. overlap). If there is overlap, we throw an error. If there is no overlap, we can proceed with the update even if the DB Values

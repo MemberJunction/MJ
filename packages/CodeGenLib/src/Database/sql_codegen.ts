@@ -149,6 +149,14 @@ export class SQLCodeGenBase {
             this.deleteGeneratedEntityFiles(directory, baselineEntities);
             succeedSpinner('Cleaned generated files');
 
+            // STEP 2(a.5) - field-level security / permission-reconciliation run context.
+            // One async pass over the live catalog (permission state + service-login role
+            // memberships) so the synchronous permission emitters can (1) REVOKE-and-reassert
+            // within the managed scope — which is what makes GRANT/DENY *removal* reach the
+            // database at all — and (2) emit field-security column DENYs safely. SQL Server
+            // only: PostgreSQL has no DENY primitive, so per decision D2 it emits nothing.
+            await this.prepareFieldSecurityRunContext(pool);
+
             // STEP 2(b) - generate all the SQL files and execute them
             startSpinner(`Generating SQL for ${includedEntities.length} entities...`);
             const step2StartTime: Date = new Date();
@@ -500,6 +508,106 @@ export class SQLCodeGenBase {
         }
     }
 
+
+    /**
+     * Builds the once-per-run {@link FieldSecurityRunContext} and hands it to the dialect
+     * provider (whose permission emitters are synchronous string builders and cannot query).
+     * Three inputs, all read here:
+     *
+     *  1. **Managed roles** — `MJ: Roles` metadata rows with a non-blank `SQLName`, EXCLUDING
+     *     the standard UI/Developer/Integration roles: by decision D1a, field-security DENYs
+     *     target custom (DBA-created) roles only, so standard roles never enter
+     *     `RoleSQLNameByID` and Deny rows against them stay app-tier-enforced.
+     *  2. **Service-protected roles** — roles any protected principal is a member of
+     *     (`sys.database_role_members`). Protected principals default to the known service
+     *     logins (`MJ_Connect`, `MJ_Connect_Dev`) plus the configured CodeGen login; a DENY
+     *     to such a role would strip the column from the service login itself.
+     *  3. **Catalog permission state** — every `sys.database_permissions` entry (object- and
+     *     column-level) granted to a managed role, keyed by `<schema>.<object>`. This powers
+     *     the wipe-and-reassert reconciliation (decision D7) that finally makes permission
+     *     REMOVAL propagate: the historical model was assert-only, so a deleted
+     *     `EntityPermission` / Deny row left its GRANT/DENY in the database until the view
+     *     happened to be regenerated.
+     *
+     * SQL Server only (PostgreSQL emits no DB-tier field security, decision D2). Any failure
+     * degrades to a null context — emitters fall back to the historical grants-only output —
+     * with a prominent warning, never a failed run.
+     */
+    protected async prepareFieldSecurityRunContext(pool: CodeGenConnection): Promise<void> {
+        if (this._dbProvider.PlatformKey !== 'sqlserver') {
+            this._dbProvider.SetFieldSecurityRunContext(null);
+            return;
+        }
+        try {
+            const md = new Metadata();
+            const standardRoleNames = new Set(['ui', 'developer', 'integration']);
+            const managedRoles = md.Roles.filter(r =>
+                (r.SQLName ?? '').trim().length > 0 && !standardRoleNames.has((r.Name ?? '').trim().toLowerCase())
+            );
+            const roleSQLNameByID = new Map<string, string>();
+            for (const role of managedRoles) {
+                roleSQLNameByID.set((role.ID ?? '').trim().toLowerCase(), role.SQLName.trim());
+            }
+            // The reconciliation scope includes the STANDARD roles' grants too (their view
+            // GRANTs / proc EXECUTEs are CodeGen-owned and must self-heal like any other),
+            // so the catalog query spans every non-blank-SQLName role — only the DENY
+            // emission path is restricted to the custom-role map above.
+            const allManagedSQLNames = md.Roles
+                .map(r => (r.SQLName ?? '').trim())
+                .filter(n => n.length > 0);
+
+            const escape = (name: string) => name.replace(/'/g, "''");
+            const protectedPrincipals = [...new Set(['MJ_Connect', 'MJ_Connect_Dev', (configInfo.codeGenLogin ?? '').trim()].filter(p => p.length > 0))];
+
+            const membershipResult = await pool.query(`
+                SELECT DISTINCT r.name AS role_name
+                FROM sys.database_role_members drm
+                JOIN sys.database_principals r ON r.principal_id = drm.role_principal_id
+                JOIN sys.database_principals m ON m.principal_id = drm.member_principal_id
+                WHERE m.name IN (${protectedPrincipals.map(p => `N'${escape(p)}'`).join(', ')})
+            `);
+            const serviceProtected = new Set<string>(
+                (membershipResult.recordset as Array<{ role_name: string }>).map(r => r.role_name.trim().toLowerCase())
+            );
+
+            const catalog = new Map<string, import('./codeGenDatabaseProvider').CatalogPermissionEntry[]>();
+            if (allManagedSQLNames.length > 0) {
+                const permissionResult = await pool.query(`
+                    SELECT pr.name AS role_name, s.name AS schema_name, o.name AS object_name,
+                           c.name AS column_name, p.state_desc, p.permission_name
+                    FROM sys.database_permissions p
+                    JOIN sys.database_principals pr ON pr.principal_id = p.grantee_principal_id
+                    JOIN sys.objects o ON o.object_id = p.major_id
+                    JOIN sys.schemas s ON s.schema_id = o.schema_id
+                    LEFT JOIN sys.columns c ON c.object_id = p.major_id AND c.column_id = p.minor_id
+                    WHERE p.class = 1
+                      AND pr.name IN (${allManagedSQLNames.map(n => `N'${escape(n)}'`).join(', ')})
+                `);
+                for (const row of permissionResult.recordset as Array<{ role_name: string; schema_name: string; object_name: string; column_name: string | null; state_desc: string; permission_name: string }>) {
+                    const key = `${row.schema_name}.${row.object_name}`.toLowerCase();
+                    const entries = catalog.get(key) ?? [];
+                    entries.push({
+                        RoleName: row.role_name.trim(),
+                        PermissionName: row.permission_name.trim(),
+                        StateDesc: row.state_desc.trim(),
+                        ColumnName: row.column_name ? row.column_name.trim() : null,
+                    });
+                    catalog.set(key, entries);
+                }
+            }
+
+            this._dbProvider.SetFieldSecurityRunContext({
+                ServiceProtectedRoleSQLNames: serviceProtected,
+                CatalogPermissions: catalog,
+                RoleSQLNameByID: roleSQLNameByID,
+            });
+            logStatus(`   Field-security run context ready: ${roleSQLNameByID.size} custom role(s), ${serviceProtected.size} service-protected role(s), ${catalog.size} object(s) with managed permissions`);
+        } catch (e) {
+            logWarning(`   ⚠️  Could not build the field-security run context (${e instanceof Error ? e.message : String(e)}). ` +
+                `Permission emission degrades to grants-only for this run: no field-security DENYs and no reconciliation REVOKEs.`);
+            this._dbProvider.SetFieldSecurityRunContext(null);
+        }
+    }
 
     public async applyPermissions(pool: CodeGenConnection, directory: string, entities: EntityInfo[], batchSize: number = 5): Promise<boolean> {
         try {

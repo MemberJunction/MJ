@@ -4,6 +4,7 @@ import { IMetadataProvider } from "./interfaces"
 import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
 import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
+import { WellKnownUserSource } from "./wellKnownUserSource"
 import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, CodeNameFromString } from "./util"
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
@@ -392,6 +393,113 @@ export class EntityPermissionInfo extends BaseInfo{
         this.copyInitData(initData);
     }
 }
+
+/**
+ * The three states a single field-level permission verb can hold, modelled on SQL Server's
+ * posture:
+ *
+ * - `No Access` — neutral, and the default. Grants nothing and blocks nothing; another role's
+ *   Allow still wins.
+ * - `Allow` — grants the action for this role.
+ * - `Deny` — trumps everything. One Deny across any of the user's roles wins no matter how
+ *   many Allows sit beside it.
+ */
+export const FieldPermissionAccess = {
+    Allow: 'Allow',
+    Deny: 'Deny',
+    NoAccess: 'No Access',
+} as const;
+
+export type FieldPermissionAccess = typeof FieldPermissionAccess[keyof typeof FieldPermissionAccess];
+
+/**
+ * The single wording for "you cannot use this field", modelled on SQL Server's posture of never
+ * disclosing whether an object is missing or merely inaccessible.
+ *
+ * Naming the field is safe — the caller supplied it, so it tells them nothing they did not
+ * already know. Naming the REASON is not: confirming "this field exists and is restricted"
+ * turns any predicate into an oracle for probing which columns a deployment considers
+ * sensitive. The ambiguity also stays correct after
+ * [#3485](https://github.com/MemberJunction/MJ/issues/3485) tiers metadata and restricted fields
+ * stop shipping to clients at all, at which point "does not exist" becomes literally true from
+ * the client's vantage point.
+ *
+ * Lives here rather than on `ProviderBase` so the write path in `BaseEntity` can reach it
+ * without importing the provider layer, which imports `BaseEntity` in turn.
+ */
+export function FieldSecurityDenialMessage(fieldName: string, entityName: string): string {
+    return `Field '${fieldName}' does not exist on entity '${entityName}' or you do not have access to it.`;
+}
+
+/**
+ * Field-level (column-level) security settings. Maps an entity FIELD to a role, carrying three
+ * independent trinary verbs — Read, Update and Create. One row per (field, role).
+ *
+ * These rows are only consulted when the parent entity has
+ * {@link EntityInfo.EnableFieldLevelSecurity} set. Aggregation across the roles a user holds,
+ * per verb: `effective = (any matching row Allows) AND NOT (any matching row Denies)`. See
+ * {@link EntityFieldInfo.GetUserFieldPermissions}.
+ */
+export class EntityFieldPermissionInfo extends BaseInfo {
+    ID: string = null
+
+    EntityFieldID: string = null
+    RoleID: string = null
+    /**
+     * Whether this role may READ the field's values. The aggregation normalizes defensively and
+     * treats anything unrecognized as `No Access`, so a bad value off the wire fails closed
+     * rather than granting.
+     */
+    ReadAccess: FieldPermissionAccess = FieldPermissionAccess.NoAccess
+    /**
+     * Whether this role may modify the field's value on an EXISTING record.
+     *
+     * Requires {@link ReadAccess} = Allow — a field a user cannot see is one they cannot
+     * change. Enforced per row by a CHECK constraint, and again after aggregation because the
+     * constraint cannot see across roles.
+     */
+    UpdateAccess: FieldPermissionAccess = FieldPermissionAccess.NoAccess
+    /**
+     * Whether this role may supply the field's value when INSERTing a record. Requires
+     * {@link ReadAccess} = Allow, on the same two-layer basis as {@link UpdateAccess}.
+     *
+     * A user who may not create a field does not get an error — the supplied value is dropped
+     * and the column takes its default, matching the read path where a denied field is simply
+     * absent.
+     */
+    CreateAccess: FieldPermissionAccess = FieldPermissionAccess.NoAccess
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
+
+    // virtual fields - returned by the database VIEW
+    EntityField: string = null
+    Role: string = null
+
+    /**
+     * @param initData raw metadata row off the wire. `BaseInfo.copyInitData` only ever reads
+     * `Object.keys()` off it, so a plain record is wide enough.
+     */
+    constructor (initData: Record<string, unknown> | null = null) {
+        super();
+        this.copyInitData(initData);
+    }
+}
+
+/**
+ * The effective field-level access a specific user has to a specific field, after trinary
+ * aggregation across all of the roles that user holds.
+ *
+ * Narrower than {@link EntityUserPermissionInfo}: Delete has no field-level meaning — you
+ * delete rows, not columns.
+ *
+ * The three flags are not independent on the way out. Read is required for Update and Create,
+ * so a `false` CanRead always arrives with `false` CanUpdate and CanCreate.
+ */
+export type EntityFieldUserPermissionInfo = {
+    CanRead: boolean;
+    CanUpdate: boolean;
+    CanCreate: boolean;
+};
 
 export const EntityFieldTSType = {
     String: 'string',
@@ -915,6 +1023,208 @@ export class EntityFieldInfo extends BaseInfo {
         return this._EntityFieldValues;
     }
 
+    private _FieldPermissions: EntityFieldPermissionInfo[] = [];
+
+    /**
+     * Field-level (column-level) security records configured for THIS field, across all roles.
+     * Empty for the overwhelming majority of fields — see {@link HasFieldPermissions}.
+     */
+    public get FieldPermissions(): EntityFieldPermissionInfo[] {
+        return this._FieldPermissions;
+    }
+
+    /**
+     * True when at least one {@link EntityFieldPermissionInfo} record exists for this field.
+     *
+     * **Not an enforcement gate** — it answers "does any configuration target this field",
+     * which CodeGen's DB-tier emission and the system-user entanglement guard both need. The
+     * access decision is {@link EntityInfo.EnableFieldLevelSecurity} plus the aggregation; on an
+     * enabled entity a field with no records is denied, not open.
+     */
+    public get HasFieldPermissions(): boolean {
+        return this._FieldPermissions.length > 0;
+    }
+
+    /**
+     * Entities whose fields can never be restricted by field-level security.
+     *
+     * Two distinct reasons, both amounting to "a configuration that cannot be undone through
+     * the product":
+     *
+     * 1. **The security-configuration surface** (Entities, Entity Fields, Entity Permissions,
+     *    Entity Field Permissions, Roles). Restricting `CanRead` on the Entity Field Permissions
+     *    entity itself would leave the admin screen unable to render the very rows needed to
+     *    reverse the restriction — recovery would require direct SQL against the database.
+     * 2. **The identity surface** (Users, User Roles). Role resolution and the auth path read
+     *    these on every request; restricting a column here degrades far more than one screen.
+     *
+     * Note this is deliberately a guard on WHICH ENTITIES are restrictable, not an exemption for
+     * particular USERS. No user is above a Deny — that would undercut the entire point of the
+     * feature for the confidentiality use cases (compensation, donor giving) that motivate it.
+     *
+     * Stored lowercased; compare with a trimmed, lowercased entity name.
+     */
+    private static readonly UnrestrictableEntityNames: ReadonlySet<string> = new Set<string>([
+        'mj: entities',
+        'mj: entity fields',
+        'mj: entity permissions',
+        'mj: entity field permissions',
+        'mj: roles',
+        'mj: users',
+        'mj: user roles',
+    ]);
+
+    /**
+     * True when this field belongs to an entity that field-level security may never restrict.
+     * See {@link EntityFieldInfo.UnrestrictableEntityNames} for the rationale.
+     */
+    public get IsOnUnrestrictableEntity(): boolean {
+        return EntityFieldInfo.UnrestrictableEntityNames.has((this.Entity ?? '').trim().toLowerCase());
+    }
+
+    /**
+     * True for fields that must remain readable regardless of any permission record:
+     * primary keys (hard or soft) and `__mj_` system columns.
+     *
+     * Stripping a primary key from a result breaks entity load, {@link CompositeKey}
+     * construction, relationship resolution, and cache fingerprinting — the failure surfaces
+     * far from the permission record that caused it. This is enforced here AND at save time on
+     * the permission record itself, so a row inserted outside the entity path still cannot take
+     * a primary key out of a result set.
+     */
+    public get IsUnrestrictableField(): boolean {
+        return this.IsPrimaryKey === true || this.IsSoftPrimaryKey === true || (this.Name ?? '').startsWith('__mj_');
+    }
+
+    /**
+     * Returns the effective field-level access this user has to this field, aggregating the
+     * field's permission records across every role the user holds.
+     *
+     * **PRECONDITION: the caller has already established that the parent entity has
+     * {@link EntityInfo.EnableFieldLevelSecurity} set.** The flag is a required parameter rather
+     * than something this method looks up, because `EntityFieldInfo` holds its entity's NAME and
+     * not a reference to the `EntityInfo` — and a method that silently answered "denied" for a
+     * field on a non-FLS entity would be a trap. Pass `false` and every field comes back fully
+     * open.
+     *
+     * Per verb, across the user's matching roles:
+     * `effective = (any row Allows) AND NOT (any row Denies)`. Deny is absorbing and No Access
+     * is the identity, so three states collapse to that one expression.
+     *
+     * Outcomes:
+     * - **Field security disabled on the entity** → fully open.
+     * - **No records on the field** (enabled) → fully closed. Snapshot initialization creates a
+     *   row for every (field, role) that should have one, so a missing row means reconciliation
+     *   has not run — failing closed makes that visible.
+     * - **Records exist, none match the user's roles** → fully closed, for want of an Allow.
+     *
+     * PERFORMANCE: this is the per-FIELD primitive. Enforcement points must never call it
+     * inside a per-row loop — `MapFieldNamesToCodeNames` runs once per row, so a naive call
+     * site costs `fields x rows` aggregations. Compute the denied-field Set once per
+     * (entity, user) per request and pass it into the row loop.
+     *
+     * @param user the user whose effective access is being resolved
+     * @param entityFieldSecurityEnabled the parent entity's `EnableFieldLevelSecurity` flag
+     */
+    public GetUserFieldPermissions(user: UserInfo, entityFieldSecurityEnabled: boolean): EntityFieldUserPermissionInfo {
+        if (!entityFieldSecurityEnabled) {
+            return EntityFieldInfo.fullyOpenFieldPermissions();
+        }
+
+        // The system user is exempt, and is the ONLY exemption — no human bypass exists.
+        //
+        // It is the account the server runs its own work as. Engine caches are process-wide and
+        // in task mode load on first touch, so a restricted system user would leave partially
+        // loaded records in a cache every subsequent user reads. It also protects nothing to
+        // deny: the server reaches the database through one service login that can already see
+        // every column, so this only limits the server's ability to do its own work.
+        if (WellKnownUserSource.Instance.IsSystemUser(user)) {
+            return EntityFieldInfo.fullyOpenFieldPermissions();
+        }
+
+        // Records on an unrestrictable entity are ignored entirely rather than half-applied.
+        // Save-time validation rejects such rows, so reaching here means they were written
+        // outside the entity path.
+        if (this.IsOnUnrestrictableEntity) {
+            return EntityFieldInfo.fullyOpenFieldPermissions();
+        }
+
+        // Primary keys and __mj_ system columns are forced open BEFORE aggregation rather than
+        // patched afterwards: a half-corrected result (readable but not creatable) would break
+        // inserts on entities whose primary key the caller supplies.
+        if (this.IsUnrestrictableField) {
+            return EntityFieldInfo.fullyOpenFieldPermissions();
+        }
+
+        return this.aggregateUserFieldPermissions(user);
+    }
+
+    /**
+     * The "field security does not apply here" answer, named so the policy exits above cannot
+     * drift apart from one another.
+     */
+    private static fullyOpenFieldPermissions(): EntityFieldUserPermissionInfo {
+        return { CanRead: true, CanUpdate: true, CanCreate: true };
+    }
+
+    /**
+     * Trinary aggregation across the user's roles. Split out of
+     * {@link GetUserFieldPermissions} so the guards there read as policy and this reads as
+     * arithmetic.
+     */
+    private aggregateUserFieldPermissions(user: UserInfo): EntityFieldUserPermissionInfo {
+        const allow = { CanRead: false, CanUpdate: false, CanCreate: false };
+        const deny = { CanRead: false, CanUpdate: false, CanCreate: false };
+
+        for (const fp of this._FieldPermissions) {
+            const roleMatch: UserRoleInfo = user?.UserRoles?.find((r) => UUIDsEqual(r.RoleID, fp.RoleID));
+            if (!roleMatch) {
+                continue; // user does not hold this role
+            }
+            EntityFieldInfo.applyAccessToBuckets(fp.ReadAccess, allow, deny, 'CanRead');
+            EntityFieldInfo.applyAccessToBuckets(fp.UpdateAccess, allow, deny, 'CanUpdate');
+            EntityFieldInfo.applyAccessToBuckets(fp.CreateAccess, allow, deny, 'CanCreate');
+        }
+
+        const effective: EntityFieldUserPermissionInfo = {
+            CanRead: allow.CanRead && !deny.CanRead,
+            CanUpdate: allow.CanUpdate && !deny.CanUpdate,
+            CanCreate: allow.CanCreate && !deny.CanCreate,
+        };
+
+        // Read is required for Update and Create. A CHECK constraint enforces this per ROW and
+        // cannot enforce it here: role A granting Read+Update and role B denying Read are each
+        // individually legal, yet a user holding both aggregates to read-denied +
+        // update-allowed. This clamp is what makes that combination unreachable at runtime.
+        if (!effective.CanRead) {
+            effective.CanUpdate = false;
+            effective.CanCreate = false;
+        }
+        return effective;
+    }
+
+    /**
+     * Folds one trinary verb into the Allow/Deny buckets. Anything unrecognized is treated as
+     * `No Access`, so a value reaching here outside the CHECK constraint grants nothing.
+     */
+    private static applyAccessToBuckets(
+        access: FieldPermissionAccess,
+        allow: EntityFieldUserPermissionInfo,
+        deny: EntityFieldUserPermissionInfo,
+        verb: keyof EntityFieldUserPermissionInfo
+    ): void {
+        switch ((access ?? '').trim().toLowerCase()) {
+            case 'allow':
+                allow[verb] = true;
+                break;
+            case 'deny':
+                deny[verb] = true;
+                break;
+            default:
+                break; // 'No Access', and anything unrecognized: neutral
+        }
+    }
+
     /**
      * Returns the ValueListType using the EntityFieldValueListType enum.
      */
@@ -1283,6 +1593,16 @@ export class EntityFieldInfo extends BaseInfo {
                 this._EntityFieldValues = [];
                 this._entityFieldValuesConstructed = true;
             }
+
+            // Field-level security records. Constructed eagerly rather than lazily (unlike
+            // EntityFieldValues above) because the array is empty for virtually every field in
+            // every deployment — there is no ~36,000-object construction cost to defer, and
+            // HasFieldPermissions is read on enforcement paths where a lazy hydration check
+            // would cost more than the construction it avoids.
+            const efp = initData.EntityFieldPermissions || initData._FieldPermissions || initData.FieldPermissions;
+            if (efp && efp.length > 0) {
+                this._FieldPermissions = efp.map((p: Record<string, unknown>) => new EntityFieldPermissionInfo(p));
+            }
         }
     }
 
@@ -1594,6 +1914,19 @@ export class EntityInfo extends BaseInfo {
      */
     AllowCaching: boolean = false
     /**
+     * Whether field-level (column-level) security is enforced for this entity.
+     *
+     * This is the single gate every field-security enforcement point checks first, and it is
+     * explicit — never inferred from whether permission rows happen to exist. It is `false` for
+     * nearly every entity in nearly every deployment, so enforcement collapses to one boolean
+     * test: no field iteration, no aggregation, no allocation.
+     *
+     * Turning it on snapshots the entity's existing entity-level permissions into per-field
+     * rows, so enabling changes no behavior until an administrator tightens a field. Turning it
+     * off leaves the rows in place, inactive, so re-enabling does not lose the configuration.
+     */
+    EnableFieldLevelSecurity: boolean = false
+    /**
      * Whether this entity is available through the GraphQL API
      */
     IncludeInAPI: boolean = false
@@ -1903,6 +2236,68 @@ export class EntityInfo extends BaseInfo {
     private _encryptedFieldsCache: EntityFieldInfo[] | null = null;
     private _datetimeFieldsCache: EntityFieldInfo[] | null = null;
     private _nameFieldCache: EntityFieldInfo | null | undefined = undefined;
+
+    /**
+     * The set of field names this user may NOT READ on this entity — the per-request primitive
+     * every field-security enforcement point is built on.
+     *
+     * Compute this ONCE per (entity, user) per request and pass the Set into any row loop.
+     * `GetUserFieldPermissions` is the per-FIELD primitive; calling it per row costs
+     * `fields x rows` aggregations (40,000 for a 1,000-row x 40-column result), each of which
+     * re-scans `user.UserRoles` and allocates. A Set lookup costs neither.
+     *
+     * Names are lowercased so callers can match case-insensitively, consistent with
+     * {@link ProjectRowsToFields}. Returns an EMPTY set — never null — both when the entity has
+     * field security switched off and when the user is denied nothing, so callers can treat
+     * `size === 0` as the single "nothing to do" condition.
+     */
+    public GetDeniedReadFields(user: UserInfo): Set<string> {
+        return this.getDeniedFields(user, (p) => !p.CanRead);
+    }
+
+    /**
+     * The set of field names this user may NOT UPDATE on this entity. Same per-request
+     * precompute contract as {@link GetDeniedReadFields}.
+     *
+     * A field can be readable and not updatable. The reverse cannot happen — Read is required
+     * for Update — so denied-read is always a subset of denied-update, but ask for the set you
+     * actually need rather than relying on that.
+     */
+    public GetDeniedUpdateFields(user: UserInfo): Set<string> {
+        return this.getDeniedFields(user, (p) => !p.CanUpdate);
+    }
+
+    /**
+     * The set of field names this user may NOT supply a value for when CREATING a record. Same
+     * per-request precompute contract as {@link GetDeniedReadFields}.
+     *
+     * Unlike the update set, this does not drive a rejection: a value supplied for a
+     * create-denied field is dropped and the column takes its default.
+     */
+    public GetDeniedCreateFields(user: UserInfo): Set<string> {
+        return this.getDeniedFields(user, (p) => !p.CanCreate);
+    }
+
+    /**
+     * Shared walk behind {@link GetDeniedReadFields} / {@link GetDeniedUpdateFields} /
+     * {@link GetDeniedCreateFields}, short-circuiting on {@link EnableFieldLevelSecurity}.
+     *
+     * Every field is aggregated, including those carrying no permission records — on an enabled
+     * entity those are denied. Unrestrictable fields (primary keys, `__mj_` columns) come back
+     * open, decided inside `GetUserFieldPermissions` rather than skipped here.
+     */
+    private getDeniedFields(user: UserInfo, isDenied: (permissions: EntityFieldUserPermissionInfo) => boolean): Set<string> {
+        const denied = new Set<string>();
+        if (!this.EnableFieldLevelSecurity) {
+            return denied;
+        }
+        for (const field of this._Fields) {
+            if (isDenied(field.GetUserFieldPermissions(user, true))) {
+                denied.add(field.Name.trim().toLowerCase());
+            }
+        }
+        return denied;
+    }
 
     /**
      * O(1) case-insensitive field lookup by name. Use this instead of `Fields.find(f => f.Name === name)`
@@ -2825,7 +3220,6 @@ export class EntityInfo extends BaseInfo {
             this._encryptedFieldsCache = null;
             this._datetimeFieldsCache = null;
             this._nameFieldCache = undefined;
-
             const ef = initData.EntityFields || initData._Fields || initData.Fields;
             if (ef) {
                 for (let j = 0; j < ef.length; j++) {

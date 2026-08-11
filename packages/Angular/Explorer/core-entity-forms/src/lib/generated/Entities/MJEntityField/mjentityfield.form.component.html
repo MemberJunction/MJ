@@ -706,6 +706,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Entity Field Permissions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJEntityFieldPermissions"
+        SectionName="Entity Field Permissions"
+        Icon="fa fa-shield-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJEntityFieldPermissions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Field Permissions','EntityFieldID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Field Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJEntityFieldPermissions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityFieldPermissions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

@@ -1077,7 +1077,12 @@ export class RunViewResolver extends ResolverBase {
           MaxRows: item.params.MaxRows,
           ForceAuditLog: item.params.ForceAuditLog,
           AuditLogDescription: item.params.AuditLogDescription,
-          ResultType: (item.params.ResultType || 'simple') as 'simple' | 'entity_object' | 'count_only',
+          // entity_object is forced to 'simple', matching RunViewGenericInternal: over the
+          // wire the server always returns plain rows (the CLIENT materializes entities),
+          // and server-side enforcement (field-security projection) deliberately exempts
+          // genuine server-internal entity_object results — a wire caller must never be
+          // able to claim that exemption. count_only passes through unchanged.
+          ResultType: (item.params.ResultType === 'entity_object' ? 'simple' : (item.params.ResultType || 'simple')) as 'simple' | 'entity_object' | 'count_only',
           StartRow: item.params.StartRow,
           // Forward the aggregate request to the engine (B40) — omitted here as well as in the
           // client's input map, so aggregates never reached InternalRunView on this transport.

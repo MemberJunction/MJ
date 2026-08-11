@@ -1,6 +1,6 @@
 import { IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
-import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
+import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityDenialMessage, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
@@ -52,6 +52,64 @@ export class EntityField {
     private _OldValue: any;
     private _Value: any;
     private _NeverSet: boolean = true;
+    private _NotLoaded: boolean = false;
+
+    /**
+     * True when the source this entity was hydrated from OMITTED this field's key — most
+     * commonly because field-level security stripped it before the payload reached us, but
+     * equally for any partial hydration. The field's in-memory state (its metadata default,
+     * else null) is a construction artifact, not data: the save path skips not-loaded fields
+     * entirely (the generated procs' `ISNULL(@p, [Col])` merge then preserves the stored
+     * value), {@link Dirty} always reports false for them, and {@link Validate} exempts them
+     * from the required/null check.
+     *
+     * Deliberately DISTINCT from `_NeverSet`, which means "no set since construction," exists
+     * to permit the one-time write to ReadOnly fields on load, and is re-armed wholesale by
+     * `InnerLoad` — reusing it would conflate defaults with omissions. This flag is set only
+     * by the hydration paths (via {@link MarkNotLoaded}) when a source omits the key, is
+     * cleared by ANY explicit set (an intentional blind write to a read-denied field is a
+     * legitimate write-only update and must save), and is never present on new (unhydrated)
+     * entities — their fields legitimately hold metadata defaults for INSERT.
+     */
+    public get NotLoaded(): boolean {
+        return this._NotLoaded;
+    }
+
+    /**
+     * Framework-internal: hydration paths call this for each field whose key the hydration
+     * source omitted. Application code should never need it — an explicit {@link Value} set
+     * clears the flag.
+     */
+    public MarkNotLoaded(): void {
+        this._NotLoaded = true;
+    }
+
+    private _CreateSuppressed: boolean = false;
+
+    /**
+     * True when field-level security bars this user from supplying the field's value on INSERT,
+     * so the save path must omit it and let the column take its database default.
+     *
+     * Deliberately DISTINCT from {@link NotLoaded}, even though both end in "leave this
+     * parameter out of the SP call". `NotLoaded` means "the hydration source omitted this key"
+     * and carries consequences this must not: it suppresses the `_Clear` companion, exempts the
+     * field from required/null validation, and forces {@link Dirty} to false. A create-suppressed
+     * field, by contrast, holds a perfectly real value the user typed — it is simply not one they
+     * are permitted to supply. Conflating them would silently disarm validation on fields a user
+     * IS allowed to create.
+     *
+     * Set per-save by the create-path gate and cleared at the start of every save, because the
+     * answer depends on the acting user and the same entity object can be saved by different
+     * users over its lifetime.
+     */
+    public get CreateSuppressed(): boolean {
+        return this._CreateSuppressed;
+    }
+
+    /** Framework-internal: set by the save path's field-security create gate. */
+    public SetCreateSuppressed(suppressed: boolean): void {
+        this._CreateSuppressed = suppressed;
+    }
 
     get Name(): string {
         return this._entityFieldInfo.Name;
@@ -141,9 +199,17 @@ export class EntityField {
                 value = value.replace(/ +$/, '');
             }
             this._Value = value;
+            // Any explicit set means the field now holds REAL data — including a blind write to
+            // a read-denied field (the write-only case), which must flow to the save. Captured
+            // BEFORE clearing so the OldValue branch below can see it: a set onto a not-loaded
+            // field is an EDIT (must become dirty and reach the save), never the "initial value
+            // set" of record setup — the record's setup moment was the hydration that omitted
+            // this field.
+            const wasNotLoaded = this._NotLoaded;
+            this._NotLoaded = false;
 
             // in the below, we set the OldValue, but only if (a) we have never set the value before, or (b) the value or the old value is not null - which means that we are in a record setup scenario
-            if (this._NeverSet &&
+            if (this._NeverSet && !wasNotLoaded &&
                 (value !== null || this._OldValue !== null)) {
                 // initial value set
                 this._OldValue = value;
@@ -164,9 +230,11 @@ export class EntityField {
 
     /**
      * Returns true if the field is dirty, false otherwise. A field is considered dirty if the value is different from the old value. If the field is read only, it is never dirty.
+     * A {@link NotLoaded} field is never dirty either — its in-memory state is a construction
+     * artifact, not data, and nothing that was never loaded can have been changed.
      */
     get Dirty(): boolean {
-        if (this.ReadOnly)
+        if (this.ReadOnly || this._NotLoaded)
             return false
         else {
             const oldNull = this._OldValue === null || this.OldValue === undefined || Number.isNaN(this.OldValue); // check for NaN because sometimes we have old values that are NaN and we need to account for that
@@ -311,7 +379,13 @@ export class EntityField {
         // no longer false-warns or throws here.
         if (!ef.ReadOnly && !ef.SkipValidation) {
             // only do validation on updatable fields and skip the special case fields defined inside the SkipValidation property (like ID/CreatedAt/UpdatedAt)
-            if (!ef.AllowsNull && (this.Value === null || this.Value === undefined)) {
+            // NotLoaded exemption: a field the hydration source omitted holds null/default by
+            // construction and is SKIPPED by the save SQL, so the stored value is untouched —
+            // failing the required check here would make every partially hydrated record
+            // unsaveable for unrelated edits (the exact NOT-NULL breakage mode the not-loaded
+            // design exists to remove). Length/type checks below still apply to whatever the
+            // constructor state is; only the required/null check is meaningless for it.
+            if (!ef.AllowsNull && !this._NotLoaded && (this.Value === null || this.Value === undefined)) {
                 // make sure this isn't a field that has a default value and we are inside a new record
                 if (ef.DefaultValue === null || ef.DefaultValue === undefined || ef.DefaultValue.trim().length === 0) {
                     // we have no default value, so this is an error
@@ -1308,6 +1382,8 @@ export abstract class BaseEntity<T = unknown> {
         // ignoreNonExistentFields=true because data may contain fields from other
         // entities in the chain that don't exist on this entity.
         this.SetMany(data, true, true, true);
+        // Hydrate is a hydration entry point: keys the source omitted are not-loaded.
+        this.markFieldsOmittedBySourceAsNotLoaded(data);
     }
 
     // ─── Entity Companions ──────────────────────────────────────────────────────
@@ -2368,6 +2444,7 @@ export abstract class BaseEntity<T = unknown> {
             if (this.EntityInfo?.HasInactiveFields) {
                 this.AssertFieldActiveStatus(FieldName, 'BaseEntity.Set');
             }
+            this.AssertFieldReadable(FieldName);
             this.SetLocal(FieldName, Value);
         }
     }
@@ -2386,6 +2463,34 @@ export abstract class BaseEntity<T = unknown> {
         const fi = this.EntityInfo?.FieldByName(fieldName);
         if (fi) {
             EntityFieldInfo.AssertEntityFieldActiveStatus(fi, caller);
+        }
+    }
+
+    /**
+     * Field-level security choke point for the strongly-typed accessor path. Throws when the
+     * acting user may not READ the field.
+     *
+     * Called by `Get()` and `Set()` — every generated typed accessor
+     * (`get Salary() { return this.Get('Salary'); }`) routes through them, so these two sites
+     * cover the whole typed surface. Gated on both READ, because a field a user cannot see is
+     * one they cannot meaningfully address by name at all; update and create denials are
+     * enforced on the write path, where a rejection can name a save rather than a keystroke.
+     *
+     * **Deliberately NOT called by `SetMany`.** That is the hydration and resolver-apply path —
+     * throwing there would break loading a record that merely CONTAINS a restricted column.
+     *
+     * **Fails open when no user resolves.** `ActiveUser` is legitimately null in plenty of
+     * server paths, and a gate that threw there would break unrelated code in ways that look
+     * nothing like field security.
+     *
+     * Framework-internal value machinery (`Dirty`, `Validate`, `GetAll`, hydration, save-SQL
+     * build) reads `EntityField.Value` directly and never routes through here — that exemption
+     * is load-bearing, not an oversight. Do not "fix" it.
+     */
+    private AssertFieldReadable(fieldName: string): void {
+        const denied = this.deniedFieldsForActiveUser(u => this.EntityInfo.GetDeniedReadFields(u));
+        if (denied?.has(fieldName?.trim().toLowerCase())) {
+            throw new Error(FieldSecurityDenialMessage(fieldName, this.EntityInfo.Name));
         }
     }
 
@@ -2449,6 +2554,11 @@ export abstract class BaseEntity<T = unknown> {
         if (this.EntityInfo?.HasInactiveFields) {
             this.AssertFieldActiveStatus(FieldName, 'BaseEntity.Get');
         }
+
+        // Field security sits BEFORE the raw-mode fast path below, not after: an entity whose
+        // fields are not yet hydrated would otherwise return denied values straight out of _raw
+        // without the gate ever running.
+        this.AssertFieldReadable(FieldName);
 
         // Raw mode fast path: read directly from the cached data without building EntityField
         // instances. This is the dominant cost in engine warm-loads — generated typed getters
@@ -2615,6 +2725,12 @@ export abstract class BaseEntity<T = unknown> {
     public GetAll(oldValues: boolean = false, onlyDirtyFields: boolean = false): any {
         let obj = {};
         for (let field of this.Fields) {
+            // NotLoaded fields are OMITTED (D-3 decision): their in-memory state is a
+            // construction artifact, and serializing it would launder a default/null into
+            // something downstream code treats as data — the exact masquerade the flag exists
+            // to prevent. Key-absence also propagates the flag naturally: hydrating another
+            // entity from this output re-marks the same fields not-loaded.
+            if (field.NotLoaded) continue;
             if (!onlyDirtyFields || (onlyDirtyFields && field.Dirty)) {
                 // Reads field.Value directly — serialization is framework-internal, so it does not
                 // (and must not) assert active status. No suppression toggle needed: the assertion no
@@ -2820,9 +2936,28 @@ export abstract class BaseEntity<T = unknown> {
                     }
                 }
             }
+            // _raw IS a hydration source (LoadFromData fast path) — fields whose key it omitted
+            // are not-loaded, not defaulted. See EntityField.NotLoaded.
+            this.markFieldsOmittedBySourceAsNotLoaded(this._raw);
             // Raw data has been promoted into Fields — release the reference so we don't carry
             // duplicate state.
             this._raw = null;
+        }
+    }
+
+    /**
+     * Marks every field whose key the given HYDRATION SOURCE omitted as {@link EntityField.NotLoaded}.
+     * Called only by the hydration entry points ({@link LoadFromData} both modes, {@link Hydrate},
+     * {@link InnerLoad}) — never by plain {@link SetMany}, which is an incremental mutation API
+     * where omitting a field means "leave it alone," not "this field was never loaded."
+     * Both the field Name and CodeName are checked, matching SetMany's key acceptance.
+     */
+    private markFieldsOmittedBySourceAsNotLoaded(source: Record<string, unknown>): void {
+        if (!source || typeof source !== 'object') return;
+        for (const field of this.Fields) {
+            if (source[field.Name] === undefined && source[field.CodeName] === undefined) {
+                field.MarkNotLoaded();
+            }
         }
     }
 
@@ -2839,7 +2974,9 @@ export abstract class BaseEntity<T = unknown> {
             for (let field of this.Fields) {
                 if (!field.IsPrimaryKey || includePrimaryKeys) {
                     const otherField = other.GetFieldByName(field.Name);
-                    if (otherField) {
+                    // Skip fields the SOURCE never loaded (D-3): copying their construction
+                    // state would masquerade a default/null as real data on this entity.
+                    if (otherField && !otherField.NotLoaded) {
                         this.Set(field.Name, otherField.Value);
                         if (replaceOldValues) {
                             field.ResetOldValue();
@@ -3216,6 +3353,8 @@ export abstract class BaseEntity<T = unknown> {
             const type: EntityPermissionType = this.IsSaved ? EntityPermissionType.Update : EntityPermissionType.Create;
             const saveSubType = this.IsSaved ? 'update' : 'create';
             this.CheckPermissions(type, true) // this will throw an error and exit out if we don't have permission
+            this.CheckFieldLevelUpdatePermissions() // field-level security — throws if a dirty field is not updatable by this user
+            this.ApplyFieldLevelCreateSuppression() // field-level security on INSERT — omits fields, never rejects
 
             // IS-A disjoint subtype enforcement: on CREATE, ensure parent record
             // isn't already claimed by another child type (e.g., can't create Meeting
@@ -3456,6 +3595,14 @@ export abstract class BaseEntity<T = unknown> {
         if (data) {
             this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
             this.SetMany(data, false, true, true); // set the new values from the data returned from the save, this will also reset the old values
+            // finalizeSave re-hydrates from the save RESPONSE — a hydration source. Keys it
+            // omitted (e.g. fields the server stripped for field security) must be marked
+            // not-loaded, or the defaults init() just produced would masquerade as confirmed
+            // values and be resent on the NEXT save (the create/update-response corner: a
+            // trigger/system adjustment or concurrent change would be silently stomped).
+            if (typeof data === 'object' && !Array.isArray(data)) {
+                this.markFieldsOmittedBySourceAsNotLoaded(data as Record<string, unknown>);
+            }
             this._everSaved = true; // Mark as saved after successful save
             const result = this.LatestResult;
             if (result)
@@ -3584,6 +3731,133 @@ export abstract class BaseEntity<T = unknown> {
             return bAllowed
     }
 
+    /**
+     * Field-level security on the write path: rejects a save that modifies a field this user
+     * has no update permission on.
+     *
+     * ENFORCEMENT LAYER — read this before treating it as the security boundary. `BaseEntity`
+     * also runs in the browser, where this guard is trivially bypassable. The AUTHORITATIVE
+     * check is the server-side execution of this same code: the MJServer mutation resolver
+     * re-instantiates the entity and re-runs Save on the server, where the client cannot reach
+     * it. The client-side occurrence is UX and defense-in-depth — fail fast with a clear
+     * message before a network round-trip — and must never be relied on alone.
+     *
+     * UPDATE rejects; CREATE does not — see {@link ApplyFieldLevelCreateSuppression}.
+     *
+     * Note this checks DIRTY fields only. CLIENT-side that is safe on its own: nothing ever
+     * nulls a restricted value in memory, so a field the user cannot see was never loaded as
+     * null, is not dirty, and an unrelated edit saves cleanly with the restricted column
+     * keeping its stored value. SERVER-side it is safe only in combination with the resolver's
+     * denied-read strip: `ResolverBase.UpdateRecord` applies client-sent values via `SetMany`,
+     * which WOULD make a read-denied field genuinely dirty with a client-fabricated value —
+     * so the resolver strips denied-read fields from the client payload before applying it
+     * (`StripDeniedReadFieldsFromClientInput`), restoring the "never dirty" premise this
+     * dirty-fields-only check rests on.
+     */
+    protected CheckFieldLevelUpdatePermissions(): void {
+        if (!this.IsSaved) {
+            return; // INSERT — handled by ApplyFieldLevelCreateSuppression, which never rejects
+        }
+        const denied = this.deniedFieldsForActiveUser(u => this.EntityInfo.GetDeniedUpdateFields(u));
+        if (!denied) {
+            return;
+        }
+        for (const field of this.Fields) {
+            if (field.Dirty && denied.has(field.Name.trim().toLowerCase())) {
+                LogDebug(
+                    `[FieldSecurity] Rejected save on '${this.EntityInfo.Name}': ` +
+                    `field '${field.Name}' is not updatable by this user`
+                );
+                throw new Error(FieldSecurityDenialMessage(field.Name, this.EntityInfo.Name));
+            }
+        }
+    }
+
+    /**
+     * Field-level security on the INSERT path: marks the fields this user may not supply so the
+     * save omits them and each column takes its database default.
+     *
+     * **This never rejects, and that is deliberate.** Rejecting would be inconsistent with the
+     * read path (a denied field is simply absent, not an error) and would leak information — an
+     * error naming `Salary` confirms the field exists and is restricted, which the ambiguous
+     * denial wording exists to prevent. Silently defaulting is also what an unrestricted user
+     * gets by leaving the field blank, so a restricted user creating a record ends up with the
+     * same record SHAPE rather than a failure.
+     *
+     * The cost is that a user who supplies a value for a create-denied field gets no feedback
+     * that it was dropped, which is why the drop is logged and why the admin UI should not
+     * render the field at all.
+     *
+     * Runs on every save (clearing prior marks first) because the answer depends on the acting
+     * user, and one entity object can be saved by different users over its lifetime.
+     */
+    protected ApplyFieldLevelCreateSuppression(): void {
+        for (const field of this.Fields) {
+            field.SetCreateSuppressed(false);
+        }
+        if (this.IsSaved) {
+            return; // UPDATE — CheckFieldLevelUpdatePermissions owns that path
+        }
+        const denied = this.deniedFieldsForActiveUser(u => this.EntityInfo.GetDeniedCreateFields(u));
+        if (!denied) {
+            return;
+        }
+
+        const suppressed: string[] = [];
+        for (const field of this.Fields) {
+            if (denied.has(field.Name.trim().toLowerCase())) {
+                field.SetCreateSuppressed(true);
+                suppressed.push(field.Name);
+            }
+        }
+        if (suppressed.length > 0) {
+            LogDebug(
+                `[FieldSecurity] Create on '${this.EntityInfo.Name}': ` +
+                `omitted field(s) ${suppressed.join(', ')}; each column takes its default`
+            );
+        }
+    }
+
+    /**
+     * The denied-field set for the acting user, or null when field security does not apply —
+     * the entity has it switched off, no user resolves, or the user is denied nothing.
+     *
+     * Returning null rather than an empty Set lets callers skip their loop entirely, and keeps
+     * the three cheap short-circuits in one place instead of repeated at each gate.
+     */
+    private deniedFieldsForActiveUser(select: (user: UserInfo) => Set<string>): Set<string> | null {
+        if (!this.EntityInfo?.EnableFieldLevelSecurity) {
+            return null; // one boolean for the overwhelming majority of entities
+        }
+        const u: UserInfo = this.resolveActiveUserOrNull();
+        if (!u) {
+            return null; // no user resolves — fail open, see AssertFieldReadable
+        }
+        const denied = select(u);
+        return denied.size > 0 ? denied : null;
+    }
+
+    /**
+     * {@link ActiveUser}, but null instead of throwing when no provider is configured to resolve
+     * one from.
+     *
+     * `ActiveUser` ends in `Metadata.Provider.CurrentUser`, which throws a TypeError when there
+     * is no global provider — during early boot, in tests, or in any context that never
+     * configured one. That was harmless while only the save path consulted it, but `Get()` and
+     * `Set()` now do on every access to an FLS-enabled entity, so an unresolvable provider would
+     * turn an ordinary read into a crash.
+     *
+     * "No provider to ask" is the same answer as "no user" for this purpose, and field security
+     * fails open on both.
+     */
+    private resolveActiveUserOrNull(): UserInfo | null {
+        try {
+            return this.ActiveUser ?? null;
+        } catch {
+            return null;
+        }
+    }
+
     protected ThrowPermissionError(u: UserInfo, type: EntityPermissionType, additionalInfoMessage: string) {
         throw new Error(`User: ${u.Name} (ID: ${u.ID}, Email: ${u.Email})
                          Does NOT have permission to ${EntityPermissionType[type]} ${this.EntityInfo.Name } records.
@@ -3661,6 +3935,10 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             this.SetMany(data, false, true, true); // don't ignore non-existent fields, but DO replace old values
+            // InnerLoad is a hydration entry point: any field the provider's row omitted (e.g.
+            // a client-side load whose server response stripped read-denied fields) is
+            // not-loaded, so its constructor state never masquerades as data on the next save.
+            this.markFieldsOmittedBySourceAsNotLoaded(data);
             if (EntityRelationshipsToLoad) {
                 for (let relationship of EntityRelationshipsToLoad) {
                     if (data[relationship]) {
@@ -3830,6 +4108,10 @@ export abstract class BaseEntity<T = unknown> {
         // Hits when: subsequent LoadFromData call on an already-loaded instance, IS-A entity
         // (parent or child), or non-plain-object input. Preserves original semantics exactly.
         this.SetMany(data, true, _replaceOldValues, true); // ignore non-existent fields, but DO replace old values based on the provided param
+        if (isPlainObject) {
+            // LoadFromData is a hydration entry point: keys the source omitted are not-loaded.
+            this.markFieldsOmittedBySourceAsNotLoaded(data as Record<string, unknown>);
+        }
         // now, check to see if we have the primary key set, if so, we should consider ourselves
         // loaded from the database and set the _recordLoaded flag to true along with the _everSaved flag
         if (this.PrimaryKeys && this.PrimaryKeys.length > 0) {

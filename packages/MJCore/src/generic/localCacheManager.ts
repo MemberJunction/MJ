@@ -1396,9 +1396,22 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      *   same entity+filter, so they must never share a cache entry. When empty/undefined (the
      *   common case — users with no RLS filter), the fingerprint is byte-for-byte identical to the
      *   pre-RLS format so normal cache sharing is preserved and no existing entries are invalidated.
+     * @param flsFieldsKey - Canonical key identifying this user's field-security access on the
+     *   entity: lowercased field names, sorted, comma-joined. The SERVER passes the DENIED set
+     *   (`ProviderBase.ComputeRunViewFLSDeniedKey`); the CLIENT passes the ALLOWED set
+     *   (`ComputeClientFLSAllowedKey`) because filtered client metadata cannot see denied
+     *   fields at all — both are opaque here, and the two caches are looked up independently. Must participate for the same reason as
+     *   `rlsWhereClause`, but for COLUMNS instead of rows: a field-restricted user's queries are
+     *   widened to their ALLOWED column set (not all columns), so their cached rows are narrower
+     *   than an unrestricted user's — the two must never share a slot in either direction. Keyed by
+     *   the DENIED set (not the allowed set) deliberately: it is precomputed per request, an empty
+     *   set appends no segment (unrestricted users and non-FLS entities keep byte-identical shared
+     *   fingerprints), and it is stable under additive schema change where an allowed-set key would
+     *   churn for every user whenever any column is added. A permission change produces a new hash →
+     *   fresh slot; slots keyed to the old hash strand until eviction (memory cost, not a leak).
      * @returns A unique, human-readable fingerprint string
      */
-    public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string, rlsWhereClause?: string): string {
+    public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string, rlsWhereClause?: string, flsFieldsKey?: string): string {
         const entity = params.EntityName?.trim() || 'Unknown';
         const rawFilter = params.ExtraFilter;
         const filter = (typeof rawFilter === 'string' ? rawFilter : rawFilter ? JSON.stringify(rawFilter) : '').trim();
@@ -1472,6 +1485,25 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const rls = (rlsWhereClause ?? '').trim();
         if (rls.length > 0) {
             parts.push(`rls:${this.simpleHash(rls)}`);
+        }
+
+        // Field-Level-Security segment — the column counterpart of `rls:`, and CLIENT-ONLY.
+        //
+        // A browser stores rows exactly as the server returned them (already narrowed to the
+        // user's allowed columns) and never projects on read, so the field set has to be part
+        // of slot identity. Without it, a user whose access is tightened keeps being served
+        // their persisted IndexedDB slot: the currency check compares maxUpdatedAt and rowCount
+        // only, neither of which notices a column.
+        //
+        // The server passes nothing here — its slots are full-width and shared, with narrowing
+        // applied at read time by ApplyFieldSecurityProjection.
+        // ProviderBase.ComputeRunViewFLSFingerprintKey is where that split is decided.
+        //
+        // Appended ONLY when non-empty, so unrestricted users and non-FLS entities keep
+        // byte-identical fingerprints and shared slots (the rls: rule).
+        const fls = (flsFieldsKey ?? '').trim();
+        if (fls.length > 0) {
+            parts.push(`fls:${this.simpleHash(fls)}`);
         }
 
         // Stored-view identity. A saved view's WhereClause/OrderBy live on the view, not in
