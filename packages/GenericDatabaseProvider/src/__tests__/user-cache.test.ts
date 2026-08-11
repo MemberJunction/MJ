@@ -1,12 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GetGlobalObjectStore } from '@memberjunction/global';
+import type { DatabaseProviderBase } from '@memberjunction/core';
 
 // ---------------------------------------------------------------------------
 // Mock external modules
 // ---------------------------------------------------------------------------
 vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
-    Metadata: class { static Provider = { ConfigData: { MJCoreSchemaName: '__mj' } } },
     UserInfo: class {
         ID: string;
         Name: string;
@@ -25,14 +25,11 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     };
 });
 
-// Mock mssql to prevent real database imports
-vi.mock('mssql', () => ({}));
-
 // ---------------------------------------------------------------------------
 // Import after mocks
 // ---------------------------------------------------------------------------
 import { UserCache } from '../UserCache';
-import { UserInfo } from '@memberjunction/core';
+import { LogError, UserInfo } from '@memberjunction/core';
 
 // ---------------------------------------------------------------------------
 // Helper to reset singleton state between tests
@@ -54,12 +51,40 @@ function makeUser(id: string, name: string): UserInfo {
     );
 }
 
+/**
+ * Minimal stand-in for a configured provider. `Refresh` only touches three members of
+ * `DatabaseProviderBase` — `MJCoreSchemaName`, `QuoteSchemaAndView` and `ExecuteSQL` — so the stub
+ * implements exactly those and records the SQL it was handed.
+ */
+interface ProviderStub {
+    Provider: DatabaseProviderBase;
+    Queries: string[];
+    ExecuteSQL: ReturnType<typeof vi.fn>;
+}
+
+function makeProviderStub(
+    rows: { users?: Record<string, unknown>[]; roles?: Record<string, unknown>[] } = {}
+): ProviderStub {
+    const queries: string[] = [];
+    const executeSQL = vi.fn(async (query: string) => {
+        queries.push(query);
+        return query.includes('vwUserRoles') ? (rows.roles ?? []) : (rows.users ?? []);
+    });
+    const stub = {
+        MJCoreSchemaName: '__mj',
+        QuoteSchemaAndView: (schema: string, view: string) => `[${schema}].[${view}]`,
+        ExecuteSQL: executeSQL,
+    };
+    return { Provider: stub as unknown as DatabaseProviderBase, Queries: queries, ExecuteSQL: executeSQL };
+}
+
 // =====================================================================
 // Tests for UserCache
 // =====================================================================
 describe('UserCache', () => {
     beforeEach(() => {
         resetSingleton();
+        vi.mocked(LogError).mockClear();
     });
 
     // -----------------------------------------------------------------
@@ -138,6 +163,133 @@ describe('UserCache', () => {
     });
 
     // -----------------------------------------------------------------
+    // Cold cache — a Refresh that never ran, or one that failed, must not throw
+    // -----------------------------------------------------------------
+    describe('cold cache', () => {
+        it('should expose an empty Users array before any Refresh', () => {
+            expect(UserCache.Instance.Users).toEqual([]);
+        });
+
+        it('should return undefined from GetSystemUser rather than throwing on a cold cache', () => {
+            expect(() => UserCache.Instance.GetSystemUser()).not.toThrow();
+            expect(UserCache.Instance.GetSystemUser()).toBeUndefined();
+        });
+
+        it('should return undefined from UserByName rather than throwing on a cold cache', () => {
+            expect(UserCache.Instance.UserByName('anyone')).toBeUndefined();
+        });
+
+        it('should leave an empty cache — not an undefined one — when Refresh fails', async () => {
+            const stub = makeProviderStub();
+            stub.ExecuteSQL.mockRejectedValue(new Error('connection reset'));
+
+            await UserCache.Instance.Refresh(stub.Provider);
+
+            expect(LogError).toHaveBeenCalled();
+            expect(UserCache.Instance.Users).toEqual([]);
+            expect(UserCache.Instance.GetSystemUser()).toBeUndefined();
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // Refresh — reads through the provider, no dialect coupling
+    // -----------------------------------------------------------------
+    describe('Refresh', () => {
+        it('should query vwUsers and vwUserRoles through the provider', async () => {
+            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [] });
+
+            await UserCache.Instance.Refresh(stub.Provider);
+
+            expect(stub.Queries).toEqual([
+                'SELECT * FROM [__mj].[vwUsers]',
+                'SELECT * FROM [__mj].[vwUserRoles]',
+            ]);
+        });
+
+        it('should build UserInfo objects with their roles attached', async () => {
+            const stub = makeProviderStub({
+                users: [{ ID: 'id1', Name: 'Alice' }, { ID: 'id2', Name: 'Bob' }],
+                roles: [
+                    { UserID: 'id1', Role: 'Developer' },
+                    { UserID: 'ID1', Role: 'Integration' },
+                    { UserID: 'id2', Role: 'UI' },
+                ],
+            });
+
+            await UserCache.Instance.Refresh(stub.Provider);
+
+            const users = UserCache.Instance.Users;
+            expect(users).toHaveLength(2);
+            // Role matching is UUID-comparison based, so the case-variant UserID still matches
+            expect((users[0] as unknown as { UserRoles: unknown[] }).UserRoles).toHaveLength(2);
+            expect((users[1] as unknown as { UserRoles: unknown[] }).UserRoles).toHaveLength(1);
+        });
+
+        it('should be usable with a PostgreSQL-style quoting provider', async () => {
+            const stub = makeProviderStub({ users: [], roles: [] });
+            const pgProvider = {
+                MJCoreSchemaName: '__mj',
+                QuoteSchemaAndView: (schema: string, view: string) => `"${schema}"."${view}"`,
+                ExecuteSQL: stub.ExecuteSQL,
+            } as unknown as DatabaseProviderBase;
+
+            await UserCache.Instance.Refresh(pgProvider);
+
+            expect(stub.Queries).toEqual([
+                'SELECT * FROM "__mj"."vwUsers"',
+                'SELECT * FROM "__mj"."vwUserRoles"',
+            ]);
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // Auto-refresh timer
+    // -----------------------------------------------------------------
+    describe('auto-refresh timer', () => {
+        beforeEach(() => {
+            vi.useFakeTimers();
+        });
+
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it('should re-arm with the same provider after the interval elapses', async () => {
+            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [] });
+
+            await UserCache.Instance.Refresh(stub.Provider, 1000);
+            expect(stub.ExecuteSQL).toHaveBeenCalledTimes(2); // users + roles, one pass
+
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(stub.ExecuteSQL).toHaveBeenCalledTimes(4); // second pass, same provider
+            expect(stub.Queries).toEqual([
+                'SELECT * FROM [__mj].[vwUsers]',
+                'SELECT * FROM [__mj].[vwUserRoles]',
+                'SELECT * FROM [__mj].[vwUsers]',
+                'SELECT * FROM [__mj].[vwUserRoles]',
+            ]);
+        });
+
+        it('should not schedule a refresh when no interval is supplied', async () => {
+            const stub = makeProviderStub({ users: [], roles: [] });
+
+            await UserCache.Instance.Refresh(stub.Provider);
+            await vi.advanceTimersByTimeAsync(60_000);
+
+            expect(stub.ExecuteSQL).toHaveBeenCalledTimes(2);
+        });
+
+        it('should not schedule a refresh when the interval is zero', async () => {
+            const stub = makeProviderStub({ users: [], roles: [] });
+
+            await UserCache.Instance.Refresh(stub.Provider, 0);
+            await vi.advanceTimersByTimeAsync(60_000);
+
+            expect(stub.ExecuteSQL).toHaveBeenCalledTimes(2);
+        });
+    });
+
+    // -----------------------------------------------------------------
     // Users getter
     // -----------------------------------------------------------------
     describe('Users getter', () => {
@@ -150,9 +302,9 @@ describe('UserCache', () => {
             expect(instance.Users).toHaveLength(2);
         });
 
-        it('should return undefined when _users has not been set', () => {
+        it('should return an empty array when _users has not been set', () => {
             const instance = UserCache.Instance;
-            expect(instance.Users).toBeUndefined();
+            expect(instance.Users).toEqual([]);
         });
     });
 
