@@ -3329,6 +3329,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * pagination under StartRow/MaxRows — is preserved) rather than from the unordered snapshot. Parse failure or
      * an un-reasoned statement shape returns `true` (refuse-to-live: treat unknown as ordered rather than risk
      * serving mis-ordered pages). Mirrors MaterializationRefresher.stripTopLevelOrderBy's AST detection.
+     *
+     * @internal Materialized-read ordering-fidelity gate — NOT part of this package's supported public API;
+     * `static` only so it can be unit-tested. Do not call from outside `@memberjunction/generic-database-provider`.
      */
     public static queryHasTopLevelOrderBy(sql: string, platformKey: string | undefined): boolean {
         if (!sql || sql.trim().length === 0) return false;
