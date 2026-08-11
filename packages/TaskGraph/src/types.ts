@@ -49,6 +49,14 @@ export type TaskActionRunResult = {
     Success: boolean;
     Output?: unknown;
     ErrorMessage?: string;
+    /**
+     * The `MJ: Action Execution Logs` row this run produced.
+     *
+     * Carried so the step can record it, which is what lets a workflow's action offer "view the
+     * execution log" the way an ordinary agent run step does. Optional because a runner that
+     * cannot produce one is limited, not broken.
+     */
+    ActionLogID?: string;
 };
 
 /**

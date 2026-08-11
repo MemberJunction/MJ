@@ -1,8 +1,18 @@
 import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component } from '@angular/core';
 import { CompositeKey, RunView } from '@memberjunction/core';
 import { MJTaskEntity, ResourceData } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { BaseDashboard } from '@memberjunction/ng-shared';
+import { ParseJSONOptions, ParseJSONRecursive, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { BaseDashboard, BaseResourceComponent } from '@memberjunction/ng-shared';
+import { SortWorkflowRuns, type WorkflowRunSortColumn } from './workflow-run-sorting';
+
+/**
+ * How the JSON panes unpack nested JSON.
+ *
+ * A task's `Configuration` and payloads are JSON stored inside a string column, so without this the
+ * viewer shows one very long escaped line — technically the truth, and unreadable. Matches what the
+ * agent-run detail panel does, so the same record reads the same way in both places.
+ */
+const JSON_PARSE_OPTIONS: ParseJSONOptions = { extractInlineJson: true, maxDepth: 100, debug: false };
 
 /** A settled-or-running graph, projected for the list. */
 export type WorkflowRunRow = {
@@ -20,6 +30,31 @@ export type WorkflowRunRow = {
 export type WorkflowRunStatusFilter = 'all' | 'Running' | 'Complete' | 'Failed' | 'Cancelled';
 
 const STATUS_FILTERS: readonly WorkflowRunStatusFilter[] = ['all', 'Running', 'Complete', 'Failed', 'Cancelled'];
+
+// The sort column type and the ordering itself live in `workflow-run-sorting`, which is pure and
+// therefore testable without standing up the component. Re-exported so existing importers of this
+// module keep resolving.
+export type { WorkflowRunSortColumn } from './workflow-run-sorting';
+
+/** What the detail panel is showing for the selected run. */
+export type WorkflowRunDetailTab = 'graph' | 'json';
+
+/**
+ * One step of a run, for the detail panel's step list and JSON view.
+ *
+ * The whole entity is kept, not a projection: the JSON view exists precisely so someone can read
+ * everything the row holds, and a projection would decide for them what is worth seeing.
+ */
+export type WorkflowRunStep = {
+    ID: string;
+    Name: string;
+    Status: string;
+    StepType: string | null;
+    StartedAt: Date | null;
+    CompletedAt: Date | null;
+    /** Every column of the row, for the JSON pane. */
+    Record: Record<string, unknown>;
+};
 
 /**
  * The Workflows app's **Runs** surface — every task graph that has run, whoever started it.
@@ -40,7 +75,15 @@ const STATUS_FILTERS: readonly WorkflowRunStatusFilter[] = ['all', 'Running', 'C
     styleUrls: ['./workflow-runs-resource.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush,
 })
-@RegisterClass(BaseDashboard, 'WorkflowRunsResource')
+// Registered against BaseResourceComponent, NOT BaseDashboard — while still extending BaseDashboard
+// for its lifecycle (initDashboard/loadData and the automatic NotifyLoadComplete).
+//
+// The registration key is what the shell looks the component up by, and a nav item with
+// `ResourceType: "Custom"` is resolved through BaseResourceComponent. Registered under BaseDashboard
+// this class was never found: the Runs tab rendered "No component is registered for driver class
+// WorkflowRunsResource", which reads as a packaging problem and is really a one-word mismatch.
+// Its sibling WorkflowsResourceComponent had it right, which is what made the difference visible.
+@RegisterClass(BaseResourceComponent, 'WorkflowRunsResource')
 export class WorkflowRunsResourceComponent extends BaseDashboard implements AfterViewInit {
     public IsLoading = false;
     public LoadError: string | null = null;
@@ -53,6 +96,23 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     public SelectedRunID: string | null = null;
 
     public readonly StatusFilters = STATUS_FILTERS;
+
+    /**
+     * Ordering. Newest-first by default, because "what just happened" is the question a run list is
+     * usually opened to answer.
+     */
+    public SortColumn: WorkflowRunSortColumn = 'StartedAt';
+    public SortDescending = true;
+
+    /** What the detail panel is showing. */
+    public DetailTab: WorkflowRunDetailTab = 'graph';
+
+    /** The selected run's steps, loaded when a run is opened. */
+    public SelectedSteps: WorkflowRunStep[] = [];
+    public StepsLoading = false;
+
+    /** The step whose JSON is showing, or null when none is selected. */
+    public SelectedStepID: string | null = null;
 
     constructor(private cdr: ChangeDetectorRef) {
         super();
@@ -70,13 +130,43 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
         this.publishAgentContext();
     }
 
-    /** The rows after the active filter and search — what the template renders. */
+    /** The rows after the active filter and search, in the chosen order — what the template renders. */
     public get VisibleRuns(): WorkflowRunRow[] {
         const wanted = this.SearchText.trim().toLowerCase();
-        return this.Runs.filter((r) => {
+        const filtered = this.Runs.filter((r) => {
             if (this.StatusFilter !== 'all' && r.Status !== this.StatusFilter) return false;
             return !wanted || r.Name.toLowerCase().includes(wanted);
         });
+        return this.sortRuns(filtered);
+    }
+
+    /** Ordering — see `workflow-run-sorting` for the rules and why unset always sorts last. */
+    private sortRuns(rows: WorkflowRunRow[]): WorkflowRunRow[] {
+        return SortWorkflowRuns(rows, this.SortColumn, this.SortDescending);
+    }
+
+    /**
+     * Sorts by a column, flipping direction when it is already the active one.
+     *
+     * Time columns start descending (newest first) and text columns ascending (A→Z), because that is
+     * what each is normally wanted in — a first click that produced the least useful order would
+     * just mean everyone clicks twice.
+     */
+    public OnSort(column: WorkflowRunSortColumn): void {
+        if (this.SortColumn === column) {
+            this.SortDescending = !this.SortDescending;
+        } else {
+            this.SortColumn = column;
+            this.SortDescending = column === 'StartedAt' || column === 'CompletedAt' || column === 'Duration';
+        }
+        this.publishAgentContext();
+        this.cdr.markForCheck();
+    }
+
+    /** The sort indicator for a column header: none, ascending, or descending. */
+    public SortIcon(column: WorkflowRunSortColumn): string {
+        if (this.SortColumn !== column) return 'fa-solid fa-sort';
+        return this.SortDescending ? 'fa-solid fa-sort-down' : 'fa-solid fa-sort-up';
     }
 
     public get SelectedRun(): WorkflowRunRow | null {
@@ -142,9 +232,111 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     }
 
     public OnSelectRun(run: WorkflowRunRow): void {
-        this.SelectedRunID = UUIDsEqual(this.SelectedRunID ?? '', run.ID) ? null : run.ID;
+        const closing = UUIDsEqual(this.SelectedRunID ?? '', run.ID);
+        this.SelectedRunID = closing ? null : run.ID;
+        this.SelectedStepID = null;
+        this.SelectedSteps = [];
         this.publishAgentContext();
         this.cdr.markForCheck();
+        if (!closing) void this.loadSteps(run.ID);
+    }
+
+    /**
+     * Loads the selected run's steps.
+     *
+     * On selection rather than with the list, because a run list of 200 would otherwise pull every
+     * step of every run to show the one a person opened. `BypassCache` because the dispatcher
+     * advances tasks through direct SQL, which fires no cache invalidation — a cached read here can
+     * hand back the state the graph was in when it started.
+     */
+    private async loadSteps(parentTaskID: string): Promise<void> {
+        this.StepsLoading = true;
+        this.cdr.markForCheck();
+        try {
+            const result = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJTaskEntity>({
+                EntityName: 'MJ: Tasks',
+                ExtraFilter: `ParentID='${parentTaskID}'`,
+                // The same ordering rule the run tree uses: what ran, in the order it ran, with work
+                // that never started at the end. `__mj_CreatedAt` alone is the COMPILER's walk
+                // order, which has nothing to do with execution.
+                OrderBy: 'CASE WHEN StartedAt IS NULL THEN 1 ELSE 0 END, StartedAt, __mj_CreatedAt',
+                ResultType: 'entity_object',
+                BypassCache: true,
+            });
+            if (!UUIDsEqual(this.SelectedRunID ?? '', parentTaskID)) return; // selection moved on
+            this.SelectedSteps = (result.Success ? (result.Results ?? []) : []).map((t) => ({
+                ID: t.ID,
+                Name: t.Name ?? '(unnamed step)',
+                Status: t.Status,
+                StepType: t.StepType,
+                StartedAt: t.StartedAt,
+                CompletedAt: t.CompletedAt,
+                Record: t.GetAll(),
+            }));
+        } catch (e) {
+            this.LoadError = e instanceof Error ? e.message : String(e);
+            this.SelectedSteps = [];
+        } finally {
+            this.StepsLoading = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /** A node was clicked on the canvas — show that step's JSON. */
+    public OnGraphNodeSelected(event: { TaskID: string }): void {
+        this.SelectedStepID = event.TaskID;
+        this.cdr.markForCheck();
+    }
+
+    public OnSelectStep(step: WorkflowRunStep): void {
+        this.SelectedStepID = UUIDsEqual(this.SelectedStepID ?? '', step.ID) ? null : step.ID;
+        this.cdr.markForCheck();
+    }
+
+    public OnDetailTab(tab: WorkflowRunDetailTab): void {
+        this.DetailTab = tab;
+        this.cdr.markForCheck();
+    }
+
+    public get SelectedStep(): WorkflowRunStep | null {
+        return this.SelectedSteps.find((s) => UUIDsEqual(s.ID, this.SelectedStepID ?? '')) ?? null;
+    }
+
+    /** The selected step, as formatted JSON for the viewer. */
+    public get SelectedStepJson(): string {
+        const step = this.SelectedStep;
+        return step ? JSON.stringify(ParseJSONRecursive(step.Record, JSON_PARSE_OPTIONS), null, 2) : '{}';
+    }
+
+    /**
+     * The whole run as JSON — the graph row and every step under it.
+     *
+     * Nested JSON is parsed rather than left as escaped strings, so `Configuration` and the payloads
+     * read as structure instead of a single unbroken line. That is the difference between a JSON tab
+     * someone can use and one they copy elsewhere to make readable.
+     */
+    public get SelectedRunJson(): string {
+        const run = this.SelectedRun;
+        if (!run) return '{}';
+        return JSON.stringify(
+            ParseJSONRecursive(
+                {
+                    Run: {
+                        ID: run.ID,
+                        Name: run.Name,
+                        Status: run.Status,
+                        StartedAt: run.StartedAt,
+                        CompletedAt: run.CompletedAt,
+                        Duration: run.Duration,
+                        AgentRunID: run.AgentRunID,
+                    },
+                    Steps: this.SelectedSteps.map((s) => s.Record),
+                },
+                JSON_PARSE_OPTIONS,
+            ),
+            null,
+            2,
+        );
     }
 
     public OnFilterByStatus(status: WorkflowRunStatusFilter): void {

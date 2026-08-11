@@ -112,7 +112,7 @@ export type TaskGraphNodeKind = 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEa
 export type TaskGraphNodeConfigMap = {
     Agent: { agentName: string; message?: string; templateParameters?: Record<string, string> };
     Action: { actionName: string; inputMapping?: string; outputMapping?: string };
-    Human: { assignToUserID?: string; instructions?: string };
+    Human: { assignToUserID?: string; instructions?: string; expiresInHours?: number };
     Prompt: { promptName: string; templateParameters?: Record<string, string> };
     ForEach: ForEachOperation;
     While: WhileOperation;
