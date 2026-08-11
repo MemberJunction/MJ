@@ -498,7 +498,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT03 - Client GraphQL Cache Integrity",
-            "Sequence": 34,
+            "Sequence": 36,
             "Status": "Active"
           },
           "primaryKey": {
@@ -513,7 +513,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT15 - Remote Operations Over-The-Wire Progress",
-            "Sequence": 35,
+            "Sequence": 37,
             "Status": "Active"
           },
           "primaryKey": {
