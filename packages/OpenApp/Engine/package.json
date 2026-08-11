@@ -25,6 +25,11 @@
     "simple-git": "^3.27.0",
     "zod": "^3.25.0"
   },
+  "optionalDependencies": {
+    "@memberjunction/skyway-core": "^0.6.2",
+    "@memberjunction/skyway-postgres": "^0.6.2",
+    "@memberjunction/skyway-sqlserver": "^0.6.2"
+  },
   "devDependencies": {
     "@types/semver": "^7.5.8",
     "@types/node": "24.10.11",
