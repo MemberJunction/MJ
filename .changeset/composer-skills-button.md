@@ -16,8 +16,8 @@ on, the editor captures a baseline length when a trigger opens this way, and thr
 it: typing filters against the baseline rather than searching for the character, chip insertion
 removes only what was typed, and dismissal has nothing to undo.
 
-It also toggles: a second click closes, because a button carrying `aria-pressed` has to be able to
-un-press. Without that the second click re-ran the open path, re-emitting the event pair and
+It also toggles: a second click closes, because a disclosure control has to be able to close what
+it opened. Without that the second click re-ran the open path, re-emitting the event pair and
 re-capturing the baseline at the new caret.
 
 Built as a sibling of the existing strip controls, with the same `attach-button-icon` chrome and
@@ -40,10 +40,10 @@ guide's naming table, which specifies `Cancellable<Domain>EventArgs` for exactly
 sixteen packages already following it. It is also the only option here on dependency grounds:
 `ng-composer` is the generic layer and cannot import from `ng-conversations`.
 
-**The pressed state is derived, not an input.** Plan Mode's active state is a persisted user
+**The expanded state is derived, not an input.** Plan Mode's active state is a persisted user
 preference the host owns and threads down. "Is the skill dropdown open" is intrinsic to the
 composer, so it reads `MentionEditorComponent.IsTriggerOpen('/')` instead. An `@Input` there would
-be an API no host could answer, and would leave the button permanently unpressed if nobody bound it.
+be an API no host could answer, and would leave the button permanently collapsed if nobody bound it.
 
 No new host-level cap: the button is gated on the existing `EnableSkillCommands` /
 `enableSkillCommands` / `allowSkillCommands` chain, which already defaults true at every layer. The
@@ -57,12 +57,23 @@ a composer advertise skills it will not serve.
   non-focusable area does not blur a contenteditable, so the dropdown stayed open with nothing able
   to close it. A `document:mousedown` listener now closes it, chosen over `click` because mousedown
   fires before focus moves and therefore cannot race blur's 200ms timer. Clicks inside the
-  component are exempt, so a suggestion row still selects.
+  component are exempt, so a suggestion row still selects. The Skills button sits OUTSIDE the
+  editor's host, so it needs the same exemption: without it the button's mousedown read as an
+  outside press and closed the dropdown, then the click saw it already closed and reopened it, so
+  the toggle never appeared to work. That seam is covered by a DOM test that fires real bubbling
+  mousedown/click rather than calling the handler, which is what hid the bug.
 * **The dropdown could land off screen.** Positioning measures the caret, and a collapsed range in
   an empty editor measures 0x0 at 0,0 in every browser, pinning the menu to the bottom-left corner
   of the viewport. It now falls back to the editor's own box. The menu also prefers to open ABOVE
   the composer: the composer sits at the bottom of the chat, so a downward menu covers the text
   being typed.
+* **A button-opened menu anchors to the button, not the caret.** On the typed path the user's eyes
+  and query are both at the caret, so the caret is the right anchor. On the button path nobody is
+  looking at the caret. The anchored menu aligns left and grows rightward, flipping to right-aligned
+  only when that would overflow the viewport — and the flip aligns to the COMPOSER's right edge
+  rather than the button's, because the strip is pinned bottom-right and Skills is the leftmost of
+  five icons, so pinning to that one icon hangs the menu's whole width out to its left. Coordinates
+  are viewport-relative throughout, since the dropdown renders with `useFixedPositioning`.
 
 `OpenTrigger` and `IsTriggerOpen` are public and generic. Any trigger character with an active
 provider can now be opened from a control, and any control can reflect whether its trigger is open.

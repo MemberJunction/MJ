@@ -124,13 +124,23 @@ export class MessageInputBoxComponent {
    * per-skill icons and chip insertion all stay in one implementation.
    */
   /**
-   * NOTE: the template pairs this with `(mousedown)="$event.preventDefault()"`. A <button> takes
-   * focus on mousedown, which blurs the editor, and the editor closes its dropdown 200ms after
-   * losing focus — so without that guard the menu opened and then shut itself before it could be
-   * used. Preventing the default keeps focus in the editor, where the trigger lives anyway.
+   * NOTE: the template pairs this with
+   * `(mousedown)="$event.preventDefault(); $event.stopPropagation()"`, and BOTH halves are
+   * load-bearing.
+   *
+   * `preventDefault` — a <button> takes focus on mousedown, which blurs the editor, and the editor
+   * closes its dropdown 200ms after losing focus. Without it the menu opened and then shut itself.
+   *
+   * `stopPropagation` — the editor's click-away listener is on `document:mousedown` and exempts only
+   * presses inside the EDITOR's host. This button is a sibling of `<mj-mention-editor>`, so a press
+   * on it read as an outside press: mousedown closed the dropdown, then click saw `SkillsActive`
+   * already false and reopened it. The menu blinked, could not be dismissed by the button that
+   * opened it, and the Before/After pair fired on every click — the exact over-counting the toggle
+   * branch below exists to prevent. Stopping propagation states that this press belongs to the
+   * dropdown machinery.
    */
-  OnSkillsClick(): void {
-    // Toggle closed first. A button carrying aria-pressed has to be able to un-press, and without
+  OnSkillsClick(event?: Event): void {
+    // Toggle closed first. A disclosure button has to be able to close what it opened, and without
     // this a second click re-ran the open path: it re-emitted the Before/After pair (so a host
     // counting opens over-counted) and re-captured the trigger's baseline at the new caret, which
     // corrupts the query offset once anything has been typed.
@@ -143,7 +153,8 @@ export class MessageInputBoxComponent {
     if (args.Cancel) {
       return;
     }
-    if (this.mentionEditor?.OpenTrigger('/')) {
+    const anchor = (event?.currentTarget as HTMLElement | undefined) ?? null;
+    if (this.mentionEditor?.OpenTrigger('/', anchor)) {
       this.AfterSkillsOpened.emit();
     }
   }

@@ -28,9 +28,12 @@ describe('MentionEditorComponent — click-away dismissal', () => {
     expect(ts).not.toContain("@HostListener('document:click'");
   });
 
-  it('does nothing when no dropdown is open', () => {
-    // Otherwise every click in the application pays for a containment check.
-    expect(body).toMatch(/if \(!this\.showMentionDropdown\) \{\s*return;/);
+  it('does nothing when nothing is open — not even a press still awaiting suggestions', () => {
+    // Otherwise every click in the application pays for a containment check. The guard also has to
+    // cover virtualTriggerOpen: between a button press and the provider's response the dropdown is
+    // not yet showing, and without that half the dismissing click is ignored and the menu opens
+    // afterwards, unbidden.
+    expect(body).toMatch(/if \(!this\.showMentionDropdown && !this\.virtualTriggerOpen\) \{\s*return;/);
   });
 
   it('leaves clicks INSIDE the component alone, so a suggestion row still selects', () => {

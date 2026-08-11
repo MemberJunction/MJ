@@ -118,6 +118,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   public mentionSuggestions: MentionSuggestion[] = [];
   public mentionDropdownPosition: { top: number; left: number } = { top: 0, left: 0 };
   public mentionDropdownShowAbove: boolean = false;
+  /** Right-align the dropdown against its anchor. Only the button path sets this. */
+  public mentionDropdownAlignRight: boolean = false;
 
   private mentionStartIndex: number = -1;
   private mentionQuery: string = '';
@@ -134,6 +136,15 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   private virtualTriggerOpen: boolean = false;
   /** Text length at the moment a virtual trigger opened — the origin for its query and deletion. */
   private virtualTriggerBaseline: number = 0;
+  /**
+   * The control that opened a virtual trigger, used to anchor the dropdown to it.
+   *
+   * STICKY for the whole session on purpose. `positionMentionDropdown()` re-runs on every keystroke
+   * while the user filters, and once there is text the caret measures real coordinates — so
+   * anchoring only on first paint would open at the button and then jump to the far-left caret on
+   * the first keypress, which is worse than not anchoring at all.
+   */
+  private virtualTriggerAnchor: HTMLElement | null = null;
   /**
    * Monotonic sequence guarding the async suggestion fetch — a response only applies
    * when no newer keystroke (or dropdown close) has superseded it.
@@ -193,7 +204,11 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    */
   @HostListener('document:mousedown', ['$event'])
   onDocumentMouseDown(event: MouseEvent): void {
-    if (!this.showMentionDropdown) {
+    // Also fires for a press still awaiting suggestions: on a cold session the provider load takes
+    // hundreds of ms, and without this the user's dismissing click is ignored and the menu pops
+    // open afterwards, unbidden. closeMentionDropdown bumps the request sequence, which drops the
+    // in-flight response.
+    if (!this.showMentionDropdown && !this.virtualTriggerOpen) {
       return;
     }
     const target = event.target as Node | null;
@@ -285,7 +300,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     // Close dropdown when editor loses focus
     // Use setTimeout to allow mousedown events on dropdown to fire first
     setTimeout(() => {
-      if (this.showMentionDropdown) {
+      if (this.showMentionDropdown || this.virtualTriggerOpen) {
         this.closeMentionDropdown();
       }
     }, 200);
@@ -347,9 +362,16 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * Handle keydown events
    */
   onKeyDown(event: KeyboardEvent): void {
-    // Enter alone: Send message (if dropdown not showing)
-    if (event.key === 'Enter' && !event.shiftKey && !this.showMentionDropdown) {
+    // Enter alone: Send message. The dropdown only earns Enter when it has something to pick. A
+    // button-opened menu stays open on an empty result set (so the press is not a silent no-op),
+    // which made "showing but empty" reachable for the first time — and there Enter was neither
+    // handled nor prevented, so it fell through to the contenteditable and inserted a newline
+    // instead of sending.
+    if (event.key === 'Enter' && !event.shiftKey && (!this.showMentionDropdown || this.mentionSuggestions.length === 0)) {
       event.preventDefault();
+      if (this.showMentionDropdown) {
+        this.closeMentionDropdown();
+      }
       const plainText = this.getPlainText();
       this.enterPressed.emit(plainText);
       return;
@@ -385,11 +407,17 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     const textBeforeCursor = this.getTextBeforeCursor(range);
 
     // Find the nearest active trigger char before the cursor — whichever is closest wins
+    // A button-opened session only recognises trigger characters typed AFTER it opened. Without
+    // this floor the scan runs over the whole message, so a URL ('.../docs'), an email ('a@b.io')
+    // or a date ('9/11') already in the box is found instead, and the first keystroke either closes
+    // the menu the button just opened or filters it by the wrong query. searchFrom is 0 on the
+    // typed path, which leaves that path's behaviour byte-for-byte unchanged.
+    const searchFrom = this.virtualTriggerOpen ? this.virtualTriggerBaseline : 0;
     let triggerIndex = -1;
     let triggerChar = '@';
     for (const t of activeTriggers) {
       const idx = textBeforeCursor.lastIndexOf(t);
-      if (idx > triggerIndex) {
+      if (idx >= searchFrom && idx > triggerIndex) {
         triggerIndex = idx;
         triggerChar = t;
       }
@@ -416,6 +444,16 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     if (textAfterTrigger.includes(' ')) {
       this.closeMentionDropdown();
       return;
+    }
+
+    // A real trigger character now owns the session, so the virtual one must let go: otherwise
+    // chip insertion still takes the virtual branch and deletes only the typed tail, orphaning the
+    // trigger text, and the menu stays pinned to the button instead of the caret.
+    if (this.virtualTriggerOpen) {
+      this.virtualTriggerOpen = false;
+      this.virtualTriggerBaseline = 0;
+      this.virtualTriggerAnchor = null;
+      this.mentionDropdownAlignRight = false;
     }
 
     // Extract query
@@ -457,6 +495,13 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     if (merged.length > 0) {
       this.showMentionDropdown = true;
       this.positionMentionDropdown();
+    } else if (this.virtualTriggerOpen) {
+      // A button press must never be a silent no-op. Closing on empty results is right for a TYPED
+      // trigger (the user is mid-word and nothing matched yet), but a host with zero skills clicking
+      // the button would get no feedback at all and read it as broken. Staying open surfaces the
+      // dropdown's own empty state, which was otherwise unreachable.
+      this.showMentionDropdown = true;
+      this.positionMentionDropdown();
     } else {
       this.closeMentionDropdown();
     }
@@ -487,6 +532,15 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
 
+    // A button-opened trigger anchors to the BUTTON, not the caret. On the typed path the user's
+    // eyes and query are at the caret so the caret is right; on the button path nobody is looking at
+    // the caret, they are looking at the control they just pressed. Sticky for the session (see
+    // virtualTriggerAnchor) so filtering does not yank the menu to the caret on the first keystroke.
+    if (this.virtualTriggerOpen && this.virtualTriggerAnchor) {
+      this.positionToAnchor(this.virtualTriggerAnchor, containerRect);
+      return;
+    }
+
     const range = selection.getRangeAt(0);
     let cursorRect = range.getBoundingClientRect();
 
@@ -507,6 +561,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     // Prefer ABOVE. The composer sits at the bottom of the chat, so a dropdown that grows downward
     // lands on top of the very text being typed. Below is the fallback for the rare host that
     // mounts the composer high in a tall viewport.
+    this.mentionDropdownAlignRight = false;
     this.mentionDropdownShowAbove = spaceAbove >= dropdownHeight || spaceAbove > spaceBelow;
 
     if (this.mentionDropdownShowAbove) {
@@ -522,6 +577,71 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
         left: cursorRect.left + window.scrollX
       };
     }
+  }
+
+
+  /**
+   * Right-align the dropdown above a trigger control, matching where the voice-options picker puts
+   * its popover so two buttons in the same strip do not open menus on opposite corners.
+   *
+   * Right alignment is applied as a transform in CSS (`align-right`) rather than computed here,
+   * because the dropdown's width is content-based; `left` is still clamped so no anchor position can
+   * push it off the left edge on a narrow viewport.
+   */
+  private positionToAnchor(anchor: HTMLElement, containerRect: DOMRect | undefined): void {
+    const GUTTER = 16;
+    const rect = anchor.getBoundingClientRect();
+    // The dropdown is rendered with `useFixedPositioning`, so `top`/`left` are VIEWPORT coordinates.
+    // Never add window.scrollX/scrollY here — getBoundingClientRect is already viewport-relative, and
+    // adding scroll converts to document coordinates, which under `position: fixed` drags the menu
+    // off by exactly the scroll offset.
+
+    // HORIZONTAL. Align the box's LEFT edge to the button's left edge and let it grow rightward.
+    // Right-alignment is wrong for this control: the Skills button sits in `.attach-buttons` on the
+    // LEFT of the composer, so pinning the box's right edge to the button's right edge sends a
+    // 280-400px menu off the left of the screen, and clamping it back parks it over the middle of
+    // the composer. Flip to right-aligned only when growing right would overflow the viewport,
+    // which is what a menu anchored to a right-hand control needs.
+    const assumedWidth = Math.min(400, window.innerWidth - GUTTER * 2);
+    const overflowsRight = rect.left + assumedWidth > window.innerWidth - GUTTER;
+    this.mentionDropdownAlignRight = overflowsRight;
+    // align-right shifts the box back by its own width, so `left` is then its RIGHT edge; otherwise
+    // `left` is its left edge. Clamp both forms inside the gutter.
+    //
+    // When flipping, align to the CONTAINER's right edge, not the button's. `.attach-buttons` is
+    // pinned to the composer's bottom-right and Skills is the leftmost of five icons, so pinning the
+    // box to that one button's right edge hangs its whole 400px body out to the left of the icon the
+    // user pressed. Aligning to the composer instead puts the menu above the button cluster, which is
+    // what "above the button" means when the menu is ten times the button's width.
+    const flippedRightEdge = containerRect
+      ? Math.min(containerRect.right, window.innerWidth - GUTTER)
+      : Math.min(rect.right, window.innerWidth - GUTTER);
+    const left = overflowsRight
+      ? Math.max(assumedWidth + GUTTER, flippedRightEdge)
+      : Math.min(Math.max(GUTTER, rect.left), window.innerWidth - GUTTER - assumedWidth);
+
+    // VERTICAL. Prefer the composer's top edge so the menu clears the whole input box rather than
+    // overlapping the text the user is composing; fall back to the button when there is no container.
+    // Not unconditional: `show-above` lifts the box by its own height, so forcing it where there is
+    // no room renders it off the top of the viewport where it cannot be reached.
+    const anchorTop = containerRect ? containerRect.top : rect.top;
+    const dropdownHeight = Math.min(Math.max(this.mentionSuggestions.length, 1) * 56, 300);
+    // Prefer above, but when it does not fit, take whichever side has MORE room rather than
+    // dropping below unconditionally — the composer is bottom-docked, so below is usually the worse
+    // side. In a short viewport (a popped-out chat, or mobile with the keyboard up) that difference
+    // is the whole menu versus a clipped sliver.
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const showAbove = anchorTop >= dropdownHeight + GUTTER || anchorTop > spaceBelow;
+    this.mentionDropdownShowAbove = showAbove;
+    // Above: `top` is the box's BOTTOM edge (the transform lifts it). Below: it is the top edge.
+    // Clamped either way, because dropdownHeight is an estimate (rows with descriptions run taller
+    // than 56px) and an underestimate would otherwise clip the first row off the top of the screen.
+    const rawTop = showAbove ? anchorTop - 8 : rect.bottom + 8;
+    const top = showAbove
+      ? Math.max(GUTTER + dropdownHeight, Math.min(rawTop, window.innerHeight - GUTTER))
+      : Math.max(GUTTER, Math.min(rawTop, window.innerHeight - GUTTER - dropdownHeight));
+
+    this.mentionDropdownPosition = { top, left };
   }
 
   /**
@@ -584,7 +704,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    *
    * @returns false when the editor is disabled, unavailable, or no active provider owns the char.
    */
-  public OpenTrigger(triggerChar: string): boolean {
+  public OpenTrigger(triggerChar: string, anchorEl?: HTMLElement | null): boolean {
     const editor = this.editorRef?.nativeElement;
     if (!editor || this.disabled) {
       return false;
@@ -605,6 +725,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     // appearing and then vanishing, is visible churn in their own message. The dropdown is opened
     // directly instead, and the character only ever exists as the chip the user chooses.
     this.virtualTriggerOpen = true;
+    this.virtualTriggerAnchor = anchorEl ?? null;
     this.virtualTriggerBaseline = this.getTextBeforeCursor(selection.getRangeAt(0)).length;
     this.activeTrigger = triggerChar;
     this.mentionQuery = '';
@@ -620,7 +741,10 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    * while an unrelated `@` mention dropdown is open.
    */
   public IsTriggerOpen(triggerChar: string): boolean {
-    return this.showMentionDropdown && this.activeTrigger === triggerChar;
+    // virtualTriggerOpen covers the window between the press and the provider's response. Reporting
+    // "closed" there makes the second press of a quick double-click re-run the open path instead of
+    // toggling, re-emitting the Before/After pair.
+    return (this.showMentionDropdown || this.virtualTriggerOpen) && this.activeTrigger === triggerChar;
   }
 
   /** True when keyboard focus currently sits inside this editor. */
@@ -1082,6 +1206,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     // point of it. Dismissing leaves the message exactly as the user left it.
     this.virtualTriggerOpen = false;
     this.virtualTriggerBaseline = 0;
+    this.virtualTriggerAnchor = null;
+    this.mentionDropdownAlignRight = false;
     // Invalidate any in-flight suggestion fetch so a late response can't reopen the dropdown
     this.suggestionRequestSeq++;
     this.showMentionDropdown = false;

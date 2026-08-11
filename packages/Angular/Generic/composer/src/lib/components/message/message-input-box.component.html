@@ -33,8 +33,8 @@
           [disabled]="Disabled"
           [attr.aria-expanded]="SkillsActive"
           aria-haspopup="true"
-          (mousedown)="$event.preventDefault()"
-          (click)="OnSkillsClick(); $event.stopPropagation()"
+          (mousedown)="$event.preventDefault(); $event.stopPropagation()"
+          (click)="OnSkillsClick($event); $event.stopPropagation()"
           title="Skills, or type / in the message box"
           aria-label="Show skills"
           >
