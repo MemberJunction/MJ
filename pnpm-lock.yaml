@@ -12744,6 +12744,16 @@ importers:
       vitest:
         specifier: ^3.1.1
         version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+    optionalDependencies:
+      '@memberjunction/skyway-core':
+        specifier: ^0.6.2
+        version: 0.6.2
+      '@memberjunction/skyway-postgres':
+        specifier: ^0.6.2
+        version: 0.6.2
+      '@memberjunction/skyway-sqlserver':
+        specifier: ^0.6.2
+        version: 0.6.2
 
   packages/PostgreSQLDataProvider:
     dependencies:
