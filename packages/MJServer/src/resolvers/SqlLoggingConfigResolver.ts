@@ -2,14 +2,13 @@ import { Arg, Ctx, Field, InputType, Mutation, ObjectType, Query, Int, Resolver 
 import { AppContext } from '../types.js';
 import { Metadata, UserInfo } from '@memberjunction/core';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { loadConfig } from '../config.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadOnlyProvider } from '../util.js';
-import { SqlLoggingOptions as ProviderSqlLoggingOptions } from '@memberjunction/generic-database-provider';
+import { UserCache, SqlLoggingOptions as ProviderSqlLoggingOptions } from '@memberjunction/generic-database-provider';
 
 /**
  * Configuration options for SQL logging sessions.
