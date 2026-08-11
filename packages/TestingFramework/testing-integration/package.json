@@ -22,6 +22,7 @@
     "@memberjunction/global": "6.1.0-edge.1",
     "@memberjunction/testing-engine": "6.1.0-edge.1",
     "@memberjunction/testing-engine-base": "6.1.0-edge.1",
+    "@memberjunction/generic-database-provider": "6.1.0-edge.1",
     "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.1",
     "@memberjunction/graphql-dataprovider": "6.1.0-edge.1",
     "@memberjunction/server-bootstrap-lite": "6.1.0-edge.1",

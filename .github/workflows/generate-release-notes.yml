@@ -59,6 +59,12 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || steps.cs.outputs.count != '0'
         uses: google-github-actions/run-gemini-cli@v0.1.22
         env:
+          # REQUIRED — without it the CLI exits 1 without running anything:
+          # "Gemini CLI is not running in a trusted directory." It refuses to start
+          # rather than falling back to a safer approval mode. Confirmed empirically
+          # on run 31453795512, where its absence killed the sibling gemini-command
+          # workflow before a single tool call. The action does not set it itself.
+          GEMINI_CLI_TRUST_WORKSPACE: 'true'
           # Consumed by the github MCP server declared in `settings` below, via the
           # ${GITHUB_TOKEN} expansion in its `env` block. Settings values expand $VAR
           # from the process environment — but an UNSET variable is left as the

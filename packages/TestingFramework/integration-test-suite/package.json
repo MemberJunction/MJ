@@ -48,6 +48,7 @@
     "@memberjunction/record-set-processor-base": "6.1.0-edge.1",
     "@memberjunction/scheduling-engine": "6.1.0-edge.1",
     "@memberjunction/search-engine": "6.1.0-edge.1",
+    "@memberjunction/generic-database-provider": "6.1.0-edge.1",
     "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.1",
     "@memberjunction/task-graph": "6.1.0-edge.1",
     "@memberjunction/templates": "6.1.0-edge.1",
