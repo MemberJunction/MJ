@@ -8,7 +8,7 @@ import {
 } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJEntityFieldPermissionEntity } from '@memberjunction/core-entities';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 /**
  * Server-side `MJ: Entity Field Permissions` entity — the save-time half of the

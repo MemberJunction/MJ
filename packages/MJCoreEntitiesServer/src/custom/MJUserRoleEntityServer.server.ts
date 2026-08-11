@@ -8,7 +8,7 @@ import {
 } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJUserRoleEntity } from '@memberjunction/core-entities';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 /**
  * Server-side `MJ: User Roles` entity — the other half of the system-user guard for

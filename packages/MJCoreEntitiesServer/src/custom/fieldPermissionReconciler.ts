@@ -7,7 +7,7 @@ import {
     UserInfo,
 } from '@memberjunction/core';
 import { MJEntityFieldPermissionEntity } from '@memberjunction/core-entities';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { ComputeFieldPermissionDelta, IsEmptyFieldPermissionDelta } from './fieldPermissionDelta';
 
 /** What a reconciliation run actually wrote. */
