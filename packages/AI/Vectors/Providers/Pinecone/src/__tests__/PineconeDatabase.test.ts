@@ -359,12 +359,33 @@ describe('PineconeDatabase', () => {
       expect(directives).toEqual({});
     });
 
-    it('returns empty object when the named field is absent from the source record', () => {
-      const directives = db.BuildProviderDirectives(
+    // Fail-closed: a configured namespaceField with no usable value must REJECT the record —
+    // returning {} would silently route the vector into the default namespace, breaching the
+    // tenant wall namespacing exists to build.
+    it('throws when namespaceField is configured but the field is absent from the source record', () => {
+      expect(() => db.BuildProviderDirectives(
         { Name: 'Acme' },
         { namespaceField: 'OrganizationID' },
+      )).toThrow(/namespaceField "OrganizationID"/);
+    });
+
+    it('throws when namespaceField is configured but the value is null or blank', () => {
+      expect(() => db.BuildProviderDirectives(
+        { OrganizationID: null },
+        { namespaceField: 'OrganizationID' },
+      )).toThrow();
+      expect(() => db.BuildProviderDirectives(
+        { OrganizationID: '   ' },
+        { namespaceField: 'OrganizationID' },
+      )).toThrow();
+    });
+
+    it('reads a dotted-path key injected by the pipeline (resolved related-record value)', () => {
+      const directives = db.BuildProviderDirectives(
+        { ID: 'item-1', 'ContentSourceID.OrganizationID': 'org-xyz' },
+        { namespaceField: 'ContentSourceID.OrganizationID' },
       );
-      expect(directives).toEqual({});
+      expect(directives).toEqual({ namespace: 'org-xyz' });
     });
 
     it('coerces non-string namespace values to string', () => {
@@ -373,6 +394,19 @@ describe('PineconeDatabase', () => {
         { namespaceField: 'TenantID' },
       );
       expect(directives).toEqual({ namespace: '42' });
+    });
+  });
+
+  /* ---- GetSourceRecordFieldPaths ---- */
+  describe('GetSourceRecordFieldPaths', () => {
+    it('declares the configured namespaceField as a source-record dependency', () => {
+      expect(db.GetSourceRecordFieldPaths({ namespaceField: 'ContentSourceID.OrganizationID' }))
+        .toEqual(['ContentSourceID.OrganizationID']);
+    });
+
+    it('declares nothing when namespaceField is not configured', () => {
+      expect(db.GetSourceRecordFieldPaths({})).toEqual([]);
+      expect(db.GetSourceRecordFieldPaths({ namespaceField: '  ' })).toEqual([]);
     });
   });
 
@@ -442,6 +476,94 @@ describe('PineconeDatabase', () => {
       const result = await db.CreateRecords(records);
       expect(result.success).toBe(false);
       expect(result.message).toContain('dimension mismatch');
+    });
+  });
+
+  /* ---- DeleteRecords — namespace routing via providerTemporaryDirectives ----
+   * Pinecone deletes are namespace-scoped and report success even for ids that
+   * don't exist, so an unrouted delete of a namespaced vector silently removes
+   * nothing. Deletes must mirror CreateRecords' per-record namespace grouping. */
+  describe('DeleteRecords — per-record namespace via providerTemporaryDirectives', () => {
+    it('groups ids by providerTemporaryDirectives.namespace and deletes per-namespace', async () => {
+      const mockNsADelete = vi.fn().mockResolvedValue(undefined);
+      const mockNsBDelete = vi.fn().mockResolvedValue(undefined);
+      mockIndexInstance.namespace
+        .mockReturnValueOnce({ deleteMany: mockNsADelete })
+        .mockReturnValueOnce({ deleteMany: mockNsBDelete });
+
+      const records = [
+        { id: 'r1', providerTemporaryDirectives: { namespace: 'org-a' } },
+        { id: 'r2', providerTemporaryDirectives: { namespace: 'org-b' } },
+        { id: 'r3', providerTemporaryDirectives: { namespace: 'org-a' } },
+      ] as never;
+
+      const result = await db.DeleteRecords(records);
+      expect(result.success).toBe(true);
+      expect(mockIndexInstance.namespace).toHaveBeenCalledWith('org-a');
+      expect(mockIndexInstance.namespace).toHaveBeenCalledWith('org-b');
+      expect(mockNsADelete).toHaveBeenCalledWith(['r1', 'r3']);
+      expect(mockNsBDelete).toHaveBeenCalledWith(['r2']);
+    });
+
+    it('deletes records without a namespace directive against the index default', async () => {
+      const mockNsDelete = vi.fn().mockResolvedValue(undefined);
+      mockIndexInstance.namespace.mockReturnValueOnce({ deleteMany: mockNsDelete });
+      mockIndexInstance.deleteMany.mockResolvedValueOnce(undefined);
+
+      const records = [
+        { id: 'r1', providerTemporaryDirectives: { namespace: 'org-a' } },
+        { id: 'r2' }, // no directive → default namespace
+      ] as never;
+
+      const result = await db.DeleteRecords(records);
+      expect(result.success).toBe(true);
+      expect(mockNsDelete).toHaveBeenCalledWith(['r1']);
+      expect(mockIndexInstance.deleteMany).toHaveBeenCalledWith(['r2']);
+    });
+
+    it('returns failure (not swallow) when a namespaced delete throws', async () => {
+      mockIndexInstance.namespace.mockReturnValueOnce({
+        deleteMany: vi.fn().mockRejectedValue(new Error('index unavailable')),
+      });
+
+      const records = [
+        { id: 'r1', providerTemporaryDirectives: { namespace: 'org-a' } },
+      ] as never;
+
+      const result = await db.DeleteRecords(records);
+      expect(result.success).toBe(false);
+    });
+
+    it('returns failure (not swallow) when an unrouted deleteMany rejects', async () => {
+      mockIndexInstance.deleteMany.mockRejectedValueOnce(new Error('index unavailable'));
+      const result = await db.DeleteRecords([{ id: 'r1' }, { id: 'r2' }] as never);
+      expect(result.success).toBe(false);
+    });
+  });
+
+  /* ---- DeleteRecord — namespace routing via providerTemporaryDirectives ---- */
+  describe('DeleteRecord — namespace via providerTemporaryDirectives', () => {
+    it('routes the delete through the record namespace when present', async () => {
+      const mockNsDeleteOne = vi.fn().mockResolvedValue(undefined);
+      mockIndexInstance.namespace.mockReturnValueOnce({ deleteOne: mockNsDeleteOne });
+
+      const result = await db.DeleteRecord({ id: 'r1', providerTemporaryDirectives: { namespace: 'org-a' } } as never);
+      expect(result.success).toBe(true);
+      expect(mockIndexInstance.namespace).toHaveBeenCalledWith('org-a');
+      expect(mockNsDeleteOne).toHaveBeenCalledWith('r1');
+    });
+
+    it('deletes against the index default when no namespace directive is present', async () => {
+      mockIndexInstance.deleteOne.mockResolvedValueOnce(undefined);
+      const result = await db.DeleteRecord({ id: 'r1' } as never);
+      expect(result.success).toBe(true);
+      expect(mockIndexInstance.deleteOne).toHaveBeenCalledWith('r1');
+    });
+
+    it('returns failure (not swallow) when deleteOne rejects', async () => {
+      mockIndexInstance.deleteOne.mockRejectedValueOnce(new Error('gone'));
+      const result = await db.DeleteRecord({ id: 'r1' } as never);
+      expect(result.success).toBe(false);
     });
   });
 });

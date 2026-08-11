@@ -13,15 +13,7 @@
  */
 
 import { RegisterClass, SafeJSONParse, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
-import {
-    ValidationResult,
-    ValidationErrorInfo,
-    ValidationErrorType,
-    UserInfo,
-    Metadata,
-    IMetadataProvider,
-    RunView,
-} from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, RunView, UserInfo, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import {
     MJConversationEntity,
     MJEnvironmentEntityExtended,

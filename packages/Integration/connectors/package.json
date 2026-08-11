@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/integration-connectors",
   "type": "module",
-  "version": "6.0.0",
+  "version": "6.1.0-edge.1",
   "description": "MemberJunction External Data Source connector base classes. Concrete vendor connectors ship from the MemberJunction/Integrations repo as individual Open Apps.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,11 +14,11 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/core": "6.0.0",
-    "@memberjunction/core-entities": "6.0.0",
-    "@memberjunction/external-data-sources": "6.0.0",
-    "@memberjunction/integration-engine": "6.0.0",
-    "@memberjunction/integration-engine-base": "6.0.0"
+    "@memberjunction/core": "6.1.0-edge.1",
+    "@memberjunction/core-entities": "6.1.0-edge.1",
+    "@memberjunction/external-data-sources": "6.1.0-edge.1",
+    "@memberjunction/integration-engine": "6.1.0-edge.1",
+    "@memberjunction/integration-engine-base": "6.1.0-edge.1"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

@@ -231,6 +231,33 @@ export interface EntityWritesFixture {
 }
 
 /**
+ * Shared accumulator fixture for the `entity-graph-client` bundle (client transport, mutating).
+ *
+ * Setup creates nothing — it only resolves the two ids the checks need to reference, so a
+ * deterministic-only run writes no rows at all. Each mutating check appends what it created, and
+ * Teardown sweeps FK-safe: `AgentPromptIds` before `AgentIds`, since a prompt row references its
+ * agent.
+ */
+export interface EntityGraphClientFixture {
+    /** Unique per-run name prefix stamped on every fixture agent. */
+    Prefix: string;
+    /**
+     * Two DISTINCT existing `MJ: AI Prompts` ids — the required FK on every child row the bundle
+     * stages. Two, not one, because `UQ_AIAgentPrompt_Agent_Prompt_Config` is unique on
+     * (AgentID, PromptID, ConfigurationID): staging the same prompt twice on one agent would fail
+     * the constraint rather than the behavior under test.
+     */
+    PromptIDs: string[];
+    /** An existing `MJ: AI Agent Types` id, when one exists. Optional on the schema, and leaving it
+     *  unset also skips the server subclass's TypeConfiguration validation, which is not under test. */
+    AgentTypeID?: string;
+    /** Every `MJ: AI Agents` row the bundle created, in creation order. */
+    AgentIds: string[];
+    /** Every `MJ: AI Agent Prompts` row the bundle created, in creation order. */
+    AgentPromptIds: string[];
+}
+
+/**
  * Shared fixture for the `open-app-teardown` bundle: the throwaway `__mj` metadata rows seeded for the
  * teardown scenario (a used app's SchemaInfo/Entity/EntityField + a blocking RecordChange + a link-less
  * nav Application), reused by OAT1/OAT2 and removed in FK-safe order in teardown.
@@ -496,6 +523,8 @@ export interface IntegrationCheckContext {
     OpenAppTeardownFixture?: OpenAppTeardownFixture;
     /** Shared fixture for the `entity-writes` bundle (client transport, mutating). */
     EntityWritesFixture?: EntityWritesFixture;
+    /** Accumulator fixture for the `entity-graph-client` bundle (client transport, mutating). */
+    EntityGraphClientFixture?: EntityGraphClientFixture;
     /** Shared fixture for the `transaction-groups` bundle (client transport, mutating). */
     TransactionGroupsFixture?: TransactionGroupsFixture;
     /** Shared fixture for the `user-routines` bundle. */

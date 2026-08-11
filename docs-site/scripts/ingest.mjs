@@ -34,19 +34,28 @@ const GENERATED_PATHS = [
   'overview.md',
   'deployment.md',
   'upgrade-v5.md',
+  'upgrade-v6.md',
   'metadata.md',
   'ecosystem.md',
   'ai-and-agents/skills.md',
 ];
 
-/** Root-level repo docs rendered as top-level site pages. */
+/**
+ * Root-level repo docs rendered as top-level site pages.
+ * DEPLOYMENT.md is deliberately absent: it is internal release-engineering
+ * material, not user documentation. Links to it from rendered pages become
+ * SHA-pinned GitHub URLs (the rewriter's treatment of any unrendered file).
+ */
 const ROOT_DOCS = [
   { src: 'README.md', slug: 'overview', out: 'overview.md', fallbackTitle: 'What is MemberJunction?' },
-  { src: 'DEPLOYMENT.md', slug: 'deployment', out: 'deployment.md', fallbackTitle: 'Deployment' },
+  { src: 'UPGRADE-v6.0.md', slug: 'upgrade-v6', out: 'upgrade-v6.md', fallbackTitle: 'Upgrading to v6' },
   { src: 'UPGRADE-v5.0.md', slug: 'upgrade-v5', out: 'upgrade-v5.md', fallbackTitle: 'Upgrading to v5' },
   { src: 'CONTRIBUTING.md', slug: 'community/contributing', out: 'community/contributing.md', fallbackTitle: 'Contributing' },
   { src: 'metadata/README.md', slug: 'metadata', out: 'metadata.md', fallbackTitle: 'Metadata System' },
 ];
+
+/** Guides that are internal ops manuals for MJ maintainers — never rendered on the public site. */
+const INTERNAL_GUIDES = new Set(['RELEASE_ENGINEERING_RUNBOOK.md']);
 
 main();
 
@@ -94,6 +103,7 @@ function guideEntries() {
   const entries = [];
   for (const name of readdirSync(guidesDir)) {
     if (!name.endsWith('.md') || !statSync(path.join(guidesDir, name)).isFile()) continue;
+    if (INTERNAL_GUIDES.has(name)) continue;
     if (name === 'README.md') {
       entries.push({ src: 'guides/README.md', slug: 'guides', out: 'guides/index.md', fallbackTitle: 'Developer Guides', sidebarLabel: 'All Guides', sidebarOrder: 0 });
     } else {

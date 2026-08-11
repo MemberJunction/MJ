@@ -161,10 +161,10 @@ export const ActionsPipelineChecks: NamedCheck[] = [
             // The fixture action's declared contract, which AP2/AP3 depend on.
             const calc = fx().Calc;
             AssertEqual(calc.Status, 'Active', `'${FIXTURE_ACTION}' status`);
-            const exprParam = calc.Params.find(p => p.Name.trim().toLowerCase() === 'expression');
+            const exprParam = calc.Params.Items.find(p => p.Name.trim().toLowerCase() === 'expression');
             Assert(exprParam != null, `'${FIXTURE_ACTION}' is missing its 'Expression' param`);
             AssertEqual(exprParam!.Type, 'Input', `'Expression' param direction`);
-            const codes = new Set(calc.ResultCodes.map(rc => rc.ResultCode.trim().toUpperCase()));
+            const codes = new Set(calc.ResultCodes.Items.map(rc => rc.ResultCode.trim().toUpperCase()));
             for (const required of ['SUCCESS', 'INVALID_EXPRESSION', 'MISSING_PARAMETERS']) {
                 Assert(codes.has(required), `'${FIXTURE_ACTION}' is missing declared result code '${required}' (has: [${[...codes].join(', ')}])`);
             }
@@ -230,36 +230,50 @@ export const ActionsPipelineChecks: NamedCheck[] = [
     },
     {
         Id: 'actions-pipeline.AP4',
-        Name: 'AP4: [KNOWN-GAP PIN, B14] base ValidateInputs / RunSingleFilter are no-op stubs — validation lives ONLY inside actions',
+        Name: 'AP4: filters PREVENT execution (B14 filter half closed); ValidateInputs is still a no-op stub (B14 pin remains)',
         Fn: async (ctx: IntegrationCheckContext) => {
             // ─────────────────────────────────────────────────────────────────────────────
-            // 🚨 KNOWN GAP — bug register B14 (plans/integration-test-expansion/bug-register.md),
-            // VERIFIED STILL PRESENT on 2026-07-21 against ActionEngine.ts:
-            //   - `ValidateInputs()` (line ~280) unconditionally returns true: the base engine
-            //     performs NO type/requiredness validation of the supplied params.
-            //   - `RunSingleFilter()` (line ~303) is an explicit "temp stub" that returns true:
-            //     declared Action Filters are never evaluated.
-            //   - Corollary (unreachable-today bug): RunAction's filters-failed branch builds a
-            //     result but FALLS THROUGH to RunActionWithTimeout instead of returning it —
-            //     masked only because the stub can never return false.
-            // This check PINS the current contract rather than silently passing over it:
-            // a zero-param call with a garbage filter attached must sail through BOTH stubs and
-            // be rejected by the ACTION's own code. When the stubs are implemented, this check
-            // MUST flip — update it (and B14's disposition) together with that change.
+            // 🚨 B14 (plans/integration-test-expansion/bug-register.md) — HALF CLOSED.
+            //
+            // This check used to pin BOTH halves as no-op stubs. Its own comment predicted the flip:
+            // "Corollary (unreachable-today bug): RunAction's filters-failed branch builds a result
+            // but FALLS THROUGH to RunActionWithTimeout instead of returning it — masked only
+            // because the stub can never return false."
+            //
+            // #3606 implemented RunSingleFilter, which should have flipped this pin and did not: the
+            // fall-through kept executing the action, so a garbage filter still reached the action's
+            // own MISSING_PARAMETERS and the pin passed for the wrong reason. The corollary is now
+            // fixed, so the filter half genuinely enforces and this check asserts the NEW contract.
+            //
+            // The ValidateInputs half of B14 is UNCHANGED and still pinned below: the base engine
+            // performs no type/requiredness validation of supplied params.
             // ─────────────────────────────────────────────────────────────────────────────
+
+            // A blank, never-saved filter has no Code and no registered subclass, so it is exactly
+            // the fail-closed case: the engine cannot evaluate it and must therefore refuse the run.
             const garbageFilter = await ctx.Provider.GetEntityObject<MJActionFilterEntity>('MJ: Action Filters', ctx.User);
-            garbageFilter.NewRecord(); // deliberately blank + never saved — a real filter impl could not pass it
-            const result = await runCalc(ctx, [], { skipLog: true, filters: [garbageFilter] });
+            garbageFilter.NewRecord();
+            const prevented = await runCalc(ctx, [], { skipLog: true, filters: [garbageFilter] });
 
-            // The engine's own failure sentinel must be ABSENT — the engine let the call through.
-            Assert(!(result.Message ?? '').includes(ENGINE_VALIDATION_SENTINEL),
-                `engine-level input validation fired ('${ENGINE_VALIDATION_SENTINEL}') — B14 stubs have been implemented; update this pin + the bug register`);
-            // ...and the refusal that DID come back is the action's own MISSING_PARAMETERS.
-            Assert(!result.Success, 'the zero-param run must still fail — inside the action');
-            AssertEqual(result.Result?.ResultCode, 'MISSING_PARAMETERS',
-                'the refusal must be the ACTION’s own validation (per-action), proving the request passed through both engine stubs');
+            // Prevented is a SUCCESS — a filter saying "not this time" is the mechanism working, not
+            // an error. Callers must not treat it as a failure to retry.
+            Assert(prevented.Success, 'an unevaluable filter must PREVENT the run, and prevention is not an error');
+            Assert((prevented.Message ?? '').includes('should not be executed'),
+                `expected the filter-prevention message, got: ${prevented.Message}`);
+            // The decisive assertion: the action never ran, so its own validation never spoke.
+            Assert(prevented.Result?.ResultCode !== 'MISSING_PARAMETERS',
+                'the action executed despite a filter refusing it — the RunAction fall-through has regressed');
 
-            console.log(`      → engine stubs passed a zero-param call + garbage filter straight to the action (B14 pinned)`);
+            // ValidateInputs half of B14, still open: with NO filters, a zero-param call sails past
+            // the engine and is rejected only by the action's own code.
+            const unfiltered = await runCalc(ctx, [], { skipLog: true });
+            Assert(!(unfiltered.Message ?? '').includes(ENGINE_VALIDATION_SENTINEL),
+                `engine-level input validation fired ('${ENGINE_VALIDATION_SENTINEL}') — B14's ValidateInputs half has been implemented; update this pin + the bug register`);
+            Assert(!unfiltered.Success, 'the zero-param run must still fail — inside the action');
+            AssertEqual(unfiltered.Result?.ResultCode, 'MISSING_PARAMETERS',
+                'the refusal must be the ACTION’s own validation, proving the request passed through the ValidateInputs stub');
+
+            console.log(`      → filters now PREVENT (B14 filter half closed); ValidateInputs still a stub (pinned)`);
         }
     },
     {

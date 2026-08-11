@@ -30,6 +30,8 @@ MemberJunction AI provider for ElevenLabs. The package ships two drivers:
 
 - API key env alias: `AI_VENDOR_API_KEY__ElevenLabsRealtime`
 - `RealtimeSessionParams.Config.llm` (string) selects the managed agent's underlying LLM; for full provider-side control, use a verbatim `agent_…` id
+- `RealtimeSessionParams.Config.voice` (string) sets the **per-session** ElevenLabs voice id, sent as the `tts.voice_id` conversation-config override on both topologies. `voice` is the driver-neutral key AssemblyAI and Inworld also read, and it reaches the driver from the effective config as `realtime.voice.providers.elevenlabs.voice`. Omit it and the agent's own configured voice is used, exactly as before. Blank or non-string values are ignored rather than sent
+  - The managed agent enables this override automatically; an agent provisioned by an earlier MJ version is re-PATCHed on next use to enable it
 - `InitialContext` is injected as a `contextual_update` once the session is confirmed (the protocol has no history-seeding channel)
 
 For the full architecture (topologies, co-agent model, capability matrix across all four realtime providers), see [guides/REALTIME_CO_AGENTS_GUIDE.md](../../../../guides/REALTIME_CO_AGENTS_GUIDE.md).

@@ -17,7 +17,7 @@
 import { RunView, BaseEntity, CompositeKey, Metadata, EntityPermissionType } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import type { MJEntityEntity, MJUserSettingEntity, MJUserViewEntity, MJQueryEntity, MJQueryCategoryEntity } from '@memberjunction/core-entities';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { Assert, AssertEqual, AssertRowShape, AssertKeysInclude, RowKeys } from '@memberjunction/testing-integration';
 import { UniqueFilter } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';

@@ -26,7 +26,6 @@ export class MJActionFormComponent extends BaseFormComponent {
             { sectionKey: 'mJActionResultCodes', sectionName: 'Result Codes', isExpanded: false },
             { sectionKey: 'mJAIAgentActions', sectionName: 'AIAgent Actions', isExpanded: false },
             { sectionKey: 'mJMCPServerTools', sectionName: 'MCP Server Tools', isExpanded: false },
-            { sectionKey: 'mJScheduledActions', sectionName: 'Scheduled Actions', isExpanded: false },
             { sectionKey: 'mJActionContexts', sectionName: 'Action Contexts', isExpanded: false },
             { sectionKey: 'mJAIAgentSteps', sectionName: 'AI Agent Steps', isExpanded: false },
             { sectionKey: 'mJEntityActions', sectionName: 'Entity Actions', isExpanded: false },
@@ -34,7 +33,8 @@ export class MJActionFormComponent extends BaseFormComponent {
             { sectionKey: 'mJActionAuthorizations', sectionName: 'Authorizations', isExpanded: false },
             { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false },
             { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false },
-            { sectionKey: 'mJAISkillActions', sectionName: 'AI Skill Actions', isExpanded: false }
+            { sectionKey: 'mJAISkillActions', sectionName: 'AI Skill Actions', isExpanded: false },
+            { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false }
         ]);
     }
 }
