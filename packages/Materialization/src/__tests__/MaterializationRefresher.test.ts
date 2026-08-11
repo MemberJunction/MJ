@@ -83,6 +83,39 @@ describe('MaterializationRefresher.buildFullRebuildStatementsSQLServer', () => {
  * PG counterpart of the full-rebuild + atomic-swap builder (plan §11.2). Pure logic; live PG
  * behavior is a gated integration follow-up. PG quoting: schema bare, object double-quoted.
  */
+describe('MaterializationRefresher — DDL identifier safety (injection guard)', () => {
+    // The swap builders interpolate schema/table/view names — read from the WRITABLE `MJ: Materialized Results`
+    // row — into EXEC / sp_rename / CREATE VIEW / RENAME TO. A name that is not a plain SQL identifier must be
+    // refused BEFORE any statement is built, so a tampered metadata row cannot make the privileged refresh job
+    // run arbitrary DDL. A valid identifier can contain none of `]`, `"`, `'`, so one check closes every surface.
+    const safe = {
+        schema: '__mj',
+        tableName: 'materialized_Demo',
+        viewName: 'materialized_vwDemo',
+        sourceSelect: 'SELECT 1 AS X',
+        surrogateColumn: '__mj_MaterializedRowID',
+    };
+    const evilNames = [
+        'Demo]; DROP TABLE [Users',    // breaks out of a [ ] identifier
+        "Demo'; DROP TABLE Users--",   // breaks out of an EXEC('...') / sp_rename '...' literal
+        'Demo" ; DROP TABLE Users',    // breaks out of a "..." identifier (PostgreSQL)
+        'has space',
+        '',
+    ];
+    for (const evil of evilNames) {
+        it(`SQL Server refuses a non-identifier table name: ${JSON.stringify(evil)}`, () => {
+            expect(() => MaterializationRefresher.buildFullRebuildStatementsSQLServer({ ...safe, tableName: evil })).toThrow(/Unsafe materialization/);
+        });
+        it(`PostgreSQL refuses a non-identifier view name: ${JSON.stringify(evil)}`, () => {
+            expect(() => MaterializationRefresher.buildFullRebuildStatementsPostgreSQL({ ...safe, viewName: evil })).toThrow(/Unsafe materialization/);
+        });
+    }
+    it('accepts legitimate CodeName-derived names on both engines', () => {
+        expect(() => MaterializationRefresher.buildFullRebuildStatementsSQLServer(safe)).not.toThrow();
+        expect(() => MaterializationRefresher.buildFullRebuildStatementsPostgreSQL(safe)).not.toThrow();
+    });
+});
+
 describe('MaterializationRefresher.buildFullRebuildStatementsPostgreSQL', () => {
     const base = { schema: '__mj', tableName: 'materialized_demo', viewName: 'materialized_vw_demo' };
 

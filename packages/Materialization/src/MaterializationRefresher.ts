@@ -88,6 +88,28 @@ export class MaterializationRefresher {
         return ranIncremental ? (current ?? 0) + 1 : 0;
     }
 
+    /** A plain, unquoted SQL identifier: leading letter/underscore, then letters/digits/underscores. */
+    private static readonly SAFE_SQL_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+    /**
+     * Guards the schema/table/view identifiers that get interpolated into materialization DDL/DML — names
+     * read from the *writable* `MJ: Materialized Results` metadata row. A materialization's names are always
+     * CodeName-derived (`materialized_<CodeName>`, schema `__mj`), so a legitimate row always passes. The
+     * assertion exists so a tampered metadata row can never drive the privileged refresh job's
+     * `EXEC(...)` / `sp_rename` / `CREATE VIEW` / `RENAME TO` statements to run arbitrary DDL: a value that
+     * matches {@link SAFE_SQL_IDENTIFIER} cannot contain `]`, `"`, or `'`, so this one check closes BOTH the
+     * identifier-quoting and the T-SQL string-literal injection surfaces the swap builders would otherwise
+     * expose. Fails closed — throws (→ the refresh is reported as failed) rather than emitting a suspect
+     * statement. This is the refresh-path complement to the mint-path dialect quoting.
+     */
+    private static assertSafeObjectNames(schema: string, tableName: string, viewName: string): void {
+        for (const [role, value] of [['schema', schema], ['table', tableName], ['view', viewName]] as const) {
+            if (typeof value !== 'string' || !MaterializationRefresher.SAFE_SQL_IDENTIFIER.test(value)) {
+                throw new Error(`Unsafe materialization ${role} identifier ${JSON.stringify(value)} — expected a plain SQL identifier (^[A-Za-z_][A-Za-z0-9_]*$); refusing to build DDL.`);
+            }
+        }
+    }
+
     /**
      * Builds the ordered SQL statements for a SQL Server full rebuild with atomic swap (plan §11.2).
      * Pure (no IO) so the swap sequence is unit-testable. Each returned string runs as its own batch.
@@ -108,6 +130,7 @@ export class MaterializationRefresher {
         shadowName?: string;
     }): string[] {
         const { schema, tableName, viewName, sourceSelect, surrogateColumn, hashKeyColumns } = opts;
+        MaterializationRefresher.assertSafeObjectNames(schema, tableName, viewName);
         const shadow = opts.shadowName ?? `${tableName}__shadow`;
         const obj = (n: string) => `[${schema}].[${n}]`;
         // Surrogate: a stable HASH of the key columns (Phase 3 — keyed/aggregation materializations, the
@@ -182,6 +205,7 @@ export class MaterializationRefresher {
         shadowName?: string;
     }): string[] {
         const { schema, tableName, viewName, sourceSelect, surrogateColumn, hashKeyColumns } = opts;
+        MaterializationRefresher.assertSafeObjectNames(schema, tableName, viewName);
         const shadow = opts.shadowName ?? `${tableName}__shadow`;
         const obj = (n: string) => `${schema}."${n}"`;
         // Surrogate: a stable HASH of the key columns (Phase 3 keyed/aggregation materializations) when
@@ -258,6 +282,13 @@ export class MaterializationRefresher {
             if (matResult.Status === 'DriftHold' || matResult.Status === 'Disabled') {
                 return { Success: false, ErrorMessage: `Materialization ${matResult.ID} is ${matResult.Status} — refusing to refresh (resolve/re-enable it first to clear the status).` };
             }
+
+            // Security: schema/table/view names are interpolated into refresh DDL (EXEC / sp_rename / CREATE VIEW
+            // / RENAME TO) and originate from the WRITABLE `MJ: Materialized Results` row. Validate them as plain
+            // SQL identifiers BEFORE any statement is built (all builders — full/incremental/external — dispatch
+            // from here), so a tampered row can never drive the privileged refresh job to run arbitrary DDL. The
+            // throw is caught below and reported as a refresh failure.
+            MaterializationRefresher.assertSafeObjectNames(matResult.SchemaName, matResult.TableName, matResult.ViewName);
 
             const exec = provider as unknown as ISQLExecutor;
             const isPostgres = exec.PlatformKey === 'postgresql';
