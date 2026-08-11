@@ -23,6 +23,10 @@ import path from 'node:path';
  * ERR_PACKAGE_PATH_NOT_EXPORTED. Some ESM loader shims (ts-node's, notably — the loader
  * MJAPI runs under) throw resolution failures as PLAIN Errors with no code at all, so
  * when there is no code, recognize Node's own resolver message instead.
+ *
+ * Keep in sync with `IsModuleResolutionFailure` in @memberjunction/open-app-engine's
+ * `src/install/migration-runner.ts` — same heuristic, duplicated because the two
+ * packages cannot depend on each other and cross-package re-exports are disallowed.
  */
 export function isResolutionFailure(error: unknown): boolean {
   const { code, message } = (error as { code?: string; message?: string }) ?? {};

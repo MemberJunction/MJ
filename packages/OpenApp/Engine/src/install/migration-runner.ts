@@ -259,7 +259,14 @@ async function ImportProviderClass(moduleId: string, exportName: string, platfor
         }
         throw error;
     }
-    return mod[exportName] as new (dbConfig: SkywayConfig['Database']) => unknown;
+    const ctor = mod[exportName];
+    if (typeof ctor !== 'function') {
+        throw new Error(
+            `${platformLabel} provider package ${moduleId} loaded but does not export '${exportName}' — ` +
+                `the installed version may not match what @memberjunction/open-app-engine expects.`,
+        );
+    }
+    return ctor as new (dbConfig: SkywayConfig['Database']) => unknown;
 }
 
 /**
@@ -267,6 +274,11 @@ async function ImportProviderClass(moduleId: string, exportName: string, platfor
  * and threw. ESM raises ERR_MODULE_NOT_FOUND; CJS resolution raises MODULE_NOT_FOUND;
  * some ESM loader shims (e.g. ts-node's) throw plain code-less Errors, recognized by
  * Node's resolver message.
+ *
+ * Keep in sync with `isResolutionFailure` in @memberjunction/server-bootstrap's
+ * `src/host-import.ts` (which carries the unit tests for this heuristic) — duplicated
+ * because the two packages cannot depend on each other and cross-package re-exports
+ * are disallowed.
  */
 function IsModuleResolutionFailure(error: unknown): boolean {
     const { code, message } = (error as { code?: string; message?: string }) ?? {};
