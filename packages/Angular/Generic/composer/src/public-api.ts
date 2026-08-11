@@ -13,7 +13,7 @@ export * from './lib/components/message/message-input-box.component';
 // Pluggable trigger-provider contract (+ MentionSuggestion / MentionSuggestionPreset /
 // ComposerSuggestionRequest / DiscoverComposerTriggerProviders)
 export * from './lib/composer-trigger-provider';
-// Before/After cancelable event args (CancellableComposerEventArgs / BeforeSkillsOpenedEventArgs)
+// Composer-specific Before/After event args (the cancelable base lives in @memberjunction/global)
 export * from './lib/events/composer-events';
 // NOTE: MentionAutocompleteService (the AI-aware suggestion engine) moved to
 // @memberjunction/ng-conversations — import it from there directly.

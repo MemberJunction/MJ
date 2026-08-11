@@ -63,9 +63,17 @@ a composer advertise skills it will not serve.
 `OpenTrigger` and `IsTriggerOpen` are public and generic. Any trigger character with an active
 provider can now be opened from a control, and any control can reflect whether its trigger is open.
 
-Minor rather than patch because the public API grows: `OpenTrigger` and `IsTriggerOpen` on
-`MentionEditorComponent`; `enableSkills`, `beforeSkillsOpened` and `afterSkillsOpened` on
-`MessageInputBoxComponent` and `mj-ai-composer`; and `CancellableComposerEventArgs` /
-`BeforeSkillsOpenedEventArgs` newly exported from `@memberjunction/ng-composer`. Existing consumers
-see no change: `enableSkills` defaults false at the leaf, and the chain above only turns it on where
-skill commands were already enabled.
+**BREAKING (renames), and the reason this is `minor` rather than `patch`.** `MessageInputBoxComponent`
+was violating MJ's convention that public class members are `PascalCase`, so every public input,
+output, getter and method on it is renamed: `placeholder` to `Placeholder`, `disabled` to `Disabled`,
+`value` to `Value`, `valueChange` to `ValueChange`, `textSubmitted` to `TextSubmitted`,
+`planModeToggle` to `PlanModeToggle`, `canSend` to `CanSend`, `onSendClick` to `OnSendClick`, and so
+on for all of them. `TriggerProviders`, `ExcludedTriggerKeys` and `Provider` were already correct.
+
+Native DOM bindings and framework members are deliberately untouched: `[disabled]` on a `<button>`
+is a DOM property, `ngOnInit` / `writeValue` / `registerOnChange` are framework contracts, and
+`mj-mention-editor`'s own inputs keep their current casing because that component is not renamed
+here.
+
+`mj-ai-composer` is updated to the new names. Any other consumer binding these inputs or listening
+to these outputs must rename accordingly.

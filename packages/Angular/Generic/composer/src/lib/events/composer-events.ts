@@ -1,35 +1,18 @@
 /**
  * @fileoverview Before/After cancelable event argument classes for the composer.
  *
- * Follows MJ's Before/After cancelable pattern as specified in
- * `guides/UI_LAYERING_GUIDE.md` section 6, and mirrors the sibling implementations in
- * `ng-conversations`, `ng-base-forms` and `ng-trees`.
+ * The cancelable BASE lives in `@memberjunction/global` as {@link CancelableEventArgs} — the
+ * pattern is framework-agnostic and shared, so this package inherits it rather than declaring
+ * another copy. Only composer-specific args belong here.
  *
- * **Contract:** an action a host might want to veto ships as a `Before*` / `After*` pair. The
- * `Before*` event carries an args object extending {@link CancellableComposerEventArgs} with a
- * `Cancel` property the listener flips. The component checks `if (args.Cancel) return;` and emits
- * the matching `After*` ONLY on the non-canceled path. Hosts rely on that, so it is a contract
- * rather than a convention.
- *
- * Declared here rather than imported from `ng-conversations` because the dependency runs the other
- * way: `ng-composer` is the generic layer and knows nothing about conversations.
- *
- * Note for listeners: `Before*` handlers must be synchronous. Angular's `EventEmitter` is
- * synchronous, which is the entire mechanism by which `Cancel` travels back — an `await` inside a
- * handler returns control before it sets the flag, and the veto is silently lost.
+ * Contract (see `guides/UI_LAYERING_GUIDE.md` section 6): an action a host might veto ships as a
+ * `Before*` / `After*` pair. A listener flips `Cancel = true`, the component checks
+ * `if (args.Cancel) return;` and does NOT emit the matching `After*`.
  *
  * @module @memberjunction/ng-composer
  */
 
-/**
- * Base for cancelable composer events. Listeners flip `Cancel = true` to halt the default
- * behavior; the matching `After*` event will NOT fire. `CancelReason` is free-form, for telemetry
- * or for a host that wants to explain itself in the UI.
- */
-export class CancellableComposerEventArgs {
-    public Cancel: boolean = false;
-    public CancelReason?: string;
-}
+import { CancelableEventArgs } from '@memberjunction/global';
 
 /**
  * Fired BEFORE the composer opens the skill-command dropdown from its Skills button.
@@ -39,4 +22,4 @@ export class CancellableComposerEventArgs {
  * Canceling suppresses the trigger; the composer does not open, and `afterSkillsOpened` is not
  * emitted.
  */
-export class BeforeSkillsOpenedEventArgs extends CancellableComposerEventArgs {}
+export class BeforeSkillsOpenedEventArgs extends CancelableEventArgs {}
