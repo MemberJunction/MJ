@@ -39,7 +39,8 @@ describe('@memberjunction/ng-bootstrap class-registration manifest', () => {
         // "Could not resolve 'crypto'/'stream'"). This turns the June-2026 incident class
         // (ng-bootstrap → templates → aiengine flooding the manifest with 27 server packages) into a
         // unit failure instead of a cold-build failure. See packages/Angular/Bootstrap/CLAUDE.md.
-        const leaked = SERVER_ONLY_POISON.filter(p => CLASS_REGISTRATIONS_PACKAGES.includes(p));
+        const manifestPackages = new Set<string>(CLASS_REGISTRATIONS_PACKAGES);
+        const leaked = SERVER_ONLY_POISON.filter(packageName => manifestPackages.has(packageName));
         expect(leaked, `server-only packages leaked into the browser manifest: ${leaked.join(', ')}`).toEqual([]);
     });
 });

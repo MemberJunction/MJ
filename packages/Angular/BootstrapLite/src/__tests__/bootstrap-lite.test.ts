@@ -48,7 +48,8 @@ describe('@memberjunction/ng-bootstrap-lite', () => {
         // The lite generator's --exclude-packages is a lazy-split guard, NOT a server guard (see
         // BootstrapLite/CLAUDE.md), so this assertion is the actual server-leak backstop — turning
         // the June-2026 incident class into a unit failure instead of a cold-build failure.
-        const leaked = SERVER_ONLY_POISON.filter(p => CLASS_REGISTRATIONS_PACKAGES.includes(p));
+        const manifestPackages = new Set<string>(CLASS_REGISTRATIONS_PACKAGES);
+        const leaked = SERVER_ONLY_POISON.filter(packageName => manifestPackages.has(packageName));
         expect(leaked, `server-only packages leaked into the lite browser manifest: ${leaked.join(', ')}`).toEqual([]);
     });
 });
