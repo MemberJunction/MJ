@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { BaseEntity } from '@memberjunction/core';
+import { BaseEntity, TransactionGroupBase } from '@memberjunction/core';
 import { renderComponentFixture, query, attr, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
 import { FlowAgentFormSectionComponent } from './flow-agent-form-section.component';
 
@@ -152,6 +152,15 @@ describe('FlowAgentFormSectionComponent — contributing the flow to the form\'s
     return state as EditorDouble & { queued: unknown[]; marked: number };
   };
 
+  /**
+   * Minimal transaction-group fake — ContributeToSave only hands the group through to the
+   * editor's QueueSaveInto, never reading a member of it, so an identity-marker object is the
+   * honest double. Same seam-cast shape as `recordWithId` above; `as never` is banned because
+   * it erases type-checking of the call entirely.
+   */
+  const fakeTransactionGroup = (marker?: string): TransactionGroupBase =>
+    (marker ? { marker } : {}) as unknown as TransactionGroupBase;
+
   it('reports the canvas as dirty so the form does not call itself clean', () => {
     // Without this, a flow-only edit leaves record.Dirty false and the navigate-away guard
     // discards the user's steps without asking. One fixture per test — TestBed configures once.
@@ -170,9 +179,9 @@ describe('FlowAgentFormSectionComponent — contributing the flow to the form\'s
   it('queues the flow onto the transaction the form is about to submit', async () => {
     const editor = editorDouble();
     const section = withEditor(editor);
-    const tg = { marker: 'the form transaction' };
+    const tg = fakeTransactionGroup('the form transaction');
 
-    await expect(section.ContributeToSave(tg as never)).resolves.toBe(true);
+    await expect(section.ContributeToSave(tg)).resolves.toBe(true);
     // The SAME group the form will submit — a group of its own would be a second save with its own
     // failure mode, which is the whole thing this contract exists to prevent.
     expect(editor.queued).toEqual([tg]);
@@ -182,12 +191,12 @@ describe('FlowAgentFormSectionComponent — contributing the flow to the form\'s
     const editor = editorDouble({ HasUnsavedChanges: false });
     const section = withEditor(editor);
 
-    await expect(section.ContributeToSave({} as never)).resolves.toBe(true);
+    await expect(section.ContributeToSave(fakeTransactionGroup())).resolves.toBe(true);
     expect(editor.queued).toHaveLength(0);
   });
 
   it('lets the record save when no editor is mounted', async () => {
-    await expect(withEditor(undefined).ContributeToSave({} as never)).resolves.toBe(true);
+    await expect(withEditor(undefined).ContributeToSave(fakeTransactionGroup())).resolves.toBe(true);
   });
 
   it('aborts the save rather than letting it commit a half-queued flow', async () => {
@@ -198,14 +207,14 @@ describe('FlowAgentFormSectionComponent — contributing the flow to the form\'s
 
     // False, not a throw: the form turns this into "nothing was saved" and stops, which beats
     // submitting a transaction carrying only part of the flow.
-    await expect(section.ContributeToSave({} as never)).resolves.toBe(false);
+    await expect(section.ContributeToSave(fakeTransactionGroup())).resolves.toBe(false);
   });
 
   it('clears the canvas dirty state only when the host says the save committed', () => {
     const editor = editorDouble();
     const section = withEditor(editor);
 
-    section.ContributeToSave({} as never);
+    section.ContributeToSave(fakeTransactionGroup());
     // Still dirty — contributing is not committing. Clearing here would mark edits saved that a
     // failed submit had just discarded.
     expect(editor.marked).toBe(0);
