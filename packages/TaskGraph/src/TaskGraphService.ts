@@ -19,13 +19,16 @@ import {
     IMetadataProvider,
     LogError,
     LogStatus,
+    RunInEntityTransaction,
     RunView,
     UserInfo,
+    type EntityTransactionScope,
 } from '@memberjunction/core';
 import {
     MJTaskEntity,
     MJTaskDependencyEntity,
     MJTaskTypeEntity,
+    MJAIAgentRequestEntity,
     type MJTaskEntity_ITaskStepConfiguration,
 } from '@memberjunction/core-entities';
 import {
@@ -305,6 +308,28 @@ function actionNamesIn(node: TaskGraphSpecNode): string[] {
     return names.filter((n): n is string => !!n);
 }
 
+/**
+ * The transaction capability of a provider, when it has one.
+ *
+ * `IMetadataProvider` does not declare transaction support — a browser provider genuinely has none —
+ * so this narrows by CAPABILITY rather than asserting a type the interface does not promise. A
+ * provider without it returns undefined and `RunInEntityTransaction` runs the work directly, which
+ * is the honest degradation: server submissions get atomicity, and a client submission behaves
+ * exactly as it did before rather than failing at a call site that claimed something untrue.
+ */
+function asTransactionCapable(provider: IMetadataProvider): TransactionCapableProvider | undefined {
+    const candidate = provider as unknown as TransactionCapableProvider;
+    return candidate.SupportsEntityTransactions === true && typeof candidate.BeginEntityTransaction === 'function'
+        ? candidate
+        : undefined;
+}
+
+/** The slice of a provider `RunInEntityTransaction` needs. */
+type TransactionCapableProvider = {
+    SupportsEntityTransactions?: boolean;
+    BeginEntityTransaction?(): Promise<EntityTransactionScope>;
+};
+
 export function FindUnrunnableKinds(spec: TaskGraphSpec): string | null {
     const offenders = spec.tasks.filter((t) => !DISPATCHABLE_KINDS.includes(t.kind));
     if (offenders.length === 0) return null;
@@ -422,10 +447,30 @@ export class TaskGraphService {
             // 3. Persist. Parent first so children have a ParentID, then children, then edges —
             //    edges last because they reference two child IDs that must both exist.
             const parentTaskID = await this.persistParent(spec, taskTypeID, context);
-            const taskIDMap = await this.persistChildren(
-                spec, parentTaskID, taskTypeID, agentIDsByName.Map!, actionIDsByName.Map!, promptIDsByName.Map!, context,
-            );
-            await this.persistDependencies(spec, taskIDMap, context);
+            // ── Children AND their edges become visible together, or not at all ─────────────────
+            // The dispatcher discovers work by polling for child tasks in 'Pending'. Writing the
+            // children first and their dependencies afterwards leaves a window — milliseconds, but
+            // real — in which every task exists with NO prerequisites recorded yet. A poll landing
+            // there sees a graph of independent tasks and claims all of them at once.
+            //
+            // Observed, not theorised: in graph C08B36E3 the dependency gating `Research: focused`
+            // was written at 00:00:59.653 and that task STARTED at 00:00:59.647 — six milliseconds
+            // before the edge that was supposed to hold it back existed. `Close out: approved` ran
+            // in the same wave as the research steps, before the draft it was meant to judge had
+            // been written. The graph then reported Complete, having executed in an order its author
+            // never drew.
+            //
+            // A transaction is the whole fix: the dispatcher cannot observe a half-built graph
+            // because a half-built graph is never visible. `RunInEntityTransaction` degrades to
+            // running the work as-is on a provider that cannot transact, which is the correct
+            // fallback rather than a silent failure.
+            const taskIDMap = await RunInEntityTransaction(asTransactionCapable(context.Provider), async () => {
+                const map = await this.persistChildren(
+                    spec, parentTaskID, taskTypeID, agentIDsByName.Map!, actionIDsByName.Map!, promptIDsByName.Map!, context,
+                );
+                await this.persistDependencies(spec, map, context);
+                return map;
+            });
 
             LogStatus(
                 `[TaskGraphService] Submitted "${spec.workflowName}": parent ${parentTaskID}, ${taskIDMap.size} task(s). ` +
@@ -458,6 +503,14 @@ export class TaskGraphService {
                 }
             }
 
+            // Withdraw the questions too. A human step that was waiting has an open
+            // `MJ: AI Agent Requests` row, and cancelling only the Task left that row `Requested`
+            // FOREVER: the person keeps seeing "a workflow is waiting on you" in their inbox for a
+            // workflow that no longer exists, and answering it settles nothing because the task is
+            // already Cancelled. Nothing else ever closes these — the dispatcher only expires rows
+            // that carry a deadline, and most do not.
+            await this.cancelOpenRequests(children.map((c) => c.ID), context);
+
             const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
             if (!(await parent.Load(parentTaskID))) return false;
             parent.Status = 'Cancelled';
@@ -466,6 +519,55 @@ export class TaskGraphService {
         } catch (e) {
             LogError(`[TaskGraphService] Cancel failed for ${parentTaskID}: ${e instanceof Error ? e.message : String(e)}`);
             return false;
+        }
+    }
+
+    /**
+     * Closes the still-open requests raised for a set of tasks.
+     *
+     * `Canceled` rather than `Expired`: nobody ran out of time, the ask was withdrawn — and the two
+     * mean different things downstream, since the dispatcher treats an expired human step as a
+     * FAILURE a give-up edge can route around, which would be a lie about a graph somebody stopped
+     * on purpose.
+     *
+     * Failures here are logged and never propagated: the graph is already cancelled, and refusing to
+     * finish that because an inbox row would not close would leave the graph in a worse state than
+     * the debris it is trying to avoid.
+     */
+    private async cancelOpenRequests(taskIDs: string[], context: TaskGraphSubmitContext): Promise<void> {
+        if (taskIDs.length === 0) return;
+        try {
+            const idList = taskIDs.map((id) => `'${id}'`).join(',');
+            const open = await RunView.FromMetadataProvider(context.Provider).RunView<MJAIAgentRequestEntity>(
+                {
+                    EntityName: 'MJ: AI Agent Requests',
+                    ExtraFilter: `Status='Requested' AND OriginatingTaskID IN (${idList})`,
+                    ResultType: 'entity_object',
+                    BypassCache: true,
+                },
+                context.ContextUser,
+            );
+            if (!open.Success) {
+                LogError(`[TaskGraphService] Could not read open requests to cancel: ${open.ErrorMessage}`);
+                return;
+            }
+
+            for (const request of open.Results ?? []) {
+                request.Status = 'Canceled';
+                request.Comments = 'The workflow that asked this was cancelled.';
+                if (!(await request.Save())) {
+                    LogError(
+                        `[TaskGraphService] Could not withdraw request ${request.ID}: ` +
+                        `${request.LatestResult?.CompleteMessage ?? 'unknown error'}. It will keep showing ` +
+                        `in someone's inbox for a workflow that no longer exists.`,
+                    );
+                }
+            }
+            if ((open.Results ?? []).length > 0) {
+                LogStatus(`[TaskGraphService] Withdrew ${open.Results!.length} open request(s) for the cancelled graph.`);
+            }
+        } catch (e) {
+            LogError(`[TaskGraphService] Could not withdraw open requests: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 

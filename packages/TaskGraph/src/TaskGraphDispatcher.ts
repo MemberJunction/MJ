@@ -1817,7 +1817,20 @@ export class TaskGraphDispatcher implements IShutdownable {
 
         const { params, errors } = BuildMappedInput(config?.inputMapping, { payload });
         for (const e of errors) LogError(`[TaskGraphDispatcher] Task ${task.ID}: ${e}`);
-        const effectiveInput = Object.keys(params).length > 0 ? params : inputPayload;
+        // `payload`, NOT `inputPayload` — the MERGED value computed above, which includes what every
+        // dependency produced.
+        //
+        // A step with an input mapping got exactly the parameters it declared; a step WITHOUT one
+        // fell back to the raw input and therefore saw nothing any earlier step had produced. For a
+        // Prompt step — which declares no mapping by design, because it reads the whole payload
+        // through `{{ _CURRENT_PAYLOAD }}` — that meant the placeholder rendered `{}` and the model
+        // was asked to write from an empty brief.
+        //
+        // It answered anyway. The Content Pipeline's draft step said "the research data was empty",
+        // which was TRUE of what it had been handed while twenty research results sat in the
+        // dependency outputs beside it, and the reviewer then rejected the draft for saying so.
+        // Every layer looked like it was working.
+        const effectiveInput = Object.keys(params).length > 0 ? params : payload;
 
         if (task.StepType === 'Prompt') {
             if (!this.promptRunner) {
@@ -2052,7 +2065,23 @@ export class TaskGraphDispatcher implements IShutdownable {
         output: unknown,
         outputMapping: string | undefined,
     ): unknown {
-        if (!outputMapping) return output ?? payload;
+        // No mapping: MERGE the step's output over the payload rather than replacing it.
+        //
+        // Replacing is what made the Content Pipeline's exclusive pair unreachable. A While loop's
+        // own output is a SUMMARY — `{iterations, succeeded, failed, results}` — so returning it
+        // discarded the payload the iterations had built, including the `brandOK` the reviewer had
+        // just set to true. The edges read `payload.brandOK === true` and `!== true`; against a
+        // summary the first is false and the second is true, so the give-up branch won on EVERY run
+        // no matter what the reviewer decided. The approved branch was unreachable in practice while
+        // being perfectly reachable on the canvas.
+        //
+        // This is the same rule the mapped path already follows two lines down, and the same rule
+        // the doc comment above states. The no-mapping branch was simply not following it.
+        if (!outputMapping) {
+            return output && typeof output === 'object' && !Array.isArray(output)
+                ? { ...payload, ...(output as Record<string, unknown>) }
+                : output ?? payload;
+        }
 
         const source = output && typeof output === 'object' ? output as Record<string, unknown> : { value: output };
         const { updates, errors, unmapped } = ApplyOutputMapping(source, outputMapping);
