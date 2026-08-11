@@ -14,7 +14,7 @@ const { runInTransactionSpy, logErrorSpy, logDebugSpy } = vi.hoisted(() => ({
     logDebugSpy: vi.fn(),
 }));
 
-vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
+vi.mock('@memberjunction/generic-database-provider', () => ({
     // The reconciler asks the cache which roles the system user holds, so those roles can be
     // excluded from the snapshot. A cold cache degrades to "exclude nothing", which is what
     // these tests exercise.
