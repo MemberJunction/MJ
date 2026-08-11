@@ -10,7 +10,7 @@
  *    retry, and the UserRoles the created user is stamped with.
  *
  * Both production modules run unmodified; mocking happens at the package
- * boundaries (@memberjunction/core, sqlserver-dataprovider, core-entities)
+ * boundaries (@memberjunction/core, generic-database-provider, core-entities)
  * plus the config module, matching unifiedAuth.test.ts.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -73,7 +73,7 @@ const {
 
 vi.mock('../config.js', () => ({ configInfo: mockConfig }));
 
-vi.mock('@memberjunction/sqlserver-dataprovider', () => {
+vi.mock('@memberjunction/generic-database-provider', () => {
     const instance = {
         UserByName: mockUserByName,
         get Users() {
@@ -94,7 +94,8 @@ vi.mock('@memberjunction/sqlserver-dataprovider', () => {
     };
 });
 
-vi.mock('@memberjunction/core', () => {
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
     const provider = {
         BeginTransaction: mockBeginTransaction,
         CommitTransaction: mockCommitTransaction,
@@ -124,6 +125,7 @@ vi.mock('@memberjunction/core', () => {
         }
     }
     return {
+        ...actual,
         Metadata: MockMetadata,
         UserInfo: MockUserInfo,
         RunView: MockRunView,
@@ -132,11 +134,15 @@ vi.mock('@memberjunction/core', () => {
     };
 });
 
-vi.mock('@memberjunction/core-entities', () => ({
-    UserInfoEngine: {
-        GetDefaultApplicationsForNewUser: mockGetDefaultApplicationsForNewUser,
-    },
-}));
+vi.mock('@memberjunction/core-entities', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
+    return {
+        ...actual,
+        UserInfoEngine: {
+            GetDefaultApplicationsForNewUser: mockGetDefaultApplicationsForNewUser,
+        },
+    };
+});
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
