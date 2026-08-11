@@ -81,8 +81,15 @@ stored query (`GetAgentRunTree`, predicate-bounded, prompt-cost join in final SE
    run-tree cycle fix** or it materializes a broken tree. **→ IMPLEMENTED in PR #3723**
    (`1a42288e7`): refuses-not-guesses on load-error/truncation/graph-unreachable, WD5 encodes the
    ruling as an equality test with a planted absurd rollup, and the query header carries the
-   non-circularity guard. Reviewer flag open: refusal paths can leave a *stale* prior rollup —
-   null the column when non-null. **Interim ruling recorded (same PR): cross-user
+   non-circularity guard. Reviewer flag CLOSED (`a44d73e4b`): refusals now clear all four
+   columns (invariant: present ⇒ equals the tree). Same PR subsequently closed (`12591c5f5`,
+   `ca4feb4ab`): loop passes as tree nodes via `runtime.iterations` (rollup was 11× low on a real
+   loop workflow; pass = leaf boundary documented in the SQL — row-per-pass is the deferred
+   structural fix), the submit race (children+edges+parent in one transaction after a poll was
+   observed claiming a task 6ms before its gating edge existed), unmapped steps starved of the
+   merged payload, no-mapping output replacing instead of merging, cancel now withdraws open
+   requests as `Canceled`, `expiresInHours` makes expiry reachable, and the 0/0-PASS gated-bundle
+   guard. **Interim ruling recorded (same PR): cross-user
    `assignToUserID` is REFUSED at submit until #3524** (better than batch-4's "honor" — no authz
    model exists); "honor" becomes the #3524-unlock work. (Historical note stands: #3698's
    `ParentRunID` claim was dead code at its own merge; #3710 made it live — and detonated
