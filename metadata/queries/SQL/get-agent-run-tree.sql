@@ -295,6 +295,23 @@ UNION ALL
 -- parentage without being a link this query follows. So a While that spent real money over three
 -- passes reported no children and no cost: the timeline had nothing to expand, and the settlement
 -- rollup under-counted every loop-bearing workflow.
+--
+-- 🚧 KNOWN BOUNDARY: a pass is a LEAF. Being emitted after the CTE, it cannot recurse — so if a
+-- loop body is a sub-agent that dispatches a graph of its OWN, this counts that agent run's own
+-- spend and stops. The nested graph's tasks are not reached, and the rollup under-reports by
+-- exactly that subtree.
+--
+-- Deliberately not "fixed" by adding a `r.ParentRunID = t.NodeID` recursive member: a sub-agent run
+-- is already reachable through its Sub-Agent step's TargetLogID, so a parentage member would return
+-- the same run twice and the SUM would double-count it — reintroducing precisely the compounding
+-- this file's header warns about, in exchange for a subtree that is rare today. Nor by refusing
+-- graph-capable agents as loop bodies at submission, which would ban a legitimate composition to
+-- protect a number.
+--
+-- The honest fix is to make an iteration's run a first-class node the recursion can descend from,
+-- which needs the pass to exist as a row rather than a JSON entry. Until then this limit is stated
+-- rather than hidden, because a total that is quietly short is the failure mode this whole area has
+-- been fixing.
 SELECT
     CAST(t.NodeID + ':' + CAST(it.[index] AS NVARCHAR(10)) AS NVARCHAR(50)) AS NodeID,
     t.NodeID                                                AS ParentNodeID,

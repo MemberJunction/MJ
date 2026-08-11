@@ -444,10 +444,9 @@ export class TaskGraphService {
 
             const taskTypeID = await this.ensureTaskType(context);
 
-            // 3. Persist. Parent first so children have a ParentID, then children, then edges —
-            //    edges last because they reference two child IDs that must both exist.
-            const parentTaskID = await this.persistParent(spec, taskTypeID, context);
-            // ── Children AND their edges become visible together, or not at all ─────────────────
+            // 3. Persist — ALL of it, or none of it.
+            //
+            // ── The whole graph becomes visible together, or not at all ─────────────────────────
             // The dispatcher discovers work by polling for child tasks in 'Pending'. Writing the
             // children first and their dependencies afterwards leaves a window — milliseconds, but
             // real — in which every task exists with NO prerequisites recorded yet. A poll landing
@@ -464,13 +463,26 @@ export class TaskGraphService {
             // because a half-built graph is never visible. `RunInEntityTransaction` degrades to
             // running the work as-is on a provider that cannot transact, which is the correct
             // fallback rather than a silent failure.
-            const taskIDMap = await RunInEntityTransaction(asTransactionCapable(context.Provider), async () => {
-                const map = await this.persistChildren(
-                    spec, parentTaskID, taskTypeID, agentIDsByName.Map!, actionIDsByName.Map!, promptIDsByName.Map!, context,
-                );
-                await this.persistDependencies(spec, map, context);
-                return map;
-            });
+            //
+            // The PARENT is inside it too. Written outside, a failure while persisting children or
+            // edges would roll those back and leave a childless parent durably in 'Pending' — which
+            // never settles (the rollup deliberately skips a graph with no nodes) and never dies, so
+            // the active-graph scan picks it up on every poll forever: permanent debris plus a
+            // permanent tick of wasted work for each failed submit. Ordering inside the transaction
+            // is unchanged, because edges only ever reference child IDs.
+            const { parentTaskID, taskIDMap } = await RunInEntityTransaction(
+                asTransactionCapable(context.Provider),
+                async () => {
+                    // Parent first so children have a ParentID, then children, then edges — edges
+                    // last because they reference two child IDs that must both exist.
+                    const parentID = await this.persistParent(spec, taskTypeID, context);
+                    const map = await this.persistChildren(
+                        spec, parentID, taskTypeID, agentIDsByName.Map!, actionIDsByName.Map!, promptIDsByName.Map!, context,
+                    );
+                    await this.persistDependencies(spec, map, context);
+                    return { parentTaskID: parentID, taskIDMap: map };
+                },
+            );
 
             LogStatus(
                 `[TaskGraphService] Submitted "${spec.workflowName}": parent ${parentTaskID}, ${taskIDMap.size} task(s). ` +
