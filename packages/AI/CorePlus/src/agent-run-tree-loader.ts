@@ -120,6 +120,8 @@ function projectRow(raw: unknown): AgentRunTreeRow {
         Tokens: toNumber(r['Tokens']),
         PromptTokens: toNumber(r['PromptTokens']),
         CompletionTokens: toNumber(r['CompletionTokens']),
+        Model: r['Model'] == null ? null : String(r['Model']),
+        Vendor: r['Vendor'] == null ? null : String(r['Vendor']),
         InputPayload: r['InputPayload'] == null ? null : String(r['InputPayload']),
         OutputPayload: r['OutputPayload'] == null ? null : String(r['OutputPayload']),
         SourceEntity: String(r['SourceEntity'] ?? ''),

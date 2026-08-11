@@ -286,8 +286,15 @@ function describeNode(node: AgentRunTreeNode): string {
             parts.push('Workflow — runs on the dispatcher');
             break;
         case 'Task':
-            // Names the kind rather than saying "workflow step" for all of them. "Action" or
-            // "Prompt" is what a reader needs; the provenance styling already says it is workflow.
+            // A prompt-backed step subtitles itself EXACTLY as an agent run's prompt step does.
+            // The same work should not describe itself two different ways depending on which
+            // timeline it was opened from — that reads as two features rather than one.
+            if (node.Model) {
+                parts.push(`Model: ${node.Model} | Vendor: ${node.Vendor || 'Unknown'}`);
+                break;
+            }
+            // Otherwise name the kind. "Action" or "Prompt" is what a reader needs; the provenance
+            // styling already says it is workflow.
             parts.push(node.SourceKind ? `${node.SourceKind} step` : 'Workflow step');
             break;
         case 'Run':

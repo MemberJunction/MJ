@@ -107,6 +107,16 @@ export type AgentRunTreeRow = {
     OutputPayload: string | null;
 
     /**
+     * The model and vendor behind this node, when a prompt produced it.
+     *
+     * Carried so a workflow's prompt step can subtitle itself the way an agent run's prompt step
+     * does — "Model: X | Vendor: Y". Without it the same work described itself two different ways
+     * depending on which timeline it was opened from, which reads as two different features.
+     */
+    Model: string | null;
+    Vendor: string | null;
+
+    /**
      * Where to go when someone clicks it — the entity name and record id.
      *
      * Carried rather than derived, because the mapping from node type to entity is not one-to-one:

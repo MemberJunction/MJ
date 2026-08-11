@@ -110595,6 +110595,15 @@ export interface MJTaskEntity_ITaskLoopIteration {
     promptRunID?: string;
     /** The `MJ: AI Agent Runs` row this pass started, when the loop body is a sub-agent. */
     agentRunID?: string;
+    /**
+     * The `MJ: Action Execution Logs` row this pass produced, when the loop body is an ACTION.
+     *
+     * Without it an action-bodied pass recorded no pointer at all, so it had no cost, no timing and
+     * nothing to open — and the tree, having neither a prompt run nor an agent run to go on, fell to
+     * its last branch and labelled the pass a **Sub-Agent**. A loop over a web search then presented
+     * five sub-agent runs that never happened.
+     */
+    actionLogID?: string;
     /** Whether the pass succeeded. A loop with `continueOnError` can have failed passes and still finish. */
     success?: boolean;
     /** Why the pass failed, when it did. */

@@ -315,6 +315,12 @@ SELECT
         WHEN al.ID IS NOT NULL  THEN CAST(al.ID AS NVARCHAR(50))
         ELSE t.NodeID
     END                                                     AS SourceID,
+    -- Model and vendor of the prompt behind this node, when there is one.
+    -- An agent run STEP subtitles a prompt with "Model: X | Vendor: Y" because its data service
+    -- preloads the prompt run. A workflow step had no way to say the same thing, so the same work
+    -- described itself two different ways depending on which timeline you opened it from.
+    pr.Model                                                AS Model,
+    pr.Vendor                                               AS Vendor,
     t.InputPayload                                          AS InputPayload,
     t.OutputPayload                                         AS OutputPayload,
     t.CreatedAt                                             AS CreatedAt,
@@ -365,11 +371,14 @@ SELECT
     CAST('Step' AS NVARCHAR(20))                            AS NodeType,
     CAST('Pass ' + CAST(it.[index] + 1 AS NVARCHAR(10)) AS NVARCHAR(500)) AS Name,
     CAST(CASE WHEN it.success = 1 THEN 'Complete' ELSE 'Failed' END AS NVARCHAR(50)) AS Status,
-    ipr.RunAt                                               AS StartedAt,
-    ipr.CompletedAt                                         AS CompletedAt,
+    COALESCE(ipr.RunAt, iar.StartedAt, ial.StartedAt)       AS StartedAt,
+    COALESCE(ipr.CompletedAt, iar.CompletedAt, ial.EndedAt)  AS CompletedAt,
     CASE
-        WHEN ipr.RunAt IS NOT NULL AND ipr.CompletedAt IS NOT NULL
-        THEN DATEDIFF(MILLISECOND, ipr.RunAt, ipr.CompletedAt)
+        WHEN COALESCE(ipr.RunAt, iar.StartedAt, ial.StartedAt) IS NOT NULL
+         AND COALESCE(ipr.CompletedAt, iar.CompletedAt, ial.EndedAt) IS NOT NULL
+        THEN DATEDIFF(MILLISECOND,
+                COALESCE(ipr.RunAt, iar.StartedAt, ial.StartedAt),
+                COALESCE(ipr.CompletedAt, iar.CompletedAt, ial.EndedAt))
         ELSE NULL
     END                                                     AS DurationMs,
     -- Own cost of whichever run the pass produced. A pass has exactly one of the two.
@@ -377,23 +386,41 @@ SELECT
     COALESCE(ipr.TokensUsed, iar.TotalTokensUsed)           AS Tokens,
     COALESCE(ipr.TokensPrompt, iar.TotalPromptTokensUsed)   AS PromptTokens,
     COALESCE(ipr.TokensCompletion, iar.TotalCompletionTokensUsed) AS CompletionTokens,
-    CAST(CASE WHEN ipr.ID IS NOT NULL THEN 'MJ: AI Prompt Runs' ELSE 'MJ: AI Agent Runs' END AS NVARCHAR(100)) AS SourceEntity,
-    CAST(CASE WHEN ipr.ID IS NOT NULL THEN 'Prompt' ELSE 'Sub-Agent' END AS NVARCHAR(50)) AS SourceKind,
-    CAST(COALESCE(CAST(ipr.ID AS NVARCHAR(50)), CAST(iar.ID AS NVARCHAR(50)), t.NodeID) AS NVARCHAR(50)) AS SourceID,
+    -- Whatever the pass ACTUALLY produced. The previous form was a two-way guess — prompt run, else
+    -- Sub-Agent — so a pass with no record at all (an action body, which recorded nothing) was
+    -- confidently labelled a sub-agent run that never happened. A kind is derived from evidence or
+    -- it is left as a plain step.
+    CAST(CASE
+        WHEN ipr.ID IS NOT NULL THEN 'MJ: AI Prompt Runs'
+        WHEN iar.ID IS NOT NULL THEN 'MJ: AI Agent Runs'
+        WHEN ial.ID IS NOT NULL THEN 'MJ: Action Execution Logs'
+        ELSE 'MJ: Tasks'
+    END AS NVARCHAR(100))                                   AS SourceEntity,
+    CAST(CASE
+        WHEN ipr.ID IS NOT NULL THEN 'Prompt'
+        WHEN iar.ID IS NOT NULL THEN 'Sub-Agent'
+        WHEN ial.ID IS NOT NULL THEN 'Actions'
+        ELSE NULL
+    END AS NVARCHAR(50))                                    AS SourceKind,
+    CAST(COALESCE(CAST(ipr.ID AS NVARCHAR(50)), CAST(iar.ID AS NVARCHAR(50)), CAST(ial.ID AS NVARCHAR(50)), t.NodeID) AS NVARCHAR(50)) AS SourceID,
+    ipr.Model                                               AS Model,
+    ipr.Vendor                                              AS Vendor,
     CAST(NULL AS NVARCHAR(MAX))                             AS InputPayload,
     CAST(NULL AS NVARCHAR(MAX))                             AS OutputPayload,
     t.CreatedAt                                             AS CreatedAt,
-    CASE WHEN ipr.RunAt IS NULL AND iar.StartedAt IS NULL THEN 1 ELSE 0 END AS NotStarted
+    CASE WHEN COALESCE(ipr.RunAt, iar.StartedAt, ial.StartedAt) IS NULL THEN 1 ELSE 0 END AS NotStarted
 FROM Tree t
 CROSS APPLY OPENJSON(t.Iterations)
     WITH (
         [index]      INT            '$.index',
         promptRunID  NVARCHAR(50)   '$.promptRunID',
         agentRunID   NVARCHAR(50)   '$.agentRunID',
+        actionLogID  NVARCHAR(50)   '$.actionLogID',
         success      BIT            '$.success'
     ) AS it
 LEFT JOIN [__mj].[vwAIPromptRuns] ipr ON ipr.ID = it.promptRunID
 LEFT JOIN [__mj].[vwAIAgentRuns]  iar ON iar.ID = it.agentRunID
+LEFT JOIN [__mj].[vwActionExecutionLogs] ial ON ial.ID = it.actionLogID
 WHERE t.Iterations IS NOT NULL
 
 -- Ordering, and the two things that were wrong with it.

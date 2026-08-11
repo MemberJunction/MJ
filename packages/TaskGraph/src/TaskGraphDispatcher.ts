@@ -1947,7 +1947,7 @@ export class TaskGraphDispatcher implements IShutdownable {
              * still ran the passes before it, and their runs are real spend that must not vanish
              * because the loop as a whole did not finish.
              */
-            const absorb = <T extends { Success: boolean; Output?: unknown; ErrorMessage?: string; PromptRunID?: string; AgentRunID?: string }>(outcome: T): T => {
+            const absorb = <T extends { Success: boolean; Output?: unknown; ErrorMessage?: string; PromptRunID?: string; AgentRunID?: string; ActionLogID?: string }>(outcome: T): T => {
                 if (outcome.Output && typeof outcome.Output === 'object' && !Array.isArray(outcome.Output)) {
                     livePayload = deepMergePayload(livePayload, outcome.Output as Record<string, unknown>);
                 }
@@ -1955,6 +1955,12 @@ export class TaskGraphDispatcher implements IShutdownable {
                     index: Index,
                     promptRunID: outcome.PromptRunID,
                     agentRunID: outcome.AgentRunID,
+                    // An ACTION body records its log here. Omitting it left an action-bodied pass
+                    // with no pointer at all — no cost, no timing, nothing to open — and the tree,
+                    // seeing neither a prompt run nor an agent run, fell through to its last branch
+                    // and called the pass a Sub-Agent. A loop over a web search then showed five
+                    // sub-agent runs that never existed.
+                    actionLogID: outcome.ActionLogID,
                     success: outcome.Success,
                     errorMessage: outcome.ErrorMessage,
                 });
