@@ -81,6 +81,26 @@ export interface ITaskStepConfiguration {
      * produced one.
      */
     runtime?: ITaskStepRuntime;
+
+    /**
+     * Where this step sits in the graph's own order — its rank in a topological sort of the
+     * dependency edges, assigned once at submission.
+     *
+     * **Why a stored rank rather than an ordering rule.** `Task` has no sequence column, and every
+     * consumer that lists a graph's steps was therefore falling back to `__mj_CreatedAt` — which is
+     * the COMPILER's walk order, related to neither the order someone drew the steps in nor the
+     * order they run in. A graph that had not started yet listed its steps essentially at random:
+     * step 2(b), step 3, step 1, step 2(a), with step 3 above the steps it depends on.
+     *
+     * A graph's edges already define a partial order, and that order is knowable before anything
+     * runs — which is exactly when it is needed, since there are no timestamps to sort by yet.
+     * Steps that share a rank are genuinely concurrent, and consumers break that tie with the real
+     * start time, so the rule reads "drawn order, then what actually happened".
+     *
+     * Assigned at submission and never rewritten: it describes the graph's shape, which does not
+     * change once compiled.
+     */
+    sequence?: number;
 }
 
 /**

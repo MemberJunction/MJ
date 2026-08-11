@@ -95,11 +95,21 @@ const TASK_KIND_PRESENTATION: Record<string, { icon: string }> = {
  */
 function presentationOf(node: AgentRunTreeNode): { icon: string; color: MarkerColor } {
     const workflow = node.NodeType === 'Task' || node.NodeType === 'TaskGraph';
-    const icon = node.NodeType === 'Task' && node.SourceKind
+    let icon = node.NodeType === 'Task' && node.SourceKind
         ? (TASK_KIND_PRESENTATION[node.SourceKind] ?? NODE_PRESENTATION.Task).icon
         : (NODE_PRESENTATION[node.NodeType] ?? NODE_PRESENTATION.Step).icon;
 
+    // A loop that ran its iterations at once is a different shape of work from one that ran them in
+    // turn, and the passes underneath look identical either way — same rows, same durations. The
+    // icon carries the distinction, because it is visible without opening anything.
+    if (IsParallelLoop(node)) icon = 'fa-solid fa-arrows-split-up-and-left';
+
     return { icon, color: workflow ? 'info' : (STATUS_COLOR[NormalizeStatus(node.Status)] ?? 'secondary') };
+}
+
+/** True when this node is a loop whose iterations ran concurrently. */
+export function IsParallelLoop(node: AgentRunTreeNode): boolean {
+    return node.LoopMode?.toLowerCase() === 'parallel';
 }
 
 /**
@@ -200,11 +210,32 @@ export type WorkflowStepView = {
     IsWorkflowStep: true;
 };
 
-/** Translates a graph task into the step shape the run timeline already understands. */
+/**
+ * A node the tree SYNTHESIZED rather than read from `AIAgentRunStep` — today, a loop pass.
+ *
+ * A pass has no row of its own; the tree builds it from the loop's iteration trace and gives it
+ * `NodeType: 'Step'`, so it is indistinguishable from a real run step by type alone. What separates
+ * them is where they point: a real step's record IS an `AIAgentRunStep`, while a pass points at the
+ * prompt run, agent run or action log it produced.
+ *
+ * This mattered because only `Task` nodes were being translated into the step shape, so a pass kept
+ * a raw tree node as its `data` — which carries `SourceID`/`SourceEntity` and no `TargetLogID`. The
+ * timeline's navigation gate reads `TargetLogID`, so five passes that each ran a real action offered
+ * no way to open any of them, while the action step two rows above did.
+ */
+function isSynthesizedStep(node: AgentRunTreeNode): boolean {
+    return node.NodeType === 'Step' && node.SourceEntity !== 'MJ: AI Agent Run Steps';
+}
+
+/** Translates a graph task — or a synthesized pass — into the step shape the timeline understands. */
 export function ProjectTaskToStepView(node: AgentRunTreeNode, stepNumber: number): WorkflowStepView {
     return {
         ID: node.NodeID,
-        StepType: (node.SourceKind && TASK_KIND_TO_STEP_TYPE[node.SourceKind]) || 'Actions',
+        // Translate a TASK's vocabulary; pass a step vocabulary through unchanged. A loop pass
+        // already reports `Actions` / `Prompt` / `Sub-Agent`, and running those through the task map
+        // dropped `Sub-Agent` (absent from it) to the `Actions` default — mislabelling every
+        // sub-agent pass as an action, and pointing its link at the wrong entity.
+        StepType: (node.SourceKind && (TASK_KIND_TO_STEP_TYPE[node.SourceKind] ?? node.SourceKind)) || 'Actions',
         StepName: node.Name,
         StepNumber: stepNumber,
         Status: node.Status,
@@ -253,29 +284,25 @@ export function ProjectRunTreeToTimeline(
 ): TimelineItem[] {
     if (!root) return [];
 
-    const items: TimelineItem[] = [];
-    // Per-parent counters, so a step's number is its position among ITS siblings rather than its
-    // position in the whole flattened list — which is what `StepNumber` means for a run's own steps.
-    const positions = new Map<string, number>();
-
-    const visit = (node: AgentRunTreeNode, level: number, parentID: string | undefined): void => {
-        const key = parentID ?? '(root)';
-        const position = (positions.get(key) ?? 0) + 1;
-        positions.set(key, position);
-
-        items.push(toTimelineItem(node, level, parentID, position));
-        for (const child of node.Children) {
-            visit(child, level + 1, node.NodeID);
-        }
+    /**
+     * Builds one row and its subtree.
+     *
+     * **Nested, not flattened.** The projection used to return one flat array with `level` for
+     * indentation, and set `children: []` on every row. The timeline's expand affordance is gated on
+     * `children.length`, so nothing a workflow produced could ever be collapsed: the task graph, its
+     * loops and their passes all rendered permanently open, indented but unmanageable, while an
+     * agent's own sub-agent steps a few rows above collapsed normally. Handing back the real shape
+     * lights up the recursive template and the expand machinery that were already there.
+     */
+    const build = (node: AgentRunTreeNode, level: number, parentID: string | undefined, position: number): TimelineItem => {
+        const item = toTimelineItem(node, level, parentID, position);
+        item.children = node.Children.map((child, index) => build(child, level + 1, node.NodeID, index + 1));
+        return item;
     };
 
-    if (skipRoot) {
-        for (const child of root.Children) visit(child, baseLevel, root.NodeID);
-    } else {
-        visit(root, baseLevel, undefined);
-    }
-
-    return items;
+    return skipRoot
+        ? root.Children.map((child, index) => build(child, baseLevel, root.NodeID, index + 1))
+        : [build(root, baseLevel, undefined, 1)];
 }
 
 /** One node as a timeline row. */
@@ -313,11 +340,13 @@ function toTimelineItem(
         duration: formatDuration(node.DurationMs),
         icon: presentation.icon,
         color: presentation.color,
-        // A task is handed to the UI as a STEP — see ProjectTaskToStepView. Everything downstream
-        // routes on this shape, so translating here is what makes a workflow's steps reuse the run
-        // timeline instead of falling through every branch to a raw JSON dump. Non-task nodes keep
-        // the tree node, which is what their own rendering reads.
-        data: node.NodeType === 'Task' ? ProjectTaskToStepView(node, position) : node,
+        // A task — and a synthesized loop pass — is handed to the UI as a STEP. Everything
+        // downstream routes on this shape, so translating here is what makes workflow work reuse the
+        // run timeline instead of falling through every branch to a raw JSON dump. A REAL agent run
+        // step keeps the tree node: its own rendering already reads that.
+        data: node.NodeType === 'Task' || isSynthesizedStep(node)
+            ? ProjectTaskToStepView(node, position)
+            : node,
         level,
         parentId: parentID,
         // Everything is already loaded — the whole tree arrived in one query — so nothing here is
@@ -347,6 +376,16 @@ function describeNode(node: AgentRunTreeNode): string {
             }
             // Otherwise name the kind. "Action" or "Prompt" is what a reader needs; the provenance
             // styling already says it is workflow.
+            //
+            // A loop also says HOW it ran. Spelled out rather than left to the icon alone: "ForEach
+            // step · 5 passes in parallel" answers, without opening anything, why five 300ms passes
+            // took 300ms rather than a second and a half.
+            if (node.SourceKind === 'ForEach' || node.SourceKind === 'While') {
+                const passes = node.Children.length;
+                const count = passes > 0 ? `${passes} ${passes === 1 ? 'pass' : 'passes'}` : 'no passes';
+                parts.push(`${node.SourceKind} step · ${count}${IsParallelLoop(node) ? ' in parallel' : ''}`);
+                break;
+            }
             parts.push(node.SourceKind ? `${node.SourceKind} step` : 'Workflow step');
             break;
         case 'Run':

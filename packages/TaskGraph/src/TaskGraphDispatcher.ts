@@ -712,6 +712,13 @@ export class TaskGraphDispatcher implements IShutdownable {
                     TotalCount: fresh.nodes.length,
                 });
                 await this.rollUpCostToSubmittingRun(provider, parent);
+                // Deliberately AFTER the rollup and OUTSIDE its refusal paths. The rollup declines
+                // to write a number it cannot stand behind — a truncated tree, an unreachable graph
+                // — and every one of those returns early. If the run's lifecycle were settled in
+                // there, a refused rollup would strand the run parked forever, which is a far worse
+                // failure than a missing cost figure. Cost and lifecycle are separate concerns with
+                // separate failure modes, so they get separate writes.
+                await this.settleSubmittingRun(provider, parent, rollup.status);
                 await this.deliverContinuation(provider, parent, fresh);
             }
         }
@@ -2300,6 +2307,72 @@ export class TaskGraphDispatcher implements IShutdownable {
             Provider: provider,
             ContextUser: this.contextUser,
         });
+    }
+
+    /**
+     * Completes the agent run that parked on this graph.
+     *
+     * **This is the other half of submit-and-detach.** A run that dispatches a graph does not
+     * complete at submission — it ends `Paused`, because reporting `Completed` above a workflow
+     * where nothing has happened yet is a claim the row cannot support. The run's lifecycle is
+     * finished HERE, when the graph it was waiting on actually settles, which is the first moment
+     * the answer exists.
+     *
+     * Doing it from the dispatcher rather than by awaiting in the agent is what keeps the properties
+     * that made detach right in the first place: a graph containing a human approval can park for
+     * days without holding a conversation turn open, and a graph reclaimed by another instance after
+     * a crash still settles its submitting run, because the settling happens wherever the graph
+     * finishes rather than wherever it started.
+     *
+     * **Only a parked run is touched.** A run that is already `Completed`, `Failed` or `Cancelled`
+     * reached that state for its own reasons — a second graph settling later, a run the user
+     * cancelled, a run that failed after submitting — and overwriting it would rewrite history from
+     * the outside. The `Paused` predicate is the whole guard.
+     *
+     * @param graphStatus the parent rollup's status: what the workflow as a whole did
+     */
+    private async settleSubmittingRun(
+        provider: IMetadataProvider,
+        parent: MJTaskEntity,
+        graphStatus: TaskGraphNodeStatus,
+    ): Promise<void> {
+        const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
+        if (!meta.submittedByAgentRunID) return; // a scheduled or remote-triggered graph has nobody waiting
+
+        try {
+            const run = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+            if (!(await run.Load(meta.submittedByAgentRunID))) {
+                LogError(`[TaskGraphDispatcher] Could not load run ${meta.submittedByAgentRunID} to settle it against graph ${parent.ID}.`);
+                return;
+            }
+            if (run.Status !== 'Paused') return;
+
+            // The workflow's outcome becomes the run's outcome. A graph that ended any way other than
+            // Complete did not do what the run started it to do, and a run reporting success over it
+            // would be the same untruth in a different place.
+            const succeeded = graphStatus === 'Complete';
+            run.Status = succeeded ? 'Completed' : 'Failed';
+            run.Success = succeeded;
+            run.CompletedAt = new Date();
+            if (!succeeded) {
+                const reason = `The workflow "${parent.Name}" ended ${graphStatus}.`;
+                run.ErrorMessage = run.ErrorMessage ? `${run.ErrorMessage}\n\n${reason}` : reason;
+            }
+
+            if (!(await run.Save())) {
+                // Left parked rather than forced. A run stuck at Paused is visibly unfinished, which
+                // is a state someone can investigate; a run flipped to Completed by a write that did
+                // not land would be the same lie this whole change removes.
+                LogError(
+                    `[TaskGraphDispatcher] Could not settle run ${run.ID} against graph ${parent.ID}: ` +
+                    `${run.LatestResult?.CompleteMessage ?? 'unknown error'}. It remains Paused.`,
+                );
+                return;
+            }
+            LogStatus(`[TaskGraphDispatcher] Run ${run.ID} settled ${run.Status} — workflow "${parent.Name}" ended ${graphStatus}.`);
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not settle the run waiting on graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
+        }
     }
 
     /**

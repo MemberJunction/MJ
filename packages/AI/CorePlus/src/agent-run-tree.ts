@@ -141,6 +141,17 @@ export type AgentRunTreeRow = {
     Vendor: string | null;
 
     /**
+     * How a loop step ran its iterations — `'parallel'`, `'sequential'`, or null for anything that
+     * is not a loop.
+     *
+     * Carried because the passes look identical either way: the same rows with the same durations.
+     * Whether they ran one after another or all at once is the difference between a loop that cost
+     * the sum of its parts and one that cost the longest of them, and it is not recoverable from any
+     * other field a consumer holds.
+     */
+    LoopMode: string | null;
+
+    /**
      * Where to go when someone clicks it — the entity name and record id.
      *
      * Carried rather than derived, because the mapping from node type to entity is not one-to-one:
@@ -206,7 +217,15 @@ export function IsAgentRunTreeTruncated(rows: readonly AgentRunTreeRow[]): boole
  * happened. Dropping it would silently shrink the run; surfacing it at the top is visibly odd, which
  * is the correct amount of alarming.
  *
- * Sorting is by `Sequence` then `NodeID`, so a tie cannot render differently between two loads.
+ * **Sorting is by `Sequence` alone, and the sort is stable**, so siblings that tie keep the order the
+ * query returned them in. That order is not arbitrary: `GetAgentRunTree` orders by started-ness,
+ * start time and creation, precisely so a run reads in the order things happened.
+ *
+ * It used to tie-break on `NodeID`, for determinism. It was deterministic and it was wrong — every
+ * task in a graph carries the same `Sequence`, so EVERY workflow's steps were ordered **by GUID**,
+ * throwing away the query's ordering entirely. A four-step workflow listed its first step last, and
+ * because a GUID order is perfectly stable, it looked like a deliberate order rather than a bug.
+ * Input order is equally deterministic — the query's `ORDER BY` is total — and it is also correct.
  */
 export function BuildAgentRunTree(rows: readonly AgentRunTreeRow[]): AgentRunTreeNode | null {
     if (rows.length === 0) return null;
@@ -237,8 +256,10 @@ export function BuildAgentRunTree(rows: readonly AgentRunTreeRow[]): AgentRunTre
     if (!root) return null;
     for (const orphan of orphans) if (orphan !== root) root.Children.push(orphan);
 
+    // `Array.prototype.sort` is stable (guaranteed since ES2019), which is what carries the query's
+    // ordering through a tie rather than replacing it with something arbitrary.
     for (const node of byID.values()) {
-        node.Children.sort((a, b) => a.Sequence - b.Sequence || a.NodeID.localeCompare(b.NodeID));
+        node.Children.sort((a, b) => a.Sequence - b.Sequence);
     }
     return root;
 }

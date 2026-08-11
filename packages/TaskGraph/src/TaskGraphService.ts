@@ -34,6 +34,7 @@ import {
 import {
     FormatValidationErrors,
     NormalizeDependency,
+    RankGraphNodes,
     ValidateTaskGraphSpec,
     type TaskGraphSpec,
     type TaskGraphSpecNode,
@@ -787,6 +788,14 @@ export class TaskGraphService {
         context: TaskGraphSubmitContext,
     ): Promise<Map<string, string>> {
         const map = new Map<string, string>();
+        // Resolved ONCE over the whole graph: a rank is a node's position in the topology, so it
+        // cannot be computed per node without seeing all of them.
+        const ranks = RankGraphNodes(
+            spec.tasks.map((t) => t.tempId),
+            spec.tasks.flatMap((t) =>
+                (t.dependsOn ?? []).map((d) => ({ From: NormalizeDependency(d).tempId, To: t.tempId })),
+            ),
+        );
         for (const node of spec.tasks) {
             const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
             task.NewRecord();
@@ -856,8 +865,15 @@ export class TaskGraphService {
             // Everything about the step that has no column of its own. Dropping this is what used
             // to lose the input/output mappings — and with them the payload values every branch
             // condition downstream reads.
-            const configuration = buildStepConfiguration(node);
-            task.Configuration = configuration ? JSON.stringify(configuration) : null;
+            //
+            // The step's rank in the graph's own order rides along. `Task` has no sequence column,
+            // so without it every consumer listing a graph's steps falls back to creation order —
+            // the compiler's walk, which is neither the order they were drawn in nor the order they
+            // run in. A graph that has not started yet has no timestamps to sort by, so its
+            // structure is the only order available, and it is available from the moment it is
+            // compiled.
+            const configuration = { ...buildStepConfiguration(node), sequence: ranks.get(node.tempId) };
+            task.Configuration = JSON.stringify(configuration);
 
             // Input rides in its own column; Description stays human-readable.
             task.InputPayload = node.inputPayload ? JSON.stringify(node.inputPayload) : null;

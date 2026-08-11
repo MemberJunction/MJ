@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRunTreeNode, AgentRunTreeStatus } from '@memberjunction/ai-core-plus';
 import { ProjectRunTreeToTimeline } from '../run-tree-timeline-projection';
+import type { TimelineItem } from '../ai-agent-run-timeline.component';
 
 function node(partial: Partial<AgentRunTreeNode> & { NodeID: string }): AgentRunTreeNode {
     return {
@@ -63,19 +64,39 @@ function sampleTree(): AgentRunTreeNode {
     });
 }
 
+/**
+ * The rows in reading order.
+ *
+ * The projection returns a NESTED structure — each row carrying its own children — because the
+ * timeline's expand affordance is gated on `children.length`, and a flat list left every workflow
+ * row permanently open with no way to collapse it. Depth-first order is still the property most of
+ * these assertions are about, so they read it back through here.
+ */
+function flatten(items: TimelineItem[]): TimelineItem[] {
+    return items.flatMap((item) => [item, ...flatten(item.children ?? [])]);
+}
+
 describe('ProjectRunTreeToTimeline', () => {
+    it('nests children so a row can be collapsed', () => {
+        const [run] = ProjectRunTreeToTimeline(sampleTree());
+
+        expect(run.children?.map((c) => c.id)).toEqual(['step']);
+        expect(run.children?.[0].children?.map((c) => c.id)).toEqual(['graph']);
+        expect(run.children?.[0].children?.[0].children?.map((c) => c.id)).toEqual(['task-a', 'task-b']);
+    });
+
     it('returns nothing for a null tree', () => {
         expect(ProjectRunTreeToTimeline(null)).toEqual([]);
     });
 
     it('flattens depth-first, which is reading order', () => {
-        const items = ProjectRunTreeToTimeline(sampleTree());
+        const items = flatten(ProjectRunTreeToTimeline(sampleTree()));
 
         expect(items.map((i) => i.id)).toEqual(['run', 'step', 'graph', 'task-a', 'task-b', 'subrun']);
     });
 
     it('derives level from tree structure, not from visit order', () => {
-        const items = ProjectRunTreeToTimeline(sampleTree());
+        const items = flatten(ProjectRunTreeToTimeline(sampleTree()));
         const levels = Object.fromEntries(items.map((i) => [i.id, i.level]));
 
         expect(levels).toEqual({ run: 0, step: 1, graph: 2, 'task-a': 3, 'task-b': 3, subrun: 4 });
@@ -88,14 +109,14 @@ describe('ProjectRunTreeToTimeline', () => {
         const graph = tree.Children[0].Children[0];
         graph.Children = [...graph.Children].reverse();
 
-        const items = ProjectRunTreeToTimeline(tree);
+        const items = flatten(ProjectRunTreeToTimeline(tree));
         const subrun = items.find((i) => i.id === 'subrun');
 
         expect(subrun?.level).toBe(4);
     });
 
     it('renders a task as a STEP, because that is what every existing branch keys on', () => {
-        const items = ProjectRunTreeToTimeline(sampleTree());
+        const items = flatten(ProjectRunTreeToTimeline(sampleTree()));
         const types = Object.fromEntries(items.map((i) => [i.id, i.type]));
 
         // A task is a `step`, not a type of its own. The run timeline routes on `type === 'step'`
@@ -121,7 +142,7 @@ describe('ProjectRunTreeToTimeline', () => {
                 node({ NodeID: 's', NodeType: 'Task', Name: 'Delegate', SourceKind: 'Agent' }),
             ],
         });
-        const items = ProjectRunTreeToTimeline(tree);
+        const items = flatten(ProjectRunTreeToTimeline(tree));
         const stepTypeOf = (id: string) => items.find((i) => i.id === id)?.data?.StepType;
 
         // The graph says 'Action'; a run step says 'Actions'. Translating is what lets one set of
@@ -137,7 +158,7 @@ describe('ProjectRunTreeToTimeline', () => {
         const tree = sampleTree();
         const step = tree.Children[0];
 
-        const items = ProjectRunTreeToTimeline(step, 5, true);
+        const items = flatten(ProjectRunTreeToTimeline(step, 5, true));
 
         expect(items[0].id).toBe('graph');
         expect(items[0].level).toBe(5);
@@ -183,7 +204,7 @@ describe('ProjectRunTreeToTimeline', () => {
     });
 
     it('flags leaves as having no children', () => {
-        const items = ProjectRunTreeToTimeline(sampleTree());
+        const items = flatten(ProjectRunTreeToTimeline(sampleTree()));
 
         expect(items.find((i) => i.id === 'task-a')?.hasNoChildren).toBe(true);
         expect(items.find((i) => i.id === 'graph')?.hasNoChildren).toBe(false);
@@ -203,7 +224,7 @@ describe('ProjectRunTreeToTimeline', () => {
         // TYPE, so every Task resolved to the same generic diagram glyph and painted over it. On a
         // real run a prompt step, a loop and an approval were visually identical, which is how a
         // workflow reads as undifferentiated boxes even though the projection knew better.
-        const items = ProjectRunTreeToTimeline(node({
+        const items = flatten(ProjectRunTreeToTimeline(node({
             NodeID: 'graph', NodeType: 'TaskGraph', Name: 'Content Pipeline',
             Children: [
                 node({ NodeID: 't1', NodeType: 'Task', SourceKind: 'Action', Name: 'Research' }),
@@ -211,7 +232,7 @@ describe('ProjectRunTreeToTimeline', () => {
                 node({ NodeID: 't3', NodeType: 'Task', SourceKind: 'While', Name: 'Review' }),
                 node({ NodeID: 't4', NodeType: 'Task', SourceKind: 'Human', Name: 'Approve' }),
             ],
-        }));
+        })));
         const iconOf = (id: string) => items.find((i) => i.id === id)!.icon;
 
         expect(new Set([iconOf('t1'), iconOf('t2'), iconOf('t3'), iconOf('t4')]).size).toBe(4);
@@ -222,10 +243,10 @@ describe('ProjectRunTreeToTimeline', () => {
     it('still marks kind-iconed tasks as workflow provenance', () => {
         // Differentiating the icon must not cost the grouping that says "this ran on the
         // dispatcher" — that is what tells a reader where to go when a step fails.
-        const items = ProjectRunTreeToTimeline(node({
+        const items = flatten(ProjectRunTreeToTimeline(node({
             NodeID: 'graph', NodeType: 'TaskGraph',
             Children: [node({ NodeID: 't', NodeType: 'Task', SourceKind: 'Prompt', Name: 'Draft' })],
-        }));
+        })));
 
         expect(items.find((i) => i.id === 't')?.provenance).toBe('workflow');
     });
@@ -285,7 +306,7 @@ describe('ProjectRunTreeToTimeline — status and marker colour', () => {
                 node({ NodeID: 'step', NodeType: 'Step', Status: 'Failed' }),
             ],
         });
-        for (const row of ProjectRunTreeToTimeline(tree)) {
+        for (const row of flatten(ProjectRunTreeToTimeline(tree))) {
             expect(MARKER_COLORS).toContain(row.color);
             expect(row.color).not.toContain('var(');
         }
@@ -301,7 +322,7 @@ describe('ProjectRunTreeToTimeline — status and marker colour', () => {
                 node({ NodeID: 'step', NodeType: 'Step', Status: 'Failed' }),
             ],
         });
-        const rows = ProjectRunTreeToTimeline(tree);
+        const rows = flatten(ProjectRunTreeToTimeline(tree));
         // A failed WORKFLOW step still reads as workflow — provenance first; its status is legible
         // elsewhere on the row.
         expect(rows.find((r) => r.id === 'task')?.color).toBe('info');
@@ -318,7 +339,7 @@ describe('ProjectRunTreeToTimeline — status and marker colour', () => {
             Status: 'Complete',
             Children: [node({ NodeID: 'sub', NodeType: 'Run', Status: 'Completed' })],
         });
-        const rows = ProjectRunTreeToTimeline(tree);
+        const rows = flatten(ProjectRunTreeToTimeline(tree));
         expect(rows.find((r) => r.id === 'sub')?.color).toBe('success');
         expect(rows.find((r) => r.id === 'sub')?.provenance).toBeUndefined();
     });

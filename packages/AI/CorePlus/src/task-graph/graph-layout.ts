@@ -145,6 +145,41 @@ export function LayoutGraphNodes(
 }
 
 /**
+ * A dense rank per node, in the order the graph says its steps come.
+ *
+ * **What this is for.** A `Task` row has no sequence column, so every consumer listing a graph's
+ * steps fell back to creation order — the compiler's walk, which matches neither the order someone
+ * drew the steps in nor the order they execute in. A graph that had not started yet therefore listed
+ * itself essentially at random, with steps appearing above the steps they depend on.
+ *
+ * The edges already define a partial order, and — unlike timestamps — it is knowable before anything
+ * runs, which is exactly when it is needed. This resolves that partial order into a total one using
+ * the same layering the layout uses, so the list order and the left-to-right drawing agree by
+ * construction rather than by coincidence.
+ *
+ * Nodes in the same layer are genuinely concurrent and get consecutive ranks in the layout's own
+ * within-layer order; consumers that have real start times break the tie with those instead.
+ */
+export function RankGraphNodes(
+    nodeIDs: readonly string[],
+    edges: readonly GraphLayoutEdge[],
+): Map<string, number> {
+    const ranks = new Map<string, number>();
+    if (nodeIDs.length === 0) return ranks;
+
+    const ids = [...new Set(nodeIDs)];
+    const known = new Set(ids);
+    const predecessors = buildPredecessorMapFromEdges(ids, edges, known);
+    const ordered = orderWithinLayers(assignLayers(ids, predecessors), predecessors, invert(predecessors, ids));
+
+    let rank = 0;
+    for (const layer of ordered) {
+        for (const id of layer) ranks.set(id, rank++);
+    }
+    return ranks;
+}
+
+/**
  * The bounding box a laid-out graph occupies.
  *
  * Saves every caller from recomputing it for fit-to-view, canvas sizing, or centring — and gets the

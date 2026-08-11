@@ -70,15 +70,32 @@ describe('BuildAgentRunTree', () => {
         expect(tree.Children.map((c) => c.Name)).toEqual(['first', 'second', 'third']);
     });
 
-    it('breaks a Sequence tie deterministically', () => {
-        // Two loads of the same run must render identically; a tie resolved by hash order would not.
+    it('resolves a Sequence tie by KEEPING THE QUERY ORDER, not by node id', () => {
+        // This test used to assert the opposite — ties sorted by `NodeID` — for determinism. It was
+        // deterministic and it was wrong: every task in a graph carries the same Sequence, so EVERY
+        // workflow's steps were being ordered BY GUID, discarding the query's `ORDER BY` (started,
+        // then start time, then created). A four-step workflow listed its first step last, and
+        // because GUID order is perfectly stable it looked deliberate rather than broken.
+        //
+        // Input order is equally deterministic — the query's ordering is total — and it is the order
+        // things actually happened in.
         const rows = [
             row({ NodeID: 'run', NodeType: 'Run', Name: 'R' }),
-            row({ NodeID: 'zzz', ParentNodeID: 'run', Depth: 1, Sequence: 0, NodeType: 'Step', Name: 'z' }),
-            row({ NodeID: 'aaa', ParentNodeID: 'run', Depth: 1, Sequence: 0, NodeType: 'Step', Name: 'a' }),
+            row({ NodeID: 'zzz', ParentNodeID: 'run', Depth: 1, Sequence: 0, NodeType: 'Step', Name: 'ran first' }),
+            row({ NodeID: 'aaa', ParentNodeID: 'run', Depth: 1, Sequence: 0, NodeType: 'Step', Name: 'ran second' }),
         ];
-        expect(BuildAgentRunTree(rows)!.Children.map((c) => c.NodeID)).toEqual(['aaa', 'zzz']);
-        expect(BuildAgentRunTree([...rows].reverse())!.Children.map((c) => c.NodeID)).toEqual(['aaa', 'zzz']);
+        expect(BuildAgentRunTree(rows)!.Children.map((c) => c.Name)).toEqual(['ran first', 'ran second']);
+    });
+
+    it('still orders by Sequence when one is given, whatever order the rows arrive in', () => {
+        // Preserving input order for TIES must not become "ignore Sequence" — the graph's own
+        // topological rank is what puts an unstarted workflow in the order it was drawn.
+        const rows = [
+            row({ NodeID: 'run', NodeType: 'Run', Name: 'R' }),
+            row({ NodeID: 'late', ParentNodeID: 'run', Depth: 1, Sequence: 9, NodeType: 'Step', Name: 'last' }),
+            row({ NodeID: 'early', ParentNodeID: 'run', Depth: 1, Sequence: 1, NodeType: 'Step', Name: 'first' }),
+        ];
+        expect(BuildAgentRunTree(rows)!.Children.map((c) => c.Name)).toEqual(['first', 'last']);
     });
 
     it('ATTACHES an orphan to the root rather than dropping it', () => {

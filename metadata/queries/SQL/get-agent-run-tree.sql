@@ -162,7 +162,17 @@ WITH Tree AS (
         CAST(tk.ID AS NVARCHAR(50)),
         t.NodeID,
         t.Depth + 1,
-        0,
+        -- The step's rank in the graph's own topological order, written at submission.
+        --
+        -- Every task used to carry 0 here, which made Sequence useless as an ordering key and left
+        -- siblings to be separated by whatever came next — start time in this query, and (until it
+        -- was fixed) the node's GUID in the client's tree assembly. A graph that had not started yet
+        -- had no start times either, so it listed its steps in creation order: the compiler's walk,
+        -- with step three above the steps it depends on.
+        --
+        -- ISNULL for graphs submitted before this was recorded: they collapse to 0 and fall through
+        -- to the start-time ordering, exactly as they did before.
+        ISNULL(TRY_CAST(JSON_VALUE(tk.Configuration, '$.sequence') AS INT), 0),
         CAST('Task' AS NVARCHAR(20)),
         CAST(COALESCE(tk.Name, 'Step') AS NVARCHAR(500)),
         CAST(tk.Status AS NVARCHAR(50)),
@@ -334,6 +344,17 @@ SELECT
     pr.Vendor                                               AS Vendor,
     t.InputPayload                                          AS InputPayload,
     t.OutputPayload                                         AS OutputPayload,
+    -- How a ForEach ran its iterations: 'parallel' or 'sequential'.
+    --
+    -- Read by joining BACK to the Task row rather than carried through the recursion. Every column
+    -- in the CTE has to be declared in all six of its members, and this is needed by exactly one of
+    -- them — so a join here costs one lookup against rows already being read, where threading it
+    -- through would be six edits and six chances to shift a UNION's column list.
+    --
+    -- It matters to a reader because the passes look identical either way: five rows with five
+    -- durations. Whether they ran one after another or all at once is the difference between a loop
+    -- that took the sum of its parts and one that took the longest of them.
+    CAST(JSON_VALUE(ltk.Configuration, '$.forEach.executionMode') AS NVARCHAR(20)) AS LoopMode,
     t.CreatedAt                                             AS CreatedAt,
     -- Sort helper only. A UNION forbids an expression in ORDER BY, so "has this started?" has to be
     -- a real column. Consumers ignore it; the loader projects by name.
@@ -343,6 +364,10 @@ LEFT JOIN [__mj].[vwAIPromptRuns] pr
     ON pr.ID = t.PromptRunID
 LEFT JOIN [__mj].[vwActionExecutionLogs] al
     ON al.ID = t.ActionLogID
+-- Only Task nodes carry step configuration; the predicate keeps a run or step id from matching a
+-- Task by coincidence and reading a foreign row's settings.
+LEFT JOIN [__mj].[vwTasks] ltk
+    ON ltk.ID = t.NodeID AND t.NodeType IN ('Task', 'TaskGraph')
 
 UNION ALL
 
@@ -380,7 +405,16 @@ SELECT
     t.Depth + 1                                             AS Depth,
     it.[index]                                              AS Sequence,
     CAST('Step' AS NVARCHAR(20))                            AS NodeType,
-    CAST('Pass ' + CAST(it.[index] + 1 AS NVARCHAR(10)) AS NVARCHAR(500)) AS Name,
+    -- "1: Google Custom Search" — the pass number, then WHAT IT RAN.
+    --
+    -- "Pass 1" alone described the loop's bookkeeping rather than the work: five identical rows
+    -- telling a reader nothing about what the loop was doing, in a list where every other row names
+    -- its action, prompt or agent. The name comes from whichever record the pass produced, so it
+    -- cannot disagree with the row it links to. A pass that produced nothing keeps the bare number,
+    -- which is the honest form of "we do not know what this ran".
+    CAST(CAST(it.[index] + 1 AS NVARCHAR(10))
+         + COALESCE(': ' + ial.Action, ': ' + iar.Agent, ': ' + ipr.Prompt, '')
+         AS NVARCHAR(500))                                  AS Name,
     CAST(CASE WHEN it.success = 1 THEN 'Complete' ELSE 'Failed' END AS NVARCHAR(50)) AS Status,
     COALESCE(ipr.RunAt, iar.StartedAt, ial.StartedAt)       AS StartedAt,
     COALESCE(ipr.CompletedAt, iar.CompletedAt, ial.EndedAt)  AS CompletedAt,
@@ -422,6 +456,7 @@ SELECT
     -- step's own payload shows only the final accumulated state.
     CAST(it.payloadAtStart AS NVARCHAR(MAX))                AS InputPayload,
     CAST(it.payloadAtEnd AS NVARCHAR(MAX))                  AS OutputPayload,
+    CAST(NULL AS NVARCHAR(20))                              AS LoopMode,
     t.CreatedAt                                             AS CreatedAt,
     CASE WHEN COALESCE(ipr.RunAt, iar.StartedAt, ial.StartedAt) IS NULL THEN 1 ELSE 0 END AS NotStarted
 FROM Tree t
