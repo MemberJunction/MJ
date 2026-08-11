@@ -379,12 +379,18 @@ export function SpecToConnections(spec: TaskGraphSpec, runtime?: TaskGraphRuntim
         for (const dep of GetDependencies(task)) {
             if (!known.has(dep.tempId)) continue;
 
+            // RUN MODE DRAWS ONLY THE PATH TAKEN.
+            //
+            // An edge touching a step the workflow declined did not carry anything, and drawing it
+            // makes a conditional workflow look as though both branches ran. Both ENDS are checked:
+            // an edge out of a skipped step is as untravelled as one into it.
+            //
+            // Design mode keeps every edge, because there is no route yet — the graph is all the
+            // routes that COULD be taken, which is exactly what an author is arranging. `runtime`
+            // being present is what distinguishes the two, so the same function serves both.
+            if (runtime && (runtime[task.tempId] === 'Skipped' || runtime[dep.tempId] === 'Skipped')) continue;
+
             const conditional = !!dep.condition?.trim();
-            // An edge into a step the workflow did not take must not read like a route that was
-            // followed. Drawn receding rather than removed: deleting it would leave the skipped node
-            // floating unattached, which reads as a rendering fault rather than as a branch nobody
-            // took — and the fact that the branch EXISTS is the thing a reader is trying to see.
-            const notTaken = runtime?.[task.tempId] === 'Skipped';
             connections.push({
                 ID: edgeId(dep.tempId, task.tempId),
                 // Reversed: dependsOn points back at the prerequisite, the drawn arrow points forward.
@@ -398,8 +404,7 @@ export function SpecToConnections(spec: TaskGraphSpec, runtime?: TaskGraphRuntim
                 LabelDetail: dep.condition ?? undefined,
                 LabelIcon: conditional ? 'fa-code-branch' : undefined,
                 Condition: dep.condition ?? undefined,
-                Style: notTaken ? 'dotted' : (conditional ? 'dashed' : 'solid'),
-                NotTaken: notTaken || undefined,
+                Style: conditional ? 'dashed' : 'solid',
                 Data: { FromTempId: dep.tempId, ToTempId: task.tempId },
             });
         }

@@ -345,16 +345,26 @@ describe('routes the workflow did not take', () => {
     };
     const runtime = { start: 'Complete', taken: 'Complete', 'not-taken': 'Skipped' } as const;
 
-    it('marks the edge into a skipped step as not taken', () => {
-        const byTarget = new Map(SpecToConnections(branching, runtime).map((c) => [c.TargetNodeID, c]));
-        expect(byTarget.get('not-taken')?.NotTaken).toBe(true);
-        expect(byTarget.get('taken')?.NotTaken).toBeUndefined();
+    it('draws no edge into a step the workflow declined', () => {
+        expect(SpecToConnections(branching, runtime).some((c) => c.TargetNodeID === 'not-taken')).toBe(false);
     });
 
-    it('still draws the edge, so the branch remains visible', () => {
-        // Removing it would leave the skipped node floating unattached — a rendering fault to a
-        // reader, rather than a branch nobody took.
-        expect(SpecToConnections(branching, runtime).some((c) => c.TargetNodeID === 'not-taken')).toBe(true);
+    it('draws no edge OUT of a declined step either', () => {
+        // An edge leaving a skipped step is as untravelled as one entering it — checking only the
+        // target would leave half of every abandoned branch drawn as though it had carried something.
+        const withDownstream: TaskGraphSpec = {
+            ...branching,
+            tasks: [
+                ...branching.tasks,
+                TaskNode.Action({ tempId: 'after', name: 'After', description: '', dependsOn: ['not-taken'] }, { actionName: 'Q' }),
+            ],
+        };
+        const conns = SpecToConnections(withDownstream, { ...runtime, after: 'Pending' });
+        expect(conns.some((c) => c.SourceNodeID === 'not-taken')).toBe(false);
+    });
+
+    it('keeps the edges along the route that WAS taken', () => {
+        expect(SpecToConnections(branching, runtime).some((c) => c.TargetNodeID === 'taken')).toBe(true);
     });
 
     it('gives a skipped step its own node status, not the default one', () => {
@@ -363,7 +373,9 @@ describe('routes the workflow did not take', () => {
         expect(nodes.find((n) => n.ID === 'taken')?.Status).toBe('success');
     });
 
-    it('marks nothing when no runtime is supplied — design time has no routes taken', () => {
-        expect(SpecToConnections(branching).every((c) => c.NotTaken === undefined)).toBe(true);
+    it('DESIGN mode keeps every edge — there is no route yet, only routes that could be taken', () => {
+        // The same graph with no runtime is what an author is arranging; hiding a branch there would
+        // hide part of what they are building.
+        expect(SpecToConnections(branching)).toHaveLength(2);
     });
 });

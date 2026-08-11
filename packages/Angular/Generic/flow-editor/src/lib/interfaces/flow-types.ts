@@ -80,15 +80,6 @@ export type FlowConnectionStyle = 'solid' | 'dashed' | 'dotted';
 
 /** A connection (edge) between two nodes */
 export interface FlowConnection {
-  /**
-   * The route was NOT followed — a conditional branch the graph declined.
-   *
-   * Distinct from `Style`, which is about the edge's KIND (conditional vs default). An edge can be
-   * conditional and taken, conditional and not taken, or unconditional; collapsing "not taken" into
-   * the dash pattern would make those indistinguishable at exactly the moment someone is trying to
-   * work out which way a run went.
-   */
-  NotTaken?: boolean;
   ID: string;
   SourceNodeID: string;
   SourcePortID: string;

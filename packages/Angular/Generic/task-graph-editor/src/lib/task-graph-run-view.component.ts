@@ -91,6 +91,16 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     /** Height of the canvas. Hosts embed this in very different amounts of space. */
     @Input() public Height: string = '320px';
 
+    /**
+     * Whether the canvas legend shows. **Off by default here**, unlike the editor.
+     *
+     * The legend explains the authoring vocabulary — what a conditional edge means, what a duplicate
+     * default looks like. That is what someone drawing a graph needs. A run view answers a different
+     * question, "what happened", which the legend helps with not at all while covering a corner of
+     * the canvas the graph is usually occupying.
+     */
+    @Input() public ShowLegend: boolean = false;
+
     @Output() public NodeSelected = new EventEmitter<TaskGraphRunNodeSelectedEvent>();
     /** Emitted once, when every step has reached a terminal status. */
     @Output() public Settled = new EventEmitter<void>();

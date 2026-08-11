@@ -151,6 +151,15 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
     @Input() public ShowToolbar: boolean = true;
     @Input() public ShowPalette: boolean = true;
     @Input() public ShowMinimap: boolean = true;
+    /**
+     * Whether the legend rides on the canvas.
+     *
+     * On for authoring, off for a run — and the difference is what the legend is FOR. It explains the
+     * authoring vocabulary (what a conditional edge means, what a duplicate default looks like),
+     * which is what someone drawing a graph needs. A run view is answering a different question —
+     * what happened — and the legend answers none of it while occluding a third of the canvas.
+     */
+    @Input() public ShowLegend: boolean = true;
     @Input() public ShowStatusBar: boolean = true;
     @Input() public AutoLayoutDirection: FlowLayoutDirection = 'vertical';
 
