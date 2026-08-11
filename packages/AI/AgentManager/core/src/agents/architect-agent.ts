@@ -3,6 +3,7 @@ import { ExecuteAgentParams, BaseAgentNextStep, AgentSpec, MJAIAgentRunEntityExt
 import { MJActionEntity } from "@memberjunction/core-entities";
 import { RunView } from '@memberjunction/core';
 import { RegisterClass, NormalizeUUID } from '@memberjunction/global';
+import { IsLoopStep, ValidateLoopStep } from '../flow-step-validation';
 
 /**
  * Architect Agent - Transforms technical design into validated AgentSpec JSON
@@ -153,8 +154,10 @@ export class AgentArchitectAgent extends BaseAgent {
             specWithType.Status = 'Active';
             corrected = true;
             console.log('✓ Auto-corrected: Added default Status = "Active"');
-        } else if (!['Active', 'Inactive', 'Pending'].includes(specWithType.Status)) {
-            errors.push(`❌ Status must be "Active", "Inactive", or "Pending", got: "${specWithType.Status}"`);
+        } else if (!['Active', 'Disabled', 'Pending'].includes(specWithType.Status)) {
+            // 'Disabled', not 'Inactive' — this validator used to accept a value the AIAgent CHECK
+            // constraint rejects, so a spec it passed could still fail at save with no explanation.
+            errors.push(`❌ Status must be "Active", "Disabled", or "Pending", got: "${specWithType.Status}"`);
         }
 
         // 5. Validate agent type-specific requirements
@@ -246,6 +249,17 @@ export class AgentArchitectAgent extends BaseAgent {
                     if (step.StepType === 'Sub-Agent') {
                         // SubAgentID can be empty "" for new sub-agents (will be linked by name matching)
                         // No validation needed here - linking happens in AgentSpecSync
+                    }
+
+                    // Validate loop steps (ForEach / While)
+                    //
+                    // A loop is a wrapper, not a leaf: LoopBodyType names which of Action/Prompt/
+                    // Sub-Agent runs each pass, and Configuration carries the bounds. A loop missing
+                    // either is the failure mode worth catching here — it saves cleanly and then
+                    // iterates over nothing at runtime, which looks like the agent doing no work
+                    // rather than like a malformed step.
+                    if (IsLoopStep(step)) {
+                        errors.push(...ValidateLoopStep(step, i));
                     }
                 }
             }

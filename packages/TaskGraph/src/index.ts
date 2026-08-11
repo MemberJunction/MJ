@@ -12,4 +12,7 @@ export * from './TaskClaimStore';
 export * from './DispatcherConditionEvaluator';
 export * from './TaskGraphDispatcher';
 export * from './TaskGraphSubmitterImpl';
+export * from './WorkflowSpecSync';
 export * from './operations/TaskGraphOperations';
+export * from './operations/WorkflowDraftOperation';
+export * from './operations/WorkflowOperations';

@@ -254,7 +254,6 @@ import { MJMagicLinkInviteApplicationFormComponent } from "./Entities/MJMagicLin
 import { MJMagicLinkInviteRoleFormComponent } from "./Entities/MJMagicLinkInviteRole/mjmagiclinkinviterole.form.component";
 import { MJMagicLinkInviteFormComponent } from "./Entities/MJMagicLinkInvite/mjmagiclinkinvite.form.component";
 import { MJMagicLinkRedemptionFormComponent } from "./Entities/MJMagicLinkRedemption/mjmagiclinkredemption.form.component";
-import { MJMaterializedResultFormComponent } from "./Entities/MJMaterializedResult/mjmaterializedresult.form.component";
 import { MJMCPServerConnectionPermissionFormComponent } from "./Entities/MJMCPServerConnectionPermission/mjmcpserverconnectionpermission.form.component";
 import { MJMCPServerConnectionToolFormComponent } from "./Entities/MJMCPServerConnectionTool/mjmcpserverconnectiontool.form.component";
 import { MJMCPServerConnectionFormComponent } from "./Entities/MJMCPServerConnection/mjmcpserverconnection.form.component";
@@ -810,7 +809,6 @@ declarations: [
     MJMagicLinkInviteRoleFormComponent,
     MJMagicLinkInviteFormComponent,
     MJMagicLinkRedemptionFormComponent,
-    MJMaterializedResultFormComponent,
     MJMCPServerConnectionPermissionFormComponent],
 imports: [
     CommonModule,

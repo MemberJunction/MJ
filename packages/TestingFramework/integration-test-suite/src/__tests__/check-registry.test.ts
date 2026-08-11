@@ -40,6 +40,11 @@ import { AiProvidersChecks } from '../checks/ai-providers.checks';
 import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 import { ContentVectorizationChecks } from '../checks/content-vectorization.checks';
 import { ScopedAnonElevationChecks } from '../checks/scoped-anon-elevation.checks';
+import { EntityGraphChecks } from '../checks/entity-graph.checks';
+import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
+import { TaskGraphOrchestrationChecks } from '../checks/task-graph-orchestration.checks';
+import { EntityActionChecks } from '../checks/entity-actions.checks';
+import { TaskGraphExecutionChecks } from '../checks/task-graph-execution.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -129,6 +134,11 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
         ['content-vectorization', ContentVectorizationChecks, 6], // CV1-CV6 content vectorization pipeline (IT67)
         ['scoped-anon-elevation', ScopedAnonElevationChecks, 5], // SA1-SA5 scoped-anonymous elevation permission contract (IT68)
+        ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
+        ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
+        ['task-graph-orchestration', TaskGraphOrchestrationChecks, 18], // TG1-TG18 submission, validation and trigger bindings (IT71)
+        ['task-graph-execution', TaskGraphExecutionChecks, 7], // TX1-TX7 the dispatcher actually running graphs (IT74)
+        ['entity-actions', EntityActionChecks, 8], // EA1-EA8 the entity-action substrate end to end (IT75)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {

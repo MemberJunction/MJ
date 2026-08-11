@@ -3,6 +3,7 @@ import { Subject } from 'rxjs';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RunView, Metadata } from '@memberjunction/core';
+import { CompareDateCells } from '../../shared/date-cell';
 import { ResourceData, MJVersionLabelEntityType, MJVersionLabelItemEntityType, UserInfoEngine } from '@memberjunction/core-entities';
 import { EntityLinkClickEvent } from '@memberjunction/ng-versions';
 import { FilterFieldConfig, ViewToggleOption } from '@memberjunction/ng-ui-components';
@@ -350,9 +351,11 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
                 }
                 case 'Date':
                 default: {
-                    const aDate = (a as Record<string, unknown>)['__mj_CreatedAt'] ?? '';
-                    const bDate = (b as Record<string, unknown>)['__mj_CreatedAt'] ?? '';
-                    return dir * String(aDate).localeCompare(String(bDate));
+                    // Simple-read date cells are real Dates — chronological compare, not
+                    // localeCompare (which orders Date.toString() by weekday name).
+                    const aDate = (a as Record<string, unknown>)['__mj_CreatedAt'];
+                    const bDate = (b as Record<string, unknown>)['__mj_CreatedAt'];
+                    return dir * CompareDateCells(aDate as Date | string | null, bDate as Date | string | null);
                 }
             }
         });

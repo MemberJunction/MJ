@@ -47,15 +47,15 @@ function paramsWith(enableTaskGraphs: boolean | undefined): ExecuteAgentParams {
 const graph = (over: Partial<TaskGraphSpec> = {}): TaskGraphSpec => ({
     workflowName: 'Quarterly review',
     tasks: [
-        { tempId: 'a', name: 'Gather', description: 'gather the data', agentName: 'Query Builder', dependsOn: [] },
-        { tempId: 'b', name: 'Summarize', description: 'summarize it', agentName: 'Sage', dependsOn: ['a'] },
+        { tempId: 'a', name: 'Gather', description: 'gather the data', kind: 'Agent' as const, configuration: { agentName: 'Query Builder' }, dependsOn: [] },
+        { tempId: 'b', name: 'Summarize', description: 'summarize it', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['a'] },
     ],
     ...over,
 });
 
 const singleNode = (over: Partial<TaskGraphSpec> = {}): TaskGraphSpec => ({
     workflowName: 'One thing',
-    tasks: [{ tempId: 'a', name: 'Do it', description: 'do the thing', agentName: 'Query Builder', dependsOn: [] }],
+    tasks: [{ tempId: 'a', name: 'Do it', description: 'do the thing', kind: 'Agent' as const, configuration: { agentName: 'Query Builder' }, dependsOn: [] }],
     ...over,
 });
 
@@ -124,8 +124,8 @@ describe('LoopAgentType — the Tasks primitive', () => {
         it('rejects a cyclic graph and names the failure code', async () => {
             const cyclic = graph({
                 tasks: [
-                    { tempId: 'a', name: 'A', description: 'a', agentName: 'Sage', dependsOn: ['b'] },
-                    { tempId: 'b', name: 'B', description: 'b', agentName: 'Sage', dependsOn: ['a'] },
+                    { tempId: 'a', name: 'A', description: 'a', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['b'] },
+                    { tempId: 'b', name: 'B', description: 'b', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['a'] },
                 ],
             });
             const result = await agent.DetermineNextStep(emit(cyclic), paramsWith(true), {}, {});
@@ -139,7 +139,7 @@ describe('LoopAgentType — the Tasks primitive', () => {
             const broken = graph({
                 workflowName: '',
                 tasks: [
-                    { tempId: 'a', name: 'A', description: 'a', agentName: 'Sage', dependsOn: ['ghost'] },
+                    { tempId: 'a', name: 'A', description: 'a', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['ghost'] },
                     { tempId: 'a', name: 'A2', description: 'a2', dependsOn: [] },
                 ],
             });
@@ -196,7 +196,7 @@ describe('LoopAgentType — the Tasks primitive', () => {
 
         it('does not fold a lone HUMAN node — there is no sub-agent to call', async () => {
             const human = singleNode({
-                tasks: [{ tempId: 'a', name: 'Approve', description: 'approve it', assignToUser: true, dependsOn: [] }],
+                tasks: [{ tempId: 'a', name: 'Approve', description: 'approve it', kind: 'Human' as const, configuration: {}, dependsOn: [] }],
             });
             const result = await agent.DetermineNextStep(emit(human), paramsWith(true), {}, {});
             expect(result.step).toBe('Tasks');

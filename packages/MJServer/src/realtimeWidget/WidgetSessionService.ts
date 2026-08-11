@@ -17,7 +17,7 @@
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { MJLruCache, UUIDsEqual } from '@memberjunction/global';
 import type { MJConversationWidgetInstanceEntity, MJConversationEntity } from '@memberjunction/core-entities';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 import { generateSessionId } from '../auth/magicLink/magicLinkCore.js';
 import { MagicLinkService } from '../auth/magicLink/MagicLinkService.js';

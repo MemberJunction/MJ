@@ -1,0 +1,28 @@
+[
+  {
+    "fields": {
+      "Name": "Workflow Drafting",
+      "Description": "Turns a plain-English description of a repeatable process into a TaskGraphSpec — the steps and the dependencies between them — for the Create Workflow front door's \"Describe it\" entry. Returns a draft only; nothing is persisted until the author approves it on the canvas. Constrained to the agent names passed in, because a workflow referencing an agent that does not exist cannot be saved.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/workflow/workflow-drafting.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Default",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 750,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "primaryKey": {
+      "ID": "1D9A1657-41E8-4B44-89D1-B1E3398F7408"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:58:56.630Z",
+      "checksum": "9b352be8f282f980e9e04d4b16fabac36cbebb49eb7824297315dcb3907a37ef"
+    }
+  }
+]

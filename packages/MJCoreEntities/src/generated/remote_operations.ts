@@ -580,16 +580,29 @@ export interface TaskGraphSubmitInput {
         workflowName: string;
         reasoning?: string;
         tasks: Array<{
+            /** One step. `kind` selects which `configuration` shape applies. */
             tempId: string;
             name: string;
             description: string;
-            agentName?: string;
-            assignToUser?: boolean;
-            dependsOn: string[];
+            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External';
+            configuration:
+                | { agentName: string; message?: string; templateParameters?: Record<string, string> }
+                | { actionName: string; inputMapping?: string; outputMapping?: string }
+                | { assignToUserID?: string; instructions?: string }
+                | { promptName: string; templateParameters?: Record<string, string> }
+                | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
+                | { condition: string; itemVariable?: string; maxIterations?: number }
+                | { domain: string; ref?: string };
+            dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
+            policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
+            /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
+            layout?: { x?: number; y?: number; width?: number; height?: number };
             inputPayload?: Record<string, unknown>;
         }>;
         continuation?: 'message' | 'reinvoke' | 'none';
         durable?: boolean;
+        /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */
+        failureSemantics?: 'block' | 'edges';
     };
     /** Environment the tasks belong to. */
     environmentID: string;
@@ -621,6 +634,121 @@ export interface TemplateRunOutput {
     output: string;
     /** Wall-clock render time in milliseconds. */
     executionTimeMs?: number;
+}
+
+/** Input for `Workflow.Draft`. */
+export interface WorkflowDraftInput {
+    /** What the person wants done, in their own words. */
+    description: string;
+    /** What to call the workflow. Carried through to the draft's `workflowName`. */
+    workflowName: string;
+}
+
+/** Output of `Workflow.Draft`. */
+export interface WorkflowDraftOutput {
+    /** True when a structurally valid draft came back. */
+    success: boolean;
+    /**
+     * The drafted graph, in the same `TaskGraphSpec` shape the canvas and `Workflow.Save` use.
+     *
+     * A DRAFT — nothing is persisted. The author reviews it on the canvas and commits with
+     * `Workflow.Save`, which is what makes "nothing is saved until you approve it" true rather than
+     * merely promised.
+     */
+    graph?: {
+        workflowName: string;
+        reasoning?: string;
+        tasks: Array<{
+            /** One step. `kind` selects which `configuration` shape applies. */
+            tempId: string;
+            name: string;
+            description: string;
+            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External';
+            configuration:
+                | { agentName: string; message?: string; templateParameters?: Record<string, string> }
+                | { actionName: string; inputMapping?: string; outputMapping?: string }
+                | { assignToUserID?: string; instructions?: string }
+                | { promptName: string; templateParameters?: Record<string, string> }
+                | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
+                | { condition: string; itemVariable?: string; maxIterations?: number }
+                | { domain: string; ref?: string };
+            dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
+            policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
+            /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
+            layout?: { x?: number; y?: number; width?: number; height?: number };
+            inputPayload?: Record<string, unknown>;
+        }>;
+        continuation?: 'message' | 'reinvoke' | 'none';
+        durable?: boolean;
+        /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */
+        failureSemantics?: 'block' | 'edges';
+    };
+    /** Why drafting failed, or why the model's output was rejected. */
+    errorMessage?: string;
+}
+
+/** Input for `Workflow.Save`. */
+export interface WorkflowSaveInput {
+    /** The workflow to save, as a `WorkflowSpec`. */
+    spec: {
+        name: string;
+        description?: string;
+        status: 'Active' | 'Paused' | 'Draft';
+        graph: {
+            workflowName: string;
+            reasoning?: string;
+            tasks: Array<{
+                /** One step. `kind` selects which `configuration` shape applies. */
+                tempId: string;
+                name: string;
+                description: string;
+                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External';
+                configuration:
+                    | { agentName: string; message?: string; templateParameters?: Record<string, string> }
+                    | { actionName: string; inputMapping?: string; outputMapping?: string }
+                    | { assignToUserID?: string; instructions?: string }
+                    | { promptName: string; templateParameters?: Record<string, string> }
+                    | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
+                    | { condition: string; itemVariable?: string; maxIterations?: number }
+                    | { domain: string; ref?: string };
+                dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
+                policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
+                /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
+                layout?: { x?: number; y?: number; width?: number; height?: number };
+                inputPayload?: Record<string, unknown>;
+            }>;
+            continuation?: 'message' | 'reinvoke' | 'none';
+            durable?: boolean;
+            /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */
+            failureSemantics?: 'block' | 'edges';
+        };
+        triggers: Array<
+            | { type: 'EntityEvent'; entityName: string; invocationType: string; filter?: string; scopeEntityName?: string; scopeRecordID?: string }
+            | { type: 'Schedule'; cron: string; timezone?: string }
+            | { type: 'OnDemand' }>;
+        notifications?: { condition: 'Always' | 'OnFailure' | 'OnChange'; recipients: string[] };
+    };
+}
+
+/** Output of `Workflow.Save`. */
+export interface WorkflowSaveOutput {
+    /** True when the workflow was validated and every substrate reconciled. */
+    success: boolean;
+    /** The Flow agent the workflow's graph persisted as — the handle for everything downstream. */
+    agentID?: string;
+    /** Scheduled Jobs created, updated or disabled by this save. */
+    scheduledJobIDs?: string[];
+    /** Triggers the spec asked for that this build cannot yet reconcile, stated rather than dropped. */
+    unreconciled?: string[];
+    /** Every validation failure, not just the first, when the workflow was rejected. */
+    errorMessage?: string;
+}
+
+/** Output of `Workflow.Validate`. */
+export interface WorkflowValidateOutput {
+    valid: boolean;
+    /** One entry per problem, each carrying a machine-readable code. */
+    errors?: Array<{ code: string; message: string; triggerIndex?: number }>;
 }
 
 // ============================================================
@@ -939,6 +1067,54 @@ export class TemplateRunOperation extends BaseRemotableOperation<TemplateRunInpu
     public readonly OperationKey = "Template.Run";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "template:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// Workflow.Draft — Draft Workflow
+// ============================================================
+/**
+ * Draft Workflow
+ * Draft a workflow's steps from a plain-English description. Returns a TaskGraphSpec and persists NOTHING — the draft goes to the canvas for the author to review, and only Workflow.Save commits it, which is what makes the front door's "nothing is saved until you approve it" promise true rather than merely stated. Constrained to agents that actually exist on the instance, because a workflow referencing an unknown agent cannot be saved and a draft that cannot be saved wastes the author's time. Validated with the SAME ValidateTaskGraphSpec the canvas and Workflow.Save run, so a draft that comes back cannot be rejected later for a reason drafting never checked. Implemented by WorkflowDraftServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Workflow.Draft'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkflowDraftOperation extends BaseRemotableOperation<WorkflowDraftInput, WorkflowDraftOutput> {
+    public readonly OperationKey = "Workflow.Draft";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workflow:read";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// Workflow.Save — Save Workflow
+// ============================================================
+/**
+ * Save Workflow
+ * Validate and persist a workflow — its graph of steps AND the triggers that fire it — by reconciling the substrates that already exist (a Flow agent for the graph, Scheduled Jobs for schedules). Creates no new storage: there is no Workflow table, because a second definition of a scheduled thing would give the scheduler two masters. Producer-agnostic — an agent over MCP, an Action, or the workflow editor all call this. Implemented by WorkflowSaveServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Workflow.Save'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkflowSaveOperation extends BaseRemotableOperation<WorkflowSaveInput, WorkflowSaveOutput> {
+    public readonly OperationKey = "Workflow.Save";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workflow:write";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// Workflow.Validate — Validate Workflow
+// ============================================================
+/**
+ * Validate Workflow
+ * Check a workflow for problems without saving it. Runs the identical validation Workflow.Save runs, so a workflow that validates here cannot be rejected for a different reason on save. Exists so an agent drafting a workflow can iterate before committing anything — the draft-then-confirm shape dry-run and Plan Mode already established. Implemented by WorkflowValidateServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Workflow.Validate'. This generated base provides the typed contract only (client-safe).
+ */
+export class WorkflowValidateOperation extends BaseRemotableOperation<WorkflowSaveInput, WorkflowValidateOutput> {
+    public readonly OperationKey = "Workflow.Validate";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "workflow:read";
     public readonly RequiresSystemUser = false;
 }
 

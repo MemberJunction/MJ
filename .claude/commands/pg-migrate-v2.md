@@ -427,9 +427,15 @@ run against it.
 ### Step 3d: Verification layer 1 — conversion parity
 
 ```bash
-docker exec claude-dev bash -lc 'cd /workspace/MJ && node scripts/check-pg-migration-parity.mjs 2>&1 | tee /tmp/v2-parity.log'
+docker exec claude-dev bash -lc 'cd /workspace/MJ && node scripts/check-pg-migration-content.mjs 2>&1 | tee /tmp/v2-content.log'
 ```
-Zero-diff regression + file parity. Exits non-zero on real divergence.
+Asserts every counterpart that EXISTS has real content (not an empty stub).
+
+Then confirm coverage by hand: diff the `migrations/vN` and `migrations-pg/vN`
+file lists and account for every T-SQL migration without a `.pg.sql`. There is
+no parity script — counterpart existence is ungated on purpose, because creating
+them is THIS process's job rather than a feature PR's (see `migrations/CLAUDE.md`),
+so the release build is exactly where the remaining list must reach zero.
 
 ### Step 3e: Verification layer 2 — SS↔PG schema parity
 
@@ -738,7 +744,7 @@ Generated: [timestamp]   Branch: [branch]
 - Clean .pg.sql: A    Hand-authored from .needs-hand: B
 - Conversion gaps remaining: 0 (structural)
 - Fresh-DB deploy gate (migrate → sync push, NO codegen): PASS/FAIL
-- Conversion parity (check-pg-migration-parity): PASS/FAIL
+- Conversion content (check-pg-migration-content): PASS/FAIL; counterparts still missing: N
 - SS↔PG schema parity: Tables X/X, Views X/X, Routines X/X (+N benign CodeGen fns), FKs X/X
 - View semantic equivalence: realDiffers=[]  (cosmeticOnly N, createFailed N benign)
 - CRUD oracle: N pass / 0 fail / 4 documented skips
@@ -754,7 +760,7 @@ Generated: [timestamp]   Branch: [branch]
 | Metric | SQL Server | PostgreSQL | Match / benign cause |
 
 ## Verification harness results
-[check-pg-migration-parity, ss-pg-view-equivalence, pg-crud-oracle — pass/fail + benign buckets]
+[check-pg-migration-content, ss-pg-view-equivalence, pg-crud-oracle — pass/fail + benign buckets]
 
 ## Known-benign / accepted differences
 [CodeGen self-FK helper routines; List Invitations.ExpiresAt type drift; cosmetic view aliasing; etc.]

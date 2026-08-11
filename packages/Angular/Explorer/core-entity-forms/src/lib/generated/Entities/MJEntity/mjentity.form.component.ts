@@ -65,7 +65,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJEntityAIActionsEntityID', sectionName: 'Entity AI Actions (Entity ID)', isExpanded: false },
             { sectionKey: 'mJEntityOrganicKeyRelatedEntities', sectionName: 'Entity Organic Key Related Entities', isExpanded: false },
             { sectionKey: 'mJEntityOrganicKeys', sectionName: 'Entity Organic Keys', isExpanded: false },
-            { sectionKey: 'mJEntityRelationshipsRelatedEntityID', sectionName: 'Entity Relationships (Related Entity ID)', isExpanded: false },
+            { sectionKey: 'mJEntityRelationshipsRelatedEntityID', sectionName: 'Entity Relationships (Related Entity)', isExpanded: false },
             { sectionKey: 'mJQueryEntities', sectionName: 'Query Entities', isExpanded: false },
             { sectionKey: 'mJRecordGeoCodes', sectionName: 'Record Geo Codes', isExpanded: false },
             { sectionKey: 'mJRecordLinksTargetEntityID', sectionName: 'Record Links (Target Entity ID)', isExpanded: false },
@@ -96,9 +96,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJScopedPromptParts', sectionName: 'Scoped Prompt Parts', isExpanded: false },
             { sectionKey: 'mJScopedPromptConfigs', sectionName: 'Scoped Prompt Configs', isExpanded: false },
             { sectionKey: 'mJActionExecutionLogs', sectionName: 'Action Execution Logs', isExpanded: false },
-            { sectionKey: 'mJMaterializedResultsSourceEntityID', sectionName: 'Materialized Results (Source Entity ID)', isExpanded: false },
-            { sectionKey: 'mJEntityActionsScopeEntityID', sectionName: 'Entity Actions (Scope Entity ID)', isExpanded: false },
-            { sectionKey: 'mJMaterializedResultsGeneratedEntityID', sectionName: 'Materialized Results (Generated Entity ID)', isExpanded: false }
+            { sectionKey: 'mJEntityActionsScopeEntityID', sectionName: 'Entity Actions (Scope Entity ID)', isExpanded: false }
         ]);
     }
 }

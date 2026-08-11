@@ -30,6 +30,15 @@ export type TaskGraphSubmitRequest = {
     ConversationDetailID?: string | null;
     /** The agent run that emitted the graph, for provenance and continuation routing. */
     AgentRunID?: string | null;
+    /**
+     * How many task-graph continuations led to the run that is submitting this graph.
+     *
+     * Carried so a `reinvoke` chain is bounded: a graph submitted by an agent that was itself
+     * started by a finished graph inherits that graph's depth + 1, and `MAX_REINVOKE_DEPTH` compares
+     * against a real number instead of a permanent zero. Omitted means an ordinary submission at
+     * depth 0 — which is every submission that is not part of a continuation chain.
+     */
+    ReinvokeDepth?: number;
     ContextUser: UserInfo;
     Provider: IMetadataProvider;
 };
@@ -62,9 +71,18 @@ export const TASK_GRAPH_SUBMITTER_KEY = 'TaskGraphSubmitter';
  * Returning null rather than throwing is deliberate: a host with no dispatcher (a CLI, a test, a
  * browser bundle) is a legitimate configuration, and the caller can turn the absence into a
  * corrective the model can act on. What must never happen is a graph vanishing quietly.
+ *
+ * **The `Submit` check is not defensive noise.** When nothing has registered under the key,
+ * `ClassFactory.CreateInstance` does not return null — it falls back to instantiating the base
+ * class it was given, and `TaskGraphSubmitter` is abstract only to TypeScript. The caller therefore
+ * receives a real object whose `Submit` is `undefined`, sails past its own null check, and dies on
+ * `submitter.Submit is not a function` — a stack trace about a missing method, when the actual fact
+ * is "this host has no dispatcher". That is precisely the diagnosis the null return exists to give,
+ * so the contract is enforced here rather than trusted.
  */
 export function GetTaskGraphSubmitter(): TaskGraphSubmitter | null {
-    return MJGlobal.Instance.ClassFactory.CreateInstance<TaskGraphSubmitter>(
+    const submitter = MJGlobal.Instance.ClassFactory.CreateInstance<TaskGraphSubmitter>(
         TaskGraphSubmitter, TASK_GRAPH_SUBMITTER_KEY,
     );
+    return typeof submitter?.Submit === 'function' ? submitter : null;
 }

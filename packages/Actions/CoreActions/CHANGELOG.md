@@ -1,5 +1,64 @@
 # Change Log - @memberjunction/core-actions
 
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/actions@6.1.0-edge.1
+  - @memberjunction/storage@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.1
+  - @memberjunction/generic-database-provider@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ai-agents@6.1.0-edge.1
+  - @memberjunction/ai-core-plus@6.1.0-edge.1
+  - @memberjunction/content-autotagging@6.1.0-edge.1
+  - @memberjunction/ai-agent-manager@6.1.0-edge.1
+  - @memberjunction/record-set-processor@6.1.0-edge.1
+  - @memberjunction/aiengine@6.1.0-edge.1
+  - @memberjunction/search-engine@6.1.0-edge.1
+  - @memberjunction/esignature@6.1.0-edge.1
+  - @memberjunction/ai-engine-base@6.1.0-edge.1
+  - @memberjunction/clustering-engine@6.1.0-edge.1
+  - @memberjunction/ai-mcp-client@6.1.0-edge.1
+  - @memberjunction/ai-prompts@6.1.0-edge.1
+  - @memberjunction/ai-vector-sync@6.1.0-edge.1
+  - @memberjunction/actions-base@6.1.0-edge.1
+  - @memberjunction/code-execution@6.1.0-edge.1
+  - @memberjunction/communication-types@6.1.0-edge.1
+  - @memberjunction/communication-engine@6.1.0-edge.1
+  - @memberjunction/external-change-detection@6.1.0-edge.1
+  - @memberjunction/integration-engine@6.1.0-edge.1
+  - @memberjunction/interactive-component-types@6.1.0-edge.1
+  - @memberjunction/lists@6.1.0-edge.1
+  - @memberjunction/core-entities-server@6.1.0-edge.1
+  - @memberjunction/react-linter@6.1.0-edge.1
+  - @memberjunction/record-set-processor-base@6.1.0-edge.1
+  - @memberjunction/geo-core@6.1.0-edge.1
+  - @memberjunction/ai@6.1.0-edge.1
+  - @memberjunction/ai-betty-bot@6.1.0-edge.1
+  - @memberjunction/lists-base@6.1.0-edge.1
+  - @memberjunction/export-engine@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+  - @memberjunction/sql-dialect@6.1.0-edge.1
+
 ## 6.1.0-edge.0
 
 ### Patch Changes

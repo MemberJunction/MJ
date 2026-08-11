@@ -846,15 +846,74 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT71 - Task Graph Orchestration",
-            "Sequence": 34,
+            "Sequence": 33,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "03B972BB-3EC8-463C-A982-140153E65ACC"
           },
           "sync": {
-            "lastModified": "2026-08-07T18:02:58.170Z",
-            "checksum": "c502c3b56c8b5c21b27f0f89fcf7eb394de74646099129c045538ee469e05821"
+            "lastModified": "2026-08-08T15:50:31.655Z",
+            "checksum": "1507265d2d71dc30e94c9029245664fd0653798aff251b78ca928b8c19765ac5"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT72 - Entity Graph (related-record collections)",
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B4FE6167-1F8A-4B5C-A565-A008CE03BFD8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT73 - Entity Graph (client transport)",
+            "Sequence": 53,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0E1289E0-2D35-4F05-A032-9E6EB09E0990"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT74 - Task Graph Execution",
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CA15CEC9-DB0B-45D2-917D-E83589CB32FC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT75 - Entity Actions",
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BB2442FB-89D6-45AE-8002-11D2938F004F"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T15:50:31.726Z",
+            "checksum": "91d8a2f26f1f5ec8ceb4f8af36dc42701163fa21b47280d03bb21bdad61289cc"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT76 - Workflow Demo Agents",
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B7A9F916-2992-4EC0-99F1-38CD8EB80BC5"
           }
         },
         {

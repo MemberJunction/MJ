@@ -35,6 +35,7 @@ import {
 } from '@memberjunction/core-entities';
 import { ComputeParentRollup, type TaskGraphNodeStatus, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import { TaskGraphService, TaskGraphSubmitContext } from '../TaskGraphService';
+import { LoadWorkflowDraftOperation } from './WorkflowDraftOperation';
 
 /**
  * The columns `GetStatus` reads. `Status` is pinned to the algorithm's own node-status union rather
@@ -201,4 +202,7 @@ export function LoadTaskGraphOperations(): void {
     void TaskGraphCancelServerOperation;
     void TaskGraphRetryTaskServerOperation;
     void TaskGraphGetStatusServerOperation;
+    // Workflow authoring rides the same loader: a host that starts the dispatcher but never
+    // registered these would accept a draft request and route it to the contract-only base.
+    LoadWorkflowDraftOperation();
 }

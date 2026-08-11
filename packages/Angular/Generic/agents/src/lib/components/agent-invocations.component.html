@@ -1,0 +1,94 @@
+<div class="mj-agent-inv">
+  @if (IsLoading && !HasLoaded) {
+    <mj-loading text="Finding everywhere this agent is invoked..." size="medium"></mj-loading>
+  } @else if (LoadError) {
+    <mj-alert Variant="error" [Message]="LoadError"></mj-alert>
+  } @else {
+    <!-- The one-glance answer. Stated as a sentence rather than a row of numbers, because the
+         question this surface exists for ("does this thing run on its own?") has a yes/no shape. -->
+    <div class="mj-agent-inv__summary" [class.mj-agent-inv__summary--automated]="Summary.IsAutomated">
+      <span class="mj-agent-inv__summary-icon">
+        <i class="fa-solid" [ngClass]="Summary.IsAutomated ? 'fa-tower-broadcast' : 'fa-hand'" aria-hidden="true"></i>
+      </span>
+      <div class="mj-agent-inv__summary-text">
+        <span class="mj-agent-inv__summary-line">{{ SummaryLine }}</span>
+        <span class="mj-agent-inv__summary-hint">
+          Manual runs are not listed — this is only what happens without anyone present.
+        </span>
+      </div>
+      <button mjButton variant="outline" size="sm" (click)="Load()" [disabled]="IsLoading" title="Re-check every source">
+        <i class="fa-solid fa-refresh" [class.fa-spin]="IsLoading" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    @if (Groups.length === 0) {
+      <mj-empty-state
+        Icon="fa-solid fa-hand"
+        Title="Nothing invokes this agent automatically"
+        Message="Give it a schedule, bind it to a data change, or call it from another agent — and every one of those will show up here.">
+      </mj-empty-state>
+    } @else {
+      <div class="mj-agent-inv__groups">
+        @for (group of Groups; track group.Kind) {
+          <section class="mj-agent-inv__group">
+            <header class="mj-agent-inv__group-head">
+              <span class="mj-agent-inv__group-icon"><i [class]="group.Icon" aria-hidden="true"></i></span>
+              <div class="mj-agent-inv__group-title">
+                <h3>{{ group.Label }}</h3>
+                <p>{{ group.Blurb }}</p>
+              </div>
+              <span
+                class="mj-agent-inv__group-count"
+                [class.mj-agent-inv__group-count--live]="group.LiveCount > 0"
+                [title]="group.LiveCount + ' of ' + group.Pathways.length + ' can fire right now'">
+                {{ group.LiveCount }}/{{ group.Pathways.length }}
+              </span>
+            </header>
+
+            <ul class="mj-agent-inv__rows">
+              @for (pathway of group.Pathways; track $index) {
+                <li class="mj-agent-inv__row" [class.mj-agent-inv__row--muted]="pathway.State !== 'Live'">
+                  <!-- A row with a record behind it is a button so it is reachable by keyboard; one
+                       without (Exposed as an action is a flag, not a row) is plain text rather than a
+                       button that would look clickable and do nothing. -->
+                  @if (pathway.EntityName && pathway.RecordID) {
+                    <button type="button" class="mj-agent-inv__row-main" (click)="OnRowActivated(pathway)"
+                      [title]="'Open ' + pathway.Title">
+                      <span class="mj-agent-inv__row-title">{{ pathway.Title }}</span>
+                      <span class="mj-agent-inv__row-trigger">{{ pathway.Trigger }}</span>
+                    </button>
+                  } @else {
+                    <div class="mj-agent-inv__row-main mj-agent-inv__row-main--static">
+                      <span class="mj-agent-inv__row-title">{{ pathway.Title }}</span>
+                      <span class="mj-agent-inv__row-trigger">{{ pathway.Trigger }}</span>
+                    </div>
+                  }
+
+                  <div class="mj-agent-inv__row-meta">
+                    @if (When(pathway.NextRunAt); as next) {
+                      <span class="mj-agent-inv__row-next" title="Next run">
+                        <i class="fa-solid fa-forward" aria-hidden="true"></i> {{ next }}
+                      </span>
+                    }
+                    @if (When(pathway.LastRunAt); as last) {
+                      <span class="mj-agent-inv__row-last" title="Last run">
+                        <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> {{ last }}
+                      </span>
+                    }
+                    <span
+                      class="mj-agent-inv__state"
+                      [class.mj-agent-inv__state--live]="pathway.State === 'Live'"
+                      [class.mj-agent-inv__state--paused]="pathway.State === 'Paused'"
+                      [title]="pathway.StateDetail || 'This can fire right now'">
+                      {{ pathway.State }}
+                    </span>
+                  </div>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+      </div>
+    }
+  }
+</div>

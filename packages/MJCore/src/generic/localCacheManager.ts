@@ -1,6 +1,6 @@
 import { BaseSingleton, MJGlobal, MJEventType } from "@memberjunction/global";
 import { AggregateResult, DatasetItemFilterType, DatasetResultType, IMetadataProvider, ILocalStorageProvider } from "./interfaces";
-import { AggregateExpression, RunViewParams, IsMaterializedDataSource } from "../views/runView";
+import { AggregateExpression, RunViewParams } from "../views/runView";
 import { LogError, LogStatusEx } from "./logging";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { Metadata } from "./metadata";
@@ -1634,16 +1634,6 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // existing cache entries are invalidated.
         if (params.IgnoreMaxRows === true) {
             parts.push('imr:1');
-        }
-
-        // DataSource segment. RunViewParams.DataSource:'Materialized' routes the read to the entity's
-        // materialized snapshot view (GetEffectiveBaseView), a DIFFERENT physical source than the default
-        // live base view — so a Live read and a Materialized read of the same entity/filter/orderBy MUST
-        // NOT share a cache slot (else one is silently served the other's source). Appended ONLY for the
-        // non-default 'Materialized' so every existing (Live/default) fingerprint stays byte-for-byte
-        // identical and no existing cache entries are invalidated.
-        if (IsMaterializedDataSource(params.DataSource)) {
-            parts.push('ds:materialized');
         }
 
         // Keyset (AfterKey) seek cursor MUST be part of the fingerprint. Each keyset page

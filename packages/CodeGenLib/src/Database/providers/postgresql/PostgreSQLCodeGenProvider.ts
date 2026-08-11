@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, ResolveStartupMode, SetProvider, StartupManager, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, ResolveStartupMode, SetProvider, StartupManager } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     CodeGenDatabaseProvider,
@@ -6,7 +6,6 @@ import {
     BaseViewGenerationContext,
     CascadeDeleteContext,
     FullTextSearchResult,
-    MaterializedColumnSpec,
     PhasedExecutionResult,
     DataSourceResult,
 } from '../../codeGenDatabaseProvider';
@@ -17,6 +16,7 @@ import { PostgreSQLDialect, DatabasePlatform, SQLDialect } from '@memberjunction
 import {
     shouldIncludeFieldInParams,
     useJsonArgShape,
+    UserCache,
 } from '@memberjunction/generic-database-provider';
 import {
     POSTGRESQL_PROCEDURE_PARAM_LIMIT,
@@ -60,14 +60,6 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
      * wires up `PostgreSQLDataProvider`, registers it as the active provider,
      * and loads the audit user.
      *
-     * **User-loading asymmetry** — SQL Server uses `UserCache.Instance.Refresh(pool)`
-     * which is hard-typed to `mssql.ConnectionPool` in `@memberjunction/sqlserver-dataprovider`.
-     * Refactoring it to be cross-platform would touch that package's public
-     * API; until then PG hand-queries `vwUsers`/`vwUserRoles` here. Same
-     * audit-user semantics (find Owner, else first user), just a different
-     * load path. Tracked for follow-up: unify behind a platform-agnostic
-     * cache that takes a `CodeGenConnection`.
-     *
      * **Env var resolution** — PG_HOST / PG_PORT / PG_DATABASE / PG_USERNAME /
      * PG_PASSWORD now flow through `configInfo.{dbHost,dbPort,dbDatabase,codeGenLogin,codeGenPassword}`
      * via `DEFAULT_CODEGEN_CONFIG` (see `Config/config.ts`). The provider just
@@ -96,18 +88,9 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
 
         const conn = new PostgreSQLCodeGenConnection(pool);
 
-        const usersResult = await conn.query('SELECT * FROM "' + coreSchema + '"."vwUsers"');
-        const rolesResult = await conn.query('SELECT * FROM "' + coreSchema + '"."vwUserRoles"');
-
-        const userInfos: UserInfo[] = usersResult.recordset.map((user: Record<string, unknown>) => {
-            (user as Record<string, unknown>).UserRoles = rolesResult.recordset.filter(
-                (role: Record<string, unknown>) => UUIDsEqual(role.UserID as string, user.ID as string),
-            );
-            return new UserInfo(provider, user);
-        });
-
-        const userMatch = userInfos.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
-        const currentUser = userMatch ?? userInfos[0];
+        await UserCache.Instance.Refresh(provider);
+        const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
+        const currentUser = userMatch ?? UserCache.Users[0];
         if (!currentUser) {
             throw new Error('No users found in PostgreSQL. Ensure vwUsers has at least one user.');
         }
@@ -428,70 +411,6 @@ EXCEPTION WHEN invalid_table_definition THEN
   DROP TABLE _vw_regen_fn_deps;
 END $vw_regen$;
 `;
-    }
-
-    // ─── MATERIALIZATION ─────────────────────────────────────────────────
-
-    /**
-     * PostgreSQL materialized-table DDL. The create is **conditional** (`CREATE TABLE IF NOT
-     * EXISTS`) so a migration-provided `materialized_<name>` table with bespoke indexing is
-     * detected and reused rather than clobbered (plan §12). Emits the single-column surrogate
-     * PRIMARY KEY, which is itself the required unique index.
-     *
-     * PG dialect vs. SQL Server: double-quoted identifiers, `CREATE TABLE IF NOT EXISTS` in
-     * place of the `IF OBJECT_ID(...) IS NULL` guard, and the surrogate column carries PG's
-     * `GENERATED ALWAYS AS IDENTITY` clause (see {@link getMaterializedSurrogateColumnType}).
-     */
-    override generateMaterializedTableSQL(schema: string, tableName: string, columns: MaterializedColumnSpec[]): string {
-        // MJ entity-field metadata stores CANONICAL (SQL Server-flavored) type names — e.g. 'uniqueidentifier',
-        // 'nvarchar(50)' — regardless of the physical DB dialect. Every other PG DDL path maps these via
-        // mapSQLType (see spCreate/spUpdate generation); the materialized-table DDL must do the same, or a
-        // base-view/query materialization emits `... uniqueidentifier ...` and PG fails the CREATE TABLE with
-        // `type "uniqueidentifier" does not exist`, aborting the whole codegen run.
-        const colLines = columns.map(
-            (c) => `    ${pgDialect.QuoteIdentifier(c.Name)} ${this.mapSQLType(c.SQLType)} ${c.Nullable ? 'NULL' : 'NOT NULL'}`,
-        );
-        const pkCols = columns.filter((c) => c.IsPrimaryKey).map((c) => c.Name);
-        const pkClause = pkCols.length
-            ? `,\n    CONSTRAINT ${pgDialect.QuoteIdentifier(`PK_${tableName}`)} PRIMARY KEY (${pkCols
-                  .map((n) => pgDialect.QuoteIdentifier(n))
-                  .join(', ')})`
-            : '';
-        return `CREATE TABLE IF NOT EXISTS ${pgDialect.QuoteSchema(schema, tableName)} (
-${colLines.join(',\n')}${pkClause}
-);`;
-    }
-
-    /**
-     * PostgreSQL wrapper-view DDL — the stable read contract over the materialized table.
-     * Uses `CREATE OR REPLACE VIEW` so the same statement both creates the view and atomically
-     * repoints it at a freshly-built table during refresh (plan §11.2). The body is always
-     * `SELECT * FROM <table>` and the shadow table shares the column shape, so PG's
-     * `CREATE OR REPLACE` column-compatibility rule is satisfied on the swap.
-     */
-    override generateMaterializedWrapperViewSQL(schema: string, viewName: string, tableName: string): string {
-        return `CREATE OR REPLACE VIEW ${pgDialect.QuoteSchema(schema, viewName)}
-AS
-SELECT * FROM ${pgDialect.QuoteSchema(schema, tableName)};`;
-    }
-
-    /**
-     * PostgreSQL synthetic surrogate key: a SQL-standard auto-assigned identity column
-     * (`GENERATED ALWAYS AS IDENTITY`), `bigint` for headroom on large materialized sets.
-     * v1 full-rebuild only; the deterministic combined-key hashing in §5 replaces this in Phase 3.
-     */
-    override getMaterializedSurrogateColumnType(): string {
-        return 'bigint GENERATED ALWAYS AS IDENTITY';
-    }
-
-    /**
-     * PostgreSQL KEYED surrogate key type: the combined-key SHA-256 hash the refresh writes comes from
-     * `encode(digest(…), 'hex')`, whose type is `text`, and the full rebuild's `CREATE TABLE AS` infers
-     * exactly that. Typing the minted entity's PK column `text` MATCHES the post-refresh physical column,
-     * avoiding the int-vs-hash divergence between CodeGen metadata and the rebuilt table.
-     */
-    override getMaterializedHashSurrogateColumnType(): string {
-        return 'text';
     }
 
     // ─── CRUD CREATE ─────────────────────────────────────────────────────
@@ -2665,6 +2584,10 @@ numbered_rows AS (
    SELECT
       sf."EntityID",
       COALESCE(ms."MaxSequence", 0) + 100000 + sf."Sequence" AS "Sequence",
+      -- The RAW schema ordinal, carried alongside the temporary Sequence above. The INSERT emitter
+      -- adds it to an apply-time MAX(), so the ordering of newly discovered fields is encoded in the
+      -- emitted VALUE rather than depending on the order the INSERT statements happen to execute.
+      sf."Sequence" AS "SourceOrdinal",
       sf."FieldName",
       sf."Description",
       sf."Type",

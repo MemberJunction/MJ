@@ -147,16 +147,6 @@ export class RunViewParams {
      */
     EntityName?: string;
     /**
-     * optional - choose the live source-of-truth vs the materialized snapshot, for entities that have a
-     * base-view materialization (an `MJ: Materialized Results` row with `SourceType='EntityBaseView'`).
-     * Defaults to `'Live'`. When `'Materialized'`, the read is routed to the materialized wrapper view
-     * (`materialized_vw<Name>`) instead of the entity's live base view — RLS, paging, and field selection
-     * apply identically because it's the same entity/shape. Choosing the snapshot is an explicit caller
-     * decision (never silent). No effect on entities that have no base-view materialization (the wrapper
-     * view won't exist). The enum (vs. a bare boolean) leaves room for future modes without a breaking change.
-     */
-    DataSource?: 'Live' | 'Materialized';
-    /**
      * An optional SQL WHERE clause that you can add to the existing filters on a stored view. For dynamic views, you can either
      * run a view without a filter (if the entity definition allows it with AllowAllRowsAPI=1) or filter with any valid SQL WHERE clause.
      *
@@ -292,8 +282,75 @@ export class RunViewParams {
      * Result Type is: 'simple', 'entity_object', or 'count_only' and defaults to 'simple'. If 'entity_object' is specified, the Results[] array will contain
      * BaseEntity-derived objects instead of simple objects. This is useful if you want to work with the data in a more strongly typed manner and/or
      * if you plan to do any update/delete operations on the data after it is returned. The 'count_only' option will return no rows, but the TotalRowCount property of the RunViewResult object will be populated.
+     *
+     * ## What `'simple'` rows actually contain — and what `T` does and does not check
+     *
+     * `'simple'` returns plain row objects, but the pipeline normalizes their VALUES to the shapes
+     * the generated entity types declare, identically on every tier: `Date` columns hold real
+     * `Date`s and numeric columns hold `number`s, whether the call ran server-side against the
+     * database or in a browser over GraphQL, and whether it was a fresh query or a cache hit.
+     * (`NULL` stays `NULL`, an unparseable value is left as-is rather than becoming `Invalid
+     * Date`, and integer strings beyond `Number.MAX_SAFE_INTEGER` stay strings to preserve
+     * BIGINT precision.)
+     *
+     * `RunView<T>` still takes a **caller-supplied** `T` the compiler does not verify, so know
+     * what a plain row can and cannot honor when you pass a generated entity type:
+     *
+     * ```typescript
+     * // Date and numeric fields are truthful on simple rows:
+     * const rows = await rv.RunView<OrderEntity>({ EntityName: 'Orders', ResultType: 'simple' });
+     * rows.Results[0].OrderDate.getFullYear();   // works — a real Date on every tier
+     *
+     * // But a plain row is still not an entity:
+     * rows.Results[0].Save();                    // compiles, crashes — no entity methods
+     * // ...and a closed-union column (e.g. Status) holds whatever string the database held.
+     * ```
+     *
+     * Two caveats worth knowing:
+     * - **`Fields` narrowing**: if you narrowed the query with `Fields`, non-selected properties
+     *   simply don't exist on the rows, whatever `T` claims.
+     * - **View-only runs**: a call that passes only `ViewID`/`ViewName` (no `EntityName` and no
+     *   loaded `ViewEntity`) skips normalization, since the entity is not synchronously
+     *   resolvable that deep in the pipeline. Pass `EntityName` alongside the view identifier to
+     *   get normalized rows.
+     *
+     * Rule of thumb: **want entity behavior — methods, validation, save, related records — ask
+     * for entity objects.** Choose `'simple'` for cheap read-only rows; its dates and numbers
+     * are already the types your entity declares.
      */
     ResultType?: 'simple' | 'entity_object' | 'count_only';
+
+    /**
+     * Names of {@link RelatedRecordCollection} companions to populate on the returned entity objects, using
+     * **one batched query per collection** across the entire result set.
+     *
+     * Requires `ResultType: 'entity_object'` — plain objects have no companions to populate.
+     *
+     * ## Why this exists rather than eager loading per row
+     *
+     * The obvious implementation of "load an entity's children automatically" is to do it in
+     * `LoadFromData()`. That is also the path every row of every `RunView(ResultType:'entity_object')`
+     * goes through, so it turns one view into N+1 queries — a real defect found in production
+     * accounting code, where listing 500 journal entries issued 500 line queries plus 500 dimension
+     * queries. Companion eager loading is therefore deliberately excluded from `LoadFromData()`, and
+     * set-oriented loading is served here instead:
+     *
+     * ```typescript
+     * const result = await rv.RunView<JournalEntryEntity>({
+     *     EntityName: 'MJ_BizApps_Accounting: Journal Entries',
+     *     ExtraFilter: `PeriodID = '${periodId}'`,
+     *     ResultType: 'entity_object',
+     *     IncludeRelatedRecords: ['Lines'],      // 1 query for ALL entries' lines, not one per entry
+     * });
+     * ```
+     *
+     * Cost is `1 + K` queries for K named collections, regardless of row count.
+     *
+     * @remarks
+     * Omitted by default. Nothing loads children unless you ask, which keeps grids and pickers —
+     * the overwhelming majority of view usage — free of any child-loading cost.
+     */
+    IncludeRelatedRecords?: string[];
 
     /**
      * Internal flag set by BaseEngine when loading entity configurations.
@@ -440,10 +497,6 @@ export class RunViewParams {
         if (a.ResultType !== b.ResultType) return false;
         if (a.CacheLocal !== b.CacheLocal) return false;
         if (a.CacheLocalTTL !== b.CacheLocalTTL) return false;
-        // A Live↔Materialized DataSource toggle changes the result set and MUST trigger a reload. Compared via
-        // IsMaterializedDataSource so undefined/'Live' are treated as equal (no spurious reload) while a switch to
-        // (or from) 'Materialized' is not — matching the read-routing decision everywhere else.
-        if (IsMaterializedDataSource(a.DataSource) !== IsMaterializedDataSource(b.DataSource)) return false;
 
         // Compare ViewEntity by reference (deep comparison would be expensive)
         if (a.ViewEntity !== b.ViewEntity) return false;
@@ -515,22 +568,6 @@ export class RunViewParams {
             && a.sqlserver === b.sqlserver
             && a.postgresql === b.postgresql;
     }
-}
-
-/**
- * Canonical test for whether a `RunViewParams.DataSource` value requests the MATERIALIZED snapshot.
- *
- * `DataSource` is typed `'Live' | 'Materialized'` here, but it crosses a GraphQL `String` boundary
- * (RunViewResolver declares it as an unconstrained `@Field(() => String)`), so a cross-version or non-MJ
- * client can send `'materialized'`, `'MATERIALIZED'`, or `'Materialized '`. This trims + lowercases before
- * comparing, so every such variant is recognized as materialized; anything else (including a typo) means a
- * live read — the safe default. Use this at EVERY DataSource decision point (read routing in
- * GetEffectiveBaseView, the cache-eligibility gate in runViewCacheEligible, and the cache fingerprint in
- * LocalCacheManager) so a mis-cased request can never be routed to the snapshot by one site while being
- * cached as Live by another (the silent-stale hazard that separate `=== 'Materialized'` checks allow).
- */
-export function IsMaterializedDataSource(dataSource: string | null | undefined): boolean {
-    return typeof dataSource === 'string' && dataSource.trim().toLowerCase() === 'materialized';
 }
 
 /**
