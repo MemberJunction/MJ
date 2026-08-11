@@ -6,6 +6,7 @@ import {
     MAX_AGENT_RUN_TREE_DEPTH,
     MJAIAgentRunEntityExtended,
     MJAIAgentEntityExtended,
+    WalkAgentRunTree,
     type AgentRunTreeNode,
 } from '@memberjunction/ai-core-plus';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
@@ -19,7 +20,22 @@ import { AIAgentRunCostService, AgentRunCostMetrics } from './ai-agent-run-cost.
 import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 
-@RegisterClass(BaseFormComponent, 'MJ: AI Agent Runs') 
+/**
+ * Task statuses that mean the step is finished with. Anything else means the workflow is still
+ * moving — see `WorkflowStillRunning`.
+ */
+const TERMINAL_TASK_STATUSES = new Set(['Complete', 'Failed', 'Cancelled', 'Skipped', 'Blocked']);
+
+/**
+ * How often to re-read the tree while a detached workflow runs.
+ *
+ * Human-scale rather than aggressive: a workflow step takes seconds at least, and the query walks
+ * the whole tree. Fast enough that a watcher sees progress, slow enough that leaving the tab open on
+ * a long workflow is not a load problem.
+ */
+const WORKFLOW_POLL_INTERVAL_MS = 4000;
+
+@RegisterClass(BaseFormComponent, 'MJ: AI Agent Runs')
 @Component({
   standalone: false,
   selector: 'mj-ai-agent-run-form',
@@ -37,6 +53,9 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   // polling the DB on a timer. Only attached when Status === 'Running'.
   private entityEventSubscription: Subscription | null = null;
   private refreshInFlight = false;
+
+  /** Pending re-read of the run tree while a detached workflow is still running. */
+  private workflowPollTimer: ReturnType<typeof setTimeout> | null = null;
 
   // UI state
   activeTab = 'timeline';
@@ -112,6 +131,54 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
       this.runTree = null;
     } finally {
       this.runTreeLoading = false;
+      this.scheduleWorkflowPoll();
+    }
+  }
+
+  /**
+   * True when this run submitted a workflow that has not finished.
+   *
+   * **The run being "Completed" says nothing about this.** A task graph is submit-and-detach: the
+   * step that submits it completes as soon as the graph is persisted, and the run completes with it
+   * — while the dispatcher goes on executing for seconds or minutes afterwards. One observed run
+   * finished in 225ms and its workflow ran for a further eighteen seconds.
+   *
+   * Without this the form showed a green COMPLETED header above steps sitting at Pending, and the
+   * only available reading was that something had failed. Nothing had; the page was simply a
+   * snapshot of a moving thing, with nothing saying so.
+   */
+  public get WorkflowStillRunning(): boolean {
+    if (!this.runTree) return false;
+    for (const node of WalkAgentRunTree(this.runTree)) {
+      if (node.NodeType !== 'Task' && node.NodeType !== 'TaskGraph') continue;
+      if (!TERMINAL_TASK_STATUSES.has(node.Status)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Re-reads the tree while a detached workflow is still moving, and stops when it settles.
+   *
+   * Polling rather than the BaseEntity event subscription this form already has, because that
+   * subscription cannot see this work for two independent reasons: it is only attached while the RUN
+   * is `Running` (a detached graph outlives that), and the dispatcher advances tasks through the
+   * claim protocol's direct SQL, which fires no entity events at all.
+   *
+   * Self-cancelling: each load reschedules only if work remains, so a settled run costs nothing.
+   */
+  private scheduleWorkflowPoll(): void {
+    this.clearWorkflowPoll();
+    if (!this.WorkflowStillRunning) return;
+    this.workflowPollTimer = setTimeout(() => {
+      this.workflowPollTimer = null;
+      void this.loadRunTree();
+    }, WORKFLOW_POLL_INTERVAL_MS);
+  }
+
+  private clearWorkflowPoll(): void {
+    if (this.workflowPollTimer !== null) {
+      clearTimeout(this.workflowPollTimer);
+      this.workflowPollTimer = null;
     }
   }
   
@@ -140,6 +207,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+    this.clearWorkflowPoll();
     this.entityEventSubscription?.unsubscribe();
     this.entityEventSubscription = null;
     this.clearParsedCache();

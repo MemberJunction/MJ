@@ -463,6 +463,30 @@ export class BaseAgent {
     private _agentRun: MJAIAgentRunEntityExtended | null = null;
 
     /**
+     * The task graph this run submitted and is now waiting on, or null.
+     *
+     * **Why a run parks instead of completing.** Submitting a graph is submit-and-detach: the run
+     * returns as soon as the graph is durable, and the dispatcher executes it afterwards — possibly
+     * minutes later, possibly on another instance, and for a graph containing a human approval,
+     * possibly days later. That is deliberate and must not change: awaiting would hold a run (and the
+     * conversation turn behind it) open for the length of an approval, and a graph that settles on a
+     * different host could never complete an awaiting run at all.
+     *
+     * But finishing as `Completed` said something untrue. A run that reported success, a duration of
+     * 441ms and a green COMPLETED badge, above a workflow where nothing had happened yet, is not a
+     * display problem — the row itself claimed to be done. So the run ends in `Paused`, which the
+     * conversation UI already reads as in-progress, and the DISPATCHER completes it when the graph
+     * settles (`TaskGraphDispatcher.settleSubmittingRun`). Nothing blocks, and no row claims to be
+     * finished while work it caused is still in flight.
+     *
+     * Set for whichever run submitted — root or sub-agent. A sub-agent that dispatches a graph parks
+     * its own run exactly the same way; its parent is unaffected and completes normally, which is
+     * correct, because the parent's own work IS done. What a viewer of the PARENT sees is covered by
+     * the run tree, which walks into the sub-agent's graph and reports it still running.
+     */
+    private _awaitingWorkflowTaskID: string | null = null;
+
+    /**
      * Stores the ID of an AIAgentRequest created when a Chat step fires.
      * Populated by executeChatStep(), returned in ExecuteAgentResult.feedbackRequestId.
      * Only set for root agents (depth 0), not sub-agents.
@@ -11963,6 +11987,15 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Success means "this graph is durable and will run", NOT "this graph has run". Saying
         // otherwise here is the exact lie the old await-everything path told when it returned early.
+        //
+        // The run PARKS on it rather than completing — see `_awaitingWorkflowTaskID`. Recorded only
+        // on a successful submission with a real parent task: a failed submission has nothing to
+        // wait for, and a graph nobody can point at could never be settled by the dispatcher, which
+        // would leave the run parked forever.
+        if (outcome.ParentTaskID) {
+            this._awaitingWorkflowTaskID = outcome.ParentTaskID;
+        }
+
         return {
             step: 'Success',
             terminate: true,
@@ -13414,7 +13447,15 @@ The context is now within limits. Please retry your request with the recovered c
             : finalStep.actionableCommands;
 
         if (this._agentRun) {
-            this._agentRun.CompletedAt = new Date();
+            // A run waiting on a workflow has NOT completed, so it gets no completion time. The
+            // dispatcher stamps this when the graph settles; until then the absence is the honest
+            // record, and a duration computed from it would be the 441ms it took to hand the work
+            // off rather than the time the work took.
+            const parkedOnWorkflow = !!this._awaitingWorkflowTaskID
+                && (finalStep.step === 'Success' || finalStep.step === 'Chat');
+            if (!parkedOnWorkflow) {
+                this._agentRun.CompletedAt = new Date();
+            }
             this._agentRun.Success = finalStep.step === 'Success' || finalStep.step === 'Chat';
             if (!this._agentRun.Success) {
                 // Capture error message from either errorMessage or message field
@@ -13427,6 +13468,17 @@ The context is now within limits. Please retry your request with the recovered c
             if (!this._agentRun.Success) {
                 // set status to Failed
                 this._agentRun.Status = 'Failed';
+            }
+            else if (parkedOnWorkflow) {
+                // Waiting on a task graph the dispatcher is still executing. `Paused` rather than a
+                // new status because it already exists on the entity AND the conversation's process
+                // panel already reads it as in-progress (`Status === 'Running' || === 'Paused'`), so
+                // a parked run presents correctly with no UI change.
+                //
+                // `Success` stays true: the turn genuinely succeeded at what it was asked to do —
+                // start the workflow. Whether the WORKFLOW succeeded is a different question, and
+                // the dispatcher answers it here when the graph settles.
+                this._agentRun.Status = 'Paused';
             }
             else if (finalStep.step === 'Chat') {
                 // Chat steps mean the agent is waiting for human input
