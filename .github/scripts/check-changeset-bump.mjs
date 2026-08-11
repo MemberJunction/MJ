@@ -24,9 +24,20 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 const DEFAULT_BASE = 'origin/next';
-/** Paths whose presence in the branch earns a `minor`. */
+/**
+ * Paths whose presence in the branch earns a `minor`.
+ *
+ * REPEATABLE migrations (`migrations/R__*.sql`) sit directly under `migrations/` rather than in a
+ * version folder, and Flyway re-runs them on every deploy — so editing one changes the database as
+ * surely as adding a versioned migration does.
+ *
+ * Matched on ANY git status, not just added files. The rule this replaces spoke of migrations
+ * "ADDED IN THIS BRANCH"; a MODIFIED migration is just as much a database change, and a repeatable
+ * script is only ever modified — it is never added twice.
+ */
 const DB_TRIGGERS = [
     { label: 'migration', pattern: /^migrations\/v[0-9]+\/.+\.sql$/ },
+    { label: 'repeatable migration', pattern: /^migrations\/R__.+\.sql$/ },
     { label: 'metadata', pattern: /^metadata\/.+/ },
 ];
 const CHANGESET_FILE = /^\.changeset\/(?!README\.md$)[^/]+\.md$/;
@@ -101,13 +112,21 @@ const triggers = dbTriggers(files);
 const changesets = addedChangesets(base);
 
 if (changesets.length === 0) {
+    // NOTE: this exits 0 even on a branch that changes the database. That is a deliberate scope
+    // line, not an oversight — this guard judges the LEVEL of the changesets a branch declares, and
+    // a branch declaring none gives it nothing to judge. "A DB branch must declare a changeset at
+    // all" is a different rule (presence, not level) and belongs wherever changesets are made
+    // mandatory. Pinned by the `db-no-changeset` test so the gap stays visible.
     console.log(`✅ No changesets added in this branch (vs ${base}) — nothing to check.`);
     process.exit(0);
 }
 
+// Parsed once and reused: the mirror check below needs the same entries, and re-reading each file
+// would let the two halves disagree if a parse ever became non-deterministic.
+const parsed = changesets.map((path) => ({ path, ...bumpEntries(path) }));
+
 const violations = [];
-for (const path of changesets) {
-    const { entries, malformed } = bumpEntries(path);
+for (const { path, entries, malformed } of parsed) {
     if (malformed) {
         violations.push({ path, reason: `could not read bump entries: ${malformed}` });
         continue;
@@ -132,7 +151,7 @@ for (const path of changesets) {
 // unpredictably rather than immediately. One `minor` anywhere in the branch's changesets is enough
 // — the `fixed` group moves every package to the highest bump regardless.
 if (triggers.length > 0 && violations.length === 0) {
-    const declaresMinor = changesets.some((path) => bumpEntries(path).entries.some((e) => e.level === 'minor'));
+    const declaresMinor = parsed.some(({ entries }) => entries.some((e) => e.level === 'minor'));
     if (!declaresMinor) {
         violations.push({
             path: changesets.join(', '),

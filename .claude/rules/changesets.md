@@ -14,9 +14,13 @@ file is that **you cannot infer it from the neighbouring files**.
 
 | Level | When |
 |---|---|
-| `minor` | The branch adds a **migration** (`migrations/vN/*.sql`) **or** changes **`metadata/`** |
+| `minor` | The branch touches the **database**: a versioned migration (`migrations/vN/*.sql`), a **repeatable** migration (`migrations/R__*.sql`), or anything under **`metadata/`** |
 | `patch` | Everything else — TypeScript, tests, docs, guides, CI, refactors |
 | `major` | **Never** without explicit user approval |
+
+**Changed counts, not just added.** Modifying an existing migration is as much a database change as
+adding one, and a repeatable script is only ever modified — Flyway re-runs it on every deploy. (The
+rule this replaces said "NEW migration files ADDED", which missed both cases.)
 
 It reads as an equivalence and is checked as one, in both directions. A `minor` with no database
 change over-bumps the workspace; a database change with only `patch` entries **under**-bumps it,
@@ -31,6 +35,13 @@ consolidated metadata-sync migration. The database change is real — it is just
 The level is about **what the branch does to the database**, not how big or user-visible the
 feature is. A 2,000-line feature with no migration and no metadata is a `patch`. A one-line
 metadata edit is a `minor`.
+
+**This is a release-train convention, not semver** — deliberately. Because every package shares one
+`fixed` group, all ~300 move to the same version whether or not they changed, so the number cannot
+carry per-package semver meaning; that possibility ended when the fixed group was adopted. Given it
+cannot mean "new API", it is put to work meaning something MJ actually needs: *this release requires
+you to run migrations*. The operator-facing half of that contract is in
+[`VERSIONING.md`](../../VERSIONING.md) — a signal nobody outside this file can read is not a signal.
 
 ## Why one stray `minor` matters
 
@@ -53,9 +64,11 @@ find out whether the pick was right.
 ## Do not pattern-match the neighbours
 
 `.changeset/` holds many pending files at any time, in a mix of both levels, written against
-branches whose contents you cannot see. Roughly a third currently use `minor`, including on
-feature packages — matching them is how this rule gets broken. **Read this file, not the
-neighbours.**
+branches whose contents you cannot see. **As of 2026-08, 40 of 86 pending files carry a `minor`** —
+close to half, and spread across a dozen feature packages rather than concentrated in one careless
+corner: `ai-core-plus` (10), `task-graph` (9), `server` (8), `integration-test-suite` (8),
+`ng-conversations` (7), `core-entities` (7), against `core` at 7. Matching them is how this rule
+gets broken. **Read this file, not the neighbours.**
 
 Only changesets *added in your branch* are your responsibility; the gate judges those alone, so a
 pre-existing file using a different level is not yours to fix.
@@ -67,8 +80,18 @@ npm run check:changeset          # judges the changesets THIS branch adds, vs or
 npm run check:changeset:test     # its own vitest suite
 ```
 
-**Nothing enforces this in CI** — no PR fails on a wrong bump level. This rule and that command
-are the only checks, so run it whenever you add a changeset.
+**Nothing enforces this in CI, by maintainer decision** — no PR fails on a wrong bump level. This
+rule and that command are the only checks, so run it whenever you add a changeset.
+
+Recorded so it is not re-litigated from a bad argument: the reason is *not* that the changesets bot
+covers it. It does not — see above, it displays the level without judging it. The reason is that the
+maintainer chose to start with guidance rather than a gate, and to see whether the rule landing
+where it actually loads is enough on its own. The gate exists, exits non-zero with an actionable
+message, and has 15 passing tests, so wiring it into CI later is a workflow file and nothing more —
+`continue-on-error: true` first if a soak period is wanted.
+
+**It also does not check that a database branch declares a changeset at all** — only the level of the
+ones it declares. A DB branch with no changeset passes here.
 
 ## Format
 

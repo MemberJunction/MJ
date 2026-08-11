@@ -89,6 +89,29 @@ describe('check-changeset-bump', () => {
         expect(code).toBe(0);
     });
 
+    /**
+     * Repeatable migrations live directly under `migrations/`, not in a version folder, and Flyway
+     * re-runs them on EVERY deploy — so a branch editing one is changing the database by any
+     * reading of the rule. Missing them is worse than a gap: with the mirror check below, an author
+     * who correctly reaches for `minor` on such a branch gets rejected.
+     */
+    it('allows minor when the branch edits a REPEATABLE migration', () => {
+        const { code } = runOnBranch('repeatable-minor', () => {
+            write('migrations/R__RefreshMetadata.sql', '-- refreshed\n');
+            write('.changeset/l.md', changeset({ '@memberjunction/core': 'minor' }));
+        });
+        expect(code).toBe(0);
+    });
+
+    it('requires minor when the branch edits a REPEATABLE migration', () => {
+        const { code, output } = runOnBranch('repeatable-patch', () => {
+            write('migrations/R__RefreshMetadata.sql', '-- refreshed again\n');
+            write('.changeset/m.md', changeset({ '@memberjunction/core': 'patch' }));
+        });
+        expect(code).toBe(1);
+        expect(output).toContain('repeatable migration');
+    });
+
     it('allows patch on a code-only branch', () => {
         const { code } = runOnBranch('ts-patch', () => {
             write('packages/Foo/d.ts', 'export const d = 1;\n');
@@ -153,6 +176,24 @@ describe('check-changeset-bump', () => {
             write('packages/Foo/g.ts', 'export const g = 1;\n');
         });
         expect(code).toBe(0);
+    });
+
+    /**
+     * DELIBERATE GAP, pinned so it is a decision rather than an oversight. A branch that changes the
+     * database and adds NO changeset passes: this guard judges the LEVEL of the changesets a branch
+     * declares, and has nothing to judge when there are none.
+     *
+     * "Should a DB branch be required to declare a changeset at all?" is a real question and
+     * arguably the more severe case — no bump is worse than an under-bump. It is a different rule
+     * though ("changesets are mandatory for X"), enforced at a different point, and folding it in
+     * here would make a bump-LEVEL guard quietly also a changeset-PRESENCE guard.
+     */
+    it('does NOT require a DB branch to add a changeset (out of scope for a bump-LEVEL guard)', () => {
+        const { code, output } = runOnBranch('db-no-changeset', () => {
+            write('migrations/v6/V202601011400__v6.1.x__Unaccompanied.sql', 'GO\n');
+        });
+        expect(code).toBe(0);
+        expect(output).toContain('nothing to check');
     });
 
     it('ignores pending changesets contributed by OTHER branches', () => {

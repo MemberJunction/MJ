@@ -63,6 +63,25 @@ Plain semver versions are only ever candidates or certified builds. Anything exp
 carries an `-edge.N` suffix. The machine-readable source of truth for what's certified,
 maintained, or end-of-life is [`release-lines.json`](release-lines.json).
 
+### What minor vs patch tells you — it is NOT semver
+
+**A minor bump means the release contains a database change**: a migration, or metadata that becomes
+one at release. A patch means it does not. That is the operational question in MJ — schema drift,
+not API breakage — so the number was given the meaning worth having.
+
+| Going from | Read it as |
+|---|---|
+| `6.1.5` → `6.2.0` | **Run migrations.** Something in this release changes the database. |
+| `6.1.5` → `6.1.6` | No schema change. Code only. |
+
+**Do not read MJ's `minor` as "new API", or its `patch` as "no new API".** Every package shares one
+`fixed` group (`.changeset/config.json`), so all ~300 move to the same version whether or not they
+changed — a consumer of one package already receives bumps driven entirely by packages they do not
+use. The version number therefore cannot carry per-package semver meaning, which is what makes it
+free to carry this one instead. A patch release may well add exported API.
+
+Authoring side, for contributors and agents: [`.claude/rules/changesets.md`](.claude/rules/changesets.md).
+
 ### npm dist-tags
 
 | Tag | Meaning |
