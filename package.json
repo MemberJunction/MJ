@@ -115,9 +115,7 @@
     "test:markdown": "node unit-testing/tools/generate-markdown.js ",
     "test:integration": "MJ_INTEGRATION_TEST=1 mj test suite \"Integration Tests \u2014 Deterministic\"",
     "test:e2e": "playwright test --config e2e/playwright.config.ts",
-    "check:standards": "mj standards check",
-    "check:changeset": "node .github/scripts/check-changeset-bump.mjs",
-    "check:changeset:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-changeset-bump"
+    "check:standards": "mj standards check"
   },
   "repository": {
     "type": "git",
