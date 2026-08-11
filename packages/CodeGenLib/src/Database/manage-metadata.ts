@@ -1388,12 +1388,20 @@ export class ManageMetadataBase {
          }
 
          // 2) Derive the snapshot column shape from the entity's base-view fields.
-         const columns: MaterializedColumnSpec[] = entity.Fields.map((f) => ({
-            Name: f.Name,
-            SQLType: f.SQLFullType,
-            Nullable: f.AllowsNull,
-            IsPrimaryKey: f.IsPrimaryKey,
-         }));
+         // For EXTERNAL entities, virtual fields are MJ-computed and absent from the remote source, so the
+         // refresh mirror (rebuildFromExternalEntity) only materializes non-virtual columns — the mint column
+         // set MUST match, or the wrapper view would expose virtual columns the refreshed table lacks (breaking
+         // virtual-field reads at the DB AND permanently tripping DriftHold on the next drift scan). LOCAL base
+         // views compute virtual columns in the view itself, so `SELECT * FROM <baseView>` includes them and the
+         // mint keeps all fields — the mint/refresh column sets stay symmetric on both paths.
+         const columns: MaterializedColumnSpec[] = entity.Fields
+            .filter((f) => !(entity.ExternalDataSourceID && f.IsVirtual))
+            .map((f) => ({
+               Name: f.Name,
+               SQLType: f.SQLFullType,
+               Nullable: f.AllowsNull,
+               IsPrimaryKey: f.IsPrimaryKey,
+            }));
          if (columns.length === 0) {
             logError(`    > Base-view materialization for "${entity.Name}": no fields resolved — skipping`);
             continue;

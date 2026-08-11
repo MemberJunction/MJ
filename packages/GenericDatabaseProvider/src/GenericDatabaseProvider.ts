@@ -1303,19 +1303,26 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return this.GetEffectiveBaseView(entityInfo, params);
         }
         const rv = new RunView(this);
-        const res = await rv.RunView<{ Status: string }>(
+        const res = await rv.RunView<{ Status: string; ViewName: string | null }>(
             {
                 EntityName: 'MJ: Materialized Results',
                 ExtraFilter: `SourceType='EntityBaseView' AND SourceEntityID='${entityInfo.ID}'`, // entityInfo.ID: trusted metadata PK
-                Fields: ['Status'],
+                Fields: ['Status', 'ViewName'],
                 ResultType: 'simple',
                 MaxRows: 1,
                 BypassCache: true,
             },
             contextUser,
         );
-        const active = res.Success && res.Results?.length > 0 && res.Results[0].Status === 'Active';
-        return active ? `materialized_vw${entityInfo.CodeName}` : entityInfo.BaseView;
+        const row = res.Success && res.Results?.length > 0 ? res.Results[0] : null;
+        if (row?.Status !== 'Active') return entityInfo.BaseView;
+        // Use the AUTHORITATIVE wrapper-view name persisted on the row rather than re-deriving
+        // materialized_vw<CodeName>: the row's ViewName is what the mint/migration actually created, so it stays
+        // correct for a migration-provided (non-conventionally-named) view or an entity renamed since mint (whose
+        // current CodeName no longer matches the view). Matches how the query path reads ViewName from the row.
+        // Fall back to the convention only if the row somehow lacks a ViewName. (SchemaName stays the entity's —
+        // base-view materialization always mints into the source entity's own schema.)
+        return row.ViewName?.trim() || `materialized_vw${entityInfo.CodeName}`;
     }
 
     /**
@@ -3420,7 +3427,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
             case 'date': {
                 const d = value instanceof Date ? value : new Date(String(value));
-                return Number.isNaN(d.getTime()) ? { ok: false } : { ok: true, value: d.toISOString() };
+                if (Number.isNaN(d.getTime())) return { ok: false };
+                const iso = d.toISOString();
+                // SQL Server rejects the ISO 'Z' zone suffix for datetime2/datetime (error 241 — 'Z' is valid only
+                // for datetimeoffset), so binding it would throw and force a fallback to live. Strip it for SS: the
+                // value is already the UTC moment and a zone-less ISO string binds as that same datetime2 wall-clock,
+                // matching the live path's rendered literal (no row divergence). PostgreSQL's timestamptz accepts
+                // 'Z', so keep it there.
+                return { ok: true, value: isPostgres ? iso : iso.replace(/Z$/, '') };
             }
             case 'string':
                 return { ok: true, value: String(value) };
@@ -3560,26 +3574,51 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 // live-rendered SQL), so a fallback below runs the live path unchanged.
                 try {
                     const materializedSQL = matPlan.sql;
-                    const timing = await this.executeQueryWithTiming(materializedSQL, contextUser, matPlan.parameters);
-                    const paginated = this.applyQueryPagination(timing.result, params);
-                    let rows = paginated.paginatedResult;
+                    // SQL-level paging parity with the live path: when the caller requested a page, wrap the
+                    // materialized read with OFFSET/FETCH (SQL Server) / LIMIT-OFFSET (PostgreSQL) plus a parallel
+                    // COUNT — via the same QueryPagingEngine the live path uses — so only the requested page is
+                    // pulled from the snapshot. Without this the whole (potentially multi-million-row) filtered
+                    // snapshot was loaded into Node and sliced in memory, defeating the large-dataset case
+                    // materialization targets. The bound row-filter parameters (matPlan.parameters) are preserved
+                    // in both the data and count SQL; StartRow/MaxRows are inlined by WrapWithPaging; and since the
+                    // materialized read carries no ORDER BY, buildDataSQL supplies the dialect default paging order
+                    // (the live path does the same for unordered queries). No cache layer — materialized reads
+                    // bypass the query cache by design. When no page is requested, keep the full-load path.
+                    const matUseSQLPaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
+                    let rows: Record<string, unknown>[];
+                    let matTotalRowCount: number;
+                    let matExecutionTime: number;
+                    if (matUseSQLPaging) {
+                        const paging = QueryPagingEngine.WrapWithPaging(materializedSQL, params.StartRow!, params.MaxRows!, this.PlatformKey as DatabasePlatform);
+                        const start = Date.now();
+                        const [dataResult, countResult] = await Promise.all([
+                            this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, matPlan.parameters, undefined, contextUser),
+                            this.ExecuteSQL<{ TotalRowCount: number }>(paging.CountSQL, matPlan.parameters, undefined, contextUser),
+                        ]);
+                        matExecutionTime = Date.now() - start;
+                        rows = dataResult ?? [];
+                        matTotalRowCount = countResult?.[0]?.TotalRowCount != null ? Number(countResult[0].TotalRowCount) : rows.length;
+                    } else {
+                        const timing = await this.executeQueryWithTiming(materializedSQL, contextUser, matPlan.parameters);
+                        matExecutionTime = timing.executionTime;
+                        const paginated = this.applyQueryPagination(timing.result, params);
+                        rows = paginated.paginatedResult;
+                        matTotalRowCount = paginated.totalRowCount;
+                    }
                     if (params.Enrichment?.EnricherKey) {
                         rows = await this.enrichQueryResults(rows, params, query, contextUser);
                     }
-                    this.auditQueryExecution(query, params, materializedSQL, rows.length, paginated.totalRowCount, timing.executionTime, contextUser);
-                    // Report PageNumber/PageSize consistently with the live path when the caller requested paging
-                    // (the materialized branch paginates in memory, but the reported metadata must match live).
-                    const matPaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
+                    this.auditQueryExecution(query, params, materializedSQL, rows.length, matTotalRowCount, matExecutionTime, contextUser);
                     return {
                         Success: true,
                         QueryID: query.ID,
                         QueryName: query.Name,
                         Results: rows,
                         RowCount: rows.length,
-                        TotalRowCount: paginated.totalRowCount,
-                        PageNumber: matPaging ? Math.floor(params.StartRow! / params.MaxRows!) + 1 : undefined,
-                        PageSize: matPaging ? params.MaxRows! : undefined,
-                        ExecutionTime: timing.executionTime,
+                        TotalRowCount: matTotalRowCount,
+                        PageNumber: matUseSQLPaging ? Math.floor(params.StartRow! / params.MaxRows!) + 1 : undefined,
+                        PageSize: matUseSQLPaging ? params.MaxRows! : undefined,
+                        ExecutionTime: matExecutionTime,
                         ErrorMessage: '',
                         AppliedParameters: appliedParameters,
                         RenderedSQL: materializedSQL,

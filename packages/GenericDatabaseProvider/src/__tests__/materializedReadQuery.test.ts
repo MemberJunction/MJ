@@ -258,9 +258,10 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
             expect(mk('1', true)!.parameters).toEqual([false]);
         });
 
-        it('date: binds the UTC ISO string (live\'s new Date(v).toISOString()), NOT the naive input', () => {
+        it('date (SQL Server): binds the UTC value as a zone-less ISO string (strips Z — datetime2 rejects it)', () => {
             // Explicit-offset input → deterministic UTC shift regardless of the test runner\'s timezone. Binding the
-            // naive input would fail this — which is the divergence bug this locks out.
+            // naive input would fail this — which is the divergence bug this locks out. SQL Server rejects the ISO
+            // 'Z' zone suffix for datetime2 (error 241), so the value is bound WITHOUT it — same UTC wall-clock.
             const plan = build({
                 ...base,
                 spec: [{ column: 'Status', operator: '>=', paramName: 'since', kind: 'scalar' }],
@@ -268,8 +269,19 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 paramTypes: { since: 'date' },
                 isPostgres: false,
             });
-            expect(plan!.parameters).toEqual(['2026-01-14T19:00:00.000Z']);
+            expect(plan!.parameters).toEqual(['2026-01-14T19:00:00.000']);
             expect(typeof plan!.parameters[0]).toBe('string');
+        });
+
+        it('date (PostgreSQL): binds the UTC ISO string WITH the Z suffix (timestamptz accepts it)', () => {
+            const plan = build({
+                ...base,
+                spec: [{ column: 'Status', operator: '>=', paramName: 'since', kind: 'scalar' }],
+                paramValues: { since: '2026-01-15T00:00:00+05:00' },
+                paramTypes: { since: 'date' },
+                isPostgres: true,
+            });
+            expect(plan!.parameters).toEqual(['2026-01-14T19:00:00.000Z']);
         });
 
         it('date: an unparseable value → null (live)', () => {
