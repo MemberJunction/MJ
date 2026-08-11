@@ -3,6 +3,12 @@
 "@memberjunction/integration-engine": patch
 "@memberjunction/ng-dashboards": patch
 "@memberjunction/core": patch
+"@memberjunction/server": patch
+"@memberjunction/graphql-dataprovider": patch
+"@memberjunction/core-actions": patch
+"@memberjunction/ng-core-entity-forms": patch
+"@memberjunction/ng-entity-viewer": patch
+"@memberjunction/component-registry-server": patch
 ---
 
 perf(core): stop paying for a speculative `COUNT(*)` on reads nobody counts
@@ -23,4 +29,6 @@ That fallback is removed. The count is now issued only when it is genuinely need
 - **`IntegrationEngine.pruneOldRunHistory`** reads the `keep` most-recent runs and prunes when the total exceeds `keep`. A capped read returns exactly `keep` rows whenever a backlog exists, so without an opt-in the guard reads `keep <= keep`, returns early every time, and run/detail history grows forever while appearing bounded. It now passes `ReturnTotalRowCount: true`.
 - **The Integration dashboard's destination record count** fetched primary-key rows and fell back to `Results.length`, capping the displayed count at `UserViewMaxRows`. It now uses `ResultType: 'count_only'`, which returns no rows at all — both correct and the cheapest form of the query.
 
-`ReturnTotalRowCount` is deliberately not plumbed through GraphQL in this change; the server-side callers that need it construct `RunViewParams` directly, and widening the wire contract is a separable decision.
+- **The generic entity data grid**, in both of its implementations. The Angular `EntityDataGridComponent` and the runtime component at `metadata/components/code/generic/entity-data-grid.js` each render a "total records" figure from a capped, non-paginated read — the runtime one passes `Skip`, which is not `StartRow` and so never counted as pagination. Both now opt in; without it the displayed total silently pins to the row cap once an entity outgrows it.
+
+`ReturnTotalRowCount` **is** plumbed through GraphQL, so remote callers get the same opt-in as in-process ones: it is declared on all four `RunView*` input types, forwarded by `GraphQLDataProvider` for both the single and batch paths, and threaded through `ResolverBase` into `RunViewParams`. The field is nullable and only forwarded when explicitly set, so the wire contract is additive and existing clients are unaffected.

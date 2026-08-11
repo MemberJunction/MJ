@@ -293,7 +293,13 @@ function EntityDataGrid({
           OrderBy: effectiveOrderBy,
           ResultType: 'simple', // Use 'simple' for plain objects, not entity instances
           MaxRows: maxCachedRows,
-          Skip: 0
+          Skip: 0,
+          // The grid reports "N total records" below, which must describe the whole
+          // filtered set rather than this capped page. `Skip` is not `StartRow`, so this
+          // read is NOT paginated and the true count is computed only when asked for.
+          // Without this, totalRecords silently pins to maxCachedRows once the entity
+          // has more rows than the cap. Mirrors EntityDataGridComponent's Angular twin.
+          ReturnTotalRowCount: true
         };
 
         const result = await utilities.rv.RunView(runViewParams);
