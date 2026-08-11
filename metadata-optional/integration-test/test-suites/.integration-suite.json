@@ -915,6 +915,14 @@
           "primaryKey": {
             "ID": "B7A9F916-2992-4EC0-99F1-38CD8EB80BC5"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT77 - Materialized Read Served From Snapshot",
+            "Sequence": 33,
+            "Status": "Active"
+          }
         }
       ]
     },

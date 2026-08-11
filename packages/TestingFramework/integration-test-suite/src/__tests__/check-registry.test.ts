@@ -38,6 +38,7 @@ import { ViewSecurityChecks } from '../checks/view-security.checks';
 import { AiProvidersChecks } from '../checks/ai-providers.checks';
 import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 import { ContentVectorizationChecks } from '../checks/content-vectorization.checks';
+import { MaterializedReadChecks } from '../checks/materialized-read.checks';
 import { ScopedAnonElevationChecks } from '../checks/scoped-anon-elevation.checks';
 import { EntityGraphChecks } from '../checks/entity-graph.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
@@ -131,6 +132,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
         ['content-vectorization', ContentVectorizationChecks, 6], // CV1-CV6 content vectorization pipeline (IT67)
+        ['materialized-read', MaterializedReadChecks, 2], // MR1-MR2 materialized read served-from-snapshot proof (IT77)
         ['scoped-anon-elevation', ScopedAnonElevationChecks, 5], // SA1-SA5 scoped-anonymous elevation permission contract (IT68)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
