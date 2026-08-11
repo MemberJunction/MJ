@@ -1,5 +1,11 @@
 name: Gemini Command
 
+# The everyday mention bot: @gemini-cli. Its Claude counterpart, claude-command.yml,
+# is still live on @claude and is kept deliberately — nothing routine reaches it, so
+# it costs nothing idle, and it stays available when someone wants Claude
+# specifically or wants to compare the two on the same thread. The concurrency
+# groups are distinct, so a thread can run both without either cancelling the other.
+
 on:
   issue_comment:
     types: [created]
@@ -11,10 +17,11 @@ jobs:
     # Gated to repo insiders (drive-by commenters on public issues/PRs can't spend
     # API budget) and non-bot authors (prevents bot-to-bot trigger loops).
     # KNOWN GOTCHA: author_association may report NONE/CONTRIBUTOR for org members
-    # whose membership is PRIVATE, silently not firing for them. Unlike the former
-    # claude-code-action, run-gemini-cli does NOT perform its own write-access
-    # check, so this gate is now the SOLE guard rather than a runner-spin-up
-    # saving. If a maintainer reports @gemini-cli not responding, have them make
+    # whose membership is PRIVATE, silently not firing for them. Unlike
+    # claude-code-action — which claude-command.yml still uses, see below —
+    # run-gemini-cli does NOT perform its own write-access check, so this gate is
+    # the SOLE guard here rather than a runner-spin-up saving.
+    # If a maintainer reports @gemini-cli not responding, have them make
     # their org membership public, or add their login to an explicit allowlist
     # here. Verify post-merge with a test comment from a private-membership member.
     if: |
