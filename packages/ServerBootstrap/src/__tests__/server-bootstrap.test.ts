@@ -164,6 +164,35 @@ describe('ServerBootstrap', () => {
             }
         });
 
+        it("prints the friendly 'not found' line (and does NOT warn) when the package itself is genuinely missing", async () => {
+            const mockSearch = vi.fn().mockReturnValue({
+                config: {
+                    dynamicPackages: {
+                        server: [{ PackageName: '@nonexistent/genuinely-missing-server', Enabled: true }],
+                    },
+                },
+                filepath: '/test/mj.config.cjs',
+                isEmpty: false,
+            });
+            (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
+            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+            await expect(createMJServer()).resolves.toBeUndefined();
+
+            // The mirror of the transitive-dep test: when the error's quoted subject IS this
+            // package, the benign friendly line fires and the scary warn path stays silent.
+            expect(logSpy).toHaveBeenCalledWith(
+                expect.stringContaining("not found (run 'npm install'?): @nonexistent/genuinely-missing-server"),
+            );
+            expect(warnSpy).not.toHaveBeenCalledWith(
+                expect.stringContaining('Error loading Open App server package @nonexistent/genuinely-missing-server'),
+                expect.anything(),
+            );
+            warnSpy.mockRestore();
+            logSpy.mockRestore();
+        });
+
         it('skips disabled Open App server packages', async () => {
             const mockSearch = vi.fn().mockReturnValue({
                 config: {

@@ -173,15 +173,15 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
     let skyway: SkywayInstance | undefined;
 
     try {
-        // Use variables to prevent TypeScript from resolving the modules at compile time.
         // The skyway packages are declared as optionalDependencies of THIS package (and as
         // regular dependencies of hosts like MJCLI), so a bare specifier resolves under both
         // npm's hoisted layout and pnpm's strict per-package layout — a bare dynamic import
         // resolves from the importing module, not the host entrypoint, so a host-provides
-        // contract alone cannot work under pnpm (MJ#3677). The import stays dynamic so this
-        // module compiles and loads even when the optional packages are not installed.
-        const skywayModuleId = '@memberjunction/skyway-core';
-        const { Skyway } = await import(skywayModuleId);
+        // contract alone cannot work under pnpm (MJ#3677). The import stays dynamic (via
+        // ImportSkywayClass) so this module compiles and loads even when the optional
+        // packages are not installed — and a genuinely-missing package gets the actionable
+        // optionalDependencies guidance instead of a raw resolver error.
+        const Skyway = await ImportSkywayClass('@memberjunction/skyway-core', 'Skyway', 'the Skyway migration engine');
         const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig, MJCoreSchema, ExtraPlaceholders, platform, TransactionMode);
         // Skyway 0.6.x requires an explicit provider, selected by platform.
         config.Provider = await CreateSkywayProvider(platform, config.Database);
@@ -231,29 +231,31 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
  */
 async function CreateSkywayProvider(platform: DatabasePlatform, dbConfig: SkywayConfig['Database']): Promise<unknown> {
     if (platform === 'postgresql') {
-        const PostgresProvider = await ImportProviderClass('@memberjunction/skyway-postgres', 'PostgresProvider', 'PostgreSQL');
+        const PostgresProvider = await ImportSkywayClass('@memberjunction/skyway-postgres', 'PostgresProvider', 'the PostgreSQL provider');
         return new PostgresProvider(dbConfig);
     }
-    const SqlServerProvider = await ImportProviderClass('@memberjunction/skyway-sqlserver', 'SqlServerProvider', 'SQL Server');
+    const SqlServerProvider = await ImportSkywayClass('@memberjunction/skyway-sqlserver', 'SqlServerProvider', 'the SQL Server provider');
     return new SqlServerProvider(dbConfig);
 }
 
 /**
- * Dynamically imports a Skyway provider package and returns the named provider class.
- * Only a RESOLUTION failure (the package is not installed) is translated into the
- * "install the provider" guidance — any other error (including a throw from the
- * provider's own module code, or later from its constructor) surfaces as-is, so a bad
- * connection config is never misreported as a missing package.
+ * Dynamically imports a skyway package and returns the named class. Only a RESOLUTION
+ * failure (the package is not installed) is translated into the optionalDependencies
+ * guidance — any other error (including a throw from the package's own module code, or
+ * later from the constructor) surfaces as-is, so a bad connection config is never
+ * misreported as a missing package. Used for skyway-core and both platform providers,
+ * so the common failure mode (all skyway packages absent together under --no-optional)
+ * gets the actionable message too.
  */
-async function ImportProviderClass(moduleId: string, exportName: string, platformLabel: string): Promise<new (dbConfig: SkywayConfig['Database']) => unknown> {
+async function ImportSkywayClass(moduleId: string, exportName: string, label: string): Promise<new (...args: unknown[]) => unknown> {
     let mod: Record<string, unknown>;
     try {
         mod = await import(moduleId);
     } catch (error: unknown) {
         if (IsModuleResolutionFailure(error)) {
             throw new Error(
-                `${platformLabel} provider not found. Install ${moduleId} to run Open App migrations against ${platformLabel} ` +
-                    `(it is an optionalDependency of @memberjunction/open-app-engine — check for --no-optional installs or a registry that does not carry it).`,
+                `Cannot run Open App migrations: ${label} (${moduleId}) is not installed. It is an ` +
+                    `optionalDependency of @memberjunction/open-app-engine — check for --no-optional installs or a registry that does not carry it.`,
                 { cause: error },
             );
         }
@@ -262,11 +264,11 @@ async function ImportProviderClass(moduleId: string, exportName: string, platfor
     const ctor = mod[exportName];
     if (typeof ctor !== 'function') {
         throw new Error(
-            `${platformLabel} provider package ${moduleId} loaded but does not export '${exportName}' — ` +
+            `${moduleId} loaded but does not export '${exportName}' — ` +
                 `the installed version may not match what @memberjunction/open-app-engine expects.`,
         );
     }
-    return ctor as new (dbConfig: SkywayConfig['Database']) => unknown;
+    return ctor as new (...args: unknown[]) => unknown;
 }
 
 /**
@@ -274,6 +276,10 @@ async function ImportProviderClass(moduleId: string, exportName: string, platfor
  * and threw. ESM raises ERR_MODULE_NOT_FOUND; CJS resolution raises MODULE_NOT_FOUND;
  * some ESM loader shims (e.g. ts-node's) throw plain code-less Errors, recognized by
  * Node's resolver message.
+ *
+ * ⚠ Under ts-node's shim the coded branch never fires (the shim strips custom error
+ * properties crossing the module-hooks thread), so the message branch is LOAD-BEARING
+ * there: if a future Node rewords its resolver messages, this predicate must be updated.
  *
  * Keep in sync with `isResolutionFailure` in @memberjunction/server-bootstrap's
  * `src/host-import.ts` (which carries the unit tests for this heuristic) — duplicated

@@ -24,6 +24,11 @@ import path from 'node:path';
  * MJAPI runs under) throw resolution failures as PLAIN Errors with no code at all, so
  * when there is no code, recognize Node's own resolver message instead.
  *
+ * ⚠ Under ts-node's shim the coded branch never fires (the shim strips custom error
+ * properties crossing the module-hooks thread), so the message branch is LOAD-BEARING
+ * there: if a future Node rewords its resolver messages, this predicate must be updated
+ * or the pnpm fallback silently stops working under ts-node hosts.
+ *
  * Keep in sync with `IsModuleResolutionFailure` in @memberjunction/open-app-engine's
  * `src/install/migration-runner.ts` — same heuristic, duplicated because the two
  * packages cannot depend on each other and cross-package re-exports are disallowed.
@@ -59,9 +64,15 @@ export async function importFromHost(pkgName: string, configFilePath?: string): 
     if (!isResolutionFailure(error)) {
       throw error;
     }
+    // Anchor priority: the mj.config.cjs that NAMED the package is the authoritative host,
+    // so it is consulted first — cwd can be a different checkout entirely (an operator
+    // launching instance A's server from instance B's directory would otherwise silently
+    // load B's copy). cwd and the process entrypoint are fallbacks for hosts whose config
+    // lives outside the tree that carries the packages (e.g. a workspace-root config with
+    // the packages linked into the app directory).
     const anchors = [
-      path.join(process.cwd(), 'package.json'),
       configFilePath,
+      path.join(process.cwd(), 'package.json'),
       process.argv[1],
     ].filter((anchor): anchor is string => typeof anchor === 'string' && anchor.length > 0);
     let sawExportsMapMismatch = false;
