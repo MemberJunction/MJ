@@ -96,7 +96,10 @@ export async function createMaterializedReadFixtures(ctx: IntegrationCheckContex
     const query = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', user);
     query.Name = `Materialized Read Probe ${stamp}`;
     query.CategoryID = category.ID;
-    query.SQL = `SELECT ID, Name FROM ${schema}.vwEntities WHERE Name = {{ marker }}`;
+    // `| sqlString` so the LIVE path (negative control) renders a quoted string literal; without it the value
+    // interpolates unquoted → "Invalid column name". The materialized path BINDS the value (spec-driven), so it
+    // is unaffected. The `marker` parameter is still auto-extracted from the token.
+    query.SQL = `SELECT ID, Name FROM ${schema}.vwEntities WHERE Name = {{ marker | sqlString }}`;
     query.UsesTemplate = true;
     query.Status = 'Approved';
     if (!await query.Save()) throw new Error(`Fixture query save failed: ${query.LatestResult?.CompleteMessage}`);
