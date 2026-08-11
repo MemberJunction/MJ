@@ -6,6 +6,7 @@ import {
     WellKnownUserSource,
 } from '@memberjunction/core';
 import { IsSystemUser, SystemUserID } from './systemUser.js';
+import { UserCache } from './UserCache.js';
 import { RegisterClassEx } from '@memberjunction/global';
 
 /**
@@ -20,19 +21,19 @@ import { RegisterClassEx } from '@memberjunction/global';
  * registration in a server package like MJServer would instead leave every CLI and job process
  * (MJCLI, CodeGen, MetadataSync, AICLI) silently without a system user.
  *
- * **Why it queries rather than reading `UserCache`.** `UserCache` lives in
- * `@memberjunction/sqlserver-dataprovider`; importing it here would invert the dependency. That
- * constraint turns out to be a benefit:
- *   - PostgreSQL gets a real answer for the first time. It has no user cache of its own — today
- *     MJServer writes `UserCache`'s private `_users` field through a cast to fake one — so a PG
- *     process outside MJServer currently has no system user at all.
- *   - It works on a cold cache. `UserCache.GetSystemUser()` throws outright before its first
- *     successful refresh, which is why several existing callers silently skip their checks.
+ * **Cache first, query as the cold-start fallback.** {@link UserCache} now lives in this same
+ * package, so reading it here is a plain in-process lookup rather than the inverted dependency it
+ * used to be. The query remains, and is load-bearing rather than vestigial:
+ *   - It answers before any `Refresh` has run. A cold cache is the normal state for a process that
+ *     resolves a system user during its own bootstrap, which is exactly when {@link BaseEngine}
+ *     asks.
+ *   - It answers when the cache was refreshed against a different connection. `UserCache` is a
+ *     process-global singleton, so in a multi-connection host its contents are not necessarily
+ *     this `provider`'s users.
  *
- * Deliberately **not** memoized beyond the caller's own reuse: a long-lived private copy would
- * drift from `UserCache` after a role sync, and that drift was the flaw in an earlier attempt at
- * this. Callers resolve rarely — {@link BaseEngine} resolves at most once per engine — so a
- * lookup per call is cheap and always current.
+ * Deliberately **not** memoized privately: a long-lived copy would drift from `UserCache` after a
+ * role sync, and that drift was the flaw in an earlier attempt at this. Reading the cache directly
+ * shares whatever every other `UserCache` consumer sees, so there is no second copy to go stale.
  */
 // No key: there is exactly one well-known-user source per process, not keyed variants,
 // so the factory's "registration has no key" advisory does not apply here.
@@ -48,9 +49,10 @@ export class DatabaseWellKnownUserSource extends WellKnownUserSource {
     }
 
     /**
-     * Reads the system user (and its roles) from `vwUsers`/`vwUserRoles` on the given provider's
-     * connection. Returns null — never throws — when the provider can't run SQL, the row is
-     * absent, or the query fails, so callers degrade rather than crash.
+     * Resolves the system user from {@link UserCache} when it is warm, and otherwise reads it (with
+     * its roles) from `vwUsers`/`vwUserRoles` on the given provider's connection. Returns null —
+     * never throws — when the provider can't run SQL, the row is absent, or the query fails, so
+     * callers degrade rather than crash.
      */
     public override async GetSystemUser(provider: IMetadataProvider): Promise<UserInfo | null> {
         // Only a database provider can answer this; anything else (a Network provider that
@@ -59,6 +61,21 @@ export class DatabaseWellKnownUserSource extends WellKnownUserSource {
             return null;
         }
 
+        // Warm cache: no query, and no second copy of the "load users + roles" logic. Returns
+        // undefined on a cold cache rather than throwing, since `_users` defaults to `[]`.
+        const cached = UserCache.Instance.GetSystemUser();
+        if (cached) {
+            return cached;
+        }
+
+        return this.querySystemUser(provider);
+    }
+
+    /**
+     * The cold-cache path: one row from `vwUsers` plus its `vwUserRoles`, built with the provider's
+     * own quoting so a single implementation serves both dialects.
+     */
+    private async querySystemUser(provider: DatabaseProviderBase): Promise<UserInfo | null> {
         try {
             const schema = provider.MJCoreSchemaName;
             const userSQL =
@@ -76,8 +93,9 @@ export class DatabaseWellKnownUserSource extends WellKnownUserSource {
                 `WHERE ${provider.QuoteIdentifier('UserID')} = ${provider.BuildParameterPlaceholder(0)}`;
             const roles = await provider.ExecuteSQL<Record<string, unknown>>(rolesSQL, [SystemUserID]);
 
-            // A dedicated instance, never a shared cached one — per-request context stamped onto
-            // a shared UserInfo leaks across sessions.
+            // A fresh instance built from this provider's own rows. `UserInfo` holds no per-request
+            // state — its constructor keeps the row data and roles and nothing else — so the warm
+            // path above can safely hand back `UserCache`'s shared instance instead.
             return new UserInfo(provider, { ...users[0], UserRoles: roles ?? [] });
         } catch (e) {
             LogError(e);

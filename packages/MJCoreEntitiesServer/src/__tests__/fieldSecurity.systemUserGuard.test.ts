@@ -35,7 +35,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     return { ...actual, RegisterClass: () => (target: unknown) => target };
 });
 
-vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
+vi.mock('@memberjunction/generic-database-provider', () => ({
     UserCache: {
         get Instance() {
             return { GetSystemUser: () => systemUserStub.value };
