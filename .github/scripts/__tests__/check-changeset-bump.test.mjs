@@ -404,6 +404,36 @@ describe('check-changeset-bump', () => {
         });
     });
 
+    describe('history shapes', () => {
+        it('does not judge a changeset this branch merely RENAMED', () => {
+            // git reports a rename as `R`, which --diff-filter=A excludes. Deliberate: the content
+            // is another branch's decision, and re-judging it against THIS branch's DB context is
+            // exactly the cross-branch false rejection the scoping rule exists to prevent.
+            // Accepted cost: editing a pending changeset *via* a rename escapes the check.
+            git('checkout', '-q', 'next');
+            write('.changeset/pre-existing.md', changeset({ '@memberjunction/foo': 'minor' }));
+            git('add', '-A');
+            git('commit', '-q', '-m', 'someone else pending changeset');
+            const { code } = runOnBranch('renamer', () => {
+                execFileSync('git', ['mv', '.changeset/pre-existing.md', '.changeset/renamed.md'], { cwd: repo });
+            });
+            expect(code).toBe(0);
+        });
+
+        it('sees no changeset when one is added and deleted within the branch', () => {
+            const { code, output } = runOnBranch('added-then-deleted', () => {
+                write('migrations/v6/V202601012300__v6.1.x__Trans.sql', 'GO\n');
+                write('.changeset/transient.md', changeset({ '@memberjunction/foo': 'minor' }));
+            });
+            expect(code).toBe(0);
+            execFileSync('git', ['rm', '-q', '.changeset/transient.md'], { cwd: repo });
+            git('commit', '-q', '-m', 'drop the changeset again');
+            const after = execFileSync('node', [SCRIPT, '--base', 'next'], { cwd: repo, encoding: 'utf8' });
+            // Falls to the documented presence gap, not to a wrong level.
+            expect(after).toContain('nothing to check');
+        });
+    });
+
     describe('robustness against real working trees', () => {
         it('works when invoked from a SUBDIRECTORY, not just the repo root', () => {
             // git reports paths from the repo root, so reading them relative to process.cwd()
