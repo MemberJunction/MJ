@@ -100,6 +100,7 @@ vi.mock('@memberjunction/core', () => ({
 // Inline the actual implementation here so the env-var-handling tests below
 // exercise the genuine behavior (they're testing this function).
 vi.mock('@memberjunction/generic-database-provider', () => ({
+  UserCache: { Instance: { Users: [], GetSystemUser: vi.fn() } },
   resolveDbPlatformFromEnv: (envVarName: string = 'DB_PLATFORM'): 'sqlserver' | 'postgresql' | undefined => {
     const raw = process.env[envVarName];
     if (raw === undefined) return undefined;
@@ -117,7 +118,6 @@ vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
   SQLServerDataProvider: vi.fn(),
   SQLServerProviderConfigData: vi.fn(),
   setupSQLServerClient: vi.fn(),
-  UserCache: { Instance: { Users: [], GetSystemUser: vi.fn() } },
 }));
 
 vi.mock('@memberjunction/api-keys', () => ({
