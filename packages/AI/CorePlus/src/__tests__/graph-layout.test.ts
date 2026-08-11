@@ -8,7 +8,7 @@
  * re-projects on every status change), or a cycle in hand-built input hanging the renderer.
  */
 import { describe, it, expect } from 'vitest';
-import { GraphLayoutBounds, LayoutGraphNodes, LayoutTaskGraph } from '../task-graph/graph-layout';
+import { GraphLayoutBounds, LayoutGraphNodes, LayoutTaskGraph, RankGraphNodes, ResolveTaskGraphPositions } from '../task-graph/graph-layout';
 import { TaskNode, type TaskGraphSpec, type TaskGraphSpecNode } from '../task-graph/task-graph-spec';
 
 const node = (tempId: string, dependsOn: string[] = []): TaskGraphSpecNode =>
@@ -177,5 +177,103 @@ describe('GraphLayoutBounds', () => {
 
     it('is empty for an empty graph', () => {
         expect(GraphLayoutBounds(new Map())).toEqual({ X: 0, Y: 0, Width: 0, Height: 0 });
+    });
+});
+
+/**
+ * Ranking exists because a `Task` row has no sequence column, so every consumer listing a graph's
+ * steps fell back to creation order — the compiler's walk, which matches neither the drawn order nor
+ * the execution order. An unstarted graph has no timestamps either, so its structure is the only
+ * order available, and it is available from the moment the graph is compiled.
+ */
+describe('RankGraphNodes', () => {
+    it('ranks a chain in dependency order', () => {
+        const ranks = RankGraphNodes(['c', 'a', 'b'], [{ From: 'a', To: 'b' }, { From: 'b', To: 'c' }]);
+        expect([...ranks.entries()].sort((x, y) => x[1] - y[1]).map(([id]) => id)).toEqual(['a', 'b', 'c']);
+    });
+
+    it('never ranks a step above something it depends on', () => {
+        // The shape from the demo workflow: one start, a two-way branch, then a step that waits on
+        // both. Whatever order the ids arrive in, step 3 must not precede 2(a) or 2(b).
+        const ranks = RankGraphNodes(
+            ['s3', 's2b', 's1', 's2a'],
+            [
+                { From: 's1', To: 's2a' }, { From: 's1', To: 's2b' },
+                { From: 's2a', To: 's3' }, { From: 's2b', To: 's3' },
+            ],
+        );
+        expect(ranks.get('s1')!).toBeLessThan(ranks.get('s2a')!);
+        expect(ranks.get('s1')!).toBeLessThan(ranks.get('s2b')!);
+        expect(ranks.get('s3')!).toBeGreaterThan(ranks.get('s2a')!);
+        expect(ranks.get('s3')!).toBeGreaterThan(ranks.get('s2b')!);
+    });
+
+    it('gives every node a distinct rank, so it can be used as an ordering key', () => {
+        const ranks = RankGraphNodes(['a', 'b', 'c', 'd'], [{ From: 'a', To: 'c' }]);
+        expect(new Set(ranks.values()).size).toBe(4);
+    });
+
+    it('ranks an edgeless graph without complaint', () => {
+        expect(RankGraphNodes(['a', 'b'], []).size).toBe(2);
+    });
+
+    it('terminates on a cycle rather than hanging', () => {
+        // Cycles are rejected at compile time, but a hand-built spec could still contain one, and a
+        // ranker that spun forever would be worse than one that ranked it imperfectly.
+        const ranks = RankGraphNodes(['a', 'b'], [{ From: 'a', To: 'b' }, { From: 'b', To: 'a' }]);
+        expect(ranks.size).toBe(2);
+    });
+
+    it('returns nothing for no nodes', () => {
+        expect(RankGraphNodes([], []).size).toBe(0);
+    });
+});
+
+/**
+ * Position resolution for a STORED graph.
+ *
+ * A workflow compiled from a Flow agent carries the arrangement its author dragged into place, on
+ * every node. `LayoutTaskGraph` ignores that and lays the graph out from scratch — right for a graph
+ * an agent emitted, wrong for one a person drew. A viewer with no positions at all leaves every node
+ * at the origin, and a canvas asked to fit a graph whose nodes are all in one place zooms until that
+ * point fills the viewport.
+ */
+describe('ResolveTaskGraphPositions', () => {
+    // Reuses the file's own node/graph builders; `layout` is what a Flow agent's compiler stamps on.
+    const spec = graph;
+    const task = (tempId: string, layout?: { x: number; y: number }): TaskGraphSpecNode =>
+        layout ? { ...node(tempId), layout } : node(tempId);
+
+    it('keeps the arrangement its author drew, exactly', () => {
+        const positions = ResolveTaskGraphPositions(spec([
+            task('a', { x: -1200, y: -240 }),
+            task('b', { x: -860, y: 220 }),
+        ]));
+        expect(positions.get('a')).toEqual({ X: -1200, Y: -240 });
+        expect(positions.get('b')).toEqual({ X: -860, Y: 220 });
+    });
+
+    it('computes positions for a graph nobody arranged', () => {
+        const positions = ResolveTaskGraphPositions(spec([task('a'), task('b')]));
+        expect(positions.size).toBe(2);
+        // Distinct, so the canvas is not asked to fit a single point.
+        expect(new Set([...positions.values()].map((p) => `${p.X},${p.Y}`)).size).toBe(2);
+    });
+
+    it('mixes the two per node, so a partly-arranged graph keeps what it has', () => {
+        const positions = ResolveTaskGraphPositions(spec([task('a', { x: 42, y: 7 }), task('b')]));
+        expect(positions.get('a')).toEqual({ X: 42, Y: 7 });
+        expect(positions.get('b')).toBeDefined();
+        expect(positions.get('b')).not.toEqual({ X: 42, Y: 7 });
+    });
+
+    it('gives every node a position, so none is left at the origin by default', () => {
+        const positions = ResolveTaskGraphPositions(spec([task('a'), task('b'), task('c', { x: 1, y: 2 })]));
+        expect(positions.size).toBe(3);
+    });
+
+    it('returns nothing for an empty or absent spec', () => {
+        expect(ResolveTaskGraphPositions(null).size).toBe(0);
+        expect(ResolveTaskGraphPositions(spec([])).size).toBe(0);
     });
 });

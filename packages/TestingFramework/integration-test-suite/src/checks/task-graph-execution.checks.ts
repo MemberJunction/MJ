@@ -450,7 +450,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
 
     {
         Id: 'task-graph-execution.TX4',
-        Name: 'TX4: a false edge condition skips its branch and the graph still settles',
+        Name: 'TX4: a false edge condition Skips its branch and the graph settles Complete',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             // TG9 proves TaskDependency.Condition round-trips as a column. This proves the dispatcher
@@ -476,13 +476,20 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             );
 
             const b = (await loadChildren(ctx, parentID)).get('B Conditional');
-            AssertEqual(b!.Status, 'Skipped', 'the untaken branch must be Skipped, not left Pending forever');
-
-            // Skipped, not Blocked: `Blocked` is reserved for FAILURE-driven unsatisfiability. A branch
-            // that merely lost its condition is a normal outcome, so ComputeParentRollup counts it as
-            // settled-aside and precedence ignores it — without that, any flow containing a single
-            // fork would settle Blocked every time.
-            AssertEqual(parent.Status, 'Complete', 'a graph whose only outstanding branch was skipped settles Complete');
+            // ── Skipped, not Blocked — this assertion was REWRITTEN, and the old one is why ──────
+            // It used to demand `Blocked` for both the branch and the graph, on the reasoning that a
+            // Prerequisite edge which can never be satisfied means the graph has genuinely not
+            // finished its work. R6 overruled that: a condition that is definitely false is a
+            // DECISION, not an obstruction. The branch was not taken, and a workflow that chose one
+            // of two routes has finished — reporting it as Blocked told an operator to go
+            // investigate a graph that had done exactly what its author drew.
+            //
+            // The dispatcher now routes definitely-false edges through the skip seeds, so the branch
+            // settles `Skipped` and the graph `Complete`. Leaving this check on the old contract
+            // meant it contradicted the live engine on every full run of the deterministic tier, and
+            // — worse — the comment taught the overruled doctrine as design intent.
+            AssertEqual(b!.Status, 'Skipped', 'the untaken branch must be Skipped: not taken is a decision, not an obstruction');
+            AssertEqual(parent.Status, 'Complete', 'a graph that chose one of two routes has finished');
             AssertEqual(parent.PercentComplete, 100, 'a skipped branch is finished work, not outstanding work');
 
             console.log('      → false condition skipped its branch; graph settled Complete at 100%');

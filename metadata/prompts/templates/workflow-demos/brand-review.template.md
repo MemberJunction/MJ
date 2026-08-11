@@ -33,10 +33,18 @@ the corrected version. The loop runs again only to re-check your own work, and s
 }
 ```
 
-Set `brandOK` **true only when you changed nothing** — when the draft already passed every rule. If
-you rewrote so much as a sentence, set it `false` and let the loop re-check your work. Marking your
-own revision as passing is how a loop exits on an unverified draft, and it is exactly what the
-re-check exists to prevent.
+**Judge the draft you were GIVEN, not the one you produce.**
+
+- If the draft you received already satisfies every rule, set `brandOK` **true** and return it
+  unchanged. Do not hunt for one more improvement: "could be slightly better" is not a rule on the
+  list, and a draft that breaks no rule has passed.
+- If it breaks a rule, set `brandOK` **false**, return the corrected draft, and say which rule and
+  where. The next pass judges your correction on its own merits.
+
+Never mark your own rewrite as passing in the same pass that wrote it — that is how a loop exits on
+an unverified draft, and the re-check exists to prevent it. The verification comes from the NEXT
+pass reading it fresh, which is why approving a draft you merely received is not only allowed but
+the expected way this loop ends.
 
 Carry `revision` forward from the payload, incremented, so the give-up branch downstream can report
 how many attempts were made.

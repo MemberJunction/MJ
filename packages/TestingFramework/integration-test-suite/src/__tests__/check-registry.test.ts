@@ -267,7 +267,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'user-routines': 16,
         'view-execution': 12,
         'view-security': 4,
-        'workflow-demo-agents': 4,
+        'workflow-demo-agents': 5,
     };
 
     // Registrations made by the unit tests earlier in THIS file (regtest/bundleX/bundleY),

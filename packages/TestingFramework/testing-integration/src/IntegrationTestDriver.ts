@@ -281,6 +281,25 @@ export class IntegrationTestDriver extends BaseTestDriver {
                 }
                 await this.runCheck(context, checkCtx, check.Id, check.Name, check.Fn, oracleResults, outcomes, deadline);
             }
+
+            // A bundle whose every check was gated out ran NOTHING, and used to report PASS for it.
+            //
+            // That is not a harmless quirk. `task-graph-execution` is entirely RequiresMutation, so
+            // the deterministic tier showed it green — 0/0, score 0.0000, "PASSED" — while one of
+            // its assertions had contradicted the live engine since R6. The suite was reporting
+            // coverage it did not have, which is the one thing a test suite must never do.
+            //
+            // Each gated check is now recorded as an explicit skip above (recordSkippedCheck marks it
+            // `Skipped: true`, so buildResult keeps it out of the pass tally and surfaces it as a
+            // skip). This bundle-level warning fires only when EVERY recorded outcome is a skip, so an
+            // all-gated bundle is impossible to miss in the log — no extra outcome is pushed, which
+            // would double-count the per-check skips.
+            if (bundle.length > 0 && outcomes.length > 0 && outcomes.every(o => o.Skipped)) {
+                this.logToTestRun(context, 'warn',
+                    `${bundleType}: all ${outcomes.length} check(s) were gated out — nothing ran. ` +
+                    `Set RUN_MUTATION_TESTS=1 (or the live-model gate) to execute them. This bundle ` +
+                    `verified NOTHING on this run.`);
+            }
         } catch (fxErr) {
             // The only throw reachable here is from lifecycle.Setup — runCheck swallows per-check
             // errors into results. Record it as a failing 'fixtures' oracle (never re-thrown).

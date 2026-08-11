@@ -39,6 +39,10 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                 Success: result.Success,
                 Output: this.buildOutput(result.Params),
                 ErrorMessage: result.Success ? undefined : result.Message,
+                // The engine already wrote the log; this is the only place its id is in hand. Without
+                // carrying it out, a workflow's action step has no path back to its own execution
+                // record — the one thing anyone wants when an action misbehaves.
+                ActionLogID: result.LogEntry?.ID,
             };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
