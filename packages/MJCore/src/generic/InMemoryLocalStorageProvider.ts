@@ -18,6 +18,13 @@ export class InMemoryLocalStorageProvider implements ILocalStorageProvider {
     private _storage: Map<string, Map<string, unknown>> = new Map();
 
     /**
+     * `true` — values are stored in a `Map` as-is, so the store and its callers share
+     * the same objects. Consumers of cached data must treat it as immutable; see
+     * {@link ILocalStorageProvider.SharesReferences}.
+     */
+    public readonly SharesReferences = true;
+
+    /**
      * Gets or creates a category map
      */
     private getCategoryMap(category: string): Map<string, unknown> {
