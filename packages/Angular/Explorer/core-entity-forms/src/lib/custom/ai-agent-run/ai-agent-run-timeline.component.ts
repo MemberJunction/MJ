@@ -1,15 +1,32 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { Subject, Observable, combineLatest } from 'rxjs';
 import { takeUntil, map, shareReplay, filter } from 'rxjs/operators';
-import { MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJActionExecutionLogEntity, MJAIPromptRunEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJActionExecutionLogEntity, MJAIPromptRunEntity, MJTaskEntity } from '@memberjunction/core-entities';
 import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { UUIDsEqual } from '@memberjunction/global';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { FindAgentRunTreeNodes, type AgentRunTreeNode } from '@memberjunction/ai-core-plus';
+import { ProjectRunTreeToTimeline } from './run-tree-timeline-projection';
 export interface TimelineItem {
   id: string;
-  type: 'step' | 'subrun' | 'action' | 'prompt';
+  /**
+   * What the row represents.
+   *
+   * `taskgraph` and `task` are dispatcher work — a graph that outlives the run that submitted it,
+   * and the steps inside it. They are rendered as ordinary rows rather than as an embedded diagram,
+   * and colour-coded so their provenance is visible without opening anything.
+   */
+  type: 'step' | 'subrun' | 'action' | 'prompt' | 'taskgraph' | 'task';
+  /**
+   * Where this row's work ran, when that is not obvious from its type.
+   *
+   * `'workflow'` means it ran on the task-graph dispatcher and outlives the agent run that
+   * submitted it. Kept separate from `type` on purpose: a workflow step that runs an action IS an
+   * action and should render as one — provenance styles it, it does not redefine it.
+   */
+  provenance?: 'workflow';
   title: string;
   subtitle: string;
   status: string;
@@ -37,6 +54,15 @@ export interface TimelineItem {
 })
 export class AIAgentRunTimelineComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   @Input() aiAgentRunId!: string;
+
+  /**
+   * The run's execution tree, loaded ONCE by the form and shared with every tab.
+   *
+   * Received rather than fetched: three tabs need the same structure, and letting each load its own
+   * issues the same recursive query three times AND lets the tabs disagree — a tab that loaded a
+   * second earlier shows a different run than the one beside it.
+   */
+  @Input() RunTree: AgentRunTreeNode | null = null;
   @Input() dataHelper!: AIAgentRunDataHelper; // Data helper passed from parent
   @Output() itemSelected = new EventEmitter<TimelineItem>();
   @Output() navigateToEntity = new EventEmitter<{ entityName: string; recordId: string }>();
@@ -54,6 +80,9 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
   loading = true;
   error: string | null = null;
   selectedItem: TimelineItem | null = null;
+
+  /** Graph steps currently being expanded, so a second click cannot start a second load. */
+  private expandingGraphIDs = new Set<string>();
 
   constructor(
     private cdr: ChangeDetectorRef
@@ -291,6 +320,12 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
       await this.loadSubAgentChildren(item);
     }
 
+    // A TaskGraph step expands into the graph's own steps — one query for the whole subtree, so it
+    // never shows a per-level loading state the way the sub-agent path has to.
+    if (item.isExpanded && item.type === 'step' && item.data?.StepType === 'TaskGraph') {
+      await this.ExpandTaskGraph(item);
+    }
+
     // For parent steps (loop containers like ForEach/While), children are already loaded via ParentID
     // Just toggle - no additional loading needed since we already have all steps from the run
     // The children were already attached in buildTimelineItems()
@@ -351,6 +386,87 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
   /**
    * TrackBy function for timeline items
    */
+  /**
+   * The graph a TaskGraph step submitted, read from the step's own output.
+   *
+   * `executeTasksStep` records `parentTaskID` there whether or not submission succeeded, because a
+   * rejected graph is the case where forensics matter most. A step with no id therefore means the
+   * graph never reached the dispatcher — a real state the caller renders differently, which is why
+   * this returns null rather than an empty string.
+   */
+  GetGraphParentTaskID(item: TimelineItem): string | null {
+    const raw = item?.data?.OutputData;
+    if (!raw) return null;
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const id = parsed?.parentTaskID;
+      return typeof id === 'string' && id.length > 0 ? id : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * A step inside the graph was selected.
+   *
+   * An Agent node carries the run it started, so selecting one offers the same navigation a
+   * Sub-Agent step already does — that link is the seam between the two views, and without it a
+   * dispatched sub-agent run is unreachable from the run that caused it.
+   */
+  OnGraphNodeSelected(event: { TaskID: string; Task: MJTaskEntity | null }): void {
+    const agentRunID = event.Task?.AgentRunID;
+    if (agentRunID) {
+      this.navigateToEntity.emit({ entityName: 'MJ: AI Agent Runs', recordId: agentRunID });
+      return;
+    }
+    if (event.Task?.ActionID) {
+      this.navigateToEntity.emit({ entityName: 'MJ: Tasks', recordId: event.TaskID });
+    }
+  }
+
+  /**
+   * Expands a task-graph step into the graph's own steps, as ordinary timeline rows.
+   *
+   * **The graph's steps are steps.** They used to appear as an embedded canvas inside the list — a
+   * diagram wedged into a vertical column, in a different visual language from everything around it,
+   * and the only work in a run that could not be read, selected or navigated the same way as the
+   * rest. They are rows now, colour-coded so their provenance is obvious, with the canvas moved to
+   * the detail panel where edges have room to be seen.
+   *
+   * One query rather than a walk: the whole subtree arrives at once, so there is no
+   * "Loading sub-agent steps…" and no per-level round trip.
+   */
+  async ExpandTaskGraph(item: TimelineItem): Promise<void> {
+    if (item.childrenLoaded || this.expandingGraphIDs.has(item.id)) return;
+
+    this.expandingGraphIDs.add(item.id);
+    this.cdr.markForCheck();
+    try {
+      if (!this.RunTree) {
+        this.error = 'The run tree is not loaded yet, so this workflow cannot be expanded.';
+        return;
+      }
+
+      // The graph hangs off THIS step in the tree, so the subtree to splice in is the node whose id
+      // matches the step — not the whole run, which is already on screen above it.
+      const stepNode = FindAgentRunTreeNodes(this.RunTree, (n) => n.NodeID === item.id)[0] ?? null;
+
+      item.children = ProjectRunTreeToTimeline(stepNode, item.level + 1, true);
+      item.childrenLoaded = true;
+      item.hasNoChildren = item.children.length === 0;
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : String(e);
+    } finally {
+      this.expandingGraphIDs.delete(item.id);
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** True while a graph's steps are being fetched, so the row can say so. */
+  IsExpandingGraph(item: TimelineItem): boolean {
+    return this.expandingGraphIDs.has(item.id);
+  }
+
   trackByItemId(index: number, item: TimelineItem): string {
     return item.id;
   }

@@ -19,11 +19,12 @@ import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { Session as InspectorSession } from 'node:inspector';
 import { sep } from 'node:path';
 import 'reflect-metadata';
 import { ReplaySubject } from 'rxjs';
-import { BuildSchemaOptions, buildSchemaSync, GraphQLTimestamp, PubSubEngine } from 'type-graphql';
+import { BuildSchemaOptions, buildSchemaSync, getMetadataStorage, GraphQLTimestamp, PubSubEngine } from 'type-graphql';
 import { PubSub } from 'graphql-subscriptions';
 import sql from 'mssql';
 import { WebSocketServer } from 'ws';
@@ -66,6 +67,7 @@ import { IntegrationProgressEmitter } from '@memberjunction/integration-progress
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
 import { SessionJanitor } from './agentSessions/index.js';
+import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
 import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
@@ -136,7 +138,6 @@ export * from './resolvers/IntegrationProgressResolver.js';
 export * from './resolvers/ClientToolRequestResolver.js';
 export * from './resolvers/AutotagPipelineResolver.js';
 export * from './resolvers/TagGovernanceResolver.js';
-export * from './resolvers/TaskResolver.js';
 export * from './generic/KeyValuePairInput.js';
 export * from './generic/KeyInputOutputTypes.js';
 export * from './generic/DeleteOptionsInput.js';
@@ -150,6 +151,12 @@ export * from './resolvers/DatasetResolver.js';
 export * from './resolvers/EntityRecordNameResolver.js';
 export * from './resolvers/MergeRecordsResolver.js';
 export * from './resolvers/QueryResolver.js';
+export * from './services/TaskGraphProviderFactory.js';
+export * from './services/TaskGraphAgentRunner.js';
+export * from './services/StartTaskGraphDispatcher.js';
+export * from './services/TaskGraphPromptRunner.js';
+export * from './services/TaskGraphContinuationDeliverer.js';
+export * from './resolvers/TaskGraphFrameResolver.js';
 export * from './resolvers/TestQuerySQLResolver.js';
 export * from './resolvers/SqlLoggingConfigResolver.js';
 export * from './resolvers/SyncRolesUsersResolver.js';
@@ -853,29 +860,90 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   lap('Resolver + Middleware Discovery', tServe);
   tServe = startupLog.BeginPhase('Building GraphQL schema');
 
+  // ── Scale-runtime instrumentation (fix #1 profiling) ─────────────────────────
+  // Split the previously-monolithic "Schema Build" phase into its three real
+  // sub-steps so we can see which one dominates at high entity counts, and capture
+  // the type-graphql metadata cardinality (the O(entities×fields) signal). Guarded
+  // by MJ_SCHEMA_PROFILE, and emits ONE explicit console line (independent of the
+  // startup logger's level, and NOT via EndPhase, so the "schema" summary token and
+  // its total math stay clean). No-op in normal deployments.
+  const schemaProfile = process.env.MJ_SCHEMA_PROFILE === '1';
+  let objectTypeCount = -1, fieldCount = -1;
+  if (schemaProfile) {
+    try {
+      const meta = getMetadataStorage();
+      // Read BEFORE buildSchemaSync — buildSchemaSync's internal build() resets these arrays.
+      objectTypeCount = meta.objectTypes.length;
+      fieldCount = meta.fields.length;
+    } catch {
+      /* metadata cardinality is best-effort; leave sentinels */
+    }
+  }
+
+  // Surgical CPU profile of ONLY buildSchemaSync (behind MJ_SCHEMA_CPUPROF=1), so we can see
+  // whether the ~66s at scale is uniform per-field work (cache is the only fix) or a patchable
+  // hotspot in type-graphql's generator. Deterministic flush (writes before serve continues) —
+  // no dependency on --cpu-prof surviving a process kill.
+  const cpuProf = process.env.MJ_SCHEMA_CPUPROF === '1';
+  let profSession: InspectorSession | undefined;
+  if (cpuProf) {
+    profSession = new InspectorSession();
+    profSession.connect();
+    await new Promise<void>((res, rej) => profSession!.post('Profiler.enable', (e) => (e ? rej(e) : res())));
+    await new Promise<void>((res, rej) => profSession!.post('Profiler.start', (e) => (e ? rej(e) : res())));
+  }
+
+  const tBuild = performance.now();
+  const builtSchema = buildSchemaSync({
+    resolvers: allResolvers,
+    validate: false,
+    scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
+    emitSchemaFile: websiteRunFromPackage !== 1,
+    pubSub,
+    globalMiddlewares: [variablesLoggingMiddleware],
+  });
+  const buildMs = performance.now() - tBuild;
+
+  if (cpuProf && profSession) {
+    const profile = await new Promise<unknown>((res, rej) =>
+      profSession!.post('Profiler.stop', (e, r) => (e ? rej(e) : res((r as { profile: unknown }).profile)))
+    );
+    const outPath = `/tmp/mjapi_schema_build_${process.pid}.cpuprofile`;
+    writeFileSync(outPath, JSON.stringify(profile));
+    profSession.disconnect();
+    // eslint-disable-next-line no-console
+    console.log(`[SCHEMA-CPUPROF] wrote ${outPath} (buildSchemaSync=${buildMs.toFixed(0)}ms)`);
+  }
+
+  const tMerge = performance.now();
   let schema = mergeSchemas({
-    schemas: [
-      buildSchemaSync({
-        resolvers: allResolvers,
-        validate: false,
-        scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
-        emitSchemaFile: websiteRunFromPackage !== 1,
-        pubSub,
-        globalMiddlewares: [variablesLoggingMiddleware],
-      }),
-    ],
+    schemas: [builtSchema],
     typeDefs: [requireSystemUserDirective.typeDefs, publicDirective.typeDefs],
   });
+  const mergeMs = performance.now() - tMerge;
 
   // Verbose-mode-only diagnostic: name custom-resolver args that aren't metadata-bound
   // and aren't @NoLog-marked. No-op in default config (logVariables=false).
   auditResolversForUndecoratedArgs();
+
+  const tTransform = performance.now();
   schema = requireSystemUserDirective.transformer(schema);
   schema = publicDirective.transformer(schema);
 
   // Apply middleware-contributed schema transformers (after built-in directive transformers)
   for (const transformer of mwSchemaTransformers) {
     schema = transformer(schema);
+  }
+  const transformMs = performance.now() - tTransform;
+
+  if (schemaProfile) {
+    const typeMapSize = Object.keys(schema.getTypeMap()).length;
+    // eslint-disable-next-line no-console
+    console.log(
+      `[SCHEMA-PROFILE] resolvers=${allResolvers.length} objectTypes=${objectTypeCount} fields=${fieldCount} ` +
+      `typeMap=${typeMapSize} | buildSchemaSync=${buildMs.toFixed(0)}ms mergeSchemas=${mergeMs.toFixed(0)}ms ` +
+      `transformers=${transformMs.toFixed(0)}ms`
+    );
   }
 
   lap('Schema Build', tServe);
@@ -1338,6 +1406,17 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
     SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
       .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
+  }
+
+  // Launch the durable task-graph dispatcher: claim Pending tasks, execute them with a fresh
+  // provider each, and reconcile claims orphaned by a crash. Without this nothing ever picks up a
+  // submitted graph — submission would be durable and inert, which is strictly worse than the old
+  // client-driven path it replaced. Gated on SQL Server because the provider factory mints
+  // SQLServerDataProvider; the PG branch lands with PG parity. Self-registers with ShutdownRegistry.
+  const taskGraphPool = dataSources[0]?.dataSource;
+  if (resumeUser && taskGraphPool instanceof sql.ConnectionPool) {
+    StartTaskGraphDispatcher(taskGraphPool, resumeUser)
+      .catch(err => console.warn(`[TaskGraphDispatcher] Startup failed: ${err}`));
   }
 
   // Launch the calendar / scheduled-bridge loop (M2): poll agent calendars for meeting invites and

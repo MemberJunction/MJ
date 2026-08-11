@@ -264,7 +264,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   get EffectiveIsDirty(): boolean {
     if (this.fc) {
-      return this.fc.record?.Dirty ?? false;
+      // OR'd with the form's own extra state: a section that owns an editor (a flow canvas, a
+      // designer) holds edits no entity field reflects, and reporting the record clean would let
+      // the navigate-away guard discard them without asking.
+      return (this.fc.record?.Dirty ?? false) || this.fc.HasAdditionalUnsavedChanges;
     }
     return this.IsDirty;
   }

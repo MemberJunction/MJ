@@ -107,6 +107,27 @@ export class EntityRelationshipInfo extends BaseInfo  {
     */
     AutoUpdateFromSchema: boolean = true
 
+    /**
+    * * Field Name: RelatedRecordCollection
+    * * SQL Data Type: nvarchar(MAX), nullable
+    *
+    * Optional JSON policy object declaring this relationship as a first-class **related-record
+    * collection** — a set of records that load, validate and persist as one unit with the parent.
+    * When non-null, CodeGen emits a typed `DeclareRelatedRecords(...)` declaration onto the
+    * generated entity subclass, so applications no longer hand-write it.
+    *
+    * Shape is `IRelatedRecordCollectionConfig`: `Name` (the generated property name, e.g. `Lines`),
+    * `Load`, `OnRemove`, `OrderBy`, `Sequence` and `ClearAfterSave`. {@link RelatedEntity} and
+    * {@link RelatedEntityJoinField} are deliberately **not** repeated inside the JSON — they are
+    * already columns on this row, and duplicating them would create two sources of truth with the
+    * JSON copy winning silently.
+    *
+    * `null` (the default, and every pre-6.2 row) means the relationship is not a declared
+    * collection: nothing is generated and nothing loads eagerly.
+    *
+    * @see guides/TRANSACTIONS_AND_BATCHING_GUIDE.md
+    */
+    RelatedRecordCollection: string = null
 
     // virtual fields - returned by the database VIEW
     Entity: string = null 
