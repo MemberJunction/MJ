@@ -456,7 +456,7 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
             return;
         }
         this.Nodes = SpecToNodes(this.currentSpec, this.currentRuntime ?? undefined, this.knownPositions);
-        this.Connections = SpecToConnections(this.currentSpec);
+        this.Connections = SpecToConnections(this.currentSpec, this.currentRuntime ?? undefined);
         this.Validate();
         this.arrangeIfNeverLaidOut();
     }

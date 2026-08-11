@@ -98,6 +98,7 @@
               [class.mj-flow-connection-colored]="!!conn.Color"
               [class.mj-flow-connection-dashed]="conn.Style === 'dashed'"
               [class.mj-flow-connection-dotted]="conn.Style === 'dotted'"
+              [class.mj-flow-connection-not-taken]="conn.NotTaken"
               (click)="onConnectionClicked($event, conn)"
               (contextmenu)="onConnectionContextMenu($event, conn)">
               <!-- Arrow marker -->

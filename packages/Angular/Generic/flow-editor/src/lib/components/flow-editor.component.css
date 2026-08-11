@@ -393,3 +393,10 @@ f-line-alignment {
   outline-offset: 1px;
   border-radius: var(--mj-radius-md);
 }
+
+/* An edge into a step the workflow did not take. Receding rather than removed: deleting it would
+   leave the skipped node floating unattached, which reads as a rendering fault — and that the
+   branch EXISTS is precisely what a reader is trying to see. */
+.mj-flow-connection-not-taken {
+  opacity: 0.3;
+}
