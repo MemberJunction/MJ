@@ -226,6 +226,24 @@
 .timeline-item[data-type="prompt"] {
   border-left: 3px solid var(--mj-brand-primary);
 }
+
+/* Dispatcher provenance.
+   A workflow step ran on the task-graph dispatcher and OUTLIVES the agent run that submitted it —
+   genuinely a different thing from a step the run executed itself. Someone reading a failure needs
+   to know which they are looking at before they know where to go next.
+
+   Keyed on PROVENANCE rather than on type, so a workflow's action still renders as an action —
+   same icon, same status treatment, same navigation as every other action row — and merely carries
+   the rail that says where it ran. Keying this on type is what turned every workflow step into an
+   undifferentiated box and threw away the displayer it should have had. */
+.timeline-item[data-type="taskgraph"] {
+  border-left: 3px solid var(--mj-status-info);
+  background: color-mix(in srgb, var(--mj-status-info) 6%, var(--mj-bg-surface));
+}
+
+.timeline-item[data-provenance="workflow"]:not([data-type="taskgraph"]) {
+  border-left: 3px solid color-mix(in srgb, var(--mj-status-info) 55%, transparent);
+}
 /* ============================================================
    Skill observability — badges on steps touched by skills
    ============================================================ */

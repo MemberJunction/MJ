@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, RunView, LogError, EntitySaveOptions } from '@memberjunction/core';
 import { NewUserBase } from './newUsers.js';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { configInfo } from '../config.js';
 import { MJUserEntity } from '@memberjunction/core-entities';
 

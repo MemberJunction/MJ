@@ -69,6 +69,7 @@ import {
     BuildVoiceMannerSection,
     BuildAppRealtimeOverridesJson,
     DeepMergeConfigs,
+    GetModelCatalogSessionSettings,
     GetDisclosureForTarget,
     GetNarrationPaceMs,
     GetProviderVoiceSettings,
@@ -76,8 +77,10 @@ import {
     JSONObjectLike,
     RealtimeAllowedAgent,
     RealtimeCoAgentConfig,
-    ResolveEffectiveRealtimeConfig
+    ResolveEffectiveRealtimeConfig,
+    MatchProviderVoiceSettings
 } from './realtime-coagent-config';
+import { SelectRealtimeVendorForModel, RealtimeVendorSelection } from './realtime-vendor-resolution';
 
 /**
  * Input for {@link RealtimeClientSessionService.PrepareClientSession}.
@@ -217,6 +220,22 @@ export interface RealtimeClientSessionPrepResult {
     /** The display name of the realtime model the session was minted with. Present on success. */
     ModelName?: string;
     /**
+     * The `DriverClass` of the vendor that actually ran the session (e.g. `OpenAIRealtime`,
+     * `ElevenLabsRealtime`). Present on success.
+     *
+     * Disclosed for OBSERVABILITY — on the default-model path the framework picks the vendor itself, so
+     * without this a caller cannot tell which one spoke, and cannot diagnose a voice that did not land
+     * (issue #3530). Plumbed all the way to the browser as `StartRealtimeClientSessionResult.DriverClass`
+     * (`RealtimeClientSessionResolver`), because on the client-direct path the caller IS the browser — a
+     * disclosure that stopped at this service boundary would deliver no observability to anyone.
+     *
+     * It is deliberately NOT a pre-prepare resolution API: a caller does not need to know the vendor in
+     * advance, because {@link RealtimeVoicePersona.voice} carries a voice to whichever vendor is chosen.
+     * Re-deriving the vendor in order to pre-file provider-keyed settings duplicates a decision the
+     * framework owns.
+     */
+    DriverClass?: string;
+    /**
      * The DB-driven progress-narration instruction template (the `Realtime Co-Agent - Progress
      * Narration` prompt's `TemplateText`, containing a `{{ progressMessage }}` placeholder).
      * `undefined` when that prompt is not present in metadata — clients fall back to their
@@ -314,6 +333,11 @@ export interface RealtimeModelResolution {
     ModelID: string;
     /** The chosen vendor id. */
     VendorID: string;
+    /**
+     * The chosen `MJ: AI Model Vendors` ROW id (not the vendor id) — the most-specific layer of
+     * the model-catalog `ModelConfiguration` cascade. Optional for back-compat with test seams.
+     */
+    ModelVendorID?: string;
     /** The vendor API name passed to the provider as the model id. */
     APIName: string;
     /** The model's display name (`MJ: AI Models.Name`). Optional for back-compat with test seams. */
@@ -373,6 +397,50 @@ export interface RealtimeModelResolutionOutcome {
     Resolution?: RealtimeModelResolution;
     /** Why resolution failed. Present on failure. */
     ErrorMessage?: string;
+}
+
+/**
+ * Logs when a configuration authored per-provider voice settings but NONE matched the vendor that
+ * actually ran — those settings are dropped, and pre-#3530 that happened with no trace at all: the
+ * value stayed visible in the config and simply never reached a driver. Names the authored keys and
+ * the resolved driver so the fix is readable straight off the log line.
+ *
+ * The session still proceeds — an unmatched provider bag is a MISCONFIGURATION, not a fault: the
+ * agnostic voice (or the driver's own default) still applies. It is logged at error level anyway,
+ * matching how this module already reports tolerant-degradation config problems (see
+ * {@link RealtimeClientSessionService.resolveConfiguredModelPreference}), because a silently ignored
+ * setting is exactly what nobody noticed for long enough to file the issue.
+ *
+ * Shared by BOTH realtime surfaces — the client-direct prepare and `BaseAgent`'s server-bridged
+ * session — so neither path can drift back into silence.
+ *
+ * WHY IT LIVES HERE rather than beside {@link MatchProviderVoiceSettings}, which it wraps: this
+ * function LOGS, and `realtime-coagent-config.ts` declares itself deliberately framework-free — no DB,
+ * no metadata provider, no logging imports. Moving it there would breach that constraint; keeping it
+ * here costs `BaseAgent` an import of this module. The placement is the constraint's consequence, not
+ * an accident. (The alternative — returning a diagnostic string for callers to log — was rejected as
+ * it lets one surface silently choose not to log, which is the failure mode being fixed.)
+ *
+ * @param effectiveConfig The resolved effective configuration.
+ * @param driverClass The resolved vendor's `DriverClass`.
+ * @param surface The calling surface, for log attribution (e.g. `RealtimeClientSessionService`).
+ */
+export function WarnOnUnmatchedProviderVoice(
+    effectiveConfig: RealtimeCoAgentConfig | undefined,
+    driverClass: string | undefined,
+    surface: string
+): void {
+    const authored = Object.keys(effectiveConfig?.realtime?.voice?.providers ?? {});
+    // MatchProviderVoiceSettings, NOT GetProviderVoiceSettings — the latter is truthy for every
+    // driver once an agnostic voice is set, which would silence this on the exact path that emits one.
+    if (authored.length === 0 || MatchProviderVoiceSettings(effectiveConfig, driverClass ?? null)) {
+        return;
+    }
+    LogError(
+        `${surface}: realtime.voice.providers authored [${authored.join(', ')}] but the session resolved ` +
+        `driver '${driverClass ?? 'unknown'}' — none matched, so those settings were dropped. Author ` +
+        'realtime.voice.default.voice to carry a voice to whichever vendor runs.'
+    );
 }
 
 /**
@@ -510,6 +578,7 @@ export class RealtimeClientSessionService {
             CoAgentRunStepID: obs?.CoAgentRunStepID,
             ModelID: resolution.ModelID,
             ModelName: resolution.ModelName,
+            DriverClass: resolution.DriverClass,
             NarrationInstructionsTemplate: this.resolveNarrationInstructionsTemplate() ?? undefined,
             EffectiveConfig: effectiveConfig,
             NarrationPaceMs: GetNarrationPaceMs(effectiveConfig) ?? undefined,
@@ -668,6 +737,7 @@ export class RealtimeClientSessionService {
 
         const sessionParams = await this.buildSessionParams(
             input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
+            resolution.ModelID, resolution.ModelVendorID,
         );
 
         return { Success: true, CoAgent: coAgent, Resolution: resolution, EffectiveConfig: effectiveConfig, SessionParams: sessionParams };
@@ -1595,6 +1665,7 @@ export class RealtimeClientSessionService {
             Model: instance,
             ModelID: model.ID,
             VendorID: vendor.VendorID,
+            ModelVendorID: vendor.ModelVendorID,
             APIName: vendor.APIName,
             ModelName: model.Name,
             DriverClass: vendor.DriverClass
@@ -1641,22 +1712,14 @@ export class RealtimeClientSessionService {
 
     /**
      * Selects the highest-priority active vendor for a model whose `DriverClass` has a resolvable
-     * API key. Mirrors `BaseAgent.selectRealtimeVendor`.
+     * API key. Delegates to {@link SelectRealtimeVendorForModel} (the one copy of the rule), threading
+     * THIS service's {@link getAPIKeyForDriver} so subclasses and tests keep their key-resolution seam.
      *
      * @param modelID The chosen model's id.
      * @returns The vendor driver/api identifiers, or `null` when none has a usable key.
      */
-    protected selectRealtimeVendor(modelID: string): { VendorID: string; DriverClass: string; APIName: string } | null {
-        const vendors = AIEngine.Instance.ModelVendors
-            .filter(mv => UUIDsEqual(mv.ModelID, modelID) && mv.Status === 'Active' && mv.DriverClass != null)
-            .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
-
-        for (const v of vendors) {
-            if (this.getAPIKeyForDriver(v.DriverClass!)) {
-                return { VendorID: v.VendorID ?? '', DriverClass: v.DriverClass!, APIName: v.APIName ?? '' };
-            }
-        }
-        return null;
+    protected selectRealtimeVendor(modelID: string): RealtimeVendorSelection | null {
+        return SelectRealtimeVendorForModel(modelID, (driverClass) => this.getAPIKeyForDriver(driverClass));
     }
 
     /**
@@ -1685,6 +1748,8 @@ export class RealtimeClientSessionService {
      * @param provider The request-scoped metadata provider.
      * @param effectiveConfig The resolved effective configuration (voice persona + provider settings).
      * @param driverClass The resolved vendor's DriverClass — matches per-provider voice settings.
+     * @param modelID The resolved `MJ: AI Models` id — keys the model-catalog `ModelConfiguration` cascade.
+     * @param modelVendorID The resolved `MJ: AI Model Vendors` ROW id — the cascade's most-specific layer.
      * @returns The assembled session params.
      */
     protected async buildSessionParams(
@@ -1694,18 +1759,26 @@ export class RealtimeClientSessionService {
         contextUser: UserInfo,
         provider: IMetadataProvider,
         effectiveConfig?: RealtimeCoAgentConfig,
-        driverClass?: string
+        driverClass?: string,
+        modelID?: string,
+        modelVendorID?: string
     ): Promise<RealtimeSessionParams> {
         const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
         const tools = this.buildStableToolSet(input.ExtraTools);
+        // Hoisted (rather than built inline at the return) so the mint log below can report the voice
+        // that ACTUALLY reached the driver — see the `voice=` field. Same bag, built once.
+        const configBag = this.buildSessionConfigBag(input, effectiveConfig, driverClass, modelID, modelVendorID);
+        WarnOnUnmatchedProviderVoice(effectiveConfig, driverClass, 'RealtimeClientSessionService');
 
         // One line per mint: confirms which tools + whether the channel-direct framing actually reach
         // the model — settles "why does the co-agent delegate instead of calling browser_*" without
         // runtime guesswork (channelExceptionInPrompt=false ⇒ stale build; browser_* missing from
-        // tools ⇒ the channel's tools never reached the mint).
+        // tools ⇒ the channel's tools never reached the mint). `driver`/`voice` make the voice that
+        // actually reached the driver legible — the whole failure mode in #3530 was that it was not.
         console.log(
-            `[RealtimeCoAgent] mint model=${modelApiName} ` +
+            `[RealtimeCoAgent] mint model=${modelApiName} driver=${driverClass ?? 'unknown'} ` +
+            `voice=${typeof configBag?.['voice'] === 'string' ? configBag['voice'] : 'none'} ` +
             `tools=[${tools.map(t => t.Name).join(', ')}] ` +
             `channelExceptionInPrompt=${systemPrompt.includes('interactive-surface')}`,
         );
@@ -1715,7 +1788,7 @@ export class RealtimeClientSessionService {
             SystemPrompt: systemPrompt,
             Tools: tools,
             InitialContext: memoryContext || undefined,
-            Config: this.buildSessionConfigBag(input, effectiveConfig, driverClass),
+            Config: configBag,
             // Server-authoritative duration ceiling (public web-widget voice cap). Drivers that can
             // bound the provider session/token apply min(default, this); the janitor enforces it
             // regardless of driver support via the session deadline stamped by the transport layer.
@@ -1724,32 +1797,42 @@ export class RealtimeClientSessionService {
     }
 
     /**
-     * Builds the provider-pact `Config` bag for the session: the effective config's matching
-     * per-provider voice settings (`realtime.voice.providers.<provider>`) merged UNDER any
-     * caller-supplied {@link PrepareClientSessionInput.Config} (the runtime bag wins per key).
-     * The settings objects are OPAQUE driver pacts — each server driver consumes its own keys
-     * exactly as it consumes any other entry of the open config bag (OpenAI spreads it into
-     * `session.update`, AssemblyAI reads `voice`, Gemini merges it last). Returns the original
-     * `input.Config` (possibly `undefined`) when no provider settings match, preserving the
-     * pre-config behavior byte-for-byte.
+     * Builds the provider-pact `Config` bag for the session: the effective config's resolved voice
+     * settings (per {@link GetProviderVoiceSettings} — the agnostic `realtime.voice.default.voice`
+     * and/or a matching `realtime.voice.providers.<provider>` bag) merged UNDER any caller-supplied
+     * {@link PrepareClientSessionInput.Config} (the runtime bag wins per key). The settings objects
+     * are OPAQUE driver pacts — each server driver consumes its own keys exactly as it consumes any
+     * other entry of the open config bag (OpenAI spreads it into `session.update`, AssemblyAI reads
+     * `voice`, Gemini merges it last). Returns the original `input.Config` (possibly `undefined`)
+     * when the config contributes no voice and no session tuning.
      *
      * @param input The prepare-session input (carries the runtime config bag).
      * @param effectiveConfig The resolved effective configuration.
      * @param driverClass The resolved vendor's DriverClass.
+     * @param modelID The resolved model id — keys the model-catalog `ModelConfiguration` cascade.
+     * @param modelVendorID The resolved model-vendor ROW id — the cascade's most-specific layer.
      * @returns The merged config bag, or `undefined` when nothing contributes.
      */
     protected buildSessionConfigBag(
         input: PrepareClientSessionInput,
         effectiveConfig?: RealtimeCoAgentConfig,
-        driverClass?: string
+        driverClass?: string,
+        modelID?: string,
+        modelVendorID?: string
     ): JSONObject | undefined {
         const providerVoice = GetProviderVoiceSettings(effectiveConfig, driverClass ?? null);
+        // Model-catalog defaults (AIModelType < AIModel < AIModelVendor ModelConfiguration cascade,
+        // resolved by AIEngine) are the BASE layer: the catalog declares what the model supports
+        // (e.g. Realtime.TurnDetection), and every layer above may refine it.
+        const catalogSettings = modelID
+            ? GetModelCatalogSessionSettings(AIEngine.Instance.GetEffectiveModelConfiguration(modelID, modelVendorID))
+            : null;
         // Session-tuning knobs (realtime.session: effortLevel / parallelToolCalls / mcpTools /
-        // inputTranscriptionModel) merge UNDER the provider voice UNDER the runtime bag — the
-        // exact cascade precedence every other config entry follows (runtime wins per key).
+        // inputTranscriptionModel / turnDetection) merge UNDER the provider voice UNDER the runtime
+        // bag — the exact cascade precedence every other config entry follows (runtime wins per key).
         const sessionTuning = GetSessionTuningSettings(effectiveConfig);
-        let bag: JSONObject | undefined = (sessionTuning || providerVoice)
-            ? (DeepMergeConfigs(sessionTuning, providerVoice, input.Config as JSONObjectLike | undefined) as JSONObject)
+        let bag: JSONObject | undefined = (catalogSettings || sessionTuning || providerVoice)
+            ? (DeepMergeConfigs(catalogSettings, sessionTuning, providerVoice, input.Config as JSONObjectLike | undefined) as JSONObject)
             : input.Config;
         // Multi-agent meeting: carry the host-NEUTRAL disable-auto-response flag in the open config bag so
         // each provider translates it its own way (OpenAI → turn_detection.create_response=false) — the

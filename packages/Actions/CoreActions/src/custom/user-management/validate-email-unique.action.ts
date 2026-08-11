@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from '@memberjunction/actions';
-import { UserCache } from "@memberjunction/sqlserver-dataprovider";
+import { UserCache } from "@memberjunction/generic-database-provider";
 
 /**
  * Validates that an email address is not already in use by another user in the system.

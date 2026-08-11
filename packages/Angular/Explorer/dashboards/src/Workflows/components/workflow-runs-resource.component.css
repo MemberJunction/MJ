@@ -1,0 +1,157 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.wfr-status-filters {
+  display: flex;
+  gap: var(--mj-space-1);
+  align-items: center;
+}
+
+/* List alone until something is selected; two panes after. The canvas gets the larger share
+   because a graph is the thing being read once it is open. */
+.wfr-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--mj-space-3);
+  height: 100%;
+  min-height: 0;
+}
+
+.wfr-split-open {
+  grid-template-columns: minmax(18rem, 22rem) 1fr;
+}
+
+@media (max-width: 900px) {
+  .wfr-split-open {
+    grid-template-columns: 1fr;
+  }
+}
+
+.wfr-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-1);
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.wfr-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mj-space-2);
+  width: 100%;
+  padding: var(--mj-space-2) var(--mj-space-3);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  text-align: left;
+  cursor: pointer;
+  color: var(--mj-text-primary);
+}
+
+.wfr-row:hover {
+  border-color: var(--mj-border-strong);
+}
+
+.wfr-row:focus-visible {
+  outline: 2px solid var(--mj-color-primary);
+  outline-offset: 2px;
+}
+
+.wfr-row-selected {
+  border-color: var(--mj-color-primary);
+  background: color-mix(in srgb, var(--mj-color-primary) 8%, var(--mj-bg-surface));
+}
+
+.wfr-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wfr-row-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wfr-row-when {
+  font-size: var(--mj-font-size-sm);
+  color: var(--mj-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.wfr-row-status {
+  flex: none;
+  font-size: var(--mj-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px var(--mj-space-2);
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-page);
+  color: var(--mj-text-secondary);
+  border: 1px solid var(--mj-border-default);
+}
+
+/* Status carries meaning, so it is encoded in colour as well as text — a failed run should be
+   findable without reading every row. Skipped stays grey on purpose: a branch that was not taken
+   is a normal outcome, not a warning. */
+.wfr-row-status[data-status='Complete'] {
+  color: var(--mj-color-success);
+  border-color: color-mix(in srgb, var(--mj-color-success) 40%, transparent);
+}
+
+.wfr-row-status[data-status='Failed'] {
+  color: var(--mj-color-error);
+  border-color: color-mix(in srgb, var(--mj-color-error) 40%, transparent);
+}
+
+.wfr-row-status[data-status='Running'] {
+  color: var(--mj-color-primary);
+  border-color: color-mix(in srgb, var(--mj-color-primary) 40%, transparent);
+}
+
+.wfr-detail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  overflow: hidden;
+}
+
+.wfr-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-2) var(--mj-space-3);
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.wfr-detail-title {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  min-width: 0;
+}
+
+.wfr-detail-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wfr-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-1);
+  flex: none;
+}

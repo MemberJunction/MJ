@@ -68,6 +68,13 @@ export const AGENT_STEP_TYPE_CONFIGS: FlowNodeTypeConfig[] = [
   }
 ];
 
+/** "1st", "2nd", "3rd", … for the precedence note on an exclusive branch. */
+function ordinal(n: number): string {
+  const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th'
+    : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th';
+  return `${n}${suffix}`;
+}
+
 /**
  * Transforms MJ AIAgentStep/Path entities to/from generic FlowNode/FlowConnection models.
  */
@@ -325,8 +332,16 @@ export class AgentFlowTransformerService {
     // highest-priority one will execute — regardless of whether they have descriptions.
     const hasAmbiguousAlways = isAlwaysPath && unconditionalSiblings.length > 1;
 
+    // Where this path sits in its exclusive group, when it is IN one. Highest Priority wins, ties
+    // broken by path ID — and none of that precedence is visible on the canvas today, so someone
+    // debugging a fork cannot tell which branch takes it when two conditions are both true.
+    const conditionalSiblings = siblingPaths.filter(p => p.Condition && p.Condition.trim().length > 0);
+    const rank = hasCondition && conditionalSiblings.length > 1
+      ? this.rankWithinGroup(path, conditionalSiblings)
+      : null;
+
     // Build label, icon, and visual style
-    const visual = this.buildPathVisuals(path, hasCondition, isOnlyPath, hasAmbiguousAlways);
+    const visual = this.buildPathVisuals(path, hasCondition, isOnlyPath, hasAmbiguousAlways, rank);
 
     return {
       ID: path.ID,
@@ -350,52 +365,110 @@ export class AgentFlowTransformerService {
     };
   }
 
+  /**
+   * What an edge says on the canvas, and what it says on inspection.
+   *
+   * **An edge label answers one question: WHEN is this path taken?** That is the condition. The
+   * `Description` is the author's rationale — genuinely useful, and inspection-time content: it is
+   * prose, it is arbitrarily long, and rendering it always turned the least important element on the
+   * canvas into the most visually dominant one, overlapping nodes and other labels.
+   *
+   * So the condition is the LABEL (truncated), the description is the DETAIL (the hover tooltip),
+   * and an unconditional edge says nothing at all — a plain line already means "then". That last
+   * rule removes most of the clutter on a real graph, because most edges are unconditional.
+   */
   private buildPathVisuals(
     path: MJAIAgentStepPathEntity,
     hasCondition: boolean,
     isOnlyPath: boolean,
-    hasAmbiguousAlways: boolean
+    hasAmbiguousAlways: boolean,
+    rank: { position: number; total: number } | null = null
   ): { label?: string; labelIcon?: string; labelIconColor?: string; labelDetail?: string; color: string; style: FlowConnectionStyle } {
-    // Conditional path — amber dashed with condition text
+    const rationale = path.Description?.trim();
+
+    // Conditional path — amber dashed, labelled with the RULE.
     if (hasCondition) {
+      const condition = path.Condition!.trim();
+      // The rank prefix is tiny and always fits, so it survives truncation — which matters, because
+      // precedence is exactly what a truncated condition would otherwise hide.
+      const prefix = rank ? `${rank.position}/${rank.total} ` : '';
+      const precedence = rank
+        ? `\n\nChecked ${ordinal(rank.position)} of ${rank.total}: highest priority wins, ties by path ID.`
+        : '';
       return {
-        label: path.Description || path.Condition!,
+        label: prefix + this.truncateLabel(condition, rank ? 28 : 32),
+        labelIcon: 'fa-code-branch',
+        labelIconColor: '#f59e0b',
+        // Full condition first — a truncated label is only safe if the whole thing is one hover
+        // away — then the rationale, then how this branch is chosen against its siblings.
+        labelDetail: (rationale ? `${condition}\n\n${rationale}` : condition) + precedence,
         color: '#f59e0b',
         style: 'dashed'
       };
     }
 
-    // Sole unconditional (only exit path) — neutral dark slate with Default indicator
-    if (isOnlyPath) {
-      return {
-        label: path.Description || 'Default',
-        labelIcon: 'fa-circle-check',
-        labelIconColor: '#16a34a',
-        color: '#64748b',
-        style: 'solid'
-      };
-    }
-
-    // Ambiguous: multiple unconditional paths from the same step
+    // Ambiguous: multiple unconditional paths from the same step. This one KEEPS its label, because
+    // it is a defect the author needs to see without hovering anything.
     if (hasAmbiguousAlways) {
       return {
-        label: path.Description || 'Default',
+        label: 'Duplicate default',
         labelIcon: 'fa-triangle-exclamation',
         labelIconColor: '#ef4444',
-        labelDetail: 'Duplicate default paths: only the highest-priority one will execute',
+        labelDetail: rationale
+          ? `Duplicate default paths: only the highest-priority one will execute.\n\n${rationale}`
+          : 'Duplicate default paths: only the highest-priority one will execute',
         color: '#ef4444',
         style: 'solid'
       };
     }
 
-    // Valid default path (unconditional among conditional siblings) — forest green with checkmark
+    // Every other unconditional path — NO LABEL. The line already means "then", and "Default" on
+    // every edge of a linear flow is a caption on each arrow of a diagram saying "arrow".
+    // The rationale stays reachable on hover.
     return {
-      label: path.Description || 'Default',
-      labelIcon: 'fa-circle-check',
-      labelIconColor: '#16a34a',
-      color: '#16a34a',
+      labelDetail: rationale || undefined,
+      color: isOnlyPath ? '#64748b' : '#16a34a',
       style: 'solid'
     };
+  }
+
+  /**
+   * This path's position among its conditional siblings, in the order the dispatcher checks them.
+   *
+   * Mirrors the COMPILER, which is where the order is actually decided: `buildDependencies` sorts a
+   * fan-out by `Priority` descending, then path ID ascending, and writes that ordinal into
+   * `TaskDependency.Sequence` — which is what `ResolveExclusiveGroups` then reads at runtime. A path
+   * row has no `Sequence` of its own and deliberately never has: a compiled edge gets a fresh UUID
+   * and needs a stored ordinal to stay deterministic across machines, while a design-time path still
+   * has its own stable ID to break the tie with. Ranking here by anything else would disagree with
+   * the engine precisely on ties — and `Priority` defaults to 0, so ties are the common case.
+   */
+  private rankWithinGroup(
+    path: MJAIAgentStepPathEntity,
+    siblings: MJAIAgentStepPathEntity[]
+  ): { position: number; total: number } {
+    const ordered = [...siblings].sort((a, b) =>
+      (b.Priority ?? 0) - (a.Priority ?? 0) || a.ID.localeCompare(b.ID)
+    );
+    return {
+      position: ordered.findIndex(p => UUIDsEqual(p.ID, path.ID)) + 1,
+      total: ordered.length
+    };
+  }
+
+  /**
+   * Trims a condition to what fits on an edge without covering its neighbours.
+   *
+   * Breaks on a word boundary when there is one near the limit, so the visible part stays readable
+   * rather than ending mid-identifier. The full text is always in `labelDetail`.
+   */
+  private truncateLabel(text: string, limit = 32): string {
+    const flat = text.replace(/\s+/g, ' ').trim();
+    if (flat.length <= limit) return flat;
+
+    const cut = flat.slice(0, limit);
+    const lastSpace = cut.lastIndexOf(' ');
+    return `${(lastSpace > limit * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
   }
 
   /** Populate loop-specific display data on the node's Data payload */

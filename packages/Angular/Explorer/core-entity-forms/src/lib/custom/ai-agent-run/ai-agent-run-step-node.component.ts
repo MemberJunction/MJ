@@ -20,14 +20,18 @@ export class AIAgentRunStepNodeComponent {
   }
 
   get isSubAgent(): boolean {
-    return this.item.type === 'subrun' || (this.item.type === 'step' && this.item.data?.StepType === 'Sub-Agent');
+    // A TaskGraph step expands too: it stands in for a whole graph of Task rows, and without the
+    // affordance the run stops at "Task Graph: X" with no way to see what actually ran.
+    return this.item.type === 'subrun' ||
+      (this.item.type === 'step' && (this.item.data?.StepType === 'Sub-Agent' || this.item.data?.StepType === 'TaskGraph'));
   }
 
   get isParentStep(): boolean {
-    // Check if this step has children via ParentID relationships (non-Sub-Agent hierarchy)
-    return this.item.type === 'step' &&
-           this.item.data?.StepType !== 'Sub-Agent' &&
-           this.hasChildren;
+    // STRUCTURAL, not type-gated. Anything holding children can be opened — a loop's iterations, a
+    // workflow's steps, a nested run. The old test required `type === 'step'`, so a ForEach that
+    // came from a task graph rendered its children into the model and then offered no way to reach
+    // them: the work existed, was loaded, and was unreachable.
+    return !this.isSubAgent && this.hasChildren;
   }
 
   get canExpand(): boolean {
@@ -56,6 +60,8 @@ export class AIAgentRunStepNodeComponent {
           return 'View Prompt Run';
         case 'sub-agent':
           return 'View Agent Run';
+        case 'taskgraph':
+          return 'View Workflow Run';
         default:
           return 'View Details';
       }

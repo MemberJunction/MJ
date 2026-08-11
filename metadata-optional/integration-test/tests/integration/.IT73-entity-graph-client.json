@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT73 - Entity Graph (client transport)",
+    "Description": "The related-record collection graph save exercised CLIENT-FIRST over the real GraphQL wire, covering the branch IT72 structurally cannot reach. IT72 runs on the server tier, where SupportsEntityTransactions is true and every save takes ExecuteGraphLocal; the browser branch — SerializeCompanions, one MJ.SaveEntityGraph remote operation, the per-node API-key scope gate, DeserializeCompanions in 'request' mode, ClassFactory rehydration to the SERVER subclass, then save — has only mock-provider unit coverage, which proves the payload is shaped correctly and nothing about whether it survives GraphQL. The fixture pair is MJ: AI Agents -> Prompts rather than IT72's MJ: Lists -> Details, deliberately: IT72 declares its collection on a test-only subclass registered in the test process, and MJAPI does not load this package, so over the wire the server would resolve the plain generated class with no collection at all. Prompts is the only shipped WRITABLE metadata-declared collection (database-sourced, ReadOnly false, OnRemove delete, Sequence on ExecutionOrder from 0), so it is present on both tiers by construction. EGC1: the metadata-declared collections reach the client tier with Source, ReadOnly and Load intact. EGC2: the client provider reports no entity transactions — the positive control without which every remote-path claim below would be vacuous. EGC3: parent plus two children persist from ONE client Save(), with the FK stamped from a key the server generated and the Sequence policy surviving serialization. EGC4: an edit to an EXISTING child persists — the request-mode regression where skipping the pre-load makes old equal new, the record report clean, and the edit vanish behind a successful save. EGC5: OnRemove delete reaches a real DELETE and renumbers the survivor. EGC6: a child the server cannot write rolls the WHOLE graph back including the parent's committed field change, which is atomicity the client cannot provide itself and must therefore have been delegated. EGC7: a read-only cache-backed collection refuses mutation on the client, and a lazy cache miss throws with an explanatory message rather than quietly reading empty. EGC8: a clean parent with only a new child still saves, so the Dirty rollup happens before the client short-circuits. EGC9: the graph path rehydrates to the registered SERVER subclass rather than the generated base — asserted through MJAIAgentEntityServer's TypeConfiguration invariant, which is the only class that enables async validation and rejects a non-object configuration, so a rejection can only have come from the server instantiating its own subclass; a positive control saves the same graph with the invariant satisfied. EGC3 through EGC6, EGC8 and EGC9 mutate and are gated behind RUN_MUTATION_TESTS; the bundle creates and tears down its own prefixed, tagged agents and agent prompts in FK-safe order and never touches a pre-existing record.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Over GraphQL, a parent and its children create, edit, remove, renumber and roll back as one unit; cache-backed collections stay read-only and fail loudly on a lazy miss."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "entity-graph-client"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "E5DDFDCB-2381-4F04-80CF-D64E268873D4"
+  }
+}

@@ -8,6 +8,7 @@ import {
   ResolveIntegrationIcon,
   IntegrationSummary,
   IntegrationKPIs,
+  IntegrationRunRow,
   ActivityFeedItem,
   DailyRecordCount,
   EntityMapRow
@@ -316,6 +317,11 @@ export class OverviewComponent extends BaseResourceComponent implements OnInit, 
     if (run.Status === 'Failed') return 'spark-dot spark-red';
     if (run.Status === 'In Progress' || run.Status === 'Pending') return 'spark-dot spark-amber';
     return 'spark-dot spark-gray';
+  }
+
+  GetSparklineTooltip(run: IntegrationRunRow): string {
+    const when = run.StartedAt ? new Date(run.StartedAt).toLocaleString() : 'N/A';
+    return `${run.Status} - ${when}`;
   }
 
   GetCardBorderClass(color: StatusColorType): string {
