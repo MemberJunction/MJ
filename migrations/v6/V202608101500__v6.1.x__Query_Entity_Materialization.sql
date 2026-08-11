@@ -18,7 +18,7 @@
    DB-design note (circular-FK elimination): the original design put FKs in BOTH
    directions — MaterializedResult.SourceQueryID → Query AND Query.MaterializedResultID
    → MaterializedResult — which is a mutual FK cycle CodeGen rejects. The relationship
-   is instead carried as rows in the dedicated join table __mj.MaterializedResultQuery
+   is instead carried as rows in the dedicated join table ${flyway:defaultSchema}.MaterializedResultQuery
    (both FKs point OUTWARD → no cycle). A query's materialization is found via
    MaterializedResultQuery.QueryID; author intent is Query.IsMaterialized. There is no
    SourceQueryID or MaterializedResultID column.
@@ -26,7 +26,7 @@
    Note (CodeGen handles automatically — intentionally omitted below):
      - __mj_CreatedAt / __mj_UpdatedAt columns + triggers
      - Foreign-key indexes (IDX_AUTO_MJ_FKEY_*)
-     - Entity / EntityField metadata (generated from this schema; the __mj schema's
+     - Entity / EntityField metadata (generated from this schema; the default schema's
        'MJ: ' EntityNamePrefix yields "MJ: Materialized Results" and
        "MJ: Materialized Result Queries")
    ============================================================================ */
