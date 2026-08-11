@@ -14,12 +14,8 @@ import { sortBySequenceAndCreatedAt } from '../../../Misc/util';
 import { configInfo, dbDatabase, mj_core_schema } from '../../../Config/config';
 import { MSSQLConnection, getSqlConfig } from '../../../Config/db-connection';
 import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
-import {
-    SQLServerDataProvider,
-    SQLServerProviderConfigData,
-    UserCache,
-    setupSQLServerClient,
-} from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { SQLServerCodeGenConnection } from './SQLServerCodeGenConnection';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -80,7 +76,7 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         if (cfg.options?.instanceName) connectionInfo += '\\' + cfg.options.instanceName;
         connectionInfo += '/' + cfg.database;
 
-        await UserCache.Instance.Refresh(pool);
+        await UserCache.Instance.Refresh(provider);
         const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
         const currentUser = userMatch ?? UserCache.Users[0];
 

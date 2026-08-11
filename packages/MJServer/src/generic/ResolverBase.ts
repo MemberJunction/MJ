@@ -20,7 +20,8 @@ import {
   UserInfo,
 } from '@memberjunction/core';
 import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { PubSubEngine, AuthorizationError } from 'type-graphql';
 import { GraphQLError } from 'graphql';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';

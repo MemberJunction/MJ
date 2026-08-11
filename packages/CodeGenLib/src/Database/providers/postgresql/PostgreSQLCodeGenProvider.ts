@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, ResolveStartupMode, SetProvider, StartupManager, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, ResolveStartupMode, SetProvider, StartupManager } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     CodeGenDatabaseProvider,
@@ -17,6 +17,7 @@ import { PostgreSQLDialect, DatabasePlatform, SQLDialect } from '@memberjunction
 import {
     shouldIncludeFieldInParams,
     useJsonArgShape,
+    UserCache,
 } from '@memberjunction/generic-database-provider';
 import {
     POSTGRESQL_PROCEDURE_PARAM_LIMIT,
@@ -60,14 +61,6 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
      * wires up `PostgreSQLDataProvider`, registers it as the active provider,
      * and loads the audit user.
      *
-     * **User-loading asymmetry** — SQL Server uses `UserCache.Instance.Refresh(pool)`
-     * which is hard-typed to `mssql.ConnectionPool` in `@memberjunction/sqlserver-dataprovider`.
-     * Refactoring it to be cross-platform would touch that package's public
-     * API; until then PG hand-queries `vwUsers`/`vwUserRoles` here. Same
-     * audit-user semantics (find Owner, else first user), just a different
-     * load path. Tracked for follow-up: unify behind a platform-agnostic
-     * cache that takes a `CodeGenConnection`.
-     *
      * **Env var resolution** — PG_HOST / PG_PORT / PG_DATABASE / PG_USERNAME /
      * PG_PASSWORD now flow through `configInfo.{dbHost,dbPort,dbDatabase,codeGenLogin,codeGenPassword}`
      * via `DEFAULT_CODEGEN_CONFIG` (see `Config/config.ts`). The provider just
@@ -96,18 +89,9 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
 
         const conn = new PostgreSQLCodeGenConnection(pool);
 
-        const usersResult = await conn.query('SELECT * FROM "' + coreSchema + '"."vwUsers"');
-        const rolesResult = await conn.query('SELECT * FROM "' + coreSchema + '"."vwUserRoles"');
-
-        const userInfos: UserInfo[] = usersResult.recordset.map((user: Record<string, unknown>) => {
-            (user as Record<string, unknown>).UserRoles = rolesResult.recordset.filter(
-                (role: Record<string, unknown>) => UUIDsEqual(role.UserID as string, user.ID as string),
-            );
-            return new UserInfo(provider, user);
-        });
-
-        const userMatch = userInfos.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
-        const currentUser = userMatch ?? userInfos[0];
+        await UserCache.Instance.Refresh(provider);
+        const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
+        const currentUser = userMatch ?? UserCache.Users[0];
         if (!currentUser) {
             throw new Error('No users found in PostgreSQL. Ensure vwUsers has at least one user.');
         }

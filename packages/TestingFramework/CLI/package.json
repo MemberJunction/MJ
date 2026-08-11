@@ -28,6 +28,7 @@
     "@memberjunction/testing-engine": "6.1.0-edge.1",
     "@memberjunction/testing-engine-base": "6.1.0-edge.1",
     "@memberjunction/testing-integration": "6.1.0-edge.1",
+    "@memberjunction/generic-database-provider": "6.1.0-edge.1",
     "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.1",
     "@oclif/core": "^3.27.0",
     "ora-classic": "^5.4.2",

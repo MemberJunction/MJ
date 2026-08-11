@@ -69,6 +69,18 @@ jobs:
       - name: Run Gemini
         id: gemini
         uses: google-github-actions/run-gemini-cli@v0.1.22
+        env:
+          # REQUIRED — without it the CLI exits 1 without running anything:
+          #   "Gemini CLI is not running in a trusted directory."
+          # It does NOT quietly fall back to prompting-then-denying; it refuses to
+          # start. The action does not set this itself, so every caller must.
+          #
+          # The cost is real and is why the tool allowlist below is written the way
+          # it is: trusting the workspace lets the action's hardcoded `--yolo` take
+          # effect, so every tool the model can see is auto-approved. Untrusted, the
+          # CLI logs "Approval mode overridden to default" — but it never gets far
+          # enough for that to protect anything.
+          GEMINI_CLI_TRUST_WORKSPACE: 'true'
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
 
@@ -161,7 +173,10 @@ jobs:
               # text is untrusted enough that it should not be able to close a fence
               # and inject markdown into the comment either way.
               if [ -n "$ERRORS" ]; then
-                printf '%s\n' "$ERRORS" | sed 's/^/    /'
+                # Strip ANSI colour codes before indenting — the CLI colourises its
+                # stderr even when not attached to a TTY, and the raw escapes render
+                # as literal ^[[31m garbage in a GitHub comment.
+                printf '%s\n' "$ERRORS" | sed -e 's/\x1b\[[0-9;]*m//g' -e 's/^/    /'
                 printf '\n'
               fi
               printf '[Run log](%s)\n' "$RUN_URL"
