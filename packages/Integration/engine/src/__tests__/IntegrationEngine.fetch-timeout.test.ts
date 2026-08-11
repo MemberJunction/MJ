@@ -17,7 +17,7 @@ import type {
     ExternalFieldSchema,
 } from '../BaseIntegrationConnector.js';
 import type { ExternalRecord } from '../types.js';
-import { IntegrationEngine } from '../IntegrationEngine.js';
+import { IntegrationEngine, PositiveInt } from '../IntegrationEngine.js';
 import { ConnectorFactory } from '../ConnectorFactory.js';
 
 // ---- Mock harness (same shape as IntegrationEngine.ratelimit-wiring.test.ts) ----
@@ -294,5 +294,118 @@ describe('IntegrationEngine — FetchChanges timeout resolution', () => {
         const observed = await observeResolvedTimeouts('{"fetchTimeoutMs": -5}', 45);
         expect(observed.length).toBeGreaterThan(0);
         expect(observed.every(ms => ms === 45)).toBe(true);
+    }, 30000);
+
+});
+
+/**
+ * The guard both override sources are run through.
+ *
+ * Tested directly rather than end-to-end: proving "a bad connector value falls back to the framework
+ * default" through the engine means waiting out that 30s default three times over, and the value under
+ * test is a pure function. The end-to-end tests above already prove the connector property is consulted
+ * at all (the 55ms case).
+ *
+ * Why the connector source needs the guard too: `??` rejects only null/undefined, but
+ * `FetchChangesTimeoutMs` is declared `number | null`, so 0, negatives and NaN are all type-legal —
+ * and `Number(process.env.UNSET)` or an undefined arithmetic term yields NaN without a type error.
+ * setTimeout coerces every one of those to ~1ms, so an unguarded value doesn't fail loudly; it makes
+ * every page time out instantly and the object silently syncs nothing.
+ */
+describe('PositiveInt — the override guard', () => {
+    it('accepts a positive number, flooring fractions', () => {
+        expect(PositiveInt(1)).toBe(1);
+        expect(PositiveInt(120000)).toBe(120000);
+        expect(PositiveInt(1.9)).toBe(1);
+    });
+
+    it.each([
+        ['zero', 0],
+        ['negative', -1],
+        ['NaN', Number.NaN],
+        ['Infinity', Number.POSITIVE_INFINITY],
+    ])('rejects %s so the caller falls through to the next source', (_label, v) => {
+        expect(PositiveInt(v)).toBeUndefined();
+    });
+
+    it.each([
+        ['a numeric string', '500'],
+        ['null', null],
+        ['undefined', undefined],
+        ['an object', {}],
+    ])('rejects %s', (_label, v) => {
+        expect(PositiveInt(v)).toBeUndefined();
+    });
+});
+
+/**
+ * The engine never pages past an unskippable fetch failure — it stops the object with whatever it
+ * already collected. Both signals that the result set is INCOMPLETE are asserted here, because they
+ * land on different surfaces and an operator may only be watching one:
+ *
+ *  - the structured `FETCH_ABORTED_INCOMPLETE` warning on the run-event stream (and console), and
+ *  - a `Warning`-severity entry in `result.Errors`, which FinalizeRun writes to
+ *    `CompanyIntegrationRun.ErrorLog` — the queryable run history.
+ *
+ * Without the second, a nightly sync that aborts on its first page every night reads as an unbroken
+ * run of clean `Status='Success'` rows with `TotalRecords: 0`.
+ */
+describe('IntegrationEngine — an aborted, incomplete fetch is reported', () => {
+    let orchestrator: IntegrationEngine;
+    let errorSpy: ReturnType<typeof vi.spyOn>;
+    let warnSpy: ReturnType<typeof vi.spyOn>;
+    let resolveOrig: typeof ConnectorFactory.Resolve;
+
+    beforeEach(() => {
+        orchestrator = new IntegrationEngine();
+        mockEntityInstances = new Map();
+        mockRunViewFn = vi.fn();
+        mockRunViewsFn = vi.fn(fanOutToRunView);
+        (IntegrationEngine as Record<string, unknown>)['activeSyncs'] = new Map();
+        errorSpy = vi.spyOn(console, 'error').mockImplementation(() => { /* silence */ });
+        warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { /* captured below */ });
+        resolveOrig = ConnectorFactory.Resolve;
+    });
+
+    afterEach(() => {
+        errorSpy.mockRestore();
+        warnSpy.mockRestore();
+        ConnectorFactory.Resolve = resolveOrig;
+    });
+
+    /** A cursor-paged object whose first page times out: unskippable, so the object aborts at batch 1. */
+    async function runAbortingSync(): Promise<void> {
+        wireConfigMocks(createMockCompanyIntegration('{"fetchTimeoutMs": 40}'), buildIntegration());
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(createHangingConnector(null));
+        await orchestrator.RunSync('ci-1', contextUser);
+    }
+
+    it('emits a FETCH_ABORTED_INCOMPLETE warning naming the object and the batch', async () => {
+        await runAbortingSync();
+
+        const warning = warnSpy.mock.calls
+            .map(args => args.map(a => String(a)).join(' '))
+            .find(line => line.includes('FETCH_ABORTED_INCOMPLETE'));
+
+        expect(warning).toBeDefined();
+        expect(warning).toContain('contacts');
+        expect(warning).toContain('INCOMPLETE');
+        // The operator's next question is "did I lose data?" — the message has to answer it.
+        expect(warning).toContain('watermark is held');
+    }, 30000);
+
+    it('records the abort on the run so it survives in queryable history, without failing the run', async () => {
+        await runAbortingSync();
+
+        const run = mockEntityInstances.get('MJ: Company Integration Runs');
+        expect(run).toBeDefined();
+        // Severity 'Warning' keeps the status honest: no RECORD failed, and the held watermark means
+        // the window is retried — so this is not a failed run...
+        expect(run!._data['Status']).toBe('Success');
+        // ...but it must no longer be indistinguishable from a clean "nothing changed" run.
+        const errorLog = run!._data['ErrorLog'] as string | undefined;
+        expect(errorLog).toBeDefined();
+        expect(errorLog).toContain('INCOMPLETE');
+        expect(errorLog).toContain('"Severity":"Warning"');
     }, 30000);
 });

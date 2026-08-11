@@ -210,6 +210,25 @@ function detectSchemaNotGenerated(entityName: string, errorMessage: string): Sch
     return null;
 }
 
+/**
+ * Coerces an externally-supplied tuning value — a duration in ms, or a count — to a usable positive
+ * integer, or `undefined` when it is not one, so the caller's `??` chain falls through to the next
+ * source.
+ *
+ * Every source of these values is outside the engine's control: operator-authored JSON in
+ * `CompanyIntegration.Configuration`, and connector-authored properties like
+ * `BaseIntegrationConnector.FetchChangesTimeoutMs`, whose declared type (`number | null`) happily
+ * admits `0`, negatives and `NaN` — a connector computing one from an unset env var gets `NaN`
+ * without a type error. Handing any of those to `setTimeout` is silently catastrophic rather than
+ * loud: it coerces them to ~1ms, so every wrapped operation rejects immediately and the object
+ * syncs nothing. Guard BOTH sources, not just the JSON one.
+ *
+ * Exported so the guard itself is unit-testable without standing up a sync.
+ */
+export function PositiveInt(v: unknown): number | undefined {
+    return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : undefined;
+}
+
 export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     public constructor() {
         super();
@@ -1464,13 +1483,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const raw = config.companyIntegration.Configuration;
             if (!raw) return {};
             const p = JSON.parse(raw) as Record<string, unknown>;
-            const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : undefined);
             return {
-                maxConcurrency: num(p.maxConcurrency),
+                maxConcurrency: PositiveInt(p.maxConcurrency),
                 rateLimitTokensPerSec: typeof p.rateLimitTokensPerSec === 'number' && p.rateLimitTokensPerSec > 0 ? p.rateLimitTokensPerSec : undefined,
-                rateLimitBurst: num(p.rateLimitBurst),
-                discoveryTimeBudgetMs: num(p.discoveryTimeBudgetMs),
-                fetchTimeoutMs: num(p.fetchTimeoutMs),
+                rateLimitBurst: PositiveInt(p.rateLimitBurst),
+                discoveryTimeBudgetMs: PositiveInt(p.discoveryTimeBudgetMs),
+                fetchTimeoutMs: PositiveInt(p.fetchTimeoutMs),
             };
         } catch { return {}; }
     }
@@ -1701,10 +1719,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // per parent does N requests inside a single FetchChanges call, so its page time scales with
         // BatchSize and with however much concurrency the adaptive controller currently allows — the
         // fixed 30s default punished exactly those connectors. Deployment config wins over the
-        // connector's own declared default, which wins over the framework default.
+        // connector's own declared default, which wins over the framework default. BOTH overrides go
+        // through PositiveInt: `??` alone would only reject null/undefined, so a connector returning
+        // 0 / -1 / NaN (all legal for its `number | null` type) would be applied verbatim and time
+        // every page out at ~1ms.
         const fetchTimeoutMs =
-            this.getConfigOverrides(config).fetchTimeoutMs
-            ?? config.connector.FetchChangesTimeoutMs
+            PositiveInt(this.getConfigOverrides(config).fetchTimeoutMs)
+            ?? PositiveInt(config.connector.FetchChangesTimeoutMs)
             ?? DEFAULT_OPERATION_TIMEOUTS.FetchChangesMs;
 
         while (hasMore) {
@@ -1825,15 +1846,32 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // failed reads as a clean "0 records, nothing changed" run. Verified live: a sync
                 // whose only page timed out finished Status=Success, errorCount=0, empty ErrorLog.
                 fetchCompletedCleanly = false;
-                logger?.warning(
-                    entityMap.ExternalObjectName ?? entityMap.ID,
-                    'FETCH_ABORTED_INCOMPLETE',
+                const abortMessage =
                     `Fetch for '${entityMap.ExternalObjectName}' stopped at batch ${batchCount} after a persistent ` +
                     `error and could not continue past it, so this object's result set is INCOMPLETE ` +
                     `(${recordsInMap} record(s) fetched before the failure). The watermark is held, so the ` +
-                    `unfetched window is retried next run. Error: ${errMsg}`,
+                    `unfetched window is retried next run. Error: ${errMsg}`;
+                logger?.warning(
+                    entityMap.ExternalObjectName ?? entityMap.ID,
+                    'FETCH_ABORTED_INCOMPLETE',
+                    abortMessage,
                     { batchIndex: batchCount, recordsFetchedBeforeFailure: recordsInMap, error: errMsg },
                 );
+                // The structured warning above reaches the console and the per-run artifact — neither of
+                // which is queryable run history. The DURABLE record is CompanyIntegrationRun, whose
+                // Status is derived from RecordsErrored (unchanged here, correctly: no record failed) and
+                // whose ErrorLog is written from result.Errors. Without an entry there, a nightly sync
+                // that aborts on its first page every night reads as an unbroken run of clean Successes
+                // with TotalRecords=0. Severity 'Warning' is what keeps Status='Success': MergeResult
+                // only clears Success on RecordsErrored > 0, so this records the condition without
+                // reclassifying a held-watermark retry as a failed run.
+                result.Errors.push({
+                    ExternalID: '',
+                    ChangeType: 'Skip',
+                    ErrorMessage: abortMessage,
+                    ErrorCode: 'CONNECTOR_ERROR',
+                    Severity: 'Warning',
+                });
                 break;
             }
             logger?.emit('sync.fetch.batch.complete', {

@@ -613,6 +613,7 @@ class IntegrationSyncConfigInput {
     @Field(() => Boolean, { nullable: true, description: '§4 cross-layer pipelining: a child map starts when ITS parents finish, not the whole layer.' }) CrossLayerPipeline?: boolean;
     @Field(() => Boolean, { nullable: true, description: 'Merkle/partition hash-diff reconcile for watermark-less change detection (buffers the set in RAM).' }) PartitionReconcile?: boolean;
     @Field(() => Int, { nullable: true, description: 'Time budget (ms) for stage-2 streaming field discovery before it stops and uses what it gathered.' }) DiscoveryTimeBudgetMs?: number;
+    @Field(() => Int, { nullable: true, description: 'Per-page FetchChanges timeout (ms). Raise it for a connector that fans out one request per parent record, whose page time scales with BatchSize. Wins over the connector\'s own FetchChangesTimeoutMs; unset = the connector\'s value, else the framework default (30000).' }) FetchTimeoutMs?: number;
     @Field(() => Int, { nullable: true, description: 'Batch size for stage-2 streaming field discovery (records per FetchChanges page). Default 500.' }) DiscoveryBatchSize?: number;
     @Field(() => Int, { nullable: true, description: 'Max records sampled in stage-2 streaming field discovery (a column corpus + PK guess; NOT a full scan). Default 500.' }) DiscoveryMaxRecords?: number;
     @Field(() => Boolean, { nullable: true, description: '§7 Comprehensive refresh deactivates Declared objects/fields ABSENT from an AUTHORITATIVE discovery (reversible). Default false.' }) DeactivateAbsent?: boolean;
@@ -631,6 +632,7 @@ class IntegrationSyncConfigOutput {
     @Field(() => Boolean, { nullable: true }) CrossLayerPipeline?: boolean;
     @Field(() => Boolean, { nullable: true }) PartitionReconcile?: boolean;
     @Field(() => Int, { nullable: true }) DiscoveryTimeBudgetMs?: number;
+    @Field(() => Int, { nullable: true }) FetchTimeoutMs?: number;
     @Field(() => Int, { nullable: true }) DiscoveryBatchSize?: number;
     @Field(() => Int, { nullable: true }) DiscoveryMaxRecords?: number;
     @Field(() => Boolean, { nullable: true }) DeactivateAbsent?: boolean;
@@ -2803,6 +2805,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             set('crossLayerPipeline', config.CrossLayerPipeline);
             set('partitionReconcile', config.PartitionReconcile);
             set('discoveryTimeBudgetMs', config.DiscoveryTimeBudgetMs);
+            set('fetchTimeoutMs', config.FetchTimeoutMs);
             set('discoveryBatchSize', config.DiscoveryBatchSize);
             set('discoveryMaxRecords', config.DiscoveryMaxRecords);
             set('deactivateAbsent', config.DeactivateAbsent);
@@ -2858,6 +2861,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             CrossLayerPipeline: bool(cfg.crossLayerPipeline),
             PartitionReconcile: bool(cfg.partitionReconcile),
             DiscoveryTimeBudgetMs: num(cfg.discoveryTimeBudgetMs),
+            FetchTimeoutMs: num(cfg.fetchTimeoutMs),
             DiscoveryBatchSize: num(cfg.discoveryBatchSize),
             DiscoveryMaxRecords: num(cfg.discoveryMaxRecords),
             DeactivateAbsent: bool(cfg.deactivateAbsent),
