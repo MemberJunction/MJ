@@ -1,11 +1,17 @@
 #!/usr/bin/env node
 /**
- * PG migration CONTENT check — the sibling of check-pg-migration-parity.mjs.
+ * PG migration CONTENT check.
+ *
+ * SCOPE: this checks only counterparts that EXIST. Counterpart existence is
+ * deliberately ungated — authoring `.pg.sql` files is build-engineer work done
+ * at release time, not feature-PR work (see migrations/CLAUDE.md), so a T-SQL
+ * migration without a counterpart is the expected state between releases. The
+ * former check-pg-migration-parity.mjs gate was removed for that reason.
  *
  * WHY THIS EXISTS
  * ---------------
- * check-pg-migration-parity.mjs asserts a `.pg.sql` counterpart EXISTS. Nothing
- * asserts it contains anything. That gap has shipped a broken release:
+ * Nothing asserts that a counterpart which DOES exist contains anything, and an
+ * empty one is a real defect at any time. That gap has shipped a broken release:
  *
  *   v5.45  V202607071019__v5.45.x__Metadata_Sync.sql   12,041 lines
  *          V202607071019__v5.45.x__Metadata_Sync.pg.sql   126 BYTES (2 comments)
@@ -407,7 +413,7 @@ function runCheck() {
   for (const { f, ssDir, pgDir } of ssFilePairs) {
     const stem = basename(f, '.sql');
     const pgPath = join(pgDir, `${stem}.pg.sql`);
-    if (!existsSync(pgPath)) continue;   // existence is check-pg-migration-parity.mjs's job
+    if (!existsSync(pgPath)) continue;   // no counterpart yet = expected between releases (build-engineer work)
 
     checked++;
     const ssSql = readFileSync(join(ssDir, f), 'utf8');

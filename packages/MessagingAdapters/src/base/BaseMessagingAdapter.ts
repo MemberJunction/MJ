@@ -12,8 +12,8 @@
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessage } from '@memberjunction/ai';
 import { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import {
     MessagingAdapterSettings,
     IncomingMessage,
@@ -748,6 +748,21 @@ export abstract class BaseMessagingAdapter {
      *
      * @returns The target agent name, or null if no delegation.
      */
+    /** Cached environment lookup — messaging adapters are long-lived and single-environment. */
+    private cachedEnvironmentID: string | null = null;
+    private async resolveEnvironmentID(contextUser: UserInfo): Promise<string | null> {
+        if (this.cachedEnvironmentID) return this.cachedEnvironmentID;
+        const res = await new RunView().RunView<{ ID: string }>(
+            { EntityName: 'MJ: Environments', Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
+            contextUser,
+        );
+        this.cachedEnvironmentID = res.Results?.[0]?.ID ?? null;
+        if (!this.cachedEnvironmentID) {
+            LogError('[BaseMessagingAdapter] Could not resolve an Environment; task graphs cannot be submitted.');
+        }
+        return this.cachedEnvironmentID;
+    }
+
     private detectDelegation(result: ExecuteAgentResult): string | null {
         if (!result.success) return null;
 

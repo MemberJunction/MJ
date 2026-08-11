@@ -8,7 +8,6 @@
 "@memberjunction/ng-explorer-core": patch
 "@memberjunction/react-linter": patch
 "@memberjunction/react-test-harness": patch
-"@memberjunction/scheduled-actions-server": patch
 "@memberjunction/server": patch
 "@memberjunction/server-extensions-core": patch
 "@memberjunction/sqlserver-dataprovider": patch
@@ -27,4 +26,4 @@ Two changes are more than a declaration:
 - **`@memberjunction/server`**: `@types/express` moves `^4.17.25` → `^5.0.6`. The package declares `express@^5.2.1` at runtime, so it was only compiling because hoisting supplied the v5 types that six sibling packages declare. The types now match the express it actually runs.
 - **`@memberjunction/ng-auth-services`**: `angularProviderFactory` gains an explicit `Provider[]` return type. Declaring `@auth0/auth0-spa-js` alone does not resolve TS2742 — the emitted declaration file still needed a nameable type rather than one inferred through a transitive package path.
 
-- **`@memberjunction/scheduled-actions-server`**: drops `@types/axios`, a deprecated stub package that carries no type definitions; its presence made TypeScript auto-include it and then fail to find any types. axios ships its own.
+(A third change in this set applied to `@memberjunction/scheduled-actions-server` — dropping `@types/axios`, a deprecated stub carrying no type definitions. That package has since been removed from the workspace, so its entry is no longer part of this changeset.)

@@ -1656,6 +1656,10 @@ DELETE FROM [__mj].[EntityAIAction] WHERE [EntityID] = @EntityID;
 DELETE FROM [__mj].[EntityCommunicationMessageType] WHERE [EntityID] = @EntityID;
 DELETE FROM [__mj].[EntityAIAction] WHERE [OutputEntityID] = @EntityID;
 
+-- Clear inbound metadata references from OTHER entities' fields that point AT this entity,
+-- so the Entity row can be deleted without tripping FK_EntityField_RelatedEntity.
+UPDATE __mj.EntityField SET RelatedEntityID = NULL WHERE RelatedEntityID = @EntityID
+
 DELETE FROM __mj.Entity WHERE ID = @EntityID
 GO
 
