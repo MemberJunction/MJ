@@ -1,5 +1,68 @@
 # Change Log - @memberjunction/ng-file-storage
 
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- 394d276: Fix the Explorer File Browser for Azure Blob (and S3) storage accounts:
+  - **Upload verb/headers.** `file-grid` `uploadFileToUrl` hardcoded `POST`, which Azure and S3 reject (Azure "Put Blob" requires `PUT` **and** the `x-ms-blob-type: BlockBlob` header). It now selects the verb by provider `ServerDriverKey` — `POST` for Dropbox temporary upload links, `PUT` otherwise — and sends `x-ms-blob-type: BlockBlob` for Azure. Previously an Azure/S3 upload appeared to succeed (local progress bar) but silently created no blob. (Note: the browser PUTs directly to the pre-authenticated Azure URL, so the storage account also needs CORS rules for the Explorer origin.)
+  - **Folder-tree nested listing.** `folder-tree` `loadFolders` passed `currentPath` verbatim (with a leading slash, e.g. `/test`) as the storage list prefix. Blob keys have no leading slash, so nested-folder listings matched nothing and rendered empty folder names. The prefix is now normalized to slash-free with a trailing slash.
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/ng-ui-components@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ng-base-types@6.1.0-edge.1
+  - @memberjunction/ng-container-directives@6.1.0-edge.1
+  - @memberjunction/ng-notifications@6.1.0-edge.1
+  - @memberjunction/ng-shared@6.1.0-edge.1
+  - @memberjunction/ng-shared-generic@6.1.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- 85a8f15: Correct the `@memberjunction/ng-notifications` pin from `5.51.0` to `6.0.0`.
+
+  The workspace package is at `6.0.0`, so a `5.51.0` spec does not match the local sibling and npm
+  resolves the **published** 5.51.0 from the registry instead of linking it. The pin dates from a
+  pre-6.0 branch state that was carried forward during the UI-layering sweep.
+
+- Updated dependencies [b895f92]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [ea003fc]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [d26e202]
+- Updated dependencies [27e4d09]
+  - @memberjunction/ng-ui-components@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/ng-shared@6.1.0-edge.0
+  - @memberjunction/ng-base-types@6.1.0-edge.0
+  - @memberjunction/ng-notifications@6.1.0-edge.0
+  - @memberjunction/ng-shared-generic@6.1.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.0
+  - @memberjunction/ng-container-directives@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

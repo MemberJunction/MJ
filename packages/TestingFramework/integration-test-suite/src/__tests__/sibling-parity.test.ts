@@ -139,3 +139,60 @@ describe('bundle↔metadata sibling parity (drift-check)', () => {
         expect(raw).toMatch(/checkModules/);
     });
 });
+
+describe('the default metadata tree stays free of integration test records (R2)', () => {
+    // The integration Tests/Suites live ONLY under metadata-optional/integration-test/ — the
+    // default-pushed metadata/ tree must never carry them, because everything in metadata/ reaches
+    // every database including production (R2: synthetic test records and accounts stay optional).
+    // This was violated once (Aug 2026): a commit added a parallel 78-record set under
+    // metadata/tests/integration/, and because metadata/'s pull configs vacuum ALL Tests/Suites
+    // from whatever dev database `mj sync pull` runs against — and every dev DB that ran the
+    // integration workflow HAS those rows — each subsequent "md sync" re-committed them. The pull
+    // configs now carry filters excluding integration records; this test is the backstop that goes
+    // red if either the filters or the policy regress.
+
+    const DEFAULT_TESTS_DIR = path.join(ROOT, 'metadata/tests');
+    const DEFAULT_SUITES_DIR = path.join(ROOT, 'metadata/test-suites');
+
+    function jsonRecordsUnder(dir: string): Array<{ file: string; rec: { fields?: Record<string, unknown> } }> {
+        const out: Array<{ file: string; rec: { fields?: Record<string, unknown> } }> = [];
+        if (!fs.existsSync(dir)) {
+            return out;
+        }
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            const p = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+                out.push(...jsonRecordsUnder(p));
+            } else if (entry.name.endsWith('.json') && entry.name !== '.mj-sync.json' && entry.name !== '.mj-folder.json') {
+                const parsed = JSON.parse(fs.readFileSync(p, 'utf-8'));
+                for (const rec of Array.isArray(parsed) ? parsed : [parsed]) {
+                    out.push({ file: path.relative(ROOT, p), rec });
+                }
+            }
+        }
+        return out;
+    }
+
+    it('metadata/tests holds no Integration Test records', () => {
+        const offenders = jsonRecordsUnder(DEFAULT_TESTS_DIR)
+            .filter(({ rec }) => String(rec.fields?.TypeID ?? '').includes('Integration Test'))
+            .map(({ file, rec }) => `${rec.fields?.Name} (${file})`);
+        expect(offenders, `Integration Tests in the default tree (move to metadata-optional/integration-test/): ${offenders.join(', ') || 'none'}`).toEqual([]);
+    });
+
+    it('metadata/test-suites holds no Integration Tests suite', () => {
+        const offenders = jsonRecordsUnder(DEFAULT_SUITES_DIR)
+            .filter(({ rec }) => String(rec.fields?.Name ?? '').startsWith('Integration Tests'))
+            .map(({ file, rec }) => `${rec.fields?.Name} (${file})`);
+        expect(offenders, `Integration suites in the default tree (move to metadata-optional/integration-test/): ${offenders.join(', ') || 'none'}`).toEqual([]);
+    });
+
+    it("the default tree's pull configs exclude integration records, so `mj sync pull` cannot re-import them", () => {
+        // The files above being clean is necessary but not sufficient: without the pull filters,
+        // the very next `mj sync pull` against a dev DB re-creates them and the cycle restarts.
+        const testsSync = JSON.parse(fs.readFileSync(path.join(DEFAULT_TESTS_DIR, '.mj-sync.json'), 'utf-8'));
+        const suitesSync = JSON.parse(fs.readFileSync(path.join(DEFAULT_SUITES_DIR, '.mj-sync.json'), 'utf-8'));
+        expect(String(testsSync.pull?.filter ?? ''), 'metadata/tests/.mj-sync.json pull.filter must exclude Integration Test records').toContain('Integration Test');
+        expect(String(suitesSync.pull?.filter ?? ''), 'metadata/test-suites/.mj-sync.json pull.filter must exclude Integration Tests suites').toContain('Integration Tests');
+    });
+});

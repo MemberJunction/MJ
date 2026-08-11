@@ -53,14 +53,24 @@ jobs:
   test:
     name: Run unit tests
     # 60 (not 30): the full-suite backstop (push/nightly) builds + tests ALL packages and was
-    # still running at ~27 min when the old 30-min cap killed it. PR affected-runs finish in
-    # minutes and are unaffected by the higher ceiling.
+    # still running at ~27 min when the old 30-min cap killed it.
+    #
+    # NB: PR runs are NOT the "couple of minutes" this comment used to claim. Measured over the
+    # last 25 runs the median PR run is ~20 min, because `--filter=...[base]` barely narrows
+    # anything here: on PR #3231-era runs it selected 303 build tasks, versus 297 for the
+    # declared FULL suite. Nearly every package depends on @memberjunction/global or core, so
+    # "affected + dependents" fans out to the whole repo and every PR pays a full build.
     timeout-minutes: 60
     runs-on: ubuntu-latest
     # issues:write so a red BACKSTOP run (push/schedule) can auto-file an alert issue (see final step).
     permissions:
       contents: read
       issues: write
+    env:
+      # Pin turbo's cache to a repo-relative path so actions/cache can persist it across runs.
+      # The default (node_modules/.cache/turbo) lives inside a directory the pnpm setup owns and
+      # would be awkward to cache independently of the store.
+      TURBO_CACHE_DIR: .turbo/cache
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -79,6 +89,26 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # Turbo's cache is the single biggest lever on this workflow's runtime. Runners are
+      # ephemeral, so without this every run reported `0 cached` and rebuilt all ~300 packages
+      # from scratch — 11m38s of a 19-minute PR run, and 9m29s of a 28-minute backstop run.
+      # (`cache: 'pnpm'` on setup-node above caches only the pnpm STORE, which is why installs
+      # are already a fast ~17s; it does nothing for build outputs.)
+      #
+      # Restore-only here; the matching save runs after the build, and ONLY on the backstop
+      # events. See the save step for why PRs deliberately don't write their own entry.
+      - name: Restore turbo build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .turbo/cache
+          # Exact key so a re-run of the SAME commit is a perfect hit; the prefix key falls
+          # back to the most recent cache on this ref, then to `next`'s (GitHub lets any run
+          # read the default branch's caches — `next` IS the default branch here, which is
+          # what makes the backstop-seeds-every-PR arrangement work).
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
 
       - name: Create MJExplorer environment file
         run: |
@@ -129,7 +159,7 @@ jobs:
         run: node scripts/classify-explorer-components.mjs --min 85
 
       - name: Generic DOM coverage ratchet
-        run: node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=137
+        run: node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=134
 
       - name: Bootstrap DOM coverage ratchet
         run: node scripts/dom-test-report.mjs packages/Angular/Bootstrap --max-none=0
@@ -189,6 +219,56 @@ jobs:
             npx turbo run test:types
             npm test -- --concurrency=4
           fi
+
+      # The cache directory is restored, added to, and saved again every backstop run, so without
+      # a bound it grows monotonically: each merge's entries pile on top of every previous merge's.
+      # Cap it by deleting the oldest entries until the total is under CAP_MB. Entries are
+      # (<hash>.tar.zst, <hash>-meta.json) pairs, so both are removed together.
+      - name: Prune turbo cache to a bounded size
+        if: always() && (github.event_name == 'push' || github.event_name == 'schedule')
+        env:
+          CAP_MB: 3072
+        run: |
+          node -e '
+            const fs = require("fs"), path = require("path");
+            const dir = process.env.TURBO_CACHE_DIR;
+            const capBytes = Number(process.env.CAP_MB) * 1024 * 1024;
+            if (!fs.existsSync(dir)) { console.log("No turbo cache dir — nothing to prune."); process.exit(0); }
+
+            const archives = fs.readdirSync(dir)
+              .filter((f) => f.endsWith(".tar.zst"))
+              .map((f) => { const s = fs.statSync(path.join(dir, f)); return { f, size: s.size, mtime: s.mtimeMs }; })
+              .sort((a, b) => b.mtime - a.mtime);   // newest first — we keep from the top down
+
+            const total = archives.reduce((n, a) => n + a.size, 0);
+            console.log(`turbo cache: ${archives.length} entries, ${(total / 1048576).toFixed(0)} MB (cap ${process.env.CAP_MB} MB)`);
+
+            let kept = 0, removed = 0;
+            for (const a of archives) {
+              if (kept + a.size <= capBytes) { kept += a.size; continue; }
+              fs.rmSync(path.join(dir, a.f), { force: true });
+              fs.rmSync(path.join(dir, a.f.replace(/\.tar\.zst$/, "-meta.json")), { force: true });
+              removed++;
+            }
+            console.log(`pruned ${removed} entries; keeping ${(kept / 1048576).toFixed(0)} MB`);
+          '
+
+      # Save ONLY on the backstop events (push to next / nightly), never on PRs. Two reasons:
+      #  1) The backstop builds EVERY package, so its cache is the most complete seed a PR can
+      #     restore from. A PR's cache would be partial (affected-only) and, being scoped to the
+      #     PR ref, unreadable by any other PR anyway — it would seed nothing.
+      #  2) Budget. The repo shares a 10 GB Actions cache across all keys, and the existing pnpm
+      #     store entries are ~583 MB each. Writing a turbo entry per PR run would thrash that
+      #     budget via LRU eviction and start evicting the very `next` entry PRs restore from.
+      # `always()` so a RED test run still saves the build outputs it produced — the build
+      # succeeding is independent of whether the suite passed, and re-running a failed PR
+      # shouldn't pay for a second cold build.
+      - name: Save turbo build cache
+        if: always() && (github.event_name == 'push' || github.event_name == 'schedule')
+        uses: actions/cache/save@v4
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
 
       # Python dialect tests against the COMMITTED sqlglot pin (issue #3252 review): the
       # sqlglot-ts vitest suite auto-skips when Python/sqlglot is absent, so CI never

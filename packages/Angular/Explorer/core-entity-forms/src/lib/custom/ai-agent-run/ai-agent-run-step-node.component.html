@@ -2,6 +2,7 @@
   [class.selected]="isSelected"
   [attr.data-status]="item.status"
   [attr.data-type]="item.type"
+  [attr.data-provenance]="item.provenance"
   [style.margin-left.px]="item.level * 24"
   (click)="handleClick()">
 
@@ -34,7 +35,11 @@
   <div class="timeline-content">
     <div class="timeline-header">
       <h4>{{ item.title }}</h4>
-      <span class="timeline-time">{{ item.startTime | date:'h:mm:ss.SSS a' }}</span>
+      @if (item.startTime) {
+        <span class="timeline-time">{{ item.startTime | date:'h:mm:ss.SSS a' }}</span>
+      } @else {
+        <span class="timeline-time timeline-time--none" title="This step has not started">&mdash;</span>
+      }
     </div>
 
     <div class="timeline-subtitle">{{ item.subtitle }}</div>

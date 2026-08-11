@@ -110,16 +110,31 @@ describe('Realtime convergence — drift protection', () => {
 
     // ── Invariant 4: the one override envelope every host emits ───────────────────────────────────────
     describe('runtime-override envelope (one shape, server + client)', () => {
-        it('builds the pinned {realtime:{modelPreference,voice:{providers:{openai:{voice}}}}} shape', () => {
+        it('builds the pinned {realtime:{modelPreference,voice:{default:{voice}}}} shape', () => {
+            // PROVIDER-AGNOSTIC by construction (#3530): the host emitting this does not know which
+            // vendor will run — the framework resolves the model, then files the voice onto that driver.
             expect(JSON.parse(BuildRealtimeOverridesJson('m', 'echo')!)).toEqual({
-                realtime: { modelPreference: 'm', voice: { providers: { openai: { voice: 'echo' } } } },
+                realtime: { modelPreference: 'm', voice: { default: { voice: 'echo' } } },
             });
             expect(JSON.parse(BuildRealtimeOverridesJson(null, 'echo')!)).toEqual({
-                realtime: { voice: { providers: { openai: { voice: 'echo' } } } },
+                realtime: { voice: { default: { voice: 'echo' } } },
             });
             expect(JSON.parse(BuildRealtimeOverridesJson('m', null)!)).toEqual({
                 realtime: { modelPreference: 'm' },
             });
+        });
+
+        it('carries a picked voice to a NON-OpenAI driver (the #3530 regression)', () => {
+            // Pre-fix this filed the voice under `openai` and any other vendor silently got nothing.
+            const eff = ResolveEffectiveRealtimeConfig(null, null, BuildRealtimeOverridesJson(null, 'Rachel'));
+            for (const driver of ['ElevenLabsRealtime', 'GeminiRealtime', 'InworldRealtime', 'OpenAIRealtime']) {
+                expect((GetProviderVoiceSettings(eff, driver) as { voice?: string } | null)?.voice).toBe('Rachel');
+            }
+        });
+
+        it('a runtime pick beats a co-agent’s vendor-pinned voice on the same vendor', () => {
+            const eff = ResolveEffectiveRealtimeConfig(null, cfg(undefined, 'alloy'), BuildRealtimeOverridesJson(null, 'verse'));
+            expect((GetProviderVoiceSettings(eff, 'OpenAIRealtime') as { voice?: string }).voice).toBe('verse');
         });
 
         it('returns null when nothing is overridden (cascade stays at its lower layers)', () => {

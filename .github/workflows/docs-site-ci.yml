@@ -10,8 +10,8 @@ on:
       - 'docs-site/**'
       - 'guides/**'
       - 'README.md'
-      - 'DEPLOYMENT.md'
       - 'UPGRADE-v5.0.md'
+      - 'UPGRADE-v6.0.md'
       - 'CONTRIBUTING.md'
       - 'metadata/README.md'
       - '.claude/skills/**'
@@ -53,7 +53,10 @@ jobs:
         run: npm run build
         working-directory: docs-site
         env:
-          # Mirror the deploy config (docs.yml) so CI builds what prod ships.
-          DOCS_BASE: /
+          # Mirror one leg of the versioned deploy (docs.yml) so CI builds what
+          # prod ships, version switcher included.
+          DOCS_BASE: /v6
           DOCS_SITE: https://docs.memberjunction.org
+          DOCS_VERSION: v6
+          DOCS_VERSIONS: '[{"id":"v5","label":"v5 (LTS)"},{"id":"v6","label":"v6 (Edge)"}]'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/sql-dialect",
   "type": "module",
-  "version": "6.0.0",
+  "version": "6.1.0-edge.1",
   "description": "MemberJunction: SQL Dialect Abstraction Layer for multi-database support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

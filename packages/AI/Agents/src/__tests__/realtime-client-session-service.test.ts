@@ -6,14 +6,16 @@
  * a {@link MockRealtimeModel} (no provider SDK / DB), engine config is a no-op, and delegation is
  * stubbed. No network, no DB — fully deterministic.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
     BaseRealtimeModel,
     ClientRealtimeSessionConfig,
     IRealtimeSession,
+    JSONObject,
     RealtimeSessionParams,
     RealtimeToolCall
 } from '@memberjunction/ai';
+import { AIEngine } from '@memberjunction/aiengine';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJAIAgentEntityExtended, MJAIModelEntityExtended, AppContextSnapshot } from '@memberjunction/ai-core-plus';
 
@@ -1718,5 +1720,78 @@ describe('C1: session-tuning knobs flow into the driver Config bag', () => {
         );
         expect(bag?.disableAutoResponse).toBe(true);
         expect(bag?.effortLevel).toBe('high');
+    });
+});
+
+describe('model-catalog ModelConfiguration is the BASE layer of the session Config bag', () => {
+    class CatalogBagService extends RealtimeClientSessionService {
+        public Bag(
+            input: Parameters<RealtimeClientSessionService['buildSessionConfigBag']>[0],
+            effectiveConfig?: RealtimeCoAgentConfig,
+            driverClass?: string,
+            modelID?: string,
+            modelVendorID?: string
+        ): JSONObject | undefined {
+            return this.buildSessionConfigBag(input, effectiveConfig, driverClass, modelID, modelVendorID);
+        }
+    }
+
+    const EMPTY_INPUT = {} as Parameters<CatalogBagService['Bag']>[0];
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('does not consult the catalog at all when no model was resolved', () => {
+        const spy = vi.spyOn(AIEngine.Instance, 'GetEffectiveModelConfiguration');
+        const bag = new CatalogBagService().Bag(EMPTY_INPUT, {}, 'OpenAIRealtime');
+        expect(spy).not.toHaveBeenCalled();
+        expect(bag).toBeUndefined();
+    });
+
+    it('threads the model AND the model-vendor ROW id into the cascade read', () => {
+        const spy = vi.spyOn(AIEngine.Instance, 'GetEffectiveModelConfiguration').mockReturnValue(null);
+        new CatalogBagService().Bag(EMPTY_INPUT, {}, 'OpenAIRealtime', 'model-1', 'model-vendor-9');
+        expect(spy).toHaveBeenCalledWith('model-1', 'model-vendor-9');
+    });
+
+    it('projects the catalog turn-detection default into the bag', () => {
+        vi.spyOn(AIEngine.Instance, 'GetEffectiveModelConfiguration').mockReturnValue({
+            Realtime: { TurnDetection: { Mode: 'semanticVad', Eagerness: 'auto' } },
+        });
+        const bag = new CatalogBagService().Bag(EMPTY_INPUT, {}, 'OpenAIRealtime', 'model-1');
+        expect(bag).toEqual({ turnDetection: { Mode: 'semanticVad', Eagerness: 'auto' } });
+    });
+
+    it('agent/app session tuning REFINES the catalog default (catalog < realtime.session)', () => {
+        vi.spyOn(AIEngine.Instance, 'GetEffectiveModelConfiguration').mockReturnValue({
+            Realtime: { TurnDetection: { Mode: 'semanticVad', Eagerness: 'auto' } },
+        });
+        const bag = new CatalogBagService().Bag(
+            EMPTY_INPUT,
+            { realtime: { session: { turnDetection: { Eagerness: 'low' } } } },
+            'OpenAIRealtime',
+            'model-1'
+        );
+        // Mode inherited from the catalog, eagerness refined by the agent config.
+        expect(bag?.turnDetection).toEqual({ Mode: 'semanticVad', Eagerness: 'low' });
+    });
+
+    it('the runtime bag still wins over BOTH (catalog < session tuning < runtime)', () => {
+        vi.spyOn(AIEngine.Instance, 'GetEffectiveModelConfiguration').mockReturnValue({
+            Realtime: { TurnDetection: { Mode: 'semanticVad', Eagerness: 'auto' } },
+        });
+        const bag = new CatalogBagService().Bag(
+            { Config: { turnDetection: { Mode: 'serverVad' } } } as unknown as Parameters<CatalogBagService['Bag']>[0],
+            { realtime: { session: { turnDetection: { Mode: 'native' } } } },
+            'OpenAIRealtime',
+            'model-1'
+        );
+        expect(bag?.turnDetection).toMatchObject({ Mode: 'serverVad', Eagerness: 'auto' });
+    });
+
+    it('a catalog with no Realtime section contributes nothing', () => {
+        vi.spyOn(AIEngine.Instance, 'GetEffectiveModelConfiguration').mockReturnValue({ LLM: { effortLevel: 'high' } });
+        expect(new CatalogBagService().Bag(EMPTY_INPUT, {}, 'OpenAIRealtime', 'model-1')).toBeUndefined();
     });
 });

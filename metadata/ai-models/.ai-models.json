@@ -3,7 +3,7 @@
     "fields": {
       "Name": "Grok 4",
       "PowerRank": 19,
-      "Description": "x.ai's frontier reasoning model with advanced capabilities for complex tasks. Features a 256K token context window and state-of-the-art performance across various domains. RETIRED May 15, 2026 \u2014 API requests now auto-redirect to grok-4.3 at grok-4.3 pricing ($1.25/$2.50 per 1M). See https://docs.x.ai/developers/migration/may-15-retirement",
+      "Description": "x.ai's frontier reasoning model with advanced capabilities for complex tasks. Features a 256K token context window and state-of-the-art performance across various domains. RETIRED May 15, 2026 — API requests now auto-redirect to grok-4.3 at grok-4.3 pricing ($1.25/$2.50 per 1M). See https://docs.x.ai/developers/migration/may-15-retirement",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": false,
       "SpeedRank": 6,
@@ -6895,7 +6895,7 @@
   {
     "fields": {
       "Name": "Grok 4-1 Fast Non-Reasoning",
-      "Description": "x.AI's fast non-reasoning model with 2M token context window. Optimized for speed without extended reasoning overhead. Supports text and image input with function calling. Rate limited to 4M tokens per minute and 480 requests per minute. RETIRED May 15, 2026 \u2014 API requests now auto-redirect to grok-4.3 with reasoning_effort=none, billed at grok-4.3 pricing. See https://docs.x.ai/developers/migration/may-15-retirement",
+      "Description": "x.AI's fast non-reasoning model with 2M token context window. Optimized for speed without extended reasoning overhead. Supports text and image input with function calling. Rate limited to 4M tokens per minute and 480 requests per minute. RETIRED May 15, 2026 — API requests now auto-redirect to grok-4.3 with reasoning_effort=none, billed at grok-4.3 pricing. See https://docs.x.ai/developers/migration/may-15-retirement",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 6,
       "IsActive": false,
@@ -6986,7 +6986,7 @@
   {
     "fields": {
       "Name": "Grok 4 Fast (Non-Reasoning)",
-      "Description": "x.ai's cost-efficient non-reasoning model for quick responses. Features a 2M token context window with the same unified architecture as the reasoning version but optimized for faster, lighter use cases without chain-of-thought processing. RETIRED May 15, 2026 \u2014 API requests now auto-redirect to grok-4.3 with reasoning_effort=none, billed at grok-4.3 pricing. See https://docs.x.ai/developers/migration/may-15-retirement",
+      "Description": "x.ai's cost-efficient non-reasoning model for quick responses. Features a 2M token context window with the same unified architecture as the reasoning version but optimized for faster, lighter use cases without chain-of-thought processing. RETIRED May 15, 2026 — API requests now auto-redirect to grok-4.3 with reasoning_effort=none, billed at grok-4.3 pricing. See https://docs.x.ai/developers/migration/may-15-retirement",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 11,
       "IsActive": false,
@@ -7168,7 +7168,7 @@
   {
     "fields": {
       "Name": "Grok 4-1 Fast Reasoning",
-      "Description": "x.AI's fast reasoning model with 2M token context window. Features reasoning capabilities with JSON and function calling support. Optimized for speed while maintaining reasoning depth. Rate limited to 4M tokens per minute and 480 requests per minute. RETIRED May 15, 2026 \u2014 API requests now auto-redirect to grok-4.3 with reasoning_effort=low, billed at grok-4.3 pricing. See https://docs.x.ai/developers/migration/may-15-retirement",
+      "Description": "x.AI's fast reasoning model with 2M token context window. Features reasoning capabilities with JSON and function calling support. Optimized for speed while maintaining reasoning depth. Rate limited to 4M tokens per minute and 480 requests per minute. RETIRED May 15, 2026 — API requests now auto-redirect to grok-4.3 with reasoning_effort=low, billed at grok-4.3 pricing. See https://docs.x.ai/developers/migration/may-15-retirement",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
       "IsActive": false,
@@ -7259,7 +7259,7 @@
   {
     "fields": {
       "Name": "Grok 4 Fast (Reasoning)",
-      "Description": "x.ai's cost-efficient reasoning model with long chain-of-thought capabilities. Features a 2M token context window, frontier-level performance, and state-of-the-art search capabilities. Optimized for complex reasoning tasks while using 40% fewer thinking tokens than Grok 4. RETIRED May 15, 2026 \u2014 API requests now auto-redirect to grok-4.3 with reasoning_effort=low, billed at grok-4.3 pricing. See https://docs.x.ai/developers/migration/may-15-retirement",
+      "Description": "x.ai's cost-efficient reasoning model with long chain-of-thought capabilities. Features a 2M token context window, frontier-level performance, and state-of-the-art search capabilities. Optimized for complex reasoning tasks while using 40% fewer thinking tokens than Grok 4. RETIRED May 15, 2026 — API requests now auto-redirect to grok-4.3 with reasoning_effort=low, billed at grok-4.3 pricing. See https://docs.x.ai/developers/migration/may-15-retirement",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 13,
       "IsActive": false,
@@ -10227,10 +10227,10 @@
   {
     "fields": {
       "Name": "Claude Opus 4.1",
-      "Description": "Anthropic's most advanced model with 74.5% on SWE-bench Verified. Released August 5, 2025, with improved agentic tasks, real-world coding, and reasoning capabilities. Supports 200k token context window. DEPRECATION ANNOUNCED 2026-06-05: claude-opus-4-1-20250805 retires August 5, 2026 — which falls 5 days after the 2026-07-31 research window and therefore INSIDE the v5.51.0 support window. IsActive remains true because the retirement has not yet occurred; flip it to false in the first weekly report dated on/after 2026-08-05, matching the Grok 4 and Mistral summer-2026 precedent of deactivating only once retired. RECOMMENDED REPLACEMENT UPDATED 2026-07-24: migrate to claude-opus-5 (this report added it) rather than claude-opus-4-8 — Opus 5 is now the current Opus flagship at the same $5/$25 per-1M pricing as 4.8 and is Anthropic's official post-4.1 migration target. Source: https://platform.claude.com/docs/en/about-claude/models/migration-guide#migrating-from-claude-opus-4-8-to-claude-opus-5 ; https://platform.claude.com/docs/en/about-claude/model-deprecations",
+      "Description": "Anthropic's most advanced model with 74.5% on SWE-bench Verified. Released August 5, 2025, with improved agentic tasks, real-world coding, and reasoning capabilities. Supports 200k token context window. RETIRED 2026-08-05: claude-opus-4-1-20250805 was deprecated 2026-06-05 and reached hard retirement on the Claude API on August 5, 2026 (60-day window); calls now fail permanently. IsActive was flipped to false in the 2026-08-08 weekly report — the first report dated on/after the retirement date, exactly as the 2026-07-31 and 2026-08-03 reports specified, and matching the Grok 4 and Mistral summer-2026 precedent of deactivating only once retirement has actually occurred. RECOMMENDED REPLACEMENT: migrate to claude-opus-5 (per the 2026-07-24 update) rather than claude-opus-4-8 — Opus 5 is the current Opus flagship at the same $5/$25 per-1M pricing as 4.8 and is Anthropic's official post-4.1 migration target. Source: https://platform.claude.com/docs/en/about-claude/models/migration-guide#migrating-from-claude-opus-4-8-to-claude-opus-5 ; https://platform.claude.com/docs/en/about-claude/model-deprecations",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 19,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 7,
       "CostRank": 3,
       "InheritTypeModalities": true
@@ -10381,8 +10381,8 @@
       "ID": "2C5EA224-85A1-4D09-ABA6-0D52F2E6AFBB"
     },
     "sync": {
-      "lastModified": "2026-07-31T18:53:05.729Z",
-      "checksum": "92ceff0c8c41770e3db4d8f46bb763a74f509af882c0540ba27de758507a68d3"
+      "lastModified": "2026-08-08T15:49:41.070Z",
+      "checksum": "5d7486a8c05898325d291be27daf03c0b271ce1a77de646ed66d940288952759"
     }
   },
   {
@@ -13222,7 +13222,7 @@
             "OutputPricePerUnit": 4.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.4-mini pricing on OpenAI as of March 2026. $0.75/$4.50 per 1M tokens \u2014 ~70% cheaper input than full GPT 5.4.",
+            "Comments": "GPT 5.4-mini pricing on OpenAI as of March 2026. $0.75/$4.50 per 1M tokens — ~70% cheaper input than full GPT 5.4.",
             "CacheReadPricePerUnit": 0.075,
             "CacheWritePricePerUnit": null
           },
@@ -13384,7 +13384,7 @@
             "OutputPricePerUnit": 1.25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.4-nano pricing on OpenAI as of March 2026. $0.20/$1.25 per 1M tokens \u2014 undercuts most alternatives on input price. Suited for classification, extraction, ranking, and sub-agent workloads.",
+            "Comments": "GPT 5.4-nano pricing on OpenAI as of March 2026. $0.20/$1.25 per 1M tokens — undercuts most alternatives on input price. Suited for classification, extraction, ranking, and sub-agent workloads.",
             "CacheReadPricePerUnit": 0.02,
             "CacheWritePricePerUnit": null
           },
@@ -13803,7 +13803,7 @@
     "fields": {
       "Name": "Qwen 3.6 35B A3B",
       "PowerRank": 14,
-      "Description": "Alibaba's open-weights Qwen 3.6 MoE model (April 15, 2026): 35B total parameters / 3B active. Reasoning/chain-of-thought model targeting agentic coding and multimodal (text + image input, text output). 262K native context, extensible to ~1M. Apache 2.0 license. Artificial Analysis Intelligence Index of 43 \u2014 top-tier for open-weights; some multimodal metrics reach Claude Sonnet 4.5 level. RefCOCO 92.0 for visual grounding.",
+      "Description": "Alibaba's open-weights Qwen 3.6 MoE model (April 15, 2026): 35B total parameters / 3B active. Reasoning/chain-of-thought model targeting agentic coding and multimodal (text + image input, text output). 262K native context, extensible to ~1M. Apache 2.0 license. Artificial Analysis Intelligence Index of 43 — top-tier for open-weights; some multimodal metrics reach Claude Sonnet 4.5 level. RefCOCO 92.0 for visual grounding.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 11,
@@ -13891,7 +13891,7 @@
             "OutputPricePerUnit": 2.25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Qwen 3.6 35B A3B pricing on Alibaba Cloud Bailian as of April 2026. $0.38/$2.25 per 1M tokens. Open-weights Apache 2.0 \u2014 also available for local deployment via Hugging Face / ModelScope. ~211 tokens/second output speed.",
+            "Comments": "Qwen 3.6 35B A3B pricing on Alibaba Cloud Bailian as of April 2026. $0.38/$2.25 per 1M tokens. Open-weights Apache 2.0 — also available for local deployment via Hugging Face / ModelScope. ~211 tokens/second output speed.",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null
           },
@@ -14053,7 +14053,7 @@
             "OutputPricePerUnit": 1.2,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "MiniMax-M2.7 pricing on OpenRouter as of March 2026. Routed inference \u2014 provider may vary.",
+            "Comments": "MiniMax-M2.7 pricing on OpenRouter as of March 2026. Routed inference — provider may vary.",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null
           },
@@ -15273,7 +15273,7 @@
             "OutputPricePerUnit": 0.87,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "DeepSeek V4 Pro permanent price cut effective May 23, 2026. The April 24, 2026 promotional pricing ($0.435 input cache miss / $0.87 output) \u2014 originally scheduled to expire May 31 \u2014 was made PERMANENT and replaces the prior list price of $1.74/$3.48 per 1M. Cache hit input pricing is $0.003625/1M (effectively 10x cheaper post the April 26 cache-hit reduction). Sources: https://api-docs.deepseek.com/quick_start/pricing ; https://www.engadget.com/2180062/deepseek-permanently-reduces-the-price-of-its-flagship-v4-model-by-75-percent/"
+            "Comments": "DeepSeek V4 Pro permanent price cut effective May 23, 2026. The April 24, 2026 promotional pricing ($0.435 input cache miss / $0.87 output) — originally scheduled to expire May 31 — was made PERMANENT and replaces the prior list price of $1.74/$3.48 per 1M. Cache hit input pricing is $0.003625/1M (effectively 10x cheaper post the April 26 cache-hit reduction). Sources: https://api-docs.deepseek.com/quick_start/pricing ; https://www.engadget.com/2180062/deepseek-permanently-reduces-the-price-of-its-flagship-v4-model-by-75-percent/"
           },
           "primaryKey": {
             "ID": "ED8D5CC8-8D61-4A68-B500-6E2CE5F341E3"
@@ -15476,7 +15476,7 @@
             "OutputPricePerUnit": 0.053,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Image",
             "ProcessingType": "Realtime",
-            "Comments": "GPT Image 2 (snapshot gpt-image-2-2026-04-21) pricing as of May 2026. OpenAI charges by tokens, not flat per-image: $5/M text input, $8/M image input (cached $2/M), $30/M image output. The per-image figure here ($0.053) is the representative cost for a 1024x1024 medium-quality image based on OpenAI's calculator \u2014 low quality ~$0.006/image, high quality ~$0.211/image. Batch API offers 50% discount on all token rates with 24h latency. Released April 21, 2026; API available early May 2026.",
+            "Comments": "GPT Image 2 (snapshot gpt-image-2-2026-04-21) pricing as of May 2026. OpenAI charges by tokens, not flat per-image: $5/M text input, $8/M image input (cached $2/M), $30/M image output. The per-image figure here ($0.053) is the representative cost for a 1024x1024 medium-quality image based on OpenAI's calculator — low quality ~$0.006/image, high quality ~$0.211/image. Batch API offers 50% discount on all token rates with 24h latency. Released April 21, 2026; API available early May 2026.",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null
           },
@@ -15502,7 +15502,7 @@
     "fields": {
       "Name": "GPT 5.5 Instant",
       "PowerRank": 13,
-      "Description": "OpenAI's latest low-latency default ChatGPT model (May 5, 2026). Replaces GPT-5.3 Instant as the default in ChatGPT and is exposed in the API as `chat-latest`. Headline metric: 52.5% fewer hallucinated claims than GPT-5.3 Instant on high-stakes prompts (legal, medical, financial). Inherits the GPT-5.5 family context: 1,050,000 input tokens, 128,000 output. Supports configurable reasoning_effort. PRICING NOTE: provisional rate uses the GPT-5.5 standard $5/$30 per 1M tokens; Instant SKU may carry a lower rate once OpenAI's pricing page differentiates it.",
+      "Description": "OpenAI's latest low-latency default ChatGPT model (May 5, 2026). Replaces GPT-5.3 Instant as the default in ChatGPT. API NOTE: there is no `gpt-5.5-instant` or `gpt-5.5-chat-latest` model id — OpenAI exposes this family as `gpt-5.5` (verified against /v1/models), which is what this record's APIName uses. Headline metric: 52.5% fewer hallucinated claims than GPT-5.3 Instant on high-stakes prompts (legal, medical, financial). Inherits the GPT-5.5 family context: 1,050,000 input tokens, 128,000 output. Supports configurable reasoning_effort. PRICING NOTE: provisional rate uses the GPT-5.5 standard $5/$30 per 1M tokens; Instant SKU may carry a lower rate once OpenAI's pricing page differentiates it.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 9,
@@ -15538,7 +15538,7 @@
             "Priority": 1,
             "Status": "Active",
             "DriverClass": "OpenAILLM",
-            "APIName": "gpt-5.5-instant",
+            "APIName": "gpt-5.5",
             "MaxInputTokens": 1050000,
             "MaxOutputTokens": 128000,
             "SupportedResponseFormats": "Any, JSON",
@@ -15550,8 +15550,8 @@
             "ID": "B12DF96C-C415-4D00-A634-2EBCA428E78C"
           },
           "sync": {
-            "lastModified": "2026-05-14T02:07:54.426Z",
-            "checksum": "21a78384321764121fd637d32e377d84731a92d0965f7f4bbd61975fb3bca6bb"
+            "lastModified": "2026-08-05T21:12:14.512Z",
+            "checksum": "2d64466c727365f44ada09fb4540e5d4f5e904c74bbc778a6b3c0a2f921bf6b0"
           }
         }
       ],
@@ -15568,7 +15568,7 @@
             "OutputPricePerUnit": 30,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-5.5 Instant pricing as of May 2026. Provisionally recorded at the GPT-5.5 standard family rate ($5/$30 per 1M tokens) \u2014 OpenAI's pricing page may differentiate Instant to a lower rate; verify on next pricing-page review. Batch and Flex are 50% off; Priority is 2.5x standard. Released May 5, 2026 as the new default ChatGPT model; also surfaces in API as `chat-latest`.",
+            "Comments": "GPT-5.5 Instant pricing as of May 2026. Provisionally recorded at the GPT-5.5 standard family rate ($5/$30 per 1M tokens) — OpenAI's pricing page may differentiate Instant to a lower rate; verify on next pricing-page review. Batch and Flex are 50% off; Priority is 2.5x standard. Released May 5, 2026 as the new default ChatGPT model; also surfaces in API as `chat-latest`.",
             "CacheReadPricePerUnit": 0.5,
             "CacheWritePricePerUnit": null
           },
@@ -15586,8 +15586,8 @@
       "ID": "7E91F18E-52CC-48C9-8457-74C810899B41"
     },
     "sync": {
-      "lastModified": "2026-05-14T02:07:54.305Z",
-      "checksum": "91bdd5baea5c7ef5700ed1299ec53cc2449b8b0c3f964e9d26f9a86d7d0cff1b"
+      "lastModified": "2026-08-05T21:12:14.437Z",
+      "checksum": "c4b71796e75f8a7807020f263cc81b431742afc4c7d2a41a79a7ebf914d2e644"
     }
   },
   {
@@ -15658,7 +15658,7 @@
             "OutputPricePerUnit": 24,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-Realtime-2 has multi-channel token pricing \u2014 the rates here ($4 input / $24 output per 1M) cover the TEXT channel only. Audio channels: $32/M audio input ($0.40 cached), $64/M audio output. Image input: $5/M. Released May 7, 2026 alongside GPT-Realtime-Translate and GPT-Realtime-Whisper (both minute-billed and flagged for human review pending Per-Minute PriceUnitType + Speech-to-Text AIModelType additions to MJ schema).",
+            "Comments": "GPT-Realtime-2 has multi-channel token pricing — the rates here ($4 input / $24 output per 1M) cover the TEXT channel only. Audio channels: $32/M audio input ($0.40 cached), $64/M audio output. Image input: $5/M. Released May 7, 2026 alongside GPT-Realtime-Translate and GPT-Realtime-Whisper (both minute-billed and flagged for human review pending Per-Minute PriceUnitType + Speech-to-Text AIModelType additions to MJ schema).",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null
           },
@@ -15773,7 +15773,7 @@
             "OutputPricePerUnit": 4,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GLM-5V Turbo pricing on Z.AI direct API as of May 2026: $1.20/M input, $4.00/M output. Released April 1, 2026 \u2014 Z.AI's first native multimodal agent model with image, video, and text input. Proprietary (not open-source) per the launch announcement.",
+            "Comments": "GLM-5V Turbo pricing on Z.AI direct API as of May 2026: $1.20/M input, $4.00/M output. Released April 1, 2026 — Z.AI's first native multimodal agent model with image, video, and text input. Proprietary (not open-source) per the launch announcement.",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null
           },
@@ -15886,7 +15886,7 @@
             "OutputPricePerUnit": 7.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Mistral Medium 3.5 pricing on Mistral direct API as of May 2026: $1.50/M input, $7.50/M output. Released May 1, 2026 as a public preview. Sibling of Mistral Medium 3.1 (already in inventory) \u2014 this is the new release, not a replacement.",
+            "Comments": "Mistral Medium 3.5 pricing on Mistral direct API as of May 2026: $1.50/M input, $7.50/M output. Released May 1, 2026 as a public preview. Sibling of Mistral Medium 3.1 (already in inventory) — this is the new release, not a replacement.",
             "CacheReadPricePerUnit": 0.15,
             "CacheWritePricePerUnit": null
           },
@@ -16385,8 +16385,8 @@
       "ID": "C65B6878-F870-4B88-9D86-CC8B37F61B2C"
     },
     "sync": {
-      "lastModified": "2026-05-20T23:53:33.993Z",
-      "checksum": "a59804bc9f0f861c3038b0b609e1227855dbdda1c573113a34257fc68b74d160"
+      "lastModified": "2026-08-05T18:34:32.983Z",
+      "checksum": "3db9bb08344cd7375f2390793723c6a72dbe10aab17aad8980842a765d1d8d64"
     }
   },
   {
@@ -16457,7 +16457,7 @@
             "OutputPricePerUnit": 0,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Cohere Embed v4 text pricing: $0.12/1M tokens. NOTE: Image embeddings priced separately at $0.47/1M image tokens \u2014 not represented in this cost row because the existing schema is single-input-token-rate. Sources: https://cohere.com/pricing ; https://cloudprice.net/models/cohere-embed-4",
+            "Comments": "Cohere Embed v4 text pricing: $0.12/1M tokens. NOTE: Image embeddings priced separately at $0.47/1M image tokens — not represented in this cost row because the existing schema is single-input-token-rate. Sources: https://cohere.com/pricing ; https://cloudprice.net/models/cohere-embed-4",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null
           },
@@ -16482,7 +16482,7 @@
   {
     "fields": {
       "Name": "Gemini Embedding 2",
-      "Description": "Google's natively multimodal embedding model \u2014 maps text, images, video, audio, and PDF into one shared 3072-dimensional vector space (Matryoshka: truncatable down to 128 dims). 8,192 token input context; retrieval task instructions are carried in the text. GA April 2026.",
+      "Description": "Google's natively multimodal embedding model — maps text, images, video, audio, and PDF into one shared 3072-dimensional vector space (Matryoshka: truncatable down to 128 dims). 8,192 token input context; retrieval task instructions are carried in the text. GA April 2026.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Embeddings",
       "IsActive": true,
       "InheritTypeModalities": true
@@ -16952,6 +16952,120 @@
   },
   {
     "fields": {
+      "Name": "Qwen 3.8 Max",
+      "PowerRank": 21,
+      "Description": "Alibaba Cloud's flagship Qwen 3.8 series reasoning model, generally available via Alibaba Cloud Model Studio on 2026-08-03 (API id qwen3.8-max). Successor to Qwen 3.7 Max. Features a 1M token context window billed at a single flat rate across the whole window (no long-context price tier), 991.8K max input standard / 983.6K in Thinking Mode, and 131K max output. reasoning_effort defaults to 'xhigh' and preserve_thinking is on by default, so thinking tokens bill as output tokens — budget above the headline output rate. Open weights were announced for release on Hugging Face and ModelScope shortly after launch.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 7,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "AFB84A68-C285-4CEB-961A-BA898F663E24"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T15:49:41.602Z",
+            "checksum": "98ce0a4e83ae6a9cb3f3b849a20a4cbef8e8d1deb8e82010c412576efe27537a"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "QwenLLM",
+            "APIName": "qwen3.8-max",
+            "MaxInputTokens": 991800,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "E5A97BB4-FB39-4867-97A0-965DB56F7D57"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T15:49:41.632Z",
+            "checksum": "708d12df7a903f287f98175ea0edc62e40cdb347242c898f49b8a8f2ba5feaa6"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "qwen/qwen3.8-max",
+            "MaxInputTokens": 991800,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "11BEE934-FB55-4250-86AA-C79D3BBF6010"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T15:49:41.646Z",
+            "checksum": "56b48c4c26298c14497dbbf675ad560a4b7e9764fda66986d1c06772bf390804"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "StartedAt": "2026-08-03T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 6,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3.8 Max pricing on Alibaba Cloud Model Studio at global API general availability, 2026-08-03. $2.00/1M input, $6.00/1M output, $0.25/1M cached (implicit) input. Flat rate across the entire 1M context window — unlike other Qwen tiers there is no long-prompt price step-up. Limits: 1M context, 991.8K max input (983.6K in Thinking Mode), 131K max output. NOTE: reasoning_effort defaults to 'xhigh' with preserve_thinking on, so thinking tokens bill at the output rate and effective cost runs above the headline $6. Sources: https://aireiter.com/blog/qwen3-8-max-api-pricing ; https://www.techrepublic.com/article/news-alibaba-qwen3-8-max-pricing-open-weights/",
+            "CacheReadPricePerUnit": 0.25,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "F1DEAEE7-F67D-402D-91F3-DACFD4E570B5"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T15:49:41.674Z",
+            "checksum": "7204929d7763fa7c1216447ee6ee2ae209f228bad5f33e0c5dc9e82fe55eca47"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "CD31949A-2E85-4410-A216-777571F47E72"
+    },
+    "sync": {
+      "lastModified": "2026-08-08T15:49:41.130Z",
+      "checksum": "fd418688c6f328c6e188ff850fce1be77d4a5e1db8ce9469b24722ab69d28cfe"
+    }
+  },
+  {
+    "fields": {
       "Name": "Claude Opus 4.8",
       "PowerRank": 24,
       "Description": "Anthropic's frontier flagship released May 28, 2026, simultaneously available on Anthropic API, Amazon Bedrock, Vertex AI, and Microsoft Foundry. Same headline pricing ($5/$25 per 1M) and 1M context window as Opus 4.7, with meaningful capability gains in reasoning and judgement. Features 128K max output (300K via batch beta `output-300k-2026-03-24`), high-resolution image input (up to 2576px), adaptive thinking with default `effort=high`, and task budgets (beta). Uses the new Opus tokenizer introduced in 4.7. Note: temperature, top_p, top_k parameters return 400 errors when set to non-default values. Knowledge cutoff January 2026.",
@@ -17066,7 +17180,7 @@
             "OutputPricePerUnit": 25,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Opus 4.8 pricing on Anthropic as of May 28, 2026 launch. Same per-token rates as Opus 4.7 ($5/$25 per 1M tokens). 5min cache write $6.25/1M, 1hr cache write $10/1M, cache hit $0.50/1M. Batch pricing $2.50/$12.50 per 1M (50% discount). Fast Mode tier $10/$50 per 1M (Opus 4.8 only \u2014 substantially cheaper than 4.6/4.7 Fast Mode at $30/$150). Sources: https://platform.claude.com/docs/en/about-claude/pricing ; https://platform.claude.com/docs/en/about-claude/models/overview"
+            "Comments": "Claude Opus 4.8 pricing on Anthropic as of May 28, 2026 launch. Same per-token rates as Opus 4.7 ($5/$25 per 1M tokens). 5min cache write $6.25/1M, 1hr cache write $10/1M, cache hit $0.50/1M. Batch pricing $2.50/$12.50 per 1M (50% discount). Fast Mode tier $10/$50 per 1M (Opus 4.8 only — substantially cheaper than 4.6/4.7 Fast Mode at $30/$150). Sources: https://platform.claude.com/docs/en/about-claude/pricing ; https://platform.claude.com/docs/en/about-claude/models/overview"
           },
           "primaryKey": {
             "ID": "F083F65E-40F5-44BE-8AEB-45754AE2CD56"
@@ -17329,8 +17443,8 @@
       "ID": "E99122E8-F77B-4C94-93FE-2361B7AA46D9"
     },
     "sync": {
-      "lastModified": "2026-06-05T02:25:07.164Z",
-      "checksum": "5238dd6b2f08222f69a9bee5355518bf42873a311853cf65cf0b781e638cf83f"
+      "lastModified": "2026-08-05T18:34:33.467Z",
+      "checksum": "e19a3072e6d6b2eed3732931d06539b22b8ef9f8d194c5741351ee27890d0343"
     }
   },
   {
@@ -17472,7 +17586,7 @@
     "fields": {
       "Name": "Qwen 3.7 Plus",
       "PowerRank": 18,
-      "Description": "Alibaba Cloud's Plus-tier model in the Qwen 3.7 series, GA on Alibaba Cloud Model Studio (Bailian) on 2026-06-01 at endpoint qwen3.7-plus. Multimodal (text, vision, video understanding) with deep-reasoning, tool invocation, and autonomous iteration capabilities. 1M token context window. Positioned as the cost-efficient sibling of Qwen 3.7 Max \u2014 roughly 1/6 the per-token price while preserving most of the agentic and reasoning capability of the Max tier. OpenAI-compatible API via DashScope; also surfaced on OpenRouter 2026-06-03.",
+      "Description": "Alibaba Cloud's Plus-tier model in the Qwen 3.7 series, GA on Alibaba Cloud Model Studio (Bailian) on 2026-06-01 at endpoint qwen3.7-plus. Multimodal (text, vision, video understanding) with deep-reasoning, tool invocation, and autonomous iteration capabilities. 1M token context window. Positioned as the cost-efficient sibling of Qwen 3.7 Max — roughly 1/6 the per-token price while preserving most of the agentic and reasoning capability of the Max tier. OpenAI-compatible API via DashScope; also surfaced on OpenRouter 2026-06-03.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 7,
@@ -17607,7 +17721,7 @@
     "fields": {
       "Name": "Gemini 3.1 Flash Live",
       "PowerRank": 11,
-      "Description": "Google's Gemini 3.1 Flash Live model \u2014 its highest-quality native-audio realtime model (supersedes the deprecated 2.5 native-audio previews): streaming, full-duplex, tool-calling, for low-latency voice conversations over the Gemini Live API. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GeminiRealtime).",
+      "Description": "Google's Gemini 3.1 Flash Live model — its highest-quality native-audio realtime model (supersedes the deprecated 2.5 native-audio previews): streaming, full-duplex, tool-calling, for low-latency voice conversations over the Gemini Live API. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GeminiRealtime).",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
       "IsActive": true,
       "SpeedRank": 8,
@@ -17651,7 +17765,7 @@
     "fields": {
       "Name": "ElevenLabs Agents",
       "PowerRank": 10,
-      "Description": "ElevenLabs Agents Platform \u2014 an orchestrated STT\u2192LLM\u2192TTS conversational stack treated as a realtime model: streaming, full-duplex, client-tool-calling voice sessions over the Agents websocket. The driver uses a MANAGED-AGENT strategy: the Model Vendor APIName is the managed agent's NAME (find-by-name, create-if-missing with the session tool set and per-session prompt-override enablement, PATCH on tool-set drift); deployments may instead set APIName to a concrete agent_\u2026 id to use a hand-configured agent verbatim. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass ElevenLabsRealtime).",
+      "Description": "ElevenLabs Agents Platform — an orchestrated STT→LLM→TTS conversational stack treated as a realtime model: streaming, full-duplex, client-tool-calling voice sessions over the Agents websocket. The driver uses a MANAGED-AGENT strategy: the Model Vendor APIName is the managed agent's NAME (find-by-name, create-if-missing with the session tool set and per-session prompt-override enablement, PATCH on tool-set drift); deployments may instead set APIName to a concrete agent_… id to use a hand-configured agent verbatim. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass ElevenLabsRealtime).",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
       "IsActive": true,
       "SpeedRank": 7,
@@ -17695,7 +17809,7 @@
     "fields": {
       "Name": "AssemblyAI Voice Agent",
       "PowerRank": 9,
-      "Description": "AssemblyAI's Voice Agent API (launched April 2026) \u2014 a single-websocket speech-to-speech stack treated as a realtime model: Universal-3 Pro streaming ASR, server-side turn detection and barge-in, LLM reasoning, JSON-Schema tool calling, and conversational TTS (30+ voices, 6 languages). Per-session prompt/tool/voice/turn-detection config is supplied natively via session.update \u2014 no server-side agent object to manage. Flat $4.50/session-hour billing (no token usage events). Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass AssemblyAIRealtime).",
+      "Description": "AssemblyAI's Voice Agent API (launched April 2026) — a single-websocket speech-to-speech stack treated as a realtime model: Universal-3 Pro streaming ASR, server-side turn detection and barge-in, LLM reasoning, JSON-Schema tool calling, and conversational TTS (30+ voices, 6 languages). Per-session prompt/tool/voice/turn-detection config is supplied natively via session.update — no server-side agent object to manage. Flat $4.50/session-hour billing (no token usage events). Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass AssemblyAIRealtime).",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
       "IsActive": true,
       "SpeedRank": 8,
@@ -17739,7 +17853,7 @@
     "fields": {
       "Name": "Grok Voice",
       "PowerRank": 11,
-      "Description": "xAI's Grok Voice Agent API \u2014 a streaming, full-duplex, tool-calling speech-to-speech realtime model. OpenAI-Realtime-API compatible (WebSocket endpoint wss://api.x.ai/v1/realtime, Base64-encoded PCM16 @ 24 kHz audio), so the MJ driver reuses the OpenAI SDK pointed at xAI's base URL. Supports custom function tools plus xAI's built-in web search, X search, and RAG. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GrokRealtime).",
+      "Description": "xAI's Grok Voice Agent API — a streaming, full-duplex, tool-calling speech-to-speech realtime model. OpenAI-Realtime-API compatible (WebSocket endpoint wss://api.x.ai/v1/realtime, Base64-encoded PCM16 @ 24 kHz audio), so the MJ driver reuses the OpenAI SDK pointed at xAI's base URL. Supports custom function tools plus xAI's built-in web search, X search, and RAG. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GrokRealtime). Superseded by Grok Voice Think Fast 2.0 (announced July 29, 2026); xAI's grok-voice-latest alias resolves to Think Fast 2.0 as of August 5, 2026, while this entry's pinned grok-voice API name continues to serve the prior generation.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
       "IsActive": true,
       "SpeedRank": 8,
@@ -17776,15 +17890,15 @@
       "ID": "19A9861F-1178-437D-941A-A4382B7D5FCA"
     },
     "sync": {
-      "lastModified": "2026-06-16T01:17:09.499Z",
-      "checksum": "eae22eb04791813f6810953f043e681547227784bdd0d02cafb5babb6084f665"
+      "lastModified": "2026-08-08T15:49:41.143Z",
+      "checksum": "74aadbca335367bf51ebababd281b86f1494ca2b5c3f094ceef7dfbeaf477a3a"
     }
   },
   {
     "fields": {
       "Name": "Inworld Realtime",
       "PowerRank": 11,
-      "Description": "Inworld's Realtime API \u2014 a single-WebSocket, full-duplex, tool-calling speech-to-speech realtime stack. Input is streamed audio (server-side STT with voice profiling); output is synthesized speech via Realtime TTS-2 (supports inline steering tags like [laugh]). Inworld brokers many underlying LLMs selected per session via modelId (e.g. anthropic/claude-sonnet-4-6); STT engine and TTS voice are configured independently. Turn-taking is semantic VAD with adjustable eagerness, handling true barge-in. Session components are swappable mid-session without reconnect via session.update. Supports fluent tool calling. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass InworldRealtime).",
+      "Description": "Inworld's Realtime API — a single-WebSocket, full-duplex, tool-calling speech-to-speech realtime stack. Input is streamed audio (server-side STT with voice profiling); output is synthesized speech via Realtime TTS-2 (supports inline steering tags like [laugh]). Inworld brokers many underlying LLMs selected per session via modelId (e.g. anthropic/claude-sonnet-4-6); STT engine and TTS voice are configured independently. Turn-taking is semantic VAD with adjustable eagerness, handling true barge-in. Session components are swappable mid-session without reconnect via session.update. Supports fluent tool calling. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass InworldRealtime).",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
       "IsActive": true,
       "SpeedRank": 9,
@@ -18326,7 +18440,7 @@
             "OutputPricePerUnit": 5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Magistral Medium 1.2 (magistral-medium-2509) pricing on Mistral direct API. $2.00 / $5.00 per 1M tokens. Reasoning model \u2014 expect 2-5x more output tokens than a generalist for the same task. Sources: https://mistral.ai/pricing/ ; https://docs.mistral.ai/models/magistral-medium-1-2-25-09 ; https://artificialanalysis.ai/providers/mistral"
+            "Comments": "Magistral Medium 1.2 (magistral-medium-2509) pricing on Mistral direct API. $2.00 / $5.00 per 1M tokens. Reasoning model — expect 2-5x more output tokens than a generalist for the same task. Sources: https://mistral.ai/pricing/ ; https://docs.mistral.ai/models/magistral-medium-1-2-25-09 ; https://artificialanalysis.ai/providers/mistral"
           },
           "primaryKey": {
             "ID": "EBC21B92-084E-47D9-9289-4A07CECDAACB"
@@ -18529,7 +18643,7 @@
     "fields": {
       "Name": "Claude Sonnet 5",
       "PowerRank": 19,
-      "Description": "Anthropic's next-generation Sonnet-class flagship, released June 30, 2026 with simultaneous availability on Anthropic API, Amazon Bedrock, Vertex AI, and Microsoft Foundry. 1M-token context, 128K max output. Uses a new Claude 5 tokenizer that produces ~30-35% more tokens per input than Sonnet 4.6 \u2014 factor into per-request cost projections. Launch pricing $2/$10 per 1M tokens is in effect through August 31, 2026, after which standard pricing steps to $3/$15 per 1M (parity with Sonnet 4.6 per-token pricing). Supports streaming, JSON output, and adaptive effort levels. Positioned as a cost-neutral capability upgrade over Sonnet 4.6, closing much of the gap with Opus 4.8.",
+      "Description": "Anthropic's next-generation Sonnet-class flagship, released June 30, 2026 with simultaneous availability on Anthropic API, Amazon Bedrock, Vertex AI, and Microsoft Foundry. 1M-token context, 128K max output. Uses a new Claude 5 tokenizer that produces ~30-35% more tokens per input than Sonnet 4.6 — factor into per-request cost projections. Launch pricing $2/$10 per 1M tokens is in effect through August 31, 2026, after which standard pricing steps to $3/$15 per 1M (parity with Sonnet 4.6 per-token pricing). Supports streaming, JSON output, and adaptive effort levels. Positioned as a cost-neutral capability upgrade over Sonnet 4.6, closing much of the gap with Opus 4.8.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 7,
@@ -19382,14 +19496,38 @@
             "CacheWritePricePerUnit": null,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.6-terra pricing on OpenAI as of July 2026. $2.50/$15.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes."
+            "Comments": "GPT 5.6-terra pricing on OpenAI as of July 2026. $2.50/$15.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes. SUPERSEDED 2026-07-30 by 20% price cut to $2.00/$12.00 (see next cost row)."
           },
           "primaryKey": {
             "ID": "60C58C8B-B5A4-4335-BCFD-2D2A65AD7DEA"
           },
           "sync": {
-            "lastModified": "2026-07-10T23:26:27.328Z",
-            "checksum": "44b1fde790395dc54655b036a3b39cbba0fe707f517bc2b1079b691cb2925460"
+            "lastModified": "2026-08-05T18:34:33.556Z",
+            "checksum": "cfdfe8b56cdf5ac11cf641e06becdb7cf0d88ac28b27e4489553efb5b7de2063"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-07-30T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 12,
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.6-terra price cut effective 2026-07-30: 20% reduction from $2.50/$15.00 to $2.00/$12.00 per 1M tokens (source: OpenAI 'Advancing the price-performance frontier with GPT-5.6', July 30, 2026; VentureBeat, CNBC, MLQ News coverage). Prompt-caching discount continues to apply at 10% of input price. No architecture or capability change — pricing-only update."
+          },
+          "primaryKey": {
+            "ID": "1E444DB9-773B-4B41-B1DA-F03A3EDDEA92"
+          },
+          "sync": {
+            "lastModified": "2026-08-05T18:34:33.593Z",
+            "checksum": "31013bbc92283367d887e42a3229cd5b5630177c042936507dfb5cc6251c1d31"
           }
         }
       ]
@@ -19473,14 +19611,38 @@
             "CacheWritePricePerUnit": null,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT 5.6-luna pricing on OpenAI as of July 2026. $1.00/$6.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes."
+            "Comments": "GPT 5.6-luna pricing on OpenAI as of July 2026. $1.00/$6.00 per 1M tokens. Cache read 0.1x input (Family B, published cached-input price); OpenAI does not charge for cache writes. SUPERSEDED 2026-07-30 by 80% price cut to $0.20/$1.20 (see next cost row)."
           },
           "primaryKey": {
             "ID": "5121599E-71C3-46AB-9AA5-43006565F2B7"
           },
           "sync": {
-            "lastModified": "2026-07-10T23:26:27.366Z",
-            "checksum": "192525b926019a8b136c342dcf1507fddcf574987b6480ea8fba36507e20ef4b"
+            "lastModified": "2026-08-05T18:34:33.612Z",
+            "checksum": "375caa454aef8b46578a621e73a5a25de8aa1d6c8492b062803b9bafc8eb5ea1"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-07-30T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.2,
+            "OutputPricePerUnit": 1.2,
+            "CacheReadPricePerUnit": 0.02,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.6-luna price cut effective 2026-07-30: 80% reduction from $1.00/$6.00 to $0.20/$1.20 per 1M tokens (source: OpenAI 'Advancing the price-performance frontier with GPT-5.6', July 30, 2026; VentureBeat, CNBC, MLQ News coverage; positioned to compete on cost with DeepSeek V4 Flash at $0.14/$0.28). Prompt-caching discount continues at 10% of input price. No architecture or capability change — pricing-only update."
+          },
+          "primaryKey": {
+            "ID": "95987637-46A3-4C7A-85C3-9660767001BB"
+          },
+          "sync": {
+            "lastModified": "2026-08-05T18:34:33.630Z",
+            "checksum": "95f8a17b05a4e3b52d5b85f75ab21e6fe357f9d02f46d8b18ae8a71a96d6450b"
           }
         }
       ]
@@ -19656,7 +19818,7 @@
     "fields": {
       "Name": "GPT Realtime 2.1",
       "PowerRank": 11,
-      "Description": "OpenAI's speech-to-speech voice model released July 6, 2026 \u2014 the 2.1 update to GPT Realtime 2. Delivers GPT-5-class reasoning through the audio modality with five reasoning effort levels (minimal/low/medium/high/xhigh, default low), parallel tool/function calls, and a 128K token context (32K max output). Improves on GPT Realtime 2 with better alphanumeric recognition, silence/noise handling, and interruption/barge-in behavior, plus ~25% lower p95 latency from improved caching; pricing is unchanged from GPT Realtime 2. Multi-channel token pricing: $32/M audio input ($0.40 cached), $64/M audio output, $4/M text input ($0.40 cached), $24/M text output, $5/M image input ($0.50 cached). Streaming full-duplex realtime model driven via BaseRealtimeModel (DriverClass OpenAIRealtime). A smaller gpt-realtime-2.1-mini variant also exists.",
+      "Description": "OpenAI's speech-to-speech voice model released July 6, 2026 — the 2.1 update to GPT Realtime 2. Delivers GPT-5-class reasoning through the audio modality with five reasoning effort levels (minimal/low/medium/high/xhigh, default low), parallel tool/function calls, and a 128K token context (32K max output). Improves on GPT Realtime 2 with better alphanumeric recognition, silence/noise handling, and interruption/barge-in behavior, plus ~25% lower p95 latency from improved caching; pricing is unchanged from GPT Realtime 2. Multi-channel token pricing: $32/M audio input ($0.40 cached), $64/M audio output, $4/M text input ($0.40 cached), $24/M text output, $5/M image input ($0.50 cached). Streaming full-duplex realtime model driven via BaseRealtimeModel (DriverClass OpenAIRealtime). A smaller gpt-realtime-2.1-mini variant also exists.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
       "IsActive": true,
       "SpeedRank": 8,
@@ -19722,7 +19884,7 @@
             "OutputPricePerUnit": 24,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-Realtime-2.1 has multi-channel token pricing \u2014 the rates here ($4 input / $24 output per 1M) cover the TEXT channel only, with cache read $0.40 (published text cached-input price; OpenAI Family B, no cache-write charge). Audio channels: $32/M audio input ($0.40 cached), $64/M audio output. Image input: $5/M ($0.50 cached). Released July 6, 2026 alongside gpt-realtime-2.1-mini; pricing identical to GPT Realtime 2.",
+            "Comments": "GPT-Realtime-2.1 has multi-channel token pricing — the rates here ($4 input / $24 output per 1M) cover the TEXT channel only, with cache read $0.40 (published text cached-input price; OpenAI Family B, no cache-write charge). Audio channels: $32/M audio input ($0.40 cached), $64/M audio output. Image input: $5/M ($0.50 cached). Released July 6, 2026 alongside gpt-realtime-2.1-mini; pricing identical to GPT Realtime 2.",
             "CacheReadPricePerUnit": 0.4,
             "CacheWritePricePerUnit": null
           },
@@ -19748,7 +19910,7 @@
     "fields": {
       "Name": "GPT Realtime 2.1-mini",
       "PowerRank": 9,
-      "Description": "OpenAI's compact speech-to-speech voice model (gpt-realtime-2.1-mini), released July 6, 2026 alongside GPT Realtime 2.1. Brings the GPT Realtime 2.1 reasoning realtime stack \u2014 five reasoning effort levels (minimal/low/medium/high/xhigh, default low), parallel tool/function calls, 128K token context (32K max output), and audio/text/image input \u2014 to a cost-optimized tier for high-volume voice workloads. Multi-channel token pricing: $10/M audio input ($0.30 cached), $20/M audio output, $0.60/M text input ($0.06 cached), $2.40/M text output, $0.80/M image input ($0.08 cached). Streaming full-duplex realtime model driven via BaseRealtimeModel (DriverClass OpenAIRealtime).",
+      "Description": "OpenAI's compact speech-to-speech voice model (gpt-realtime-2.1-mini), released July 6, 2026 alongside GPT Realtime 2.1. Brings the GPT Realtime 2.1 reasoning realtime stack — five reasoning effort levels (minimal/low/medium/high/xhigh, default low), parallel tool/function calls, 128K token context (32K max output), and audio/text/image input — to a cost-optimized tier for high-volume voice workloads. Multi-channel token pricing: $10/M audio input ($0.30 cached), $20/M audio output, $0.60/M text input ($0.06 cached), $2.40/M text output, $0.80/M image input ($0.08 cached). Streaming full-duplex realtime model driven via BaseRealtimeModel (DriverClass OpenAIRealtime).",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
       "IsActive": true,
       "SpeedRank": 9,
@@ -19813,7 +19975,7 @@
             "OutputPricePerUnit": 2.4,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GPT-Realtime-2.1-mini has multi-channel token pricing \u2014 the rates here ($0.60 input / $2.40 output per 1M) cover the TEXT channel only, with cache read $0.06 (published text cached-input price; OpenAI Family B, no cache-write charge). Audio channels: $10/M audio input ($0.30 cached), $20/M audio output. Image input: $0.80/M ($0.08 cached). Released July 6, 2026; the cost-optimized variant of GPT Realtime 2.1.",
+            "Comments": "GPT-Realtime-2.1-mini has multi-channel token pricing — the rates here ($0.60 input / $2.40 output per 1M) cover the TEXT channel only, with cache read $0.06 (published text cached-input price; OpenAI Family B, no cache-write charge). Audio channels: $10/M audio input ($0.30 cached), $20/M audio output. Image input: $0.80/M ($0.08 cached). Released July 6, 2026; the cost-optimized variant of GPT Realtime 2.1.",
             "CacheReadPricePerUnit": 0.06,
             "CacheWritePricePerUnit": null
           },
@@ -20363,7 +20525,7 @@
     "fields": {
       "Name": "Inkling",
       "PowerRank": 20,
-      "Description": "Thinking Machines Lab's inaugural open-weights frontier model, released July 15, 2026. 975B total / 41B active mixture-of-experts transformer, multimodal pretraining on 45T tokens (text/image/audio/video), 1M token architectural context. NOTE: served context is provider-specific and lower than the architectural maximum \u2014 OpenRouter (Together-backed) serves 524,288 tokens, and Tinker offers 64K/256K options; the vendor rows carry the provider limits, not the 1M architectural figure. Apache 2.0 license with weights on Hugging Face at launch. Positioned by Artificial Analysis at release as the leading U.S. open-weights model. Accessible via Thinking Machines Lab's Tinker direct API (`inkling`, currently at 50% launch-promo pricing of $1.87/$4.68 per 1M) and via OpenRouter as `thinkingmachines/inkling` at $1.00 input / $4.05 output per 1M tokens. First major open-weights frontier release from a U.S. lab in 2026, from the team led by former OpenAI CTO Mira Murati.",
+      "Description": "Thinking Machines Lab's inaugural open-weights frontier model, released July 15, 2026. 975B total / 41B active mixture-of-experts transformer, multimodal pretraining on 45T tokens (text/image/audio/video), 1M token architectural context. NOTE: served context is provider-specific and lower than the architectural maximum — OpenRouter (Together-backed) serves 524,288 tokens, and Tinker offers 64K/256K options; the vendor rows carry the provider limits, not the 1M architectural figure. Apache 2.0 license with weights on Hugging Face at launch. Positioned by Artificial Analysis at release as the leading U.S. open-weights model. Accessible via Thinking Machines Lab's Tinker direct API (`inkling`, currently at 50% launch-promo pricing of $1.87/$4.68 per 1M) and via OpenRouter as `thinkingmachines/inkling` at $1.00 input / $4.05 output per 1M tokens. First major open-weights frontier release from a U.S. lab in 2026, from the team led by former OpenAI CTO Mira Murati.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 6,
@@ -20428,7 +20590,7 @@
             "OutputPricePerUnit": 4.05,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Inkling launch pricing on OpenRouter (July 15, 2026): $1.00/$4.05 per 1M tokens for `thinkingmachines/inkling`. Direct Tinker API (thinkingmachines.ai) is currently running a 50% launch promo at $1.87 input / $0.374 cached-input / $4.68 output \u2014 not recorded here to avoid tying the cost history to a temporary discount. 975B total / 41B active MoE, Apache 2.0. Sources: https://thinkingmachines.ai/news/introducing-inkling/ ; https://openrouter.ai/thinkingmachines/inkling ; https://artificialanalysis.ai/models/inkling ; https://techcrunch.com/2026/07/15/thinking-machines-amps-up-its-bet-against-one-size-fits-all-ai-with-its-first-open-model-inkling/",
+            "Comments": "Inkling launch pricing on OpenRouter (July 15, 2026): $1.00/$4.05 per 1M tokens for `thinkingmachines/inkling`. Direct Tinker API (thinkingmachines.ai) is currently running a 50% launch promo at $1.87 input / $0.374 cached-input / $4.68 output — not recorded here to avoid tying the cost history to a temporary discount. 975B total / 41B active MoE, Apache 2.0. Sources: https://thinkingmachines.ai/news/introducing-inkling/ ; https://openrouter.ai/thinkingmachines/inkling ; https://artificialanalysis.ai/models/inkling ; https://techcrunch.com/2026/07/15/thinking-machines-amps-up-its-bet-against-one-size-fits-all-ai-with-its-first-open-model-inkling/",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null
           },
@@ -21002,6 +21164,300 @@
     "sync": {
       "lastModified": "2026-07-31T18:53:06.281Z",
       "checksum": "44335a233fb0fb335593efa45b401ea4d90a8100894e3dbdffec1afcafdaf3f9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Grok Voice Think Fast 2.0",
+      "PowerRank": 12,
+      "Description": "xAI's second-generation speech-to-speech realtime voice model, announced July 29, 2026; the grok-voice-latest alias resolves to it as of August 5, 2026. Reasons while speaking rather than pausing to think — ~60% fewer reasoning tokens than Think Fast 1.0 at ~0.70s time-to-first-audio. Transcription WER 1.5-2.0x better than dedicated STT (Deepgram Nova 3, ElevenLabs Scribe v2) on xAI's 24-language eval, widening to ~10x in noisy environments; 20+ languages with automatic language detection. OpenAI-Realtime-API compatible (WebSocket endpoint wss://api.x.ai/v1/realtime), so the MJ driver reuses the OpenAI SDK pointed at xAI's base URL. Supports custom function tools plus xAI's built-in web search, X search, collections search, and remote MCP tools. Priced per minute of audio ($0.08/min API list price). Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass GrokRealtime).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 4,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Grok Voice"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "E7131979-6EC6-420E-AB53-B7D931181B11"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T15:49:41.851Z",
+            "checksum": "589fefbcfaf2edd0e8453043d35596d031d25a6754b3ff1e585b43da0091b57b"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GrokRealtime",
+            "APIName": "grok-voice-think-fast-2.0",
+            "MaxInputTokens": 128000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "85C4AD09-757C-4739-95AA-236B02B5E8D7"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T15:49:41.864Z",
+            "checksum": "1cc34aa3e8048db77fd6cde58e085898e6e7dc7aaf2a8d895cf88e2077e0ce79"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "StartedAt": "2026-07-29T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Minutes",
+            "InputPricePerUnit": 0.08,
+            "OutputPricePerUnit": 0,
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Minute",
+            "ProcessingType": "Realtime",
+            "Comments": "Grok Voice Think Fast 2.0 API list pricing on x.ai as of the July 29, 2026 announcement: $0.08 per minute of audio, expressed as a single blended session rate in InputPricePerUnit with OutputPricePerUnit set to 0 so per-minute consumers multiply elapsed minutes by one rate and never double-count. First cost row in the catalog on the Minutes price type / Per Minute unit. The Grok Voice Agent Builder product lists $0.05/min but is a separate SKU, not the raw realtime API. Cache pricing does not apply to per-minute audio billing (both cache columns null)."
+          },
+          "primaryKey": {
+            "ID": "3466CD84-31F6-40D0-A0A0-A35448BB65C4"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T15:49:41.886Z",
+            "checksum": "ba6ef72cddcb2f01682a476392939c8dc6c16fc53484f02b3f70b0db0bf8f8c1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "9E9C9FBD-0092-4873-9D47-D45E3026DDA0"
+    },
+    "sync": {
+      "lastModified": "2026-08-08T15:49:41.740Z",
+      "checksum": "f8264e632f1f8c79f132564f6ea3e5dbde9dd63789f005309bcae864b186282a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Whisper Large v3",
+      "Description": "OpenAI's Whisper Large v3 speech recognition model. Multilingual transcription across 90+ languages with strong accuracy on accented speech, background noise and domain vocabulary.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Speech to Text",
+      "PowerRank": 9,
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 8,
+      "ModelSelectionInsights": "Choose over Turbo when transcription accuracy matters more than latency - long-form content kept as a record, or audio with heavy accents, crosstalk or specialist vocabulary. Does NOT support speaker diarization on any vendor here; use AssemblyAI or Deepgram when speaker labels are required. Groq caps uploads at 25MB per request, so longer audio must be split before transcription.",
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active",
+            "DriverClass": "GroqAudioGenerator",
+            "APIName": "whisper-large-v3",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "FECDBACF-2EA8-428B-982F-AD0CAFFCBCEC"
+          },
+          "sync": {
+            "lastModified": "2026-08-10T20:58:44.961Z",
+            "checksum": "58375140d7b9af03ed7998a4c0ef1e36415e1c2e8d053e7ea6f65b001448fbb5"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "29DE17F3-F01F-4292-B840-4747D915D1F6"
+          },
+          "sync": {
+            "lastModified": "2026-08-10T20:58:44.981Z",
+            "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8778F6F5-7738-48CF-BA67-694DE686639C"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:58:44.495Z",
+      "checksum": "495478cf7272832069731b16e400b0c3b1ab3a2951b83ac9d04674cc26222641"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Whisper Large v3 Turbo",
+      "Description": "A distilled, substantially faster variant of Whisper Large v3, trading a small amount of accuracy for a large reduction in transcription time and cost.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Speech to Text",
+      "PowerRank": 8,
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 9,
+      "ModelSelectionInsights": "The default choice for bulk or latency-sensitive transcription. Prefer Whisper Large v3 when the transcript is the durable artifact rather than an intermediate step. Same 25MB Groq upload cap and same absence of diarization as Large v3.",
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Active",
+            "DriverClass": "GroqAudioGenerator",
+            "APIName": "whisper-large-v3-turbo",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "4086CA48-C3A0-4E8E-93BC-E8A34E032B85"
+          },
+          "sync": {
+            "lastModified": "2026-08-10T20:58:45.004Z",
+            "checksum": "bb138ba45ab6037e63d13a823fc18f54b107fcad9ea55d14f876408f0fcdab13"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "9BBB4DEE-A12F-46C4-AFCC-B6D391C2F2F1"
+          },
+          "sync": {
+            "lastModified": "2026-08-10T20:58:45.020Z",
+            "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B0DFE543-E954-4639-AE14-E56EC763356E"
+    },
+    "sync": {
+      "lastModified": "2026-08-10T20:58:44.513Z",
+      "checksum": "c1eba073f3f2ceb6dfe07e9994d170756e19f8d174cf62ddec6b52081c88b940"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Inkling Small",
+      "PowerRank": 17,
+      "Description": "Thinking Machines Lab's distilled open-weights sibling to Inkling, released July 30, 2026 with full Apache 2.0 weights on Hugging Face. 276B total / 12B active mixture-of-experts, multimodal (text + image + audio), variable thinking effort, and a context window up to 1M tokens architecturally. NOTE: served context is provider-specific — OpenRouter (`thinkingmachines/inkling-small`) currently serves 524,288 input tokens with a 262,144 max output. Thinking Machines Lab's own tables show Small ahead of full Inkling on Humanity's Last Exam (text-only) and SWE-bench Verified while trailing on SimpleQA — a distillation trade-off, not a strict subset of capability. Direct Tinker API meters prefill/sampled/training/cached-prefill tokens rather than input/output (promotional launch rates $0.58/$1.44/$1.73/$0.116 per 1M), which does not map cleanly onto MJ's per-1M-input/output cost schema — the cost row here uses the OpenRouter route ($0.45/$1.20 per 1M) instead, matching how the base Inkling entry handled the same asymmetry.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 2,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Thinking Machines Lab",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "C1B4D2FA-EF19-42BB-A73D-1D0B058A32F1"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "thinkingmachines/inkling-small",
+            "MaxInputTokens": 524288,
+            "MaxOutputTokens": 262144,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "B45FCCAD-77DD-4C42-86BA-937F428D103B"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-07-30T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.45,
+            "OutputPricePerUnit": 1.2,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Inkling Small on OpenRouter (`thinkingmachines/inkling-small`) at $0.45 input / $1.20 output per 1M tokens as of the July 30, 2026 open-weights release. Direct Tinker API is priced by prefill/sampled/training/cached-prefill tokens (promotional launch rates $0.58/$1.44/$1.73/$0.116 per 1M), which does not map to MJ's input/output cost schema — hence the OpenRouter route is used here, mirroring how the base Inkling record handled the same asymmetry. Some third-party aggregators cite $0.30/$1.20 for the direct Thinking Machines rate; the OpenRouter number is the one recorded because it matches an actually invoiceable input/output route. If Thinking Machines publishes a token-model rate card, add a second cost row rather than editing this one. Sources: https://thinkingmachines.ai/news/inkling-small/ ; https://openrouter.ai/thinkingmachines/inkling-small ; https://artificialanalysis.ai/models/inkling-small ; https://venturebeat.com/technology/thinking-machines-debuts-inkling-small-open-source-ai-model-nearing-performance-of-predecessor-at-about-1-4-size ; https://dataconomy.com/2026/07/31/thinking-machines-launches-open-source-inkling-small-model/",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "C47FD9FC-EFEF-4C39-B306-0481E8944D97"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0FC7BBBA-9505-4927-9114-2356C01E53E6"
     }
   }
 ]

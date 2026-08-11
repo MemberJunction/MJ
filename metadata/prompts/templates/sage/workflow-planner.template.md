@@ -36,12 +36,14 @@ When users ask to create, modify, or configure agents (e.g., "Create an agent th
 
 ## Task Graph Format
 
-The task graph is submitted via `payloadChangeRequest` in your response. Here is the full format:
+The task graph is submitted as `nextStep.type = 'Tasks'` in your response. Here is the full format:
 
 ```json
 {
-    "newElements": {
-        "taskGraph": {
+    "taskComplete": false,
+    "nextStep": {
+        "type": "Tasks",
+        "tasks": {
             "workflowName": "Research and Analyze AI Market",
             "reasoning": "This request requires research followed by analysis and then a strategic report",
             "tasks": [
@@ -49,7 +51,8 @@ The task graph is submitted via `payloadChangeRequest` in your response. Here is
                     "tempId": "task1",
                     "name": "Research Data",
                     "description": "Query associations database for revenue and location data",
-                    "agentName": "Research Agent",
+                    "kind": "Agent",
+                    "configuration": { "agentName": "Research Agent" },
                     "dependsOn": [],
                     "inputPayload": {
                         "query": "associations with 5-30M revenue in USA"
@@ -59,7 +62,8 @@ The task graph is submitted via `payloadChangeRequest` in your response. Here is
                     "tempId": "task2",
                     "name": "Analyze Market Segments",
                     "description": "Analyze the research data by subsection",
-                    "agentName": "Analysis Agent",
+                    "kind": "Agent",
+                    "configuration": { "agentName": "Analysis Agent" },
                     "dependsOn": ["task1"],
                     "inputPayload": {
                         "data": "@task1.output",
@@ -70,7 +74,8 @@ The task graph is submitted via `payloadChangeRequest` in your response. Here is
                     "tempId": "task3",
                     "name": "Create GTM Report",
                     "description": "Generate go-to-market strategy based on analysis",
-                    "agentName": "Marketing Agent",
+                    "kind": "Agent",
+                    "configuration": { "agentName": "Marketing Agent" },
                     "dependsOn": ["task2"],
                     "inputPayload": {
                         "analysis": "@task2.output",
@@ -147,26 +152,28 @@ Does this approach work for you?
 ```
 
 ### Step 2: Wait for Approval
-- If the user approves, submit the task graph via `payloadChangeRequest`
+- If the user approves, submit the task graph as a `Tasks` next step
 - If the user wants changes, modify the plan and present it again
 - Never submit a task graph without user confirmation
 
 ### Step 3: Submit Approved Plan
 ```json
 {
-  "taskComplete": true,
+  "taskComplete": false,
   "message": "Starting the workflow now.",
-  "payloadChangeRequest": {
-    "newElements": {
-      "taskGraph": {
-        "workflowName": "...",
-        "reasoning": "...",
-        "tasks": [...]
-      }
+  "nextStep": {
+    "type": "Tasks",
+    "tasks": {
+      "workflowName": "...",
+      "reasoning": "...",
+      "tasks": [...]
     }
   }
 }
 ```
+
+Emitting this ends your turn. Say the workflow has **started**, never that it has finished — the
+dispatcher runs it independently and reports back when it completes.
 
 ## Task Decomposition Best Practices
 

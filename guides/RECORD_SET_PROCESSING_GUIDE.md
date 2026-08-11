@@ -248,6 +248,44 @@ graph LR
 - **OnChange** — fires on entity events matching `OnChangeInvocationType` + `OnChangeFilter` (single-record scope).
 - **Schedule** — the scheduling engine invokes `RecordProcessExecutor` on the cron in the given timezone.
 
+### How OnChange and Schedule are actually wired
+
+Neither trigger is a bespoke mechanism. **The Record Process row is the source of truth, and saving
+it reconciles the substrate rows that do the work** — the same pattern the workflow layer uses, so
+editing the definition keeps its triggers in sync and there is no second place to manage them.
+
+| Trigger | What `MJRecordProcessEntityServer.Save()` owns |
+|---|---|
+| `ScheduleEnabled` | one `MJ: Scheduled Jobs` row of type `Run Record Process`, matched by `Configuration.RecordProcessID` |
+| `OnChangeEnabled` | one `MJ: Entity Actions` binding on the process's target entity, dispatching to the existing `Run Record Process` action |
+
+For OnChange, the binding carries:
+
+- an `MJ: Entity Action Invocations` row for `OnChangeInvocationType` — reconciled as a *set*, so
+  switching from `AfterUpdate` to `AfterCreate` leaves the process firing on exactly one event rather
+  than both;
+- a `Static` `RecordProcessID` param (which is also how the binding's **ownership** is matched —
+  `Run Record Process` is one shared action, so matching on entity + action alone would let a second
+  process silently repoint the first one's trigger);
+- a `Script` `Scope` param resolving the changed record into `{Kind:'records', RecordIDs:[…]}` — a
+  script because the record differs every time, where a static value would pin the trigger to
+  whichever record was open when it was configured;
+- an `MJ: Action Filters` row compiled from `OnChangeFilter`, bound through `MJ: Entity Action Filters`.
+
+`OnChangeFilter` is a **JavaScript boolean expression evaluated against the change**, sharing its
+shape with a workflow trigger's `filter` — so `DidFieldChangeToValue('Status','Approved')` means the
+same thing on both surfaces. Write the transition, not the state: `Status === 'Approved'` is true on
+every subsequent save too. The full vocabulary is in
+[`packages/Actions/Engine/README.md`](../packages/Actions/Engine/README.md#transition-filters--deciding-on-the-change-not-the-end-state).
+
+**Turning a trigger off disables its row rather than deleting it.** The Scheduled Job carries the
+counts, last-run and next-run that are the only record it ever fired; the filter row carries the
+expression someone wrote. Both should survive a mis-click.
+
+Reconciliation is **best-effort and never fails the save** — the process row itself is valid and
+already persisted, so a substrate error is an operator problem, logged, not a rejected edit. The two
+triggers reconcile independently, so a failure in one cannot skip the other.
+
 ---
 
 ## 8. The persisted run model
