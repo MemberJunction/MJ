@@ -329,27 +329,42 @@ export class GeminiRealtime extends BaseRealtimeModel {
      *          was discarded because the raw block already decided it — the caller logs it, keeping
      *          this a pure calculation.
      */
-    private static buildSpeechConfig(voice: string | undefined, existing: SpeechConfig | undefined): { SpeechConfig?: SpeechConfig; DroppedVoice?: string } {
+    private static buildSpeechConfig(voice: string | undefined, existing: SpeechConfig | undefined): { SpeechConfig?: SpeechConfig; DroppedVoice?: string; MalformedExisting?: boolean } {
+        // `existing` is DECLARED as SpeechConfig, but it reaches us from the open JSON config bag
+        // through the `as Partial<LiveConnectConfig>` cast — the very cast that hid #3721 — so the
+        // type is unenforced at runtime. Spreading a string below would emit `{0:'K',1:'o',…}` onto
+        // the wire, so a non-object is discarded rather than trusted.
+        const usableExisting = GeminiRealtime.isPlainObject(existing) ? existing : undefined;
+        const malformedExisting = existing !== undefined && usableExisting === undefined;
         if (!voice) {
-            return { SpeechConfig: existing };
+            return { SpeechConfig: usableExisting, MalformedExisting: malformedExisting };
         }
         // Does the raw block already decide the voice? Any of three shapes counts: a named prebuilt
-        // voice, a cloned/replicated voice, or a multi-speaker config (mutually exclusive with
-        // `voiceConfig` — the SDK rejects the pair on a live session, so injecting there would turn a
-        // discarded voice into a dead session).
+        // voice, a cloned/replicated voice, or a multi-speaker config — the last is documented as
+        // mutually exclusive with `voiceConfig`, so fabricating one beside it would be inventing a
+        // shape the SDK rejects. Note the multi-speaker session is doomed either way: the SDK throws
+        // on that key for ANY live session, on both topologies, whether or not `voiceConfig` is
+        // present — so this branch neither causes nor avoids that, it just declines to add to it.
+        // (The caller warns about the key separately, since the throw is what the author needs told.)
         const rawAlreadyDecidesVoice =
-            existing?.voiceConfig?.prebuiltVoiceConfig?.voiceName != null ||
-            existing?.voiceConfig?.replicatedVoiceConfig != null ||
-            existing?.multiSpeakerVoiceConfig != null;
+            usableExisting?.voiceConfig?.prebuiltVoiceConfig?.voiceName != null ||
+            usableExisting?.voiceConfig?.replicatedVoiceConfig != null ||
+            usableExisting?.multiSpeakerVoiceConfig != null;
         if (rawAlreadyDecidesVoice) {
-            return { SpeechConfig: existing, DroppedVoice: voice };
+            return { SpeechConfig: usableExisting, DroppedVoice: voice, MalformedExisting: malformedExisting };
         }
         return {
             SpeechConfig: {
-                ...existing,
-                voiceConfig: { ...existing?.voiceConfig, prebuiltVoiceConfig: { voiceName: voice } },
+                ...usableExisting,
+                voiceConfig: { ...usableExisting?.voiceConfig, prebuiltVoiceConfig: { voiceName: voice } },
             },
+            MalformedExisting: malformedExisting,
         };
+    }
+
+    /** Narrows an unenforced config-bag value to a real object — not a string, array, or null. */
+    private static isPlainObject(value: unknown): value is SpeechConfig {
+        return typeof value === 'object' && value !== null && !Array.isArray(value);
     }
 
     /**
@@ -387,12 +402,15 @@ export class GeminiRealtime extends BaseRealtimeModel {
             // output voice at speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName instead.
             const rawVoice = cfg.voice;
             delete cfg.voice;
-            const voice = typeof rawVoice === 'string' ? rawVoice.trim() : undefined;
-            if (rawVoice !== undefined && typeof rawVoice !== 'string') {
+            const voice = typeof rawVoice === 'string' && rawVoice.trim().length > 0 ? rawVoice.trim() : undefined;
+            if (rawVoice !== undefined && voice === undefined) {
                 // Reported separately from the shared-key scrub below: `voice` IS meaningful to
                 // Gemini, so describing it as a foreign OpenAI-protocol key would misdiagnose what is
-                // simply a malformed value.
-                console.warn(`[GeminiRealtime] Ignored the session config bag's \`voice\` because it is not a string (got ${typeof rawVoice}) — expected a Gemini prebuilt voice name.`);
+                // simply a malformed value. BLANK counts as malformed for reporting even though it is
+                // treated as absent — a cleared-but-not-removed metadata field is the likeliest way
+                // this goes wrong, so it must not be the one case that disappears in silence.
+                const reason = typeof rawVoice === 'string' ? 'blank' : `not a string (got ${typeof rawVoice})`;
+                console.warn(`[GeminiRealtime] Ignored the session config bag's \`voice\` because it is ${reason} — expected a Gemini prebuilt voice name.`);
             }
             // Scrub the MJ-side keys shared across the realtime driver family (OpenAI-protocol
             // feature knobs + transport settings). They are NOT Gemini config keys — a co-agent
@@ -402,6 +420,14 @@ export class GeminiRealtime extends BaseRealtimeModel {
             // The two keys Gemini translates natively (`disableAutoResponse`, `voice`) were already
             // consumed and deleted above, so the loop only ever sees keys with no Gemini mapping —
             // no per-key exemption needed here.
+            //
+            // This scrub NARROWS the silent-drop class of #3721; it does not close it. The list is an
+            // allowlist of MJ-SHARED keys, not of non-Gemini keys, so anything outside it still rides
+            // the `Object.assign` below and is dropped by the SDK's path allowlist exactly as `voice`
+            // was. One live instance remains: `realtime.voice.providers.gemini.voiceId`, which #3530
+            // deprecated but deliberately kept authorable in the agent-type ConfigSchema. Closing the
+            // class means inverting this check to warn on any key that is not a known
+            // `LiveConnectConfig` field — tracked separately rather than widened here.
             const scrubbed: string[] = [];
             for (const key of REALTIME_SHARED_CONFIG_KEYS) {
                 if (key in cfg) {
@@ -413,9 +439,24 @@ export class GeminiRealtime extends BaseRealtimeModel {
                 console.warn(`[GeminiRealtime] Scrubbed non-Gemini config key(s) from the session bag: ${scrubbed.join(', ')} — these are OpenAI-protocol/transport keys and do not apply to Gemini Live.`);
             }
             Object.assign(config, cfg as Partial<LiveConnectConfig>);
+            // Captured BEFORE the mapping below replaces or deletes it, so the warning can report the
+            // type that was actually rejected rather than the type that replaced it.
+            const rawSpeechConfig: unknown = config.speechConfig;
             const speech = GeminiRealtime.buildSpeechConfig(voice, config.speechConfig);
             if (speech.SpeechConfig) {
                 config.speechConfig = speech.SpeechConfig;
+            } else if (speech.MalformedExisting) {
+                // Nothing usable to put back, and the raw value must not survive the merge.
+                delete config.speechConfig;
+            }
+            if (speech.MalformedExisting) {
+                console.warn(`[GeminiRealtime] Ignored the session config bag's \`speechConfig\` because it is not an object (got ${Array.isArray(rawSpeechConfig) ? 'array' : typeof rawSpeechConfig}) — expected a Gemini SpeechConfig.`);
+            }
+            // Independent of any voice mapping: the SDK rejects this key on EVERY live session, so a
+            // config carrying it is already doomed on both topologies. Forwarding it in silence hands
+            // the caller a dead session with no hint which key caused it.
+            if (config.speechConfig?.multiSpeakerVoiceConfig != null) {
+                console.warn('[GeminiRealtime] The session config bag sets `speechConfig.multiSpeakerVoiceConfig`, which the Gemini Live API does not support — the SDK throws on it for both server-bridged and client-direct sessions. Use `speechConfig.voiceConfig` (or the neutral `voice` key) instead.');
             }
             if (speech.DroppedVoice) {
                 console.warn(`[GeminiRealtime] Ignored the neutral voice "${speech.DroppedVoice}" — the session config bag supplies its own speechConfig, which already names a voice. Author one or the other, not both.`);
