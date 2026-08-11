@@ -37,6 +37,7 @@
     "@memberjunction/global": "6.1.0-edge.1",
     "@memberjunction/server": "6.1.0-edge.1",
     "@memberjunction/server-bootstrap-lite": "6.1.0-edge.1",
+    "@memberjunction/generic-database-provider": "6.1.0-edge.1",
     "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.1",
     "cosmiconfig": "^9.0.0",
     "dotenv": "^17.2.4",

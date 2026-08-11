@@ -89,10 +89,11 @@ describe('CompareDateCells', () => {
         // Fri Dec 04 vs Mon Jan 05 of the next year: alphabetically "Fri" < "Mon" agrees,
         // but Wed Dec 30 vs Thu Dec 31: "Wed" > "Thu" alphabetically while Dec 30 < Dec 31
         // chronologically — the exact inversion the old localeCompare sorts shipped.
-        // Constructed in LOCAL time, not from a UTC instant. `String(date)` renders the weekday in
-        // the runner's zone, so UTC midnight lands on the PREVIOUS day west of Greenwich (Tue/Wed
-        // instead of Wed/Thu) — and "Tue" < "Wed" agrees with chronology, so the inversion this test
-        // exists to demonstrate silently disappears. The local-date form is Wed/Thu in every zone.
+        // Constructed in LOCAL time, deliberately. The inversion this test pins is a property
+        // of `String(date)`, which renders locally — so a UTC instant only lands on the intended
+        // weekday in UTC. `2026-12-30T00:00:00Z` is Tuesday the 29th anywhere west of Greenwich,
+        // making "Tue" < "Wed" and inverting the very assertion below. Local construction makes
+        // the two dates Wednesday and Thursday in every timezone.
         const dec30 = new Date(2026, 11, 30); // Wednesday
         const dec31 = new Date(2026, 11, 31); // Thursday
         expect(String(dec30).localeCompare(String(dec31))).toBeGreaterThan(0); // the bug
