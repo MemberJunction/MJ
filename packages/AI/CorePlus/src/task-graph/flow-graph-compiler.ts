@@ -362,6 +362,13 @@ function emitNode(
                 // The step's description IS what the person is being asked to do — the same
                 // convention a sub-agent step uses for its message.
                 instructions: step.Description ?? undefined,
+                // Carried so the dispatcher can put a real deadline on the request it raises. A
+                // positive number only: zero or a negative would mean "already overdue", which would
+                // expire the step before anyone could see it.
+                expiresInHours:
+                    typeof config['expiresInHours'] === 'number' && config['expiresInHours'] > 0
+                        ? config['expiresInHours']
+                        : undefined,
             });
         }
         case 'ForEach':
