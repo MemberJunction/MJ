@@ -7,7 +7,7 @@
  * particular order — invisible on screen most of the time, and trivial to pin here.
  */
 import { describe, expect, it } from 'vitest';
-import type { AgentRunTreeNode } from '@memberjunction/ai-core-plus';
+import type { AgentRunTreeNode, AgentRunTreeStatus } from '@memberjunction/ai-core-plus';
 import { ProjectRunTreeToTimeline } from '../run-tree-timeline-projection';
 
 function node(partial: Partial<AgentRunTreeNode> & { NodeID: string }): AgentRunTreeNode {
@@ -237,5 +237,89 @@ describe('ProjectRunTreeToTimeline', () => {
         );
 
         expect(items[0].icon).toContain('diagram-next');
+    });
+});
+
+/**
+ * Status vocabulary and marker colour — two failures that were silent by construction.
+ *
+ * A task says `Complete`; a run step says `Completed`. Every branch in the timeline is keyed on the
+ * step vocabulary, so a workflow row matched none of them and fell through to the unknown-status
+ * glyph — a question mark on every row of every task graph.
+ *
+ * The marker colour was worse, because it looked correct in source: `color` is written to
+ * `data-color` and matched by `.timeline-marker[data-color="info"]`, so emitting a CSS value like
+ * `var(--mj-status-info)` matched no rule at all. No filled circle was drawn, the bare glyph
+ * inherited `--mj-text-inverse`, and in dark mode it was nearly invisible. An unmatched attribute
+ * selector is not an error and neither is a variable that resolves to nothing.
+ */
+describe('ProjectRunTreeToTimeline — status and marker colour', () => {
+    const MARKER_COLORS = ['info', 'success', 'error', 'warning', 'secondary'];
+
+    it('normalizes the task vocabulary onto the step vocabulary', () => {
+        const [row] = ProjectRunTreeToTimeline(node({ NodeID: 't', NodeType: 'Task', Status: 'Complete' }));
+        expect(row.status).toBe('Completed');
+    });
+
+    it('normalizes In Progress to Running', () => {
+        const [row] = ProjectRunTreeToTimeline(node({ NodeID: 't', NodeType: 'Task', Status: 'In Progress' }));
+        expect(row.status).toBe('Running');
+    });
+
+    it('leaves statuses that exist in both vocabularies alone', () => {
+        const shared: AgentRunTreeStatus[] = ['Failed', 'Skipped', 'Blocked', 'Pending', 'Cancelled'];
+        for (const status of shared) {
+            const [row] = ProjectRunTreeToTimeline(node({ NodeID: 't', NodeType: 'Task', Status: status }));
+            expect(row.status).toBe(status);
+        }
+    });
+
+    it('emits a colour NAME the stylesheet can match, never a CSS value', () => {
+        const tree = node({
+            NodeID: 'run',
+            NodeType: 'Run',
+            Status: 'Completed',
+            Children: [
+                node({ NodeID: 'graph', NodeType: 'TaskGraph', Status: 'Complete' }),
+                node({ NodeID: 'task', NodeType: 'Task', Status: 'Complete', SourceKind: 'Action' }),
+                node({ NodeID: 'step', NodeType: 'Step', Status: 'Failed' }),
+            ],
+        });
+        for (const row of ProjectRunTreeToTimeline(tree)) {
+            expect(MARKER_COLORS).toContain(row.color);
+            expect(row.color).not.toContain('var(');
+        }
+    });
+
+    it('colours workflow work by provenance and everything else by status', () => {
+        const tree = node({
+            NodeID: 'run',
+            NodeType: 'Run',
+            Status: 'Completed',
+            Children: [
+                node({ NodeID: 'task', NodeType: 'Task', Status: 'Failed', SourceKind: 'Action' }),
+                node({ NodeID: 'step', NodeType: 'Step', Status: 'Failed' }),
+            ],
+        });
+        const rows = ProjectRunTreeToTimeline(tree);
+        // A failed WORKFLOW step still reads as workflow — provenance first; its status is legible
+        // elsewhere on the row.
+        expect(rows.find((r) => r.id === 'task')?.color).toBe('info');
+        // An ordinary run step is coloured by what happened to it.
+        expect(rows.find((r) => r.id === 'step')?.color).toBe('error');
+    });
+
+    it('reverts to agent styling at the run boundary inside a graph', () => {
+        // A sub-agent run nested under a task is ordinary agent work again — that is what tells a
+        // reader where to look when it fails.
+        const tree = node({
+            NodeID: 'graph',
+            NodeType: 'TaskGraph',
+            Status: 'Complete',
+            Children: [node({ NodeID: 'sub', NodeType: 'Run', Status: 'Completed' })],
+        });
+        const rows = ProjectRunTreeToTimeline(tree);
+        expect(rows.find((r) => r.id === 'sub')?.color).toBe('success');
+        expect(rows.find((r) => r.id === 'sub')?.provenance).toBeUndefined();
     });
 });

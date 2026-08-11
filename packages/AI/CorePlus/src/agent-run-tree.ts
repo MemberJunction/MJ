@@ -43,15 +43,39 @@ export type AgentRunTreeNodeType =
     /** One `Task` inside a graph. May itself own a run, if it dispatched an agent. */
     | 'Task';
 
-/** Terminal-ish status, normalized across the entities so a renderer branches once. */
+/**
+ * A node's status, **as the underlying row spells it** — which means two vocabularies, not one.
+ *
+ * This union previously claimed the statuses were "normalized across the entities so a renderer
+ * branches once". They are not, and never were: the query returns each row's own value, and a
+ * `Task` says `Complete` / `In Progress` where an `AIAgentRunStep` says `Completed` / `Running`.
+ * `Completed` was not even a member, so the type disagreed with the data for every agent step in
+ * every tree — and the mismatch was invisible because nothing assigned a literal to it.
+ *
+ * The cost of the fiction was real: consumers branch on the step vocabulary, so every workflow row
+ * matched none of their cases and fell through to an unknown-status rendering. Declaring both
+ * vocabularies makes that a visible fact rather than a trap — a `switch` over this type now has to
+ * acknowledge that `Complete` and `Completed` both occur.
+ *
+ * **Normalize at your boundary, don't normalize here.** A consumer that wants one vocabulary should
+ * map at the point it renders (the run timeline does exactly this); collapsing it inside the loader
+ * would throw away which kind of row a node came from, which tests and cost roll-up both rely on.
+ */
 export type AgentRunTreeStatus =
-    | 'Pending'
-    | 'Running'
-    | 'Complete'
+    // Shared by both
     | 'Failed'
+    | 'Cancelled'
+    | 'Pending'
+    // `AIAgentRunStep` / `AIAgentRun` vocabulary
+    | 'Running'
+    | 'Completed'
+    // `Task` vocabulary
+    | 'In Progress'
+    | 'Complete'
     | 'Skipped'
     | 'Blocked'
-    | 'Cancelled'
+    | 'Deferred'
+    // Human-in-the-loop
     | 'Waiting';
 
 /**

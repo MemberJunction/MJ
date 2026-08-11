@@ -3,6 +3,7 @@ import { CompositeKey, RunView } from '@memberjunction/core';
 import { MJTaskEntity, ResourceData } from '@memberjunction/core-entities';
 import { ParseJSONOptions, ParseJSONRecursive, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseDashboard, BaseResourceComponent } from '@memberjunction/ng-shared';
+import { SortWorkflowRuns, type WorkflowRunSortColumn } from './workflow-run-sorting';
 
 /**
  * How the JSON panes unpack nested JSON.
@@ -30,8 +31,10 @@ export type WorkflowRunStatusFilter = 'all' | 'Running' | 'Complete' | 'Failed' 
 
 const STATUS_FILTERS: readonly WorkflowRunStatusFilter[] = ['all', 'Running', 'Complete', 'Failed', 'Cancelled'];
 
-/** Which column the list is ordered by. */
-export type WorkflowRunSortColumn = 'Name' | 'Status' | 'StartedAt' | 'CompletedAt' | 'Duration';
+// The sort column type and the ordering itself live in `workflow-run-sorting`, which is pure and
+// therefore testable without standing up the component. Re-exported so existing importers of this
+// module keep resolving.
+export type { WorkflowRunSortColumn } from './workflow-run-sorting';
 
 /** What the detail panel is showing for the selected run. */
 export type WorkflowRunDetailTab = 'graph' | 'json';
@@ -137,45 +140,9 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
         return this.sortRuns(filtered);
     }
 
-    /**
-     * Orders the rows by the chosen column.
-     *
-     * **Unset values always sort last, whichever direction the column is in.** A run that never
-     * started has no start time, and letting `null` sort as though it were the beginning of time
-     * puts work that did not happen above work that did — the same defect the run tree's ordering
-     * had to fix. "Missing" is not "earliest".
-     */
+    /** Ordering — see `workflow-run-sorting` for the rules and why unset always sorts last. */
     private sortRuns(rows: WorkflowRunRow[]): WorkflowRunRow[] {
-        const direction = this.SortDescending ? -1 : 1;
-        const column = this.SortColumn;
-
-        return [...rows].sort((a, b) => {
-            if (column === 'StartedAt' || column === 'CompletedAt') {
-                const left = a[column]?.getTime() ?? null;
-                const right = b[column]?.getTime() ?? null;
-                if (left === null && right === null) return a.Name.localeCompare(b.Name);
-                if (left === null) return 1;
-                if (right === null) return -1;
-                return (left - right) * direction;
-            }
-            if (column === 'Duration') {
-                const left = this.elapsedMs(a);
-                const right = this.elapsedMs(b);
-                if (left === null && right === null) return a.Name.localeCompare(b.Name);
-                if (left === null) return 1;
-                if (right === null) return -1;
-                return (left - right) * direction;
-            }
-            // Name and Status are strings. `localeCompare` rather than `<`, so casing and accents
-            // order the way a reader expects rather than by code point.
-            return a[column].localeCompare(b[column]) * direction;
-        });
-    }
-
-    /** How long a run took, in ms, or null when it never started. */
-    private elapsedMs(run: WorkflowRunRow): number | null {
-        if (!run.StartedAt) return null;
-        return (run.CompletedAt ?? new Date()).getTime() - run.StartedAt.getTime();
+        return SortWorkflowRuns(rows, this.SortColumn, this.SortDescending);
     }
 
     /**
