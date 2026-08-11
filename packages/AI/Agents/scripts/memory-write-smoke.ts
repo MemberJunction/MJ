@@ -24,7 +24,8 @@ import 'dotenv/config';
 // Side-effect import: registers ALL @memberjunction classes (providers, entity subclasses, engines).
 import '@memberjunction/server-bootstrap/mj-class-registrations';
 import sql from 'mssql';
-import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { Metadata, RunView, UserInfo, LogStatus } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentNoteEntity } from '@memberjunction/core-entities';

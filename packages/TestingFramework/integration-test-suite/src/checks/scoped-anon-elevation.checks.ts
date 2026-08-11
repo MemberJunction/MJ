@@ -36,7 +36,7 @@
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { MJAIAgentRunEntity, MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { RealtimeClientSessionService } from '@memberjunction/ai-agents';
 import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck } from '@memberjunction/testing-integration';
 
