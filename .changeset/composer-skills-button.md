@@ -29,12 +29,16 @@ visibility gate so a composer offering skills but no attachments, voice or plan 
 the strip.
 
 **Before/After pair, per `guides/UI_LAYERING_GUIDE.md` section 6.** Opening skills is an action a
-host might veto, so it ships as `beforeSkillsOpened` (carrying `BeforeSkillsOpenedEventArgs` with
-`Cancel` / `CancelReason`) and `afterSkillsOpened`. `After` is not emitted on the canceled path, and
+host might veto, so it ships as `BeforeSkillsOpened` (carrying `BeforeSkillsOpenedEventArgs` with
+`Cancel` / `CancelReason`) and `AfterSkillsOpened`. `After` is not emitted on the canceled path, and
 not emitted when no active provider owns the trigger, so a host counting it counts dropdowns the
-user saw rather than clicks. The cancelable base is declared in `ng-composer` rather than imported
-from `ng-conversations` because the dependency runs the other way. `Before` handlers must be
-synchronous: EventEmitter's synchronous dispatch is how `Cancel` travels back.
+user saw rather than clicks. `Before` handlers must be synchronous: EventEmitter's synchronous
+dispatch is how `Cancel` travels back.
+
+The base, `CancellableComposerEventArgs`, is per-domain rather than shared. That matches the same
+guide's naming table, which specifies `Cancellable<Domain>EventArgs` for exactly this class, and the
+sixteen packages already following it. It is also the only option here on dependency grounds:
+`ng-composer` is the generic layer and cannot import from `ng-conversations`.
 
 **The pressed state is derived, not an input.** Plan Mode's active state is a persisted user
 preference the host owns and threads down. "Is the skill dropdown open" is intrinsic to the
