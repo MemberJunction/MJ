@@ -25,6 +25,18 @@ import { readFileSync } from 'node:fs';
 
 const DEFAULT_BASE = 'origin/next';
 /**
+ * A certified LTS line (`lts/6.1`, `origin/lts/6.1`), where the rule INVERTS.
+ *
+ * `plans/lts-process.md` §12: on a line, everything is a patch — metadata migrations, CodeGen
+ * repairs, and even schema migrations under a security exception. The migration-⇒-minor rule is
+ * Edge-tuple grammar (§3.1) and applies to the `next` stream only.
+ *
+ * A `minor` on a line is not merely unnecessary, it is HARMFUL: lines are patch-only forever
+ * (`6.1.0 → 6.1.1 → 6.1.2`), so a minor there consumes the tuple the next certification is
+ * targeting. Applying the Edge rule here demanded exactly that, on security-driven cert fixes.
+ */
+const LINE_BRANCH = /^(?:origin\/)?lts\//;
+/**
  * Paths whose presence in the branch earns a `minor`.
  *
  * REPEATABLE migrations (`migrations/R__*.sql`) sit directly under `migrations/` rather than in a
@@ -48,9 +60,42 @@ function git(args) {
     return execFileSync('git', args, { encoding: 'utf8' }).trim();
 }
 
+/** The branch currently checked out, or `''` when detached (CI checkouts often are). */
+function currentBranch() {
+    try {
+        const name = git(['rev-parse', '--abbrev-ref', 'HEAD']);
+        return name === 'HEAD' ? '' : name;
+    } catch {
+        return '';
+    }
+}
+
+/**
+ * Resolves the base ref and, from it, WHICH rule applies.
+ *
+ * The rule follows where the change will LAND, so the base ref is the authority — a PR targeting
+ * `lts/6.1` is a line change whatever the topic branch is called, and a topic branch name can never
+ * be trusted to say so.
+ *
+ * When no base is given the default is `origin/next`, EXCEPT in line context, where guessing is
+ * refused outright. Silently defaulting a line branch to `origin/next` is what made
+ * `npm run check:changeset` unusable there: wrong base and wrong rule at once, reported
+ * confidently. There is no honest default — which line a backport targets is not derivable — so the
+ * script asks rather than answers.
+ */
 function parseArgs(argv) {
     const baseIndex = argv.indexOf('--base');
-    return { base: baseIndex === -1 ? DEFAULT_BASE : argv[baseIndex + 1] };
+    const explicitBase = baseIndex === -1 ? null : argv[baseIndex + 1];
+    if (!explicitBase && LINE_BRANCH.test(currentBranch())) {
+        console.error(
+            `❌ On line branch '${currentBranch()}' there is no safe default base.\n` +
+            `   Pass the line explicitly, e.g. --base lts/6.1 — defaulting to ${DEFAULT_BASE} would\n` +
+            `   apply the Edge rule to a certified line and demand a level lines cannot carry.`
+        );
+        process.exit(2);
+    }
+    const base = explicitBase ?? DEFAULT_BASE;
+    return { base, onLine: LINE_BRANCH.test(base) };
 }
 
 /**
@@ -99,7 +144,7 @@ function bumpEntries(path) {
     return { entries, malformed: entries.length === 0 ? 'no package entries' : null };
 }
 
-const { base } = parseArgs(process.argv.slice(2));
+const { base, onLine } = parseArgs(process.argv.slice(2));
 try {
     git(['rev-parse', '--verify', base]);
 } catch {
@@ -136,7 +181,14 @@ for (const { path, entries, malformed } of parsed) {
             violations.push({ path, reason: `"${pkg}": ${level} is not one of ${LEVELS.join(' / ')}` });
         } else if (level === 'major') {
             violations.push({ path, reason: `"${pkg}": major — never use without explicit approval` });
-        } else if (level === 'minor' && triggers.length === 0) {
+        } else if (onLine && level === 'minor') {
+            // Inverted on a line: patch is not merely sufficient, it is the ONLY correct level, and
+            // a minor here would consume the next certification's tuple.
+            violations.push({
+                path,
+                reason: `"${pkg}": minor on a certified line — lines are patch-only (lts-process §12), even for migrations`,
+            });
+        } else if (!onLine && level === 'minor' && triggers.length === 0) {
             violations.push({
                 path,
                 reason: `"${pkg}": minor, but this branch changes no migration and no metadata`,
@@ -150,7 +202,9 @@ for (const { path, entries, malformed } of parsed) {
 // some other changeset in the same release happens to carry a `minor`, so it fails rarely and
 // unpredictably rather than immediately. One `minor` anywhere in the branch's changesets is enough
 // — the `fixed` group moves every package to the highest bump regardless.
-if (triggers.length > 0 && violations.length === 0) {
+// Skipped entirely on a line: there, a DB change ships as a patch BY DESIGN, so demanding a minor
+// is exactly the false rejection this guard used to produce on cert-fix backports.
+if (!onLine && triggers.length > 0 && violations.length === 0) {
     const declaresMinor = parsed.some(({ entries }) => entries.some((e) => e.level === 'minor'));
     if (!declaresMinor) {
         violations.push({
@@ -160,11 +214,18 @@ if (triggers.length > 0 && violations.length === 0) {
     }
 }
 
-console.log(
-    triggers.length > 0
-        ? `Branch touches ${triggers.join(' + ')} — minor is required.`
-        : 'Branch touches no migration and no metadata — every entry must be patch.'
-);
+if (onLine) {
+    console.log(
+        `Base '${base}' is a certified line — every entry must be patch` +
+        (triggers.length > 0 ? `, including the ${triggers.join(' + ')} this branch carries.` : '.')
+    );
+} else {
+    console.log(
+        triggers.length > 0
+            ? `Branch touches ${triggers.join(' + ')} — minor is required.`
+            : 'Branch touches no migration and no metadata — every entry must be patch.'
+    );
+}
 
 if (violations.length > 0) {
     console.error(`\n❌ Changeset bump levels (${violations.length} problem(s)):`);
@@ -172,9 +233,17 @@ if (violations.length > 0) {
         console.error(`   ${v.path} — ${v.reason}`);
     }
     console.error('');
-    console.error('minor  ⇐ the branch adds a migration (migrations/v*/*.sql) or changes metadata/**');
-    console.error('         (metadata becomes a migration at release, via the build engineer\'s mj sync push)');
-    console.error('patch  ⇐ everything else: TypeScript, tests, docs, guides, CI');
+    if (onLine) {
+        console.error('patch  ⇐ EVERYTHING on a certified line, migrations included — lines are patch-only');
+        console.error('         forever (lts-process §12). The migration-⇒-minor rule is Edge-tuple grammar');
+        console.error('         and does not apply here; a minor would consume the next certification\'s tuple.');
+        console.error('         The DB signal for a line release is `dbImpact`, not the version digits.');
+    } else {
+        console.error('minor  ⇐ the branch adds a migration (migrations/v*/*.sql or migrations/R__*.sql)');
+        console.error('         or changes metadata/** (metadata becomes a migration at release, via the');
+        console.error('         build engineer\'s mj sync push)');
+        console.error('patch  ⇐ everything else: TypeScript, tests, docs, guides, CI');
+    }
     console.error('major  ⇐ never without explicit approval');
     console.error('');
     console.error('Every MJ package shares one `fixed` group in .changeset/config.json, so the highest');

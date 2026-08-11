@@ -52,11 +52,28 @@ Two consequences worth knowing before you reason about the number:
 
 - **On a certified line, everything is a patch** — metadata migrations, CodeGen repairs and even
   schema migrations. The migration-⇒-minor rule is Edge-tuple grammar only, so `6.1.5` → `6.1.6`
-  may well contain a migration.
+  may well contain a migration. On a line the rule **inverts**: `patch` is not merely sufficient, it
+  is the only correct level, because a `minor` there consumes the tuple the next certification is
+  targeting. `check:changeset` applies the inverted rule whenever the base is `lts/*`, and refuses
+  to guess a base at all on a line branch rather than silently answering with the Edge rule.
 - **The number cannot carry per-package semver.** All ~300 packages share one `fixed` group, so a
   consumer already receives bumps driven entirely by packages they do not use.
 
-## Why one stray `minor` matters
+## Why the accumulated level matters
+
+**The direction that costs a release is a MISSING `minor`.** If a cycle contains a migration but no
+changeset in it declares `minor`, the accumulated tuple stays `X.Y.Z+1` — and the invariant that
+migrations only ever ship in a minor-or-higher-tupled release (`lts-process` §3.1/§12) is broken for
+that whole cycle, not just your PR. It is also the failure that hides: it only shows up when no
+other changeset in the release happens to carry a `minor`, so it fails rarely and unpredictably
+rather than immediately.
+
+**A stray extra `minor` is the cheap direction** — worth avoiding, but understand what it does and
+does not do. Under permanent pre mode the stream is `X.Y.0-edge.N`; once the tuple is already minor,
+another `minor` moves nothing, and every Edge release advances all ~300 packages to `edge.N+1`
+regardless of anyone's level. So a stray `minor` produces **no additional version movement
+mid-stream**. What it costs is meaning: it tells the next author that minor-for-a-feature is normal,
+which is how the rule erodes.
 
 `.changeset/config.json` puts every MJ package in a single `fixed` group:
 
@@ -64,9 +81,10 @@ Two consequences worth knowing before you reason about the number:
 "fixed": [["@memberjunction/*"]]
 ```
 
-So the **highest bump in a release decides the version of every package**. Measured, not theorised:
-on PR #3736 a changeset naming three packages `minor` produced a changesets-bot table of
-**301 packages, all 301 Minor**. Three entries, 301 version bumps.
+That is why the level is a *release-wide* fact rather than a per-package one: the highest bump in a
+release decides the tuple for every package. On PR #3736 a changeset naming three packages `minor`
+produced a changesets-bot table of **301 packages, all 301 Minor** — an accurate picture of the
+group's scope, not of 301 version movements caused by those three entries.
 
 **The bot shows you this, but it does not judge it.** Every PR gets a `🦋 Changeset detected`
 comment listing each package and its `Minor`/`Patch` type — so the level is visible, inside a
@@ -89,8 +107,9 @@ pre-existing file using a different level is not yours to fix.
 ## Check before you push
 
 ```bash
-npm run check:changeset          # judges the changesets THIS branch adds, vs origin/next
-npm run check:changeset:test     # its own vitest suite
+npm run check:changeset                          # vs origin/next (the Edge rule)
+npm run check:changeset -- --base lts/6.1        # a line backport (the inverted, patch-only rule)
+npm run check:changeset:test                     # its own vitest suite
 ```
 
 **Nothing enforces this in CI, by maintainer decision** — no PR fails on a wrong bump level. This

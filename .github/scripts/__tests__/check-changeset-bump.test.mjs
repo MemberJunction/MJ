@@ -212,6 +212,80 @@ describe('check-changeset-bump', () => {
         expect(code).toBe(0);
     });
 
+    /**
+     * On a CERTIFIED LINE the rule inverts. `plans/lts-process.md` §12: on a line everything is a
+     * patch — metadata migrations, CodeGen repairs, and even schema migrations under a security
+     * exception. The migration-⇒-minor rule is Edge-tuple grammar (§3.1) and does not reach here.
+     *
+     * Before this, the Edge rule was applied universally, so a canon-correct cert-fix backport
+     * carrying a migration and a `patch` was REJECTED — the gate demanding a level the release
+     * process forbids, on the highest-stakes branch in the repo.
+     */
+    describe('on a certified LTS line', () => {
+        /** Builds a line branch off `next` and a topic branch on top of it. */
+        function runOnLine(name, build, { base = 'lts/6.1', explicitBase = true } = {}) {
+            git('checkout', '-q', 'next');
+            try {
+                git('checkout', '-q', 'lts/6.1');
+            } catch {
+                git('checkout', '-q', '-b', 'lts/6.1');
+                git('commit', '-q', '--allow-empty', '-m', 'line 6.1 certified');
+            }
+            git('checkout', '-q', '-b', name);
+            build();
+            git('add', '-A');
+            git('commit', '-q', '-m', name);
+            const args = explicitBase ? [SCRIPT, '--base', base] : [SCRIPT];
+            try {
+                return { code: 0, output: execFileSync('node', args, { cwd: repo, encoding: 'utf8' }) };
+            } catch (error) {
+                return { code: error.status, output: `${error.stdout ?? ''}${error.stderr ?? ''}` };
+            }
+        }
+
+        it('ACCEPTS a migration backport declared patch (the case that used to be rejected)', () => {
+            const { code, output } = runOnLine('certfix-patch', () => {
+                write('migrations/v6/V202601011500__v6.1.x__SecurityFix.sql', 'GO\n');
+                write('.changeset/certfix.md', changeset({ '@memberjunction/core': 'patch' }));
+            });
+            expect(code).toBe(0);
+            expect(output).toContain('certified line');
+        });
+
+        it('REJECTS a minor on a line, even with a migration', () => {
+            const { code, output } = runOnLine('certfix-minor', () => {
+                write('migrations/v6/V202601011600__v6.1.x__Other.sql', 'GO\n');
+                write('.changeset/certfix2.md', changeset({ '@memberjunction/core': 'minor' }));
+            });
+            expect(code).toBe(1);
+            expect(output).toContain('patch-only');
+        });
+
+        it('rejects a minor on a line even with NO database change', () => {
+            const { code } = runOnLine('line-code-minor', () => {
+                write('packages/Foo/line.ts', 'export const l = 1;\n');
+                write('.changeset/certfix3.md', changeset({ '@memberjunction/core': 'minor' }));
+            });
+            expect(code).toBe(1);
+        });
+
+        it('REFUSES to guess a base on a line branch rather than defaulting to next', () => {
+            // The local trap this closes: `npm run check:changeset` on a line branch defaulting to
+            // origin/next is wrong base AND wrong rule at once, reported confidently. Which line a
+            // backport targets is not derivable, so there is no honest default — it asks.
+            const { code, output } = runOnLine(
+                'lts/6.1-local',
+                () => {
+                    write('migrations/v6/V202601011700__v6.1.x__Local.sql', 'GO\n');
+                    write('.changeset/certfix4.md', changeset({ '@memberjunction/core': 'patch' }));
+                },
+                { explicitBase: false }
+            );
+            expect(code).toBe(2);
+            expect(output).toContain('no safe default base');
+        });
+    });
+
     it('fails loudly on an unresolvable base ref', () => {
         let code = 0;
         try {
