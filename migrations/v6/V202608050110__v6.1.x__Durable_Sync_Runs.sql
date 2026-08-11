@@ -116,8 +116,14 @@ GO
 
 -- ─── 2. Status domain gains 'Queued' (worker-mode enqueue state) ─────
 
-ALTER TABLE [${flyway:defaultSchema}].[CompanyIntegrationRun]
-    DROP CONSTRAINT [CK_CompanyIntegrationRun_Status];
+-- Guarded drop, matching the convention already used in
+-- migrations/v6/V202608082250__v6.1.x__TaskGraph_Skipped_And_Exclusive_Groups.sql.
+-- The name is identical across every shipped baseline, so an unguarded DROP works on a
+-- stock install — but it hard-fails the entire migration on any database where the
+-- constraint was renamed or removed by hand, which is not worth risking for one line.
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_CompanyIntegrationRun_Status')
+    ALTER TABLE [${flyway:defaultSchema}].[CompanyIntegrationRun]
+        DROP CONSTRAINT [CK_CompanyIntegrationRun_Status];
 GO
 
 ALTER TABLE [${flyway:defaultSchema}].[CompanyIntegrationRun]
@@ -214,12 +220,22 @@ GO
 CREATE PROCEDURE [${flyway:defaultSchema}].[spReleaseCompanyIntegrationRun]
     @RunID       UNIQUEIDENTIFIER,
     @OwnerToken  UNIQUEIDENTIFIER,
-    @FinalStatus NVARCHAR(20)
+    @FinalStatus NVARCHAR(20),
+    @FenceToken  INT = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @Released TABLE (ID UNIQUEIDENTIFIER);
 
+    -- The fence is checked here for the same reason spRenewCompanyIntegrationRunLease
+    -- checks it: OwnerToken alone proves "some context using this token owns the row",
+    -- not "THIS context still owns it". RunOwnershipService mints a fresh token per
+    -- instance and each instance claims once, so today the two are equivalent — but
+    -- Claim() is re-callable and overwrites the fence, so a future second claim on one
+    -- instance would let a superseded context set a final status on a live run.
+    -- Checking the fence makes the guarantee a property of the procedure rather than of
+    -- call-site discipline. Optional so a caller that has not yet been updated behaves
+    -- exactly as before.
     UPDATE [${flyway:defaultSchema}].[CompanyIntegrationRun]
        SET Status         = @FinalStatus,
            OwnerToken     = NULL,
@@ -227,7 +243,8 @@ BEGIN
            EndedAt        = COALESCE(EndedAt, SYSDATETIMEOFFSET())
     OUTPUT INSERTED.ID INTO @Released
      WHERE ID = @RunID
-       AND OwnerToken = @OwnerToken;
+       AND OwnerToken = @OwnerToken
+       AND (@FenceToken IS NULL OR FenceToken = @FenceToken);
 
     -- Zero rows = we no longer owned the run (reclaimed); the release is a no-op.
     SELECT ID FROM @Released;
@@ -452,7 +469,9 @@ GO
          (
             '23435976-52d3-4ebf-89b9-90d2cd8b2dd2',
             '4BC729D5-E37D-4B8A-8653-0CF009B42C10', -- Entity: MJ: RSU Pending Works
-            100001,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1
+               FROM [${flyway:defaultSchema}].[EntityField]
+              WHERE [EntityID] = '4BC729D5-E37D-4B8A-8653-0CF009B42C10'),
             'ID',
             'ID',
             NULL,
@@ -515,7 +534,9 @@ GO
          (
             '7bf1de44-6f7a-4a3d-8977-21114ea59e14',
             '4BC729D5-E37D-4B8A-8653-0CF009B42C10', -- Entity: MJ: RSU Pending Works
-            100002,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1
+               FROM [${flyway:defaultSchema}].[EntityField]
+              WHERE [EntityID] = '4BC729D5-E37D-4B8A-8653-0CF009B42C10'),
             'CompanyIntegrationID',
             'Company Integration ID',
             NULL,
@@ -578,7 +599,9 @@ GO
          (
             '8fe7fb1d-8340-4289-9bca-f40950103a69',
             '4BC729D5-E37D-4B8A-8653-0CF009B42C10', -- Entity: MJ: RSU Pending Works
-            100003,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1
+               FROM [${flyway:defaultSchema}].[EntityField]
+              WHERE [EntityID] = '4BC729D5-E37D-4B8A-8653-0CF009B42C10'),
             'PayloadJSON',
             'Payload JSON',
             'The RSU pending-work payload (the RSUPendingWork JSON shape: SourceObjectNames, SchemaName, sync/schedule options). Stored as JSON so the payload can evolve without schema churn; only the RSU pipeline interprets it.',
@@ -641,7 +664,9 @@ GO
          (
             '1b85b6a3-105e-40b1-b1b6-99e86b2fc19b',
             '4BC729D5-E37D-4B8A-8653-0CF009B42C10', -- Entity: MJ: RSU Pending Works
-            100004,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1
+               FROM [${flyway:defaultSchema}].[EntityField]
+              WHERE [EntityID] = '4BC729D5-E37D-4B8A-8653-0CF009B42C10'),
             'Status',
             'Status',
             'Lifecycle state of this pending work item. Pending = registered, not yet processed (rows Pending for longer than expected indicate stranded work). Completed = the post-restart consumer finished successfully. Failed = processing errored; see ErrorMessage.',
@@ -704,7 +729,9 @@ GO
          (
             'f0d3adee-b047-4dc6-b7a8-6b84eafd39ec',
             '4BC729D5-E37D-4B8A-8653-0CF009B42C10', -- Entity: MJ: RSU Pending Works
-            100005,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1
+               FROM [${flyway:defaultSchema}].[EntityField]
+              WHERE [EntityID] = '4BC729D5-E37D-4B8A-8653-0CF009B42C10'),
             'ErrorMessage',
             'Error Message',
             'Error detail recorded when processing this work item failed. The row is left in place (Status=Failed) rather than deleted, so failures are visible and re-runnable.',
@@ -767,7 +794,9 @@ GO
          (
             'ee3f8713-8941-4c7d-97d8-3d8719463443',
             '4BC729D5-E37D-4B8A-8653-0CF009B42C10', -- Entity: MJ: RSU Pending Works
-            100006,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1
+               FROM [${flyway:defaultSchema}].[EntityField]
+              WHERE [EntityID] = '4BC729D5-E37D-4B8A-8653-0CF009B42C10'),
             'ProcessedAt',
             'Processed At',
             'When the post-restart consumer finished processing this row (success or failure). NULL while Pending.',
@@ -830,7 +859,9 @@ GO
          (
             '2dcd6237-cdf2-47bf-a30c-90ea60cc70b3',
             '4BC729D5-E37D-4B8A-8653-0CF009B42C10', -- Entity: MJ: RSU Pending Works
-            100007,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1
+               FROM [${flyway:defaultSchema}].[EntityField]
+              WHERE [EntityID] = '4BC729D5-E37D-4B8A-8653-0CF009B42C10'),
             '__mj_CreatedAt',
             'Created At',
             NULL,
@@ -893,7 +924,9 @@ GO
          (
             '6b898c30-5290-4956-a136-72c03aa7ca49',
             '4BC729D5-E37D-4B8A-8653-0CF009B42C10', -- Entity: MJ: RSU Pending Works
-            100008,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1
+               FROM [${flyway:defaultSchema}].[EntityField]
+              WHERE [EntityID] = '4BC729D5-E37D-4B8A-8653-0CF009B42C10'),
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -956,7 +989,9 @@ GO
          (
             '1cfc0cab-9501-4e75-8895-a1f70201de2d',
             'E5238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integration Runs
-            100036,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1
+               FROM [${flyway:defaultSchema}].[EntityField]
+              WHERE [EntityID] = 'E5238F34-2837-EF11-86D4-6045BDEE16E6'),
             'OwnerToken',
             'Owner Token',
             'Opaque token identifying the process currently executing this run. NULL = unowned. Set atomically by spClaimCompanyIntegrationRun; a claim succeeds only when the run is unowned or its lease has expired. Cleared by spReleaseCompanyIntegrationRun.',
@@ -1019,7 +1054,9 @@ GO
          (
             'c34608a3-bdfb-4931-867c-8a8ffd49c55c',
             'E5238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integration Runs
-            100037,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1
+               FROM [${flyway:defaultSchema}].[EntityField]
+              WHERE [EntityID] = 'E5238F34-2837-EF11-86D4-6045BDEE16E6'),
             'LeaseExpiresAt',
             'Lease Expires At',
             'When the current owner''s lease expires. A run whose lease has passed is reclaimable by the stale sweep or another worker via spClaimCompanyIntegrationRun. Renewed on a timer by the owning engine via spRenewCompanyIntegrationRunLease.',
@@ -1082,7 +1119,9 @@ GO
          (
             'f9a387a2-964c-4eda-b959-e2f3c771f9f9',
             'E5238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integration Runs
-            100038,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1
+               FROM [${flyway:defaultSchema}].[EntityField]
+              WHERE [EntityID] = 'E5238F34-2837-EF11-86D4-6045BDEE16E6'),
             'HeartbeatAt',
             'Heartbeat At',
             'Timestamp of the owner''s most recent lease renewal (liveness signal). Updated by spClaimCompanyIntegrationRun and spRenewCompanyIntegrationRunLease.',
@@ -1145,7 +1184,9 @@ GO
          (
             '44dcc259-6252-4a3b-b485-89b0585799aa',
             'E5238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integration Runs
-            100039,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1
+               FROM [${flyway:defaultSchema}].[EntityField]
+              WHERE [EntityID] = 'E5238F34-2837-EF11-86D4-6045BDEE16E6'),
             'FenceToken',
             'Fence Token',
             'Monotonic fencing token, incremented on every successful claim/reclaim by spClaimCompanyIntegrationRun. The engine re-checks this at every batch boundary BEFORE writing: if it has moved, another process owns the run and the original owner aborts without writing. This is what turns the stale sweep from a double-run cause into a double-run fix.',
@@ -1208,7 +1249,9 @@ GO
          (
             '761351e1-56c1-4d4b-beec-df76be5a2898',
             'E5238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integration Runs
-            100040,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1
+               FROM [${flyway:defaultSchema}].[EntityField]
+              WHERE [EntityID] = 'E5238F34-2837-EF11-86D4-6045BDEE16E6'),
             'CancelRequestedAt',
             'Cancel Requested At',
             'When cancellation was requested for this run (from any process). NULL = no cancel requested. The owning engine checks this at the same batch boundary as the fence token and stops at the next boundary. Replaces the former per-process in-memory cancellation map — the database row is the single source of truth.',
@@ -1271,7 +1314,9 @@ GO
          (
             '1baed062-e987-4402-bdd5-0ac1facdd578',
             'E5238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Company Integration Runs
-            100041,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1
+               FROM [${flyway:defaultSchema}].[EntityField]
+              WHERE [EntityID] = 'E5238F34-2837-EF11-86D4-6045BDEE16E6'),
             'ProgressJSON',
             'Progress JSON',
             'JSON progress snapshot written (throttled, at most once per batch) by the owning engine. Readers query this row instead of an in-process map, so progress is visible from any process. Only the owner writes it.',
@@ -2014,7 +2059,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteRSUPendingWork] TO [cdp_Deve
          (
             '0374a147-0c25-482f-ae1f-4cde88bbd0c1',
             '4BC729D5-E37D-4B8A-8653-0CF009B42C10', -- Entity: MJ: RSU Pending Works
-            100017,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1
+               FROM [${flyway:defaultSchema}].[EntityField]
+              WHERE [EntityID] = '4BC729D5-E37D-4B8A-8653-0CF009B42C10'),
             'CompanyIntegration',
             'Company Integration',
             NULL,

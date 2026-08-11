@@ -219,14 +219,21 @@ export class RunOwnershipService {
 
     /**
      * Terminal release: set the final status, clear OwnerToken/LeaseExpiresAt,
-     * stamp EndedAt if unset. Token-checked — a stale holder (lease reclaimed)
-     * releasing late is a harmless no-op (returns false).
+     * stamp EndedAt if unset. Token- AND fence-checked — a stale holder (lease
+     * reclaimed) releasing late is a harmless no-op (returns false).
+     *
+     * The fence is sent for the same reason Renew() sends it: the owner token proves
+     * only that *some* context using this token owns the row, not that THIS context
+     * still does. Each instance mints its own token and claims once, so the two are
+     * equivalent today — but Claim() is re-callable and overwrites the fence, so
+     * passing it keeps the guarantee in the procedure rather than in call-site
+     * discipline.
      */
     public async Release(finalStatus: 'Success' | 'Failed'): Promise<boolean> {
         this.StopHeartbeat();
         const rows = await this.provider.ExecuteSQL<{ ID: string }>(
-            this.buildSprocCall('spReleaseCompanyIntegrationRun', ['RunID', 'OwnerToken', 'FinalStatus']),
-            [this.runID, this.ownerToken, finalStatus],
+            this.buildSprocCall('spReleaseCompanyIntegrationRun', ['RunID', 'OwnerToken', 'FinalStatus', 'FenceToken']),
+            [this.runID, this.ownerToken, finalStatus, this.fenceToken],
             { isMutation: true, description: 'spReleaseCompanyIntegrationRun' },
             this.contextUser
         );

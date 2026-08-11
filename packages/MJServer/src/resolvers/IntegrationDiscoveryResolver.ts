@@ -936,7 +936,7 @@ class IntegrationRunEventsOutput {
     @Field() IsInFlight: boolean;
 }
 
-// Sync progress is now tracked inside IntegrationEngine itself via IntegrationEngine.GetSyncProgress()
+// Sync progress is now tracked inside IntegrationEngine itself via IntegrationEngine.GetSyncProgressAsync()
 
 @ObjectType()
 class ConnectionSummaryOutput {
@@ -4159,7 +4159,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // DB-backed cancel (durable runs): stamps CancelRequestedAt on the live run row, so
             // the request reaches the owning process wherever it is — this server, another API
             // node, or a worker — via its heartbeat/boundary checks. No in-memory signal.
-            const cancelled = await IntegrationEngine.CancelSync(companyIntegrationID, user, provider);
+            const cancelled = await IntegrationEngine.CancelSyncAsync(companyIntegrationID, user, provider);
             if (!cancelled) {
                 return { Success: false, Message: 'No active sync found for this connector' };
             }
@@ -4760,7 +4760,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
             // DB-backed progress (durable runs): reads ProgressJSON from the live run row, so
             // progress is visible from ANY process — not just the one executing the sync.
-            const syncProgress = await IntegrationEngine.GetSyncProgress(companyIntegrationID, user, provider);
+            const syncProgress = await IntegrationEngine.GetSyncProgressAsync(companyIntegrationID, user, provider);
             if (syncProgress) {
                 return {
                     Success: true,

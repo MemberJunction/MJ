@@ -415,6 +415,63 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 
     /**
+     * One-time-per-method deprecation notice. Repeating it on every call would flood the
+     * log of a caller that polls progress on a timer, which is the usual usage.
+     */
+    private static readonly _deprecationNoticesEmitted = new Set<string>();
+    private static noteDeprecated(oldName: string, replacement: string): void {
+        if (IntegrationEngine._deprecationNoticesEmitted.has(oldName)) {
+            return;
+        }
+        IntegrationEngine._deprecationNoticesEmitted.add(oldName);
+        console.warn(
+            `IntegrationEngine.${oldName}() is deprecated and no longer functional: sync progress and ` +
+            `cancellation now live on the CompanyIntegrationRun row so they are visible across processes, ` +
+            `and the in-process map this method read no longer exists. Use ${replacement}() instead.`
+        );
+    }
+
+    /**
+     * @deprecated Superseded by {@link IntegrationEngine.GetSyncProgressAsync}, which reads
+     * the run row and therefore sees runs owned by ANY process.
+     *
+     * Retained with its original signature so a published consumer does not break on a
+     * minor upgrade. It cannot be made to work: the static map it used to read was removed
+     * when progress moved to the database, and a synchronous method cannot query it. It
+     * returns `undefined` — the same value it returned when no run was in progress — and
+     * logs once explaining the replacement.
+     */
+    public static GetSyncProgress(_companyIntegrationID: string): SyncProgressSnapshot | undefined {
+        IntegrationEngine.noteDeprecated('GetSyncProgress', 'GetSyncProgressAsync');
+        return undefined;
+    }
+
+    /**
+     * @deprecated Superseded by {@link IntegrationEngine.CancelSyncAsync}, which records the
+     * cancel on the run row so the owning process observes it at its next batch boundary.
+     *
+     * Retained with its original signature for published consumers. Returns `false` —
+     * truthfully reporting that it cancelled nothing — rather than pretending to succeed,
+     * so a caller branching on the result is not silently misled.
+     */
+    public static CancelSync(_companyIntegrationID: string): boolean {
+        IntegrationEngine.noteDeprecated('CancelSync', 'CancelSyncAsync');
+        return false;
+    }
+
+    /**
+     * @deprecated No direct replacement. Query `MJ: Company Integration Runs` for rows whose
+     * Status is `In Progress` or `Queued` and read their `ProgressJSON`, which is what
+     * {@link IntegrationEngine.GetSyncProgressAsync} does for a single connector.
+     *
+     * Retained with its original signature for published consumers; returns an empty map.
+     */
+    public static GetAllSyncProgress(): Map<string, SyncProgressSnapshot> {
+        IntegrationEngine.noteDeprecated('GetAllSyncProgress', 'GetSyncProgressAsync');
+        return new Map<string, SyncProgressSnapshot>();
+    }
+
+    /**
      * Read current sync progress for a connector FROM THE DATABASE (PR 1 item 4 —
      * progress lives on the run row, so it is visible from ANY process, not just the
      * one executing the sync). Returns undefined when no live run exists. A run is
@@ -422,7 +479,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * expired lease means the owner died and the snapshot is stale history, not
      * progress.
      */
-    public static async GetSyncProgress(
+    public static async GetSyncProgressAsync(
         companyIntegrationID: string,
         contextUser: UserInfo,
         provider?: IMetadataProvider
@@ -460,7 +517,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * owner). The owner observes the stamp at its next batch boundary / lease renewal
      * and stops after the current batch. Returns true when a live run row was stamped.
      */
-    public static async CancelSync(
+    public static async CancelSyncAsync(
         companyIntegrationID: string,
         contextUser: UserInfo,
         provider?: IMetadataProvider

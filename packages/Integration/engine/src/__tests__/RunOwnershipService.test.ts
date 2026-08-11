@@ -354,7 +354,7 @@ describe('RunOwnershipService', () => {
     });
 
     describe('Release', () => {
-        it('stops the heartbeat and token-checks the terminal write', async () => {
+        it('stops the heartbeat and token- AND fence-checks the terminal write', async () => {
             const mock = createMockProvider();
             mock.setResult([{ FenceToken: 5, LeaseExpiresAt: new Date().toISOString() }]);
             const svc = new RunOwnershipService(mock.provider, RUN_ID, undefined, mockContextUser);
@@ -365,7 +365,10 @@ describe('RunOwnershipService', () => {
 
             await expect(svc.Release('Success')).resolves.toBe(true);
             expect(mock.executed[0].sql).toContain('spReleaseCompanyIntegrationRun');
-            expect(mock.executed[0].params).toEqual([RUN_ID, svc.OwnerToken, 'Success']);
+            // The fence now rides along with the owner token, matching Renew: the token alone
+            // proves only that SOME context using it owns the row, not that THIS one still
+            // does. 5 is the FenceToken the Claim() above returned.
+            expect(mock.executed[0].params).toEqual([RUN_ID, svc.OwnerToken, 'Success', 5]);
 
             mock.executed.length = 0;
             await vi.advanceTimersByTimeAsync(60 * 60_000);
