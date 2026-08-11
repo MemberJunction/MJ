@@ -35,9 +35,15 @@ metadata edit is a `minor`.
 "fixed": [["@memberjunction/*"]]
 ```
 
-So the **highest bump in a release decides the version of all ~294 packages**. A `minor` on one
-package nobody touched moves the entire workspace. Nothing in the changesets CLI questions it, and
-it is invisible in review unless someone specifically looks.
+So the **highest bump in a release decides the version of every package**. Measured, not theorised:
+on PR #3736 a changeset naming three packages `minor` produced a changesets-bot table of
+**301 packages, all 301 Minor**. Three entries, 301 version bumps.
+
+**The bot shows you this, but it does not judge it.** Every PR gets a `🦋 Changeset detected`
+comment listing each package and its `Minor`/`Patch` type — so the level is visible, inside a
+collapsed `<details>` of ~301 near-identical rows. It renders whatever you chose; a wrong `minor`
+and a correct `patch` produce the same-shaped table. Use it to confirm what you picked, not to
+find out whether the pick was right.
 
 ## Do not pattern-match the neighbours
 
