@@ -2,7 +2,7 @@ import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component } 
 import { CompositeKey, RunView } from '@memberjunction/core';
 import { MJTaskEntity, ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { BaseDashboard } from '@memberjunction/ng-shared';
+import { BaseDashboard, BaseResourceComponent } from '@memberjunction/ng-shared';
 
 /** A settled-or-running graph, projected for the list. */
 export type WorkflowRunRow = {
@@ -40,7 +40,15 @@ const STATUS_FILTERS: readonly WorkflowRunStatusFilter[] = ['all', 'Running', 'C
     styleUrls: ['./workflow-runs-resource.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush,
 })
-@RegisterClass(BaseDashboard, 'WorkflowRunsResource')
+// Registered against BaseResourceComponent, NOT BaseDashboard — while still extending BaseDashboard
+// for its lifecycle (initDashboard/loadData and the automatic NotifyLoadComplete).
+//
+// The registration key is what the shell looks the component up by, and a nav item with
+// `ResourceType: "Custom"` is resolved through BaseResourceComponent. Registered under BaseDashboard
+// this class was never found: the Runs tab rendered "No component is registered for driver class
+// WorkflowRunsResource", which reads as a packaging problem and is really a one-word mismatch.
+// Its sibling WorkflowsResourceComponent had it right, which is what made the difference visible.
+@RegisterClass(BaseResourceComponent, 'WorkflowRunsResource')
 export class WorkflowRunsResourceComponent extends BaseDashboard implements AfterViewInit {
     public IsLoading = false;
     public LoadError: string | null = null;

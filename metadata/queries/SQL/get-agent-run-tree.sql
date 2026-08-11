@@ -65,6 +65,13 @@ WITH Tree AS (
         r.TotalCompletionTokensUsed                          AS CompletionTokens,
         CAST('MJ: AI Agent Runs' AS NVARCHAR(100))           AS SourceEntity,
         CAST(NULL AS NVARCHAR(50))                           AS PromptRunID,
+        -- The action equivalent, so an Action task can point at its execution log.
+        CAST(NULL AS NVARCHAR(50))                           AS ActionLogID,
+        -- A task's payloads, so a workflow step can present the same before/after diff an agent
+        -- run step does. Without them the shared detail panel has nothing to compare and falls
+        -- back to a raw dump, which is the difference someone notices immediately.
+        CAST(NULL AS NVARCHAR(MAX))                          AS InputPayload,
+        CAST(NULL AS NVARCHAR(MAX))                          AS OutputPayload,
         -- A loop step's per-pass trace, carried through the recursion and expanded into nodes in a
         -- second SELECT below (APPLY is illegal inside a recursive member).
         CAST(NULL AS NVARCHAR(MAX))                          AS Iterations,
@@ -101,6 +108,9 @@ WITH Tree AS (
         CAST(NULL AS INT),
         CAST('MJ: AI Agent Run Steps' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
+        CAST(NULL AS NVARCHAR(50)),
+        CAST(NULL AS NVARCHAR(MAX)),
+        CAST(NULL AS NVARCHAR(MAX)),
         CAST(NULL AS NVARCHAR(MAX)),
         CAST(s.StepType AS NVARCHAR(50)),
         s.__mj_CreatedAt
@@ -131,6 +141,9 @@ WITH Tree AS (
         CAST(NULL AS INT),
         CAST('MJ: Tasks' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
+        CAST(NULL AS NVARCHAR(50)),
+        CAST(NULL AS NVARCHAR(MAX)),
+        CAST(NULL AS NVARCHAR(MAX)),
         CAST(NULL AS NVARCHAR(MAX)),
         CAST('TaskGraph' AS NVARCHAR(50)),
         tk.__mj_CreatedAt
@@ -164,6 +177,9 @@ WITH Tree AS (
         CAST(NULL AS INT),
         CAST('MJ: Tasks' AS NVARCHAR(100)),
         CAST(JSON_VALUE(tk.Configuration, '$.runtime.promptRunID') AS NVARCHAR(50)),
+        CAST(JSON_VALUE(tk.Configuration, '$.runtime.actionLogID') AS NVARCHAR(50)),
+        CAST(tk.InputPayload AS NVARCHAR(MAX)),
+        CAST(tk.OutputPayload AS NVARCHAR(MAX)),
         -- JSON_QUERY, not JSON_VALUE: this is an ARRAY, and JSON_VALUE returns NULL for one.
         CAST(JSON_QUERY(tk.Configuration, '$.runtime.iterations') AS NVARCHAR(MAX)),
         CAST(tk.StepType AS NVARCHAR(50)),
@@ -199,6 +215,9 @@ WITH Tree AS (
         r.TotalCompletionTokensUsed,
         CAST('MJ: AI Agent Runs' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
+        CAST(NULL AS NVARCHAR(50)),
+        CAST(NULL AS NVARCHAR(MAX)),
+        CAST(NULL AS NVARCHAR(MAX)),
         CAST(NULL AS NVARCHAR(MAX)),
         CAST(NULL AS NVARCHAR(50)),
         r.__mj_CreatedAt
@@ -232,6 +251,9 @@ WITH Tree AS (
         r.TotalCompletionTokensUsed,
         CAST('MJ: AI Agent Runs' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
+        CAST(NULL AS NVARCHAR(50)),
+        CAST(NULL AS NVARCHAR(MAX)),
+        CAST(NULL AS NVARCHAR(MAX)),
         CAST(NULL AS NVARCHAR(MAX)),
         CAST(NULL AS NVARCHAR(50)),
         r.__mj_CreatedAt
@@ -282,9 +304,19 @@ SELECT
     -- reason someone clicks a prompt step. Pointing at the Task instead showed a row whose only
     -- interesting content was a foreign key to the thing they wanted. Every other node keeps its own
     -- record, and a prompt task whose run is missing falls back to its Task rather than to nothing.
-    CASE WHEN pr.ID IS NOT NULL THEN 'MJ: AI Prompt Runs' ELSE t.SourceEntity END AS SourceEntity,
+    CASE
+        WHEN pr.ID IS NOT NULL  THEN 'MJ: AI Prompt Runs'
+        WHEN al.ID IS NOT NULL  THEN 'MJ: Action Execution Logs'
+        ELSE t.SourceEntity
+    END                                                     AS SourceEntity,
     t.SourceKind,
-    CASE WHEN pr.ID IS NOT NULL THEN CAST(pr.ID AS NVARCHAR(50)) ELSE t.NodeID END AS SourceID,
+    CASE
+        WHEN pr.ID IS NOT NULL  THEN CAST(pr.ID AS NVARCHAR(50))
+        WHEN al.ID IS NOT NULL  THEN CAST(al.ID AS NVARCHAR(50))
+        ELSE t.NodeID
+    END                                                     AS SourceID,
+    t.InputPayload                                          AS InputPayload,
+    t.OutputPayload                                         AS OutputPayload,
     t.CreatedAt                                             AS CreatedAt,
     -- Sort helper only. A UNION forbids an expression in ORDER BY, so "has this started?" has to be
     -- a real column. Consumers ignore it; the loader projects by name.
@@ -292,6 +324,8 @@ SELECT
 FROM Tree t
 LEFT JOIN [__mj].[vwAIPromptRuns] pr
     ON pr.ID = t.PromptRunID
+LEFT JOIN [__mj].[vwActionExecutionLogs] al
+    ON al.ID = t.ActionLogID
 
 UNION ALL
 
@@ -346,6 +380,8 @@ SELECT
     CAST(CASE WHEN ipr.ID IS NOT NULL THEN 'MJ: AI Prompt Runs' ELSE 'MJ: AI Agent Runs' END AS NVARCHAR(100)) AS SourceEntity,
     CAST(CASE WHEN ipr.ID IS NOT NULL THEN 'Prompt' ELSE 'Sub-Agent' END AS NVARCHAR(50)) AS SourceKind,
     CAST(COALESCE(CAST(ipr.ID AS NVARCHAR(50)), CAST(iar.ID AS NVARCHAR(50)), t.NodeID) AS NVARCHAR(50)) AS SourceID,
+    CAST(NULL AS NVARCHAR(MAX))                             AS InputPayload,
+    CAST(NULL AS NVARCHAR(MAX))                             AS OutputPayload,
     t.CreatedAt                                             AS CreatedAt,
     CASE WHEN ipr.RunAt IS NULL AND iar.StartedAt IS NULL THEN 1 ELSE 0 END AS NotStarted
 FROM Tree t

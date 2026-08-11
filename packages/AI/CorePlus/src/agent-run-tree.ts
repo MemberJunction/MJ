@@ -96,6 +96,17 @@ export type AgentRunTreeRow = {
     CompletionTokens: number | null;
 
     /**
+     * A workflow task's payloads, before and after.
+     *
+     * Present so a graph step can be presented the way an agent run STEP is: the shared detail panel
+     * shows a before/after diff, and without these it has nothing to compare and falls back to a raw
+     * dump — which is exactly the difference between a workflow step and an agent step that a reader
+     * notices first. Null for every node that is not a task.
+     */
+    InputPayload: string | null;
+    OutputPayload: string | null;
+
+    /**
      * Where to go when someone clicks it — the entity name and record id.
      *
      * Carried rather than derived, because the mapping from node type to entity is not one-to-one:

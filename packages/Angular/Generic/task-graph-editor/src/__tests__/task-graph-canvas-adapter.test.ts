@@ -14,6 +14,8 @@ import {
     GetEntryTempIds,
     GetNodeTypeConfig,
     GetTaskNodeType,
+    GetNodeTypeConfig,
+    TASK_GRAPH_NODE_TYPES,
     IsHumanTask,
     NewTaskFromNodeType,
     NextTempId,
@@ -377,5 +379,45 @@ describe('NextTempId', () => {
 
     it('works on an empty graph', () => {
         expect(NextTempId(spec({ tasks: [] }))).toBe('task1');
+    });
+
+    /**
+     * Kinds a person cannot DRAW but a run can contain.
+     *
+     * These all collapsed to `AgentTask`, and `TaskSubtitle`'s default branch then reported
+     * "No agent chosen yet" — so a fully-configured ForEach rendered as a broken agent step in the
+     * run view. Drawing and rendering are different questions; the canvas has to depict every kind
+     * the dispatcher can execute, whether or not the palette offers it.
+     */
+    describe('display-only kinds', () => {
+        it('gives each run-only kind its own shape instead of the agent fallback', () => {
+            expect(GetTaskNodeType(task({ kind: 'Prompt' as const, configuration: { promptName: 'Draft' } }))).toBe('PromptTask');
+            expect(GetTaskNodeType(task({ kind: 'ForEach' as const, configuration: { collectionPath: 'payload.rows' } }))).toBe('ForEachTask');
+            expect(GetTaskNodeType(task({ kind: 'While' as const, configuration: { condition: 'payload.ok !== true' } }))).toBe('WhileTask');
+            expect(GetTaskNodeType(task({ kind: 'External' as const, configuration: { domain: 'billing' } }))).toBe('ExternalTask');
+        });
+
+        it('never tells a configured step that it has no agent', () => {
+            const foreach = task({ kind: 'ForEach' as const, configuration: { collectionPath: 'payload.rows', prompt: { name: 'Describe' } } });
+            const prompt = task({ kind: 'Prompt' as const, configuration: { promptName: 'Draft the piece' } });
+
+            expect(TaskSubtitle(foreach)).not.toContain('No agent chosen');
+            expect(TaskSubtitle(foreach)).toContain('Describe');      // says what it repeats
+            expect(TaskSubtitle(prompt)).toBe('Draft the piece');
+        });
+
+        it('still says so for a genuinely unassigned node', () => {
+            // The original behaviour, which was right — it was only wrong for kinds that never take
+            // an agent in the first place.
+            const unassigned = task({ kind: 'Agent' as const, configuration: {} });
+            expect(TaskSubtitle(unassigned)).toBe('No agent chosen yet');
+        });
+
+        it('keeps the PALETTE to what a person can actually configure', () => {
+            // Rendering is a superset. Putting these in the palette would offer steps the properties
+            // panel cannot configure, which is worse than not offering them.
+            expect(TASK_GRAPH_NODE_TYPES.map((t) => t.Type)).toEqual(['AgentTask', 'ActionTask', 'HumanTask']);
+            expect(GetNodeTypeConfig('ForEachTask')?.Label).toBe('For Each Step');
+        });
     });
 });

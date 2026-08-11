@@ -27,10 +27,10 @@ import type { TimelineItem } from './ai-agent-run-timeline.component';
  * at before they know where to go next.
  */
 const NODE_PRESENTATION: Record<AgentRunTreeNodeType, { icon: string; color: string }> = {
-    Run: { icon: 'fa-solid fa-robot', color: 'var(--mj-color-primary)' },
+    Run: { icon: 'fa-solid fa-robot', color: 'var(--mj-brand-primary)' },
     Step: { icon: 'fa-solid fa-circle-nodes', color: 'var(--mj-text-secondary)' },
-    TaskGraph: { icon: 'fa-solid fa-diagram-project', color: 'var(--mj-color-info)' },
-    Task: { icon: 'fa-solid fa-diagram-next', color: 'var(--mj-color-info)' },
+    TaskGraph: { icon: 'fa-solid fa-diagram-project', color: 'var(--mj-status-info)' },
+    Task: { icon: 'fa-solid fa-diagram-next', color: 'var(--mj-status-info)' },
 };
 
 /**
@@ -46,14 +46,21 @@ const NODE_PRESENTATION: Record<AgentRunTreeNodeType, { icon: string; color: str
  * the visual grouping that tells you this work ran on the dispatcher.
  */
 const TASK_KIND_PRESENTATION: Record<string, { icon: string; color: string }> = {
-    Action: { icon: 'fa-solid fa-bolt', color: 'var(--mj-color-info)' },
-    Prompt: { icon: 'fa-solid fa-comment-dots', color: 'var(--mj-color-info)' },
-    Agent: { icon: 'fa-solid fa-robot', color: 'var(--mj-color-info)' },
-    ForEach: { icon: 'fa-solid fa-repeat', color: 'var(--mj-color-info)' },
-    While: { icon: 'fa-solid fa-rotate', color: 'var(--mj-color-info)' },
-    Human: { icon: 'fa-solid fa-user-check', color: 'var(--mj-color-info)' },
-    External: { icon: 'fa-solid fa-arrow-up-right-from-square', color: 'var(--mj-color-info)' },
+    Action: { icon: 'fa-solid fa-bolt', color: 'var(--mj-status-info)' },
+    Prompt: { icon: 'fa-solid fa-comment-dots', color: 'var(--mj-status-info)' },
+    Agent: { icon: 'fa-solid fa-robot', color: 'var(--mj-status-info)' },
+    ForEach: { icon: 'fa-solid fa-repeat', color: 'var(--mj-status-info)' },
+    While: { icon: 'fa-solid fa-rotate', color: 'var(--mj-status-info)' },
+    Human: { icon: 'fa-solid fa-user-check', color: 'var(--mj-status-info)' },
+    External: { icon: 'fa-solid fa-arrow-up-right-from-square', color: 'var(--mj-status-info)' },
 };
+
+// ⚠️ These MUST be semantic tokens (`--mj-status-*`, `--mj-brand-*`, `--mj-text-*`), never a
+// primitive and never an invented name. `--mj-color-info` and `--mj-color-primary` were used here
+// and NEITHER EXISTS — only `--mj-color-info-50/100/500` do — so `var()` resolved to nothing, the
+// icons inherited whatever colour was around them, and in dark mode they were nearly invisible.
+// A missing custom property fails silently by design, which is what let this ship looking fine in
+// light mode.
 
 /** A node's icon and colour: by task kind when it has one, by structural role otherwise. */
 function presentationOf(node: AgentRunTreeNode): { icon: string; color: string } {
@@ -128,6 +135,15 @@ export type WorkflowStepView = {
     ParentID: string | null;
     StartedAt: Date | null;
     CompletedAt: Date | null;
+    /**
+     * The step's payload before and after, under the names the run timeline reads.
+     *
+     * A task calls them Input/OutputPayload; a run step calls them PayloadAtStart/PayloadAtEnd. The
+     * rename IS the translation — it is what makes the shared detail panel show a workflow step the
+     * same before/after diff it shows for an agent step, instead of falling through to a raw dump.
+     */
+    PayloadAtStart: string | null;
+    PayloadAtEnd: string | null;
     /** Marks this as dispatcher work for anything that wants to say so. */
     IsWorkflowStep: true;
 };
@@ -148,6 +164,8 @@ export function ProjectTaskToStepView(node: AgentRunTreeNode, stepNumber: number
         ParentID: node.ParentNodeID,
         StartedAt: node.StartedAt,
         CompletedAt: node.CompletedAt,
+        PayloadAtStart: node.InputPayload,
+        PayloadAtEnd: node.OutputPayload,
         IsWorkflowStep: true,
     };
 }

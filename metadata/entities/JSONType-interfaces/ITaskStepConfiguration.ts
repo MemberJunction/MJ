@@ -103,6 +103,20 @@ export interface ITaskStepRuntime {
     promptRunID?: string;
 
     /**
+     * The `MJ: Action Execution Logs` row this step produced, when it was an Action step.
+     *
+     * The action equivalent of {@link promptRunID}, and it exists for the same reason: the Task row
+     * records that an action ran, and nothing recorded WHICH execution. So a workflow's action step
+     * had no way to offer "view the execution log" — the one thing a person wants when an action
+     * misbehaves — while an ordinary agent run step has offered exactly that all along through its
+     * `TargetLogID`.
+     *
+     * Set on the step's LAST execution, matching promptRunID: the logs themselves are the durable
+     * history, and this points at the one whose output the payload actually carries.
+     */
+    actionLogID?: string;
+
+    /**
      * One entry per pass of a loop step, in iteration order.
      *
      * **Without this a loop's work does not exist anywhere the platform can see it.** The run tree

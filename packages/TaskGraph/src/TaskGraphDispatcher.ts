@@ -110,6 +110,8 @@ type TaskBodyOutcome = {
      * omits it. Recorded into the step's `Configuration.runtime` when the outcome is written.
      */
     PromptRunID?: string;
+    /** The action execution log an Action step produced — the action's answer to PromptRunID. */
+    ActionLogID?: string;
     /**
      * One entry per pass, for a loop step.
      *
@@ -469,7 +471,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     OutputPayload: result.Output != null ? JSON.stringify(result.Output) : null,
                     ErrorMessage: result.ErrorMessage ?? null,
                     AgentRunID: result.AgentRunID ?? null,
-                    Configuration: this.configurationWithRuntime(task, result.PromptRunID, result.Iterations),
+                    Configuration: this.configurationWithRuntime(task, result.PromptRunID, result.ActionLogID, result.Iterations),
                 },
                 this.contextUser,
             );
@@ -2143,9 +2145,10 @@ export class TaskGraphDispatcher implements IShutdownable {
     private configurationWithRuntime(
         task: MJTaskEntity,
         promptRunID: string | undefined,
+        actionLogID: string | undefined,
         iterations?: MJTaskEntity_ITaskLoopIteration[],
     ): string | undefined {
-        if (!promptRunID && !iterations?.length) return undefined;
+        if (!promptRunID && !actionLogID && !iterations?.length) return undefined;
 
         const existing = this.parseConfiguration(task);
         const merged: MJTaskEntity_ITaskStepConfiguration = {
@@ -2153,6 +2156,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             runtime: {
                 ...existing?.runtime,
                 ...(promptRunID ? { promptRunID } : {}),
+                ...(actionLogID ? { actionLogID } : {}),
                 // Replaced wholesale rather than appended: this is the trace of the loop's LAST
                 // execution, and a retried step that concatenated would report a loop that ran twice
                 // as many passes as it did.

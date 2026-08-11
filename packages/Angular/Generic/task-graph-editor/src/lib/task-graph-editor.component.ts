@@ -49,6 +49,7 @@ import {
     AddTask,
     GetDependents,
     GetNodeTypeConfig,
+    IsAuthorableNodeType,
     NewTaskFromNodeType,
     NextTempId,
     RemoveDependency,
@@ -356,7 +357,9 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
     public OnNodeAdded(event: FlowNodeAddedEvent): void {
         if (this.ReadOnly || !this.currentSpec) return;
         const type = GetNodeTypeConfig(event.Node.Type)?.Type;
-        if (!type) return;
+        // Only an authorable shape can be dropped from the palette. The render set is wider, and a
+        // display-only kind arriving here would mean the palette offered something with no editor.
+        if (!type || !IsAuthorableNodeType(type)) return;
 
         const added = this.AddTask(
             NewTaskFromNodeType(this.currentSpec, type, {
