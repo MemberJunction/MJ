@@ -178,7 +178,18 @@ WITH Tree AS (
         CAST('MJ: Tasks' AS NVARCHAR(100)),
         CAST(JSON_VALUE(tk.Configuration, '$.runtime.promptRunID') AS NVARCHAR(50)),
         CAST(JSON_VALUE(tk.Configuration, '$.runtime.actionLogID') AS NVARCHAR(50)),
-        CAST(tk.InputPayload AS NVARCHAR(MAX)),
+        -- The RESOLVED payload the step began from, falling back to the AUTHORED input.
+        --
+        -- These are different things and the fallback is not a preference between them: a step's
+        -- authored input is what its designer declared, while `runtime.payloadAtStart` is what it
+        -- actually received once its dependencies had run. The run view diffs against this, and with
+        -- only the authored value — NULL for every compiled step — every step reported itself as
+        -- having created the entire payload from nothing. The fallback keeps runs recorded before
+        -- the dispatcher wrote this readable rather than blank.
+        CAST(COALESCE(
+            JSON_QUERY(tk.Configuration, '$.runtime.payloadAtStart'),
+            tk.InputPayload
+        ) AS NVARCHAR(MAX)),
         CAST(tk.OutputPayload AS NVARCHAR(MAX)),
         -- JSON_QUERY, not JSON_VALUE: this is an ARRAY, and JSON_VALUE returns NULL for one.
         CAST(JSON_QUERY(tk.Configuration, '$.runtime.iterations') AS NVARCHAR(MAX)),
@@ -405,8 +416,12 @@ SELECT
     CAST(COALESCE(CAST(ipr.ID AS NVARCHAR(50)), CAST(iar.ID AS NVARCHAR(50)), CAST(ial.ID AS NVARCHAR(50)), t.NodeID) AS NVARCHAR(50)) AS SourceID,
     ipr.Model                                               AS Model,
     ipr.Vendor                                              AS Vendor,
-    CAST(NULL AS NVARCHAR(MAX))                             AS InputPayload,
-    CAST(NULL AS NVARCHAR(MAX))                             AS OutputPayload,
+    -- The pass's own before/after. A pass has no row of its own, so these live in the trace entry;
+    -- without them every iteration showed null on both sides and the detail panel could say nothing
+    -- about what any single pass did — which for a loop is the only question worth asking, since the
+    -- step's own payload shows only the final accumulated state.
+    CAST(it.payloadAtStart AS NVARCHAR(MAX))                AS InputPayload,
+    CAST(it.payloadAtEnd AS NVARCHAR(MAX))                  AS OutputPayload,
     t.CreatedAt                                             AS CreatedAt,
     CASE WHEN COALESCE(ipr.RunAt, iar.StartedAt, ial.StartedAt) IS NULL THEN 1 ELSE 0 END AS NotStarted
 FROM Tree t
@@ -416,7 +431,12 @@ CROSS APPLY OPENJSON(t.Iterations)
         promptRunID  NVARCHAR(50)   '$.promptRunID',
         agentRunID   NVARCHAR(50)   '$.agentRunID',
         actionLogID  NVARCHAR(50)   '$.actionLogID',
-        success      BIT            '$.success'
+        success      BIT            '$.success',
+        -- AS JSON, because these are OBJECTS. Without it OPENJSON returns NULL for a non-scalar and
+        -- the payloads would silently read as absent — indistinguishable from a pass that recorded
+        -- none.
+        payloadAtStart NVARCHAR(MAX) '$.payloadAtStart' AS JSON,
+        payloadAtEnd   NVARCHAR(MAX) '$.payloadAtEnd'   AS JSON
     ) AS it
 LEFT JOIN [__mj].[vwAIPromptRuns] ipr ON ipr.ID = it.promptRunID
 LEFT JOIN [__mj].[vwAIAgentRuns]  iar ON iar.ID = it.agentRunID

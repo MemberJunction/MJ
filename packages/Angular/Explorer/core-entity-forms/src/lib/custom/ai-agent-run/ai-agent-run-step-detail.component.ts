@@ -65,6 +65,51 @@ export class AIAgentRunStepDetailComponent {
     }
   }
 
+  /**
+   * What to say about a step that never executed, or null when it ran.
+   *
+   * **Why this needs saying at all.** A workflow persists every step at submission, before anything
+   * runs — the rows are the dispatcher's work queue, and the skip cascade is computed from the graph
+   * they form. So a branch the workflow did not take still has a row, and opening it shows a
+   * perfectly normal record with empty payloads. Without a word of explanation the reader is left to
+   * work out whether that emptiness is a branch that was not chosen, work still queued, or a step
+   * that broke silently — three very different situations that look identical in JSON.
+   *
+   * The distinction between Skipped and Blocked is load-bearing and deliberately preserved here:
+   * `Skipped` means the workflow chose another route, `Blocked` means something upstream failed. The
+   * dispatcher separated them precisely because conflating them made every conditional workflow look
+   * half-broken.
+   */
+  get StepNotice(): { Variant: 'info' | 'warning' | 'error'; Message: string } | null {
+    const item = this.selectedTimelineItem;
+    if (!item?.data?.IsWorkflowStep) return null;
+
+    switch (item.status) {
+      case 'Skipped':
+        return {
+          Variant: 'info',
+          Message: 'This step never ran — the workflow took another route. Its row exists because ' +
+                   'every step is created when the workflow is submitted, so the record of the branch ' +
+                   'that was not taken survives. Nothing went wrong here.',
+        };
+      case 'Blocked':
+        return {
+          Variant: 'error',
+          Message: 'This step could not run: something it depended on failed, so no path to it was ' +
+                   'left. It is not a branch that lost — it is work that became unreachable.',
+        };
+      case 'Pending':
+        return {
+          Variant: 'warning',
+          Message: 'This step has not started yet. A workflow runs on the dispatcher and outlives the ' +
+                   'agent run that submitted it, so a finished run can still contain steps that are ' +
+                   'queued or in flight.',
+        };
+      default:
+        return null;
+    }
+  }
+
   getSelectedItemJson(): string {
     if (!this.selectedTimelineItem) return '{}';
     

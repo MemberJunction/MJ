@@ -131,6 +131,24 @@ export interface ITaskStepRuntime {
      * its finished iterations here.
      */
     iterations?: ITaskLoopIteration[];
+
+    /**
+     * The payload as it stood when this step BEGAN — its dependencies' outputs merged with whatever
+     * authored input it carried.
+     *
+     * **Why this is not `Task.InputPayload`.** That column holds the *authored* input from the spec
+     * and round-trips back out through `TaskGraphSpecToAgentSpec`; overwriting it at completion would
+     * make a run's resolved values indistinguishable from what its author declared. So the resolved
+     * value lives here, and the authored one stays where it was written.
+     *
+     * **Why it is stored at all**, when `OutputPayload` already holds the payload as it stood after.
+     * Without a before, the run view has nothing to diff against and reports every step as having
+     * created the entire payload from nothing — a step that added one key showed as `root Added
+     * Object{5 keys}`. It is the same before/after pair an `AIAgentRunStep` has always recorded, for
+     * the same reason. It duplicates the upstream task's output by design: recomputing it would mean
+     * re-implementing the dependency merge in every consumer.
+     */
+    payloadAtStart?: Record<string, unknown>;
 }
 
 /**
@@ -160,6 +178,32 @@ export interface ITaskLoopIteration {
     success?: boolean;
     /** Why the pass failed, when it did. */
     errorMessage?: string;
+
+    /**
+     * What THIS pass was handed — the body's resolved input, not the loop's running payload.
+     *
+     * A pass is the ONLY unit of work in a graph with no row of its own, so there is nowhere else
+     * for its input and output to live. Without them every pass presented `null` on both sides and
+     * the run view could say nothing about any individual iteration — which for a loop is the only
+     * interesting question, since the step's own payload shows just the final accumulated state.
+     *
+     * **Deliberately the pass's own input rather than "the running payload before this pass".** The
+     * latter is the obvious reading of a before/after pair and is quadratic: every pass would carry a
+     * full copy of everything the earlier passes accumulated. A five-iteration demo produced a 121KB
+     * configuration that way, and the same loop over fifty items would produce megabytes — in a
+     * column that the run tree, the timeline, the canvas and the run list all load.
+     *
+     * May instead hold `{ __omitted, __bytes, __limit }` when a size budget was exceeded. Stated
+     * rather than left empty, because a pass showing nothing is otherwise indistinguishable from a
+     * pass that produced nothing.
+     */
+    payloadAtStart?: Record<string, unknown>;
+
+    /**
+     * What this pass gave back — the body's own output, on the same basis as {@link payloadAtStart},
+     * and subject to the same budget marker.
+     */
+    payloadAtEnd?: Record<string, unknown>;
 }
 
 /** A step's position and size on the canvas, in canvas units. */

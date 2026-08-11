@@ -31,6 +31,8 @@ import {
     type EdgeConditionOutcome,
 
     ComputeSkipCascade,
+    LayoutGraphNodes,
+    type GraphLayoutEdge,
     ApplyOutputMapping,
     BuildMappedInput,
     ResolveMappedInput,
@@ -122,6 +124,15 @@ type TaskBodyOutcome = {
      * settlement rollup that was under-counting every loop-bearing workflow.
      */
     Iterations?: MJTaskEntity_ITaskLoopIteration[];
+    /**
+     * The resolved payload this step STARTED from — dependencies' outputs merged with its authored
+     * input.
+     *
+     * Returned from the body rather than recomputed at the call site because the body is the only
+     * place that knows it: the merge happens inside `runTaskBody`, and a caller reconstructing it
+     * would be a second implementation of the same rule, free to drift.
+     */
+    PayloadAtStart?: Record<string, unknown>;
 };
 
 /** What a task's position in its graph tells the runner: how deep, and who submitted it. */
@@ -143,6 +154,64 @@ function stringifyBindings(bindings: Record<string, unknown>): Record<string, st
         out[key] = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
     }
     return out;
+}
+
+/**
+ * How much of a loop's per-pass payloads may be kept, and what happens when that runs out.
+ *
+ * **Why a budget exists at all.** A loop's trace lives inside one `Configuration` column, and its
+ * size is the product of two things nobody bounds: how many passes the loop runs, and how large the
+ * body's input and output are. A hundred-pass loop over documents would put megabytes in a column
+ * that the run tree, the timeline, the canvas and the Workflows list all read — punishing every
+ * reader of the row for a detail only someone inspecting one pass will ever open.
+ *
+ * **What it protects.** Only the payloads. `promptRunID` / `agentRunID` / `actionLogID` / `success`
+ * are always recorded: those point at the durable rows where the real forensics live, and they are
+ * what cost roll-up and the timeline traverse. Losing a payload costs a reader some detail; losing a
+ * pointer would lose the pass.
+ *
+ * **Omission is stated, never silent.** Once the budget is spent, further passes record a marker
+ * saying so and how large the value was, because a pass showing nothing is indistinguishable from a
+ * pass that produced nothing — and that ambiguity is exactly the failure this whole area keeps
+ * hitting.
+ */
+const ITERATION_PAYLOAD_BUDGET_BYTES = 128 * 1024;
+
+/** Per-value cap, so one enormous pass cannot consume the whole budget by itself. */
+const ITERATION_PAYLOAD_VALUE_BYTES = 16 * 1024;
+
+class IterationPayloadBudget {
+    private spent = 0;
+
+    /**
+     * The value if it fits, or a marker describing what was left out.
+     *
+     * @returns the value, a marker object, or undefined when there was nothing to record
+     */
+    public Take(value: unknown): Record<string, unknown> | undefined {
+        if (value == null) return undefined;
+        const asRecord = value && typeof value === 'object' && !Array.isArray(value)
+            ? value as Record<string, unknown>
+            : { value };
+
+        let size: number;
+        try {
+            size = JSON.stringify(asRecord)?.length ?? 0;
+        } catch {
+            // Circular or otherwise unserializable. It could not be persisted anyway, and saying so
+            // is better than a pass that silently shows nothing.
+            return { __omitted: 'unserializable' };
+        }
+
+        if (size > ITERATION_PAYLOAD_VALUE_BYTES) {
+            return { __omitted: 'too-large', __bytes: size, __limit: ITERATION_PAYLOAD_VALUE_BYTES };
+        }
+        if (this.spent + size > ITERATION_PAYLOAD_BUDGET_BYTES) {
+            return { __omitted: 'budget-exhausted', __bytes: size, __limit: ITERATION_PAYLOAD_BUDGET_BYTES };
+        }
+        this.spent += size;
+        return asRecord;
+    }
 }
 
 /** Deep-merges a prompt's JSON response into the payload, preserving what earlier steps established. */
@@ -471,7 +540,9 @@ export class TaskGraphDispatcher implements IShutdownable {
                     OutputPayload: result.Output != null ? JSON.stringify(result.Output) : null,
                     ErrorMessage: result.ErrorMessage ?? null,
                     AgentRunID: result.AgentRunID ?? null,
-                    Configuration: this.configurationWithRuntime(task, result.PromptRunID, result.ActionLogID, result.Iterations),
+                    Configuration: this.configurationWithRuntime(
+                        task, result.PromptRunID, result.ActionLogID, result.Iterations, result.PayloadAtStart,
+                    ),
                 },
                 this.contextUser,
             );
@@ -604,7 +675,22 @@ export class TaskGraphDispatcher implements IShutdownable {
             const rollup = ComputeParentRollup(fresh.nodes, fresh.handledFailureIDs);
             const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
             if (!(await parent.Load(parentID))) continue;
-            if (parent.Status !== rollup.status || parent.PercentComplete !== rollup.percentComplete) {
+            // A graph starts when its first step does.
+            //
+            // `StartedAt` is stamped by the CLAIM, and a parent is never claimed — it is a container,
+            // not a unit of work — so the graph row carried no start time even after it completed.
+            // A settled workflow therefore reported a CompletedAt with no beginning: it sorted as
+            // "not started" in the run tree, showed no timestamp, and no duration could be computed
+            // for the thing whose duration people actually ask about.
+            //
+            // Taken from the earliest child rather than from the clock, because that is when work
+            // genuinely began — a graph can sit Pending for a long time between submission (already
+            // recorded as CreatedAt) and a dispatcher picking up its first task.
+            const earliestChildStart = this.earliestStart(fresh.entityById);
+            const startedAtChanged = parent.StartedAt == null && earliestChildStart != null;
+            if (startedAtChanged) parent.StartedAt = earliestChildStart;
+
+            if (startedAtChanged || parent.Status !== rollup.status || parent.PercentComplete !== rollup.percentComplete) {
                 parent.Status = rollup.status;
                 parent.PercentComplete = rollup.percentComplete;
                 if (rollup.isTerminal) parent.CompletedAt = new Date();
@@ -612,6 +698,8 @@ export class TaskGraphDispatcher implements IShutdownable {
             }
 
             if (rollup.isTerminal) {
+                // Geometry is settled once, here, so every viewer of this run agrees on it.
+                await this.persistComputedLayout(fresh);
                 // Emitted before the continuation is delivered, and outside its once-only guard: a
                 // viewer watching the run should learn it finished whether or not this instance is
                 // the one that wins the delivery CAS.
@@ -1814,7 +1902,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         // A loop's own step type decides how many times its body runs; the body itself is dispatched
         // through the very same runners as a one-shot step.
         if (task.StepType === 'ForEach' || task.StepType === 'While') {
-            return this.runLoopTask(task, provider, payload, dependencyOutputs);
+            return { ...await this.runLoopTask(task, provider, payload, dependencyOutputs), PayloadAtStart: payload };
         }
 
         const { params, errors } = BuildMappedInput(config?.inputMapping, { payload });
@@ -1861,6 +1949,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 AgentRunID: null,
                 ErrorMessage: promptResult.ErrorMessage,
                 Output: this.applyStepOutputMapping(task, merged, merged, config?.outputMapping),
+                PayloadAtStart: payload,
                 ChatMessage: promptResult.ChatMessage,
                 // Returned even when the prompt FAILED. A failed prompt still cost tokens, and a
                 // cost rollup that silently omits failures under-reports exactly the runs someone
@@ -1880,7 +1969,11 @@ export class TaskGraphDispatcher implements IShutdownable {
             }), AgentRunID: null }
             : await this.runAgentNode(task, provider, effectiveInput, dependencyOutputs);
 
-        return { ...raw, Output: this.applyStepOutputMapping(task, payload, raw.Output, config?.outputMapping) };
+        return {
+            ...raw,
+            Output: this.applyStepOutputMapping(task, payload, raw.Output, config?.outputMapping),
+            PayloadAtStart: payload,
+        };
     }
 
     /**
@@ -1911,6 +2004,16 @@ export class TaskGraphDispatcher implements IShutdownable {
         // merged in) through the placeholder, so an empty mapping is correct rather than missing.
         const bodyMapping = (op.action?.params ?? {}) as Record<string, unknown>;
 
+        // The BODY's output mapping, applied once per pass — see `foldIterationOutput`.
+        //
+        // It used to be applied a single time after the loop finished, against the accumulated
+        // payload. That is the wrong moment in two ways at once: the mapping names an output
+        // PARAMETER of the body, which no longer exists by then, and a mapping like
+        // `"Items": "results[]"` can only append per pass. So every pass merged its raw result into
+        // the shared payload instead, each overwriting the last, and the mapping matched nothing and
+        // wrote nothing. A ForEach over five items reported five successes and kept item five.
+        const bodyOutputMapping = op.action?.outputMapping ?? op.prompt?.outputMapping;
+
         // Where this step sits in its graph, resolved ONCE rather than per iteration. A loop body is
         // dispatched exactly like a one-shot step and needs the same two things: the run that
         // submitted the graph (so a spawned run gets a ParentRunID and is visible to the tree and to
@@ -1933,6 +2036,10 @@ export class TaskGraphDispatcher implements IShutdownable {
         // spend was missing from the settlement rollup. See ITaskStepRuntime.iterations.
         const iterationTrace: MJTaskEntity_ITaskLoopIteration[] = [];
 
+        // Bounds what the trace's payloads may cost. The pointers are never budgeted — those are the
+        // durable record of the work and must survive whatever the payloads do.
+        const budget = new IterationPayloadBudget();
+
         const invokeBody: LoopBodyInvoker = async ({ Index, Bindings }) => {
             // Bindings go INTO the payload rather than beside it, so an authored mapping reaches the
             // current item the same way it reaches anything else: `payload.<itemVariable>`.
@@ -1947,12 +2054,26 @@ export class TaskGraphDispatcher implements IShutdownable {
              * still ran the passes before it, and their runs are real spend that must not vanish
              * because the loop as a whole did not finish.
              */
-            const absorb = <T extends { Success: boolean; Output?: unknown; ErrorMessage?: string; PromptRunID?: string; AgentRunID?: string; ActionLogID?: string }>(outcome: T): T => {
-                if (outcome.Output && typeof outcome.Output === 'object' && !Array.isArray(outcome.Output)) {
-                    livePayload = deepMergePayload(livePayload, outcome.Output as Record<string, unknown>);
-                }
+            const absorb = <T extends { Success: boolean; Output?: unknown; ErrorMessage?: string; PromptRunID?: string; AgentRunID?: string; ActionLogID?: string }>(outcome: T, bodyInput: unknown): T => {
+                livePayload = this.foldIterationOutput(task, livePayload, outcome.Output, bodyOutputMapping);
                 iterationTrace.push({
                     index: Index,
+                    // What THIS pass was handed and what it gave back — not the loop's running
+                    // payload before and after it.
+                    //
+                    // A pass has no row of its own, so without these there is nowhere its work can be
+                    // recorded: every iteration presented null on both sides and the run view could
+                    // say nothing about any single pass, which for a loop is the only interesting
+                    // question. But recording the RUNNING payload on both sides — the obvious reading
+                    // of "before and after" — is quadratic: each pass would hold a full copy of
+                    // everything every earlier pass accumulated. A five-iteration demo produced a
+                    // 121KB Configuration that way; the same loop over fifty items would produce
+                    // megabytes, in a column every reader of the row pays to load.
+                    //
+                    // The pass's own input and output are what a reader actually wants ("what did
+                    // pass three do?"), and they are constant-sized per pass.
+                    payloadAtStart: budget.Take(bodyInput),
+                    payloadAtEnd: budget.Take(outcome.Output),
                     promptRunID: outcome.PromptRunID,
                     agentRunID: outcome.AgentRunID,
                     // An ACTION body records its log here. Omitting it left an action-bodied pass
@@ -1994,7 +2115,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     TemplateParameters: { ...stringifyBindings(Bindings), ...op.prompt?.templateParameters },
                     Provider: provider,
                     ContextUser: this.contextUser,
-                }));
+                }), iterationPayload);
             }
 
             if (task.ActionID) {
@@ -2005,22 +2126,23 @@ export class TaskGraphDispatcher implements IShutdownable {
                     DependencyOutputs: dependencyOutputs,
                     Provider: provider,
                     ContextUser: this.contextUser,
-                }));
+                }), resolved);
             }
 
+            const agentInput = Object.keys(resolved).length > 0 ? resolved : iterationPayload;
             return absorb(await this.agentRunner.RunAgentForTask({
                 TaskID: task.ID,
                 AgentID: task.AgentID!,
                 // The ITERATION payload when the body declares no inputs of its own. A sub-agent
                 // body has no `params`, so the mapped result is `{}` — every iteration was handing
                 // the agent nothing and asking it to work from that.
-                InputPayload: Object.keys(resolved).length > 0 ? resolved : iterationPayload,
+                InputPayload: agentInput,
                 DependencyOutputs: dependencyOutputs,
                 ContinuationDepth: graphContext.Depth,
                 SubmittingAgentRunID: graphContext.SubmittingAgentRunID,
                 Provider: provider,
                 ContextUser: this.contextUser,
-            }));
+            }), agentInput);
         };
 
         const outcome = task.StepType === 'ForEach'
@@ -2048,11 +2170,55 @@ export class TaskGraphDispatcher implements IShutdownable {
             Iterations: iterationTrace.length > 0 ? iterationTrace : undefined,
             // The ACCUMULATED payload — everything the iterations established — not the one the
             // loop started with, which would discard the loop's whole effect on the workflow.
-            Output: this.applyStepOutputMapping(
-                task, livePayload, outcome.Output,
-                op.action?.outputMapping ?? op.prompt?.outputMapping ?? config?.outputMapping,
-            ),
+            //
+            // Only the STEP's own mapping is applied here. The body's mapping already ran once per
+            // pass inside `foldIterationOutput`; applying it again against the accumulated payload
+            // is what used to make it match nothing.
+            Output: this.applyStepOutputMapping(task, livePayload, outcome.Output, config?.outputMapping),
         };
+    }
+
+    /**
+     * Folds one pass's result into the loop's running payload.
+     *
+     * **With a body mapping**, the pass's declared outputs are filed where the author said to put
+     * them — including `name[]`, which appends, so a ForEach can collect one entry per item. That is
+     * the whole point of a loop over a collection, and it is only expressible per pass.
+     *
+     * **Without one**, the raw result is deep-merged, which is the pre-existing behaviour and the
+     * right default for a `While` that converges on a value: each pass refines what the condition
+     * reads. It is the wrong default for a ForEach that collects — hence the mapping.
+     *
+     * An unmapped output is reported per pass rather than swallowed, for the same reason
+     * {@link applyStepOutputMapping} reports it: a mapping that names something the body never
+     * returned means the pass did work that went nowhere, while everything reports success.
+     */
+    private foldIterationOutput(
+        task: MJTaskEntity,
+        livePayload: Record<string, unknown>,
+        output: unknown,
+        bodyOutputMapping: string | undefined,
+    ): Record<string, unknown> {
+        if (!output || typeof output !== 'object' || Array.isArray(output)) return livePayload;
+        const source = output as Record<string, unknown>;
+
+        if (!bodyOutputMapping) return deepMergePayload(livePayload, source);
+
+        // Applied ONTO a deep copy of the running payload, not into a fresh object: `name[]` appends,
+        // and appending is meaningless without the list already there. The copy is deep because the
+        // trace has already recorded earlier passes' payloads — mutating a shared nested array would
+        // retroactively rewrite what those passes are recorded as having seen.
+        const { updates, errors, unmapped } = ApplyOutputMapping(source, bodyOutputMapping, structuredClone(livePayload));
+        for (const e of errors) LogError(`[TaskGraphDispatcher] Task ${task.ID} loop body: ${e}`);
+        if (unmapped?.length) {
+            LogError(
+                `[TaskGraphDispatcher] '${task.Name}' loop body mapped output(s) it did not return: ` +
+                `${unmapped.join(', ')}. The pass returned: ${Object.keys(source).join(', ') || '(nothing)'}. ` +
+                `Those payload values were NOT written, so anything downstream reading them sees nothing.`,
+            );
+        }
+        // `updates` IS the copy that was applied onto, so it is already the complete next payload.
+        return updates;
     }
 
     /**
@@ -2137,6 +2303,72 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
+     * Gives every step that lacks one a position, once the graph has finished.
+     *
+     * **Why the run stores geometry at all.** A `TaskGraphSpec` is a logical structure with no
+     * layout field, so a graph an agent emitted has no opinion about where its boxes go. Every
+     * viewer was therefore laying it out for itself at render time — and a viewer that failed to
+     * (because the canvas measures nodes it has not drawn yet) fell back to every node at the
+     * origin, piled on one another, with the zoom-to-fit that follows fitting a one-node bounding
+     * box. Settling it once, server-side, means the agent-run canvas, the Workflows runs tab and
+     * anything built later all draw the same picture, and none of them has to compute it.
+     *
+     * **An authored position is never overwritten.** A workflow compiled from a Flow agent carries
+     * the arrangement someone dragged into place; replacing it with an algorithm's guess would
+     * discard a deliberate act. Only steps with no geometry get one, so a partially-arranged graph
+     * keeps what it has.
+     *
+     * Failure here is logged and swallowed: this is presentation. A graph whose work completed must
+     * not be reported as failed because its picture could not be saved.
+     */
+    private async persistComputedLayout(graph: GraphState): Promise<void> {
+        try {
+            const needsLayout = [...graph.entityById.values()].filter(
+                (t) => !this.parseConfiguration(t)?.layout,
+            );
+            if (needsLayout.length === 0) return;
+
+            // Laid out over the WHOLE graph, not just the nodes missing geometry: position depends on
+            // where a node sits in the topology, and a layout computed over a subset would place its
+            // nodes as though the rest of the workflow did not exist.
+            const edges: GraphLayoutEdge[] = graph.edges.map((e) => ({ From: e.dependsOnTaskId, To: e.taskId }));
+            const positions = LayoutGraphNodes([...graph.entityById.keys()], edges, { Direction: 'LR' });
+
+            for (const task of needsLayout) {
+                const position = positions.get(task.ID);
+                if (!position) continue;
+                const existing = this.parseConfiguration(task);
+                const merged: MJTaskEntity_ITaskStepConfiguration = {
+                    ...existing,
+                    layout: { x: position.X, y: position.Y },
+                };
+                task.Configuration = JSON.stringify(merged);
+                if (!(await task.Save())) {
+                    LogError(`[TaskGraphDispatcher] Could not save computed layout for ${task.ID}: ${task.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+            }
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not compute a layout for the settled graph: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /**
+     * The earliest moment any step in the graph began, or null when none has.
+     *
+     * Null is a real answer — a graph whose tasks are all still Pending has not started — and is
+     * deliberately not collapsed to "now", which would date the graph from whenever this pass
+     * happened to run.
+     */
+    private earliestStart(entityById: Map<string, MJTaskEntity>): Date | null {
+        let earliest: Date | null = null;
+        for (const entity of entityById.values()) {
+            if (!entity.StartedAt) continue;
+            if (earliest === null || entity.StartedAt < earliest) earliest = entity.StartedAt;
+        }
+        return earliest;
+    }
+
+    /**
      * The step's Configuration with this run's artefacts folded in, or `undefined` to leave it be.
      *
      * **Merged into the authored bag, never written over it.** The Configuration column holds the
@@ -2153,8 +2385,9 @@ export class TaskGraphDispatcher implements IShutdownable {
         promptRunID: string | undefined,
         actionLogID: string | undefined,
         iterations?: MJTaskEntity_ITaskLoopIteration[],
+        payloadAtStart?: Record<string, unknown>,
     ): string | undefined {
-        if (!promptRunID && !actionLogID && !iterations?.length) return undefined;
+        if (!promptRunID && !actionLogID && !iterations?.length && !payloadAtStart) return undefined;
 
         const existing = this.parseConfiguration(task);
         const merged: MJTaskEntity_ITaskStepConfiguration = {
@@ -2167,6 +2400,10 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // execution, and a retried step that concatenated would report a loop that ran twice
                 // as many passes as it did.
                 ...(iterations?.length ? { iterations } : {}),
+                // The resolved before-state, so the run view has something to diff the output
+                // against. NOT written to Task.InputPayload, which holds the AUTHORED input and
+                // round-trips back out as part of the spec.
+                ...(payloadAtStart ? { payloadAtStart } : {}),
             },
         };
         return JSON.stringify(merged);

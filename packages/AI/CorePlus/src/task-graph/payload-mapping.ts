@@ -237,24 +237,33 @@ export function ResolveMappedOutput(result: Record<string, unknown>, outputParam
  *
  * Values that resolve to `undefined` are skipped rather than written, so a step that did not produce
  * an optional field leaves the payload as it was instead of stamping it with nothing.
+ *
+ * @param into an object to apply the updates ONTO, defaulting to a fresh one. Pass the current
+ *   payload when the mapping must see what is already there — which is the only way `name[]` can
+ *   mean anything, since appending is defined relative to an existing list. A loop applying its
+ *   body's mapping once per pass needs exactly this: with a fresh object each pass, every append
+ *   produces a new one-element array that replaces the last, and the loop keeps only its final
+ *   iteration. **The object is mutated**, so callers that must not disturb the value they hold
+ *   should pass a copy.
  */
 export function ApplyOutputMapping(
     result: Record<string, unknown>,
     mappingJSON: string | null | undefined,
+    into: Record<string, unknown> = {},
 ): OutputMappingResult {
     const errors: string[] = [];
-    if (!mappingJSON?.trim()) return { updates: {}, errors };
+    if (!mappingJSON?.trim()) return { updates: into, errors };
 
     let mapping: PayloadMapping;
     try {
         const parsed: unknown = JSON.parse(mappingJSON);
-        if (!isRecord(parsed)) return { updates: {}, errors: ['Output mapping must be a JSON object.'] };
+        if (!isRecord(parsed)) return { updates: into, errors: ['Output mapping must be a JSON object.'] };
         mapping = parsed as PayloadMapping;
     } catch (e) {
-        return { updates: {}, errors: [`Output mapping is not valid JSON: ${errorText(e)}`] };
+        return { updates: into, errors: [`Output mapping is not valid JSON: ${errorText(e)}`] };
     }
 
-    const updates: Record<string, unknown> = {};
+    const updates: Record<string, unknown> = into;
     const specialFields: MappedSpecialFields = {};
     const unmapped: string[] = [];
 

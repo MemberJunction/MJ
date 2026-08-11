@@ -120,6 +120,31 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
         return this.currentRuntime;
     }
 
+    /**
+     * Geometry for the nodes, keyed by `tempId`. Supplying it places the graph instead of laying it
+     * out.
+     *
+     * **Why a host must be able to supply this.** The spec has no layout field, so without it every
+     * node projects to the origin — all of them, stacked in one place — and the canvas is left to
+     * rescue the situation with a deferred Dagre pass. That pass is fine in the editor, where the
+     * author is present and can rearrange. It was not fine in the RUN views, which held the real
+     * geometry (a workflow's authored positions, or a computed layout) and had no way to hand it
+     * over: every run rendered its steps piled on the origin, and the zoom-to-fit that followed
+     * fitted a bounding box one node wide and blew the viewport up past 250%.
+     *
+     * Applied as the starting geometry only. Once the canvas reports positions of its own — a drag,
+     * an arrange — those win, because the person moving a node is the authority on where it goes.
+     */
+    @Input()
+    public set NodePositions(value: ReadonlyMap<string, FlowPosition> | null) {
+        if (!value || value.size === 0) return;
+        for (const [id, position] of value) this.knownPositions.set(id, { ...position });
+        // Real geometry means the one-time Dagre pass has nothing to rescue.
+        this.hasLaidOut = true;
+        this.project();
+        this.zoomToFitSoon();
+    }
+
     /** Read-only mode. The same component is the viewer — there is no second, weaker renderer. */
     @Input() public ReadOnly: boolean = false;
 
@@ -466,6 +491,22 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
         this.pendingLayout = setTimeout(() => {
             this.pendingLayout = null;
             this.canvas?.AutoArrange(this.AutoLayoutDirection);
+        });
+    }
+
+    /**
+     * Fits the viewport to the graph, once the canvas has drawn it.
+     *
+     * Deferred for the same reason the layout pass is: `fitToScreen` measures the rendered nodes, so
+     * calling it in the same turn as the projection fits whatever was on screen a moment ago. With
+     * every node still at the origin that bounding box is a single node wide, and "fit" means zoom
+     * to ~265% — the symptom that made a four-step workflow look like one enormous box.
+     */
+    private zoomToFitSoon(): void {
+        if (this.pendingLayout !== null) clearTimeout(this.pendingLayout);
+        this.pendingLayout = setTimeout(() => {
+            this.pendingLayout = null;
+            this.canvas?.ZoomToFit();
         });
     }
 

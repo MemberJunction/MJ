@@ -26,11 +26,37 @@ import type { TimelineItem } from './ai-agent-run-timeline.component';
  * step the run executed itself, and someone reading a failure needs to know which they are looking
  * at before they know where to go next.
  */
-const NODE_PRESENTATION: Record<AgentRunTreeNodeType, { icon: string; color: string }> = {
-    Run: { icon: 'fa-solid fa-robot', color: 'var(--mj-brand-primary)' },
-    Step: { icon: 'fa-solid fa-circle-nodes', color: 'var(--mj-text-secondary)' },
-    TaskGraph: { icon: 'fa-solid fa-diagram-project', color: 'var(--mj-status-info)' },
-    Task: { icon: 'fa-solid fa-diagram-next', color: 'var(--mj-status-info)' },
+const NODE_PRESENTATION: Record<AgentRunTreeNodeType, { icon: string }> = {
+    Run: { icon: 'fa-solid fa-robot' },
+    Step: { icon: 'fa-solid fa-circle-nodes' },
+    TaskGraph: { icon: 'fa-solid fa-diagram-project' },
+    Task: { icon: 'fa-solid fa-diagram-next' },
+};
+
+/**
+ * The marker colour vocabulary — a NAME, never a CSS value.
+ *
+ * `TimelineItem.color` is written to `data-color` and matched by
+ * `.timeline-marker[data-color="info"]`, which sets the filled circle's background. Emitting
+ * `var(--mj-status-info)` here — a perfectly valid CSS value — matched no selector at all, so
+ * workflow rows got no filled circle and rendered a bare glyph inheriting `--mj-text-inverse`:
+ * near-invisible in dark mode, and visibly second-class beside the agent's own steps.
+ *
+ * That failure is silent twice over. An unmatched attribute selector is not an error, and neither is
+ * a CSS variable that resolves to nothing — so the only symptom was an icon that looked dim.
+ */
+type MarkerColor = 'info' | 'success' | 'error' | 'warning' | 'secondary';
+
+/** Status → marker colour, matching what an agent run's own steps have always used. */
+const STATUS_COLOR: Record<string, MarkerColor> = {
+    Running: 'info',
+    Completed: 'success',
+    Failed: 'error',
+    Cancelled: 'warning',
+    Blocked: 'error',
+    Skipped: 'secondary',
+    Pending: 'secondary',
+    Waiting: 'warning',
 };
 
 /**
@@ -45,29 +71,55 @@ const NODE_PRESENTATION: Record<AgentRunTreeNodeType, { icon: string; color: str
  * Colour still says "workflow" via `provenance`, so these icons differentiate KIND without costing
  * the visual grouping that tells you this work ran on the dispatcher.
  */
-const TASK_KIND_PRESENTATION: Record<string, { icon: string; color: string }> = {
-    Action: { icon: 'fa-solid fa-bolt', color: 'var(--mj-status-info)' },
-    Prompt: { icon: 'fa-solid fa-comment-dots', color: 'var(--mj-status-info)' },
-    Agent: { icon: 'fa-solid fa-robot', color: 'var(--mj-status-info)' },
-    ForEach: { icon: 'fa-solid fa-repeat', color: 'var(--mj-status-info)' },
-    While: { icon: 'fa-solid fa-rotate', color: 'var(--mj-status-info)' },
-    Human: { icon: 'fa-solid fa-user-check', color: 'var(--mj-status-info)' },
-    External: { icon: 'fa-solid fa-arrow-up-right-from-square', color: 'var(--mj-status-info)' },
+const TASK_KIND_PRESENTATION: Record<string, { icon: string }> = {
+    Action: { icon: 'fa-solid fa-bolt' },
+    Prompt: { icon: 'fa-solid fa-comment-dots' },
+    Agent: { icon: 'fa-solid fa-robot' },
+    ForEach: { icon: 'fa-solid fa-repeat' },
+    While: { icon: 'fa-solid fa-rotate' },
+    Human: { icon: 'fa-solid fa-user-check' },
+    External: { icon: 'fa-solid fa-arrow-up-right-from-square' },
 };
 
-// ⚠️ These MUST be semantic tokens (`--mj-status-*`, `--mj-brand-*`, `--mj-text-*`), never a
-// primitive and never an invented name. `--mj-color-info` and `--mj-color-primary` were used here
-// and NEITHER EXISTS — only `--mj-color-info-50/100/500` do — so `var()` resolved to nothing, the
-// icons inherited whatever colour was around them, and in dark mode they were nearly invisible.
-// A missing custom property fails silently by design, which is what let this ship looking fine in
-// light mode.
+/**
+ * A node's icon and marker colour.
+ *
+ * **Workflow work is always `info`** — the blue filled circle — because provenance is the thing a
+ * reader needs first: work that ran on the dispatcher, outliving the run that submitted it, is a
+ * different kind of thing from a step the run executed itself. Status is still legible on the row
+ * (its own coloured line, its icon), so the marker is free to carry provenance instead.
+ *
+ * **Everything else is coloured by status**, exactly as an agent run's own steps always have been.
+ * That is what makes a sub-agent run nested inside a graph revert to ordinary agent styling at the
+ * run boundary: below it, the work is ordinary agent work again.
+ */
+function presentationOf(node: AgentRunTreeNode): { icon: string; color: MarkerColor } {
+    const workflow = node.NodeType === 'Task' || node.NodeType === 'TaskGraph';
+    const icon = node.NodeType === 'Task' && node.SourceKind
+        ? (TASK_KIND_PRESENTATION[node.SourceKind] ?? NODE_PRESENTATION.Task).icon
+        : (NODE_PRESENTATION[node.NodeType] ?? NODE_PRESENTATION.Step).icon;
 
-/** A node's icon and colour: by task kind when it has one, by structural role otherwise. */
-function presentationOf(node: AgentRunTreeNode): { icon: string; color: string } {
-    if (node.NodeType === 'Task' && node.SourceKind) {
-        return TASK_KIND_PRESENTATION[node.SourceKind] ?? NODE_PRESENTATION.Task;
+    return { icon, color: workflow ? 'info' : (STATUS_COLOR[NormalizeStatus(node.Status)] ?? 'secondary') };
+}
+
+/**
+ * One status vocabulary for the timeline, out of the two the tree returns.
+ *
+ * A `Task` says `Complete` / `In Progress`; an `AIAgentRunStep` says `Completed` / `Running`. The
+ * timeline branches on the step vocabulary throughout — icons, colours, the status pill — so every
+ * workflow row missed EVERY branch and fell through to the unknown-status glyph. `Complete` and
+ * `Completed` differing by two letters is not a distinction anyone should have to know about.
+ *
+ * Normalized for DISPLAY only. `WorkflowStepView.Status` keeps the row's own word, so the JSON tab
+ * still shows what the database actually holds.
+ */
+export function NormalizeStatus(status: string): string {
+    switch (status) {
+        case 'Complete': return 'Completed';
+        case 'In Progress': return 'Running';
+        case 'Deferred': return 'Pending';
+        default: return status;
     }
-    return NODE_PRESENTATION[node.NodeType] ?? NODE_PRESENTATION.Step;
 }
 
 /**
@@ -248,7 +300,7 @@ function toTimelineItem(
         provenance: node.NodeType === 'Task' || node.NodeType === 'TaskGraph' ? 'workflow' : undefined,
         title: node.Name,
         subtitle: describeNode(node),
-        status: node.Status,
+        status: NormalizeStatus(node.Status),
         // NULL when a node has not started — never a fabricated instant.
         //
         // This used to be `StartedAt ?? CompletedAt ?? new Date(8_640_000_000_000_000)`, chosen so
