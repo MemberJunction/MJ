@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Hoisted mock variables
-const { mockRunViewFn, mockAvailable, mockKHConfig, mockEntityDocumentsRef } = vi.hoisted(() => {
+const { mockRunViewFn, mockAvailable, mockKHConfig, mockEntityDocumentsRef, mockContentSourcesRef } = vi.hoisted(() => {
     const mockRunViewFn = vi.fn();
     const mockAvailable = { value: false };
     const mockKHConfig = vi.fn();
     const mockEntityDocumentsRef: { value: Array<{ VectorIndexID: string; Entity: string }> } = { value: [] };
-    return { mockRunViewFn, mockAvailable, mockKHConfig, mockEntityDocumentsRef };
+    const mockContentSourcesRef: { value: Array<{ ID: string; ConfigurationObject: { VectorEntityName?: string } | null }> } = { value: [] };
+    return { mockRunViewFn, mockAvailable, mockKHConfig, mockEntityDocumentsRef, mockContentSourcesRef };
 });
 
 vi.mock('@memberjunction/core', () => {
@@ -57,6 +58,9 @@ vi.mock('@memberjunction/core-entities', () => ({
         Instance: {
             Config: mockKHConfig,
             get EntityDocuments() { return mockEntityDocumentsRef.value; },
+            // Mirrors the engine's O(1) cached ByID helper.
+            GetContentSourceByID: (id: string) =>
+                mockContentSourcesRef.value.find(c => c.ID.trim().toLowerCase() === id.trim().toLowerCase()),
         },
     },
 }));
@@ -118,6 +122,7 @@ describe('VectorSearchProvider', () => {
         mockRunViewFn.mockReset();
         mockKHConfig.mockReset().mockResolvedValue(undefined);
         mockEntityDocumentsRef.value = [];
+        mockContentSourcesRef.value = [];
     });
 
     describe('SourceType', () => {
@@ -474,6 +479,142 @@ describe('VectorSearchProvider', () => {
             ], 'test-index');
 
             expect(results[0].Score).toBe(0);
+        });
+    });
+
+    // ────────────────────────────────────────────────────────────────
+    // Attribution from the vector's CONTENT SOURCE.
+    //
+    // The ContentSource pipeline with `fieldStrategy: 'explicit'` writes only the configured
+    // fields — so `ContentSourceID` is present and the identity keys are not. `ContentSource.EntityID`
+    // is a column the source's owner sets, which makes this a DECLARATION rather than a guess, and it
+    // resolves per match rather than per index (one index can serve many sources).
+    //
+    // Why it is a correctness concern and not a label: `SearchEngine.filterEntityResults` groups by
+    // `EntityName` and evaluates THAT entity's CanRead/RLS. For an ISA extension the row-level
+    // security lives on the extension, not the base entity it inherits from — so naming the base is
+    // a security difference, and per-source declaration is the only way to express which one.
+    // ────────────────────────────────────────────────────────────────
+    describe('attribution from ContentSource.EntityID', () => {
+        type QueryOneIdx = (
+            vectorIndex: { ID: string; Name: string; VectorDatabaseID: string },
+            queryVector: number[],
+            queryText: string,
+            topK: number,
+            filter: object | undefined,
+            providerConfig: Record<string, unknown> | undefined,
+            contextUser: UserInfo
+        ) => Promise<Array<{ EntityName: string; RecordID: string; Title: string }>>;
+
+        const SOURCE_A = 'a0000000-0000-4000-8000-00000000000a';
+        const SOURCE_B = 'b0000000-0000-4000-8000-00000000000b';
+        const RECORD_GUID = 'c1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
+        /** Query one index, returning whatever the provider's matches convert to. */
+        const queryWith = async (matches: Array<{ id: string; score?: number; metadata: Record<string, unknown> }>) => {
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [{ ClassKey: 'PineconeDatabase', VectorDatabaseID: 'db-1' }],
+            });
+            createInstanceMock.mockReturnValue({
+                SupportsColocatedQuery: false,
+                TryWireColocatedHost: vi.fn(),
+                ColocatedQuery: vi.fn(),
+                QueryIndex: vi.fn().mockResolvedValue({ success: true, data: { matches } }),
+            });
+            const queryOneIndex = (provider as unknown as { queryOneIndex: QueryOneIdx }).queryOneIndex;
+            return queryOneIndex.call(
+                provider, { ID: 'idx-1', Name: 'idx', VectorDatabaseID: 'db-1' }, [0.1], 'q', 5, undefined, undefined, contextUser
+            );
+        };
+
+        it('attributes a match to the entity its content source declares', async () => {
+            mockContentSourcesRef.value = [{ ID: SOURCE_A, ConfigurationObject: { VectorEntityName: 'Content Items' } }];
+
+            const results = await queryWith([{ id: RECORD_GUID, score: 0.8, metadata: { ContentSourceID: SOURCE_A, ContentDate: 1786000000 } }]);
+
+            expect(results[0].EntityName).toBe('Content Items');
+        });
+
+        it('attributes PER MATCH, so one index can serve several sources', async () => {
+            // The reason this cannot be an index-wide answer.
+            mockContentSourcesRef.value = [
+                { ID: SOURCE_A, ConfigurationObject: { VectorEntityName: 'Content Items' } },
+                { ID: SOURCE_B, ConfigurationObject: { VectorEntityName: 'People' } },
+            ];
+
+            const results = await queryWith([
+                { id: RECORD_GUID, score: 0.9, metadata: { ContentSourceID: SOURCE_A } },
+                { id: 'd2b2c3d4-e5f6-7890-abcd-ef1234567890', score: 0.8, metadata: { ContentSourceID: SOURCE_B } },
+            ]);
+
+            expect(results.map(r => r.EntityName)).toEqual(['Content Items', 'People']);
+        });
+
+        it("never overrides a match's own Entity metadata", async () => {
+            mockContentSourcesRef.value = [{ ID: SOURCE_A, ConfigurationObject: { VectorEntityName: 'Content Items' } }];
+
+            const results = await queryWith([{ id: RECORD_GUID, score: 0.8, metadata: { Entity: 'People', ContentSourceID: SOURCE_A } }]);
+
+            expect(results[0].EntityName).toBe('People');
+        });
+
+        it('outranks the index-wide Entity Document, being the more specific declaration', async () => {
+            mockEntityDocumentsRef.value = [{ VectorIndexID: 'idx-1', Entity: 'People' }];
+            mockContentSourcesRef.value = [{ ID: SOURCE_A, ConfigurationObject: { VectorEntityName: 'Content Items' } }];
+
+            const results = await queryWith([{ id: RECORD_GUID, score: 0.8, metadata: { ContentSourceID: SOURCE_A } }]);
+
+            expect(results[0].EntityName).toBe('Content Items');
+        });
+
+        it('falls back to the Entity Document when the source declares no vector entity', async () => {
+            mockEntityDocumentsRef.value = [{ VectorIndexID: 'idx-1', Entity: 'People' }];
+            mockContentSourcesRef.value = [{ ID: SOURCE_A, ConfigurationObject: null }];
+
+            const results = await queryWith([{ id: RECORD_GUID, score: 0.8, metadata: { ContentSourceID: SOURCE_A } }]);
+
+            expect(results[0].EntityName).toBe('People');
+        });
+
+        it("stays 'Unknown' when neither the source nor the index declares anything", async () => {
+            const results = await queryWith([{ id: RECORD_GUID, score: 0.8, metadata: { ContentSourceID: SOURCE_A } }]);
+
+            expect(results[0].EntityName).toBe('Unknown');
+        });
+
+        it('recovers the record identity from the vector ID, since explicit mode stores no RecordID', async () => {
+            mockContentSourcesRef.value = [{ ID: SOURCE_A, ConfigurationObject: { VectorEntityName: 'Content Items' } }];
+
+            const results = await queryWith([{ id: RECORD_GUID, score: 0.8, metadata: { ContentSourceID: SOURCE_A } }]);
+
+            // Load-bearing: the permission filter validates these against the attributed entity's table.
+            expect(results[0].RecordID).toBe(RECORD_GUID);
+        });
+
+        it('applies the resolved entity to a match whose Entity metadata is an empty string', async () => {
+            // The "needs attributing" test is falsy, so `Entity: ''` resolves a name — applying it with
+            // `??` would discard it and the result would be dropped with the work already done.
+            mockContentSourcesRef.value = [{ ID: SOURCE_A, ConfigurationObject: { VectorEntityName: 'Content Items' } }];
+
+            const results = await queryWith([{ id: RECORD_GUID, score: 0.8, metadata: { Entity: '', ContentSourceID: SOURCE_A } }]);
+
+            expect(results[0].EntityName).toBe('Content Items');
+        });
+
+        it('titles the hit from a name-ish metadata field once attributed', async () => {
+            mockContentSourcesRef.value = [{ ID: SOURCE_A, ConfigurationObject: { VectorEntityName: 'Content Items' } }];
+
+            const results = await queryWith([{ id: RECORD_GUID, score: 0.8, metadata: { ContentSourceID: SOURCE_A, Name: 'Q3 Board Minutes' } }]);
+
+            expect(results[0].Title).toBe('Q3 Board Minutes');
+        });
+
+        it('does not consult the engine at all when every match carries Entity', async () => {
+            const results = await queryWith([{ id: RECORD_GUID, score: 0.8, metadata: { Entity: 'People', RecordID: RECORD_GUID } }]);
+
+            expect(results[0].EntityName).toBe('People');
+            expect(mockKHConfig).not.toHaveBeenCalled();
         });
     });
 
