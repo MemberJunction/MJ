@@ -11,7 +11,13 @@
  *     still concluded "All apps are up to date."
  */
 import { describe, it, expect, vi } from 'vitest';
-import { CheckAppsForUpdates, type UpdateCheckApp, type LatestVersionLookup } from '../utils/update-check.js';
+import {
+    CheckAppsForUpdates,
+    FormatUpdateCheckReport,
+    type UpdateCheckApp,
+    type LatestVersionLookup,
+    type UpdateCheckReport,
+} from '../utils/update-check.js';
 
 function app(overrides: Partial<UpdateCheckApp> = {}): UpdateCheckApp {
     return {
@@ -212,5 +218,85 @@ describe('CheckAppsForUpdates — per-app failure isolation', () => {
 
         expect(report.Updates).toEqual([]);
         expect(report.Failures.map((f) => f.Name)).toEqual(['A', 'B']);
+    });
+});
+
+describe('FormatUpdateCheckReport — the reassuring line is a positive claim', () => {
+    /**
+     * `CheckAppsForUpdates` deciding an app is UNKNOWN is only half the fix; the other half is the
+     * command not printing "All apps are up to date" over it. That decision previously lived inline
+     * in the oclif command with no test, so re-collapsing it would have silently restored the
+     * original bug — nine apps with real upgrades reported as current. These pin it.
+     */
+    function report(overrides: Partial<UpdateCheckReport> = {}): UpdateCheckReport {
+        return { Updates: [], Failures: [], Unresolved: [], ...overrides };
+    }
+    const kinds = (r: UpdateCheckReport) => FormatUpdateCheckReport(r).map((l) => l.Kind);
+
+    it('says "up to date" ONLY when nothing is outstanding', () => {
+        const lines = FormatUpdateCheckReport(report());
+        expect(lines).toEqual([{ Kind: 'up-to-date', Text: 'All apps are up to date.' }]);
+    });
+
+    it('does NOT say "up to date" when an app could not be resolved', () => {
+        const kindList = kinds(report({
+            Unresolved: [{ Name: 'connector-orcid', Current: '1.1.2', Reason: "no 'Platform/ORCID@<version>' tags found" }],
+        }));
+
+        expect(kindList).not.toContain('up-to-date');
+        expect(kindList[0]).toBe('inconclusive');
+        expect(kindList).toContain('unresolved');
+    });
+
+    it('does NOT say "up to date" when an app threw', () => {
+        const kindList = kinds(report({ Failures: [{ Name: 'Private', Message: '404 Not Found' }] }));
+
+        expect(kindList).not.toContain('up-to-date');
+        expect(kindList[0]).toBe('inconclusive');
+        expect(kindList).toContain('failure');
+    });
+
+    it('does NOT say "up to date" when BOTH kinds of unknown are present', () => {
+        const kindList = kinds(report({
+            Failures: [{ Name: 'A', Message: 'rate limited' }],
+            Unresolved: [{ Name: 'B', Current: '1.0.0', Reason: 'no tags' }],
+        }));
+
+        expect(kindList).not.toContain('up-to-date');
+        expect(kindList).toEqual([
+            'inconclusive', 'failures-header', 'failure', 'failures-note',
+            'unresolved-header', 'unresolved', 'unresolved-note',
+        ]);
+    });
+
+    it('lists updates, and still reports unknowns alongside them', () => {
+        const lines = FormatUpdateCheckReport(report({
+            Updates: [{ Name: 'connector-hubspot', Current: '1.1.0', Latest: '1.1.2' }],
+            Unresolved: [{ Name: 'connector-orcid', Current: '1.1.2', Reason: 'no tags' }],
+        }));
+
+        expect(lines.map((l) => l.Kind)).toEqual([
+            'updates-header', 'update', 'upgrade-hint',
+            'unresolved-header', 'unresolved', 'unresolved-note',
+        ]);
+        // An update being found must not suppress the unknowns — they are independent facts.
+        expect(lines.find((l) => l.Kind === 'update')?.Text).toBe('connector-hubspot: 1.1.0 -> 1.1.2');
+    });
+
+    it('counts the apps it could not check', () => {
+        const lines = FormatUpdateCheckReport(report({
+            Failures: [{ Name: 'A', Message: 'x' }, { Name: 'B', Message: 'y' }],
+        }));
+
+        expect(lines.find((l) => l.Kind === 'failures-header')?.Text).toBe('Could not check 2 app(s):');
+    });
+
+    it('names the app and its installed version on an unresolved line', () => {
+        const lines = FormatUpdateCheckReport(report({
+            Unresolved: [{ Name: 'connector-orcid', Current: '1.1.2', Reason: 'no scoped tags found' }],
+        }));
+
+        expect(lines.find((l) => l.Kind === 'unresolved')?.Text)
+            .toBe('connector-orcid (installed 1.1.2): no scoped tags found');
     });
 });
