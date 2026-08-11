@@ -11490,7 +11490,7 @@ export const MJCompanyIntegrationRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Status: z.union([z.literal('Failed'), z.literal('In Progress'), z.literal('Pending'), z.literal('Success')]).describe(`
+    Status: z.union([z.literal('Failed'), z.literal('In Progress'), z.literal('Pending'), z.literal('Queued'), z.literal('Success')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
@@ -11500,6 +11500,7 @@ export const MJCompanyIntegrationRunSchema = z.object({
     *   * Failed
     *   * In Progress
     *   * Pending
+    *   * Queued
     *   * Success
         * * Description: Status of the integration run. Possible values: Pending, In Progress, Success, Failed.`),
     ErrorLog: z.string().nullable().describe(`
@@ -11518,6 +11519,37 @@ export const MJCompanyIntegrationRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
         * * Description: Links to the scheduled job run that triggered this integration sync. NULL for manually-triggered syncs.`),
+    OwnerToken: z.string().nullable().describe(`
+        * * Field Name: OwnerToken
+        * * Display Name: Owner Token
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Opaque token identifying the process currently executing this run. NULL = unowned. Set atomically by spClaimCompanyIntegrationRun; a claim succeeds only when the run is unowned or its lease has expired. Cleared by spReleaseCompanyIntegrationRun.`),
+    LeaseExpiresAt: z.date().nullable().describe(`
+        * * Field Name: LeaseExpiresAt
+        * * Display Name: Lease Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the current owner's lease expires. A run whose lease has passed is reclaimable by the stale sweep or another worker via spClaimCompanyIntegrationRun. Renewed on a timer by the owning engine via spRenewCompanyIntegrationRunLease.`),
+    HeartbeatAt: z.date().nullable().describe(`
+        * * Field Name: HeartbeatAt
+        * * Display Name: Heartbeat At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the owner's most recent lease renewal (liveness signal). Updated by spClaimCompanyIntegrationRun and spRenewCompanyIntegrationRunLease.`),
+    FenceToken: z.number().describe(`
+        * * Field Name: FenceToken
+        * * Display Name: Fence Token
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Monotonic fencing token, incremented on every successful claim/reclaim by spClaimCompanyIntegrationRun. The engine re-checks this at every batch boundary BEFORE writing: if it has moved, another process owns the run and the original owner aborts without writing. This is what turns the stale sweep from a double-run cause into a double-run fix.`),
+    CancelRequestedAt: z.date().nullable().describe(`
+        * * Field Name: CancelRequestedAt
+        * * Display Name: Cancel Requested At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When cancellation was requested for this run (from any process). NULL = no cancel requested. The owning engine checks this at the same batch boundary as the fence token and stops at the next boundary. Replaces the former per-process in-memory cancellation map — the database row is the single source of truth.`),
+    ProgressJSON: z.string().nullable().describe(`
+        * * Field Name: ProgressJSON
+        * * Display Name: Progress JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON progress snapshot written (throttled, at most once per batch) by the owning engine. Readers query this row instead of an in-process map, so progress is visible from any process. Only the owner writes it.`),
     Integration: z.string().describe(`
         * * Field Name: Integration
         * * Display Name: Integration
@@ -26655,6 +26687,64 @@ export const MJRowLevelSecurityFilterSchema = z.object({
 });
 
 export type MJRowLevelSecurityFilterEntityType = z.infer<typeof MJRowLevelSecurityFilterSchema>;
+
+/**
+ * zod schema definition for the entity MJ: RSU Pending Works
+ */
+export const MJRSUPendingWorkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CompanyIntegrationID: z.string().describe(`
+        * * Field Name: CompanyIntegrationID
+        * * Display Name: Company Integration ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Company Integrations (vwCompanyIntegrations.ID)`),
+    PayloadJSON: z.string().describe(`
+        * * Field Name: PayloadJSON
+        * * Display Name: Payload JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The RSU pending-work payload (the RSUPendingWork JSON shape: SourceObjectNames, SchemaName, sync/schedule options). Stored as JSON so the payload can evolve without schema churn; only the RSU pipeline interprets it.`),
+    Status: z.union([z.literal('Completed'), z.literal('Failed'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Completed
+    *   * Failed
+    *   * Pending
+        * * Description: Lifecycle state of this pending work item. Pending = registered, not yet processed (rows Pending for longer than expected indicate stranded work). Completed = the post-restart consumer finished successfully. Failed = processing errored; see ErrorMessage.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Error detail recorded when processing this work item failed. The row is left in place (Status=Failed) rather than deleted, so failures are visible and re-runnable.`),
+    ProcessedAt: z.date().nullable().describe(`
+        * * Field Name: ProcessedAt
+        * * Display Name: Processed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the post-restart consumer finished processing this row (success or failure). NULL while Pending.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CompanyIntegration: z.string().describe(`
+        * * Field Name: CompanyIntegration
+        * * Display Name: Company Integration
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJRSUPendingWorkEntityType = z.infer<typeof MJRSUPendingWorkSchema>;
 
 /**
  * zod schema definition for the entity MJ: Scheduled Job Runs
@@ -64177,13 +64267,14 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
     *   * Failed
     *   * In Progress
     *   * Pending
+    *   * Queued
     *   * Success
     * * Description: Status of the integration run. Possible values: Pending, In Progress, Success, Failed.
     */
-    get Status(): 'Failed' | 'In Progress' | 'Pending' | 'Success' {
+    get Status(): 'Failed' | 'In Progress' | 'Pending' | 'Queued' | 'Success' {
         return this.Get('Status');
     }
-    set Status(value: 'Failed' | 'In Progress' | 'Pending' | 'Success') {
+    set Status(value: 'Failed' | 'In Progress' | 'Pending' | 'Queued' | 'Success') {
         this.Set('Status', value);
     }
 
@@ -64225,6 +64316,85 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
     }
     set ScheduledJobRunID(value: string | null) {
         this.Set('ScheduledJobRunID', value);
+    }
+
+    /**
+    * * Field Name: OwnerToken
+    * * Display Name: Owner Token
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Opaque token identifying the process currently executing this run. NULL = unowned. Set atomically by spClaimCompanyIntegrationRun; a claim succeeds only when the run is unowned or its lease has expired. Cleared by spReleaseCompanyIntegrationRun.
+    */
+    get OwnerToken(): string | null {
+        return this.Get('OwnerToken');
+    }
+    set OwnerToken(value: string | null) {
+        this.Set('OwnerToken', value);
+    }
+
+    /**
+    * * Field Name: LeaseExpiresAt
+    * * Display Name: Lease Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the current owner's lease expires. A run whose lease has passed is reclaimable by the stale sweep or another worker via spClaimCompanyIntegrationRun. Renewed on a timer by the owning engine via spRenewCompanyIntegrationRunLease.
+    */
+    get LeaseExpiresAt(): Date | null {
+        return this.Get('LeaseExpiresAt');
+    }
+    set LeaseExpiresAt(value: Date | null) {
+        this.Set('LeaseExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: HeartbeatAt
+    * * Display Name: Heartbeat At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the owner's most recent lease renewal (liveness signal). Updated by spClaimCompanyIntegrationRun and spRenewCompanyIntegrationRunLease.
+    */
+    get HeartbeatAt(): Date | null {
+        return this.Get('HeartbeatAt');
+    }
+    set HeartbeatAt(value: Date | null) {
+        this.Set('HeartbeatAt', value);
+    }
+
+    /**
+    * * Field Name: FenceToken
+    * * Display Name: Fence Token
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Monotonic fencing token, incremented on every successful claim/reclaim by spClaimCompanyIntegrationRun. The engine re-checks this at every batch boundary BEFORE writing: if it has moved, another process owns the run and the original owner aborts without writing. This is what turns the stale sweep from a double-run cause into a double-run fix.
+    */
+    get FenceToken(): number {
+        return this.Get('FenceToken');
+    }
+    set FenceToken(value: number) {
+        this.Set('FenceToken', value);
+    }
+
+    /**
+    * * Field Name: CancelRequestedAt
+    * * Display Name: Cancel Requested At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When cancellation was requested for this run (from any process). NULL = no cancel requested. The owning engine checks this at the same batch boundary as the fence token and stops at the next boundary. Replaces the former per-process in-memory cancellation map — the database row is the single source of truth.
+    */
+    get CancelRequestedAt(): Date | null {
+        return this.Get('CancelRequestedAt');
+    }
+    set CancelRequestedAt(value: Date | null) {
+        this.Set('CancelRequestedAt', value);
+    }
+
+    /**
+    * * Field Name: ProgressJSON
+    * * Display Name: Progress JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON progress snapshot written (throttled, at most once per batch) by the owning engine. Readers query this row instead of an in-process map, so progress is visible from any process. Only the owner writes it.
+    */
+    get ProgressJSON(): string | null {
+        return this.Get('ProgressJSON');
+    }
+    set ProgressJSON(value: string | null) {
+        this.Set('ProgressJSON', value);
     }
 
     /**
@@ -103564,6 +103734,151 @@ export class MJRowLevelSecurityFilterEntity extends BaseEntity<MJRowLevelSecurit
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: RSU Pending Works - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RSUPendingWork
+ * * Base View: vwRSUPendingWorks
+ * * @description Durable queue of Runtime Schema Update (RSU) pending setup work that must survive a server restart — replaces the former .rsu_pending directory of delete-on-read JSON files. A row is inserted when post-restart work is registered, marked Completed only AFTER the work succeeds, and marked Failed with ErrorMessage on error (never deleted on read), so stranded work older than N minutes is queryable instead of silently lost.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: RSU Pending Works')
+export class MJRSUPendingWorkEntity extends BaseEntity<MJRSUPendingWorkEntityType> {
+    /**
+    * Loads the MJ: RSU Pending Works record from the database
+    * @param ID: string - primary key value to load the MJ: RSU Pending Works record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRSUPendingWorkEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CompanyIntegrationID
+    * * Display Name: Company Integration ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Company Integrations (vwCompanyIntegrations.ID)
+    */
+    get CompanyIntegrationID(): string {
+        return this.Get('CompanyIntegrationID');
+    }
+    set CompanyIntegrationID(value: string) {
+        this.Set('CompanyIntegrationID', value);
+    }
+
+    /**
+    * * Field Name: PayloadJSON
+    * * Display Name: Payload JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The RSU pending-work payload (the RSUPendingWork JSON shape: SourceObjectNames, SchemaName, sync/schedule options). Stored as JSON so the payload can evolve without schema churn; only the RSU pipeline interprets it.
+    */
+    get PayloadJSON(): string {
+        return this.Get('PayloadJSON');
+    }
+    set PayloadJSON(value: string) {
+        this.Set('PayloadJSON', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Completed
+    *   * Failed
+    *   * Pending
+    * * Description: Lifecycle state of this pending work item. Pending = registered, not yet processed (rows Pending for longer than expected indicate stranded work). Completed = the post-restart consumer finished successfully. Failed = processing errored; see ErrorMessage.
+    */
+    get Status(): 'Completed' | 'Failed' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Completed' | 'Failed' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error detail recorded when processing this work item failed. The row is left in place (Status=Failed) rather than deleted, so failures are visible and re-runnable.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: ProcessedAt
+    * * Display Name: Processed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the post-restart consumer finished processing this row (success or failure). NULL while Pending.
+    */
+    get ProcessedAt(): Date | null {
+        return this.Get('ProcessedAt');
+    }
+    set ProcessedAt(value: Date | null) {
+        this.Set('ProcessedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CompanyIntegration
+    * * Display Name: Company Integration
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CompanyIntegration(): string {
+        return this.Get('CompanyIntegration');
     }
 }
 

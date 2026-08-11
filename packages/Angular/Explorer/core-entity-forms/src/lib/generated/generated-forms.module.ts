@@ -918,8 +918,7 @@ declarations: [
     MJRoleFormComponent,
     MJRowLevelSecurityFilterFormComponent,
     MJRSUPendingWorkFormComponent,
-    MJScheduledJobRunFormComponent,
-    MJScheduledJobTypeFormComponent],
+    MJScheduledJobRunFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -936,6 +935,7 @@ export class GeneratedForms_SubModule_14 { }
 
 @NgModule({
 declarations: [
+    MJScheduledJobTypeFormComponent,
     MJScheduledJobFormComponent,
     MJSchemaInfoFormComponent,
     MJScopedPromptConfigFormComponent,
@@ -954,8 +954,7 @@ declarations: [
     MJSignatureRequestDocumentFormComponent,
     MJSignatureRequestLogFormComponent,
     MJSignatureRequestRecipientFormComponent,
-    MJSignatureRequestFormComponent,
-    MJSkillFormComponent],
+    MJSignatureRequestFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -972,6 +971,7 @@ export class GeneratedForms_SubModule_15 { }
 
 @NgModule({
 declarations: [
+    MJSkillFormComponent,
     MJSQLDialectFormComponent,
     MJStateProvinceFormComponent,
     MJTagAuditLogFormComponent,
@@ -990,8 +990,7 @@ declarations: [
     MJTemplateParamFormComponent,
     MJTemplateFormComponent,
     MJTestRubricFormComponent,
-    MJTestRunFeedbackFormComponent,
-    MJTestRunOutputTypeFormComponent],
+    MJTestRunFeedbackFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1008,6 +1007,7 @@ export class GeneratedForms_SubModule_16 { }
 
 @NgModule({
 declarations: [
+    MJTestRunOutputTypeFormComponent,
     MJTestRunOutputFormComponent,
     MJTestRunFormComponent,
     MJTestSuiteRunFormComponent,
@@ -1026,8 +1026,7 @@ declarations: [
     MJUserRoleFormComponent,
     MJUserRoutineRecipientFormComponent,
     MJUserRoutineRunFormComponent,
-    MJUserRoutineFormComponent,
-    MJUserSettingFormComponent],
+    MJUserRoutineFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1044,6 +1043,7 @@ export class GeneratedForms_SubModule_17 { }
 
 @NgModule({
 declarations: [
+    MJUserSettingFormComponent,
     MJUserViewCategoryFormComponent,
     MJUserViewRunDetailFormComponent,
     MJUserViewRunFormComponent,
