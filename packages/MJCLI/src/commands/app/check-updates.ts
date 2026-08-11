@@ -37,14 +37,22 @@ export default class AppCheckUpdates extends Command {
       // A bare `{ Token }` dropped the per-repo TokenMap, and every private repo whose token lives
       // there reported "up to date" forever.
       const githubOptions = buildGitHubOptions(config);
-      const { Updates: updates, Failures: failures } = await CheckAppsForUpdates(apps, (repoUrl, subpath) =>
-        GetLatestVersion(repoUrl, githubOptions, subpath)
+      const { Updates: updates, Failures: failures, Unresolved: unresolved } = await CheckAppsForUpdates(
+        apps,
+        (repoUrl, subpath) => GetLatestVersion(repoUrl, githubOptions, subpath)
       );
 
       spinner.stop();
 
       if (updates.length === 0) {
-        this.log(chalk.green('\nAll apps are up to date.'));
+        // The green line is a POSITIVE claim, so it may only be printed when every app actually
+        // produced an answer. An app that threw, or that resolved to no version at all, is an
+        // unknown — saying "up to date" over it is the failure mode this command exists to avoid.
+        if (failures.length === 0 && unresolved.length === 0) {
+          this.log(chalk.green('\nAll apps are up to date.'));
+        } else {
+          this.log(chalk.yellow('\nNo updates found, but some apps could not be checked (see below).'));
+        }
       } else {
         this.log(chalk.bold('\nUpdates available:\n'));
         for (const update of updates) {
@@ -59,6 +67,19 @@ export default class AppCheckUpdates extends Command {
           this.log(`  ${failure.Name}: ${chalk.red(failure.Message)}`);
         }
         this.log(chalk.dim('\nThese apps may or may not have updates — the check did not complete for them.'));
+      }
+
+      if (unresolved.length > 0) {
+        this.log(chalk.yellow(`\nNo published version could be resolved for ${unresolved.length} app(s):\n`));
+        for (const app of unresolved) {
+          this.log(`  ${app.Name} (installed ${chalk.yellow(app.Current)}): ${chalk.dim(app.Reason)}`);
+        }
+        this.log(
+          chalk.dim(
+            '\nThese apps were installed from a real ref, so finding no version now means the lookup ' +
+            'and the repository disagree — treat this as UNKNOWN, not as up to date.'
+          )
+        );
       }
     } catch (error) {
       spinner.fail('Failed to check for updates');

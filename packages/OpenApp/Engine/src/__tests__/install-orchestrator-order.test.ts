@@ -763,21 +763,24 @@ describe('UpgradeApp — config prune ordering', () => {
         );
     });
 
-    it('prunes stale entries BEFORE re-adding the new manifest\'s entries', async () => {
-        // Order is load-bearing: pruning AFTER the add would delete the entries just written for
-        // the new version, since the prune keep-set is derived from the same manifest.
+    it('adds the new manifest\'s entries BEFORE pruning stale ones', async () => {
+        // Both orders converge on the same config (the keep-set IS the new manifest), so the
+        // order is chosen for the FAILURE window between these two un-rolled-back writes.
+        // Add-then-prune leaves that window at (old ∪ new) — the running server still finds every
+        // entry it needs. Prune-then-add would leave a subset of BOTH versions.
         await UpgradeApp({ AppName: 'app-x' }, upContext);
 
         const pruneCall = vi.mocked(PruneDynamicPackagesNotInManifest).mock.invocationCallOrder[0];
         const addCall = vi.mocked(AddServerDynamicPackages).mock.invocationCallOrder[0];
         expect(pruneCall).toBeDefined();
         expect(addCall).toBeDefined();
-        expect(pruneCall).toBeLessThan(addCall);
+        expect(addCall).toBeLessThan(pruneCall);
     });
 
-    it('fails the upgrade (and does NOT add) when the prune fails', async () => {
-        // A failed prune leaves the config in an unknown state; proceeding to add on top of it
-        // would silently produce exactly the accumulated-union config this step exists to prevent.
+    it('fails the upgrade when the prune fails, leaving the added entries in place', async () => {
+        // The adds have already run, so the config is a superset of what the new version needs and
+        // the server keeps booting. The upgrade must still report failure so the operator retries;
+        // the resume checkpoint is not advanced, so the retry re-runs both writes.
         vi.mocked(PruneDynamicPackagesNotInManifest).mockReturnValue(
             { Success: false, ErrorMessage: 'config left unchanged' } as ReturnType<typeof PruneDynamicPackagesNotInManifest>
         );
@@ -785,7 +788,21 @@ describe('UpgradeApp — config prune ordering', () => {
         const result = await UpgradeApp({ AppName: 'app-x' }, upContext);
 
         expect(result.Success).toBe(false);
-        expect(vi.mocked(AddServerDynamicPackages)).not.toHaveBeenCalled();
+        expect(vi.mocked(AddServerDynamicPackages)).toHaveBeenCalled();
+        expect(vi.mocked(SetAppStatus)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', 'Error');
+    });
+
+    it('does NOT prune when the add fails — the old config is left intact', async () => {
+        // The failure window that motivates the order: if the first write fails, the second must
+        // not run, so the config still holds exactly what the previous version needed.
+        vi.mocked(AddServerDynamicPackages).mockReturnValue(
+            { Success: false, ErrorMessage: 'could not write mj.config.cjs' } as ReturnType<typeof AddServerDynamicPackages>
+        );
+
+        const result = await UpgradeApp({ AppName: 'app-x' }, upContext);
+
+        expect(result.Success).toBe(false);
+        expect(vi.mocked(PruneDynamicPackagesNotInManifest)).not.toHaveBeenCalled();
         expect(vi.mocked(SetAppStatus)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', 'Error');
     });
 });

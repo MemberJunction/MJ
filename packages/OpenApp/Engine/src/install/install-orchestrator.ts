@@ -880,23 +880,36 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 
     // Step 7: Update server config if changed
     if (!IsStepDone(UPGRADE_STEP_ORDER, resumeCheckpoint, 'ConfigUpdated')) {
-      // Prune BEFORE adding. HandleServerConfig is add-only and idempotent — correct for install,
-      // but on upgrade it leaves the config converging on the union of every version ever
+      // ADD first, then prune. HandleServerConfig is add-only and idempotent — correct for
+      // install, but on upgrade it leaves the config converging on the union of every version ever
       // installed. A package the new version dropped keeps its dynamicPackages.server entry, and
       // the server loader then tries to import a package that may no longer be built or present.
-      // Pruning first, then re-adding, makes the config match THIS manifest exactly.
-      const pruneResult = PruneStaleServerConfig(existingApp, manifest, context);
-      if (!pruneResult.Success) {
-        await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Config', pruneResult.ErrorMessage ?? 'Config prune failed', startTime, previousVersion);
-        await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
-        return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Config', startTime, pruneResult.ErrorMessage ?? 'Config prune failed');
-      }
-
+      // The prune is what makes the config match THIS manifest exactly.
+      //
+      // The two steps converge on the same config in either order — the keep-set IS the new
+      // manifest, so a prune running after the adds keeps precisely what was just written, and a
+      // renamed startupExport is retargeted either way (prune-first rewrites the value and the add
+      // is then a no-op; add-first is the no-op and the prune rewrites it).
+      //
+      // The order is chosen for the FAILURE case, which is NOT symmetric. These are two separate
+      // writes to the same files with no rollback between them, so a failure in the second one is
+      // observable. Adding first leaves that window at (old ∪ new): every entry the running server
+      // needs is still present and it keeps booting — exactly the pre-prune behavior. Pruning
+      // first would leave a SUBSET of both versions, with the old version's dropped entries
+      // already gone and the new version's never written, so a server that restarts before the
+      // operator retries loses the app's registrations entirely.
       const configResult = HandleServerConfig(manifest, context);
       if (!configResult.Success) {
         await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Config', configResult.ErrorMessage ?? 'Config update failed', startTime, previousVersion);
         await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
         return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Config', startTime, configResult.ErrorMessage ?? 'Config update failed');
+      }
+
+      const pruneResult = PruneStaleServerConfig(existingApp, manifest, context);
+      if (!pruneResult.Success) {
+        await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Config', pruneResult.ErrorMessage ?? 'Config prune failed', startTime, previousVersion);
+        await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
+        return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Config', startTime, pruneResult.ErrorMessage ?? 'Config prune failed');
       }
       await SetAppStep(context.ContextUser, existingApp.ID, 'ConfigUpdated', undefined, manifest.version);
     }

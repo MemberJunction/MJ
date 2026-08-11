@@ -83,22 +83,84 @@ describe('CheckAppsForUpdates — update detection', () => {
 
         expect(report.Updates).toEqual([]);
         expect(report.Failures).toEqual([]);
-    });
-
-    it('reports nothing — and does NOT fail — when no version could be resolved', async () => {
-        // A repo with no tags at all is a legitimate "nothing published yet", not an error.
-        const report = await CheckAppsForUpdates([app()], async () => null);
-
-        expect(report.Updates).toEqual([]);
-        expect(report.Failures).toEqual([]);
+        expect(report.Unresolved).toEqual([]);
     });
 
     it('handles an empty app list', async () => {
         const lookup = vi.fn<LatestVersionLookup>();
         const report = await CheckAppsForUpdates([], lookup);
 
-        expect(report).toEqual({ Updates: [], Failures: [] });
+        expect(report).toEqual({ Updates: [], Failures: [], Unresolved: [] });
         expect(lookup).not.toHaveBeenCalled();
+    });
+});
+
+describe('CheckAppsForUpdates — an unresolvable version is an UNKNOWN, not "up to date"', () => {
+    /**
+     * The concrete regression this pins. `ListGitHubTags` reads a single page of the GitHub tags
+     * API. `MemberJunction/Integrations` carries 374 tags, and the `Platform-<App>@<semver>` tag
+     * line for every installed connector lives past page 1 — so the scoped lookup returns null for
+     * every app. Folding null into "no update available" made `mj app check-updates` print a
+     * confident "All apps are up to date" over nine apps that had real upgrades waiting, which is
+     * strictly worse than the wrong-but-loud answer it replaced.
+     *
+     * Every app in this list is INSTALLED, so it resolved from a real ref at install time.
+     * Finding no version now means the resolver and the repository disagree.
+     */
+    it('records a null result as Unresolved rather than as silence', async () => {
+        const report = await CheckAppsForUpdates(
+            [app({ Name: 'connector-orcid', Version: '1.1.2', Subpath: 'Platform/ORCID' })],
+            async () => null
+        );
+
+        expect(report.Updates).toEqual([]);
+        expect(report.Failures).toEqual([]);
+        expect(report.Unresolved).toEqual([
+            {
+                Name: 'connector-orcid',
+                Current: '1.1.2',
+                Reason: "no 'Platform/ORCID@<version>' tags found in https://github.com/acme/apps",
+            },
+        ]);
+    });
+
+    it('records an undefined result the same way', async () => {
+        const report = await CheckAppsForUpdates([app()], async () => undefined);
+
+        expect(report.Unresolved).toHaveLength(1);
+        expect(report.Updates).toEqual([]);
+    });
+
+    it('names the repo-wide tag line when the app has no Subpath', async () => {
+        const report = await CheckAppsForUpdates([app({ Subpath: null })], async () => null);
+
+        expect(report.Unresolved[0].Reason).toBe(
+            'no version tags or releases found in https://github.com/acme/apps'
+        );
+    });
+
+    it('keeps Unresolved separate from Failures — they are different unknowns', async () => {
+        const report = await CheckAppsForUpdates(
+            [
+                app({ Name: 'Empty', Subpath: 'apps/empty' }),
+                app({ Name: 'Throwing', Subpath: 'apps/throwing' }),
+                app({ Name: 'Fine', Version: '1.0.0', Subpath: 'apps/fine' }),
+            ],
+            async (_repo, subpath) => {
+                if (subpath === 'apps/throwing') throw new Error('API rate limit exceeded');
+                return subpath === 'apps/fine' ? '2.0.0' : null;
+            }
+        );
+
+        expect(report.Updates).toEqual([{ Name: 'Fine', Current: '1.0.0', Latest: '2.0.0' }]);
+        expect(report.Failures.map((f) => f.Name)).toEqual(['Throwing']);
+        expect(report.Unresolved.map((u) => u.Name)).toEqual(['Empty']);
+    });
+
+    it('does not treat an app whose latest EQUALS its installed version as unresolved', async () => {
+        const report = await CheckAppsForUpdates([app({ Version: '1.0.0' })], async () => '1.0.0');
+
+        expect(report.Unresolved).toEqual([]);
     });
 });
 
