@@ -64,7 +64,7 @@ find out whether the pick was right.
 ## Do not pattern-match the neighbours
 
 `.changeset/` holds many pending files at any time, in a mix of both levels, written against
-branches whose contents you cannot see. **As of 2026-08, 40 of 86 pending files carry a `minor`** —
+branches whose contents you cannot see. **As of 2026-08, 41 of 87 pending files carry a `minor`** —
 close to half, and spread across a dozen feature packages rather than concentrated in one careless
 corner: `ai-core-plus` (10), `task-graph` (9), `server` (8), `integration-test-suite` (8),
 `ng-conversations` (7), `core-entities` (7), against `core` at 7. Matching them is how this rule
