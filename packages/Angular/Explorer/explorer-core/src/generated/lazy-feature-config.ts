@@ -274,8 +274,8 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::TestingRunsResource': loadNgDashboardsTestingDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./workflows-dashboards.module
-  'BaseDashboard::WorkflowRunsResource': loadNgDashboardsWorkflowsDashboardsModule,
   'BaseDashboard::WorkflowsDashboard': loadNgDashboardsWorkflowsDashboardsModule,
+  'BaseResourceComponent::WorkflowRunsResource': loadNgDashboardsWorkflowsDashboardsModule,
   'BaseResourceComponent::WorkflowsResource': loadNgDashboardsWorkflowsDashboardsModule,
 
   // @memberjunction/ng-explorer-settings → ./settings.module
