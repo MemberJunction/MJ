@@ -22,6 +22,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Model Types&Name=ModelConfiguration"
+          },
+          "sync": {
+            "lastModified": "2026-08-11T03:54:48.606Z",
+            "checksum": "90b7ca25c11e1dd4ae8432a187eb496c975cb7464c93106e2990735013e43ab4"
           }
         }
       ]
@@ -52,6 +56,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Models&Name=ModelConfiguration"
+          },
+          "sync": {
+            "lastModified": "2026-08-11T03:54:48.193Z",
+            "checksum": "90b7ca25c11e1dd4ae8432a187eb496c975cb7464c93106e2990735013e43ab4"
           }
         }
       ]
@@ -81,6 +89,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Model Vendors&Name=ModelConfiguration"
+          },
+          "sync": {
+            "lastModified": "2026-08-11T03:54:48.254Z",
+            "checksum": "90b7ca25c11e1dd4ae8432a187eb496c975cb7464c93106e2990735013e43ab4"
           }
         }
       ]
