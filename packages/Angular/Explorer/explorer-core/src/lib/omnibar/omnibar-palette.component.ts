@@ -2,7 +2,7 @@ import {
     ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, EventEmitter,
     OnDestroy, Output, ViewChild, inject,
 } from '@angular/core';
-import { CompositeKey, UserInfo } from '@memberjunction/core';
+import { CompositeKey, LogError, UserInfo } from '@memberjunction/core';
 import { Metadata } from '@memberjunction/core';
 import { MentionSuggestion } from '@memberjunction/ng-composer';
 import { NavigationService } from '@memberjunction/ng-shared';
@@ -87,6 +87,8 @@ export class OmnibarPaletteComponent implements OnDestroy {
     private defaultProvider: OmnibarProvider | null = null;
     private byTrigger = new Map<string, OmnibarProvider>();
     private queryGeneration = 0;
+    /** Trigger char of the provider that produced the current {@link Rows}. */
+    private renderedTriggerChar = '';
     private debounceHandle: ReturnType<typeof setTimeout> | null = null;
     /** Element focused before the palette opened — restored on close (a11y). */
     private previousFocus: HTMLElement | null = null;
@@ -143,8 +145,41 @@ export class OmnibarPaletteComponent implements OnDestroy {
         return char ? (this.byTrigger.get(char) ?? null) : this.defaultProvider;
     }
 
+    /**
+     * Keyboard selection may only ever target rows that are actually RENDERED.
+     * RecentRows render only in the empty-query state ({@link Rows} empty AND
+     * `Query.length === 0`), so falling back to them once a query is typed selected
+     * rows the user could not see — and Enter executed one. Real failure from the
+     * regression suite: typing over a seeded '/' left `Rows` empty and Enter opened
+     * an `MJ: Applications` RECORD page instead of switching to the Admin app.
+     */
     private get selectableRows(): OmnibarRow[] {
-        return this.Rows.length > 0 ? this.Rows : this.RecentRows;
+        if (this.Rows.length > 0) {
+            return this.Rows;
+        }
+        return this.Query.length === 0 ? this.RecentRows : [];
+    }
+
+    /**
+     * Whether <kbd>Enter</kbd> on a rowless palette may fall through to the full Search
+     * Results workspace for the typed text. Drives BOTH the key handler and the empty
+     * state's wording, so the promise on screen and the behavior can't diverge.
+     *
+     * Default mode is unconditional: full search IS this mode's action — the See-All row
+     * navigates to exactly the same place — so submitting early can't diverge from
+     * submitting late, and a search box that ignores Enter for 300 ms reads as broken.
+     *
+     * Trigger modes require a SETTLED query. There, full search is a *different* action
+     * from what the rows would have offered (switch app, open record), so escaping while
+     * a fetch is outstanding would substitute a global search for the app the user was
+     * three keystrokes into naming — the same class of wrong-action bug as selecting an
+     * unrendered row.
+     */
+    public get CanEscapeToFullSearch(): boolean {
+        if (this.EffectiveQuery.trim().length <= 1) {
+            return false;
+        }
+        return this.ActiveTriggerChar === '' || !this.IsLoading;
     }
 
     /**
@@ -172,6 +207,9 @@ export class OmnibarPaletteComponent implements OnDestroy {
         this.Query = initialQuery;
         this.Rows = [];
         this.SelectedIndex = 0;
+        // The empty row set we just installed belongs to no mode, so the first fetch is
+        // correctly seen as a mode change.
+        this.renderedTriggerChar = '';
         void this.loadScopes();
         void this.loadRecents();
         if (initialQuery.length > 0) {
@@ -240,8 +278,7 @@ export class OmnibarPaletteComponent implements OnDestroy {
                 const row = rows[this.SelectedIndex];
                 if (row) {
                     this.Execute(row.Suggestion);
-                } else if (this.ActiveTriggerChar === '' && this.EffectiveQuery.trim().length > 1) {
-                    // No rows yet (still loading / no matches): honest escape hatch to full search.
+                } else if (this.CanEscapeToFullSearch) {
                     this.openFullSearch(this.EffectiveQuery.trim());
                 }
                 break;
@@ -374,7 +411,15 @@ export class OmnibarPaletteComponent implements OnDestroy {
     // Execution
     // ---------------------------------------------------------------
 
-    /** Executes a suggestion: navigate per its payload, or re-seed for entity drill-in. */
+    /**
+     * Executes a suggestion: navigate per its payload, or re-seed for entity drill-in.
+     *
+     * Deliberately unguarded: every activation path (input Enter, row Enter, row click)
+     * targets a row the user can see, because {@link selectableRows} only ever offers
+     * rendered rows and a mode change clears {@link Rows} outright. Refusing a visible
+     * row while a debounce is outstanding made the palette look interactive and be inert
+     * for ~300 ms after every keystroke.
+     */
     public Execute(suggestion: MentionSuggestion): void {
         const nav = GetOmnibarNavPayload(suggestion);
         if (!nav) {
@@ -493,20 +538,36 @@ export class OmnibarPaletteComponent implements OnDestroy {
         if (!provider || (query.trim().length === 0 && !isTriggerMode)) {
             this.Rows = [];
             this.IsLoading = false;
+            this.renderedTriggerChar = this.ActiveTriggerChar;
             this.cdr.markForCheck();
             return;
         }
 
-        const fire = () => void this.fetchSuggestions(provider, query, generation);
-        if (isTriggerMode) {
-            // Short debounce: entity matching is in-memory, but record suggestions issue a
-            // RunView per keystroke — debouncing collapses a typing burst into one backend query.
-            this.debounceHandle = setTimeout(fire, TRIGGER_DEBOUNCE_MS);
-        } else {
-            this.IsLoading = this.Rows.length === 0;
-            this.cdr.markForCheck();
-            this.debounceHandle = setTimeout(fire, SEARCH_DEBOUNCE_MS);
+        // A MODE change invalidates the rows outright: a different provider answers a
+        // different question, so the old list isn't a stale approximation of the new
+        // one — it's the wrong list. (Typing 'Admin' over the seeded '/' switches
+        // Go-to-App → Global Search, and the app list must not survive that.) Rows
+        // for the SAME mode are kept while the next fetch is in flight, which is
+        // conventional palette behavior and avoids flicker on every keystroke.
+        if (this.ActiveTriggerChar !== this.renderedTriggerChar) {
+            this.Rows = [];
         }
+
+        // An empty `Rows` must mean "nothing matched", never "we haven't looked yet" — the
+        // empty state asserts "No matches" and offers Enter as an escape hatch, and both
+        // claims are false while a fetch is outstanding. Loading is therefore per-QUERY,
+        // not default-mode-only: trigger modes used to skip this assignment entirely, so
+        // the mode-change clear above rendered "No matches" for the whole debounce.
+        // `Rows.length === 0` keeps same-mode refinement flicker-free — rows already on
+        // screen stay, and no spinner appears.
+        this.IsLoading = this.Rows.length === 0;
+        this.cdr.markForCheck();
+
+        // Shorter debounce in trigger mode: entity matching is in-memory, but record
+        // suggestions issue a RunView per keystroke — debouncing collapses a typing burst
+        // into one backend query.
+        const fire = () => void this.fetchSuggestions(provider, query, generation);
+        this.debounceHandle = setTimeout(fire, isTriggerMode ? TRIGGER_DEBOUNCE_MS : SEARCH_DEBOUNCE_MS);
     }
 
     private async fetchSuggestions(provider: OmnibarProvider, query: string, generation: number): Promise<void> {
@@ -516,15 +577,24 @@ export class OmnibarPaletteComponent implements OnDestroy {
             ContextUser: this.currentUser,
             Provider: null,
         };
-        const suggestions = query.trim().length === 0
-            ? await provider.EmptyStateSuggestions(request)
-            : await provider.GetSuggestions(request);
+        // A failed fetch must still SETTLE this generation. Letting the rejection escape
+        // left the spinner up forever (and surfaced as an unhandled rejection, since the
+        // caller invokes this as `void fetchSuggestions(...)`).
+        let suggestions: MentionSuggestion[] = [];
+        try {
+            suggestions = query.trim().length === 0
+                ? await provider.EmptyStateSuggestions(request)
+                : await provider.GetSuggestions(request);
+        } catch (e) {
+            LogError(e);
+        }
         if (generation !== this.queryGeneration) {
             return; // stale response — a newer keystroke superseded it
         }
         this.Rows = this.toRows(suggestions);
         this.SelectedIndex = 0;
         this.IsLoading = false;
+        this.renderedTriggerChar = this.ActiveTriggerChar;
         this.cdr.markForCheck();
     }
 
