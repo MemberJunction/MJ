@@ -9,7 +9,7 @@
  * @module @memberjunction/search-engine
  */
 
-import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
+import { EntityInfo, LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey } from '@memberjunction/core';
 import { MJVectorIndexEntity, MJVectorDatabaseEntity, MJContentSourceEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
@@ -23,16 +23,6 @@ import { CheckScopeJsonFilter, ScopeFilterCheck } from './ScopeFilterGuard';
  * Provides vector similarity search across all configured vector indexes.
  * Handles multiple embedding models and vector databases transparently.
  */
-/**
- * The per-source vector-attribution key this PR proposes adding to the `ContentSource.Configuration`
- * JSONType. Declared locally until CodeGen regenerates `IContentSourceConfiguration` — see
- * `declaredVectorEntityName`.
- */
-interface VectorAttributionConfig {
-    /** The entity this source's vectors represent, e.g. an ISA extension rather than its base entity. */
-    VectorEntityName?: string;
-}
-
 /** Shape of a cached embedding entry */
 interface EmbeddingCacheEntry {
     vector: number[];
@@ -399,8 +389,8 @@ export class VectorSearchProvider extends BaseSearchProvider {
      *  - **It is per match.** One index can hold vectors from many content sources, so an index-wide
      *    answer is wrong the moment a second source shares the index. A `ContentSourceID` is carried
      *    by the vector itself.
-     *  - **It is declared, not inferred.** `ContentSource.EntityID` is a column the source's owner
-     *    sets; nothing here guesses. That matters because attribution decides *which* entity's
+     *  - **It is declared, not inferred.** `Configuration.VectorEntityName` is set by the source's
+     *    owner; nothing here guesses. That matters because attribution decides *which* entity's
      *    CanRead/RLS `SearchEngine.filterEntityResults` evaluates — an inferred name would put the
      *    wrong object's permissions in front of the records.
      *
@@ -421,26 +411,64 @@ export class VectorSearchProvider extends BaseSearchProvider {
             return byContentSourceID;
         }
 
+        const engine = KnowledgeHubMetadataEngine.Instance;
         try {
-            await KnowledgeHubMetadataEngine.Instance.Config(false, contextUser);
-            const engine = KnowledgeHubMetadataEngine.Instance;
-            for (const match of needAttribution) {
-                const contentSourceID = match.metadata?.['ContentSourceID'];
-                if (typeof contentSourceID !== 'string' || contentSourceID.trim().length === 0) {
-                    continue;
-                }
-                if (byContentSourceID.has(contentSourceID)) {
-                    continue; // distinct sources only — a batch of matches usually shares a handful
-                }
+            // Pass `this.Provider`, not just the user: the declared entity is resolved through this
+            // provider a few methods down, so loading the sources against the process-global default
+            // would read one metadata set and validate against another.
+            await engine.Config(false, contextUser, this.Provider);
+        } catch (error) {
+            // Attribution is best-effort — never let a metadata failure sink the query results.
+            LogError(`VectorSearchProvider: Failed to load knowledge-hub metadata: ${error}`);
+            return byContentSourceID;
+        }
+
+        // An empty content-source collection is NOT evidence that nothing is declared. On a
+        // permission-denied load `BaseEngine` empties every collection, records the load as
+        // SUCCESSFUL, flags itself constrained, and does not throw — and this engine exposes its
+        // backing arrays directly rather than through `GetConfigData`, so no PermissionConstrainedError
+        // surfaces. Declining explicitly (rather than reading "nothing declared") is the difference
+        // between "no declaration" and "cannot see the declaration".
+        //
+        // Two properties of that flag a reader should know, because they bound what this guard achieves:
+        // it is set when ANY of the engine's configs is denied — not necessarily the content sources —
+        // and it is process-wide and sticky, reset only on a fresh or forced load. So it reflects
+        // whoever warmed the singleton first, not the caller. Naming the denied entities rather than
+        // guessing is the least this can do; the real fix is registering the engine for startup so the
+        // first search does not decide this for everyone. See the PR's open questions.
+        if (engine.IsPermissionConstrained) {
+            // `?? []` because this is a diagnostic on the path that has just decided to return nothing,
+            // and it sits outside the try/catch above — a throw here would take the whole query down to
+            // improve a log message.
+            const denied = engine.PermissionConstrainedEntities ?? [];
+            LogStatus(
+                'VectorSearchProvider: the knowledge-hub metadata cache is permission-constrained, so ' +
+                'vector matches cannot be attributed from their content source. Denied: ' +
+                (denied.length > 0 ? denied.join(', ') : 'not reported') +
+                '. Grant Read on those to this role, or set an `Entity` metadata key on the vectors. ' +
+                'Note this state is process-wide and set by whichever user loaded the cache first.'
+            );
+            return byContentSourceID;
+        }
+
+        const seen = new Set<string>();
+        for (const match of needAttribution) {
+            const contentSourceID = match.metadata?.['ContentSourceID'];
+            if (typeof contentSourceID !== 'string' || contentSourceID.trim().length === 0 || seen.has(contentSourceID)) {
+                continue; // distinct sources only — a batch of matches usually shares a handful
+            }
+            seen.add(contentSourceID);
+            try {
+                // Per source, NOT one guard around the loop: `ConfigurationObject` is a bare
+                // `JSON.parse`, so one malformed blob would otherwise abandon every source after it
+                // and silently downgrade those matches to a different entity's permissions.
                 const declared = this.declaredVectorEntityName(engine.GetContentSourceByID(contentSourceID));
                 if (declared) {
                     byContentSourceID.set(contentSourceID, declared);
                 }
+            } catch (error) {
+                LogError(`VectorSearchProvider: content source ${contentSourceID} has unreadable configuration: ${error}`);
             }
-        } catch (error) {
-            // Attribution is best-effort — never let a metadata failure sink the query results. The
-            // matches fall back to the Entity Document path, or to 'Unknown' as they did before.
-            LogError(`VectorSearchProvider: Failed to resolve content-source entities: ${error}`);
         }
         return byContentSourceID;
     }
@@ -461,17 +489,95 @@ export class VectorSearchProvider extends BaseSearchProvider {
      * direction from what attribution needs, and it is null for precisely the source types that most
      * need attributing.
      *
-     * Typed via a local extension of the generated config interface because the property is proposed
-     * by this PR and CodeGen has not yet regenerated `IContentSourceConfiguration` from the JSONType
-     * definition. Once it has, this cast comes out and the accessor is used directly.
+     * Read through the generated `ConfigurationObject` accessor, which CodeGen emits from the
+     * `IContentSourceConfiguration` JSONType definition — so the property name cannot drift from the
+     * metadata without failing to compile.
      */
     private declaredVectorEntityName(source: MJContentSourceEntity | undefined): string | null {
         if (!source) {
             return null;
         }
-        const config = source.ConfigurationObject as (VectorAttributionConfig | null);
-        const declared = config?.VectorEntityName;
-        return typeof declared === 'string' && declared.trim().length > 0 ? declared.trim() : null;
+        const declared = source.ConfigurationObject?.VectorEntityName;
+        if (typeof declared !== 'string' || declared.trim().length === 0) {
+            return null;
+        }
+        return this.validatedAttributionEntity(declared.trim(), source.ID);
+    }
+
+    /**
+     * Entities a content source is allowed to declare its vectors to be: the content-item entities
+     * themselves, or anything that IS-A one of them.
+     */
+    private static readonly AttributionRoots: readonly string[] = ['MJ: Content Items', 'MJ: Content Item Chunks'];
+
+    /**
+     * Validate a declared attribution before it is trusted, and return the entity's CANONICAL name.
+     *
+     * Two checks, each closing a way this could go wrong, because whatever is returned here becomes
+     * the entity whose CanRead and row-level security `SearchEngine.filterEntityResults` evaluates —
+     * and that method never verifies the matched record ids actually belong to it.
+     *
+     *  - **It must resolve.** An unresolvable name is not a labelling slip: the permission filter
+     *    silently discards the whole group, so a typo (or a core-entity name missing its `MJ: `
+     *    prefix) would delete a source's search results with no error anywhere. Declining instead
+     *    leaves the index's own Entity Document to answer, which is the pre-existing behaviour.
+     *  - **It must be a content-item entity.** Without this, the declaration is an arbitrary entity
+     *    name in a writable configuration blob deciding which permissions apply — point it at
+     *    something world-readable with no row filter and every vector from that source is admitted
+     *    for every user. Restricting to the IS-A family of the content-item entities keeps the
+     *    legitimate case (naming a subtype whose row-level security differs from its parent's) and
+     *    removes the arbitrary-entity case entirely.
+     */
+    private validatedAttributionEntity(declared: string, contentSourceID: string): string | null {
+        const entity = this.Provider.EntityByName(declared);
+        if (!entity) {
+            LogError(
+                `VectorSearchProvider: content source ${contentSourceID} declares vector entity ` +
+                `"${declared}", which does not resolve in metadata — ignoring it. Core entities carry ` +
+                `the \`MJ: \` prefix.`
+            );
+            return null;
+        }
+        if (!this.isContentItemEntity(entity)) {
+            LogError(
+                `VectorSearchProvider: content source ${contentSourceID} declares vector entity ` +
+                `"${entity.Name}", which is not a content-item entity — ignoring it. A source may only ` +
+                `declare ${VectorSearchProvider.AttributionRoots.join(' / ')} or a subtype of one.`
+            );
+            return null;
+        }
+        return entity.Name; // canonical casing, so downstream grouping is consistent
+    }
+
+    /**
+     * Whether an entity IS-A content-item entity — itself one of {@link AttributionRoots}, or a subtype
+     * of one somewhere up its IS-A chain.
+     *
+     * Walks `ParentID` through **this provider** rather than using `EntityInfo.ParentChain`, which
+     * resolves each step against the process-global `Metadata.Provider` by design. Mixing the two would
+     * resolve the declared entity on the request's provider and then walk its ancestry on a different
+     * metadata set — under a non-default provider the chain comes back empty and a legitimate subtype is
+     * refused. Fail-closed, but wrong, and invisible until someone runs multi-provider.
+     */
+    private isContentItemEntity(entity: EntityInfo): boolean {
+        const roots = VectorSearchProvider.AttributionRoots;
+        const provider = this.Provider;
+        const visited = new Set<string>();
+        let current: EntityInfo | undefined = entity;
+        while (current) {
+            if (roots.includes(current.Name)) {
+                return true;
+            }
+            if (!current.ParentID || visited.has(current.ID)) {
+                return false; // root reached, or a cycle in the metadata
+            }
+            visited.add(current.ID);
+            const parentID: string = current.ParentID;
+            current = provider.EntityByID
+                ? provider.EntityByID(parentID) ?? undefined
+                : provider.Entities?.find(e => UUIDsEqual(e.ID, parentID));
+        }
+        return false;
     }
 
     /**
@@ -488,7 +594,10 @@ export class VectorSearchProvider extends BaseSearchProvider {
      */
     private async resolveIndexEntityName(vectorIndexID: string, contextUser: UserInfo): Promise<string | null> {
         try {
-            await KnowledgeHubMetadataEngine.Instance.Config(false, contextUser);
+            // Same provider argument as the content-source path — the engine is a process-wide
+            // singleton whose provider binds on first load, so if only one of its two callers passes
+            // one, which metadata set gets cached depends on which search happens to run first.
+            await KnowledgeHubMetadataEngine.Instance.Config(false, contextUser, this.Provider);
 
             const distinct = new Set(
                 KnowledgeHubMetadataEngine.Instance.EntityDocuments
@@ -512,7 +621,8 @@ export class VectorSearchProvider extends BaseSearchProvider {
         fallbackEntityName?: string | null,
         entityByContentSourceID?: Map<string, string>
     ): SearchResultItem[] {
-        return matches.map(match => {
+        const unattributed: string[] = [];
+        const items = matches.map(match => {
             const meta = match.metadata ?? {};
             // Attribution, most specific first: the vector's own key, then the entity its CONTENT
             // SOURCE declares (per match), then the index's Entity Document (index-wide).
@@ -526,14 +636,20 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 ? entityByContentSourceID?.get(contentSourceID)
                 : undefined;
             const resolvedEntity = (meta['Entity'] as string) || declaredBySource || fallbackEntityName || null;
+            if (!resolvedEntity) {
+                unattributed.push(match.id);
+            }
             const entityName = resolvedEntity ?? 'Unknown';
             // Vector metadata stores RecordID in CompositeKey URL format: "FieldName|Value" or "F1|V1||F2|V2"
             // Use CompositeKey to properly parse it, then extract just the values for consistent
             // matching with entity search results (which use plain record IDs)
-            const rawRecordID = (meta['RecordID'] as string) ?? match.id;
+            // `||` for the same reason as the entity name above: a producer that writes `RecordID: ''`
+            // rather than omitting the key must still fall through to the vector's own id, or the item
+            // ships an empty RecordID and the permission filter drops it on an `IN ('')`.
+            const rawRecordID = (meta['RecordID'] as string) || match.id;
             const recordID = this.extractRecordIDFromCompositeKey(rawRecordID);
 
-            const title = this.extractDisplayTitle(meta, resolvedEntity);
+            const title = this.extractDisplayTitle(meta, entityName);
             const snippet = this.extractDisplaySnippet(meta, indexName, match.score);
             const entityIcon = (meta['EntityIcon'] as string) || undefined;
             const updatedAt = meta['__mj_UpdatedAt'] ? new Date(meta['__mj_UpdatedAt'] as string) : new Date();
@@ -558,19 +674,53 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 RawMetadata: JSON.stringify(meta),
             };
         });
+        this.warnOnUnattributedMatches(unattributed, indexName);
+        return items;
+    }
+
+    /** How many vector ids to name in the unattributed-match warning. */
+    private static readonly UnattributedSampleSize = 3;
+
+    /**
+     * Report matches that no attribution step could name, because they are about to disappear.
+     *
+     * `SearchEngine.filterEntityResults` resolves each group's `EntityName` through `EntityByName` and
+     * returns before admitting a group it cannot resolve — fail-closed, and with no log of its own. The
+     * one trace that does exist is the aggregate `Residual permission filter removed N result(s)`, whose
+     * wording attributes the loss to incomplete provider push-down. So the only signal a deployment gets
+     * today points away from the cause: vectors are demonstrably in the index and never surface.
+     *
+     * Logged once per index per batch rather than per match, and it names the three ways to fix it,
+     * because the audience is whoever populated the index rather than whoever wrote this code.
+     */
+    private warnOnUnattributedMatches(vectorIDs: string[], indexName: string): void {
+        if (vectorIDs.length === 0) {
+            return;
+        }
+        const sample = vectorIDs.slice(0, VectorSearchProvider.UnattributedSampleSize).join(', ');
+        LogError(
+            `VectorSearchProvider: ${vectorIDs.length} match(es) from index "${indexName}" carry no ` +
+            `resolvable entity and will be dropped by the permission filter rather than returned. Give ` +
+            `the vectors an \`Entity\` metadata key, declare \`VectorEntityName\` on their content source ` +
+            `(which also needs \`ContentSourceID\` in the metadata to be found), or point an Entity ` +
+            `Document at this index. Sample vector id(s): ${sample}`
+        );
     }
 
     /**
      * Extract best display title from vector metadata using entity field metadata.
      * Combines all IsNameField fields in Sequence order.
      */
-    private extractDisplayTitle(meta: Record<string, unknown>, resolvedEntity: string | null): string {
-        // Use the RESOLVED entity, not `meta['Entity']`. They agree whenever the metadata carries the
-        // key; when it does not, this is the whole point — a match attributed from its content source
-        // or an Entity Document can still have its name fields read out of the metadata. Re-reading
-        // `meta['Entity']` here skips the name-field path for exactly those matches and falls through
-        // to the heuristics, then to the literal "<Entity> Record".
-        const entityName = resolvedEntity ?? undefined;
+    private extractDisplayTitle(meta: Record<string, unknown>, fallbackEntity: string): string {
+        // DELIBERATELY reads `meta['Entity']` and NOT the resolved entity name. It looks like an
+        // oversight and is not: when the metadata carries no name fields this method falls through to
+        // `` `${fallbackEntity} Record` ``, and that string is a SENTINEL —
+        // `SearchEnricher.resolveRecordNames` matches `RecordName === `${EntityName} Record`` and
+        // replaces it with the live name from the database. Feeding the resolved entity in here makes
+        // the name-field branch succeed off the embedding-time metadata snapshot instead, the sentinel
+        // never forms, and renamed records show a stale title in every search result until re-embedded.
+        // Titles for attributed-but-unlabelled matches are meant to come from the enricher.
+        const entityName = meta['Entity'] as string | undefined;
         if (entityName) {
             const md = this.Provider;
             const entityInfo = md.EntityByName(entityName);
@@ -597,7 +747,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 return meta[field] as string;
             }
         }
-        return `${resolvedEntity ?? 'Unknown'} Record`;
+        return `${fallbackEntity} Record`;
     }
 
     /** Extract best display snippet from vector metadata */

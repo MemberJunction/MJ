@@ -360,7 +360,16 @@ describe('AutotagBaseEngine', () => {
         return {
           GetEntityObject: vi.fn().mockResolvedValue(buildMockEntityRecord()),
           // buildVectorRecords resolves the ContentItem entity for strategy-driven metadata fields.
-          EntityByName: () => MOCK_CONTENT_ITEM_ENTITY,
+          // Name-AWARE on purpose: the real EntityByName returns undefined for a name that does not
+          // exist, and `canOmitEntityMetadataKey` now depends on that to refuse an unresolvable vector
+          // entity declaration. A mock that resolves everything would hide the refusal entirely.
+          EntityByName: (name: string) =>
+            (name === 'MJ: Content Items' || name === 'MJ: Content Item Chunks')
+              ? { ...MOCK_CONTENT_ITEM_ENTITY, ID: `id-${name}`, Name: name, ParentID: null }
+              : undefined,
+          // The IS-A walk for the level check resolves parents by ID. No fixture entity has a parent,
+          // so this returning undefined ends the walk at the first hop.
+          EntityByID: () => undefined,
         };
       },
       configurable: true,
@@ -748,6 +757,7 @@ describe('AutotagBaseEngine', () => {
     async function configureSource1(cfg: {
       VectorIDStrategy?: 'hash' | 'recordId';
       ChunkTextStorage?: 'mixed' | 'alwaysChunk';
+      VectorEntityName?: string;
       VectorMetadata?: {
         FieldStrategy?: 'all' | 'include' | 'exclude' | 'explicit';
         Fields?: Record<string, { Included?: boolean; TruncationLimit?: number; StoreAs?: 'string' | 'number' | 'boolean' | 'epochSeconds' | 'epochMilliseconds' }>;
@@ -1097,7 +1107,8 @@ describe('AutotagBaseEngine', () => {
       await engine.VectorizeContentItems([createMockItem('item-x', 'content', 'My Title')] as never[], mockUser);
 
       const meta = await metaFromRun(mockCreateRecords);
-      // Entity is always kept so the result stays labeled...
+      // Entity is kept so the result stays labeled — this source declares no VectorEntityName, so
+      // nothing else could answer what the vector is (see the omission tests below).
       expect(meta.Entity).toBe('MJ: Content Item Chunks');
       // ...the configured field is included...
       expect(meta.Name).toBe('My Title');
@@ -1110,6 +1121,157 @@ describe('AutotagBaseEngine', () => {
       expect(meta.Tags).toBeUndefined();
       expect(meta.EntityIcon).toBeUndefined();
       expect(meta.__mj_UpdatedAt).toBeUndefined();
+    });
+
+    // Omitting `Entity` is only safe while something else can still name the vector's entity. Every
+    // leg here is a condition on that: search discards a match it cannot attribute rather than
+    // returning it unlabelled, so a wrongly-omitted key deletes results silently.
+    describe('declared vector entity — when `explicit` may omit the `Entity` key', () => {
+      const declared = { FieldStrategy: 'explicit' as const, Fields: { Name: { Included: true } } };
+
+      it('omits Entity and promotes ContentSourceID when the source declares its vector entity', async () => {
+        const { mockCreateRecords } = await setupVectorMocks();
+        await configureSource1({ VectorEntityName: 'MJ: Content Item Chunks', VectorMetadata: declared });
+
+        await engine.VectorizeContentItems([createMockItem('item-decl', 'content', 'My Title')] as never[], mockUser);
+
+        const meta = await metaFromRun(mockCreateRecords);
+        expect(meta.Entity).toBeUndefined();
+        // The invariant: the key attribution resolves THROUGH is written unconditionally, so the
+        // match can still be named even though the entity name is no longer on the vector.
+        expect(meta.ContentSourceID).toBe('source-1');
+        // Still minimal otherwise — promoting one key is not a licence to reinstate the rest.
+        expect(meta.Name).toBe('My Title');
+        expect(meta.RecordID).toBeUndefined();
+        expect(meta.ContentItemID).toBeUndefined();
+        expect(meta.Sequence).toBeUndefined();
+      });
+
+      it("keeps Entity under 'mixed', where one declaration cannot describe two levels", async () => {
+        const { mockCreateRecords } = await setupVectorMocks();
+        await configureSource1({
+          ChunkTextStorage: 'mixed',
+          VectorEntityName: 'MJ: Content Items',
+          VectorMetadata: declared,
+        });
+
+        await engine.VectorizeContentItems([createMockItem('item-mixed', 'content')] as never[], mockUser);
+
+        // A single-chunk item under 'mixed' is an item-level vector; a multi-chunk one from the same
+        // source would be a chunk-level vector. Only the per-vector key can tell them apart.
+        const meta = await metaFromRun(mockCreateRecords);
+        expect(meta.Entity).toBe('MJ: Content Items');
+      });
+
+      it("keeps Entity under 'hash', where the record id would be unrecoverable", async () => {
+        const { mockCreateRecords } = await setupVectorMocks();
+        await configureSource1({
+          VectorIDStrategy: 'hash',
+          VectorEntityName: 'MJ: Content Item Chunks',
+          VectorMetadata: declared,
+        });
+
+        await engine.VectorizeContentItems([createMockItem('item-hash', 'content')] as never[], mockUser);
+
+        // `explicit` drops RecordID too, so the vector's own id is the only pointer back to a row —
+        // and under 'hash' that id is a digest. Attributing the match then handing search an id that
+        // resolves against nothing is the same disappearance one step later.
+        const meta = await metaFromRun(mockCreateRecords);
+        expect(meta.Entity).toBe('MJ: Content Item Chunks');
+      });
+
+      it('keeps Entity under a strategy other than explicit, which promises a populated set', async () => {
+        const { mockCreateRecords } = await setupVectorMocks();
+        await configureSource1({
+          VectorEntityName: 'MJ: Content Item Chunks',
+          VectorMetadata: { FieldStrategy: 'include', Fields: { Name: { Included: true } } },
+        });
+
+        await engine.VectorizeContentItems([createMockItem('item-inc', 'content')] as never[], mockUser);
+
+        const meta = await metaFromRun(mockCreateRecords);
+        expect(meta.Entity).toBe('MJ: Content Item Chunks');
+        expect(typeof meta.RecordID).toBe('string'); // 'include' keeps the identity keys it documents
+      });
+
+      it('survives the source configuring ContentSourceID in its own field list', async () => {
+        const { mockCreateRecords } = await setupVectorMocks();
+        await configureSource1({
+          VectorEntityName: 'MJ: Content Item Chunks',
+          VectorMetadata: { FieldStrategy: 'explicit', Fields: { ContentSourceID: { Included: true } } },
+        });
+
+        await engine.VectorizeContentItems([createMockItem('item-order', 'content')] as never[], mockUser);
+
+        // The promotion and the display-field pass both write this key. Whichever order they run in,
+        // the invariant is that a resolvable value survives — asserted together with the omission so a
+        // regression that erased the key (or quietly stopped omitting) fails here.
+        // Deliberately NOT asserting a truncated or re-cased value: `setCoercedFieldValue` routes
+        // uniqueidentifier fields through NormalizeUUID and only reaches the truncating branch for
+        // values that fail IsValidUUID, so a TruncationLimit assertion would pin a branch production
+        // cannot reach with a real source id.
+        const meta = await metaFromRun(mockCreateRecords);
+        expect(meta.Entity).toBeUndefined();
+        expect(meta.ContentSourceID).toBe('source-1');
+      });
+
+      // The invariant is a contract between two packages: the write side decides to drop `Entity`, the
+      // read side decides whether the declaration is usable. Nothing tested that they agree, and they
+      // did not — a whitespace-only declaration was truthy on the write side and empty on the read
+      // side, so the key was dropped against a declaration search would refuse.
+      it('keeps Entity when the declaration is only whitespace, which the reader would refuse', async () => {
+        const { mockCreateRecords } = await setupVectorMocks();
+        await configureSource1({ VectorEntityName: '   ', VectorMetadata: declared });
+
+        await engine.VectorizeContentItems([createMockItem('item-blank', 'content')] as never[], mockUser);
+
+        const meta = await metaFromRun(mockCreateRecords);
+        expect(meta.Entity).toBe('MJ: Content Item Chunks');
+      });
+
+      it('keeps Entity when the declaration names the item entity but the vectors are chunks', async () => {
+        const { mockCreateRecords } = await setupVectorMocks();
+        await configureSource1({ VectorEntityName: 'MJ: Content Items', VectorMetadata: declared });
+
+        await engine.VectorizeContentItems([createMockItem('item-level', 'content')] as never[], mockUser);
+
+        // 'alwaysChunk' means every id is a ContentItemChunk key, so attributing them to the item
+        // entity points search at a table containing none of them. The reader only checks family
+        // membership, so both roots pass there — this is the only place the level can be caught.
+        const meta = await metaFromRun(mockCreateRecords);
+        expect(meta.Entity).toBe('MJ: Content Item Chunks');
+      });
+
+      it('keeps Entity when the declaration does not resolve, which the reader would refuse', async () => {
+        const { mockCreateRecords } = await setupVectorMocks();
+        // The ordinary mistake: a core entity written without its `MJ: ` prefix.
+        await configureSource1({ VectorEntityName: 'Content Items', VectorMetadata: declared });
+
+        await engine.VectorizeContentItems([createMockItem('item-typo', 'content')] as never[], mockUser);
+
+        // This one is not merely a dropped result set — it is unrecoverable. Omitting `Entity` against a
+        // name the reader refuses means the vectors carry no entity at all, so fixing the typo later
+        // does not bring them back; only a re-embed does. Hence the write side resolves the name itself
+        // and fails SAFE by keeping the key.
+        const meta = await metaFromRun(mockCreateRecords);
+        expect(meta.Entity).toBe('MJ: Content Item Chunks');
+      });
+
+      it('restores a resolvable ContentSourceID when a field rule would destroy it', async () => {
+        const { mockCreateRecords } = await setupVectorMocks();
+        await configureSource1({
+          VectorEntityName: 'MJ: Content Item Chunks',
+          VectorMetadata: { FieldStrategy: 'explicit', Fields: { ContentSourceID: { Included: true, StoreAs: 'boolean' } } },
+        });
+
+        await engine.VectorizeContentItems([createMockItem('item-bool', 'content')] as never[], mockUser);
+
+        // `StoreAs: 'boolean'` assigns Boolean(value) unguarded, so the configured rule would replace
+        // the id with `true` — and the reader requires a string, so the match would be unattributable
+        // despite being attributable by design. Configured rules win up to that point and no further.
+        const meta = await metaFromRun(mockCreateRecords);
+        expect(meta.ContentSourceID).toBe('source-1');
+      });
     });
 
     it('coerces a field to epoch seconds via StoreAs', async () => {

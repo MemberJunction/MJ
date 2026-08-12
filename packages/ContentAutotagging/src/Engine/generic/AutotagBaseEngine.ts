@@ -90,7 +90,16 @@ export interface ResolvedVectorStorageConfig {
     chunkTextStorage: ChunkTextStorage;
     /** How vector metadata is shaped (undefined ⇒ the curated default set). */
     metadata?: VectorMetadataConfig;
+    /**
+     * The entity this source declares its vectors to be, from `ContentSource.Configuration`. Read only
+     * to decide whether the per-vector `Entity` key can be omitted ({@link AutotagBaseEngine.canOmitEntityMetadataKey});
+     * the value itself is never written to metadata, and search validates it at attribution time.
+     */
+    vectorEntityName?: VectorEntityName;
 }
+
+/** The entity a source declares its vectors to be. Derived from the generated JSONType interface. */
+export type VectorEntityName = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['VectorEntityName']>;
 
 /** Column types that cannot be stored in vector metadata at all (binary/rowversion). */
 const UNSTORABLE_METADATA_TYPES = new Set(['varbinary', 'image', 'binary', 'timestamp', 'rowversion']);
@@ -2839,6 +2848,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             vectorIDStrategy: srcCfg?.VectorIDStrategy ?? typeCfg?.VectorIDStrategy ?? DEFAULT_VECTOR_ID_STRATEGY,
             chunkTextStorage: srcCfg?.ChunkTextStorage ?? typeCfg?.ChunkTextStorage ?? DEFAULT_CHUNK_TEXT_STORAGE,
             metadata: srcCfg?.VectorMetadata ?? typeCfg?.VectorMetadata ?? undefined,
+            // Source only — deliberately NOT part of the ContentType cascade the other knobs use. The
+            // others describe HOW to store a vector, which a content type can sensibly default for every
+            // source that adopts it. This one asserts WHAT the vectors are, and it decides which entity's
+            // permissions search evaluates, so a type-level default would make that assertion on behalf of
+            // sources the type's author never saw — including ones storing their vectors at a different
+            // level, where the declaration would be wrong.
+            vectorEntityName: srcCfg?.VectorEntityName,
         };
     }
 
@@ -2911,7 +2927,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      *
      * The identity keys are chunk-aware (see the Chunk-Identity Contract); under 'explicit' only
      * `Entity` is kept so content search results stay labeled (record id is recovered from the
-     * vector id under the default 'recordId' strategy).
+     * vector id under the default 'recordId' strategy) — unless the source declares its vector entity,
+     * in which case `Entity` gives way to `ContentSourceID` and search resolves the name from the
+     * declaration. See {@link canOmitEntityMetadataKey} for the conditions and why each one exists.
      */
     protected buildVectorMetadata(
         chunk: EmbeddingChunk,
@@ -2926,7 +2944,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const explicit = strategy === 'explicit';
         const meta: Record<string, string | number | boolean | string[]> = {};
 
-        this.addContentSystemMetadata(meta, chunk, isItemLevel, explicit);
+        this.addContentSystemMetadata(meta, chunk, isItemLevel, explicit, config);
 
         if (!strategy) {
             this.addCuratedMetadata(meta, item);
@@ -2946,20 +2964,34 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         if (metaCfg?.IncludeText && chunk.text) {
             meta['Text'] = chunk.text.substring(0, DEFAULT_METADATA_TRUNCATION);
         }
+
+        this.enforceAttributionKey(meta, chunk, explicit, config);
         return meta;
     }
 
     /**
-     * Add the identity/system keys. `Entity` is always present (chunk-aware). Under 'explicit' the
-     * rest are omitted (minimal metadata); otherwise `RecordID` — plus `ContentItemID` / `Sequence`
-     * for chunk vectors — are included so an external hydrator can fetch the row(s).
+     * Add the identity/system keys. `Entity` is present unless the source declares its vector entity
+     * and {@link canOmitEntityMetadataKey} allows dropping it, in which case `ContentSourceID` takes
+     * its place as the key search attributes through. Under 'explicit' the rest are omitted (minimal
+     * metadata); otherwise `RecordID` — plus `ContentItemID` / `Sequence` for chunk vectors — are
+     * included so an external hydrator can fetch the row(s).
      */
     private addContentSystemMetadata(
         meta: Record<string, string | number | boolean | string[]>,
         chunk: EmbeddingChunk,
         isItemLevel: boolean,
-        explicit: boolean
+        explicit: boolean,
+        config: ResolvedVectorStorageConfig
     ): void {
+        if (this.canOmitEntityMetadataKey(config, explicit)) {
+            // The invariant that makes omission safe, and the whole reason this is not just a deletion:
+            // a vector with no `Entity` key must still carry the key attribution resolves THROUGH, or the
+            // match reaches search with nothing to resolve and is discarded without being shown. Written
+            // unconditionally — a source configuring `ContentSourceID` in its own field list is applied
+            // later (display fields go last) and so still wins, StoreAs coercion included.
+            meta['ContentSourceID'] = chunk.item.ContentSourceID;
+            return;
+        }
         meta['Entity'] = isItemLevel ? 'MJ: Content Items' : 'MJ: Content Item Chunks';
         if (explicit) return;
         if (isItemLevel) {
@@ -2969,6 +3001,172 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             meta['ContentItemID'] = chunk.item.ID;
             meta['Sequence'] = chunk.chunkIndex;
         }
+    }
+
+    /**
+     * Last line of defence for the omission invariant: when `Entity` was dropped, the vector MUST leave
+     * here carrying a `ContentSourceID` search can actually resolve — a non-empty **string**.
+     *
+     * The promoted key is written before the strategy's own display fields, deliberately, so a source
+     * that configures `ContentSourceID` with its own rules wins. That is right for every coercion but
+     * one: `StoreAs: 'boolean'` assigns `Boolean(value)` unconditionally
+     * ({@link setCoercedFieldValue} — the numeric and epoch branches are guarded, that one is not), so
+     * the configured rule would replace the id with `true`. The reader requires a string
+     * (`typeof contentSourceID === 'string'`), so the match would arrive attributable-by-design and
+     * unattributable-in-fact — the silent drop this feature exists to prevent, reintroduced by a field
+     * rule that looks unrelated.
+     *
+     * So configured rules win up to the point where they would break attribution, and no further.
+     */
+    private enforceAttributionKey(
+        meta: Record<string, string | number | boolean | string[]>,
+        chunk: EmbeddingChunk,
+        explicit: boolean,
+        config: ResolvedVectorStorageConfig
+    ): void {
+        if (!this.canOmitEntityMetadataKey(config, explicit)) {
+            return;
+        }
+        const current = meta['ContentSourceID'];
+        if (typeof current === 'string' && current.trim().length > 0) {
+            return;
+        }
+        LogStatus(
+            `[Autotag] Content source ${chunk.item.ContentSourceID} configures ContentSourceID in a way ` +
+            `that leaves no resolvable value (${JSON.stringify(current)}), and its vectors omit the Entity ` +
+            `key — restoring the id so search can still attribute them. Remove the StoreAs override on ` +
+            `ContentSourceID, or set VectorEntityName aside and let Entity be written instead.`
+        );
+        meta['ContentSourceID'] = chunk.item.ContentSourceID;
+    }
+
+    /**
+     * Whether this source's vectors may omit the `Entity` metadata key and let search resolve the entity
+     * from the source's declaration instead of carrying it on every vector.
+     *
+     * Each condition closes a way attribution could otherwise fail, and attribution failure is not a
+     * cosmetic loss: a match search cannot name is discarded by the permission filter, not returned
+     * unlabelled.
+     *
+     * - **`explicit` only.** The other strategies document a populated metadata set; dropping a key their
+     *   consumers are told is always there would be a behavior change for them.
+     * - **A declaration must exist**, and must resolve to the chunk entity or a subtype of it — see
+     *   {@link declarationWillResolve}. Without one nothing downstream can answer what the vector is.
+     * - **`'alwaysChunk'` only.** One declaration names one entity, and `'mixed'` emits ContentItem-level
+     *   vectors for single-chunk items and ContentItemChunk-level vectors for the rest
+     *   ({@link isItemLevelVector}) — two entities out of one source, which a single declaration cannot
+     *   describe. Written as an allowlist so a storage mode added later keeps writing the key until
+     *   someone decides otherwise.
+     * - **`'recordId'` only.** Under `explicit` the `RecordID` key is dropped too, leaving the vector's own
+     *   id as the only pointer back to a row — which IS the chunk id under `'recordId'`, and a SHA-1 digest
+     *   under `'hash'` ({@link resolveChunkVectorID}). Omitting `Entity` under `'hash'` would attribute the
+     *   match successfully and then hand search an id that resolves against no row: the same silent
+     *   disappearance, one step further along.
+     *
+     * The level IS checked here (it was not, originally, and that was wrong — the reader validates
+     * family membership, which both content-item entities satisfy, so a chunk-level source declaring the
+     * item entity passed both sides and pointed search at a table holding none of its ids).
+     */
+    private canOmitEntityMetadataKey(config: ResolvedVectorStorageConfig, explicit: boolean): boolean {
+        // Trimmed, because the reader trims before deciding whether a declaration exists
+        // (`declaredVectorEntityName`). A whitespace-only value is truthy here and empty there, so the
+        // untrimmed test would omit the key against a declaration the reader then refuses.
+        const declared = config.vectorEntityName?.trim();
+        if (!explicit
+            || !declared
+            || config.chunkTextStorage !== 'alwaysChunk'
+            || config.vectorIDStrategy !== 'recordId') {
+            return false;
+        }
+        return this.declarationWillResolve(declared);
+    }
+
+    /** Declarations already reported as unresolvable, so the warning is once per run, not per vector. */
+    private readonly unresolvableDeclarations = new Set<string>();
+
+    /**
+     * Whether a declared entity name resolves in metadata — checked HERE, before the `Entity` key is
+     * dropped, and not left to the reader.
+     *
+     * This asymmetry is the difference between a recoverable mistake and an unrecoverable one. The
+     * reader refuses a name it cannot resolve and falls through to `'Unknown'`, at which point the
+     * results are silently discarded — but by then the vectors were written without `Entity`, so
+     * correcting the name does not bring them back. Only a full re-embed does. The likeliest way in is
+     * the most ordinary: a core entity written without its `MJ: ` prefix.
+     *
+     * Keeping the key when the name does not resolve costs one redundant metadata field and loses
+     * nothing. So this deliberately fails SAFE rather than fail-closed.
+     *
+     * It checks resolution only, not whether the entity is in the content-item family. That refusal is
+     * the reader's security decision to make (an arbitrary entity name in a writable blob must not
+     * choose which permissions apply), and it is not something the write side should be able to
+     * pre-approve.
+     */
+    private declarationWillResolve(declared: string): boolean {
+        const entity = this.ProviderToUse.EntityByName(declared);
+        if (!entity) {
+            this.refuseDeclarationOnce(
+                declared,
+                `does not resolve in metadata (core entities carry the \`MJ: \` prefix)`
+            );
+            return false;
+        }
+        // Level, not just family. Omission requires `alwaysChunk`, so every vector this gate governs is
+        // chunk-level and its id is a ContentItemChunk primary key. A declaration naming the ITEM entity
+        // — or a subtype of it, which is what the config docs steer you toward when row-level security
+        // lives on an extension — would therefore point search at a table containing none of these ids.
+        // The read side validates family membership only, so this is the only place the mismatch can be
+        // caught before the key is gone for good.
+        if (!this.isChunkLevelEntity(entity)) {
+            this.refuseDeclarationOnce(
+                declared,
+                `is not "${AutotagBaseEngine.CHUNK_ENTITY_NAME}" or a subtype of it, but this source stores ` +
+                `chunk-level vectors (ChunkTextStorage 'alwaysChunk'), so their ids are chunk keys`
+            );
+            return false;
+        }
+        return true;
+    }
+
+    /** The entity whose rows chunk-level vectors actually are. */
+    private static readonly CHUNK_ENTITY_NAME = 'MJ: Content Item Chunks';
+
+    /**
+     * Whether an entity IS-A {@link CHUNK_ENTITY_NAME} — itself, or a subtype somewhere up its IS-A
+     * chain, so a consumer may still declare an extension carrying its own row-level security.
+     *
+     * Walks `ParentID` through `this.ProviderToUse` rather than `EntityInfo.ParentChain`, which resolves
+     * each step against the process-global `Metadata.Provider` by design — mixing the two would resolve
+     * the declaration on one metadata set and walk its ancestry on another.
+     */
+    private isChunkLevelEntity(entity: EntityInfo): boolean {
+        const visited = new Set<string>();
+        let current: EntityInfo | undefined = entity;
+        while (current) {
+            if (current.Name === AutotagBaseEngine.CHUNK_ENTITY_NAME) {
+                return true;
+            }
+            if (!current.ParentID || visited.has(current.ID)) {
+                return false; // root reached, or a cycle in the metadata
+            }
+            visited.add(current.ID);
+            current = this.ProviderToUse.EntityByID(current.ParentID) ?? undefined;
+        }
+        return false;
+    }
+
+    /** Report a refused declaration once per run — this is evaluated per vector, so per-call would spam. */
+    private refuseDeclarationOnce(declared: string, because: string): void {
+        if (this.unresolvableDeclarations.has(declared)) {
+            return;
+        }
+        this.unresolvableDeclarations.add(declared);
+        LogStatus(
+            `[Autotag] Vector entity declaration "${declared}" ${because}. Keeping the \`Entity\` key ` +
+            `rather than omitting it — search would otherwise have no way to attribute these vectors, ` +
+            `and because the key would never have been written, correcting the configuration later would ` +
+            `not recover them without a re-embed.`
+        );
     }
 
     /** The curated default content metadata set (historical behavior when no FieldStrategy is set). */
