@@ -31,6 +31,7 @@ import {
     type TaskGraphFrame,
     type TaskGraphObserver,
 } from '@memberjunction/task-graph';
+import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -136,14 +137,34 @@ class RecordingObserver implements TaskGraphObserver {
 }
 
 /**
- * Hands the dispatcher the check's own provider.
+ * Mints one provider per task, over the check's pool — what production does.
  *
- * Production mints one provider per task so parallel work never shares a transaction scope; a check
- * runs against a single connection and has no such contention, so sharing is both safe and simpler.
- * The seam is what is being exercised here, not the pooling.
+ * This used to hand every task the check's single provider, on the reasoning that a check has no
+ * real contention. That reasoning was wrong, and it is the root cause of this bundle's long-running
+ * intermittency. A `SQLServerDataProvider` wraps one request context: issue two queries on it
+ * concurrently and `mssql` rejects the second with `Requests can only be made in the LoggedIn state,
+ * not the SentClientRequest state`. Any check that runs work in parallel — TX2's diamond branches,
+ * TX6's two dispatchers — does exactly that, so a claim query or a rollup read would fail at random.
+ * `pollOnce` catches and logs the failure, so the visible symptom was never the driver error but
+ * whatever the lost query would have done: a task that never got claimed, a graph that never
+ * settled, an execution that never showed up.
+ *
+ * The pool is the concurrency governor, exactly as `TaskGraphProviderFactory` documents. Client
+ * bundles have no pool and no parallel dispatcher, so they keep the shared provider.
  */
-function providerFactory(provider: IMetadataProvider): ProviderFactory {
-    return { CreateProvider: async () => provider };
+function providerFactory(ctx: IntegrationCheckContext): ProviderFactory {
+    const pool = ctx.Pool;
+    if (!pool) return { CreateProvider: async () => ctx.Provider };
+    return {
+        CreateProvider: async () => {
+            // `loadIfNeeded = false` reuses already-loaded metadata rather than re-reading it per
+            // provider — the difference between cheap-per-task and prohibitive.
+            const config = new SQLServerProviderConfigData(pool, ctx.Schema ?? '__mj', 0, undefined, undefined, false);
+            const provider = new SQLServerDataProvider();
+            await provider.Config(config);
+            return provider as unknown as IMetadataProvider;
+        },
+    };
 }
 
 /** Resolves a TaskType, creating a disposable one if the install has none. */
@@ -246,7 +267,7 @@ function buildDispatcher(
     observer?: TaskGraphObserver,
 ): TaskGraphDispatcher {
     return new TaskGraphDispatcher(
-        providerFactory(ctx.Provider),
+        providerFactory(ctx),
         runner,
         ctx.User as UserInfo,
         {
