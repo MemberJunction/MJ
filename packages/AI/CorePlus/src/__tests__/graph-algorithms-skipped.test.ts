@@ -13,6 +13,7 @@ import {
     ComputeSkipCascade,
     ComputeTasksToBlock,
     ConfirmSkipSeeds,
+    IsGraphStalled,
     ResolveExclusiveGroups,
     type EvaluatedEdge,
     type TaskGraphEdge,
@@ -331,5 +332,31 @@ describe('P1: what seed confirmation must NOT decide', () => {
         const edges: TaskGraphEdge[] = [e('C', 'B'), e('C', 'D')];
         const nodes = [n('B'), n('C'), n('D')];
         expect(ComputeSkipCascade(nodes, edges, ['B'])).toEqual([]);
+    });
+});
+
+/**
+ * P2 — a held graph must not report as healthy.
+ *
+ * A task held because its guard could not be evaluated has a live gating edge from a `Complete`
+ * origin, so `ComputeEligibleTasks` says it is eligible while the dispatcher refuses to claim it.
+ * "Something is eligible" then reads as "not stalled", and a graph that will wait forever produced
+ * no diagnostics at all — which is the silence the hold mechanism exists to break.
+ */
+describe('P2: IsGraphStalled sees holds', () => {
+    const nodes = [n('A', 'Complete'), n('Guarded')];
+    const edges = [e('Guarded', 'A')];
+
+    it('reports a graph stalled when its only eligible task is held', () => {
+        expect(IsGraphStalled(nodes, edges, new Set(['Guarded']))).toBe(true);
+    });
+
+    it('reports the same graph healthy when nothing is held', () => {
+        expect(IsGraphStalled(nodes, edges)).toBe(false);
+    });
+
+    it('is not fooled into stalling while other work is genuinely eligible', () => {
+        const wider = [...nodes, n('Other')];
+        expect(IsGraphStalled(wider, edges, new Set(['Guarded']))).toBe(false);
     });
 });

@@ -276,6 +276,13 @@ const TERMINAL_FOR_CONDITIONS: ReadonlySet<MJTaskEntity['Status']> = new Set<MJT
 export class TaskGraphDispatcher implements IShutdownable {
     private readonly config: TaskGraphDispatcherConfig;
     private readonly claims: TaskClaimStore;
+
+    /**
+     * Edges already reported as unevaluable, so the report is once per transition and not once per
+     * poll. Per-instance and in-memory by design: a restart re-reports, which is the right amount of
+     * noise for a condition that is still broken after a restart.
+     */
+    private readonly reportedUnevaluableConditions = new Set<string>();
     private readonly conditionEvaluator: DispatcherConditionEvaluator;
 
     private running = false;
@@ -663,7 +670,11 @@ export class TaskGraphDispatcher implements IShutdownable {
                 }
             }
 
-            if (IsGraphStalled(graph.nodes, graph.edges)) {
+            // Holds are passed in, or the detector reports a held graph as healthy: a held target's
+            // gating edge is still live and its origin Complete, so ComputeEligibleTasks counts it
+            // as eligible and "something is eligible" reads as "not stalled". A graph waiting
+            // forever on a broken condition then produced no diagnostics at all.
+            if (IsGraphStalled(graph.nodes, graph.edges, graph.holdTaskIDs)) {
                 LogError(`[TaskGraphDispatcher] Graph ${parentID} is stalled: pending work with no satisfiable path.`);
             }
 
@@ -1725,10 +1736,16 @@ export class TaskGraphDispatcher implements IShutdownable {
         );
         const loserEdgeIDs = new Set(resolution.loserEdgeIDs);
 
+        // Targets of an edge whose condition could not be evaluated (P2). Neither eligible nor
+        // skipped: the edge stays live so the target is not mistaken for unreachable, and the target
+        // joins the hold set so nothing claims it.
+        const heldByCondition = new Set<string>();
+
         for (const d of ordinary) {
             if (d.Condition?.trim()) {
                 const outcome = this.evaluateEdgeCondition(d, entityById);
                 if (outcome === 'drop') { droppedInto.add(d.TaskID); continue; }
+                if (outcome === 'hold') heldByCondition.add(d.TaskID);
             }
             stillReachable.add(d.TaskID);
             liveEdges.push({
@@ -1776,9 +1793,31 @@ export class TaskGraphDispatcher implements IShutdownable {
             entityById,
             unreachableTaskIDs,
             skipSeedTaskIDs: confirmedSkipSeeds,
-            holdTaskIDs: new Set(resolution.holdTaskIDs),
+            // Exclusive holds and ordinary-condition holds are the same state and share one set:
+            // "we cannot tell yet, so nothing may claim this."
+            holdTaskIDs: new Set([...resolution.holdTaskIDs, ...heldByCondition]),
             handledFailureIDs: await this.computeHandledFailures(provider, parentTaskID, nodes, liveEdges),
         };
+    }
+
+    /**
+     * Reports an unevaluable condition ONCE per edge, not once per poll.
+     *
+     * Eligibility is recomputed every cycle, so an unqualified LogError here would repeat every few
+     * seconds for as long as the graph is held — which buries the one line that matters under
+     * thousands of copies of itself. Keyed by edge id plus the failure text, so a condition that
+     * starts failing differently is reported again.
+     */
+    private logUnevaluableConditionOnce(dep: MJTaskDependencyEntity, errorMessage: string | undefined): void {
+        const key = `${dep.ID}:${errorMessage ?? ''}`;
+        if (this.reportedUnevaluableConditions.has(key)) return;
+        this.reportedUnevaluableConditions.add(key);
+        LogError(
+            `[TaskGraphDispatcher] Dependency ${dep.ID} has an unevaluable condition ` +
+            `(${errorMessage}); condition text: ${JSON.stringify(dep.Condition)}. ` +
+            `Task ${dep.TaskID} is HELD — it will not run and will not be skipped until the ` +
+            `condition can be evaluated. The graph reports as stalled while this holds.`,
+        );
     }
 
     /**
@@ -1791,7 +1830,7 @@ export class TaskGraphDispatcher implements IShutdownable {
     private evaluateEdgeCondition(
         dep: MJTaskDependencyEntity,
         entityById: Map<string, MJTaskEntity>,
-    ): 'keep' | 'drop' {
+    ): 'keep' | 'drop' | 'hold' {
         const upstream = entityById.get(dep.DependsOnTaskID);
         if (!upstream) return 'keep';
 
@@ -1817,12 +1856,22 @@ export class TaskGraphDispatcher implements IShutdownable {
         const result = this.conditionEvaluator.Evaluate(dep.Condition!, this.buildConditionContext(upstream, output));
 
         if (!result.Success) {
-            LogError(
-                `[TaskGraphDispatcher] Dependency ${dep.ID} has an unevaluable condition ` +
-                `(${result.ErrorMessage}); keeping the edge so the graph stalls visibly rather than ` +
-                `running ${dep.TaskID} out of order.`,
-            );
-            return 'keep';
+            // UNDECIDED — not satisfied, not false. This returned 'keep', and the comment claimed
+            // keeping the edge "stalls the graph visibly". That holds only while the origin is
+            // non-terminal; conditions are only evaluated once it IS terminal (the guard above), and
+            // a kept edge from a Complete origin is a SATISFIED PREREQUISITE. So a broken guard —
+            // a typo, a TypeError — executed the work it was guarding, irreversibly if that work is
+            // an action with side effects.
+            //
+            // The layer's own contract says the opposite ("A condition that fails to evaluate does
+            // NOT open the gate", task-graph-spec.ts), the legacy walker refused the edge, and
+            // exclusive groups already HOLD. Ordinary edges were the one dialect with inverted
+            // failure semantics.
+            //
+            // Hold, don't drop: the target may have other live routes, and dropping would let it be
+            // skipped as unreachable — turning "we cannot tell" into "definitely not taken".
+            this.logUnevaluableConditionOnce(dep, result.ErrorMessage);
+            return 'hold';
         }
         return result.Value ? 'keep' : 'drop';
     }

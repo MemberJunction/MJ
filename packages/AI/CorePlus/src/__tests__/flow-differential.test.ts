@@ -130,6 +130,16 @@ const FLOWS: Record<string, Flow> = {
             path({ ID: 'p2', OriginStepID: 'a', DestinationStepID: 'b', Condition: 'ok', Priority: 1 }),
         ],
     },
+    // P2 — an unevaluable guard must not open the gate. A SINGLE successor compiles to no exclusive
+    // group, so this is the ordinary-edge dialect: the one that used to treat "cannot evaluate" as
+    // "satisfied" and execute the guarded work.
+    'a guard that cannot be evaluated': {
+        steps: [
+            step({ ID: 'a', Name: 'A', StartingStep: true }),
+            step({ ID: 'g', Name: 'Guarded' }),
+        ],
+        paths: [path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'g', Condition: 'typo(' })],
+    },
     'no path matches — the walk ends': {
         steps: [step({ ID: 'a', Name: 'A', StartingStep: true }), step({ ID: 'b', Name: 'B' })],
         paths: [path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'b', Condition: 'never' })],
@@ -266,6 +276,7 @@ function compiledOrder(flow: Flow): string[] {
         }
 
         // A non-exclusive conditional edge that is false blocks its target the ordinary way.
+        const unevaluableHolds = new Set<string>();
         for (const t of spec.tasks) {
             for (const d of (t.dependsOn ?? []).map(NormalizeDependency)) {
                 if (d.exclusiveGroup || !d.condition) continue;
@@ -274,6 +285,13 @@ function compiledOrder(flow: Flow): string[] {
                 // used to write Blocked here, and because nothing pinned the two together the
                 // divergence sat hidden behind a green differential suite. Both now Skip (R6), and
                 // Blocked is reserved for failure-driven unsatisfiability.
+                //
+                // THREE outcomes, not two. `CONTEXT[cond] === false` is false for an UNEVALUABLE
+                // condition as well as for a satisfied one, so the simulator let unevaluable
+                // guards through — reproducing the production bug rather than testing against it,
+                // and agreeing with a wrong answer. Unevaluable now HOLDS: neither skipped here nor
+                // eligible below.
+                if (!(d.condition in CONTEXT)) { unevaluableHolds.add(t.tempId); continue; }
                 if (CONTEXT[d.condition] === false && status.get(t.tempId) === 'Pending') status.set(t.tempId, 'Skipped');
             }
         }
@@ -282,7 +300,7 @@ function compiledOrder(flow: Flow): string[] {
         const eligible = ComputeEligibleTasks(
             [...status].map(([i, s]) => ({ id: i, status: s })),
             liveEdges,
-        ).filter((n) => !xor.holdTaskIDs.includes(n.id));
+        ).filter((n) => !xor.holdTaskIDs.includes(n.id) && !unevaluableHolds.has(n.id));
         if (eligible.length === 0) break;
 
         for (const n of eligible) { order.push(n.id); status.set(n.id, 'Complete'); }

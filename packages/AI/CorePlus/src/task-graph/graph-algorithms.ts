@@ -327,11 +327,22 @@ export function ComputeParentRollup(
  * Distinguishes "finished" from "wedged". A graph with `Pending` tasks and zero eligible tasks and
  * zero in-flight tasks is deadlocked — previously this exited the execution loop quietly and the
  * parent was marked complete.
+ *
+ * **Held tasks do not count as eligible.** A task held because its guard could not be evaluated has
+ * a live gating edge from a `Complete` origin, so eligibility says yes while the dispatcher refuses
+ * to claim it. Counting it made a graph that will wait forever report as healthy, with no
+ * diagnostics — the exact silence the hold mechanism exists to break.
+ *
+ * @param heldTaskIDs tasks the caller is refusing to start this cycle (undecided guards)
  */
-export function IsGraphStalled(nodes: readonly TaskGraphNode[], edges: readonly TaskGraphEdge[]): boolean {
+export function IsGraphStalled(
+    nodes: readonly TaskGraphNode[],
+    edges: readonly TaskGraphEdge[],
+    heldTaskIDs: ReadonlySet<string> = new Set(),
+): boolean {
     const anyActive = nodes.some((n) => n.status === 'In Progress');
     if (anyActive) return false;
-    if (ComputeEligibleTasks(nodes, edges).length > 0) return false;
+    if (ComputeEligibleTasks(nodes, edges).some((n) => !heldTaskIDs.has(n.id))) return false;
     return nodes.some((n) => n.status === 'Pending');
 }
 
