@@ -76,6 +76,11 @@ regardless of anyone's level. So a stray `minor` produces **no additional versio
 mid-stream**. What it costs is meaning: it tells the next author that minor-for-a-feature is normal,
 which is how the rule erodes.
 
+**None of this applies on a certified line.** There the accumulated level is fixed at `patch`
+whatever the branch carries, so neither direction above is available to get wrong — a migration
+backport is a patch, and a `minor` is the error. If you arrived here from a backport, that bullet
+above is the whole rule for you.
+
 `.changeset/config.json` puts every MJ package in a single `fixed` group:
 
 ```json
@@ -112,6 +117,12 @@ npm run check:changeset                          # picks the rule from the branc
 npm run check:changeset -- --base origin/lts/5   # force a line base (the inverted, patch-only rule)
 npm run check:changeset:test                     # its own vitest suite
 ```
+
+**Detection is only as good as the refs your clone has.** The line rule is inferred from ancestry,
+so a clone with no `lts/*` refs — a shallow or single-branch checkout, which is `actions/checkout`'s
+default — finds no line and falls back to the Edge rule. On a line PR that is silently the original
+bug. **Anything automated must pass `--base` explicitly** (CI knows the PR's base ref, and an
+explicit base is authoritative) or fetch the line refs first.
 
 **Nothing enforces this in CI, by maintainer decision** — no PR fails on a wrong bump level. This
 rule and that command are the only checks, so run it whenever you add a changeset.

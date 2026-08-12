@@ -120,10 +120,18 @@ function knownLineRefs() {
 function detectLine() {
     const head = git(['rev-parse', 'HEAD']);
     const candidates = knownLineRefs().filter(
-        // STRICT ancestor: a ref sitting on HEAD is not something this branch is built ON, it is
-        // this branch. Without this, a topic branch that happens to be named `lts/…` resolves to
-        // itself and gets diffed against itself — every change invisible.
-        (ref) => isAncestor(ref, 'HEAD') && git(['rev-parse', ref]) !== head
+        (ref) =>
+            // STRICT ancestor: a ref sitting on HEAD is not something this branch is built ON, it
+            // is this branch. Without this, a topic branch that happens to be named `lts/…`
+            // resolves to itself and gets diffed against itself — every change invisible.
+            isAncestor(ref, 'HEAD') &&
+            git(['rev-parse', ref]) !== head &&
+            // DIVERGED from next: between a line being cut and its first line-only commit, the line
+            // tip IS a commit on `next`, so it is an ancestor of every Edge branch cut afterwards.
+            // Inferring "line" from that would judge ordinary Edge work by the patch-only rule and
+            // reject the `minor` a migration requires — the mirror of the bug this detection fixes.
+            // A ref still wholly contained in `next` has not become a line yet.
+            !isAncestor(ref, DEFAULT_BASE)
     );
     if (candidates.length === 0) {
         return null;

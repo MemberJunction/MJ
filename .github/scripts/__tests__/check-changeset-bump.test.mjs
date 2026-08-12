@@ -57,6 +57,8 @@ beforeAll(() => {
     write('migrations/v6/keep.sql', 'GO\n');
     git('add', '-A');
     git('commit', '-q', '-m', 'base');
+    // A real clone has origin/next; bare invocations resolve their default against it.
+    git('update-ref', 'refs/remotes/origin/next', 'HEAD');
 });
 
 afterAll(() => {
@@ -332,6 +334,34 @@ describe('check-changeset-bump', () => {
          * fixtures elsewhere create both, so a lookup that finds only the local one still passes
          * them while being dead in production. This case deletes the local branch first.
          */
+        /**
+         * The mirror of the bug this suite exists for. Between a line being cut and receiving its
+         * first line-only commit, the line tip IS a commit on `next` — so it is an ancestor of every
+         * `next` topic branch cut afterwards, and inference would judge ordinary Edge work by the
+         * line rule, rejecting the `minor` a migration requires.
+         *
+         * A ref still wholly contained in `next` has not diverged, so it is not yet a line for rule
+         * purposes. The window is short in the happy path but stays open indefinitely for a line
+         * cut and then withdrawn.
+         */
+        it('does NOT treat a just-cut line (no line-only commit yet) as a line', () => {
+            git('checkout', '-q', 'next');
+            git('update-ref', 'refs/remotes/origin/lts/9.9', 'refs/remotes/origin/next');
+            try {
+                git('checkout', '-q', '-b', 'feat/edge-after-cut');
+                write('migrations/v6/V202601012400__v6.1.x__Edge.sql', 'GO\n');
+                write('.changeset/edge.md', changeset({ '@memberjunction/foo': 'minor' }));
+                git('add', '-A');
+                git('commit', '-q', '-m', 'edge work');
+                const out = execFileSync('node', [SCRIPT], { cwd: repo, encoding: 'utf8' });
+                expect(out).toContain('minor is required');
+                expect(out).not.toContain('certified line');
+            } finally {
+                execFileSync('git', ['update-ref', '-d', 'refs/remotes/origin/lts/9.9'], { cwd: repo });
+                git('checkout', '-q', 'next');
+            }
+        });
+
         it('detects the line from a REMOTE-TRACKING ref alone (as a real clone has)', () => {
             git('checkout', '-q', 'next');
             git('checkout', '-q', '-b', 'remote-only-src', 'lts/6.1');
