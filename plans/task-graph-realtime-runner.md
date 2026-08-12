@@ -127,7 +127,9 @@ The debugger does not *replace* the fixes — it makes the next ring of seams di
 | Note | R3-2 coordination on the terminal-decides set | **Already live and consumed.** R2-4 landed `failureSemantics`-driven `terminalDecides`; the gate-frame emission now reads the same `decidingStatuses` value the resolution uses, so the console cannot announce a fork the engine left undecided under `'block'` |
 | Note | `readDebugState` cost one query per graph per pass | **Batched.** `primeDebugStates` reads every graph a pass touches in one query; pass cost is flat in the number of live workflows |
 
-One defect was found while fixing #5 and is not in the review: `JSON_MODIFY` does not create intermediate objects, so every debug-bag write — including the original `TryPauseAtBreakpoint` — silently no-opped on a graph that had never carried debug state, while the UPDATE still reported a row. `ContainingPaths` + `ensureObjects` create the containers first, pinned by five tests.
+One defect was found while fixing #5 and is not in the review: **`JSON_MODIFY` does not create intermediate objects**, so a write to `$.debug.<field>` on a payload with no `debug` key changes nothing while the `UPDATE` still reports a row — the statement returns success and the state is not there. `ContainingPaths` + `ensureObjects` create the containers first, shallowest-first and only when absent, pinned by five tests including quoted UUID keys.
+
+**Corrected after review verification (the reviewer caught an overstatement in the first telling):** this was **latent, not live, in the pre-review code**. Every write there went through the whole-bag `TryWriteDebugState`, whose path is `$.debug` — one level, whose parent is the document root and always exists. So `SetBreakpoints` itself created the `debug` key, and since a breakpoint cannot exist without that verb having run, `TryPauseAtBreakpoint`'s `$.debug.paused` always found its parent present. The defect became *reachable* at exactly the moment the field-scoped writes shipped — which is when it was caught. The fix is required either way; the history is what needed correcting.
 
 ## 6. Risks & open questions
 

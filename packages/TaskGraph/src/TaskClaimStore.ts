@@ -594,6 +594,12 @@ export class TaskClaimStore {
      * acquires a `debug` key the first time somebody debugs it, so this is the NORMAL first call,
      * not an edge case.
      *
+     * This hazard arrived WITH field-scoped writes and is the price of them: the whole-bag write
+     * they replaced targeted `$.debug`, one level down from a root that always exists, so it
+     * created the containing object as a side effect of every verb. Field-scoping is still the
+     * right trade — it removes the step-resurrection class outright — but it moves the
+     * container's existence from implicit to something this method has to guarantee.
+     *
      * Each containing object is created only when absent, shallowest first, so an existing bag is
      * never replaced.
      */
@@ -659,10 +665,11 @@ export class TaskClaimStore {
      * interval produce one `BreakpointHit` announcement, not two. The graph's existing breakpoint
      * list and edge overrides are untouched — only the pause fields are written.
      *
-     * The `$.debug` object is created when absent, for the same reason
-     * {@link TaskGraphService.SetBreakpoints}' write needs it: a graph whose breakpoints were set
-     * and then cleared has no `debug` key, and `JSON_MODIFY` will not create one — so without this
-     * the pause would report success and the workflow would run straight through its breakpoint.
+     * The `$.debug` object is created when absent, for the same reason the field-scoped writes need
+     * it: `JSON_MODIFY` will not create a missing container, so without this the pause would report
+     * success and the workflow would run straight through its breakpoint. Reachable here only since
+     * the writes became field-scoped — the whole-bag write this replaced created `$.debug` on the
+     * way past, so a breakpoint could not exist without its container already being there.
      */
     public async TryPauseAtBreakpoint(
         provider: IMetadataProvider,
