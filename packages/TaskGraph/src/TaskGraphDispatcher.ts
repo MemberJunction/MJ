@@ -85,6 +85,16 @@ const TERMINAL_TASK_STATUSES: ReadonlySet<string> = new Set<string>(TERMINAL_PAR
 const STOP_DRAIN_TIMEOUT_MS = 30_000;
 
 /**
+ * How many consecutive failing passes a graph gets before this instance stops re-queueing it.
+ *
+ * Not a giving-up threshold so much as a stop-shouting one: past this the graph has failed to settle
+ * on every attempt for minutes, so something is wrong that another identical attempt will not fix,
+ * and continuing costs a full graph load per poll forever. It is reported and left to the startup
+ * sweep, which is the wider net.
+ */
+const MAX_SETTLEMENT_RETRY_PASSES = 20;
+
+/**
  * Written to a human task's `ClaimedBy` once its assignee has been told it is ready.
  *
  * A human task has no executor, so the claim column is otherwise unused — which makes it the natural
@@ -303,6 +313,35 @@ export class TaskGraphDispatcher implements IShutdownable {
 
     /** Resolved once it EXISTS; null while it does not, so a fresh install is not cached blind. */
     private cachedWorkflowTaskTypeID: string | null = null;
+
+    /**
+     * Graphs this instance is still trying to settle, with how many passes it has spent trying.
+     *
+     * **The sweep's window is on `__mj_UpdatedAt`, and a failing pass writes nothing** — the terminal
+     * write returns rowcount 0 because the row is already terminal, the layout pass touches only
+     * children, a refused CAS writes nothing at all. So a graph that fails to settle stops advancing
+     * its own timestamp and, after 24h of futile retries, ages out of the steady-state window while
+     * the process is up. The doc comment claimed the bound was "on abandonment, not age"; for this
+     * case it was on age, and R2-2's deferral made the case ordinary rather than exotic.
+     *
+     * In memory rather than a touch column because the alternative is a write on every failed
+     * attempt — more load exactly when something is already wrong — and because a restart is covered
+     * by the wide startup sweep, which is the durable backstop this leans on.
+     */
+    private readonly retryingSettlement = new Map<string, number>();
+
+    /**
+     * Graphs whose settled-branch ANNOUNCEMENTS have already been made by this process.
+     *
+     * Re-entry is the point of the rescue, but only the parts that failed should repeat. Layout and
+     * the `GraphSettled` frame are idempotent facts about a finished graph, so a graph stuck in
+     * retry was re-persisting geometry and re-emitting the same frame every poll — for the whole
+     * 24h window, for as long as it kept failing.
+     */
+    private readonly announcedSettlements = new Set<string>();
+
+    /** Live claim heartbeats by task ID, so the drain can silence the ones it gives up waiting for. */
+    private readonly heartbeats = new Map<string, ReturnType<typeof setInterval>>();
     private readonly conditionEvaluator: DispatcherConditionEvaluator;
 
     private running = false;
@@ -427,7 +466,16 @@ export class TaskGraphDispatcher implements IShutdownable {
         // reconciliation above already does for tasks. The realistic producer of a >24h-stale
         // unsettled graph is this process having been DOWN — an outage, a long deploy — which the
         // steady-state window cannot see and which would otherwise leave those runs parked forever.
-        await this.sweepUnsettledGraphs(UNSETTLED_STARTUP_WINDOW_HOURS);
+        // Counted as a pass (R2-13). It settles graphs, delivers continuations and can start fresh
+        // reinvoke turns, and it runs AFTER this instance registers for shutdown — so a `Stop()`
+        // landing during it used to return immediately while the sweep carried on doing all of that
+        // against a host that believed the dispatcher had stopped.
+        this.activePasses++;
+        try {
+            await this.sweepUnsettledGraphs(UNSETTLED_STARTUP_WINDOW_HOURS);
+        } finally {
+            this.activePasses--;
+        }
 
         this.pollTimer = setInterval(() => { void this.pollOnce(); }, this.config.PollIntervalSeconds * 1000);
         this.reconcileTimer = setInterval(
@@ -471,7 +519,16 @@ export class TaskGraphDispatcher implements IShutdownable {
             await new Promise((r) => setTimeout(r, 25));
         }
         if (this.inFlight.size > 0) {
-            LogError(`[TaskGraphDispatcher] Stopped with ${this.inFlight.size} task(s) still in flight; their claims will expire.`);
+            // The promise in this message was FALSE while the process lived (R2-13): each in-flight
+            // task heartbeats its own claim on its own timer, so an over-drain task renewed its lease
+            // indefinitely and the claim never expired — reconciliation could not reclaim the work,
+            // and the host's shutdown was waiting on something that had stopped being reclaimable.
+            // Stopping the heartbeats makes the sentence true. The task itself keeps running; its
+            // completion write is guarded on still owning the claim, so if another instance reclaims
+            // the task in the meantime, the abandoned executor's result is refused rather than raced.
+            for (const stop of this.heartbeats.values()) clearInterval(stop);
+            this.heartbeats.clear();
+            LogError(`[TaskGraphDispatcher] Stopped with ${this.inFlight.size} task(s) still in flight; their claims will now expire.`);
         }
         if (this.activePasses > 0) {
             // Loud, because from here on this instance writes to a database the host believes it has
@@ -531,17 +588,26 @@ export class TaskGraphDispatcher implements IShutdownable {
      */
     private async pollOnce(): Promise<void> {
         if (!this.running || this.polling) return;
-        const capacity = this.config.MaxConcurrentTasks - this.inFlight.size;
-        if (capacity <= 0) return;
 
         this.polling = true;
         this.activePasses++;
         try {
             const provider = await this.providerFactory.CreateProvider();
 
-            // Settle graphs before picking new work, so a failure earlier in this pass stops its
-            // branch immediately rather than after another wave has already launched.
+            // SETTLEMENT IS NOT GATED ON CAPACITY (R2-11).
+            //
+            // This used to return at `capacity <= 0` before reaching the rollup, so a handful of
+            // wedged long-running tasks froze EVERYTHING for the whole instance: no settlement, no
+            // skip or block propagation, no human-task settlement, no continuation delivery — for
+            // graphs that had nothing to do with the tasks holding the slots. A per-task hang is an
+            // accepted limitation; "one hung task stops every workflow on this host" is not, and the
+            // two were the same line of code.
+            //
+            // Only CLAIMING consumes capacity, because only claiming starts work.
             await this.propagateAndRollup(provider);
+
+            const capacity = this.config.MaxConcurrentTasks - this.inFlight.size;
+            if (capacity <= 0) return;
 
             // The rollup above can take seconds, and `Stop()` may have been called during it. Claiming
             // now would start work the process has already decided to abandon — the claim then sits
@@ -552,6 +618,12 @@ export class TaskGraphDispatcher implements IShutdownable {
 
             const candidates = await this.findClaimableTasks(provider, capacity);
             for (const task of candidates) {
+                // Re-checked EVERY iteration, not once before the loop (R2-13). `findClaimableTasks`
+                // loads and resolves every active graph and can run for seconds; a `Stop()` landing
+                // during it would otherwise still claim and launch every candidate it had already
+                // found — a shutting-down process taking ownership of work it is about to abandon,
+                // manufacturing the orphaned claims reconciliation exists to clean up.
+                if (!this.running) return;
                 if (this.inFlight.size >= this.config.MaxConcurrentTasks) break;
                 if (!(await this.claims.TryClaim(provider, task.ID, this.contextUser))) {
                     // Another instance won the race, or the task is no longer Pending. Normal.
@@ -594,6 +666,9 @@ export class TaskGraphDispatcher implements IShutdownable {
                     }
                 });
             }, this.config.HeartbeatIntervalSeconds * 1000);
+            // Registered so `Stop()` can reach it. A heartbeat that outlives the drain keeps renewing
+            // a lease nobody is going to honour — see the drain-timeout branch in Stop().
+            this.heartbeats.set(taskID, heartbeat);
 
             // Emitted after the claim is held, not before: a frame saying "started" for work another
             // instance actually took would be a lie a viewer cannot detect.
@@ -661,6 +736,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             } catch { /* already logged; nothing further to do */ }
         } finally {
             if (heartbeat) clearInterval(heartbeat);
+            this.heartbeats.delete(taskID);
         }
     }
 
@@ -803,8 +879,10 @@ export class TaskGraphDispatcher implements IShutdownable {
                 if (!settled && !TERMINAL_TASK_STATUSES.has(parent.Status)) {
                     // Neither "already terminal" nor a successful write: the statement failed. Leave
                     // the graph active so the next pass retries rather than settling on a status the
-                    // database never accepted.
+                    // database never accepted. Re-queued explicitly, because a failed write is
+                    // exactly the case where the row's own timestamp does not advance.
                     LogError(`[TaskGraphDispatcher] Could not write terminal status for graph ${parentID}; leaving it active to retry.`);
+                    this.keepRetryingSettlement(parentID);
                     continue;
                 }
                 parent.Status = rollup.status;
@@ -820,19 +898,27 @@ export class TaskGraphDispatcher implements IShutdownable {
             }
 
             if (rollup.outcome === 'settled') {
-                // Geometry is settled once, here, so every viewer of this run agrees on it.
-                await this.persistComputedLayout(fresh);
-                // Emitted before the continuation is delivered, and outside its once-only guard: a
-                // viewer watching the run should learn it finished whether or not this instance is
-                // the one that wins the delivery CAS.
-                this.emit({
-                    Kind: 'GraphSettled',
-                    ParentTaskID: parentID,
-                    OwnerUserID: await this.resolveOwner(provider, parentID),
-                    Status: rollup.status,
-                    CompletedCount: fresh.nodes.filter((n) => n.status === 'Complete').length,
-                    TotalCount: fresh.nodes.length,
-                });
+                // ANNOUNCE ONCE PER PROCESS, RETRY THE REST (R2-12). Layout and the frame are
+                // idempotent facts about a finished graph; the cost, lifecycle and delivery writes
+                // below are the ones re-entry exists to retry. Without this split, a graph that keeps
+                // failing to settle re-persisted geometry and re-emitted the same frame every poll
+                // for the whole rescue window.
+                if (!this.announcedSettlements.has(parentID)) {
+                    // Geometry is settled once, here, so every viewer of this run agrees on it.
+                    await this.persistComputedLayout(fresh);
+                    // Emitted before the continuation is delivered, and outside its once-only guard: a
+                    // viewer watching the run should learn it finished whether or not this instance is
+                    // the one that wins the delivery CAS.
+                    this.emit({
+                        Kind: 'GraphSettled',
+                        ParentTaskID: parentID,
+                        OwnerUserID: await this.resolveOwner(provider, parentID),
+                        Status: rollup.status,
+                        CompletedCount: fresh.nodes.filter((n) => n.status === 'Complete').length,
+                        TotalCount: fresh.nodes.length,
+                    });
+                    this.announcedSettlements.add(parentID);
+                }
                 // READ-ONLY GATE, before any write to the submitting run's half (R2-2).
                 //
                 // A graph can settle before the run that submitted it has parked at all. `BaseAgent`
@@ -847,7 +933,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // terminal-and-undelivered and the rescue sweep brings it back next pass, by which
                 // time finalize has parked the run and both writes land.
                 const readiness = await this.submittingRunReadiness(provider, parent);
-                if (readiness === 'defer') continue;
+                if (readiness === 'defer') { this.keepRetryingSettlement(parentID); continue; }
 
                 await this.rollUpCostToSubmittingRun(provider, parent);
                 // Deliberately AFTER the rollup and OUTSIDE its refusal paths. The rollup declines
@@ -860,9 +946,14 @@ export class TaskGraphDispatcher implements IShutdownable {
                     // The lifecycle write did not land. Delivering now would claim the marker and
                     // make this the LAST pass to look at the graph — leaving the run Paused forever,
                     // which is the exact permanence R2-2 removes. Leave the marker unset and retry.
+                    this.keepRetryingSettlement(parentID);
                     continue;
                 }
                 await this.deliverContinuation(provider, parent, fresh);
+                // Delivered, expired, or lost the CAS to a peer — every one of those means this graph
+                // is somebody's finished business and needs no further re-queueing from here.
+                this.retryingSettlement.delete(parentID);
+                this.announcedSettlements.delete(parentID);
             }
         }
     }
@@ -1504,6 +1595,10 @@ export class TaskGraphDispatcher implements IShutdownable {
         ], this.contextUser);
 
         const ids = new Set<string>();
+        // Graphs this instance is mid-retry on, whatever the window says (R2-12). A failing pass
+        // writes nothing, so their `__mj_UpdatedAt` has stopped advancing and the third arm below
+        // will eventually stop finding them — which would turn a retry into a silent abandonment.
+        for (const id of this.retryingSettlement.keys()) ids.add(id);
         for (const r of (withPendingWork?.Results ?? []) as Array<{ ParentID: string }>) {
             if (r.ParentID) ids.add(r.ParentID);
         }
@@ -2606,6 +2701,27 @@ export class TaskGraphDispatcher implements IShutdownable {
             Provider: provider,
             ContextUser: this.contextUser,
         });
+    }
+
+    /**
+     * Keeps a graph in this instance's sweep regardless of what its row timestamp says.
+     *
+     * Bounded, and the bound is about noise rather than surrender: past the cap the graph has failed
+     * on every attempt for minutes, so another identical attempt will not fix it, and continuing
+     * costs a full graph load per poll forever. It is reported once and left to the startup sweep.
+     */
+    private keepRetryingSettlement(parentID: string): void {
+        const passes = (this.retryingSettlement.get(parentID) ?? 0) + 1;
+        if (passes > MAX_SETTLEMENT_RETRY_PASSES) {
+            this.retryingSettlement.delete(parentID);
+            LogError(
+                `[TaskGraphDispatcher] Graph ${parentID} has failed to settle on ${MAX_SETTLEMENT_RETRY_PASSES} ` +
+                `consecutive passes; this instance will stop re-queueing it. Its submitting run may be ` +
+                `left Paused. A restart's startup sweep will try again.`,
+            );
+            return;
+        }
+        this.retryingSettlement.set(parentID, passes);
     }
 
     /**
