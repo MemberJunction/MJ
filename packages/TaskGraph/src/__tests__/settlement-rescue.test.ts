@@ -148,6 +148,16 @@ describe('IsSubmittingRunReady — the graph can finish before its submitter par
         expect(IsSubmittingRunReady('Running', -60_000)).toBe(false);
     });
 
+    it('reads as a GATE, not as a report — the sense of the answer is the fix', () => {
+        // The one this suite could not catch, recorded so it cannot come back. `IsSubmittingRunReady`
+        // was always correct; the dispatcher inverted it at the call site and returned 'ready' from
+        // both branches, so the gate never deferred and R2-2 was inert. A decision extracted for
+        // testability is only half the job — the wiring is the other half, and only IT74's TX13
+        // could see it. Pinning the sense here at least makes a future inversion a two-place change.
+        expect(IsSubmittingRunReady('Running', 0)).toBe(false);   // false ⇒ DEFER
+        expect(IsSubmittingRunReady('Paused', 0)).toBe(true);     // true  ⇒ PROCEED
+    });
+
     it('the grace is short relative to the delivery window it sits inside', () => {
         // If the grace ever exceeded the rescue window, a deferred graph would age out of the sweep
         // before it was ever allowed to proceed — deferral would become permanent loss.

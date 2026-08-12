@@ -3021,15 +3021,22 @@ export class TaskGraphDispatcher implements IShutdownable {
             // for the agent they cancelled.
             const cancelled = run.Status === 'Cancelled';
             const settledFor = parent.CompletedAt ? Date.now() - parent.CompletedAt.getTime() : 0;
-            if (IsSubmittingRunReady(run.Status, settledFor)) {
-                return { Verdict: 'ready', SubmitterCancelled: cancelled };
+            if (!IsSubmittingRunReady(run.Status, settledFor)) {
+                // Still `Running` and inside the grace: `finalizeAgentRun` has not parked it yet.
+                // Defer the whole run-half so nothing claims the marker — see the call site.
+                return { Verdict: 'defer', SubmitterCancelled: cancelled };
             }
 
-            LogError(
-                `[TaskGraphDispatcher] Run ${run.ID} has been Running for ${Math.round(settledFor / 1000)}s ` +
-                `since graph ${parent.ID} settled — it never parked, so its submitting process most ` +
-                `likely died. Settling and delivering the graph anyway; the run needs separate attention.`,
-            );
+            if (run.Status === 'Running') {
+                // Ready DESPITE being unparked means the grace has expired: the submitting process
+                // most likely died before it could park. Proceeding loses nothing that is still
+                // recoverable and stops a dead submitter holding a finished workflow's outcome.
+                LogError(
+                    `[TaskGraphDispatcher] Run ${run.ID} has been Running for ${Math.round(settledFor / 1000)}s ` +
+                    `since graph ${parent.ID} settled — it never parked, so its submitting process most ` +
+                    `likely died. Settling and delivering the graph anyway; the run needs separate attention.`,
+                );
+            }
             return { Verdict: 'ready', SubmitterCancelled: cancelled };
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Could not check the run waiting on graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
