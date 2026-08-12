@@ -29,8 +29,8 @@
  * RequiresMutation-gated — they always run when the bundle is selected.
  */
 import { randomUUID } from 'node:crypto';
-import { RunQuery, Metadata, LogError } from '@memberjunction/core';
-import type { UserInfo } from '@memberjunction/core';
+import { RunQuery, RunView, Metadata, LogError } from '@memberjunction/core';
+import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { QueryEngine } from '@memberjunction/core-entities';
 import type {
     MJQueryCategoryEntity,
@@ -167,18 +167,25 @@ async function ensureQueryMetadata(md: Metadata, user: UserInfo, queryID: string
     }
 }
 
-/** Best-effort teardown: drop the snapshot table, then delete the metadata FK-safe (join → MR → query → category). */
+/**
+ * Best-effort teardown: drop the snapshot table, then delete the metadata FK-safe (join → MR → query → category).
+ * Each delete is guarded individually — MR3 may have already deleted the MaterializedResult (and, via the server
+ * subclass, its join row), so a delete that finds nothing must never skip the remaining cleanup (else the Query +
+ * Category would leak on every run). `IsSaved` skips the row MR3 already removed; the per-delete catch handles the
+ * join row the subclass deleted out from under the in-memory object.
+ */
 export async function teardownMaterializedReadFixtures(ctx: IntegrationCheckContext): Promise<void> {
+    const safeDelete = async (label: string, fn: () => Promise<unknown>): Promise<void> => {
+        try { await fn(); } catch (e) { console.error(`materialized-read teardown (${label}): ${e instanceof Error ? e.message : String(e)}`); }
+    };
     try {
         if (fixtures && ctx.Pool) {
             await ctx.Pool.request().query(`IF OBJECT_ID('[${fixtures.Schema}].[${fixtures.MatObject}]', 'U') IS NOT NULL DROP TABLE [${fixtures.Schema}].[${fixtures.MatObject}];`);
         }
-        if (fixtures?.Link) await fixtures.Link.Delete();
-        if (fixtures?.MaterializedResult) await fixtures.MaterializedResult.Delete();
-        if (fixtures?.Query) await fixtures.Query.Delete();
-        if (fixtures?.Category) await fixtures.Category.Delete();
-    } catch (e) {
-        console.error(`materialized-read teardown warning: ${e instanceof Error ? e.message : String(e)}`);
+        if (fixtures?.Link?.IsSaved) await safeDelete('link', () => fixtures!.Link.Delete());
+        if (fixtures?.MaterializedResult?.IsSaved) await safeDelete('materializedResult', () => fixtures!.MaterializedResult.Delete());
+        if (fixtures?.Query) await safeDelete('query', () => fixtures!.Query.Delete());
+        if (fixtures?.Category) await safeDelete('category', () => fixtures!.Category.Delete());
     } finally {
         fixtures = undefined;
     }
@@ -218,6 +225,24 @@ export const MaterializedReadChecks: NamedCheck[] = [
             Assert(!/materialized_/i.test(rendered), `MR2: the Live read must NOT touch the snapshot — RenderedSQL should reference the source, got: ${rendered.slice(0, 160)}`);
             Assert(!containsSentinel(result.Results ?? [], SentinelID), 'MR2: the sentinel exists ONLY in the snapshot, so a Live read must not return it — this attributes MR1 to the snapshot, not to correct rows generally');
             AssertEqual(result.Results?.length ?? -1, 0, 'MR2: no live Entity is named the sentinel, so the Live read returns zero rows');
+        },
+    },
+    {
+        Id: 'materialized-read.MR3',
+        Name: 'MR3: deleting the MaterializedResult (join row present) cleans the join first — no raw FK error (reverse-direction FK cleanup)',
+        Fn: async (ctx): Promise<void> => {
+            if (!fixtures) { console.warn('  ⚠ materialized-read.MR3 SKIPPED — no fixtures (no mssql pool on this run path).'); return; }
+            const { MaterializedResult, Link } = requireFixtures();
+            const rv = RunView.FromMetadataProvider(ctx.Provider as IMetadataProvider);
+            const before = await rv.RunView<{ ID: string }>({ EntityName: 'MJ: Materialized Result Queries', ExtraFilter: `ID='${Link.ID}'`, Fields: ['ID'], ResultType: 'simple' }, ctx.User);
+            Assert(before.Success && (before.Results?.length ?? 0) === 1, 'MR3: the join row must exist before the delete (anti-vacuity)');
+            // Delete the MaterializedResult while its join row still references it. The join FK has no
+            // ON DELETE CASCADE, so absent MJMaterializedResultEntityServer cleaning the join FIRST this would be a
+            // raw FK_MaterializedResultQuery_MaterializedResult violation rather than a clean delete.
+            const deleted = await MaterializedResult.Delete();
+            Assert(deleted, `MR3: deleting the MaterializedResult must succeed (join cleaned first), got: ${MaterializedResult.LatestResult?.CompleteMessage}`);
+            const after = await rv.RunView<{ ID: string }>({ EntityName: 'MJ: Materialized Result Queries', ExtraFilter: `ID='${Link.ID}'`, Fields: ['ID'], ResultType: 'simple' }, ctx.User);
+            AssertEqual(after.Results?.length ?? -1, 0, 'MR3: the join row must be gone after the MaterializedResult delete');
         },
     },
 ];

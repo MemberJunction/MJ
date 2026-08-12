@@ -2,10 +2,10 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "IT77 - Materialized Read Served From Snapshot",
-    "Description": "Live-DB proof that RunQuery(DataSource:'Materialized') is served from the physical snapshot, not the live source. Fabricates a snapshot table carrying a sentinel row absent from the live source, then MR1 asserts a Materialized read returns the sentinel AND its RenderedSQL references materialized_<...> + the surrogate order key; MR2 (negative control) asserts the SAME query read Live returns the sentinel nowhere. Server transport (RenderedSQL stripped by the GraphQL client). Self-cleaning fixtures; SQL-Server only (skips when no mssql pool).",
+    "Description": "Live-DB proof that RunQuery(DataSource:'Materialized') is served from the physical snapshot (not the live source) plus the reverse-direction delete-path FK cleanup. Fabricates a snapshot table carrying a sentinel row absent from the live source, then MR1 asserts a Materialized read returns the sentinel AND its RenderedSQL references materialized_<...> + the surrogate order key; MR2 (negative control) asserts the SAME query read Live returns the sentinel nowhere; MR3 asserts deleting the MaterializedResult with its join row present cleans the join first (no raw FK violation). Server transport (RenderedSQL stripped by the GraphQL client). Self-cleaning fixtures; SQL-Server only (skips when no mssql pool).",
     "InputDefinition": {},
     "ExpectedOutcomes": {
-      "summary": "A Materialized read is served from the snapshot (sentinel present + materialized_ RenderedSQL) while the same query read Live returns the sentinel nowhere. 2 checks (MR1-MR2)."
+      "summary": "A Materialized read is served from the snapshot (sentinel present + materialized_ RenderedSQL) while the same query read Live returns the sentinel nowhere, and deleting the MaterializedResult cleans its join row first. 3 checks (MR1-MR3)."
     },
     "Configuration": {
       "tier": "deterministic",
