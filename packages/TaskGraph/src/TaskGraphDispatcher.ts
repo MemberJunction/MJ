@@ -284,6 +284,15 @@ export class TaskGraphDispatcher implements IShutdownable {
     private readonly inFlight = new Set<string>();
     /** Guards against a slow poll overlapping the next tick. */
     private polling = false;
+    /**
+     * The poll pass currently running, so `Stop` can wait for it.
+     *
+     * `clearInterval` cannot cancel a tick that has already fired, and a pass is a long sequence of
+     * awaits (provider, rollup, claim query) — so without this, `Stop` returns while a pass is still
+     * mid-flight and about to claim. Its tasks then land in `inFlight` AFTER the drain loop already
+     * saw an empty set, which is precisely the state the drain exists to prevent.
+     */
+    private pollPass: Promise<void> | null = null;
 
     /** Graph → owning user, from the parent's durable metadata. Ownership never changes, so this never goes stale. */
     private readonly ownerByParentID = new Map<string, string | null>();
@@ -386,7 +395,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         LogStatus(`[TaskGraphDispatcher] Starting as instance '${this.config.InstanceID}'.`);
         await this.Reconcile();
 
-        this.pollTimer = setInterval(() => { void this.pollOnce(); }, this.config.PollIntervalSeconds * 1000);
+        this.pollTimer = setInterval(() => { this.pollPass = this.pollOnce(); }, this.config.PollIntervalSeconds * 1000);
         this.reconcileTimer = setInterval(
             () => { void this.Reconcile(); },
             this.config.ReconciliationIntervalSeconds * 1000,
@@ -404,6 +413,12 @@ export class TaskGraphDispatcher implements IShutdownable {
         this.running = false;
         if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
         if (this.reconcileTimer) { clearInterval(this.reconcileTimer); this.reconcileTimer = null; }
+
+        // Drain the poll pass BEFORE the task drain below, not after: a pass still running has not
+        // necessarily claimed anything yet, so `inFlight` can be empty while work is moments from
+        // starting. Clearing `running` above stops that pass claiming anything further; this waits
+        // for it to notice. Its own failures are already logged inside `pollOnce`.
+        if (this.pollPass) { await this.pollPass.catch(() => undefined); this.pollPass = null; }
 
         const deadline = Date.now() + 30_000;
         while (this.inFlight.size > 0 && Date.now() < deadline) {
@@ -461,13 +476,24 @@ export class TaskGraphDispatcher implements IShutdownable {
         this.polling = true;
         try {
             const provider = await this.providerFactory.CreateProvider();
+            // `running` is re-read after every await from here on. The entry check above only proves
+            // the dispatcher was live when the tick fired; each await is a point where `Stop` can
+            // land, and a stopped instance must neither mutate graph state nor take new work. Left
+            // unchecked, a stopped dispatcher goes on to roll up graphs (emitting GraphSettled to an
+            // observer nobody is listening to any more) and to claim tasks it will never run — which
+            // then sit claimed until their lease expires.
+            if (!this.running) return;
 
             // Settle graphs before picking new work, so a failure earlier in this pass stops its
             // branch immediately rather than after another wave has already launched.
             await this.propagateAndRollup(provider);
+            if (!this.running) return;
 
             const candidates = await this.findClaimableTasks(provider, capacity);
             for (const task of candidates) {
+                // Re-checked per iteration, not just before the loop: claiming is itself awaited, so
+                // a multi-task wave can straddle a Stop.
+                if (!this.running) break;
                 if (this.inFlight.size >= this.config.MaxConcurrentTasks) break;
                 if (!(await this.claims.TryClaim(provider, task.ID, this.contextUser))) {
                     // Another instance won the race, or the task is no longer Pending. Normal.

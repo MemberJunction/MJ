@@ -91,11 +91,28 @@ class StubAgentRunner implements TaskAgentRunner {
         };
     }
 
+    /**
+     * Names registered at submission time, so the hot path needs no query.
+     *
+     * Reading the name from the database at execution time made every recorded start depend on a
+     * concurrent read succeeding. When one transiently failed — the shared connection reports
+     * `Requests can only be made in the LoggedIn state` under a fanned-out wave — the catch below
+     * fell through to the task ID, and every assertion that filters by NAME silently dropped that
+     * execution. The task had run; the check reported it had not, so a healthy engine failed as
+     * "the gate task must still run" or "expected 4, got 3".
+     */
+    public readonly NamesByID = new Map<string, string>();
+
     /** The task's own name, read where the work happens — see SHARED_FAILURES. */
     private async resolveName(params: TaskAgentRunParams): Promise<string> {
+        const known = this.NamesByID.get(params.TaskID);
+        if (known) return known;
         try {
             const t = await params.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', params.ContextUser);
-            if (await t.Load(params.TaskID)) return t.Name;
+            if (await t.Load(params.TaskID)) {
+                this.NamesByID.set(params.TaskID, t.Name);
+                return t.Name;
+            }
         } catch { /* fall through to the ID */ }
         return params.TaskID;
     }
@@ -177,6 +194,13 @@ async function submitGraph(ctx: IntegrationCheckContext, spec: TaskGraphSpec): P
     Assert(result.Success, `submission failed: ${result.ErrorMessage}`);
     Assert(!!result.ParentTaskID, 'submission returned no parent task');
     CREATED_PARENT_IDS.push(result.ParentTaskID!);
+
+    // Register the names now, while nothing is executing and the read is uncontended. This is the
+    // only moment that is true: once the dispatcher starts, a name lookup competes with the wave it
+    // is describing. See StubAgentRunner.NamesByID.
+    for (const child of (await loadChildren(ctx, result.ParentTaskID!)).values()) {
+        RUNNER.NamesByID.set(child.ID, child.Name);
+    }
     return result.ParentTaskID!;
 }
 
