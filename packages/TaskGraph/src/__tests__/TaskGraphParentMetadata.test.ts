@@ -114,6 +114,33 @@ describe('ParseTaskGraphParentMetadata', () => {
     });
 });
 
+describe('continuationDeliveredAs — how a settlement ended, kept in the row', () => {
+    // Written by the same compare-and-swap that sets the timestamp, and read afterwards to tell a
+    // settlement that was ANNOUNCED from one that was found too late to announce. Untyped, that
+    // distinction survived only in whatever string happened to be in the JSON.
+    it('reads the two values the claim statement writes', () => {
+        expect(ParseTaskGraphParentMetadata('{"continuationDeliveredAs":"delivered"}').continuationDeliveredAs)
+            .toBe('delivered');
+        expect(ParseTaskGraphParentMetadata('{"continuationDeliveredAs":"expired"}').continuationDeliveredAs)
+            .toBe('expired');
+    });
+
+    it('reads anything else as unknown rather than echoing it', () => {
+        // Guarded like `continuation` and `reinvokeDepth`: a hand edit or a future producer can put
+        // anything here, and a caller branching on it should see "we do not know" instead of a
+        // string that merely is not one of the two it tests for.
+        expect(ParseTaskGraphParentMetadata('{"continuationDeliveredAs":"sent"}').continuationDeliveredAs)
+            .toBeUndefined();
+        expect(ParseTaskGraphParentMetadata('{"continuationDeliveredAs":7}').continuationDeliveredAs)
+            .toBeUndefined();
+    });
+
+    it('is absent on a graph that has not been delivered', () => {
+        expect(ParseTaskGraphParentMetadata('{"continuation":"message"}').continuationDeliveredAs).toBeUndefined();
+        expect(ParseTaskGraphParentMetadata(null).continuationDeliveredAs).toBeUndefined();
+    });
+});
+
 describe('IsReinvokeCapReached', () => {
     const at = (reinvokeDepth: number): TaskGraphParentMetadata =>
         ({ continuation: 'reinvoke', reinvokeDepth, submittedByAgentRunID: null });
