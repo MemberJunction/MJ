@@ -482,12 +482,25 @@ async function assertStubRan(
             + `bundle's stub ever running them: ${ranByOthers.join(', ')}. Another dispatcher on this `
             + `database executed them with its own runner, so this check exercised nothing. IT74 `
             + `requires exclusive use of the database (an MJAPI pointed at it, or another agent's `
-            + `session, will race every check here). Stop the other dispatcher and re-run.`,
+            + `session, will race every check here). ${CONTAMINATION_REMEDY}`,
         );
     }
     AssertEqual(started.length, expected, what);
     return started;
 }
+
+/**
+ * What to DO about a contaminated run — stated once, so both inferences give the same instruction.
+ *
+ * Naming the flag matters: without it the only apparent remedy is "stop your server", which nobody
+ * wants to do on a machine they are also developing on, so the bundle gets re-run and blamed
+ * instead. The flag is also what R3-11 made honest — a host carrying it now refuses graph
+ * submissions rather than silently accepting work it will never run.
+ */
+const CONTAMINATION_REMEDY =
+    'Stop the other dispatcher — or, if it is an MJAPI you need running, restart it with ' +
+    'MJ_DISABLE_TASK_GRAPH_DISPATCHER=1, which keeps the server serving while it declines both to ' +
+    'run graphs and (since R3-11) to accept them — then re-run.';
 
 /** Statuses that mean a task was RUN by somebody, for the foreign-runner inference above. */
 const TERMINAL_FOR_FOREIGN_CHECK: ReadonlySet<string> = new Set(['Complete', 'Failed']);
@@ -508,7 +521,7 @@ function assertMarkerUnclaimed(marker: { At: string | undefined }, provenLocally
         `${what} — but this bundle's own instances provably delivered nothing, so the marker at ` +
         `${marker.At} was claimed by a dispatcher outside this bundle. IT74 requires exclusive use of ` +
         `the database (an MJAPI pointed at it, or another agent's session, will race every check ` +
-        `here). Stop the other dispatcher and re-run.`,
+        `here). ${CONTAMINATION_REMEDY}`,
     );
     AssertEqual(marker.At, undefined, what);
 }
