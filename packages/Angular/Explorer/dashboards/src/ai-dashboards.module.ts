@@ -249,27 +249,44 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     SharedDashboardWidgetsModule
   ]
 })
-export class AIDashboardsModule {
-    constructor() {
-        // Ensure tree-shaking prevention loaders are called
-        LoadTagsResource();
-        LoadClusterVisualizationResource();
-        LoadVisualizeResource();
-        LoadSchedulingResource();
-        LoadAnalyticsResource();
-        LoadFeaturePipelinesResource();
-        LoadAIAnalyticsResource();
-        LoadAnalyticsExecutiveSummary();
-        LoadAnalyticsPromptRuns();
-        LoadAnalyticsAgentRuns();
-        LoadAnalyticsModelPerformance();
-        LoadAnalyticsCostBudget();
-        LoadAnalyticsErrorAnalysis();
-        LoadAnalyticsUsagePatterns();
-        LoadAnalyticsRealtimeOverview();
-        LoadAnalyticsRealtimeSessions();
-        LoadRealtimeManagement();
-        LoadAnalyticsRealtimeTranscripts();
-        LoadAIOverviewHub();
-    }
-}
+export class AIDashboardsModule {}
+
+// ─── Tree-shaking prevention (MODULE SCOPE — do not move into a constructor) ───
+//
+// These MUST run on file EVALUATION, not NgModule instantiation: the lazy resource
+// path builds components with `createComponent(reg.SubClass)` and never instantiates
+// this NgModule, so a constructor loader never runs.
+//
+// A module-scope call is also the only reference that survives a production build.
+// `declarations` compiles to `ɵɵsetNgModuleScope`, which is `ngJitMode`-guarded and
+// stripped, leaving a component referenced ONLY by module metadata with no live
+// reference for ESBuild to keep. See PR #3380 for the `FeaturePipelinesResource` case.
+//
+// These calls are belt-and-braces, NOT the primary guarantee. Every @RegisterClass
+// component below is also in the eager `mj-class-registrations` manifest, which
+// `@memberjunction/ng-bootstrap` re-exports from its public API and publishes with
+// `sideEffects: true` (see its `scripts/fix-dist-package.js`) precisely so a bare
+// import runs the decorators. That manifest — populated by exporting the component
+// from this package's `public-api.ts` — is what actually fixed FeaturePipelines.
+// So `sideEffects: false` on THIS package is not a live hazard: nothing load-bearing
+// depends on this file being evaluated. Keep the calls as a second line of defense
+// for anything that lands here before it lands in the manifest.
+LoadTagsResource();
+LoadClusterVisualizationResource();
+LoadVisualizeResource();
+LoadSchedulingResource();
+LoadAnalyticsResource();
+LoadFeaturePipelinesResource();
+LoadAIAnalyticsResource();
+LoadAnalyticsExecutiveSummary();
+LoadAnalyticsPromptRuns();
+LoadAnalyticsAgentRuns();
+LoadAnalyticsModelPerformance();
+LoadAnalyticsCostBudget();
+LoadAnalyticsErrorAnalysis();
+LoadAnalyticsUsagePatterns();
+LoadAnalyticsRealtimeOverview();
+LoadAnalyticsRealtimeSessions();
+LoadRealtimeManagement();
+LoadAnalyticsRealtimeTranscripts();
+LoadAIOverviewHub();
