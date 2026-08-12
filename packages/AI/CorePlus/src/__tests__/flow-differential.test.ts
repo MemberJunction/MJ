@@ -162,6 +162,24 @@ const FLOWS: Record<string, Flow> = {
             path({ ID: 'p4', OriginStepID: 'p', DestinationStepID: 'j' }),
         ],
     },
+    // C3's fidelity fix is what makes this expressible: a reconvergence shape where the guarded
+    // branch is cut but the join is still fed by a live route. Before the fix the simulator skipped
+    // the join too (no `stillReachable` equivalent) and the fixture would have false-failed a
+    // correct dispatcher.
+    'a cut branch must not take the join down with it': {
+        steps: [
+            step({ ID: 'a', Name: 'A', StartingStep: true }),
+            step({ ID: 'g', Name: 'Guarded' }),
+            step({ ID: 'p', Name: 'Plain' }),
+            step({ ID: 'j', Name: 'Join' }),
+        ],
+        paths: [
+            path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'p', Priority: 10 }),
+            path({ ID: 'p2', OriginStepID: 'a', DestinationStepID: 'g', Condition: 'never', Priority: 1 }),
+            path({ ID: 'p3', OriginStepID: 'g', DestinationStepID: 'j' }),
+            path({ ID: 'p4', OriginStepID: 'p', DestinationStepID: 'j' }),
+        ],
+    },
     'no path matches — the walk ends': {
         steps: [step({ ID: 'a', Name: 'A', StartingStep: true }), step({ ID: 'b', Name: 'B' })],
         paths: [path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'b', Condition: 'never' })],
@@ -316,31 +334,50 @@ function compiledOrder(flow: Flow): string[] {
         }
 
         // A non-exclusive conditional edge that is false blocks its target the ordinary way.
+        // ── ordinary conditional edges, modelled the way the dispatcher actually decides them ──
+        //
+        // C3: this used to skip a target the moment ANY of its conditional edges read false, which
+        // was unfaithful three ways and made it useless on exactly the reconvergence shapes R3-2
+        // needs. It (a) evaluated edges whose origin had not finished, so it skipped at cycle 1
+        // while the origin was still Pending; (b) had no `stillReachable` equivalent, so it skipped
+        // a target another LIVE route still fed; and (c) evaluated edges out of a Skipped origin,
+        // which the dispatcher drops unevaluated. Each of those either false-fails a correct
+        // dispatcher or goes blind on the divergence it exists to catch.
         const unevaluableHolds = new Set<string>();
+        const droppedInto = new Set<string>();
+        const stillReachable = new Set<string>();
         for (const t of spec.tasks) {
             for (const d of (t.dependsOn ?? []).map(NormalizeDependency)) {
-                if (d.exclusiveGroup || !d.condition) continue;
-                // An ordinary conditional edge that is definitely false skips its target, exactly
-                // like an XOR loser. This simulator modelled that from the start; the real dispatcher
-                // used to write Blocked here, and because nothing pinned the two together the
-                // divergence sat hidden behind a green differential suite. Both now Skip (R6), and
-                // Blocked is reserved for failure-driven unsatisfiability.
-                //
-                // THREE outcomes, not two. `CONTEXT[cond] === false` is false for an UNEVALUABLE
-                // condition as well as for a satisfied one, so the simulator let unevaluable
-                // guards through — reproducing the production bug rather than testing against it,
-                // and agreeing with a wrong answer. Unevaluable now HOLDS: neither skipped here nor
-                // eligible below.
-                // Absent data drops the edge, exactly as `DecideGate` now does — it does NOT hold.
-                // Before R2-3 this was a hold, which stalled the graph forever on a terminal origin
-                // whose output could never change.
-                if (ABSENT_DATA.has(d.condition)) {
-                    if (status.get(t.tempId) === 'Pending') status.set(t.tempId, 'Skipped');
-                    continue;
+                if (d.exclusiveGroup) continue;
+                const originStatus = status.get(d.tempId) ?? 'Pending';
+
+                if (d.condition) {
+                    // A branch that was not taken does not get a vote: the edge drops, unevaluated.
+                    if (originStatus === 'Skipped') { droppedInto.add(t.tempId); continue; }
+
+                    // TERMINALITY GUARD. An undecided origin is never asked — `succeeded` against a
+                    // still-Pending step is a confident, wrong `false`. Keeping the edge costs
+                    // nothing; the prerequisite gate already holds the target.
+                    if (originStatus === 'Complete' || originStatus === 'Failed' || originStatus === 'Cancelled') {
+                        // Absent data drops the edge, exactly as `DecideGate` does — it does NOT
+                        // hold. Before R2-3 this was a hold, stalling the graph forever on a
+                        // terminal origin whose output could never change.
+                        if (ABSENT_DATA.has(d.condition)) { droppedInto.add(t.tempId); continue; }
+                        // THREE outcomes, not two. `CONTEXT[cond] === false` is false for an
+                        // UNEVALUABLE condition as well as a satisfied one, so this once let
+                        // unevaluable guards through — reproducing the production bug rather than
+                        // testing against it, and agreeing with a wrong answer.
+                        if (!(d.condition in CONTEXT)) { unevaluableHolds.add(t.tempId); continue; }
+                        if (CONTEXT[d.condition] === false) { droppedInto.add(t.tempId); continue; }
+                    }
                 }
-                if (!(d.condition in CONTEXT)) { unevaluableHolds.add(t.tempId); continue; }
-                if (CONTEXT[d.condition] === false && status.get(t.tempId) === 'Pending') status.set(t.tempId, 'Skipped');
+                stillReachable.add(t.tempId);
             }
+        }
+        // Only unreachable when EVERY route in was cut — a target another live branch still feeds is
+        // reachable, which is the whole point of reconvergence.
+        for (const id of droppedInto) {
+            if (!stillReachable.has(id) && status.get(id) === 'Pending') status.set(id, 'Skipped');
         }
 
         // 3. eligibility, last.

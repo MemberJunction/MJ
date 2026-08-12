@@ -379,6 +379,9 @@ export class TaskGraphDispatcher implements IShutdownable {
 
     /** Live claim heartbeats by task ID, so the drain can silence the ones it gives up waiting for. */
     private readonly heartbeats = new Map<string, ReturnType<typeof setInterval>>();
+
+    /** Latched once the drain has given up waiting, so a late arrival does not re-register. */
+    private heartbeatsPurged = false;
     private readonly conditionEvaluator: DispatcherConditionEvaluator;
 
     private running = false;
@@ -597,6 +600,12 @@ export class TaskGraphDispatcher implements IShutdownable {
             // Stopping the heartbeats makes the sentence true. The task itself keeps running; its
             // completion write is guarded on still owning the claim, so if another instance reclaims
             // the task in the meantime, the abandoned executor's result is refused rather than raced.
+            // Latched, because the purge RACES the registration it is purging (C5). A task stalled
+            // in its two pre-heartbeat awaits — creating a provider, loading the row — registers
+            // AFTER this line and would renew its claim for the rest of the process's life, which is
+            // exactly the state the drain timeout means to end, under exactly the database duress
+            // that causes drain timeouts in the first place.
+            this.heartbeatsPurged = true;
             for (const stop of this.heartbeats.values()) clearInterval(stop);
             this.heartbeats.clear();
             LogError(`[TaskGraphDispatcher] Stopped with ${this.inFlight.size} task(s) still in flight; their claims will now expire.`);
@@ -744,9 +753,16 @@ export class TaskGraphDispatcher implements IShutdownable {
                     }
                 });
             }, this.config.HeartbeatIntervalSeconds * 1000);
-            // Registered so `Stop()` can reach it. A heartbeat that outlives the drain keeps renewing
-            // a lease nobody is going to honour — see the drain-timeout branch in Stop().
-            this.heartbeats.set(taskID, heartbeat);
+            // Registered so `Stop()` can reach it — unless the drain has already given up, in which
+            // case this task arrived too late to be waited for and must not renew its lease (C5).
+            // Its completion write stays guarded, so if another instance reclaims the task in the
+            // meantime this executor's result is refused rather than raced.
+            if (this.heartbeatsPurged || !this.running) {
+                clearInterval(heartbeat);
+                heartbeat = null;
+            } else {
+                this.heartbeats.set(taskID, heartbeat);
+            }
 
             // Emitted after the claim is held, not before: a frame saying "started" for work another
             // instance actually took would be a lie a viewer cannot detect.
@@ -1179,26 +1195,19 @@ export class TaskGraphDispatcher implements IShutdownable {
 
             const totals = SumAgentRunTreeCost(tree.Root);
 
-            const submitting = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
-            if (!(await submitting.Load(runID))) {
-                LogError(`[TaskGraphDispatcher] Could not load run ${runID} to record graph cost against it.`);
-                return 'failed-transient';
-            }
+
 
             // Assignment, never accumulation. The tree already contains the run's own spend as its
             // ROOT node, and it reads own-cost everywhere, so recomputing from scratch on every
             // settlement lands on the same answer — which is what makes this safe to call again when
             // a second graph settles, or when the terminal check is re-evaluated after a HITL wait.
-            submitting.TotalCostRollup = totals.Cost;
-            submitting.TotalTokensUsedRollup = totals.Tokens;
-            submitting.TotalPromptTokensUsedRollup = totals.PromptTokens;
-            submitting.TotalCompletionTokensUsedRollup = totals.CompletionTokens;
-
-            if (!(await submitting.Save())) {
-                LogError(
-                    `[TaskGraphDispatcher] Could not record graph cost against run ${runID}: ` +
-                    `${submitting.LatestResult?.CompleteMessage ?? 'unknown error'}`,
-                );
+            //
+            // COLUMN-SCOPED (C4). A full-row save here carried a whole snapshot of the run, and two
+            // instances entering the settled branch for one graph is by design — so a peer's rollup,
+            // loaded before this instance settled the run, would write `Paused` back over
+            // `Completed` along with everything else it had read.
+            if (!(await this.claims.TrySetRunCostRollup(provider, runID, totals, this.contextUser))) {
+                LogError(`[TaskGraphDispatcher] Could not record graph cost against run ${runID}.`);
                 return 'failed-transient';
             }
 
@@ -1574,6 +1583,12 @@ export class TaskGraphDispatcher implements IShutdownable {
             // on the marker: a missed notification visible in the record beats one repeated forever.
             LogError(`[TaskGraphDispatcher] Continuation delivery failed for ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
         }
+        // C1: the function is declared `Promise<boolean>` and fell off the end here, so EVERY
+        // successfully delivered graph resolved `undefined` — read as "not resolved" by the caller,
+        // which then re-queued it and paid another full settle pass (run-tree cost query included)
+        // and polluted R2-6's retry accounting. No double delivery, because the CAS holds; just a
+        // wasted pass per settlement and a retry counter measuring the wrong thing.
+        return true;
     }
 
     /** Reads the parent's durable continuation metadata through the shared parser. */
@@ -3288,25 +3303,32 @@ export class TaskGraphDispatcher implements IShutdownable {
             // Complete did not do what the run started it to do, and a run reporting success over it
             // would be the same untruth in a different place.
             const succeeded = graphStatus === 'Complete';
-            run.Status = succeeded ? 'Completed' : 'Failed';
-            run.Success = succeeded;
-            run.CompletedAt = new Date();
-            if (!succeeded) {
-                const reason = `The workflow "${parent.Name}" ended ${graphStatus}.`;
-                run.ErrorMessage = run.ErrorMessage ? `${run.ErrorMessage}\n\n${reason}` : reason;
-            }
-
-            if (!(await run.Save())) {
+            // COLUMN-SCOPED AND GUARDED ON `Paused` (C4), for the same reason every parent write has
+            // been since Round 1: a full-row save carries a stale snapshot of a row another instance
+            // may have moved, and the predicate makes the transition once-only rather than
+            // last-write-wins.
+            const settled = await this.claims.TrySettleRun(
+                provider, run.ID, succeeded,
+                succeeded ? null : `The workflow "${parent.Name}" ended ${graphStatus}.`,
+                this.contextUser,
+            );
+            if (!settled) {
                 // Left parked rather than forced. A run stuck at Paused is visibly unfinished, which
                 // is a state someone can investigate; a run flipped to Completed by a write that did
                 // not land would be the same lie this whole change removes.
+                // Rowcount 0 is either "a peer settled it first" — fine, and the status read above
+                // would have caught the common case — or a write that did not land. Deferring covers
+                // both: a peer's settle makes the next pass's `Paused` check return `done`.
                 LogError(
-                    `[TaskGraphDispatcher] Could not settle run ${run.ID} against graph ${parent.ID}: ` +
-                    `${run.LatestResult?.CompleteMessage ?? 'unknown error'}. It remains Paused; retrying next pass.`,
+                    `[TaskGraphDispatcher] Could not settle run ${run.ID} against graph ${parent.ID}; ` +
+                    `it is no longer Paused or the write did not land. Retrying next pass.`,
                 );
                 return 'defer';
             }
-            LogStatus(`[TaskGraphDispatcher] Run ${run.ID} settled ${run.Status} — workflow "${parent.Name}" ended ${graphStatus}.`);
+            LogStatus(
+                `[TaskGraphDispatcher] Run ${run.ID} settled ${succeeded ? 'Completed' : 'Failed'} — ` +
+                `workflow "${parent.Name}" ended ${graphStatus}.`,
+            );
             return 'done';
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Could not settle the run waiting on graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);

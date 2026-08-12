@@ -87,6 +87,66 @@ export class TaskClaimStore {
         return `${db.QuoteIdentifier(db.MJCoreSchemaName)}.${db.QuoteIdentifier('Task')}`;
     }
 
+    private agentRunTable(provider: IMetadataProvider): string {
+        const db = this.sql(provider);
+        return `${db.QuoteIdentifier(db.MJCoreSchemaName)}.${db.QuoteIdentifier('AIAgentRun')}`;
+    }
+
+    /**
+     * Writes a graph's cost rollup onto the submitting run, those four columns and no others.
+     *
+     * **The full-row `Save()` this replaces could revert a peer's settle** (C4). Two instances
+     * entering the settled branch for one graph is by design, so instance B's rollup — loaded before
+     * A settled the run — would write back `Paused` over A's `Completed`, along with every other
+     * column it had read. And a crash between this write and the same pass's lifecycle write left
+     * the run `Paused` under a claimed marker, which no sweep re-enters.
+     */
+    public async TrySetRunCostRollup(
+        provider: IMetadataProvider,
+        runID: string,
+        totals: { Cost: number | null; Tokens: number | null; PromptTokens: number | null; CompletionTokens: number | null },
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const num = (v: number | null): string => (v == null ? 'NULL' : String(v));
+        const sql = `
+            UPDATE ${this.agentRunTable(provider)}
+            SET ${db.QuoteIdentifier('TotalCostRollup')} = ${num(totals.Cost)},
+                ${db.QuoteIdentifier('TotalTokensUsedRollup')} = ${num(totals.Tokens)},
+                ${db.QuoteIdentifier('TotalPromptTokensUsedRollup')} = ${num(totals.PromptTokens)},
+                ${db.QuoteIdentifier('TotalCompletionTokensUsedRollup')} = ${num(totals.CompletionTokens)}
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(runID)}'`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
+     * Settles a parked agent run, guarded on it still being parked.
+     *
+     * Same reasoning as the rollup above and as every parent write since Round 1: a full-row save
+     * carries a whole stale snapshot, and the `Paused` predicate makes the transition once-only
+     * across instances rather than last-write-wins.
+     */
+    public async TrySettleRun(
+        provider: IMetadataProvider,
+        runID: string,
+        succeeded: boolean,
+        errorMessage: string | null,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const errorClause = errorMessage == null
+            ? ''
+            : `, ${db.QuoteIdentifier('ErrorMessage')} = CONCAT(COALESCE(${db.QuoteIdentifier('ErrorMessage')} + CHAR(10) + CHAR(10), ''), '${this.escape(errorMessage)}')`;
+        const sql = `
+            UPDATE ${this.agentRunTable(provider)}
+            SET ${db.QuoteIdentifier('Status')} = '${succeeded ? 'Completed' : 'Failed'}',
+                ${db.QuoteIdentifier('Success')} = ${succeeded ? 1 : 0},
+                ${db.QuoteIdentifier('CompletedAt')} = SYSUTCDATETIME()${errorClause}
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(runID)}'
+              AND ${db.QuoteIdentifier('Status')} = 'Paused'`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
     /**
      * Attempts to claim one task.
      *
