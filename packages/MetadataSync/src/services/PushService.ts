@@ -103,7 +103,7 @@ export interface PushResult {
   sqlLogPath?: string;
   /**
    * All captured SQL migration files, in order. Single-element when the capture fit under
-   * `sqlLogging.maxFileSize`; multiple `*.partNN.sql` files when size-based splitting triggered.
+   * `sqlLogging.maxFileSize`; multiple `*.partNNN.sql` files when size-based splitting triggered.
    */
   sqlLogPaths?: string[];
   /** Structured per-record changes captured during the push, for the changes recap. */
@@ -634,7 +634,8 @@ export class PushService {
             const mib = effectiveLimit / (1024 * 1024);
             const limitStr = mib >= 1 ? `${mib >= 10 ? Math.round(mib) : mib.toFixed(1)} MiB` : `${Math.round(effectiveLimit / 1024)} KiB`;
             callbacks?.onLog?.(`📝 SQL log split into ${paths.length} parts (each ≤ ~${limitStr} unless a single statement exceeds it):`);
-            paths.forEach((p, i) => callbacks?.onLog?.(`   ${String(i + 1).padStart(2, '0')}. ${p}`));
+            const pad = String(paths.length).length;
+            paths.forEach((p, i) => callbacks?.onLog?.(`   ${String(i + 1).padStart(pad, '0')}. ${p}`));
           } else if (options.verbose) {
             callbacks?.onLog?.(`📝 SQL log written to: ${paths[0]}`);
           }

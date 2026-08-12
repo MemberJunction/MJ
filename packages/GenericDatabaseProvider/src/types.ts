@@ -91,7 +91,7 @@ export interface SqlLoggingOptions {
    *   (its own header/footer, and per-part batch-separator counting reset so a `GO` batch
    *   never spans a file boundary).
    * - When splitting triggers, every part (including the first) is named by inserting
-   *   `.partNN` before the extension of `filePath` (e.g. `push.sql` → `push.part01.sql`,
+   *   `.partNNN` before the extension of `filePath` (e.g. `push.sql` → `push.part001.sql`,
    *   `push.part02.sql`, ...). Enumerate all produced files via {@link SqlLoggingSession.filePaths}.
    * - A single statement larger than `maxFileSize` cannot be split; it is written whole to
    *   its own part (which then exceeds the limit). This is unavoidable and does not loop.
@@ -109,7 +109,7 @@ export interface SqlLoggingSession {
   readonly id: string;
   /**
    * File path where SQL is being logged. When {@link SqlLoggingOptions.maxFileSize} splitting
-   * triggers, this is the FIRST part (`*.part01.sql`); use {@link filePaths} to get every part.
+   * triggers, this is the FIRST part (`*.part001.sql`); use {@link filePaths} to get every part.
    */
   readonly filePath: string;
   /**

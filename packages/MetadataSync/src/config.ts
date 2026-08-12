@@ -20,7 +20,7 @@ import { configManager } from './lib/config-manager';
  * that are rejected) while keeping ~10 MiB of headroom and minimizing the number of part files.
  * (GitHub's 50 MB "large file" notice is only a soft warning, not a block, so we don't optimize
  * for it.) Applied by the metadata-sync push/watch capture paths so a large push splits into
- * multiple `*.partNN.sql` files automatically. Set `maxFileSize: 0` in `.mj-sync.json` to disable.
+ * multiple `*.partNNN.sql` files automatically. Set `maxFileSize: 0` in `.mj-sync.json` to disable.
  */
 export const DEFAULT_SQL_LOG_MAX_FILE_SIZE = 90 * 1024 * 1024;
 
@@ -148,7 +148,7 @@ export interface SyncConfig {
     variableBatchThreshold?: number;
     /**
      * Maximum size, in bytes, of a single generated SQL migration file. When a push capture would
-     * exceed this, the logger splits the output into multiple ordered part files (`*.partNN.sql`),
+     * exceed this, the logger splits the output into multiple ordered part files (`*.partNNN.sql`),
      * each individually runnable and under the limit — so a large metadata push stays under host
      * file-size limits (e.g. GitHub's 100 MiB cap). Splitting happens strictly on statement
      * boundaries; a push whose output fits under the limit produces a single file at the original

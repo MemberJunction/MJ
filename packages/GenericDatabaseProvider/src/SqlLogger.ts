@@ -50,7 +50,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   private _currentPartStatements: number = 0;
   /** 1-based index of the part currently being written. */
   private _partIndex: number = 1;
-  /** True once at least one rotation has occurred (the base file was renamed to part01). */
+  /** True once at least one rotation has occurred (the base file was renamed to part001). */
   private _rotated: boolean = false;
   /** Ordered list of every part path produced (starts with the base filePath). */
   private _partPaths: string[] = [];
@@ -89,16 +89,17 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * unless size-based splitting rotated across multiple parts.
    */
   public get filePaths(): string[] {
-    return this._partPaths;
+    return [...this._partPaths];
   }
 
   /**
-   * Derives a part file path by inserting `.partNN` before the extension of the base path.
-   * e.g. `/x/push.sql` + index 2 → `/x/push.part02.sql`.
+   * Derives a part file path by inserting `.partNNN` before the extension of the base path.
+   * e.g. `/x/push.sql` + index 2 → `/x/push.part002.sql`. Three digits keep lexicographic
+   * filename order equal to part order up to 999 parts (two digits break at `part100` < `part11`).
    */
   private _partFilePath(index: number): string {
     const parsed = path.parse(this.filePath);
-    const suffix = `.part${String(index).padStart(2, '0')}`;
+    const suffix = `.part${String(index).padStart(3, '0')}`;
     return path.join(parsed.dir, `${parsed.name}${suffix}${parsed.ext}`);
   }
 
@@ -126,7 +127,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   /**
    * Rotate to a new part file (size-based splitting). Finalizes the current part with a
    * footer, closes it, and opens the next part with a fresh header. On the FIRST rotation
-   * the base file is renamed to `.part01` so all parts share the `.partNN` naming.
+   * the base file is renamed to `.part001` so all parts share the `.partNNN` naming.
    *
    * Called only from `logSqlStatement`, only when splitting is enabled and the current part
    * already holds at least one statement — so rotation always happens on a statement boundary
@@ -137,19 +138,20 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       return;
     }
 
-    // On the FIRST rotation, rename the base file to part01 (before finalizing) so all parts
-    // share `.partNN` naming and the part-1 footer is labeled correctly. The open handle keeps
-    // writing to the same file after the rename (POSIX renames the path, not the descriptor).
-    if (!this._rotated) {
-      const part01 = this._partFilePath(1);
-      await fs.promises.rename(this.filePath, part01);
-      this._partPaths[0] = part01;
-      this._rotated = true;
-    }
-
-    // Finalize the part being closed.
+    // Finalize the part being closed: footer, then close the handle. The footer's part label
+    // comes from `_partIndex`, so it doesn't depend on the rename below.
     await this._fileHandle.writeFile(this._generateFooter(this._partIndex));
     await this._fileHandle.close();
+
+    // On the FIRST rotation, rename the (now closed) base file to part001 so all parts share
+    // `.partNNN` naming. Renaming only after close keeps this portable: Windows can reject
+    // renaming a file with an open handle (EPERM/EBUSY), while POSIX doesn't care either way.
+    if (!this._rotated) {
+      const part1 = this._partFilePath(1);
+      await fs.promises.rename(this.filePath, part1);
+      this._partPaths[0] = part1;
+      this._rotated = true;
+    }
 
     // Open the next part.
     this._partIndex += 1;
@@ -310,7 +312,8 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     // At this point `logEntry` is the complete statement block (description + SQL + params),
     // WITHOUT any batch separator yet. When size-based splitting is enabled, decide rotation on
     // the block size BEFORE applying the (intra-file) batch separator — so a freshly rotated part
-    // never starts with a stray leading GO. The +1 accounts for the trailing blank line added below.
+    // never starts with a stray leading GO. FOOTER_RESERVE_BYTES absorbs the footer/separator/
+    // blank-line slack so a finalized part stays strictly under the limit.
     if (this._maxFileSize > 0 &&
         this._currentPartStatements > 0 &&
         this._currentFileBytes + Buffer.byteLength(logEntry) + SqlLoggingSessionImpl.FOOTER_RESERVE_BYTES > this._maxFileSize) {
