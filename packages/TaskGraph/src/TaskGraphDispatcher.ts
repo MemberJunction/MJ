@@ -3073,7 +3073,7 @@ export class TaskGraphDispatcher implements IShutdownable {
 
             LogStatus(
                 `[TaskGraphDispatcher] Task ${taskID} had ${rows.length} open requests — keeping the ` +
-                `oldest (${rows[0].ID}${rows[0].ID === keepIfSole ? ', this instance\'s' : ''}) and withdrawing the rest.`,
+                `oldest (${rows[0].ID}${UUIDsEqual(rows[0].ID, keepIfSole) ? ', this instance\'s' : ''}) and withdrawing the rest.`,
             );
             for (const duplicate of rows.slice(1)) {
                 duplicate.Status = 'Canceled';
