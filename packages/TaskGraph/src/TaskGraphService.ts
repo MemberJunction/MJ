@@ -102,6 +102,16 @@ export type TaskGraphParentMetadata = {
      * racing the same completion produce one winner rather than two notifications.
      */
     continuationDeliveredAt?: string;
+    /**
+     * HOW it was delivered — written by the same compare-and-swap that sets the timestamp.
+     *
+     * `'expired'` means the settlement was found after its delivery window, so the run and its cost
+     * were corrected but nothing was announced: posting a week-old "your workflow finished" into a
+     * live conversation, or starting a fresh billed turn for it, is worse than staying quiet. The
+     * distinction has to survive in the row, or an expired settlement is indistinguishable from a
+     * delivered one the moment anybody looks afterwards.
+     */
+    continuationDeliveredAs?: 'delivered' | 'expired';
 };
 
 /**
@@ -151,6 +161,11 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
                 : 'message',
             failureSemantics: parsed.failureSemantics === 'edges' ? 'edges' : 'block',
             reinvokeDepth: Number.isFinite(parsed.reinvokeDepth) ? Number(parsed.reinvokeDepth) : 0,
+            // Guarded like the others: this is read to explain a settlement after the fact, and an
+            // arbitrary string arriving from a hand edit should read as "unknown", not be echoed.
+            continuationDeliveredAs: parsed.continuationDeliveredAs === 'delivered' || parsed.continuationDeliveredAs === 'expired'
+                ? parsed.continuationDeliveredAs
+                : undefined,
         };
     } catch {
         return { ...DEFAULT_PARENT_METADATA };

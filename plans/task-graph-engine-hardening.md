@@ -137,6 +137,19 @@ This plan is ordered accordingly:
 
 ### D3. Scope the active-graph sweep to workflow graphs
 
+> **MOSTLY CLOSED in Phase 1 (R2-2).** The discriminator option (a) already existed: `Submit` has
+> always stamped `TypeID` = the `AI Workflow` task type on the parent and every child, via
+> `ensureTaskType`, which runs before the persist transaction. So no schema decision was needed and
+> no backfill: **verified against a live database, every parent graph carries the stamp (24/24)**, and
+> nothing dispatcher-owned predates it. `TypeID = @aiWorkflow` is now on all three sweep arms and
+> inside the two guarded statements that write a payload column (`TryClaimContinuation`,
+> `TrySetParentOutput`), where it is a REQUIRED argument rather than an optional filter. IT74 TX10
+> asserts an ordinary parent+subtask hierarchy survives a live sweep byte-identical.
+>
+> What remains under D3 is only B4's NULL-`StepType` human-task inconsistency, which the scoping
+> mooted in practice but did not delete.
+
+
 **Today.** `findActiveGraphIDs` (`TaskGraphDispatcher.ts:1221-1262`) selects **every** `MJ: Tasks` row with `ParentID IS NULL AND Status IN ('Pending','In Progress')` (and every parent of a non-terminal child) — no `TypeID` or provenance filter — yet Tasks is a general-purpose entity used by conversations and user to-dos. Consequences: the dispatcher rolls up and overwrites the status of ordinary parent tasks; "human-task" classification by columns (`!AgentID && !ActionID && !PromptID`, `:1308-1324`) raises `MJ: AI Agent Requests` rows and writes `__human-notified__` into `ClaimedBy` for plain to-dos; `claimContinuation` **overwrites the parent's `InputPayload`** with the continuation-metadata bag (`ParseTaskGraphParentMetadata` of arbitrary content returns defaults — the original payload is destroyed, `:1126`); and every ordinary pending task costs ~two child queries per instance per 5s poll.
 
 **Options**: (a) a dedicated `TaskType` row / `TypeID` filter for dispatcher-owned graphs; (b) a provenance marker written by `TaskGraphService.Submit` that the sweep requires (the parent-metadata bag exists, but making it queryable again meets P3/P4's marker decision); (c) a discriminator column. **This should be decided together with the P3/P4 marker representation** — one schema decision covers all three. Backfill existing workflow parents; a graph submitted before the marker existed must not become invisible to the sweep (that would recreate P3).
@@ -177,6 +190,22 @@ The audit's sharpest meta-finding: **the coverage gaps map one-to-one onto the b
 1. **Dispatcher unit-test seam** (new, `packages/TaskGraph/src/__tests__/`). The dispatcher already takes injectable runners and a provider; add tests driving `propagateAndRollup` + the settle sequence against an in-memory provider stub: crash-window re-entry (P3), settle idempotency, skip-seed vs. cascade confirmation (P1), unevaluable-condition hold (P2), stalled-graph diagnostics (B7). These are *logic* tests — the atomicity claims stay in IT74 where the real database answers.
 2. **Differential fixtures** (`flow-differential.test.ts`): the two P1 shapes, the P2 shape, and — once D2 resolves — context-parity assertions (conditions and mappings see the same values under walker simulation and dispatcher, not just the same traversal order). Fix the simulator's edge-identity collapse and its `=== false` ordinary-condition model first; both currently mirror the production bugs.
 3. **IT74 extensions** (TX8+, same stub-runner seam, no model calls): P1 diamond live with start-order assertion; P3 cancel-settles-run determinism; P3 transient-rollup-failure recovery; P4 two-dispatcher single-delivery race; B6 non-ASCII round-trip; D3 ordinary-task-hierarchy non-interference.
+
+   **Landed in Phase 1** — TX8 P3 crash-rescue end to end across a process boundary (settle for real,
+   strip the marker, start a *fresh* dispatcher whose poll interval is an hour so only the STARTUP
+   sweep can act, assert delivery exactly once and no re-delivery by the next process); TX9 P4's
+   two-dispatcher single-delivery race with a shared counting deliverer, also asserting the metadata
+   bag survives the losing instance; TX10 D3 ordinary-hierarchy non-interference; TX11 the `Stop()`
+   drain, asserted **per instance** (frames and claims of its own) rather than as global stillness,
+   which is not a property one dispatcher can own.
+
+   ⚠️ **IT74 requires exclusive use of the database.** Every "ran exactly once" assertion here
+   depends on no other dispatcher competing, and when that is violated the raw failure is
+   uninformative (`expected 1, got 0` on a task that plainly completed). The count assertions now
+   infer the cause — a task that reached a terminal status this bundle's stub never started can only
+   have been run by a foreign runner — and name it in the failure. Still open: TX3/TX7-class checks
+   remain *racy* rather than merely uninformative under a competing dispatcher; genuinely fixing that
+   needs process isolation, not a better message.
 4. **Unit-test debt**: `DetermineInitialStep` (now the entire live flow-agent path — compile, refusals, Tasks handoff) has zero coverage (`flow-agent-type.test.ts` covers only mapping helpers and state); `TaskGraphService` Submit/Cancel/Retry likewise. Cover alongside the fixes that touch them rather than as a separate campaign.
 
 Definition of done per repo standard: affected packages' unit tests pass, and `pnpm run test:integration` (deterministic tier) passes including the new TX checks.
