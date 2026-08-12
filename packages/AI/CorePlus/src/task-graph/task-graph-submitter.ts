@@ -39,8 +39,39 @@ export type TaskGraphSubmitRequest = {
      * depth 0 — which is every submission that is not part of a continuation chain.
      */
     ReinvokeDepth?: number;
+    /**
+     * The invocation's own runtime parameters, as the flow dialect's `data` and `context` roots.
+     *
+     * **These are NOT the origin step's output** — that is what `payload` means — and conflating the
+     * two is the defect this field exists to fix (R3-3). In the engine being replaced,
+     * `FlowAgentType.buildConditionContext` sets `data: params.data` and `context: params.context`
+     * from `ExecuteAgentParams`, and `data.userApproval === true` is that class's own documented
+     * pattern. The compiled path carried neither, so every documented `data.x`/`context.x` condition
+     * evaluated against the origin's output, found nothing, and read a clean `false` — silently
+     * taking a branch the walker never took, on every invocation, with the validator blessing the
+     * condition at the door.
+     *
+     * Persisted on the graph's parent so it survives the submitting run, for the same reason
+     * everything else in that bag is: the instance that evaluates a condition is routinely not the
+     * process that accepted the graph.
+     */
+    Invocation?: TaskGraphInvocationEnvelope;
     ContextUser: UserInfo;
     Provider: IMetadataProvider;
+};
+
+/**
+ * What an invocation contributes to condition evaluation, beyond the steps' own outputs.
+ *
+ * Deliberately just the two documented roots rather than the whole `ExecuteAgentParams`: this is a
+ * durable record read by another process later, so it carries what conditions may reference and
+ * nothing that would go stale or leak.
+ */
+export type TaskGraphInvocationEnvelope = {
+    /** The invocation's `data` — the flow dialect's `data.*` root. */
+    Data?: unknown;
+    /** The invocation's `context` — the flow dialect's `context.*` root. */
+    Context?: unknown;
 };
 
 /** What the caller learns about a submission. */

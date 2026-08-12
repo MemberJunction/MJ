@@ -34,6 +34,10 @@ export class DurableTaskGraphSubmitter extends TaskGraphSubmitter {
             // Carried through so MAX_REINVOKE_DEPTH bounds a real chain. Without it every
             // submission was depth 0 and the cap could never trip.
             ReinvokeDepth: request.ReinvokeDepth ?? 0,
+            // The flow dialect's `data`/`context` roots. Carried the same way and for the same
+            // reason as the depth above: the graph outlives this call, so anything a condition may
+            // reference has to travel with it (R3-3).
+            Invocation: request.Invocation,
         });
         return {
             Success: result.Success,

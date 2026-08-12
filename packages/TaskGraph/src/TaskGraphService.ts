@@ -36,6 +36,7 @@ import {
     NormalizeDependency,
     RankGraphNodes,
     ValidateTaskGraphSpec,
+    type TaskGraphInvocationEnvelope,
     type TaskGraphSpec,
     type TaskGraphSpecNode,
     type ForEachOperation,
@@ -61,6 +62,12 @@ export type TaskGraphSubmitContext = {
      * re-invoked by a finished graph carries its parent's depth + 1.
      */
     ReinvokeDepth?: number;
+    /**
+     * The invocation's runtime parameters, for the flow dialect's `data`/`context` roots (R3-3).
+     * Persisted on the parent because the instance evaluating a condition is routinely not the
+     * process that accepted the graph.
+     */
+    Invocation?: TaskGraphInvocationEnvelope;
 };
 
 /**
@@ -121,6 +128,14 @@ export type TaskGraphParentMetadata = {
      * claim and start a step the early finish is in the middle of skipping.
      */
     earlyFinishedAt?: string;
+    /**
+     * The invocation's `data` and `context`, as the flow dialect's roots of the same names (R3-3).
+     *
+     * Absent for a graph submitted without them, in which case those roots resolve to the same
+     * empty-but-readable value any absent data does — a condition on them reads false rather than
+     * throwing, exactly as the walker's would on a missing key.
+     */
+    invocation?: { data?: unknown; context?: unknown };
 };
 
 /**
@@ -949,6 +964,11 @@ export class TaskGraphService {
             reinvokeDepth: context.ReinvokeDepth ?? 0,
             failureSemantics: spec.failureSemantics ?? 'block',
             submittedByAgentRunID: context.AgentRunID ?? null,
+            // Only written when the caller supplied one, so a graph with no invocation envelope
+            // carries no key at all rather than a misleading empty object.
+            ...(context.Invocation
+                ? { invocation: { data: context.Invocation.Data, context: context.Invocation.Context } }
+                : {}),
             submittedByUserID: context.ContextUser?.ID ?? null,
         } satisfies TaskGraphParentMetadata);
         if (!(await parent.Save())) {

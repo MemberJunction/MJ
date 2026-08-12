@@ -39,6 +39,19 @@ export type FailureSemantics = 'block' | 'edges';
 /** The evaluator's answer, in the shape `IConditionEvaluator` returns. */
 export type ConditionVerdict = { Success: boolean; Value?: unknown; ErrorMessage?: string };
 
+/**
+ * The invocation's contribution to the condition envelope — the flow dialect's `data`/`context`.
+ *
+ * Separate from the origin's output on purpose: `payload`, `output` and `stepResult` describe what
+ * the previous STEP produced, while these describe how the workflow was INVOKED. They travel with
+ * the graph on its parent's metadata bag because the instance evaluating a condition is routinely
+ * not the process that accepted the graph.
+ */
+export type ConditionInvocation = {
+    Data?: unknown;
+    Context?: unknown;
+};
+
 /** The origin fields a condition can see. Structural, so `MJTaskEntity` satisfies it as-is. */
 export type ConditionOrigin = {
     ID: string;
@@ -114,7 +127,11 @@ export function ParseConditionOutput(payload: string | null | undefined): unknow
  * each task's output is its own, and inventing a merged one would give conditions a value the flow
  * engine never had.
  */
-export function BuildConditionContext(origin: ConditionOrigin, output: unknown): Record<string, unknown> {
+export function BuildConditionContext(
+    origin: ConditionOrigin,
+    output: unknown,
+    invocation: ConditionInvocation = {},
+): Record<string, unknown> {
     // The envelope and the spec's declared roots (`CONDITION_ROOTS`, in ai-core-plus) are one
     // contract split across two packages, and the validator refuses conditions on the strength of
     // that list. A key here with no entry there is a root nobody may reference; an entry there with
@@ -135,10 +152,30 @@ export function BuildConditionContext(origin: ConditionOrigin, output: unknown):
         errorMessage: origin.ErrorMessage ?? null,
         // flow dialect
         payload: readable(envelope.payload ?? output),
-        stepResult: { Success: succeeded, step: origin.Name, result: readable(envelope.result ?? output) },
+        // `step` IS A STATUS WORD, NOT THE STEP'S NAME (R3-3, decided against the walker's actual
+        // exposure rather than against the spec's prose). `FlowAgentType` stores
+        // `{ Success: true, step: 'Success', result, rawResult }`, and the documented condition
+        // `stepResult.step === 'Success'` only means anything under that reading. Putting the
+        // origin's name here made that condition false for every step whose name was not literally
+        // "Success" — which is all of them. The name is deliberately NOT exposed under another key:
+        // the walker did not expose it, and inventing a root is how the two engines drift.
+        stepResult: {
+            Success: succeeded,
+            step: succeeded ? 'Success' : 'Failed',
+            result: readable(envelope.result ?? output),
+        },
         flowContext: { currentStepId: origin.ID, completedSteps: [], executionPath: [], stepCount: 0 },
-        data: envelope.data ?? NO_OUTPUT,
-        context: envelope.context ?? NO_OUTPUT,
+        // FROM THE INVOCATION, NOT THE ORIGIN'S OUTPUT (R3-3).
+        //
+        // These were `envelope.data`/`envelope.context` — keys of the origin STEP's parsed output —
+        // which is a different thing entirely from what the dialect documents and what the walker
+        // provided. `FlowAgentType.buildConditionContext` sets these from `ExecuteAgentParams`, and
+        // `data.userApproval === true` is that class's own documented pattern. A step's output
+        // essentially never carries a `data` key, so every such condition resolved `undefined`, read
+        // a clean `false`, and silently took the branch the walker would not have — with no throw,
+        // no hold, and the validator blessing the condition at the door.
+        data: invocation.Data ?? NO_OUTPUT,
+        context: invocation.Context ?? NO_OUTPUT,
     };
 }
 

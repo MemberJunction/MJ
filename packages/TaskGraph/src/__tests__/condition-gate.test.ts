@@ -230,6 +230,53 @@ describe('R2-3: a branch that was not taken does not get a vote', () => {
     });
 });
 
+describe('R3-3: data and context come from the INVOCATION, not the origin\'s output', () => {
+    // The walker read these straight off `ExecuteAgentParams` — `data.userApproval === true` is
+    // `FlowAgentType`'s own documented pattern. The compiled path mapped them to keys of the origin
+    // STEP's parsed output, which essentially never carries a `data` key, so every such condition
+    // resolved `undefined`, read a clean `false`, and silently took the branch the walker would not
+    // have. No throw, no hold, and the validator blessing the condition at the door — which
+    // guaranteed the silent wrong branch rather than a refusal.
+
+    it('resolves data and context from the invocation envelope', () => {
+        const ctx = BuildConditionContext(origin(), null, {
+            Data: { userApproval: true },
+            Context: { tenant: 'acme' },
+        });
+        expect(ctx.data).toEqual({ userApproval: true });
+        expect(ctx.context).toEqual({ tenant: 'acme' });
+    });
+
+    it('does NOT read them from the origin\'s output, even when it happens to have those keys', () => {
+        // The defect in one assertion. A step whose output contains a `data` key must not be able to
+        // impersonate the invocation's parameters.
+        const ctx = BuildConditionContext(origin(), { data: { userApproval: true } }, {});
+        expect(ctx.data).not.toEqual({ userApproval: true });
+    });
+
+    it('keeps payload, output and stepResult on the ORIGIN\'s output — they mean the step', () => {
+        const ctx = BuildConditionContext(
+            origin(), { payload: { total: 7 } }, { Data: { userApproval: true } },
+        );
+        expect(ctx.payload).toEqual({ total: 7 });
+        expect(ctx.data).toEqual({ userApproval: true });
+    });
+
+    it('an absent envelope reads as absent DATA, not as a throw', () => {
+        // A graph submitted without an invocation envelope must behave like any other absent data:
+        // `data.x` is undefined and the condition reads false, exactly as the walker's would on a
+        // missing key — never a permanent hold.
+        const ctx = BuildConditionContext(origin(), null, {});
+        expect(() => (ctx.data as Record<string, unknown>).userApproval).not.toThrow();
+        expect((ctx.data as Record<string, unknown>).userApproval).toBeUndefined();
+        expect(() => (ctx.context as Record<string, unknown>).anything).not.toThrow();
+    });
+
+    it('defaults the envelope entirely, so existing callers keep working', () => {
+        expect(() => BuildConditionContext(origin(), null)).not.toThrow();
+    });
+});
+
 describe('the envelope and the spec\'s declared roots are one contract', () => {
     it('provides exactly the roots the spec says a condition may reference', () => {
         // Split across two packages: the validator refuses conditions on the strength of
@@ -270,7 +317,10 @@ describe('BuildConditionContext — one condition, two dialects', () => {
     it('exposes the flow dialect from the same origin', () => {
         const ctx = BuildConditionContext(origin({ Name: 'Fetch data' }), { payload: { title: 'x' } });
         expect(ctx.payload).toEqual({ title: 'x' });
-        expect(ctx.stepResult).toMatchObject({ Success: true, step: 'Fetch data' });
+        // `step` is a STATUS WORD, matching what the flow engine stores — not the step's name.
+        // `stepResult.step === 'Success'` is the documented condition, and it only means anything
+        // under that reading (R3-3).
+        expect(ctx.stepResult).toMatchObject({ Success: true, step: 'Success' });
     });
 
     it('falls back to the whole output when there is no payload envelope', () => {
@@ -284,7 +334,12 @@ describe('BuildConditionContext — one condition, two dialects', () => {
         expect(ctx.succeeded).toBe(false);
         expect(ctx.failed).toBe(true);
         expect(ctx.errorMessage).toBe('timeout');
-        expect(ctx.stepResult).toMatchObject({ Success: false });
+        expect(ctx.stepResult).toMatchObject({ Success: false, step: 'Failed' });
+    });
+
+    it('never puts the step NAME in stepResult.step — the walker did not, so neither do we', () => {
+        expect((BuildConditionContext(origin({ Name: 'Fetch data' }), null).stepResult as { step: string }).step)
+            .not.toBe('Fetch data');
     });
 
     it('gives every dialect key a value even with no output at all', () => {

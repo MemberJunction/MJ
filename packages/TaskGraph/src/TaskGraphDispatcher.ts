@@ -50,7 +50,13 @@ import { IShutdownable, ShutdownRegistry, UUIDsEqual } from '@memberjunction/glo
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import type { MJTaskEntity_ITaskStepConfiguration, MJTaskEntity_ITaskLoopIteration } from '@memberjunction/core-entities';
 import { TaskClaimStore, TERMINAL_PARENT_STATUSES, TERMINAL_PARENT_STATUS_SQL } from './TaskClaimStore';
-import { BuildConditionContext, DecideGate, IsDataAbsence, ParseConditionOutput } from './condition-gate';
+import {
+    BuildConditionContext,
+    DecideGate,
+    IsDataAbsence,
+    ParseConditionOutput,
+    type ConditionInvocation,
+} from './condition-gate';
 import { HumanTaskSQL, IsHumanTask } from './task-predicates';
 import {
     IsSettlementExpired,
@@ -2241,6 +2247,12 @@ export class TaskGraphDispatcher implements IShutdownable {
         // One parent read serves both questions this pass asks of the metadata bag.
         const parentMeta = await this.readParentMetadataFor(provider, parentTaskID);
         const failureSemantics = parentMeta.failureSemantics;
+        // The invocation's own parameters, carried on the parent so a condition evaluated by any
+        // instance sees what the walker saw (R3-3).
+        const invocation: ConditionInvocation = {
+            Data: parentMeta.invocation?.data,
+            Context: parentMeta.invocation?.context,
+        };
 
         // Conditional edges are resolved HERE, before eligibility runs, by dropping edges whose
         // condition does not hold. Expressing it as edge removal rather than as a second rule inside
@@ -2277,7 +2289,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 originStatus: (entityById.get(d.DependsOnTaskID)?.Status ?? 'Pending') as TaskGraphNodeStatus,
                 priority: d.Priority ?? 0,
                 sequence: d.Sequence ?? 0,
-                conditionOutcome: this.evaluateExclusiveCondition(d, entityById),
+                conditionOutcome: this.evaluateExclusiveCondition(d, entityById, invocation),
             })),
             // WHICH STATUSES MAY DECIDE — the graph's own failure dialect, not a constant.
             //
@@ -2305,7 +2317,7 @@ export class TaskGraphDispatcher implements IShutdownable {
 
         for (const d of ordinary) {
             if (d.Condition?.trim()) {
-                const outcome = this.evaluateEdgeCondition(d, entityById, failureSemantics);
+                const outcome = this.evaluateEdgeCondition(d, entityById, failureSemantics, invocation);
                 if (outcome === 'drop') { droppedInto.add(d.TaskID); continue; }
                 if (outcome === 'hold') heldByCondition.add(d.TaskID);
             }
@@ -2423,6 +2435,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         dep: MJTaskDependencyEntity,
         entityById: Map<string, MJTaskEntity>,
         failureSemantics: TaskGraphParentMetadata['failureSemantics'],
+        invocation: ConditionInvocation,
     ): 'keep' | 'drop' | 'hold' {
         const upstream = entityById.get(dep.DependsOnTaskID);
         if (!upstream) return 'keep';
@@ -2438,7 +2451,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         const outcome = DecideGate(upstream.Status, failureSemantics, () => {
             const result = this.conditionEvaluator.Evaluate(
                 dep.Condition!,
-                BuildConditionContext(upstream, ParseConditionOutput(upstream.OutputPayload)),
+                BuildConditionContext(upstream, ParseConditionOutput(upstream.OutputPayload), invocation),
             );
             if (!result.Success) unevaluableError = result.ErrorMessage;
             return result;
@@ -2461,6 +2474,7 @@ export class TaskGraphDispatcher implements IShutdownable {
     private evaluateExclusiveCondition(
         dep: MJTaskDependencyEntity,
         entityById: Map<string, MJTaskEntity>,
+        invocation: ConditionInvocation,
     ): EdgeConditionOutcome {
         if (!dep.Condition?.trim()) return 'satisfied';
         const upstream = entityById.get(dep.DependsOnTaskID);

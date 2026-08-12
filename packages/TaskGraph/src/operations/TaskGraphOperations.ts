@@ -92,6 +92,13 @@ function submitContext(
  * to" — but it is currently a consequence of the input shape rather than a decision. Closing it
  * means additive optional inputs on a PUBLISHED remote operation, which is a metadata change plus
  * CodeGen, not an edit here. Flagged rather than done quietly.
+ *
+ * **R3-3 widened this gap.** The submit contract now carries an invocation envelope — the flow
+ * dialect's `data`/`context` condition roots — and this input shape has no field for that either.
+ * So a graph submitted remotely evaluates `data.x`/`context.x` against nothing, which is the exact
+ * silent-wrong-branch this round fixed on the in-process path. Whatever is decided for `AgentRunID`
+ * and `ReinvokeDepth` has to cover the envelope in the same change, or the same class of drop
+ * recurs on the remote seam.
  */
 @RegisterClass(BaseRemotableOperation, 'TaskGraph.Submit')
 export class TaskGraphSubmitServerOperation extends TaskGraphSubmitOperation {

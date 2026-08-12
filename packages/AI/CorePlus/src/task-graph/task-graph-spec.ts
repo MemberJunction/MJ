@@ -56,6 +56,11 @@ export type TaskGraphDependency = {
      *                hand its target a satisfied prerequisite.
      *   Pending / In Progress / Deferred — undecided; the edge is kept and the prerequisite gate
      *                keeps the target waiting.
+     *
+     * `stepResult.step` carries a STATUS WORD (`'Success'` / `'Failed'`), not the step's name —
+     * matching what the flow engine actually exposes, which is what the documented condition
+     * `stepResult.step === 'Success'` tests against. The step's name is not a condition root on
+     * either engine.
      */
     /**
      * How this edge participates in the target's join.
