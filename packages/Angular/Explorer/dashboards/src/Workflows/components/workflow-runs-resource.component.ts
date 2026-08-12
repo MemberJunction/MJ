@@ -1,8 +1,22 @@
-import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, HostListener } from '@angular/core';
 import { CompositeKey, RunView } from '@memberjunction/core';
-import { MJTaskEntity, ResourceData } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
-import { BaseDashboard } from '@memberjunction/ng-shared';
+import { MJTaskEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
+import { ParseJSONOptions, ParseJSONRecursive, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { BaseDashboard, BaseResourceComponent } from '@memberjunction/ng-shared';
+import { SortWorkflowRuns, type WorkflowRunSortColumn } from './workflow-run-sorting';
+import { WorkflowRunLayout } from './workflow-run-layout';
+
+/** Below this the detail pane cannot hold a canvas AND a JSON pane side by side. */
+const STACK_INNER_BELOW_PX = 1100;
+
+/**
+ * How the JSON panes unpack nested JSON.
+ *
+ * A task's `Configuration` and payloads are JSON stored inside a string column, so without this the
+ * viewer shows one very long escaped line — technically the truth, and unreadable. Matches what the
+ * agent-run detail panel does, so the same record reads the same way in both places.
+ */
+const JSON_PARSE_OPTIONS: ParseJSONOptions = { extractInlineJson: true, maxDepth: 100, debug: false };
 
 /** A settled-or-running graph, projected for the list. */
 export type WorkflowRunRow = {
@@ -20,6 +34,31 @@ export type WorkflowRunRow = {
 export type WorkflowRunStatusFilter = 'all' | 'Running' | 'Complete' | 'Failed' | 'Cancelled';
 
 const STATUS_FILTERS: readonly WorkflowRunStatusFilter[] = ['all', 'Running', 'Complete', 'Failed', 'Cancelled'];
+
+// The sort column type and the ordering itself live in `workflow-run-sorting`, which is pure and
+// therefore testable without standing up the component. Re-exported so existing importers of this
+// module keep resolving.
+export type { WorkflowRunSortColumn } from './workflow-run-sorting';
+
+/** What the detail panel is showing for the selected run. */
+export type WorkflowRunDetailTab = 'graph' | 'json';
+
+/**
+ * One step of a run, for the detail panel's step list and JSON view.
+ *
+ * The whole entity is kept, not a projection: the JSON view exists precisely so someone can read
+ * everything the row holds, and a projection would decide for them what is worth seeing.
+ */
+export type WorkflowRunStep = {
+    ID: string;
+    Name: string;
+    Status: string;
+    StepType: string | null;
+    StartedAt: Date | null;
+    CompletedAt: Date | null;
+    /** Every column of the row, for the JSON pane. */
+    Record: Record<string, unknown>;
+};
 
 /**
  * The Workflows app's **Runs** surface — every task graph that has run, whoever started it.
@@ -40,7 +79,15 @@ const STATUS_FILTERS: readonly WorkflowRunStatusFilter[] = ['all', 'Running', 'C
     styleUrls: ['./workflow-runs-resource.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush,
 })
-@RegisterClass(BaseDashboard, 'WorkflowRunsResource')
+// Registered against BaseResourceComponent, NOT BaseDashboard — while still extending BaseDashboard
+// for its lifecycle (initDashboard/loadData and the automatic NotifyLoadComplete).
+//
+// The registration key is what the shell looks the component up by, and a nav item with
+// `ResourceType: "Custom"` is resolved through BaseResourceComponent. Registered under BaseDashboard
+// this class was never found: the Runs tab rendered "No component is registered for driver class
+// WorkflowRunsResource", which reads as a packaging problem and is really a one-word mismatch.
+// Its sibling WorkflowsResourceComponent had it right, which is what made the difference visible.
+@RegisterClass(BaseResourceComponent, 'WorkflowRunsResource')
 export class WorkflowRunsResourceComponent extends BaseDashboard implements AfterViewInit {
     public IsLoading = false;
     public LoadError: string | null = null;
@@ -54,6 +101,40 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
 
     public readonly StatusFilters = STATUS_FILTERS;
 
+    /**
+     * Ordering. Newest-first by default, because "what just happened" is the question a run list is
+     * usually opened to answer.
+     */
+    public SortColumn: WorkflowRunSortColumn = 'StartedAt';
+    public SortDescending = true;
+
+    /** What the detail panel is showing. */
+    public DetailTab: WorkflowRunDetailTab = 'graph';
+
+    /** The selected run's steps, loaded when a run is opened. */
+    public SelectedSteps: WorkflowRunStep[] = [];
+    public StepsLoading = false;
+
+    /** The step whose JSON is showing, or null when none is selected. */
+    public SelectedStepID: string | null = null;
+
+    /**
+     * Pane sizes, panel visibility and the legend toggle — the rules live in `workflow-run-layout`,
+     * which is pure and therefore testable without standing up Angular.
+     *
+     * Preferences go through `UserInfoEngine` (`MJ: User Settings`), never `localStorage`: a pane
+     * width that vanishes when someone opens a different browser is exactly the kind of preference
+     * people notice when it disappears. Reads are a synchronous cache hit; writes are debounced,
+     * because dragging a splitter fires continuously.
+     */
+    public readonly Layout = new WorkflowRunLayout({
+        Get: (key) => UserInfoEngine.Instance.GetSetting(key),
+        Set: (key, value) => UserInfoEngine.Instance.SetSettingDebounced(key, value),
+    });
+
+    /** Stacked rather than side-by-side when the detail pane is too narrow for both. */
+    public InnerSplitDirection: 'horizontal' | 'vertical' = 'horizontal';
+
     constructor(private cdr: ChangeDetectorRef) {
         super();
     }
@@ -63,24 +144,95 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     }
 
     initDashboard(): void {
-        // Nothing to set up — loadData does the work and the filters default to "everything".
+        this.Layout.Restore();
+        this.applyViewportRules();
     }
 
     ngAfterViewInit(): void {
         this.publishAgentContext();
     }
 
-    /** The rows after the active filter and search — what the template renders. */
+    /** Re-evaluates the stacking rule; the detail pane's width follows the window's. */
+    @HostListener('window:resize')
+    public onViewportResized(): void {
+        const before = this.InnerSplitDirection;
+        this.applyViewportRules();
+        if (before !== this.InnerSplitDirection) this.cdr.markForCheck();
+    }
+
+    private applyViewportRules(): void {
+        // Three columns on a laptop gives each about 400px and the canvas stops being usable, so the
+        // inner pair stacks instead. Mirrors the outer split's existing breakpoint rather than
+        // inventing a second responsive scheme.
+        this.InnerSplitDirection = window.innerWidth < STACK_INNER_BELOW_PX ? 'vertical' : 'horizontal';
+    }
+
+    public OnSplitDragEnd(sizes: readonly (number | '*')[]): void {
+        this.Layout.OnSplitDragEnd(sizes);
+    }
+
+    public OnStepSplitDragEnd(sizes: readonly (number | '*')[]): void {
+        this.Layout.OnStepSplitDragEnd(sizes);
+    }
+
+    public ToggleStepPanel(): void {
+        this.Layout.ToggleStepPanel();
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * The legend was toggled on the canvas toolbar — remember it.
+     *
+     * Driven from the toolbar rather than a button of our own: the canvas already has a legend
+     * control in the place people look for one, and adding a second in the header would be two
+     * controls for one setting, free to disagree.
+     */
+    public OnLegendToggled(show: boolean): void {
+        this.Layout.SetLegendVisible(show);
+        this.cdr.markForCheck();
+    }
+
+    /** The rows after the active filter and search, in the chosen order — what the template renders. */
     public get VisibleRuns(): WorkflowRunRow[] {
         const wanted = this.SearchText.trim().toLowerCase();
-        return this.Runs.filter((r) => {
+        const filtered = this.Runs.filter((r) => {
             if (this.StatusFilter !== 'all' && r.Status !== this.StatusFilter) return false;
             return !wanted || r.Name.toLowerCase().includes(wanted);
         });
+        return this.sortRuns(filtered);
+    }
+
+    /** Ordering — see `workflow-run-sorting` for the rules and why unset always sorts last. */
+    private sortRuns(rows: WorkflowRunRow[]): WorkflowRunRow[] {
+        return SortWorkflowRuns(rows, this.SortColumn, this.SortDescending);
+    }
+
+    /**
+     * Sorts by a column, flipping direction when it is already the active one.
+     *
+     * Time columns start descending (newest first) and text columns ascending (A→Z), because that is
+     * what each is normally wanted in — a first click that produced the least useful order would
+     * just mean everyone clicks twice.
+     */
+    public OnSort(column: WorkflowRunSortColumn): void {
+        if (this.SortColumn === column) {
+            this.SortDescending = !this.SortDescending;
+        } else {
+            this.SortColumn = column;
+            this.SortDescending = column === 'StartedAt' || column === 'CompletedAt' || column === 'Duration';
+        }
+        this.publishAgentContext();
+        this.cdr.markForCheck();
+    }
+
+    /** The sort indicator for a column header: none, ascending, or descending. */
+    public SortIcon(column: WorkflowRunSortColumn): string {
+        if (this.SortColumn !== column) return 'fa-solid fa-sort';
+        return this.SortDescending ? 'fa-solid fa-sort-down' : 'fa-solid fa-sort-up';
     }
 
     public get SelectedRun(): WorkflowRunRow | null {
-        return this.Runs.find((r) => r.ID === this.SelectedRunID) ?? null;
+        return this.Runs.find((r) => UUIDsEqual(r.ID, this.SelectedRunID ?? '')) ?? null;
     }
 
     async loadData(): Promise<void> {
@@ -142,9 +294,114 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     }
 
     public OnSelectRun(run: WorkflowRunRow): void {
-        this.SelectedRunID = this.SelectedRunID === run.ID ? null : run.ID;
+        const closing = UUIDsEqual(this.SelectedRunID ?? '', run.ID);
+        this.SelectedRunID = closing ? null : run.ID;
+        this.SelectedStepID = null;
+        this.SelectedSteps = [];
         this.publishAgentContext();
         this.cdr.markForCheck();
+        if (!closing) void this.loadSteps(run.ID);
+    }
+
+    /**
+     * Loads the selected run's steps.
+     *
+     * On selection rather than with the list, because a run list of 200 would otherwise pull every
+     * step of every run to show the one a person opened. `BypassCache` because the dispatcher
+     * advances tasks through direct SQL, which fires no cache invalidation — a cached read here can
+     * hand back the state the graph was in when it started.
+     */
+    private async loadSteps(parentTaskID: string): Promise<void> {
+        this.StepsLoading = true;
+        this.cdr.markForCheck();
+        try {
+            const result = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJTaskEntity>({
+                EntityName: 'MJ: Tasks',
+                ExtraFilter: `ParentID='${parentTaskID}'`,
+                // The same ordering rule the run tree uses: what ran, in the order it ran, with work
+                // that never started at the end. `__mj_CreatedAt` alone is the COMPILER's walk
+                // order, which has nothing to do with execution.
+                OrderBy: 'CASE WHEN StartedAt IS NULL THEN 1 ELSE 0 END, StartedAt, __mj_CreatedAt',
+                ResultType: 'entity_object',
+                BypassCache: true,
+            });
+            if (!UUIDsEqual(this.SelectedRunID ?? '', parentTaskID)) return; // selection moved on
+            this.SelectedSteps = (result.Success ? (result.Results ?? []) : []).map((t) => ({
+                ID: t.ID,
+                Name: t.Name ?? '(unnamed step)',
+                Status: t.Status,
+                StepType: t.StepType,
+                StartedAt: t.StartedAt,
+                CompletedAt: t.CompletedAt,
+                Record: t.GetAll(),
+            }));
+        } catch (e) {
+            this.LoadError = e instanceof Error ? e.message : String(e);
+            this.SelectedSteps = [];
+        } finally {
+            this.StepsLoading = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /** A node was clicked on the canvas — show that step's JSON. */
+    public OnGraphNodeSelected(event: { TaskID: string }): void {
+        this.SelectedStepID = event.TaskID;
+        // Asking to see a step is asking for the panel. Leaving it closed would make the click look
+        // like it did nothing.
+        if (!this.Layout.StepPanelOpen) this.ToggleStepPanel();
+        this.cdr.markForCheck();
+    }
+
+    public OnSelectStep(step: WorkflowRunStep): void {
+        this.SelectedStepID = UUIDsEqual(this.SelectedStepID ?? '', step.ID) ? null : step.ID;
+        this.cdr.markForCheck();
+    }
+
+    public OnDetailTab(tab: WorkflowRunDetailTab): void {
+        this.DetailTab = tab;
+        this.cdr.markForCheck();
+    }
+
+    public get SelectedStep(): WorkflowRunStep | null {
+        return this.SelectedSteps.find((s) => UUIDsEqual(s.ID, this.SelectedStepID ?? '')) ?? null;
+    }
+
+    /** The selected step, as formatted JSON for the viewer. */
+    public get SelectedStepJson(): string {
+        const step = this.SelectedStep;
+        return step ? JSON.stringify(ParseJSONRecursive(step.Record, JSON_PARSE_OPTIONS), null, 2) : '{}';
+    }
+
+    /**
+     * The whole run as JSON — the graph row and every step under it.
+     *
+     * Nested JSON is parsed rather than left as escaped strings, so `Configuration` and the payloads
+     * read as structure instead of a single unbroken line. That is the difference between a JSON tab
+     * someone can use and one they copy elsewhere to make readable.
+     */
+    public get SelectedRunJson(): string {
+        const run = this.SelectedRun;
+        if (!run) return '{}';
+        return JSON.stringify(
+            ParseJSONRecursive(
+                {
+                    Run: {
+                        ID: run.ID,
+                        Name: run.Name,
+                        Status: run.Status,
+                        StartedAt: run.StartedAt,
+                        CompletedAt: run.CompletedAt,
+                        Duration: run.Duration,
+                        AgentRunID: run.AgentRunID,
+                    },
+                    Steps: this.SelectedSteps.map((s) => s.Record),
+                },
+                JSON_PARSE_OPTIONS,
+            ),
+            null,
+            2,
+        );
     }
 
     public OnFilterByStatus(status: WorkflowRunStatusFilter): void {
@@ -231,7 +488,7 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
                 Handler: async (params: Record<string, unknown>) => {
                     const wanted = String(params['run'] ?? '').trim().toLowerCase();
                     const match =
-                        this.Runs.find((r) => r.ID.toLowerCase() === wanted) ??
+                        this.Runs.find((r) => UUIDsEqual(r.ID, wanted)) ??
                         this.Runs.find((r) => r.Name.trim().toLowerCase() === wanted) ??
                         this.Runs.find((r) => r.Name.toLowerCase().includes(wanted));
                     if (!match) {

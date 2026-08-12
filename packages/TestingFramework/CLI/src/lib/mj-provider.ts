@@ -1,7 +1,9 @@
 import { SetProvider, Metadata, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+// `UserCache` moved to generic-database-provider upstream (dialect-neutral Refresh); the rest of
+// this line is this branch's PG-parity work, which the merged body below still uses.
+import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import sql from 'mssql';
 import dotenv from 'dotenv';
 import path from 'path';

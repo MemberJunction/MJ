@@ -23,6 +23,7 @@ export class MJTaskFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTaskDependenciesTaskID', sectionName: 'Task Dependencies (Task)', isExpanded: false },
             { sectionKey: 'mJTaskDependenciesDependsOnTaskID', sectionName: 'Task Dependencies (Depends On Task ID)', isExpanded: false },
+            { sectionKey: 'mJAIAgentRequests', sectionName: 'AI Agent Requests', isExpanded: false },
             { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false }
         ]);
     }

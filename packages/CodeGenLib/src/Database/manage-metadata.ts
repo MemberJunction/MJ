@@ -946,42 +946,6 @@ export class ManageMetadataBase {
     * within the given schema) and sets Entity.ParentID on the child entity.
     * Must run AFTER entities are created but BEFORE manageParentEntityFields().
     */
-   /**
-    * Builds the entity lookup behind {@link processISARelationshipConfig}: match on Name first, else
-    * on BaseTable, optionally constrained to a schema.
-    *
-    * The schema predicate is composed CONDITIONALLY rather than written as
-    * `(@SchemaName IS NULL OR SchemaName = @SchemaName)`. That form is fatal on PostgreSQL: the
-    * parameter's only unambiguous use is `$n IS NULL`, which gives the planner no type to infer, so
-    * the whole statement fails to prepare with "could not determine data type of parameter $n".
-    * SQL Server infers the type from the other side of the OR and never saw the problem.
-    *
-    * The failure was silent in the worst way — processISARelationshipConfig catches per-relationship
-    * errors and logs them, so CodeGen ran to completion with a zero exit code while every declared
-    * IS-A relationship on PostgreSQL was quietly skipped, leaving Entity.ParentID NULL. Downstream
-    * that means no mirrored parent fields, no parent JOIN in the child base view, and a child whose
-    * Save() never writes the parent row.
-    *
-    * Emitting the predicate only when a schema was supplied keeps the parameter list free of
-    * type-ambiguous entries and is portable to both dialects without a cast.
-    */
-   protected buildISAEntityLookupSQL(
-      schema: string,
-      selectBody: string,
-      nameParam: string,
-      schemaName?: string,
-   ): { sql: string; params: Record<string, unknown> } {
-      const schemaPredicate = schemaName ? ` AND SchemaName = @ISASchemaName` : '';
-      const sql = `
-                  ${this.selectTop(1, selectBody,
-                     `FROM ${this.qs(schema, 'vwEntities')}
-                  WHERE Name = @${nameParam}
-                     OR (BaseTable = @${nameParam}${schemaPredicate})`,
-                     `CASE WHEN Name = @${nameParam} THEN 0 ELSE 1 END`)}
-               `;
-      return { sql, params: schemaName ? { 'ISASchemaName': schemaName } : {} };
-   }
-
    protected async processISARelationshipConfig(pool: CodeGenConnection): Promise<{ success: boolean; updatedCount: number }> {
       const config = ManageMetadataBase.getSoftPKFKConfig();
       if (!config) return { success: true, updatedCount: 0 };
@@ -995,11 +959,15 @@ export class ManageMetadataBase {
       for (const rel of relationships) {
          try {
             // Look up the parent entity — try by Name first, then by BaseTable within the given schema
-            const parentLookup = this.buildISAEntityLookupSQL(schema, 'ID, Name', 'ParentName', rel.SchemaName);
-            const parentResult = await this.runQueryWithParams(pool, parentLookup.sql, {
-               'ParentName': rel.ParentEntity,
-               ...parentLookup.params,
-            });
+            const parentResult = await this.runQueryWithParams(pool, `
+                  ${this.selectTop(1, 'ID, Name',
+                     `FROM ${this.qs(schema, 'vwEntities')}
+                  WHERE Name = @ParentName
+                     OR (BaseTable = @ParentName AND (@SchemaName IS NULL OR SchemaName = @SchemaName))`,
+                     'CASE WHEN Name = @ParentName THEN 0 ELSE 1 END')}
+               `,
+               { 'ParentName': rel.ParentEntity, 'SchemaName': rel.SchemaName || null }
+               );
 
             if (parentResult.recordset.length === 0) {
                logError(`    > IS-A config: parent entity "${rel.ParentEntity}" not found — skipping`);
@@ -1010,11 +978,15 @@ export class ManageMetadataBase {
             const parentName = parentResult.recordset[0].Name;
 
             // Look up the child entity — same strategy
-            const childLookup = this.buildISAEntityLookupSQL(schema, 'ID, Name, ParentID', 'ChildName', rel.SchemaName);
-            const childResult = await this.runQueryWithParams(pool, childLookup.sql, {
-               'ChildName': rel.ChildEntity,
-               ...childLookup.params,
-            });
+            const childResult = await this.runQueryWithParams(pool, `
+                  ${this.selectTop(1, 'ID, Name, ParentID',
+                     `FROM ${this.qs(schema, 'vwEntities')}
+                  WHERE Name = @ChildName
+                     OR (BaseTable = @ChildName AND (@SchemaName IS NULL OR SchemaName = @SchemaName))`,
+                     'CASE WHEN Name = @ChildName THEN 0 ELSE 1 END')}
+               `,
+               { 'ChildName': rel.ChildEntity, 'SchemaName': rel.SchemaName || null }
+               );
 
             if (childResult.recordset.length === 0) {
                logError(`    > IS-A config: child entity "${rel.ChildEntity}" not found — skipping`);
@@ -2373,14 +2345,10 @@ export class ManageMetadataBase {
          return false;
       }
 
-      // Resolve each identified PK to the field's ACTUAL name, rather than keeping the spelling the
-      // model returned. The match is case-insensitive, so an LLM answering `orderid` for a column
-      // named `OrderID` passed validation and was then used verbatim in the UPDATE below — which
-      // matches nothing on PostgreSQL (case-sensitive), while still reporting success. Same-cased
-      // answers are unaffected, so SQL Server behaviour does not change.
-      const validPKs = primaryKeys
-         .map(pk => entity.Fields.find(f => f.Name.toLowerCase() === pk.toLowerCase())?.Name)
-         .filter((name): name is string => !!name);
+      // Validate that all identified PK fields exist on the entity
+      const validPKs = primaryKeys.filter(pk =>
+         entity.Fields.some(f => f.Name.toLowerCase() === pk.toLowerCase())
+      );
       if (validPKs.length === 0) {
          return false;
       }
@@ -2641,13 +2609,9 @@ export class ManageMetadataBase {
 
          // Check the DATABASE for existing field record — in-memory metadata may be stale
          // (e.g. createNewEntityFieldsFromSchema may have already added this field from the view)
-         // Identifiers are quoted via qi(): __mj.EntityField's columns are mixed-case, and an
-         // unquoted reference folds to lower case on PostgreSQL — `column "length" does not exist`.
-         // SQL Server's case-insensitive resolution hid this for as long as IS-A ran only there.
-         const existsResult = await this.runQueryWithParams(pool,
-               `SELECT ${this.qi('ID')}, ${this.qi('IsVirtual')}, ${this.qi('Type')}, ${this.qi('Length')}, ${this.qi('Precision')}, ${this.qi('Scale')}, ${this.qi('AllowsNull')}, ${this.qi('AllowUpdateAPI')}
+         const existsResult = await this.runQueryWithParams(pool, `SELECT ID, IsVirtual, Type, Length, Precision, Scale, AllowsNull, AllowUpdateAPI
                     FROM ${this.qs(mj_core_schema(), 'EntityField')}
-                    WHERE ${this.qi('EntityID')} = @EntityID AND ${this.qi('Name')} = @FieldName`,
+                    WHERE EntityID = @EntityID AND Name = @FieldName`,
                { 'EntityID': childEntity.ID, 'FieldName': parentField.Name }
                );
 
@@ -2664,14 +2628,14 @@ export class ManageMetadataBase {
 
             if (needsUpdate) {
                const sqlUpdate = `UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
-                  SET ${this.qi('IsVirtual')}=${this.boolLit(true)},
-                      ${this.qi('Type')}='${parentField.Type}',
-                      ${this.qi('Length')}=${parentField.Length},
-                      ${this.qi('Precision')}=${parentField.Precision},
-                      ${this.qi('Scale')}=${parentField.Scale},
-                      ${this.qi('AllowsNull')}=${this.boolLit(parentField.AllowsNull)},
-                      ${this.qi('AllowUpdateAPI')}=${this.boolLit(true)}
-                  WHERE ${this.qi('ID')}='${existingRow.ID}'`;
+                  SET IsVirtual=${this.boolLit(true)},
+                      Type='${parentField.Type}',
+                      Length=${parentField.Length},
+                      Precision=${parentField.Precision},
+                      Scale=${parentField.Scale},
+                      AllowsNull=${this.boolLit(parentField.AllowsNull)},
+                      AllowUpdateAPI=${this.boolLit(true)}
+                  WHERE ID='${existingRow.ID}'`;
                await this.LogSQLAndExecute(pool, sqlUpdate,
                   `Update IS-A parent field ${parentField.Name} on ${childEntity.Name}`);
                bUpdated = true;
@@ -3070,10 +3034,10 @@ export class ManageMetadataBase {
                // the below could fail if there are non-core dependencies on the entity, but that's ok, we will flag that in the console
                // for the admin to handle manually
                try {
-                  // expectsResultSet=false: this routine only has side effects, and on PostgreSQL it
-                  // is a `RETURNS SETOF record` function with no OUT parameters, which cannot be
-                  // invoked as `SELECT * FROM ...`.
-                  const sqlDelete = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteEntityWithCoreDependencies', [`'${e.ID}'`], ['EntityID'], false);
+                  // discardResult: this routine only performs deletions — nothing below reads rows
+                  // from it — and on PostgreSQL it is declared RETURNS SETOF record, which cannot be
+                  // invoked through the default `SELECT * FROM` form at all.
+                  const sqlDelete = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteEntityWithCoreDependencies', [`'${e.ID}'`], ['EntityID'], true);
                   await this.LogSQLAndExecute(pool, sqlDelete, `SQL text to remove entity ${e.Name}`);
                   logStatus(`      > Removed metadata for table ${e.SchemaName}.${e.BaseTable}`);
 
@@ -5128,14 +5092,7 @@ export class ManageMetadataBase {
          // not products — hide them from new users. Application.DefaultForNewUser defaults to 1 in the
          // DB, so omitting the column here is what put raw '__mj_*'-named apps in every new user's
          // app switcher while the human-authored metadata app stayed hidden.
-         // Identifiers are quoted explicitly. This statement runs through LogSQLAndExecute,
-         // which calls ds.query() directly and — unlike runQuery / runQueryWithParams — does
-         // NOT route through qsql(), so the auto-quoter never sees it. The bare column list
-         // therefore reached PostgreSQL as authored: `ID` folded to `id` and the insert failed
-         // with `column "id" of relation "Application" does not exist`, so CodeGen could not
-         // create the bucket application for a new schema at all. Found by running IS-A
-         // end-to-end against a live PostgreSQL database.
-         const appInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (${this.qi('ID')}, ${this.qi('Name')}, ${this.qi('Description')}, ${this.qi('SchemaAutoAddNewEntities')}, ${this.qi('Path')}, ${this.qi('AutoUpdatePath')}, ${this.qi('DefaultForNewUser')})
+         const appInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (ID, Name, Description, SchemaAutoAddNewEntities, Path, AutoUpdatePath, DefaultForNewUser)
                        VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', ${this.dialect.BooleanLiteral(true)}, ${this.dialect.BooleanLiteral(false)})`;
          const sSQL = this.conditionalInsert(appCheckQuery, appInsert);
          await this.LogSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);

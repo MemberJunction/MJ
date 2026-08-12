@@ -118,7 +118,15 @@ function projectRow(raw: unknown): AgentRunTreeRow {
         DurationMs: toNumber(r['DurationMs']),
         Cost: toNumber(r['Cost']),
         Tokens: toNumber(r['Tokens']),
+        PromptTokens: toNumber(r['PromptTokens']),
+        CompletionTokens: toNumber(r['CompletionTokens']),
+        Model: r['Model'] == null ? null : String(r['Model']),
+        Vendor: r['Vendor'] == null ? null : String(r['Vendor']),
+        LoopMode: r['LoopMode'] == null ? null : String(r['LoopMode']),
+        InputPayload: r['InputPayload'] == null ? null : String(r['InputPayload']),
+        OutputPayload: r['OutputPayload'] == null ? null : String(r['OutputPayload']),
         SourceEntity: String(r['SourceEntity'] ?? ''),
+        SourceKind: r['SourceKind'] == null ? null : String(r['SourceKind']),
         SourceID: String(r['SourceID'] ?? r['NodeID'] ?? ''),
     };
 }

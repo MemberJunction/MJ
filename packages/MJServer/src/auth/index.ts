@@ -1,8 +1,8 @@
 import { JwtHeader, SigningKeyCallback, JwtPayload } from 'jsonwebtoken';
 import { configInfo } from '../config.js';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import sql from 'mssql';
-import { Metadata, RoleInfo, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, Metadata, RoleInfo, UserInfo } from '@memberjunction/core';
 import { NewUserBase } from './newUsers.js';
 import { MJGlobal } from '@memberjunction/global';
 import { MJUserEntity, MJUserEntityType } from '@memberjunction/core-entities';
@@ -21,9 +21,13 @@ class MissingAuthError extends Error {
   }
 }
 
-const refreshUserCache = async (dataSource?: sql.ConnectionPool) => {
+const refreshUserCache = async () => {
   const startTime: number = Date.now();
-  await UserCache.Instance.Refresh(dataSource);
+  // UserCache is process-global in this phase, and so is the provider MJServer configures at
+  // bootstrap — the callers below only hold a ConnectionPool, which they use purely as a
+  // "the database is reachable" gate before asking for a refresh.
+  const provider = Metadata.Provider as unknown as DatabaseProviderBase; // global-provider-ok: server auth path; runs under the server's single default provider
+  await UserCache.Instance.Refresh(provider);
   const endTime: number = Date.now();
   const elapsed: number = endTime - startTime;
 
@@ -179,7 +183,7 @@ export const getSystemUser = async (dataSource?: sql.ConnectionPool, attemptCach
     if (dataSource && attemptCacheUpdateIfNeeded) {
       console.warn(`System user not found in cache. Updating cache in attempt to find the user...`);
 
-      await refreshUserCache(dataSource);
+      await refreshUserCache();
       return getSystemUser(dataSource, false); // try one more time but do not update cache next time if not found
     }
     throw new Error(`System user ID '${UserCache.Instance.SYSTEM_USER_ID}' not found in database`);
@@ -260,7 +264,7 @@ export const verifyUserRecord = async (
       // if we get here that means in the above, if we were attempting to create a new user, it did not work, or it wasn't attempted and we have a config that asks us to auto update the cache
       console.warn(`User ${email} not found in cache. Updating cache in attempt to find the user...`);
 
-      await refreshUserCache(dataSource);
+      await refreshUserCache();
 
       return verifyUserRecord(email, firstName, lastName, requestDomain, dataSource, false); // try one more time but do not update cache next time if not found
     }

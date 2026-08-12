@@ -929,13 +929,13 @@ export abstract class CodeGenDatabaseProvider {
      *              for PostgreSQL they become positional arguments.
      * @param paramNames Optional parameter names for SQL Server's `@Name=value` syntax.
      *                   Ignored on PostgreSQL.
-     * @param expectsResultSet Whether the caller consumes rows. Defaults to true. Pass false for
-     *                   side-effect-only routines: PostgreSQL rejects `SELECT * FROM fn(...)` for a
-     *                   function declared `RETURNS SETOF record` with no OUT parameters ("a column
-     *                   definition list is required"), so the PG provider emits a discard form
-     *                   instead. Ignored on SQL Server, where `EXEC` is correct either way.
+     * @param discardResult Set for routines whose rows the caller never reads. PostgreSQL needs to
+     *                   know: its default `SELECT * FROM routine(...)` form is rejected outright for
+     *                   a function returning `SETOF record` ("a column definition list is required
+     *                   for functions returning record"), and a routine that only performs work has
+     *                   no column list to give. SQL Server's `EXEC` is unaffected and ignores this.
      */
-    abstract callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[], expectsResultSet?: boolean): string;
+    abstract callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[], discardResult?: boolean): string;
 
     // ─── METADATA MANAGEMENT: CONDITIONAL INSERT ─────────────────────
 

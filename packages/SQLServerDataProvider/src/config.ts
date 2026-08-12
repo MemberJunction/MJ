@@ -2,7 +2,7 @@ import { LogError, LogStatus, SetProvider, StartupManager, StartupOptions } from
 import { SQLServerDataProvider } from "./SQLServerDataProvider";
 import { SQLServerProviderConfigData } from "./types";
 import sql from 'mssql';
-import { UserCache } from "./UserCache";
+import { UserCache } from "@memberjunction/generic-database-provider";
 
 
 /**
@@ -27,7 +27,7 @@ export async function setupSQLServerClient(config: SQLServerProviderConfigData, 
 
             // now setup the user cache
             // CheckRefreshIntervalSeconds is in SECONDS; UserCache.Refresh expects MILLISECONDS -> convert.
-            await UserCache.Instance.Refresh(pool, config.CheckRefreshIntervalSeconds * 1000);
+            await UserCache.Instance.Refresh(provider, config.CheckRefreshIntervalSeconds * 1000);
 
             if (config.CheckRefreshIntervalSeconds && config.CheckRefreshIntervalSeconds > 0) {
                 // Start a timer to check for refreshes

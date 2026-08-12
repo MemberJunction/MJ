@@ -650,17 +650,17 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit, 
 
   // ── Formatting Helpers ────────────────────────────────────
 
-  FormatDuration(startedAt: string | null, endedAt: string | null): string {
+  FormatDuration(startedAt: Date | string | null, endedAt: Date | string | null): string {
     if (!startedAt || !endedAt) return '--';
     const ms = new Date(endedAt).getTime() - new Date(startedAt).getTime();
     return this.dataService.FormatDuration(ms);
   }
 
-  GetRelativeTime(dateStr: string | null): string {
+  GetRelativeTime(dateStr: Date | string | null): string {
     return this.dataService.ComputeRelativeTime(dateStr);
   }
 
-  FormatAbsoluteDate(dateStr: string | null): string {
+  FormatAbsoluteDate(dateStr: Date | string | null): string {
     if (!dateStr) return '';
     return new Date(dateStr).toLocaleString(undefined, {
       year: 'numeric', month: 'short', day: 'numeric',
@@ -674,7 +674,7 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit, 
     return value;
   }
 
-  FormatDate(dateStr: string | null): string {
+  FormatDate(dateStr: Date | string | null): string {
     if (!dateStr) return '--';
     return new Date(dateStr).toLocaleString(undefined, {
       month: 'short', day: 'numeric',

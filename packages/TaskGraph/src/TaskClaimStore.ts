@@ -22,6 +22,7 @@
  * @module @memberjunction/task-graph
  */
 import { IMetadataProvider, DatabaseProviderBase, LogError, LogStatus, UserInfo } from '@memberjunction/core';
+import { TERMINAL_TASK_GRAPH_STATUSES, type TerminalTaskGraphStatus } from '@memberjunction/ai-core-plus';
 import { ReconciliationEvent } from './types';
 
 /** Fields the claim protocol needs from a candidate task. */
@@ -42,6 +43,33 @@ export type ClaimableTask = {
  * changed underneath it, which is precisely the race being defended against. Every method here is a
  * single statement; nothing reads-then-writes.
  */
+/**
+ * Statuses a graph parent has stopped moving from — the single source of truth.
+ *
+ * `Blocked` is INCLUDED: `ComputeParentRollup` returns it as settled, so a
+ * failure-blocked graph is as settled as a completed one. Leaving it out left a Blocked settlement
+ * unprotected from overwrite AND invisible to the rescue sweep — a stranded run with extra steps.
+ *
+ * Exported because the dispatcher's sweep filters on the same set. Two lists that must agree is how
+ * a graph becomes invisible to the machinery meant to rescue it.
+ */
+export const TERMINAL_PARENT_STATUSES = TERMINAL_TASK_GRAPH_STATUSES;
+
+export type TerminalParentStatus = TerminalTaskGraphStatus;
+
+/**
+ * The only status a *progress* write may set.
+ *
+ * Typed rather than left as a string so the split between the two parent writes is enforced instead
+ * of remembered: settling is a once-only guarded transition with a completion timestamp, and it goes
+ * through {@link TaskClaimStore.TrySettleParent}. Handing a terminal status to the progress method
+ * is now a compile error rather than a graph that settles without a `CompletedAt`.
+ */
+export type NonTerminalParentStatus = 'In Progress';
+
+/** The same set as a SQL literal list, so the guards and the sweep cannot drift. */
+export const TERMINAL_PARENT_STATUS_SQL = TERMINAL_PARENT_STATUSES.map((s) => `'${s}'`).join(',');
+
 export class TaskClaimStore {
     constructor(
         private readonly instanceID: string,
@@ -247,6 +275,182 @@ export class TaskClaimStore {
             LogError(`[TaskGraph reconciliation] ${e.Action}: ${e.Detail}`);
         }
         return events;
+    }
+
+    /**
+     * Writes a graph parent's terminal status, and only if it is not already terminal.
+     *
+     * **Why this is not `parent.Save()`.** `GenerateSaveSQL` sends every updateable column on every
+     * save, not just the dirty ones — so a full-row save carries the whole in-memory snapshot,
+     * including `InputPayload`. Two instances polling the same settling graph both compute the
+     * terminal rollup; if one claims the continuation marker (written into that JSON bag) and the
+     * other then saves its pre-marker snapshot, **the marker is erased** and the settlement is
+     * delivered a second time. For `reinvoke` that is a second billed agent turn for one settlement
+     * — precisely the failure P4 exists to prevent, reintroduced through a column nobody thought
+     * they were writing.
+     *
+     * Column-scoped and guarded, per the doctrine every task transition already follows: touch
+     * `Status`/`PercentComplete`/`CompletedAt` and nothing else, and only from a non-terminal state.
+     * The second instance's write becomes a no-op instead of a rewind.
+     *
+     * @returns true when this call moved the parent to terminal; false when it was already terminal
+     *          (someone else settled it) or the write failed
+     */
+    public async TrySettleParent(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        status: TerminalParentStatus,
+        percentComplete: number,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${db.QuoteIdentifier('Status')} = '${this.escape(status)}',
+                ${db.QuoteIdentifier('PercentComplete')} = ${Number.isFinite(percentComplete) ? Math.round(percentComplete) : 0},
+                ${db.QuoteIdentifier('CompletedAt')} = '${new Date().toISOString()}'
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
+              AND ${db.QuoteIdentifier('Status')} NOT IN (${TERMINAL_PARENT_STATUS_SQL})`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
+     * Updates a graph parent's in-flight progress — column-scoped, and refused once it is terminal.
+     *
+     * **The race this closes needs no exotic timing.** Instance A loads the graph while a child is
+     * still In Progress and computes a non-terminal rollup. Instance B loads after that child
+     * finishes, settles the parent and claims the continuation. A's full-row progress `Save()` then
+     * lands: `Status` reverts to non-terminal *and* A's pre-marker `InputPayload` snapshot erases
+     * the marker. The next pass finds a non-terminal parent with a terminal rollup and an absent
+     * marker — so it settles again and delivers again. That is the duplicate `reinvoke` P4 exists to
+     * prevent, arriving through the last unguarded window.
+     *
+     * "These writes happen before settlement" is true per instance and false across instances, which
+     * is exactly the kind of timing argument a guard replaces with a structural one.
+     */
+    public async TryUpdateParentProgress(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        status: NonTerminalParentStatus,
+        percentComplete: number,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${db.QuoteIdentifier('Status')} = '${this.escape(status)}',
+                ${db.QuoteIdentifier('PercentComplete')} = ${Number.isFinite(percentComplete) ? Math.round(percentComplete) : 0}
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
+              AND ${db.QuoteIdentifier('Status')} NOT IN (${TERMINAL_PARENT_STATUS_SQL})`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
+     * Stamps a graph parent's start time, once, without touching anything else.
+     *
+     * Same reason as {@link TrySettleParent}: a full-row `Save()` here would carry the whole
+     * in-memory snapshot including `InputPayload`, so stamping a start time could erase a
+     * continuation marker another instance had just claimed. Guarded on `StartedAt IS NULL` so it is
+     * naturally once-only and safe to call on every pass.
+     */
+    public async TryStampParentStart(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        startedAt: Date,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${db.QuoteIdentifier('StartedAt')} = '${startedAt.toISOString()}'
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
+              AND ${db.QuoteIdentifier('StartedAt')} IS NULL`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
+     * Claims the right to deliver a graph's continuation — exactly once, across every instance.
+     *
+     * **What this replaces.** `claimContinuation` was Load → check the marker → `BaseEntity.Save()`:
+     * an unconditional last-write-wins UPDATE. Two dispatchers polling the same settled graph inside
+     * one interval both read "no marker", both saved, and both delivered. The comments called it a
+     * compare-and-swap; it was read-check-write. Every *task* transition in this store is a guarded
+     * single statement for exactly this reason — the continuation marker was the one transition that
+     * was not.
+     *
+     * The marker lives inside the parent's `InputPayload` JSON bag rather than a column, so the
+     * guard is a JSON predicate. That keeps one representation for writer and reader: this statement
+     * writes it, `ParseTaskGraphParentMetadata` reads it, and a graph settled before this existed is
+     * decided by the same parser as one settled after — which a new column plus a backfill could not
+     * promise.
+     *
+     * Timestamps are ISO 8601 UTC because the TS reader parses them; `JSON_MODIFY` on a row whose
+     * payload is absent or unparseable writes nothing and the rowcount says so, which is the honest
+     * outcome — a graph we cannot read metadata for is one we must not deliver for.
+     *
+     * `workflowTaskTypeID` is REQUIRED rather than optional because this statement injects keys into
+     * a row's `InputPayload`. `MJ: Tasks` holds conversation tasks and users' own to-dos as well as
+     * workflow graphs; a mis-targeted claim would silently edit somebody's payload. Passing the
+     * discriminator is not a filter the caller may forget — it is the caller stating which family of
+     * task it believes it is writing to, and the statement refusing if it is wrong.
+     *
+     * @param deliveredAs how the settlement is being delivered, recorded alongside the marker so an
+     *                    expired settlement is distinguishable from a delivered one after the fact
+     * @returns true when this instance won the right to deliver
+     */
+    public async TryClaimContinuation(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        deliveredAs: 'delivered' | 'expired',
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const nowIso = new Date().toISOString();
+        const payload = db.QuoteIdentifier('InputPayload');
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${payload} = JSON_MODIFY(
+                    JSON_MODIFY(${payload}, '$.continuationDeliveredAt', '${this.escape(nowIso)}'),
+                    '$.continuationDeliveredAs', '${this.escape(deliveredAs)}')
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
+              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
+              AND ISJSON(${payload}) = 1
+              AND JSON_VALUE(${payload}, '$.continuationDeliveredAt') IS NULL`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
+     * Records why a graph ended early, writing that column and no other.
+     *
+     * The hazard is the one {@link TrySettleParent} exists for, reached by a different route. A task
+     * that ends the flow early skips its siblings, which makes the graph fully terminal — so another
+     * instance's very next poll can settle it and claim the continuation marker. The old code had
+     * already loaded the parent by then and finished with a full-row `Save()`, which would write back
+     * the pre-settle snapshot: status reverted to `In Progress`, marker gone, graph delivered twice.
+     *
+     * No status predicate here, unlike the other writes: the early-finish message is the truthful
+     * summary whether or not the graph has settled since, and two tasks ending the same flow both
+     * describe it correctly. The bug was never the value — it was the other columns riding along.
+     *
+     * Type-scoped for the same reason the claim is: every statement in this store that writes into a
+     * payload column states which family of task it means, so a mis-derived parent ID cannot edit a
+     * conversation task or somebody's to-do.
+     */
+    public async TrySetParentOutput(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        outputPayload: string,
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${db.QuoteIdentifier('OutputPayload')} = '${this.escape(outputPayload)}'
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
+              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
     }
 
     /** Runs the affected-rows statement, returning 0 on error rather than throwing into the loop. */

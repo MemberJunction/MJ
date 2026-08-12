@@ -43,15 +43,39 @@ export type AgentRunTreeNodeType =
     /** One `Task` inside a graph. May itself own a run, if it dispatched an agent. */
     | 'Task';
 
-/** Terminal-ish status, normalized across the entities so a renderer branches once. */
+/**
+ * A node's status, **as the underlying row spells it** — which means two vocabularies, not one.
+ *
+ * This union previously claimed the statuses were "normalized across the entities so a renderer
+ * branches once". They are not, and never were: the query returns each row's own value, and a
+ * `Task` says `Complete` / `In Progress` where an `AIAgentRunStep` says `Completed` / `Running`.
+ * `Completed` was not even a member, so the type disagreed with the data for every agent step in
+ * every tree — and the mismatch was invisible because nothing assigned a literal to it.
+ *
+ * The cost of the fiction was real: consumers branch on the step vocabulary, so every workflow row
+ * matched none of their cases and fell through to an unknown-status rendering. Declaring both
+ * vocabularies makes that a visible fact rather than a trap — a `switch` over this type now has to
+ * acknowledge that `Complete` and `Completed` both occur.
+ *
+ * **Normalize at your boundary, don't normalize here.** A consumer that wants one vocabulary should
+ * map at the point it renders (the run timeline does exactly this); collapsing it inside the loader
+ * would throw away which kind of row a node came from, which tests and cost roll-up both rely on.
+ */
 export type AgentRunTreeStatus =
-    | 'Pending'
-    | 'Running'
-    | 'Complete'
+    // Shared by both
     | 'Failed'
+    | 'Cancelled'
+    | 'Pending'
+    // `AIAgentRunStep` / `AIAgentRun` vocabulary
+    | 'Running'
+    | 'Completed'
+    // `Task` vocabulary
+    | 'In Progress'
+    | 'Complete'
     | 'Skipped'
     | 'Blocked'
-    | 'Cancelled'
+    | 'Deferred'
+    // Human-in-the-loop
     | 'Waiting';
 
 /**
@@ -84,6 +108,48 @@ export type AgentRunTreeRow = {
     /** What this node itself spent. Null where the concept does not apply, e.g. a Task. */
     Cost: number | null;
     Tokens: number | null;
+    /**
+     * The prompt/completion split of {@link Tokens}, on the same per-node own-spend basis.
+     *
+     * Present because the settlement-time rollup writes four columns on `AIAgentRun`. A tree that
+     * answered only cost and total tokens would leave the other two to a second computation on a
+     * different basis — and two numbers describing one run that were derived differently is the
+     * defect this tree exists to remove, not a detail to leave to callers.
+     */
+    PromptTokens: number | null;
+    CompletionTokens: number | null;
+
+    /**
+     * A workflow task's payloads, before and after.
+     *
+     * Present so a graph step can be presented the way an agent run STEP is: the shared detail panel
+     * shows a before/after diff, and without these it has nothing to compare and falls back to a raw
+     * dump — which is exactly the difference between a workflow step and an agent step that a reader
+     * notices first. Null for every node that is not a task.
+     */
+    InputPayload: string | null;
+    OutputPayload: string | null;
+
+    /**
+     * The model and vendor behind this node, when a prompt produced it.
+     *
+     * Carried so a workflow's prompt step can subtitle itself the way an agent run's prompt step
+     * does — "Model: X | Vendor: Y". Without it the same work described itself two different ways
+     * depending on which timeline it was opened from, which reads as two different features.
+     */
+    Model: string | null;
+    Vendor: string | null;
+
+    /**
+     * How a loop step ran its iterations — `'parallel'`, `'sequential'`, or null for anything that
+     * is not a loop.
+     *
+     * Carried because the passes look identical either way: the same rows with the same durations.
+     * Whether they ran one after another or all at once is the difference between a loop that cost
+     * the sum of its parts and one that cost the longest of them, and it is not recoverable from any
+     * other field a consumer holds.
+     */
+    LoopMode: string | null;
 
     /**
      * Where to go when someone clicks it — the entity name and record id.
@@ -93,6 +159,16 @@ export type AgentRunTreeRow = {
      * is, and re-deriving that in every consumer is how two of them end up disagreeing.
      */
     SourceEntity: string;
+    /**
+     * What KIND of work this node is, in its own vocabulary — a run step's `StepType`
+     * ('Prompt', 'Actions', 'Sub-Agent', 'Validation', …) or a task's ('Agent', 'Action',
+     * 'ForEach', 'While', 'Human', …). Null for a Run node, whose kind is simply "a run".
+     *
+     * Carried because every visual consumer colours and icons by kind. Without it a renderer can
+     * only draw undifferentiated boxes, which is precisely what kept the run visualizations reading
+     * raw step rows instead of this tree.
+     */
+    SourceKind: string | null;
     SourceID: string;
 };
 
@@ -141,7 +217,15 @@ export function IsAgentRunTreeTruncated(rows: readonly AgentRunTreeRow[]): boole
  * happened. Dropping it would silently shrink the run; surfacing it at the top is visibly odd, which
  * is the correct amount of alarming.
  *
- * Sorting is by `Sequence` then `NodeID`, so a tie cannot render differently between two loads.
+ * **Sorting is by `Sequence` alone, and the sort is stable**, so siblings that tie keep the order the
+ * query returned them in. That order is not arbitrary: `GetAgentRunTree` orders by started-ness,
+ * start time and creation, precisely so a run reads in the order things happened.
+ *
+ * It used to tie-break on `NodeID`, for determinism. It was deterministic and it was wrong — every
+ * task in a graph carries the same `Sequence`, so EVERY workflow's steps were ordered **by GUID**,
+ * throwing away the query's ordering entirely. A four-step workflow listed its first step last, and
+ * because a GUID order is perfectly stable, it looked like a deliberate order rather than a bug.
+ * Input order is equally deterministic — the query's `ORDER BY` is total — and it is also correct.
  */
 export function BuildAgentRunTree(rows: readonly AgentRunTreeRow[]): AgentRunTreeNode | null {
     if (rows.length === 0) return null;
@@ -172,8 +256,10 @@ export function BuildAgentRunTree(rows: readonly AgentRunTreeRow[]): AgentRunTre
     if (!root) return null;
     for (const orphan of orphans) if (orphan !== root) root.Children.push(orphan);
 
+    // `Array.prototype.sort` is stable (guaranteed since ES2019), which is what carries the query's
+    // ordering through a tie rather than replacing it with something arbitrary.
     for (const node of byID.values()) {
-        node.Children.sort((a, b) => a.Sequence - b.Sequence || a.NodeID.localeCompare(b.NodeID));
+        node.Children.sort((a, b) => a.Sequence - b.Sequence);
     }
     return root;
 }
@@ -193,14 +279,29 @@ export function FindAgentRunTreeNodes(
 }
 
 /** What a run cost in total, including every nested run and dispatched graph. */
-export function SumAgentRunTreeCost(root: AgentRunTreeNode): { Cost: number; Tokens: number } {
-    let Cost = 0;
-    let Tokens = 0;
+export type AgentRunTreeTotals = {
+    Cost: number;
+    Tokens: number;
+    PromptTokens: number;
+    CompletionTokens: number;
+};
+
+/**
+ * What a run cost in total, including every nested run and dispatched graph.
+ *
+ * A plain SUM is correct **only because every node reports its OWN spend** — see the header of
+ * `get-agent-run-tree.sql`. If a node ever carried a rollup, this would double-count each nested
+ * run once per level of nesting.
+ */
+export function SumAgentRunTreeCost(root: AgentRunTreeNode): AgentRunTreeTotals {
+    const totals: AgentRunTreeTotals = { Cost: 0, Tokens: 0, PromptTokens: 0, CompletionTokens: 0 };
     for (const node of WalkAgentRunTree(root)) {
-        Cost += node.Cost ?? 0;
-        Tokens += node.Tokens ?? 0;
+        totals.Cost += node.Cost ?? 0;
+        totals.Tokens += node.Tokens ?? 0;
+        totals.PromptTokens += node.PromptTokens ?? 0;
+        totals.CompletionTokens += node.CompletionTokens ?? 0;
     }
-    return { Cost, Tokens };
+    return totals;
 }
 
 /**

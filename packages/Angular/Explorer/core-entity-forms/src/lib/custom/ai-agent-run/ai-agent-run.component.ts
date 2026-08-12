@@ -1,7 +1,14 @@
 import { Component, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
 import { Subject, Subscription } from 'rxjs';
 import { BaseEntity, BaseEntityEvent, CompositeKey, Metadata } from '@memberjunction/core';
-import { MJAIAgentRunEntityExtended, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import {
+    LoadAgentRunTree,
+    MAX_AGENT_RUN_TREE_DEPTH,
+    MJAIAgentRunEntityExtended,
+    MJAIAgentEntityExtended,
+    WalkAgentRunTree,
+    type AgentRunTreeNode,
+} from '@memberjunction/ai-core-plus';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { MJGlobal, MJEvent, MJEventType, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
@@ -13,7 +20,22 @@ import { AIAgentRunCostService, AgentRunCostMetrics } from './ai-agent-run-cost.
 import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 
-@RegisterClass(BaseFormComponent, 'MJ: AI Agent Runs') 
+/**
+ * Task statuses that mean the step is finished with. Anything else means the workflow is still
+ * moving — see `WorkflowStillRunning`.
+ */
+const TERMINAL_TASK_STATUSES = new Set(['Complete', 'Failed', 'Cancelled', 'Skipped', 'Blocked']);
+
+/**
+ * How often to re-read the tree while a detached workflow runs.
+ *
+ * Human-scale rather than aggressive: a workflow step takes seconds at least, and the query walks
+ * the whole tree. Fast enough that a watcher sees progress, slow enough that leaving the tab open on
+ * a long workflow is not a load problem.
+ */
+const WORKFLOW_POLL_INTERVAL_MS = 4000;
+
+@RegisterClass(BaseFormComponent, 'MJ: AI Agent Runs')
 @Component({
   standalone: false,
   selector: 'mj-ai-agent-run-form',
@@ -31,6 +53,9 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   // polling the DB on a timer. Only attached when Status === 'Running'.
   private entityEventSubscription: Subscription | null = null;
   private refreshInFlight = false;
+
+  /** Pending re-read of the run tree while a detached workflow is still running. */
+  private workflowPollTimer: ReturnType<typeof setTimeout> | null = null;
 
   // UI state
   activeTab = 'timeline';
@@ -65,12 +90,104 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
 
   // Instance of data helper per component
   public dataHelper = new AIAgentRunDataHelper();
+
+  /**
+   * The run's complete execution tree — loaded ONCE here and shared with every tab.
+   *
+   * **One load, one shape, one refresh.** The timeline, the three flow renderers and analytics all
+   * need the same structure; letting each fetch its own would issue the same recursive query three
+   * times, and — worse — let the tabs disagree, because a tab that loaded a second earlier shows a
+   * different run than the one beside it. Sharing it also means a refresh updates all three at once
+   * rather than whichever one the user happens to open next.
+   */
+  public runTree: AgentRunTreeNode | null = null;
+
+  /** True while the tree is loading, so a tab can say so rather than render an empty run. */
+  public runTreeLoading = false;
+
+  /** Why the tree could not be loaded, or null. Surfaced rather than swallowed. */
+  public runTreeError: string | null = null;
+
+  /**
+   * Loads (or reloads) the shared run tree.
+   *
+   * Errors are held rather than thrown: a run whose tree cannot be read still has fields worth
+   * looking at, and taking the whole form down over one query would hide them.
+   */
+  private async loadRunTree(): Promise<void> {
+    if (!this.record?.ID) return;
+    this.runTreeLoading = true;
+    this.runTreeError = null;
+    try {
+      const result = await LoadAgentRunTree(this.record.ID, this.RunQueryToUse);
+      this.runTree = result.Root;
+      this.runTreeError = result.ErrorMessage;
+      if (result.Truncated) {
+        this.runTreeError =
+          `This run nests deeper than ${MAX_AGENT_RUN_TREE_DEPTH} levels; what is shown is truncated.`;
+      }
+    } catch (e) {
+      this.runTreeError = e instanceof Error ? e.message : String(e);
+      this.runTree = null;
+    } finally {
+      this.runTreeLoading = false;
+      this.scheduleWorkflowPoll();
+    }
+  }
+
+  /**
+   * True when this run submitted a workflow that has not finished.
+   *
+   * **The run being "Completed" says nothing about this.** A task graph is submit-and-detach: the
+   * step that submits it completes as soon as the graph is persisted, and the run completes with it
+   * — while the dispatcher goes on executing for seconds or minutes afterwards. One observed run
+   * finished in 225ms and its workflow ran for a further eighteen seconds.
+   *
+   * Without this the form showed a green COMPLETED header above steps sitting at Pending, and the
+   * only available reading was that something had failed. Nothing had; the page was simply a
+   * snapshot of a moving thing, with nothing saying so.
+   */
+  public get WorkflowStillRunning(): boolean {
+    if (!this.runTree) return false;
+    for (const node of WalkAgentRunTree(this.runTree)) {
+      if (node.NodeType !== 'Task' && node.NodeType !== 'TaskGraph') continue;
+      if (!TERMINAL_TASK_STATUSES.has(node.Status)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Re-reads the tree while a detached workflow is still moving, and stops when it settles.
+   *
+   * Polling rather than the BaseEntity event subscription this form already has, because that
+   * subscription cannot see this work for two independent reasons: it is only attached while the RUN
+   * is `Running` (a detached graph outlives that), and the dispatcher advances tasks through the
+   * claim protocol's direct SQL, which fires no entity events at all.
+   *
+   * Self-cancelling: each load reschedules only if work remains, so a settled run costs nothing.
+   */
+  private scheduleWorkflowPoll(): void {
+    this.clearWorkflowPoll();
+    if (!this.WorkflowStillRunning) return;
+    this.workflowPollTimer = setTimeout(() => {
+      this.workflowPollTimer = null;
+      void this.loadRunTree();
+    }, WORKFLOW_POLL_INTERVAL_MS);
+  }
+
+  private clearWorkflowPoll(): void {
+    if (this.workflowPollTimer !== null) {
+      clearTimeout(this.workflowPollTimer);
+      this.workflowPollTimer = null;
+    }
+  }
   
   async ngOnInit() {
     await super.ngOnInit();
     
     if (this.record && this.record.ID) {
       await this.dataHelper.loadAgentRunData(this.record.ID);
+      await this.loadRunTree();
       await this.loadAgent();
       await this.loadCostMetrics();
 
@@ -90,6 +207,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+    this.clearWorkflowPoll();
     this.entityEventSubscription?.unsubscribe();
     this.entityEventSubscription = null;
     this.clearParsedCache();
@@ -359,6 +477,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
         
         // Reload data through helper - this will update all components (force reload for refresh)
         this.dataHelper.loadAgentRunData(this.record.ID, true);
+        void this.loadRunTree();
         
         // Trigger analytics refresh
         if (this.analyticsComponent) {

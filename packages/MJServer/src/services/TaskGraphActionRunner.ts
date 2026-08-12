@@ -12,13 +12,14 @@
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam } from '@memberjunction/actions-base';
 import { LogError } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { TaskActionRunner, TaskActionRunParams, TaskActionRunResult } from '@memberjunction/task-graph';
 
 export class TaskGraphActionRunner implements TaskActionRunner {
     public async RunActionForTask(params: TaskActionRunParams): Promise<TaskActionRunResult> {
         try {
             await ActionEngineServer.Instance.Config(false, params.ContextUser);
-            const action = ActionEngineServer.Instance.Actions.find((a) => a.ID === params.ActionID);
+            const action = ActionEngineServer.Instance.Actions.find((a) => UUIDsEqual(a.ID, params.ActionID));
             if (!action) {
                 return { Success: false, ErrorMessage: `Action ${params.ActionID} is not in the engine's metadata.` };
             }
@@ -38,6 +39,10 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                 Success: result.Success,
                 Output: this.buildOutput(result.Params),
                 ErrorMessage: result.Success ? undefined : result.Message,
+                // The engine already wrote the log; this is the only place its id is in hand. Without
+                // carrying it out, a workflow's action step has no path back to its own execution
+                // record — the one thing anyone wants when an action misbehaves.
+                ActionLogID: result.LogEntry?.ID,
             };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);

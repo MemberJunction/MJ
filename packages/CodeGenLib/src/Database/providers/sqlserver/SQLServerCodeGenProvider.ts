@@ -13,12 +13,8 @@ import { sortBySequenceAndCreatedAt } from '../../../Misc/util';
 import { configInfo, dbDatabase, mj_core_schema } from '../../../Config/config';
 import { MSSQLConnection, getSqlConfig } from '../../../Config/db-connection';
 import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
-import {
-    SQLServerDataProvider,
-    SQLServerProviderConfigData,
-    UserCache,
-    setupSQLServerClient,
-} from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { SQLServerCodeGenConnection } from './SQLServerCodeGenConnection';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -79,7 +75,7 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         if (cfg.options?.instanceName) connectionInfo += '\\' + cfg.options.instanceName;
         connectionInfo += '/' + cfg.database;
 
-        await UserCache.Instance.Refresh(pool);
+        await UserCache.Instance.Refresh(provider);
         const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
         const currentUser = userMatch ?? UserCache.Users[0];
 
@@ -1119,8 +1115,9 @@ GO
      * are provided, generates named parameter syntax (`@ParamName=value`); otherwise uses
      * positional parameter values. Returns just `EXEC [schema].[routine]` if no params.
      */
-    callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[], _expectsResultSet?: boolean): string {
-        // _expectsResultSet is a PostgreSQL concern — EXEC is correct for SQL Server either way.
+    callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[], _discardResult?: boolean): string {
+        // `_discardResult` is a PostgreSQL concern only — `EXEC` neither returns a result set the
+        // caller must consume nor cares whether one is produced.
         const qualifiedName = `[${schema}].[${routineName}]`;
         if (!params || params.length === 0) {
             return `EXEC ${qualifiedName}`;

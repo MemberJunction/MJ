@@ -2727,7 +2727,7 @@ export const MJAIAgentRequestSchema = z.object({
         * * Description: Current status of the request (Requested, Approved, Rejected, Canceled).`),
     Request: z.string().describe(`
         * * Field Name: Request
-        * * Display Name: Request
+        * * Display Name: Request Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Details of what the AI Agent is requesting.`),
     Response: z.string().nullable().describe(`
@@ -2737,7 +2737,7 @@ export const MJAIAgentRequestSchema = z.object({
         * * Description: Response provided by the human to the agent request.`),
     ResponseByUserID: z.string().nullable().describe(`
         * * Field Name: ResponseByUserID
-        * * Display Name: Response By User
+        * * Display Name: Responded By User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: Populated when a user responds indicating which user responded to the request.`),
@@ -2816,17 +2816,23 @@ export const MJAIAgentRequestSchema = z.object({
     *   * Conversation
     *   * Dashboard
         * * Description: Identifies where the response originated: Conversation (handled by chat resolver), Dashboard (slide-in panel), or API (external integration). Used by the server-side entity subclass to determine whether agent resumption is needed.`),
+    OriginatingTaskID: z.string().nullable().describe(`
+        * * Field Name: OriginatingTaskID
+        * * Display Name: Originating Task
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
+        * * Description: The workflow step (MJ: Tasks row) waiting on this request, when it came from a task graph rather than from a running agent. Distinct from OriginatingAgentRunStepID: a task graph outlives the agent run that submitted it, so the task — not the run — is what resumes when a person answers. NULL for requests raised by a run directly.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
     RequestForUser: z.string().nullable().describe(`
         * * Field Name: RequestForUser
-        * * Display Name: Request For User Name
+        * * Display Name: Target User
         * * SQL Data Type: nvarchar(100)`),
     ResponseByUser: z.string().nullable().describe(`
         * * Field Name: ResponseByUser
-        * * Display Name: Response By User Name
+        * * Display Name: Responded By
         * * SQL Data Type: nvarchar(100)`),
     RequestType: z.string().nullable().describe(`
         * * Field Name: RequestType
@@ -2843,6 +2849,10 @@ export const MJAIAgentRequestSchema = z.object({
     ResumingAgentRun: z.string().nullable().describe(`
         * * Field Name: ResumingAgentRun
         * * Display Name: Resuming Agent Run Name
+        * * SQL Data Type: nvarchar(255)`),
+    OriginatingTask: z.string().nullable().describe(`
+        * * Field Name: OriginatingTask
+        * * Display Name: Originating Task Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -4184,7 +4194,7 @@ export const MJAIAgentStepSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    StepType: z.union([z.literal('Action'), z.literal('ForEach'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('While')]).describe(`
+    StepType: z.union([z.literal('Action'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('While')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(20)
@@ -4192,6 +4202,7 @@ export const MJAIAgentStepSchema = z.object({
     * * Possible Values 
     *   * Action
     *   * ForEach
+    *   * Human
     *   * Prompt
     *   * Sub-Agent
     *   * While
@@ -40400,7 +40411,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: Request
-    * * Display Name: Request
+    * * Display Name: Request Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Details of what the AI Agent is requesting.
     */
@@ -40426,7 +40437,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: ResponseByUserID
-    * * Display Name: Response By User
+    * * Display Name: Responded By User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: Populated when a user responds indicating which user responded to the request.
@@ -40612,6 +40623,20 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
     }
 
     /**
+    * * Field Name: OriginatingTaskID
+    * * Display Name: Originating Task
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
+    * * Description: The workflow step (MJ: Tasks row) waiting on this request, when it came from a task graph rather than from a running agent. Distinct from OriginatingAgentRunStepID: a task graph outlives the agent run that submitted it, so the task — not the run — is what resumes when a person answers. NULL for requests raised by a run directly.
+    */
+    get OriginatingTaskID(): string | null {
+        return this.Get('OriginatingTaskID');
+    }
+    set OriginatingTaskID(value: string | null) {
+        this.Set('OriginatingTaskID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)
@@ -40622,7 +40647,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: RequestForUser
-    * * Display Name: Request For User Name
+    * * Display Name: Target User
     * * SQL Data Type: nvarchar(100)
     */
     get RequestForUser(): string | null {
@@ -40631,7 +40656,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: ResponseByUser
-    * * Display Name: Response By User Name
+    * * Display Name: Responded By
     * * SQL Data Type: nvarchar(100)
     */
     get ResponseByUser(): string | null {
@@ -40672,6 +40697,15 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
     */
     get ResumingAgentRun(): string | null {
         return this.Get('ResumingAgentRun');
+    }
+
+    /**
+    * * Field Name: OriginatingTask
+    * * Display Name: Originating Task Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get OriginatingTask(): string | null {
+        return this.Get('OriginatingTask');
     }
 }
 
@@ -44350,15 +44384,16 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * * Possible Values 
     *   * Action
     *   * ForEach
+    *   * Human
     *   * Prompt
     *   * Sub-Agent
     *   * While
     * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)
     */
-    get StepType(): 'Action' | 'ForEach' | 'Prompt' | 'Sub-Agent' | 'While' {
+    get StepType(): 'Action' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While' {
         return this.Get('StepType');
     }
-    set StepType(value: 'Action' | 'ForEach' | 'Prompt' | 'Sub-Agent' | 'While') {
+    set StepType(value: 'Action' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While') {
         this.Set('StepType', value);
     }
 
@@ -110494,6 +110529,26 @@ export interface MJTaskEntity_ITaskStepConfiguration {
      * produced one.
      */
     runtime?: MJTaskEntity_ITaskStepRuntime;
+
+    /**
+     * Where this step sits in the graph's own order — its rank in a topological sort of the
+     * dependency edges, assigned once at submission.
+     *
+     * **Why a stored rank rather than an ordering rule.** `Task` has no sequence column, and every
+     * consumer that lists a graph's steps was therefore falling back to `__mj_CreatedAt` — which is
+     * the COMPILER's walk order, related to neither the order someone drew the steps in nor the
+     * order they run in. A graph that had not started yet listed its steps essentially at random:
+     * step 2(b), step 3, step 1, step 2(a), with step 3 above the steps it depends on.
+     *
+     * A graph's edges already define a partial order, and that order is knowable before anything
+     * runs — which is exactly when it is needed, since there are no timestamps to sort by yet.
+     * Steps that share a rank are genuinely concurrent, and consumers break that tie with the real
+     * start time, so the rule reads "drawn order, then what actually happened".
+     *
+     * Assigned at submission and never rewritten: it describes the graph's shape, which does not
+     * change once compiled.
+     */
+    sequence?: number;
 }
 
 /**
@@ -110514,6 +110569,109 @@ export interface MJTaskEntity_ITaskStepRuntime {
      * output the payload actually carries.
      */
     promptRunID?: string;
+
+    /**
+     * The `MJ: Action Execution Logs` row this step produced, when it was an Action step.
+     *
+     * The action equivalent of {@link promptRunID}, and it exists for the same reason: the Task row
+     * records that an action ran, and nothing recorded WHICH execution. So a workflow's action step
+     * had no way to offer "view the execution log" — the one thing a person wants when an action
+     * misbehaves — while an ordinary agent run step has offered exactly that all along through its
+     * `TargetLogID`.
+     *
+     * Set on the step's LAST execution, matching promptRunID: the logs themselves are the durable
+     * history, and this points at the one whose output the payload actually carries.
+     */
+    actionLogID?: string;
+
+    /**
+     * One entry per pass of a loop step, in iteration order.
+     *
+     * **Without this a loop's work does not exist anywhere the platform can see it.** The run tree
+     * reaches nested work through exactly six links — a run's steps, a task-graph step's graph, a
+     * graph's tasks, a Sub-Agent step's run, and a task's own `AgentRunID` — and a loop iteration is
+     * none of them. `AIAgentRun.ParentRunID` does not help either: it records parentage but is not a
+     * link the tree traverses. So a `While` that spent real money across three passes reported one
+     * childless node with no cost, the settlement rollup under-counted every loop-bearing workflow,
+     * and the timeline offered nothing to expand — the work had happened and was unreachable.
+     *
+     * Recorded by the dispatcher as each pass completes, so a loop that is still running already has
+     * its finished iterations here.
+     */
+    iterations?: MJTaskEntity_ITaskLoopIteration[];
+
+    /**
+     * The payload as it stood when this step BEGAN — its dependencies' outputs merged with whatever
+     * authored input it carried.
+     *
+     * **Why this is not `Task.InputPayload`.** That column holds the *authored* input from the spec
+     * and round-trips back out through `TaskGraphSpecToAgentSpec`; overwriting it at completion would
+     * make a run's resolved values indistinguishable from what its author declared. So the resolved
+     * value lives here, and the authored one stays where it was written.
+     *
+     * **Why it is stored at all**, when `OutputPayload` already holds the payload as it stood after.
+     * Without a before, the run view has nothing to diff against and reports every step as having
+     * created the entire payload from nothing — a step that added one key showed as `root Added
+     * Object{5 keys}`. It is the same before/after pair an `AIAgentRunStep` has always recorded, for
+     * the same reason. It duplicates the upstream task's output by design: recomputing it would mean
+     * re-implementing the dependency merge in every consumer.
+     */
+    payloadAtStart?: Record<string, unknown>;
+}
+
+/**
+ * What one pass of a loop produced.
+ *
+ * Deliberately just pointers plus outcome: the `AIPromptRun` / `AIAgentRun` rows are the durable
+ * record of what happened, and copying their cost here would create a second number to disagree with
+ * the first — the exact failure this whole area has been fixing.
+ */
+export interface MJTaskEntity_ITaskLoopIteration {
+    /** Zero-based pass number, so iterations render in the order they ran. */
+    index: number;
+    /** The `MJ: AI Prompt Runs` row this pass produced, when the loop body is a prompt. */
+    promptRunID?: string;
+    /** The `MJ: AI Agent Runs` row this pass started, when the loop body is a sub-agent. */
+    agentRunID?: string;
+    /**
+     * The `MJ: Action Execution Logs` row this pass produced, when the loop body is an ACTION.
+     *
+     * Without it an action-bodied pass recorded no pointer at all, so it had no cost, no timing and
+     * nothing to open — and the tree, having neither a prompt run nor an agent run to go on, fell to
+     * its last branch and labelled the pass a **Sub-Agent**. A loop over a web search then presented
+     * five sub-agent runs that never happened.
+     */
+    actionLogID?: string;
+    /** Whether the pass succeeded. A loop with `continueOnError` can have failed passes and still finish. */
+    success?: boolean;
+    /** Why the pass failed, when it did. */
+    errorMessage?: string;
+
+    /**
+     * What THIS pass was handed — the body's resolved input, not the loop's running payload.
+     *
+     * A pass is the ONLY unit of work in a graph with no row of its own, so there is nowhere else
+     * for its input and output to live. Without them every pass presented `null` on both sides and
+     * the run view could say nothing about any individual iteration — which for a loop is the only
+     * interesting question, since the step's own payload shows just the final accumulated state.
+     *
+     * **Deliberately the pass's own input rather than "the running payload before this pass".** The
+     * latter is the obvious reading of a before/after pair and is quadratic: every pass would carry a
+     * full copy of everything the earlier passes accumulated. A five-iteration demo produced a 121KB
+     * configuration that way, and the same loop over fifty items would produce megabytes — in a
+     * column that the run tree, the timeline, the canvas and the run list all load.
+     *
+     * May instead hold `{ __omitted, __bytes, __limit }` when a size budget was exceeded. Stated
+     * rather than left empty, because a pass showing nothing is otherwise indistinguishable from a
+     * pass that produced nothing.
+     */
+    payloadAtStart?: Record<string, unknown>;
+
+    /**
+     * What this pass gave back — the body's own output, on the same basis as {@link payloadAtStart},
+     * and subject to the same budget marker.
+     */
+    payloadAtEnd?: Record<string, unknown>;
 }
 
 /** A step's position and size on the canvas, in canvas units. */
@@ -110569,6 +110727,8 @@ export interface MJTaskEntity_ITaskForEachConfiguration {
     action?: MJTaskEntity_ITaskLoopActionBody;
     /** Run this sub-agent once per iteration. */
     subAgent?: MJTaskEntity_ITaskLoopSubAgentBody;
+    /** A prompt run once per loop iteration. */
+    prompt?: MJTaskEntity_ITaskLoopPromptBody;
 }
 
 /**
@@ -110592,6 +110752,24 @@ export interface MJTaskEntity_ITaskWhileConfiguration {
     action?: MJTaskEntity_ITaskLoopActionBody;
     /** Run this sub-agent once per iteration. */
     subAgent?: MJTaskEntity_ITaskLoopSubAgentBody;
+    /** A prompt run once per loop iteration. */
+    prompt?: MJTaskEntity_ITaskLoopPromptBody;
+}
+
+/**
+ * A prompt run once per loop iteration.
+ *
+ * The cheapest loop body there is — one model call per item, with no agent wrapper, no reasoning
+ * loop and no run record. Right when an iteration is a single transformation (classify this,
+ * describe this column); wrong the moment an iteration has to decide what to do next.
+ */
+export interface MJTaskEntity_ITaskLoopPromptBody {
+    /** Prompt name. Resolved to `Task.PromptID` at submission, so it is a real foreign key. */
+    name: string;
+    /** Values bound into the template, alongside the loop's own item and index bindings. */
+    templateParameters?: Record<string, string>;
+    /** JSON mapping from the prompt's response into the payload, applied per iteration. */
+    outputMapping?: string;
 }
 
 /** An action run once per loop iteration. */
@@ -110620,6 +110798,19 @@ export interface MJTaskEntity_ITaskLoopSubAgentBody {
 export interface MJTaskEntity_ITaskHumanConfiguration {
     /** What the person is being asked to do. */
     instructions?: string;
+
+    /**
+     * How long the person has to answer before the step gives up, in hours.
+     *
+     * **Without this the deadline machinery is unreachable.** `AIAgentRequest.ExpiresAt` exists, and
+     * the dispatcher already expires overdue requests and fails the step so a give-up edge can route
+     * around it — but nothing ever set the column, so that path had never run outside a test. A
+     * workflow waiting on someone who left the company waited forever.
+     *
+     * Omitted means no deadline, which stays the default: a step that silently expired on a timeout
+     * its author never chose would be worse than one that waits.
+     */
+    expiresInHours?: number;
 }
 
 /** A step completed by a system outside MemberJunction, which reports back when it is done. */
@@ -110679,6 +110870,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     /**
     * Validate() method override for MJ: Tasks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * PercentComplete: This rule ensures that if a percent complete value is provided, it must be between 0 and 100 inclusive.
+    * * Table-Level: A record can be associated with at most one context: either a User, an Agent, an Action, or a Prompt. Specifying more than one of these references is not allowed.
     * @public
     * @method
     * @override
@@ -110686,6 +110878,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidatePercentCompleteWithinZeroAndOneHundred(result);
+        this.ValidateAtMostOneContextField(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -110700,6 +110893,37 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     public ValidatePercentCompleteWithinZeroAndOneHundred(result: ValidationResult) {
     	if (this.PercentComplete != null && (this.PercentComplete < 0 || this.PercentComplete > 100)) {
     		result.Errors.push(new ValidationErrorInfo("PercentComplete", "PercentComplete must be between 0 and 100 if specified.", this.PercentComplete, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * A record can be associated with at most one context: either a User, an Agent, an Action, or a Prompt. Specifying more than one of these references is not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateAtMostOneContextField(result: ValidationResult) {
+    	let count = 0;
+    	if (this.UserID != null) {
+    		count++;
+    	}
+    	if (this.AgentID != null) {
+    		count++;
+    	}
+    	if (this.ActionID != null) {
+    		count++;
+    	}
+    	if (this.PromptID != null) {
+    		count++;
+    	}
+    
+    	if (count > 1) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UserID",
+    			"Only one of UserID, AgentID, ActionID, or PromptID can be specified for a single record.",
+    			this.UserID,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 

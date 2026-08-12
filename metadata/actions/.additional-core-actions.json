@@ -5358,11 +5358,15 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": true,
-            "Description": "The rows returned by the query. This is the action's result \u2014 map it into the payload to use the records downstream, e.g. {\"Records\": \"accounts\"}.",
+            "Description": "The rows returned by the query. This is the action's result — map it into the payload to use the records downstream, e.g. {\"Records\": \"accounts\"}.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "93B80E4B-36E6-4CFD-A957-E922A4264B17"
+          },
+          "sync": {
+            "lastModified": "2026-08-11T22:50:30.512Z",
+            "checksum": "54d3d4449ce81e7a96358b6effdadf17859f6d2e161f0c7efb52e52b2f4e7506"
           }
         },
         {
@@ -5377,6 +5381,10 @@
           },
           "primaryKey": {
             "ID": "A4604694-D070-45FF-BE22-74A3AFC40D33"
+          },
+          "sync": {
+            "lastModified": "2026-08-11T22:50:30.540Z",
+            "checksum": "e51f5e36b840bb4e59725161f2e3005f2bccde1a1500a87a95336c234b46d66e"
           }
         }
       ]

@@ -904,6 +904,28 @@
             "lastModified": "2026-08-08T15:50:31.726Z",
             "checksum": "91d8a2f26f1f5ec8ceb4f8af36dc42701163fa21b47280d03bb21bdad61289cc"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT76 - Workflow Demo Agents",
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B7A9F916-2992-4EC0-99F1-38CD8EB80BC5"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT77 - Cache Immutability (freeze-on-write)",
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CB7AAFCA-4913-4DCF-9D36-B6CD50E5BE96"
+          }
         }
       ]
     },

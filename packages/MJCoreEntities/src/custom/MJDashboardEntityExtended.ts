@@ -74,7 +74,22 @@ export class MJDashboardEntityExtended extends MJDashboardEntity  {
         if (this.IsSaved && !UUIDsEqual(this.UserID, currentUser.ID)) {
             const permissions = DashboardEngine.Instance.GetDashboardPermissions(this.ID, currentUser.ID);
 
-            if (!permissions.CanEdit) {
+            // An unloaded engine is not a permission decision. GetDashboardPermissions resolves
+            // against `_dashboards`, and a dashboard it cannot find returns "no permissions" — which
+            // is indistinguishable from a genuine denial. In a process that never configures the
+            // engine (a CLI task, where the 14 engines are deferred to first use), that array is
+            // empty, so EVERY dashboard save is refused, including the owner's own.
+            //
+            // Ownership does not need the cache to be answered: the row carries UserID. Falling back
+            // to it keeps the owner able to save while leaving every real denial intact — a loaded
+            // engine still decides, and a non-owner is still refused either way.
+            //
+            // Found by `mj sync push` on PostgreSQL, where this record is dirty and therefore
+            // reaches Validate(); on SQL Server the same record is unchanged, so Save() short-
+            // circuits and the defect stays hidden.
+            const ownsRecord = !DashboardEngine.Instance.Loaded && UUIDsEqual(this.UserID, currentUser.ID);
+
+            if (!permissions.CanEdit && !ownsRecord) {
                 result.Success = false;
                 result.Errors.push(new ValidationErrorInfo(
                     'Permission',

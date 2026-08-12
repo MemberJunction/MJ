@@ -136,7 +136,7 @@ export class ClassifyItemGridComponent extends BaseAngularComponent {
         { field: 'TaggingStatus', headerName: 'Status', width: 130 },
         { field: 'UpdatedAt', headerName: 'Updated', width: 160, sort: 'desc',
           comparator: (_a, _b, nodeA, nodeB) =>
-              (nodeA.data?.UpdatedAtRaw ?? '').localeCompare(nodeB.data?.UpdatedAtRaw ?? '') },
+              (nodeA.data?.UpdatedAtRaw ?? 0) - (nodeB.data?.UpdatedAtRaw ?? 0) },
     ];
 
     public OnGridReady(event: GridReadyEvent<ClassifyItemGridRow>): void {
@@ -253,7 +253,7 @@ export class ClassifyItemGridComponent extends BaseAngularComponent {
 
     private toRow(r: Record<string, unknown>, tagCounts: Map<string, number>): ClassifyItemGridRow {
         const id = r['ID'] as string;
-        const updatedAt = (r['__mj_UpdatedAt'] as string) ?? '';
+        const updatedAt = (r['__mj_UpdatedAt'] as Date | string | null) ?? null;
         return {
             ID: id,
             DisplayName: deriveDisplayName({ Name: r['Name'] as string | null, Description: r['Description'] as string | null }),
@@ -262,7 +262,7 @@ export class ClassifyItemGridComponent extends BaseAngularComponent {
             EmbeddingStatus: (r['EmbeddingStatus'] as string) ?? '',
             TaggingStatus: (r['TaggingStatus'] as string) ?? '',
             UpdatedAt: updatedAt ? formatDate(updatedAt) : '—',
-            UpdatedAtRaw: updatedAt,
+            UpdatedAtRaw: updatedAt ? new Date(updatedAt).getTime() : 0,
         };
     }
 
