@@ -86,11 +86,16 @@ describe('CompareDateCells', () => {
     });
 
     it('is the discriminating case for the weekday-name bug', () => {
-        // Fri Dec 04 vs Mon Jan 05 of the next year: alphabetically "Fri" < "Mon" agrees,
-        // but Wed Dec 30 vs Thu Dec 31: "Wed" > "Thu" alphabetically while Dec 30 < Dec 31
+        // Wed Dec 30 vs Thu Dec 31: "Wed" > "Thu" alphabetically while Dec 30 < Dec 31
         // chronologically — the exact inversion the old localeCompare sorts shipped.
-        const dec30 = new Date('2026-12-30T00:00:00.000Z'); // Wednesday
-        const dec31 = new Date('2026-12-31T00:00:00.000Z'); // Thursday
+        //
+        // Built from LOCAL calendar components, not a UTC instant. `Date.prototype.toString()`
+        // renders in the local zone, so `new Date('2026-12-30T00:00:00.000Z')` is "Tue Dec 29"
+        // anywhere west of UTC — and Tue/Wed happen to agree alphabetically and chronologically,
+        // so the test quietly stopped discriminating and failed. The weekday is a property of the
+        // local calendar date, which is exactly what this assertion is about.
+        const dec30 = new Date(2026, 11, 30); // Wednesday, in every timezone
+        const dec31 = new Date(2026, 11, 31); // Thursday, in every timezone
         expect(String(dec30).localeCompare(String(dec31))).toBeGreaterThan(0); // the bug
         expect(CompareDateCells(dec30, dec31)).toBeLessThan(0);                // the fix
     });

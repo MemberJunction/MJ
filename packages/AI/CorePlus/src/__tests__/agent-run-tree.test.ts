@@ -27,6 +27,8 @@ const row = (over: Partial<AgentRunTreeRow> & Pick<AgentRunTreeRow, 'NodeID' | '
     DurationMs: null,
     Cost: null,
     Tokens: null,
+    PromptTokens: null,
+    CompletionTokens: null,
     SourceEntity: 'MJ: AI Agent Runs',
     SourceID: over.NodeID,
     ...over,
@@ -68,15 +70,32 @@ describe('BuildAgentRunTree', () => {
         expect(tree.Children.map((c) => c.Name)).toEqual(['first', 'second', 'third']);
     });
 
-    it('breaks a Sequence tie deterministically', () => {
-        // Two loads of the same run must render identically; a tie resolved by hash order would not.
+    it('resolves a Sequence tie by KEEPING THE QUERY ORDER, not by node id', () => {
+        // This test used to assert the opposite — ties sorted by `NodeID` — for determinism. It was
+        // deterministic and it was wrong: every task in a graph carries the same Sequence, so EVERY
+        // workflow's steps were being ordered BY GUID, discarding the query's `ORDER BY` (started,
+        // then start time, then created). A four-step workflow listed its first step last, and
+        // because GUID order is perfectly stable it looked deliberate rather than broken.
+        //
+        // Input order is equally deterministic — the query's ordering is total — and it is the order
+        // things actually happened in.
         const rows = [
             row({ NodeID: 'run', NodeType: 'Run', Name: 'R' }),
-            row({ NodeID: 'zzz', ParentNodeID: 'run', Depth: 1, Sequence: 0, NodeType: 'Step', Name: 'z' }),
-            row({ NodeID: 'aaa', ParentNodeID: 'run', Depth: 1, Sequence: 0, NodeType: 'Step', Name: 'a' }),
+            row({ NodeID: 'zzz', ParentNodeID: 'run', Depth: 1, Sequence: 0, NodeType: 'Step', Name: 'ran first' }),
+            row({ NodeID: 'aaa', ParentNodeID: 'run', Depth: 1, Sequence: 0, NodeType: 'Step', Name: 'ran second' }),
         ];
-        expect(BuildAgentRunTree(rows)!.Children.map((c) => c.NodeID)).toEqual(['aaa', 'zzz']);
-        expect(BuildAgentRunTree([...rows].reverse())!.Children.map((c) => c.NodeID)).toEqual(['aaa', 'zzz']);
+        expect(BuildAgentRunTree(rows)!.Children.map((c) => c.Name)).toEqual(['ran first', 'ran second']);
+    });
+
+    it('still orders by Sequence when one is given, whatever order the rows arrive in', () => {
+        // Preserving input order for TIES must not become "ignore Sequence" — the graph's own
+        // topological rank is what puts an unstarted workflow in the order it was drawn.
+        const rows = [
+            row({ NodeID: 'run', NodeType: 'Run', Name: 'R' }),
+            row({ NodeID: 'late', ParentNodeID: 'run', Depth: 1, Sequence: 9, NodeType: 'Step', Name: 'last' }),
+            row({ NodeID: 'early', ParentNodeID: 'run', Depth: 1, Sequence: 1, NodeType: 'Step', Name: 'first' }),
+        ];
+        expect(BuildAgentRunTree(rows)!.Children.map((c) => c.Name)).toEqual(['first', 'last']);
     });
 
     it('ATTACHES an orphan to the root rather than dropping it', () => {
@@ -121,6 +140,39 @@ describe('traversal helpers', () => {
         // the near-zero cost of a run that dispatched all its real work.
         const totals = SumAgentRunTreeCost(BuildAgentRunTree(deepRun())!);
         expect(totals.Cost).toBeCloseTo(0.08);
+    });
+
+    it('sums the prompt/completion split on the same basis as the total', () => {
+        // All four numbers are written to AIAgentRun's …Rollup columns at settlement. Deriving two
+        // of them here and the other two somewhere else is how one run ends up described by two
+        // arithmetics that disagree.
+        const totals = SumAgentRunTreeCost(BuildAgentRunTree([
+            row({ NodeID: 'run', NodeType: 'Run', Name: 'R', Tokens: 300, PromptTokens: 200, CompletionTokens: 100 }),
+            row({
+                NodeID: 'nested', ParentNodeID: 'run', Depth: 1, NodeType: 'Run', Name: 'Sub',
+                Tokens: 30, PromptTokens: 20, CompletionTokens: 10,
+            }),
+        ])!);
+
+        expect(totals).toEqual({ Cost: 0, Tokens: 330, PromptTokens: 220, CompletionTokens: 110 });
+    });
+
+    it('counts a nested run ONCE — the property that lets the total be cached back onto the run', () => {
+        // 🔒 The load-bearing invariant. Since v6.1 the dispatcher writes this sum into
+        // TotalCostRollup, so the column is an OUTPUT of the tree. It is only safe because every
+        // node reports its OWN spend: if the query is ever "improved" to select TotalCostRollup for
+        // a Run node, that written total becomes an INPUT too, and each settlement folds the previous
+        // one back in — compounding, silently, with no error anywhere.
+        //
+        // Here the nested run spent 0.04 and its own step spent 0.01. A rollup-valued node would
+        // report 0.05 for the run AND 0.01 for the step, totalling 0.06 for 0.05 of real spend.
+        const totals = SumAgentRunTreeCost(BuildAgentRunTree([
+            row({ NodeID: 'run', NodeType: 'Run', Name: 'R', Cost: 0.10 }),
+            row({ NodeID: 'nested', ParentNodeID: 'run', Depth: 1, NodeType: 'Run', Name: 'Sub', Cost: 0.04 }),
+            row({ NodeID: 'nested-step', ParentNodeID: 'nested', Depth: 2, NodeType: 'Step', Name: 'Prompt', Cost: 0.01 }),
+        ])!);
+
+        expect(totals.Cost).toBeCloseTo(0.15);
     });
 
     it('formats a readable outline, so a failed assertion names the node', () => {

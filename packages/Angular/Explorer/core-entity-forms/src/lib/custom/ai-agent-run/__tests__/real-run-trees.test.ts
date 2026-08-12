@@ -11,6 +11,18 @@
 import { describe, expect, it } from 'vitest';
 import { BuildAgentRunTree, type AgentRunTreeRow } from '@memberjunction/ai-core-plus';
 import { ProjectRunTreeToTimeline } from '../run-tree-timeline-projection';
+import type { TimelineItem } from '../ai-agent-run-timeline.component';
+
+/**
+ * The projected rows in reading order.
+ *
+ * The projection returns a NESTED structure so a workflow's rows can be collapsed like everything
+ * else in the timeline; these assertions are about which rows exist and at what depth, which is what
+ * a depth-first read still answers.
+ */
+function flatten(items: TimelineItem[]): TimelineItem[] {
+    return items.flatMap((item) => [item, ...flatten(item.children ?? [])]);
+}
 import { buildFlowModelFromTree } from '../flow/run-tree-flow-projection';
 import fixture from './real-run-trees.fixture.json';
 
@@ -36,18 +48,20 @@ describe('real Content Pipeline run', () => {
     it('assembles every captured node into one tree', () => {
         const root = treeFor('Content Pipeline');
         expect(root).not.toBeNull();
-        expect(ProjectRunTreeToTimeline(root)).toHaveLength(REAL['Content Pipeline'].rows.length);
+        expect(flatten(ProjectRunTreeToTimeline(root))).toHaveLength(REAL['Content Pipeline'].rows.length);
     });
 
     it('shows the workflow steps as timeline rows, at their real depth', () => {
-        const items = ProjectRunTreeToTimeline(treeFor('Content Pipeline'));
+        const items = flatten(ProjectRunTreeToTimeline(treeFor('Content Pipeline')));
         const byTitle = new Map(items.map((i) => [i.title, i]));
 
-        // These are MJ: Tasks rows. Before the tree they appeared in NO timeline at all — and when
-        // they first did, they all rendered as a generic 'task', throwing away the action and prompt
-        // displayers every other row gets. A workflow step that runs a prompt IS a prompt.
-        expect(byTitle.get('Draft the piece')?.type).toBe('prompt');
-        expect(byTitle.get('Research: broad')?.type).toBe('action');
+        // These are MJ: Tasks rows. Before the tree they appeared in NO timeline at all; then they
+        // appeared with row types of their own ('prompt', 'action'), which got the icon right and
+        // missed everything keyed on `type === 'step'` — the detail panel, the action link, loop
+        // expansion. They are STEPS now, carrying the step vocabulary in `data`.
+        expect(byTitle.get('Draft the piece')?.type).toBe('step');
+        expect(byTitle.get('Draft the piece')?.data?.StepType).toBe('Prompt');
+        expect(byTitle.get('Research: broad')?.data?.StepType).toBe('Actions');
         // What marks them as dispatcher work is provenance, not a different row type.
         expect(byTitle.get('Draft the piece')?.provenance).toBe('workflow');
         expect(byTitle.get('Review against brand rules')?.provenance).toBe('workflow');
@@ -55,7 +69,7 @@ describe('real Content Pipeline run', () => {
     });
 
     it('keeps the branch that was not taken visible, as Skipped', () => {
-        const items = ProjectRunTreeToTimeline(treeFor('Content Pipeline'));
+        const items = flatten(ProjectRunTreeToTimeline(treeFor('Content Pipeline')));
         const approved = items.find((i) => i.title === 'Close out: approved');
 
         // The exclusive pair is the most interesting thing this run did; a viewer that dropped the
@@ -64,7 +78,7 @@ describe('real Content Pipeline run', () => {
     });
 
     it('surfaces the prompt-step cost the run steps cannot reach', () => {
-        const items = ProjectRunTreeToTimeline(treeFor('Content Pipeline'));
+        const items = flatten(ProjectRunTreeToTimeline(treeFor('Content Pipeline')));
         const draft = items.find((i) => i.title === 'Draft the piece')!;
 
         // A Prompt task has no agent run — its spend is only reachable through the promptRunID
@@ -89,7 +103,7 @@ describe('real Content Pipeline run', () => {
 
 describe('real Schema Documentation Sweep run', () => {
     it('shows the Get Records step and its ForEach as rows', () => {
-        const items = ProjectRunTreeToTimeline(treeFor('Schema Documentation Sweep'));
+        const items = flatten(ProjectRunTreeToTimeline(treeFor('Schema Documentation Sweep')));
         const titles = items.map((i) => i.title);
 
         expect(titles).toContain('Find undocumented fields');

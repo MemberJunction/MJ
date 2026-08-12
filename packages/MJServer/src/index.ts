@@ -5,9 +5,9 @@ dotenv.config({ quiet: true });
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ResolveStartupMode } from '@memberjunction/core';
-import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
-import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { registerIntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
 import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap } from './integration/EntityMapLifecycle.js';
@@ -330,8 +330,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     await provider.Config(pgConfigData);
     SetProvider(provider);
 
-    // Refresh user cache using PostgreSQL
-    await refreshUserCacheFromPG(pgPool, mj_core_schema);
+    // Warm the user cache — dialect-neutral, same call the SQL Server path makes
+    await UserCache.Instance.Refresh(provider);
 
     // Run startup actions — same 'full' entry-point default as the SQL Server path
     const sysUser = UserCache.Instance.GetSystemUser();
@@ -1413,8 +1413,20 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // submitted graph — submission would be durable and inert, which is strictly worse than the old
   // client-driven path it replaced. Gated on SQL Server because the provider factory mints
   // SQLServerDataProvider; the PG branch lands with PG parity. Self-registers with ShutdownRegistry.
+  //
+  // `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1` suppresses it, for the one case where a second dispatcher
+  // is actively harmful: the integration suite's task-graph bundle drives its OWN dispatcher against
+  // a stub runner and asserts exactly-once execution. A dispatcher claims from the whole table, not
+  // from "its own" graphs, so a server sharing that database races the suite for every claim and
+  // executes the suite's tasks with the real agent runner. The bundle then reports tasks that never
+  // ran and graphs that settled to the wrong status — symptoms that read as engine defects and cost
+  // a release cycle to trace back to here. The suite still needs MJAPI up for its client-transport
+  // members, so "stop the server" is not the remedy; this is.
   const taskGraphPool = dataSources[0]?.dataSource;
-  if (resumeUser && taskGraphPool instanceof sql.ConnectionPool) {
+  const taskGraphDispatcherDisabled = process.env.MJ_DISABLE_TASK_GRAPH_DISPATCHER === '1';
+  if (taskGraphDispatcherDisabled) {
+    LogStatus('[TaskGraphDispatcher] Disabled by MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 — submitted graphs will not be executed by this process.');
+  } else if (resumeUser && taskGraphPool instanceof sql.ConnectionPool) {
     StartTaskGraphDispatcher(taskGraphPool, resumeUser)
       .catch(err => console.warn(`[TaskGraphDispatcher] Startup failed: ${err}`));
   }
@@ -1868,31 +1880,6 @@ function createMSSQLCompatPool(pgPool: import('pg').Pool): sql.ConnectionPool {
     _pgPool: pgPool,
   };
   return wrapper as unknown as sql.ConnectionPool;
-}
-
-/**
- * Refreshes the UserCache using PostgreSQL queries instead of MSSQL.
- * This mirrors the logic in UserCache.Refresh() but uses pg.Pool.
- */
-async function refreshUserCacheFromPG(pgPool: import('pg').Pool, coreSchema: string): Promise<void> {
-  const { UserInfo } = await import('@memberjunction/core');
-  const uResult = await pgPool.query(`SELECT * FROM ${coreSchema}."vwUsers"`);
-  const rResult = await pgPool.query(`SELECT * FROM ${coreSchema}."vwUserRoles"`);
-  const users = uResult.rows;
-  const roles = rResult.rows;
-
-  if (users) {
-    const userInfos = users.map((user: Record<string, unknown>) => {
-      const userWithRoles = {
-        ...user,
-        UserRoles: roles.filter((role: Record<string, unknown>) => UUIDsEqual(role.UserID as string, user.ID as string)),
-      };
-      return new UserInfo(Metadata.Provider, userWithRoles); // global-provider-ok: bootstrap (UserCache initialization)
-    });
-    // Access the UserCache internals to set users
-    const cache = UserCache.Instance;
-    (cache as unknown as Record<string, unknown>)['_users'] = userInfos;
-  }
 }
 
 /**
