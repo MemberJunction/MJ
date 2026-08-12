@@ -253,6 +253,32 @@ describe('ValidateTaskGraphSpec — the condition front door', () => {
         expect(error.Message).not.toContain('9f1c2d33');
     });
 
+    it('accepts a ForEach with no itemVariable, which the executor defaults (C6)', () => {
+        // The type marks it optional and `TaskLoopExecutor` defaults it to `item`, so requiring it
+        // refused compiled legacy flows at Submit for a setting the runtime always supplies.
+        const spec: TaskGraphSpec = {
+            workflowName: 'Looping',
+            tasks: [{
+                tempId: 'each', name: 'Score each lead', description: 'x', kind: 'ForEach',
+                configuration: { collectionPath: 'payload.leads' },
+            }],
+        };
+        expect(ValidateTaskGraphSpec(spec).Errors.filter((e) => e.Code === 'InvalidConfiguration')).toEqual([]);
+    });
+
+    it('still requires the collection, which nothing can default', () => {
+        const spec: TaskGraphSpec = {
+            workflowName: 'Looping',
+            tasks: [{
+                tempId: 'each', name: 'Score each lead', description: 'x', kind: 'ForEach',
+                configuration: { itemVariable: 'lead' },
+            }],
+        };
+        const errors = ValidateTaskGraphSpec(spec).Errors.filter((e) => e.Code === 'InvalidConfiguration');
+        expect(errors).toHaveLength(1);
+        expect(errors[0].Message).toContain('collectionPath');
+    });
+
     it('does not mask the structural errors that were already reported', () => {
         // A bad condition on an edge to a task that does not exist should produce both findings —
         // the new check must not short-circuit the graph-level ones.

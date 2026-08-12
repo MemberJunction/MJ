@@ -1119,8 +1119,14 @@ export class TaskGraphService {
     }
 
     private async loadChildren(parentTaskID: string, context: TaskGraphSubmitContext): Promise<MJTaskEntity[]> {
+        // `BypassCache` for the reason the dispatcher documents at every one of its reads (C4): task
+        // status is written by the claim protocol's direct SQL, which fires no cache invalidation.
+        // A cached read here returns PRE-EXECUTION state, and both callers act on status — Cancel's
+        // "leave terminal work alone" guard would pass for a task that has since completed, and
+        // write `Cancelled` over a `Complete` row. That is precisely the history-rewriting the guard
+        // exists to prevent, performed by the guard itself.
         const result = await RunView.FromMetadataProvider(context.Provider).RunView<MJTaskEntity>(
-            { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentTaskID}'`, ResultType: 'entity_object' },
+            { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentTaskID}'`, ResultType: 'entity_object', BypassCache: true },
             context.ContextUser,
         );
         return (result.Success ? result.Results : []) ?? [];

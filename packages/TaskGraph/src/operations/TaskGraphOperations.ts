@@ -77,6 +77,21 @@ function submitContext(
  * Returning before execution is the point: the caller is freed the moment the work is safe, and the
  * dispatcher owns it from there. That is what lets an agent submit a graph over MCP without holding
  * anything open.
+ *
+ * **KNOWN LIMITATION (C5): a graph submitted through this operation is fully detached.**
+ * `TaskGraphSubmitContext` carries `AgentRunID` and `ReinvokeDepth`, and this input shape has no
+ * field for either, so a remote submission always records `submittedByAgentRunID: null` and depth
+ * zero. Three consequences, all silent:
+ *
+ *   - no cost rollup — the graph's spend never reaches the calling agent's run;
+ *   - no `reinvoke` — settlement has nobody to restart, so it degrades to a message;
+ *   - the continuation depth restarts at zero, so a chain submitted this way is not counted by the
+ *     cap that bounds it.
+ *
+ * That may be the intended contract — a remote caller is not obviously "a run this graph belongs
+ * to" — but it is currently a consequence of the input shape rather than a decision. Closing it
+ * means additive optional inputs on a PUBLISHED remote operation, which is a metadata change plus
+ * CodeGen, not an edit here. Flagged rather than done quietly.
  */
 @RegisterClass(BaseRemotableOperation, 'TaskGraph.Submit')
 export class TaskGraphSubmitServerOperation extends TaskGraphSubmitOperation {

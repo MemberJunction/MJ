@@ -128,7 +128,10 @@ const REQUIRED_CONFIG_FIELDS: Record<TaskGraphNodeKind, readonly string[]> = {
     Action: ['actionName'],
     Human: [],
     Prompt: ['promptName'],
-    ForEach: ['collectionPath', 'itemVariable'],
+    // `itemVariable` is NOT required (C6): the type marks it optional and `TaskLoopExecutor` defaults
+    // it to `item`, so requiring it here refused compiled legacy flows at Submit for a setting the
+    // runtime was always going to supply. `collectionPath` stays — nothing can default a collection.
+    ForEach: ['collectionPath'],
     // A While loop has NO items — it repeats until a condition stops holding — so `itemVariable`
     // is a ForEach concept and requiring it here rejected every valid While graph with a message
     // about a setting that does not apply to it.

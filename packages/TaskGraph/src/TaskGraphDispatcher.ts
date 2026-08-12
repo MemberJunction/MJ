@@ -452,17 +452,25 @@ export class TaskGraphDispatcher implements IShutdownable {
         const cached = this.ownerByParentID.get(parentTaskID);
         if (cached !== undefined) return cached;
 
-        let owner: string | null = null;
         try {
             const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
-            if (await parent.Load(parentTaskID)) {
-                owner = this.readParentMetadata(parent).submittedByUserID ?? null;
+            if (!(await parent.Load(parentTaskID))) {
+                // NOT CACHED (C1). A failed load is not an answer, and caching it as one is
+                // permanent for the life of the process: the delivery filter fails closed on a null
+                // owner, so every frame for this graph reaches nobody until a restart. One
+                // transient blip, and a viewer watches a workflow that never appears to move.
+                LogError(`[TaskGraphDispatcher] Could not load graph ${parentTaskID} to resolve its owner; frames for it are unaddressed this pass.`);
+                return null;
             }
+            const owner = this.readParentMetadata(parent).submittedByUserID ?? null;
+            // A successfully-read graph with no owner IS an answer — a scheduled or remote-triggered
+            // graph legitimately has none — so that one caches.
+            this.ownerByParentID.set(parentTaskID, owner);
+            return owner;
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Could not resolve owner for graph ${parentTaskID}: ${e instanceof Error ? e.message : String(e)}`);
+            return null;
         }
-        this.ownerByParentID.set(parentTaskID, owner);
-        return owner;
     }
 
     /**
@@ -1367,9 +1375,15 @@ export class TaskGraphDispatcher implements IShutdownable {
             return true;
         }
 
-        // At the cap, downgrade rather than refuse: the results still reach the user, the chain just
+        // At the cap, DOWNGRADE rather than refuse: the results still reach the user, the chain just
         // stops growing. Refusing outright would lose the outcome of work that actually completed.
-        const mode = IsReinvokeCapReached(meta) ? 'message' : meta.continuation;
+        //
+        // But a downgrade only applies to something that was going to be delivered (C2). Mapping the
+        // cap straight onto `'message'` also promoted `continuation: 'none'` — a graph that asked
+        // for silence — into a message nobody requested. Latent today because `Submit` refuses to
+        // create a graph past the cap, and exactly the kind of latent that stops being latent the
+        // moment a producer bypasses that check.
+        const mode = meta.continuation !== 'none' && IsReinvokeCapReached(meta) ? 'message' : meta.continuation;
         if (mode !== 'none' && IsReinvokeCapReached(meta) && meta.continuation === 'reinvoke') {
             LogStatus(
                 `[TaskGraphDispatcher] Graph ${parent.ID} hit the reinvoke cap (${MAX_REINVOKE_DEPTH}); ` +
