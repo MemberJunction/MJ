@@ -695,13 +695,16 @@ export class TaskGraphDispatcher implements IShutdownable {
 
             const result = await this.runTaskBody(task, provider, inputPayload, dependencyOutputs);
 
-            // A prompt can end the workflow early and say why. Honour it before recording the
-            // outcome, so the remaining tasks are already Skipped by the time the rollup runs and
-            // the graph settles Complete rather than looking abandoned with work left Pending.
-            if (result.ChatMessage) {
-                await this.endGraphEarly(provider, task, result.ChatMessage);
-            }
-
+            // ONLY THE CONFIRMED OWNER MUTATES THE GRAPH (R2-10).
+            //
+            // The early-finish skips used to run BEFORE this, so a lapsed claim produced the worst
+            // possible pair: the siblings were terminally Skipped and satisfying dependents, while
+            // the completion was refused and the task re-ran on another instance — where it might
+            // not end early at all. The graph would then be missing steps nobody decided to skip.
+            //
+            // Recording first costs a poll: the skips now land after the completion, so a rollup
+            // that lands in between sees work still Pending and settles one pass later. That is a
+            // delay; the other order was a wrong graph.
             const recorded = await this.claims.CompleteClaimed(
                 provider,
                 taskID,
@@ -733,6 +736,14 @@ export class TaskGraphDispatcher implements IShutdownable {
                     Status: result.Success ? 'Complete' : 'Failed',
                     ErrorMessage: result.Success ? undefined : (result.ErrorMessage ?? undefined),
                 });
+
+                // A prompt can end the workflow early and say why — honoured only now that this
+                // instance is the confirmed owner of the outcome. The remaining tasks are Skipped
+                // here so the graph settles Complete rather than looking abandoned with work left
+                // Pending; a rollup that lands between the two simply settles one pass later.
+                if (result.ChatMessage) {
+                    await this.endGraphEarly(provider, task, result.ChatMessage);
+                }
             }
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Execution failed for ${taskID}: ${e instanceof Error ? e.message : String(e)}`);
@@ -786,11 +797,13 @@ export class TaskGraphDispatcher implements IShutdownable {
                 ...skipSeeds,
                 ...ComputeSkipCascade(graph.nodes, graph.edges, [...skipSeeds]),
             ]);
+            const skippedByRoute: string[] = [];
             for (const taskID of toSkip) {
                 const entity = graph.entityById.get(taskID);
                 if (!entity || entity.Status !== 'Pending') continue;
                 entity.Status = 'Skipped';
                 if (await entity.Save()) {
+                    skippedByRoute.push(taskID);
                     LogStatus(`[TaskGraphDispatcher] Skipped '${entity.Name}' (${taskID}) — another branch was taken.`);
                     // Announced separately from TaskBlocked because it means something different to
                     // a viewer: nothing went wrong, this route simply was not the one chosen.
@@ -808,6 +821,14 @@ export class TaskGraphDispatcher implements IShutdownable {
                     if (node) node.status = 'Skipped';
                 }
             }
+
+            // A human step reached by a route the workflow did not take has the same zombie request
+            // as one skipped by an early finish (R2-10): notified, `Requested` forever, and invisible
+            // to the settle and expiry sweeps because they filter on Pending tasks and this one is
+            // not Pending any more. Same treatment, different reason.
+            await this.withdrawOpenRequests(
+                provider, skippedByRoute, 'The workflow took a different route, so this step is no longer needed.',
+            );
 
             // Only failure-driven unsatisfiability reaches here now; not-taken branches were skipped
             // above. A task already Skipped is left alone rather than overwritten — the two passes
@@ -1168,10 +1189,12 @@ export class TaskGraphDispatcher implements IShutdownable {
         try {
             LogStatus(`[TaskGraphDispatcher] '${task.Name}' ended the workflow early: ${message}`);
 
+            const skipped: string[] = [];
             for (const sibling of await this.loadChildTasks(provider, task.ParentID)) {
                 if (sibling.ID === task.ID || sibling.Status !== 'Pending') continue;
                 sibling.Status = 'Skipped';
                 if (await sibling.Save()) {
+                    skipped.push(sibling.ID);
                     this.emit({
                         Kind: 'TaskSkipped',
                         ParentTaskID: task.ParentID,
@@ -1183,6 +1206,16 @@ export class TaskGraphDispatcher implements IShutdownable {
                 }
             }
 
+            // WITHDRAW WHAT WE JUST SKIPPED (R2-10).
+            //
+            // A skipped human step leaves its `MJ: AI Agent Requests` row `Requested` forever:
+            // un-answerable, because answering settles nothing once the task is terminal, and
+            // immortal, because the human settle and expiry sweeps both filter on `Status='Pending'`
+            // tasks and this one no longer is. The person keeps seeing "a workflow is waiting on
+            // you" for a workflow that finished without them. `Cancel` has always done this; the
+            // early-finish path skipped exactly the same rows and did not.
+            await this.withdrawOpenRequests(provider, skipped, 'The workflow finished before this step was needed.');
+
             // Column-scoped, because skipping the siblings above just made this graph fully
             // terminal — so another instance can settle it and claim the marker before this line
             // runs. A full-row save from the snapshot we loaded first would undo both. See
@@ -1191,6 +1224,15 @@ export class TaskGraphDispatcher implements IShutdownable {
             if (typeID) {
                 await this.claims.TrySetParentOutput(
                     provider, task.ParentID, JSON.stringify({ message }), typeID, this.contextUser,
+                );
+            } else {
+                // Surfaced rather than dropped (R2-10). The graph still ends early — the siblings
+                // are already Skipped — but the reason it ended goes nowhere, and a workflow that
+                // stopped for a stated reason with no stated reason recorded is exactly the kind of
+                // silence this round exists to remove.
+                LogError(
+                    `[TaskGraphDispatcher] Could not resolve the workflow task type, so the early-finish ` +
+                    `reason for graph ${task.ParentID} was not recorded: ${message}`,
                 );
             }
         } catch (e) {
@@ -2749,6 +2791,54 @@ export class TaskGraphDispatcher implements IShutdownable {
             Provider: provider,
             ContextUser: this.contextUser,
         });
+    }
+
+    /**
+     * Closes the still-open asks raised for tasks that will never be answered.
+     *
+     * `Canceled` rather than `Expired`: nobody ran out of time, the ask was withdrawn — and the two
+     * mean different things downstream, since an expired human step is treated as a FAILURE that a
+     * give-up edge can route around, which would be a lie about a step the workflow decided it no
+     * longer needed.
+     *
+     * Failures are logged and never propagated. The graph's outcome is already decided; refusing to
+     * finish over an inbox row would trade a stale notification for a stalled workflow.
+     */
+    private async withdrawOpenRequests(
+        provider: IMetadataProvider,
+        taskIDs: readonly string[],
+        reason: string,
+    ): Promise<void> {
+        if (taskIDs.length === 0) return;
+        try {
+            const idList = taskIDs.map((id) => `'${id}'`).join(',');
+            const open = await RunView.FromMetadataProvider(provider).RunView<MJAIAgentRequestEntity>(
+                {
+                    EntityName: 'MJ: AI Agent Requests',
+                    ExtraFilter: `Status='Requested' AND OriginatingTaskID IN (${idList})`,
+                    ResultType: 'entity_object',
+                    BypassCache: true,
+                },
+                this.contextUser,
+            );
+            if (!open.Success) {
+                LogError(`[TaskGraphDispatcher] Could not read open requests to withdraw: ${open.ErrorMessage}`);
+                return;
+            }
+            for (const request of open.Results ?? []) {
+                request.Status = 'Canceled';
+                request.Comments = reason;
+                if (!(await request.Save())) {
+                    LogError(
+                        `[TaskGraphDispatcher] Could not withdraw request ${request.ID}: ` +
+                        `${request.LatestResult?.CompleteMessage ?? 'unknown error'}. It will keep showing ` +
+                        `in someone's inbox for a step that will never run.`,
+                    );
+                }
+            }
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not withdraw open requests: ${e instanceof Error ? e.message : String(e)}`);
+        }
     }
 
     /**
