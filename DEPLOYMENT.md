@@ -336,8 +336,16 @@ With those rows present all 7 cache-gauntlet checks pass and the tier reaches 52
 
 ```bash
 # In a separate shell, pointed at the Step-3 database
-cd packages/MJAPI && pnpm start
+cd packages/MJAPI && MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 pnpm start
 ```
+
+> 🚨 **`MJ_DISABLE_TASK_GRAPH_DISPATCHER=1` is REQUIRED for the deterministic tier, and omitting it produces failures that look exactly like engine defects.** MJServer starts its own `TaskGraphDispatcher` at boot, and a dispatcher claims from the **whole** task table rather than from "its own" graphs. `IT74 - Task Graph Execution` drives its own dispatcher against a stub runner and asserts exactly-once execution, so the server races it for every claim and executes the bundle's tasks with the *real* agent runner. The stub never sees them.
+>
+> The symptoms are alarming and never mention MJAPI: `every node ran exactly once — expected 4, got 2`, `a graph with an unrecoverable failure rolls up Failed — expected "Failed", got "Complete"`, `no GraphSettled frame was emitted`, `the reclaimed task ran exactly once — expected 1, got 2`. They **reshuffle every run**, because which dispatcher wins each claim is a race — which reads as engine flakiness rather than as interference. Measured on one box: **0/4 runs green with the server dispatcher up, 4/4 with it down.**
+>
+> Stopping MJAPI is *not* the remedy — the 19 client-transport members need it, and without it they skip-as-PASS. Run the server with its dispatcher suppressed instead.
+>
+> **Leave the flag OFF for the live-model tier (4.4 #2)**, which drives shipped agents that rely on durable execution.
 
 > ⚠️ **Run it from `packages/MJAPI`, not `pnpm run start:api` from the repo root.** The root script is `turbo start --filter=mj_api`, and **turbo passes through only the environment variables declared in `turbo.json`** — anything else is stripped before the task sees it. Overriding the database with `DB_DATABASE=… pnpm run start:api` therefore fails with `Error parsing config file … "path": ["dbDatabase"] … "received": "undefined"`, which reads like a config-file problem rather than an env-passthrough one. Running from the package directory bypasses turbo entirely and the variables arrive intact.
 

@@ -536,6 +536,13 @@ export class TaskGraphDispatcher implements IShutdownable {
         this.activePasses++;
         try {
             const provider = await this.providerFactory.CreateProvider();
+            // `running` is re-read after every await from here on. The entry check above only proves
+            // the dispatcher was live when the tick fired; each await is a point where `Stop` can
+            // land, and a stopped instance must neither mutate graph state nor take new work. Left
+            // unchecked, a stopped dispatcher goes on to roll up graphs (emitting GraphSettled to an
+            // observer nobody is listening to any more) and to claim tasks it will never run — which
+            // then sit claimed until their lease expires.
+            if (!this.running) return;
 
             // Settle graphs before picking new work, so a failure earlier in this pass stops its
             // branch immediately rather than after another wave has already launched.
@@ -550,6 +557,9 @@ export class TaskGraphDispatcher implements IShutdownable {
 
             const candidates = await this.findClaimableTasks(provider, capacity);
             for (const task of candidates) {
+                // Re-checked per iteration, not just before the loop: claiming is itself awaited, so
+                // a multi-task wave can straddle a Stop.
+                if (!this.running) break;
                 if (this.inFlight.size >= this.config.MaxConcurrentTasks) break;
                 if (!(await this.claims.TryClaim(provider, task.ID, this.contextUser))) {
                     // Another instance won the race, or the task is no longer Pending. Normal.
