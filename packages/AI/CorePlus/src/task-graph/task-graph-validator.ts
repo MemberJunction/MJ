@@ -12,6 +12,7 @@
  *
  * @module @memberjunction/ai-core-plus
  */
+import { SafeExpressionEvaluator } from '@memberjunction/global';
 import { DetectCycle, type TaskGraphEdge, type TaskGraphNode } from './graph-algorithms';
 import {
     MAX_TASKS_PER_GRAPH,
@@ -24,10 +25,68 @@ import {
     type TaskGraphNodeKind,
 } from './task-graph-spec';
 
+/**
+ * One evaluator for the whole module — it caches compiled expressions, and validation is the one
+ * caller that sees the same conditions repeatedly (every save of the same workflow).
+ */
+const CONDITION_SYNTAX = new SafeExpressionEvaluator();
+
 /** Kinds this build knows how to configure. Derived from the map so the two can never drift. */
 const KNOWN_KINDS: readonly TaskGraphNodeKind[] = [
     'Agent', 'Action', 'Human', 'Prompt', 'ForEach', 'While', 'External',
 ];
+
+/**
+ * Refuses an edge condition that cannot parse, at the door.
+ *
+ * **Syntax only.** An unknown identifier PASSES: the condition envelope is genuinely dynamic
+ * (`payload`, `stepResult`, `flowContext`, `data`, `context`), and refusing on identifiers would
+ * encode a scope contract here that the runtime may widen later. `payload.x.y` and
+ * `payload.title.includes('x')` pass for the same reason — whether they resolve is a question about
+ * a run that has not happened yet. `payload.x >` and `foo(` do not pass, because no run makes those
+ * mean anything.
+ *
+ * **Why refuse at all, now that an unevaluable condition HOLDS rather than opening the gate.**
+ * P2 made the failure safe; this makes it legible. A typo used to execute the step it was guarding;
+ * it now stalls the branch instead — better, but the author still finds out by reading server logs
+ * for a graph that silently stopped. Refusing at authoring time, naming the step and quoting the
+ * condition, turns that into a sentence.
+ *
+ * **This can newly refuse a workflow that saved yesterday.** A step whose condition never parsed has
+ * been failing at runtime all along; the change is only that the failure now arrives at save time,
+ * which is why the message has to carry enough to explain itself to someone who was editing an
+ * unrelated step in an old flow.
+ */
+function checkConditionSyntax(task: TaskGraphSpecNode, errors: TaskGraphValidationError[]): void {
+    const report = (where: string, condition: string): void => {
+        const verdict = CONDITION_SYNTAX.validateSyntax(condition);
+        // Undecidable means this host cannot compile at all (a strict CSP) — not that the condition
+        // is wrong. Refusing then would reject every condition in the browser while the same spec
+        // validated fine on the server.
+        if (verdict.Valid || verdict.Undecidable) return;
+        errors.push({
+            Code: 'InvalidCondition',
+            Message: `Task "${task.tempId}" has ${where} that cannot be parsed: ${verdict.Error}. `
+                + `The condition was: ${condition}`,
+            TempId: task.tempId,
+        });
+    };
+
+    for (const raw of task.dependsOn ?? []) {
+        const dep = NormalizeDependency(raw);
+        if (dep.condition?.trim()) report(`a condition on its dependency "${dep.tempId}"`, dep.condition);
+    }
+
+    // A While step's loop condition is the same grammar evaluated by the same evaluator, and a typo
+    // there fails the task on iteration one — louder than a held edge, but still only after the run
+    // has started and only for whoever reads the error.
+    if (task.kind === 'While') {
+        const loopCondition = (task.configuration as { condition?: unknown } | undefined)?.condition;
+        if (typeof loopCondition === 'string' && loopCondition.trim()) {
+            report('a loop condition', loopCondition);
+        }
+    }
+}
 
 /**
  * Which `configuration` fields each kind requires.
@@ -41,7 +100,10 @@ const REQUIRED_CONFIG_FIELDS: Record<TaskGraphNodeKind, readonly string[]> = {
     Human: [],
     Prompt: ['promptName'],
     ForEach: ['collectionPath', 'itemVariable'],
-    While: ['condition', 'itemVariable'],
+    // A While loop has NO items — it repeats until a condition stops holding — so `itemVariable`
+    // is a ForEach concept and requiring it here rejected every valid While graph with a message
+    // about a setting that does not apply to it.
+    While: ['condition'],
     External: ['domain'],
 };
 
@@ -156,6 +218,7 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec): TaskGraphValidationR
         }
 
         checkConfiguration(task, errors);
+        checkConditionSyntax(task, errors);
 
         for (const raw of task.dependsOn ?? []) {
             // NORMALISE before comparing. The object form `{ tempId: <own> }` used to slip past this

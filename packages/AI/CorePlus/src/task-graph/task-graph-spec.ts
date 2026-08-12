@@ -112,7 +112,7 @@ export type TaskGraphNodeKind = 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEa
 export type TaskGraphNodeConfigMap = {
     Agent: { agentName: string; message?: string; templateParameters?: Record<string, string> };
     Action: { actionName: string; inputMapping?: string; outputMapping?: string };
-    Human: { assignToUserID?: string; instructions?: string };
+    Human: { assignToUserID?: string; instructions?: string; expiresInHours?: number };
     Prompt: { promptName: string; templateParameters?: Record<string, string> };
     ForEach: ForEachOperation;
     While: WhileOperation;
@@ -287,7 +287,15 @@ export type TaskGraphValidationError = {
         /** The `configuration` bag is missing a field its `kind` requires. */
         | 'InvalidConfiguration'
         /** Members of one `exclusiveGroup` do not all leave the same origin. */
-        | 'InvalidExclusiveGroup';
+        | 'InvalidExclusiveGroup'
+        /**
+         * An edge condition cannot be parsed.
+         *
+         * Syntax only — an unknown identifier is not this error. The condition envelope is dynamic,
+         * so whether `payload.x` resolves is a question about a run that has not happened yet;
+         * whether `payload.x >` parses is not.
+         */
+        | 'InvalidCondition';
     Message: string;
     /** The offending node, when the error is attributable to one. */
     TempId?: string;

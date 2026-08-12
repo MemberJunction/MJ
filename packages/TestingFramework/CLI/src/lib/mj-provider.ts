@@ -1,5 +1,6 @@
 import { SetProvider, Metadata } from '@memberjunction/core';
-import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import sql from 'mssql';
 import dotenv from 'dotenv';
 import path from 'path';

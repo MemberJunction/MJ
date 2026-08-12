@@ -73,12 +73,14 @@ describe('RunForEachLoop', () => {
         expect(seen).toHaveLength(2);
     });
 
-    it('treats maxIterations of 0 as UNLIMITED, not as zero', async () => {
-        // Read as a limit, 0 runs the loop zero times — indistinguishable from an empty collection.
-        // ForEachOperation documents it as unlimited, and that is what the dispatcher must honour.
+    it('treats maxIterations of 0 as ZERO iterations, matching the in-run engine', () => {
+        // The operation types' JSDoc claimed 0 meant unlimited, but both engines have always computed
+        // Math.min(collection.length, maxIterations ?? default) — so zero has always meant zero. This
+        // engine replaces that one, and running a loop its author had effectively disabled would be a
+        // silent behaviour change. Parity beats the comment; the comment was corrected instead.
         const { seen, invoke } = recorder();
-        await RunForEachLoop({ collectionPath: 'static:[1,2,3]', maxIterations: 0 }, {}, invoke);
-        expect(seen).toHaveLength(3);
+        return RunForEachLoop({ collectionPath: 'static:[1,2,3]', maxIterations: 0 }, {}, invoke)
+            .then(() => expect(seen).toHaveLength(0));
     });
 
     it('applies a default ceiling when none is set', async () => {
@@ -174,5 +176,42 @@ describe('RunWhileLoop', () => {
         const result = await RunWhileLoop({ condition: 'true', maxIterations: 5 }, () => ({ Success: true, Value: true }), invoke);
         expect(result.Success).toBe(false);
         expect(result.Output.iterations).toBe(1);
+    });
+});
+
+describe('a While loop must be able to reach its exit condition', () => {
+    it('stops as soon as the condition flips, rather than burning every iteration', async () => {
+        // The shape the Content Pipeline demo needs, and the one it could not do: the body CHANGES
+        // something the condition reads. The dispatcher used to evaluate the condition against the
+        // payload as it was when the loop STARTED, so `while payload.brandOK !== true` could never
+        // go false — the loop always exhausted its cap and the branch behind "approved" was
+        // unreachable dead code. The loop ran, reported success, and its outcome was predetermined.
+        const payload: Record<string, unknown> = { brandOK: false };
+
+        const result = await RunWhileLoop(
+            { condition: 'payload.brandOK !== true', maxIterations: 5 } as never,
+            // Stands in for the dispatcher's evaluator reading the LIVE payload.
+            () => ({ Success: true, Value: payload['brandOK'] !== true }),
+            async () => {
+                payload['brandOK'] = true;    // the body's effect, as the next check must see it
+                return { Success: true, Output: { brandOK: true } };
+            },
+        );
+
+        expect(result.Success).toBe(true);
+        expect(result.Output).toMatchObject({ iterations: 1 });
+    });
+
+    it('still honours the cap when the condition never flips', async () => {
+        // The give-up path stays intact: a body that cannot satisfy its condition must not spin.
+        let iterations = 0;
+        const result = await RunWhileLoop(
+            { condition: 'payload.brandOK !== true', maxIterations: 3 } as never,
+            () => ({ Success: true, Value: true }),
+            async () => { iterations++; return { Success: true, Output: {} }; },
+        );
+
+        expect(iterations).toBe(3);
+        expect(result.Output).toMatchObject({ iterations: 3 });
     });
 });

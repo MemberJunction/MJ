@@ -54,6 +54,15 @@
             <i class="fas" [ngClass]="getStatusIcon(record.Status || '')"></i>
             {{ record.Status }}
           </div>
+          <!-- A workflow outlives the run that submitted it, so a Completed run can still have work
+               in flight. Said beside the status rather than instead of it — both are true. -->
+          @if (WorkflowStillRunning) {
+            <div class="workflow-running-badge"
+                 title="This run submitted a workflow that runs on the dispatcher. The run finished when the workflow was submitted; the workflow itself is still going. This view refreshes on its own.">
+              <i class="fas fa-circle-notch fa-spin"></i>
+              Workflow still running
+            </div>
+          }
           <div class="header-actions">
             <button class="btn-icon" (click)="refreshData()" title="Refresh">
               <i class="fas fa-sync-alt"></i>
@@ -161,6 +170,7 @@
               <mj-ai-agent-run-timeline
                 [aiAgentRunId]="record.ID"
                 [dataHelper]="dataHelper"
+                [RunTree]="runTree"
                 (itemSelected)="selectTimelineItem($event)"
                 (navigateToEntity)="navigateToEntityRecord($event)">
               </mj-ai-agent-run-timeline>
@@ -170,6 +180,7 @@
               <as-split-area [size]="45">
                 <mj-ai-agent-run-step-detail
                   [selectedTimelineItem]="selectedTimelineItem"
+                  [Provider]="ProviderToUse"
                   (closePanel)="closeJsonPanel()"
                   (navigateToActionLog)="navigateToActionLog($event)"
                   (copyToClipboard)="copyToClipboard($event)">
@@ -190,7 +201,8 @@
               [agentName]="agent?.Name || null"
               [runStatus]="record.Status || ''"
               [agentIconClass]="agent?.IconClass || null"
-              [agentLogoUrl]="agent?.LogoURL || null">
+              [agentLogoUrl]="agent?.LogoURL || null"
+              [RunTree]="runTree">
             </mj-ai-agent-run-flow>
           }
         </div>
@@ -203,6 +215,7 @@
             <mj-ai-agent-run-analytics
               #analyticsComponent
               [agentRunId]="record.ID"
+              [RunTree]="runTree"
               >
             </mj-ai-agent-run-analytics>
           }

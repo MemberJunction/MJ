@@ -84,12 +84,21 @@ export async function RunForEachLoop(
     if (!Array.isArray(collection)) {
         return failedLoop(
             `The loop's collection '${op.collectionPath}' did not resolve to a list, so there is ` +
-            `nothing to iterate over. Check that the step producing it ran before this one.`,
+            `nothing to iterate over. ` +
+            // The overwhelmingly common cause, and invisible without being told: a bare name is a
+            // LITERAL in the mapping dialect, not a path. `fields` is the string "fields"; the
+            // payload value is `payload.fields`. Both produce this same error, and only one of them
+            // is about a step that has not run yet — so say which to check first.
+            (looksLikeUnprefixedPath(op.collectionPath)
+                ? `'${op.collectionPath}' has no prefix, so it is read as the literal text ` +
+                  `"${op.collectionPath}" rather than a payload value — did you mean ` +
+                  `'payload.${op.collectionPath}'?`
+                : `Check that the step producing it ran before this one.`),
         );
     }
 
     const limit = iterationLimit(op.maxIterations, DEFAULT_FOREACH_MAX_ITERATIONS);
-    const items = limit === null ? collection : collection.slice(0, limit);
+    const items = collection.slice(0, limit);
     if (items.length < collection.length) {
         // Truncation is announced. A silent cap reads downstream as "the collection was that size".
         LogStatus(
@@ -134,7 +143,7 @@ export async function RunWhileLoop(
     let failed = 0;
     let index = 0;
 
-    while (limit === null || index < limit) {
+    while (index < limit) {
         const verdict = evaluateCondition(index);
         if (!verdict.Success) {
             return {
@@ -165,7 +174,7 @@ export async function RunWhileLoop(
         if (op.delayBetweenIterationsMs) await delay(op.delayBetweenIterationsMs);
     }
 
-    if (limit !== null && index >= limit) {
+    if (index >= limit) {
         // Hitting the ceiling is reported, not treated as normal completion: the condition was still
         // true, so the work is unfinished and saying otherwise would hide it.
         LogError(`[TaskLoopExecutor] While loop stopped at its ${limit}-iteration ceiling with its condition still true.`);
@@ -274,11 +283,10 @@ function summarize(results: unknown[], succeeded: number, failed: number, contin
  * means unlimited**, and a positive number is the limit. The zero case is the one worth stating —
  * read as a limit it would run the loop zero times, which looks exactly like an empty collection.
  */
-function iterationLimit(maxIterations: number | undefined, fallback: number): number | null {
-    if (maxIterations === undefined) return fallback;
-    if (maxIterations === 0) return null;
-    return maxIterations;
+function iterationLimit(maxIterations: number | undefined, fallback: number): number {
+    return maxIterations === undefined ? fallback : maxIterations;
 }
+
 
 /** Resolves a collection path through the shared mapping dialect, parsing a JSON literal if given one. */
 function resolveCollection(collectionPath: string, ctx: PayloadMappingContext): unknown {
@@ -289,6 +297,17 @@ function resolveCollection(collectionPath: string, ctx: PayloadMappingContext): 
         try { return JSON.parse(resolved); } catch { return resolved; }
     }
     return resolved;
+}
+
+/**
+ * True for a bare name that was probably meant as a payload path.
+ *
+ * Deliberately narrow: only an unprefixed, dot-free identifier. Anything carrying a recognized
+ * prefix was written deliberately, and a dotted path without one is a different mistake worth its
+ * own message rather than this guess.
+ */
+function looksLikeUnprefixedPath(collectionPath: string): boolean {
+    return /^[A-Za-z_][A-Za-z0-9_]*$/.test(collectionPath);
 }
 
 /** A loop that never got as far as its first iteration, with the reason an author can act on. */

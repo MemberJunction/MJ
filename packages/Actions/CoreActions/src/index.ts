@@ -9,6 +9,11 @@ export * from './custom/communication/teams-webhook.action';
 // CRUD Actions
 export * from './custom/crud/create-record.action';
 export * from './custom/crud/get-record.action';
+// Plural, and genuinely a different action: `Get Record` fetches one row by primary key, `Get
+// Records` runs a filtered view. Missing from this list since it was written, which is why every
+// agent that reached for it failed with "could not find a class for action Get Records" — the class
+// existed and built, but never reached a registration manifest, so nothing could resolve it.
+export * from './custom/crud/get-records.action';
 export * from './custom/crud/update-record.action';
 export * from './custom/crud/delete-record.action';
 export * from './custom/crud/write-entity-fields.action';

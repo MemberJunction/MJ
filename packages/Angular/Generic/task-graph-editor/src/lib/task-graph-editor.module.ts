@@ -6,10 +6,11 @@ import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective } from '@mem
 
 import { TaskGraphEditorComponent } from './task-graph-editor.component';
 import { TaskGraphPropertiesPanelComponent } from './task-graph-properties-panel.component';
+import { TaskGraphRunViewComponent } from './task-graph-run-view.component';
 
 @NgModule({
-  declarations: [TaskGraphEditorComponent, TaskGraphPropertiesPanelComponent],
+  declarations: [TaskGraphEditorComponent, TaskGraphPropertiesPanelComponent, TaskGraphRunViewComponent],
   imports: [CommonModule, FormsModule, FlowEditorModule, MJEmptyStateComponent, MJAlertComponent, MJButtonDirective],
-  exports: [TaskGraphEditorComponent, TaskGraphPropertiesPanelComponent],
+  exports: [TaskGraphEditorComponent, TaskGraphPropertiesPanelComponent, TaskGraphRunViewComponent],
 })
 export class TaskGraphEditorModule {}
