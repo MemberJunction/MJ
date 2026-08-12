@@ -31,6 +31,7 @@ import {
     type EdgeConditionOutcome,
 
     ComputeSkipCascade,
+    ConfirmSkipSeeds,
     LayoutGraphNodes,
     type GraphLayoutEdge,
     ApplyOutputMapping,
@@ -1293,6 +1294,11 @@ export class TaskGraphDispatcher implements IShutdownable {
             const eligible = ComputeEligibleTasks(graph.nodes, graph.edges, graph.handledFailureIDs)
                 .filter((n) =>
                     !graph.holdTaskIDs.has(n.id) &&
+                    // CONFIRMED seeds, not raw ones (P1). Holding a decided loser out of claiming
+                    // closes a real race — the loser could be claimed between eligibility and the
+                    // skip write — and that role is unchanged. What changed is which targets count
+                    // as decided: a task another live route still reaches was never a loser, so it
+                    // must stay claimable and run when its own prerequisites are met.
                     !graph.skipSeedTaskIDs.has(n.id) &&
                     !graph.unreachableTaskIDs.has(n.id));
             for (const node of eligible) {
@@ -1748,6 +1754,20 @@ export class TaskGraphDispatcher implements IShutdownable {
         // waiting on it, and a node reached by an alternate branch is genuinely reachable.
         const unreachableTaskIDs = new Set([...droppedInto].filter((id) => !stillReachable.has(id)));
 
+        // EXCLUSIVE LOSERS GET THE SAME TEST — they did not, and that is P1.
+        //
+        // A loser's target was seeded and written `Skipped` unconditionally, with no "does another
+        // live route reach it?" check. The shape that breaks: `A →(cond)→ Review → Publish` and
+        // `A →(else)→ Publish`. With the condition true, the losing edge `A→Publish` skipped
+        // **Publish** while Review was still running; Review completed, Publish was already
+        // terminal, and `Skipped` satisfies dependents — so the graph settled Complete with the
+        // publish step never executed. No error and no stall.
+        //
+        // Confirmed against `liveEdges`, which by this point has both losers and definitely-false
+        // edges removed, so "a live gating edge still points here" is exactly the surviving-route
+        // question. A genuine loser has none and is still skipped.
+        const confirmedSkipSeeds = new Set(ConfirmSkipSeeds([...resolution.skipSeedTaskIDs], liveEdges));
+
         const nodes: TaskGraphNode[] = children.map((c) => ({ id: c.ID, status: c.Status as TaskGraphNodeStatus }));
 
         return {
@@ -1755,7 +1775,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             edges: liveEdges,
             entityById,
             unreachableTaskIDs,
-            skipSeedTaskIDs: new Set(resolution.skipSeedTaskIDs),
+            skipSeedTaskIDs: confirmedSkipSeeds,
             holdTaskIDs: new Set(resolution.holdTaskIDs),
             handledFailureIDs: await this.computeHandledFailures(provider, parentTaskID, nodes, liveEdges),
         };

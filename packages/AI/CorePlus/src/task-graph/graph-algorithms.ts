@@ -500,8 +500,10 @@ export function ResolveExclusiveGroups(
 
     const keptEdgeIDs: string[] = [];
     const loserEdgeIDs: string[] = [];
-    const skipSeedTaskIDs: string[] = [];
+    const candidateSeeds: string[] = [];
     const holdTaskIDs: string[] = [];
+    /** Targets a kept edge points at, anywhere in this resolution. */
+    const keptTargets = new Set<string>();
 
     for (const group of byGroup.values()) {
         // Every edge in a group leaves the same origin (the validator enforces it), so any member
@@ -515,7 +517,7 @@ export function ResolveExclusiveGroups(
 
         const satisfied = group.filter((e) => e.conditionOutcome === 'satisfied');
         if (satisfied.length === 0) {
-            for (const e of group) { loserEdgeIDs.push(e.id); skipSeedTaskIDs.push(e.taskId); }
+            for (const e of group) { loserEdgeIDs.push(e.id); candidateSeeds.push(e.taskId); }
             continue;
         }
 
@@ -523,10 +525,60 @@ export function ResolveExclusiveGroups(
             (a, b) => (b.priority - a.priority) || (a.sequence - b.sequence),
         )[0];
         for (const e of group) {
-            if (e.id === winner.id) keptEdgeIDs.push(e.id);
-            else { loserEdgeIDs.push(e.id); skipSeedTaskIDs.push(e.taskId); }
+            if (e.id === winner.id) { keptEdgeIDs.push(e.id); keptTargets.add(e.taskId); }
+            else { loserEdgeIDs.push(e.id); candidateSeeds.push(e.taskId); }
         }
     }
 
+    // A LOSING EDGE DOES NOT DECIDE ITS TARGET — it only decides itself.
+    //
+    // Two edges in one group may point at the SAME task: `AIAgentStepPath` has no
+    // Origin+Destination unique constraint, so two conditions routing to one destination is
+    // drawable. One wins and one loses, which made the target simultaneously the winner's target
+    // and a skip seed — and it was skipped 100% of the time, while the legacy walker ran it.
+    //
+    // Checked across the whole resolution rather than within the group: a target a winner reaches
+    // is live no matter which fork that winner belongs to.
+    //
+    // This is the cheap half of the invariant. The other half — a route that survives through
+    // ORDINARY edges, which this function cannot see — is {@link ConfirmSkipSeeds}.
+    const skipSeedTaskIDs = candidateSeeds.filter((id) => !keptTargets.has(id));
+
     return { keptEdgeIDs, loserEdgeIDs, skipSeedTaskIDs, holdTaskIDs };
+}
+
+/**
+ * Which skip seeds are real — the ones nothing still reaches.
+ *
+ * **The invariant.** A task may be marked `Skipped` only when EVERY route into it has been cut.
+ * The dispatcher already enforces that for ordinary dropped edges (its `stillReachable` set), and
+ * {@link ComputeSkipCascade}'s own contract promises it for joins: *"a join that is also reachable
+ * from the winning branch therefore survives — which is the entire point, since a fork that
+ * reconverges must still run its join."* Exclusive losers bypassed both and were written `Skipped`
+ * directly.
+ *
+ * The shape that breaks: `A →(cond)→ Review → Publish` and `A →(else)→ Publish`. With the condition
+ * true, the losing edge `A→Publish` seeded **Publish** as Skipped while Review was still running.
+ * Review then completed, Publish was already terminal, `Skipped` satisfies dependents — and the
+ * graph settled **Complete with the publish step never executed**. No error and no stall, which is
+ * why it needed a test rather than a bug report.
+ *
+ * **Why the cascade cannot do this job.** `ComputeSkipCascade` decides over node STATUS — "every
+ * gating predecessor is Skipped". A genuine XOR loser's origin is `Complete`, not `Skipped`, so the
+ * cascade would refuse every legitimate loser. Seed confirmation is a question about EDGES: is any
+ * gating edge into this task still live? The two rules are complementary, and this is the one the
+ * cascade is missing.
+ *
+ * @param seedTaskIDs candidate skips (exclusive losers) this cycle
+ * @param liveEdges   edges that survived resolution — losers and definitely-false edges removed
+ * @returns the seeds with no live gating route remaining
+ */
+export function ConfirmSkipSeeds(
+    seedTaskIDs: readonly string[],
+    liveEdges: readonly TaskGraphEdge[],
+): string[] {
+    // Only GATING edges keep a task alive, matching ComputeEligibleTasks and ComputeSkipCascade: an
+    // edge that does not gate a task starting cannot argue that it will start.
+    const reached = new Set(liveEdges.filter(isGatingEdge).map((e) => e.taskId));
+    return seedTaskIDs.filter((id) => !reached.has(id));
 }
