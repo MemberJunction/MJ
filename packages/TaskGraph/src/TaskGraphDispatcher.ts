@@ -50,7 +50,7 @@ import { IShutdownable, ShutdownRegistry, UUIDsEqual } from '@memberjunction/glo
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import type { MJTaskEntity_ITaskStepConfiguration, MJTaskEntity_ITaskLoopIteration } from '@memberjunction/core-entities';
 import { TaskClaimStore, TERMINAL_PARENT_STATUSES, TERMINAL_PARENT_STATUS_SQL } from './TaskClaimStore';
-import { BuildConditionContext, DecideGate, ParseConditionOutput } from './condition-gate';
+import { BuildConditionContext, DecideGate, ParseConditionOutput, TERMINAL_FOR_CONDITIONS } from './condition-gate';
 import {
     IsSettlementExpired,
     SelectUnsettledGraphIDs,
@@ -59,6 +59,12 @@ import {
     UNSETTLED_STARTUP_WINDOW_HOURS,
 } from './settlement-rescue';
 import { DispatcherConditionEvaluator } from './DispatcherConditionEvaluator';
+import {
+    DecideClaimGate,
+    OverrideVerdictFor,
+    ParseTaskGraphDebugState,
+    type TaskGraphDebugState,
+} from './debug-state';
 import { RunForEachLoop, RunWhileLoop, type LoopBodyInvoker } from './TaskLoopExecutor';
 import { NotificationEngine } from '@memberjunction/notifications';
 
@@ -107,6 +113,7 @@ import { IsReinvokeCapReached, MAX_REINVOKE_DEPTH, ParseTaskGraphParentMetadata,
 import {
     DEFAULT_DISPATCHER_CONFIG,
     ProviderFactory,
+    type ReconciliationEvent,
     TaskActionRunner,
     TaskAgentRunner,
     TaskPromptRunner,
@@ -115,6 +122,7 @@ import {
     type TaskContinuationParams,
     type TaskGraphFrame,
     type TaskGraphObserver,
+    type TaskRunProgressCallback,
 } from './types';
 
 /**
@@ -259,6 +267,13 @@ function deepMergePayload(
 }
 
 /** A graph's children + edges, in both algorithm shape and mutable-entity shape. */
+/** One gating edge's decided verdict, queued for a change-only `GateDecision` frame. */
+type GateDecisionRecord = {
+    edge: MJTaskDependencyEntity;
+    verdict: 'satisfied' | 'notTaken' | 'held';
+    reason?: string;
+};
+
 type GraphState = {
     nodes: TaskGraphNode[];
     edges: TaskGraphEdge[];
@@ -324,6 +339,38 @@ export class TaskGraphDispatcher implements IShutdownable {
     /** Graph → owning user, from the parent's durable metadata. Ownership never changes, so this never goes stale. */
     private readonly ownerByParentID = new Map<string, string | null>();
 
+    /** Monotonic pass counter for `PassCompleted` frames, so a viewer can order and gap-detect ticks. */
+    private passCounter = 0;
+
+    /**
+     * Debug state per graph, cached for ONE pass. `pollOnce` clears it at entry, so within a pass
+     * the claim filter and the propagation loop read the same state (loading it twice could see a
+     * pause land between them and gate half a pass), and across passes a control verb written by any
+     * instance is picked up within one poll interval.
+     */
+    private readonly debugStateByGraph = new Map<string, TaskGraphDebugState>();
+
+    /**
+     * The pause state last announced per graph, so `GraphPaused`/`GraphResumed` are emitted on the
+     * TRANSITION rather than every pass — the verbs write durable state, not events, and it is this
+     * instance's job to notice the change and say so exactly once.
+     */
+    private readonly announcedPaused = new Map<string, boolean>();
+
+    /**
+     * The verdict last emitted per gating edge, keyed by edge ID. `GateDecision` frames announce
+     * CHANGES: edges are re-resolved every pass, and an unconditional emission would repeat every
+     * few seconds for as long as the graph lives — the frame-topic version of the log flood
+     * `logUnevaluableConditionOnce` exists to prevent.
+     */
+    private readonly emittedGateVerdicts = new Map<string, string>();
+
+    /** Last `NodeProgress` emission per task, for rate limiting chatty runners. */
+    private readonly nodeProgressLastEmit = new Map<string, number>();
+
+    /** Minimum interval between `NodeProgress` frames for one task. */
+    private static readonly NODE_PROGRESS_MIN_INTERVAL_MS = 1_000;
+
     constructor(
         private readonly providerFactory: ProviderFactory,
         private readonly agentRunner: TaskAgentRunner,
@@ -373,6 +420,37 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
+     * A progress sink for one task's runner, rate-limited into `NodeProgress` frames.
+     *
+     * Rate-limited HERE rather than asking every runner to be polite, for the same reason `emit`
+     * swallows observer throws in one place: a chatty runner (an agent streaming token-level
+     * updates) must not be able to flood the topic, and the limit belongs to the announcement, not
+     * the work. A 100% report always passes — the terminal update is the one a viewer must not lose.
+     */
+    private nodeProgressEmitter(
+        graphID: string,
+        ownerUserID: string | null,
+        taskID: string,
+        taskName: string,
+    ): TaskRunProgressCallback {
+        return (message: string, percent?: number) => {
+            const now = Date.now();
+            const last = this.nodeProgressLastEmit.get(taskID) ?? 0;
+            if (percent !== 100 && now - last < TaskGraphDispatcher.NODE_PROGRESS_MIN_INTERVAL_MS) return;
+            this.nodeProgressLastEmit.set(taskID, now);
+            this.emit({
+                Kind: 'NodeProgress',
+                ParentTaskID: graphID,
+                OwnerUserID: ownerUserID,
+                TaskID: taskID,
+                TaskName: taskName,
+                ProgressMessage: message,
+                ProgressPercent: percent,
+            });
+        };
+    }
+
+    /**
      * Who a graph belongs to, memoized for the process's lifetime.
      *
      * Read from the parent's durable metadata rather than a column, because `Task.UserID` means
@@ -401,6 +479,70 @@ export class TaskGraphDispatcher implements IShutdownable {
         }
         this.ownerByParentID.set(parentTaskID, owner);
         return owner;
+    }
+
+    /**
+     * A graph's debug state, cached for the current pass.
+     *
+     * Read fresh (BypassCache) because the state is written by direct `JSON_MODIFY` statements that
+     * fire no cache invalidation — the same reason every row read in this class bypasses the cache.
+     */
+    private async readDebugState(provider: IMetadataProvider, parentTaskID: string): Promise<TaskGraphDebugState> {
+        const cached = this.debugStateByGraph.get(parentTaskID);
+        if (cached !== undefined) return cached;
+
+        let state: TaskGraphDebugState = {};
+        try {
+            const rows = await RunView.FromMetadataProvider(provider).RunView<{ InputPayload: string | null }>(
+                {
+                    EntityName: 'MJ: Tasks',
+                    ExtraFilter: `ID='${parentTaskID}'`,
+                    Fields: ['ID', 'InputPayload'],
+                    ResultType: 'simple',
+                    BypassCache: true,
+                },
+                this.contextUser,
+            );
+            state = ParseTaskGraphDebugState(rows.Success ? rows.Results?.[0]?.InputPayload : null);
+        } catch (e) {
+            // "Not being debugged" is the safe reading of "could not read": gating real work on a
+            // transient read failure would turn a database hiccup into a paused workflow.
+            LogError(`[TaskGraphDispatcher] Could not read debug state for graph ${parentTaskID}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        this.debugStateByGraph.set(parentTaskID, state);
+        return state;
+    }
+
+    /**
+     * Announces a graph's pause-state TRANSITION, once, whichever instance notices first in its own
+     * frame stream.
+     *
+     * Per-instance dedup rather than a CAS: frames are advisory commentary, and a viewer receiving
+     * the transition from two instances is a duplicate line, not a duplicate execution — the price
+     * of a cross-instance guard here would be a write on every pass for a purely cosmetic guarantee.
+     */
+    private async announcePauseTransition(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        debug: TaskGraphDebugState,
+    ): Promise<void> {
+        const paused = debug.paused === true;
+        const previous = this.announcedPaused.get(parentTaskID);
+        if (previous === paused) return;
+        this.announcedPaused.set(parentTaskID, paused);
+        // First sighting of an unpaused graph needs no announcement — "running" is the default a
+        // viewer already assumes; only a transition is information.
+        if (previous === undefined && !paused) return;
+
+        this.emit({
+            Kind: paused ? 'GraphPaused' : 'GraphResumed',
+            ParentTaskID: parentTaskID,
+            OwnerUserID: await this.resolveOwner(provider, parentTaskID),
+            TaskID: debug.pausedAtTaskID ?? undefined,
+            Reason: paused
+                ? (debug.pausedReason === 'breakpoint' ? 'breakpoint' : 'paused by user')
+                : 'resumed',
+        });
     }
 
     /**
@@ -503,6 +645,43 @@ export class TaskGraphDispatcher implements IShutdownable {
         }
     }
 
+    /**
+     * Announces expired claims the sweep just released, so a viewer watching the graph sees "the
+     * step's worker vanished and the engine requeued it" as it happens.
+     *
+     * Best-effort by contract: the release already succeeded and is the durable truth; a frame that
+     * cannot be addressed (row unloadable, no parent) is dropped, never retried.
+     */
+    private async announceReclaims(provider: IMetadataProvider, released: readonly ReconciliationEvent[]): Promise<void> {
+        if (!this.observer || released.length === 0) return;
+        try {
+            const idList = released.map((r) => `'${r.TaskID}'`).join(',');
+            const rows = await RunView.FromMetadataProvider(provider).RunView<{ ID: string; ParentID: string | null; Name: string }>(
+                {
+                    EntityName: 'MJ: Tasks',
+                    ExtraFilter: `ID IN (${idList})`,
+                    Fields: ['ID', 'ParentID', 'Name'],
+                    ResultType: 'simple',
+                    BypassCache: true,
+                },
+                this.contextUser,
+            );
+            for (const row of (rows.Success ? rows.Results : []) ?? []) {
+                const graphID = row.ParentID ?? row.ID;
+                this.emit({
+                    Kind: 'ClaimChanged',
+                    ParentTaskID: graphID,
+                    OwnerUserID: await this.resolveOwner(provider, graphID),
+                    TaskID: row.ID,
+                    TaskName: row.Name,
+                    ClaimEvent: 'reclaimed',
+                });
+            }
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not announce reclaimed task(s) (ignored): ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
     /** The reconciliation body. Wrapped by {@link Reconcile} so `Stop()` can drain it. */
     private async reconcileOnce(): Promise<void> {
         let provider: IMetadataProvider | null = null;
@@ -516,6 +695,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     `${orphaned.length} orphaned task(s) reported.`,
                 );
             }
+            await this.announceReclaims(provider, released);
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Reconciliation failed: ${e instanceof Error ? e.message : String(e)}`);
         }
@@ -534,6 +714,9 @@ export class TaskGraphDispatcher implements IShutdownable {
 
         this.polling = true;
         this.activePasses++;
+        // One pass, one read of each graph's debug state — see `readDebugState`.
+        this.debugStateByGraph.clear();
+        const passNumber = ++this.passCounter;
         try {
             const provider = await this.providerFactory.CreateProvider();
             // `running` is re-read after every await from here on. The entry check above only proves
@@ -555,7 +738,8 @@ export class TaskGraphDispatcher implements IShutdownable {
             // starts after the decision to stop.
             if (!this.running) return;
 
-            const candidates = await this.findClaimableTasks(provider, capacity);
+            const { tasks: candidates, stats } = await this.findClaimableTasks(provider, capacity);
+            const claimedByGraph = new Map<string, number>();
             for (const task of candidates) {
                 // Re-checked per iteration, not just before the loop: claiming is itself awaited, so
                 // a multi-task wave can straddle a Stop.
@@ -565,9 +749,27 @@ export class TaskGraphDispatcher implements IShutdownable {
                     // Another instance won the race, or the task is no longer Pending. Normal.
                     continue;
                 }
+                const graphID = task.ParentID ?? task.ID;
+                claimedByGraph.set(graphID, (claimedByGraph.get(graphID) ?? 0) + 1);
                 this.inFlight.add(task.ID);
                 // Intentionally not awaited — the poll loop must keep dispatching while this runs.
                 void this.executeClaimed(task.ID).finally(() => this.inFlight.delete(task.ID));
+            }
+
+            // The engine's heartbeat, per watched graph: what was ready, what was held, what this
+            // instance took. A stuck run is a strip of these ticking with nothing moving, which is
+            // the honest visual of a stall — and the reason this frame exists.
+            for (const [graphID, s] of stats) {
+                this.emit({
+                    Kind: 'PassCompleted',
+                    ParentTaskID: graphID,
+                    OwnerUserID: await this.resolveOwner(provider, graphID),
+                    PassNumber: passNumber,
+                    EligibleCount: s.eligible,
+                    HeldCount: s.held,
+                    ClaimedCount: claimedByGraph.get(graphID) ?? 0,
+                    InFlightCount: this.inFlight.size,
+                });
             }
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Poll failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -594,20 +796,35 @@ export class TaskGraphDispatcher implements IShutdownable {
                 return;
             }
 
+            // Emitted after the claim is held, not before: a frame saying "started" for work another
+            // instance actually took would be a lie a viewer cannot detect.
+            const graphID = task.ParentID ?? taskID;
+            const ownerUserID = await this.resolveOwner(provider, graphID);
+
             heartbeat = setInterval(() => {
                 void this.claims.Heartbeat(provider, taskID, this.contextUser).then((ok) => {
                     if (!ok) {
                         // Lost ownership — reconciliation reclaimed it, or a human intervened.
                         LogError(`[TaskGraphDispatcher] Lost claim on task ${taskID} while executing; another instance may take it over.`);
+                        // Announced so a viewer sees "this step's worker lost its lease" the moment
+                        // it happens instead of discovering it in a forensic query later — the R2-1
+                        // wedge class, made visible.
+                        this.emit({
+                            Kind: 'ClaimChanged', ParentTaskID: graphID, OwnerUserID: ownerUserID,
+                            TaskID: taskID, TaskName: task.Name,
+                            ClaimEvent: 'heartbeat-lost', ClaimedBy: this.config.InstanceID,
+                        });
                     }
                 });
             }, this.config.HeartbeatIntervalSeconds * 1000);
 
-            // Emitted after the claim is held, not before: a frame saying "started" for work another
-            // instance actually took would be a lie a viewer cannot detect.
-            const graphID = task.ParentID ?? taskID;
-            const ownerUserID = await this.resolveOwner(provider, graphID);
             this.emit({ Kind: 'TaskStarted', ParentTaskID: graphID, OwnerUserID: ownerUserID, TaskID: taskID, TaskName: task.Name, Status: 'In Progress' });
+            this.emit({
+                Kind: 'ClaimChanged', ParentTaskID: graphID, OwnerUserID: ownerUserID,
+                TaskID: taskID, TaskName: task.Name,
+                ClaimEvent: 'claimed', ClaimedBy: this.config.InstanceID,
+                ClaimExpiresAt: new Date(Date.now() + this.config.ClaimTTLSeconds * 1000).toISOString(),
+            });
 
             const dependencyOutputs = await this.loadDependencyOutputs(provider, taskID);
             let inputPayload: unknown = null;
@@ -616,7 +833,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                 catch (e) { LogError(`[TaskGraphDispatcher] Task ${taskID} has malformed InputPayload: ${e}`); }
             }
 
-            const result = await this.runTaskBody(task, provider, inputPayload, dependencyOutputs);
+            const onProgress = this.nodeProgressEmitter(graphID, ownerUserID, taskID, task.Name);
+            const result = await this.runTaskBody(task, provider, inputPayload, dependencyOutputs, onProgress);
 
             // A prompt can end the workflow early and say why. Honour it before recording the
             // outcome, so the remaining tasks are already Skipped by the time the rollup runs and
@@ -689,7 +907,10 @@ export class TaskGraphDispatcher implements IShutdownable {
             await this.settleAnsweredHumanTasks(provider, parentID);
             await this.reopenCancelledHumanTasks(provider, parentID);
 
-            const graph = await this.loadGraphState(provider, parentID);
+            // Edge overrides apply to propagation exactly as they apply to claiming — a branch the
+            // operator answered 'false' must cascade its skips here, not merely stop being claimed.
+            const debug = await this.readDebugState(provider, parentID);
+            const graph = await this.loadGraphState(provider, parentID, debug);
             if (graph.nodes.length === 0) continue;
 
             // SKIPS FIRST — before blocking, before eligibility. A task whose gating predecessors
@@ -763,7 +984,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 LogError(`[TaskGraphDispatcher] Graph ${parentID} is stalled: pending work with no satisfiable path.`);
             }
 
-            const fresh = await this.loadGraphState(provider, parentID);
+            const fresh = await this.loadGraphState(provider, parentID, debug);
             // ComputeParentRollup treats an empty child set as Complete-and-terminal, which is right
             // for a graph that genuinely has no children and catastrophic for one whose reload came
             // back empty transiently — it would mark live work finished and fire its continuation.
@@ -1524,11 +1745,17 @@ export class TaskGraphDispatcher implements IShutdownable {
      * complete" as a query is possible but would be a second, independently-maintained definition of
      * the same rule, free to drift from the one the in-run executor uses.
      */
-    private async findClaimableTasks(provider: IMetadataProvider, limit: number): Promise<MJTaskEntity[]> {
+    private async findClaimableTasks(
+        provider: IMetadataProvider,
+        limit: number,
+    ): Promise<{ tasks: MJTaskEntity[]; stats: Map<string, { eligible: number; held: number }> }> {
         const claimable: MJTaskEntity[] = [];
+        const stats = new Map<string, { eligible: number; held: number }>();
         for (const parentID of await this.findActiveGraphIDs(provider)) {
             if (claimable.length >= limit) break;
-            const graph = await this.loadGraphState(provider, parentID);
+            const debug = await this.readDebugState(provider, parentID);
+            await this.announcePauseTransition(provider, parentID, debug);
+            const graph = await this.loadGraphState(provider, parentID, debug);
             // HOLD is what makes "a broken condition stalls visibly" true rather than merely stated.
             // An undecided exclusive group keeps all its edges, and a kept edge on a Complete origin
             // is a SATISFIED prerequisite — so without this filter every branch of the fork would be
@@ -1556,7 +1783,43 @@ export class TaskGraphDispatcher implements IShutdownable {
                     // must stay claimable and run when its own prerequisites are met.
                     !graph.skipSeedTaskIDs.has(n.id) &&
                     !graph.unreachableTaskIDs.has(n.id));
+            stats.set(parentID, { eligible: eligible.length, held: graph.holdTaskIDs.size });
+
+            // THE DEBUG GATE — pause, single-step, breakpoints — decided by the pure function, with
+            // the CAS writes staying here. Every control is a gate on CLAIMING: a claimed task can
+            // never be interrupted mid-flight anyway, so "paused" means nothing new starts while
+            // in-flight work finishes and its completions land. That is also why the gate sits
+            // BEFORE the runner checks and the human notification below: pausing a graph must not
+            // keep notifying assignees — a notification is starting something.
+            const gate = DecideClaimGate(debug, eligible.map((n) => n.id));
+            if (gate.mode === 'closed') continue;
+            let allowedTaskIDs: Set<string> | null = null;
+            if (gate.mode === 'breakpoint') {
+                const typeID = await this.workflowTaskTypeID(provider);
+                // The pause is a CAS so two instances arriving at the same breakpoint in the same
+                // interval produce one announcement — the loser simply sees a paused graph next pass.
+                if (typeID && await this.claims.TryPauseAtBreakpoint(provider, parentID, gate.taskID, typeID, this.contextUser)) {
+                    const owner = await this.resolveOwner(provider, parentID);
+                    const name = graph.entityById.get(gate.taskID)?.Name;
+                    LogStatus(`[TaskGraphDispatcher] Graph ${parentID} paused at breakpoint on '${name}' (${gate.taskID}).`);
+                    this.emit({ Kind: 'BreakpointHit', ParentTaskID: parentID, OwnerUserID: owner, TaskID: gate.taskID, TaskName: name });
+                    this.emit({ Kind: 'GraphPaused', ParentTaskID: parentID, OwnerUserID: owner, TaskID: gate.taskID, Reason: 'breakpoint' });
+                    this.announcedPaused.set(parentID, true);
+                }
+                continue;
+            }
+            if (gate.mode === 'step') {
+                const typeID = await this.workflowTaskTypeID(provider);
+                // Consuming the allowance is the race: exactly one instance clears the marker and
+                // releases work; the loser waits for the next allowance. A lost consume is normal.
+                if (!typeID || !(await this.claims.TryConsumeStepMarker(provider, parentID, typeID, this.contextUser))) {
+                    continue;
+                }
+                allowedTaskIDs = new Set(gate.taskIDs);
+            }
+
             for (const node of eligible) {
+                if (allowedTaskIDs && !allowedTaskIDs.has(node.id)) continue;
                 const entity = graph.entityById.get(node.id);
                 if (!entity) continue;
 
@@ -1590,7 +1853,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 if (claimable.length >= limit) break;
             }
         }
-        return claimable;
+        return { tasks: claimable, stats };
     }
 
     /**
@@ -1911,7 +2174,11 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /** Loads a graph's children and edges in the shapes both the algorithms and mutation need. */
-    private async loadGraphState(provider: IMetadataProvider, parentTaskID: string): Promise<GraphState> {
+    private async loadGraphState(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        debug?: TaskGraphDebugState,
+    ): Promise<GraphState> {
         const rv = RunView.FromMetadataProvider(provider);
         // BypassCache throughout: task status is written by the claim protocol's direct SQL, which
         // fires no cache invalidation. See findActiveGraphIDs.
@@ -1972,7 +2239,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 originStatus: (entityById.get(d.DependsOnTaskID)?.Status ?? 'Pending') as TaskGraphNodeStatus,
                 priority: d.Priority ?? 0,
                 sequence: d.Sequence ?? 0,
-                conditionOutcome: this.evaluateExclusiveCondition(d, entityById),
+                conditionOutcome: this.evaluateExclusiveCondition(d, entityById, debug),
             })),
             // A flow's failure handling is its outgoing edges, so a Failed origin still decides its
             // group. For a loop-agent graph the set is Complete-only and nothing changes.
@@ -1985,11 +2252,22 @@ export class TaskGraphDispatcher implements IShutdownable {
         // joins the hold set so nothing claims it.
         const heldByCondition = new Set<string>();
 
+        // Decisions collected for `GateDecision` frames — announced after the state is assembled,
+        // change-only, so a viewer learns WHY a branch ran (or is held) the moment it is decided.
+        const gateDecisions: GateDecisionRecord[] = [];
+
         for (const d of ordinary) {
             if (d.Condition?.trim()) {
-                const outcome = this.evaluateEdgeCondition(d, entityById);
-                if (outcome === 'drop') { droppedInto.add(d.TaskID); continue; }
-                if (outcome === 'hold') heldByCondition.add(d.TaskID);
+                const decision = this.evaluateEdgeCondition(d, entityById, debug);
+                if (decision.decided) {
+                    gateDecisions.push({
+                        edge: d,
+                        verdict: decision.outcome === 'keep' ? 'satisfied' : decision.outcome === 'drop' ? 'notTaken' : 'held',
+                        reason: decision.reason,
+                    });
+                }
+                if (decision.outcome === 'drop') { droppedInto.add(d.TaskID); continue; }
+                if (decision.outcome === 'hold') heldByCondition.add(d.TaskID);
             }
             stillReachable.add(d.TaskID);
             liveEdges.push({
@@ -2028,6 +2306,25 @@ export class TaskGraphDispatcher implements IShutdownable {
         // edges removed, so "a live gating edge still points here" is exactly the surviving-route
         // question. A genuine loser has none and is still skipped.
         const confirmedSkipSeeds = new Set(ConfirmSkipSeeds([...resolution.skipSeedTaskIDs], liveEdges));
+
+        // Exclusive edges get verdicts too, once their origin can decide them: a loser is a branch
+        // not taken, a member of an undecided group is held, a surviving edge is satisfied. Same
+        // vocabulary as ordinary edges so a viewer never needs to know which dialect an edge was.
+        const exclusiveHolds = new Set(resolution.holdTaskIDs);
+        for (const d of exclusive) {
+            const originStatus = entityById.get(d.DependsOnTaskID)?.Status ?? 'Pending';
+            if (!TERMINAL_FOR_CONDITIONS.has(originStatus) && !OverrideVerdictFor(debug ?? {}, d.ID)) continue;
+            gateDecisions.push({
+                edge: d,
+                verdict: loserEdgeIDs.has(d.ID)
+                    ? 'notTaken'
+                    : exclusiveHolds.has(d.TaskID) ? 'held' : 'satisfied',
+                reason: exclusiveHolds.has(d.TaskID)
+                    ? 'this fork is undecided — a path in its group cannot be answered yet'
+                    : undefined,
+            });
+        }
+        this.emitGateDecisions(provider, parentTaskID, gateDecisions, entityById);
 
         const nodes: TaskGraphNode[] = children.map((c) => ({ id: c.ID, status: c.Status as TaskGraphNodeStatus }));
 
@@ -2074,9 +2371,22 @@ export class TaskGraphDispatcher implements IShutdownable {
     private evaluateEdgeCondition(
         dep: MJTaskDependencyEntity,
         entityById: Map<string, MJTaskEntity>,
-    ): 'keep' | 'drop' | 'hold' {
+        debug?: TaskGraphDebugState,
+    ): { outcome: 'keep' | 'drop' | 'hold'; reason?: string; decided: boolean } {
+        // An operator's override answers the edge BEFORE the condition is consulted — an override
+        // exists precisely because the condition cannot be answered (or answered wrongly), so
+        // evaluating first would re-produce the hold the override exists to end.
+        const override = OverrideVerdictFor(debug ?? {}, dep.ID);
+        if (override) {
+            return {
+                outcome: override === 'true' ? 'keep' : 'drop',
+                reason: `answered '${override}' by an operator override`,
+                decided: true,
+            };
+        }
+
         const upstream = entityById.get(dep.DependsOnTaskID);
-        if (!upstream) return 'keep';
+        if (!upstream) return { outcome: 'keep', decided: false };
 
         // The DECISION lives in `condition-gate`; what stays here is the loading and the logging.
         //
@@ -2097,7 +2407,15 @@ export class TaskGraphDispatcher implements IShutdownable {
         // Reported here rather than inside the decision, so the pure part stays pure and a held edge
         // is still loud once — see logUnevaluableConditionOnce.
         if (outcome === 'hold') this.logUnevaluableConditionOnce(dep, unevaluableError);
-        return outcome;
+        return {
+            outcome,
+            reason: outcome === 'hold'
+                ? (unevaluableError ?? 'the condition cannot be answered yet')
+                : undefined,
+            // 'keep' from a non-terminal origin is "undecided", not "satisfied" — announcing it as a
+            // verdict would tell a viewer a gate opened that has not actually been asked.
+            decided: TERMINAL_FOR_CONDITIONS.has(upstream.Status),
+        };
     }
 
 
@@ -2112,7 +2430,12 @@ export class TaskGraphDispatcher implements IShutdownable {
     private evaluateExclusiveCondition(
         dep: MJTaskDependencyEntity,
         entityById: Map<string, MJTaskEntity>,
+        debug?: TaskGraphDebugState,
     ): EdgeConditionOutcome {
+        // Same override-first rule as ordinary edges — see evaluateEdgeCondition.
+        const override = OverrideVerdictFor(debug ?? {}, dep.ID);
+        if (override) return override === 'true' ? 'satisfied' : 'unsatisfied';
+
         if (!dep.Condition?.trim()) return 'satisfied';
         const upstream = entityById.get(dep.DependsOnTaskID);
         if (!upstream) return 'unevaluable';
@@ -2123,6 +2446,46 @@ export class TaskGraphDispatcher implements IShutdownable {
         );
         if (!result.Success) return 'unevaluable';
         return result.Value ? 'satisfied' : 'unsatisfied';
+    }
+
+    /**
+     * Announces gate verdicts that CHANGED since this instance last looked.
+     *
+     * Fire-and-forget by design: `loadGraphState` is synchronous graph assembly, and the owner
+     * lookup the frame needs is async — so the emission floats behind rather than making state
+     * loading wait on observability. Frames are commentary, never a step of the work.
+     */
+    private emitGateDecisions(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        decisions: readonly GateDecisionRecord[],
+        entityById: Map<string, MJTaskEntity>,
+    ): void {
+        if (!this.observer || decisions.length === 0) return;
+        const changed = decisions.filter((d) => {
+            const key = `${d.verdict}|${d.reason ?? ''}`;
+            if (this.emittedGateVerdicts.get(d.edge.ID) === key) return false;
+            this.emittedGateVerdicts.set(d.edge.ID, key);
+            return true;
+        });
+        if (changed.length === 0) return;
+
+        void this.resolveOwner(provider, parentTaskID).then((owner) => {
+            for (const d of changed) {
+                this.emit({
+                    Kind: 'GateDecision',
+                    ParentTaskID: parentTaskID,
+                    OwnerUserID: owner,
+                    TaskID: d.edge.TaskID,
+                    TaskName: entityById.get(d.edge.TaskID)?.Name,
+                    EdgeID: d.edge.ID,
+                    DependsOnTaskID: d.edge.DependsOnTaskID,
+                    Verdict: d.verdict,
+                    ConditionText: d.edge.Condition ?? undefined,
+                    Reason: d.reason,
+                });
+            }
+        }).catch(() => { /* owner lookup already logged; a lost frame is acceptable */ });
     }
 
 
@@ -2162,6 +2525,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
         inputPayload: unknown,
         dependencyOutputs: Map<string, unknown>,
+        onProgress?: TaskRunProgressCallback,
     ): Promise<TaskBodyOutcome> {
         const payload = this.mergedPayload(inputPayload, dependencyOutputs);
         const config = task.ConfigurationObject;
@@ -2202,6 +2566,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 TemplateParameters: config?.prompt?.templateParameters,
                 Provider: provider,
                 ContextUser: this.contextUser,
+                OnProgress: onProgress,
             });
 
             // A prompt's response is DEEP-MERGED into the payload rather than replacing it. A prompt
@@ -2233,8 +2598,9 @@ export class TaskGraphDispatcher implements IShutdownable {
                 DependencyOutputs: dependencyOutputs,
                 Provider: provider,
                 ContextUser: this.contextUser,
+                OnProgress: onProgress,
             }), AgentRunID: null }
-            : await this.runAgentNode(task, provider, effectiveInput, dependencyOutputs);
+            : await this.runAgentNode(task, provider, effectiveInput, dependencyOutputs, onProgress);
 
         return {
             ...raw,
@@ -2555,6 +2921,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
         effectiveInput: unknown,
         dependencyOutputs: Map<string, unknown>,
+        onProgress?: TaskRunProgressCallback,
     ): Promise<TaskBodyOutcome> {
         const context = await this.graphContext(provider, task);
         return this.agentRunner.RunAgentForTask({
@@ -2566,6 +2933,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             SubmittingAgentRunID: context.SubmittingAgentRunID,
             Provider: provider,
             ContextUser: this.contextUser,
+            OnProgress: onProgress,
         });
     }
 

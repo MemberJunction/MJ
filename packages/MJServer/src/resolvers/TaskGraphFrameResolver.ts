@@ -52,6 +52,57 @@ export class TaskGraphFrameNotification {
   @Field(() => Number, { nullable: true })
   totalCount?: number;
 
+  // ── GateDecision ──────────────────────────────────────────────────────────
+  @Field(() => ID, { nullable: true })
+  edgeId?: string;
+
+  @Field(() => ID, { nullable: true })
+  dependsOnTaskId?: string;
+
+  /** 'satisfied' | 'notTaken' | 'held' */
+  @Field(() => String, { nullable: true })
+  verdict?: string;
+
+  @Field(() => String, { nullable: true })
+  conditionText?: string;
+
+  @Field(() => String, { nullable: true })
+  reason?: string;
+
+  // ── ClaimChanged ──────────────────────────────────────────────────────────
+  /** 'claimed' | 'heartbeat-lost' | 'reclaimed' */
+  @Field(() => String, { nullable: true })
+  claimEvent?: string;
+
+  @Field(() => String, { nullable: true })
+  claimedBy?: string;
+
+  @Field(() => String, { nullable: true })
+  claimExpiresAt?: string;
+
+  // ── PassCompleted ─────────────────────────────────────────────────────────
+  @Field(() => Number, { nullable: true })
+  passNumber?: number;
+
+  @Field(() => Number, { nullable: true })
+  eligibleCount?: number;
+
+  @Field(() => Number, { nullable: true })
+  heldCount?: number;
+
+  @Field(() => Number, { nullable: true })
+  claimedCount?: number;
+
+  @Field(() => Number, { nullable: true })
+  inFlightCount?: number;
+
+  // ── NodeProgress ──────────────────────────────────────────────────────────
+  @Field(() => String, { nullable: true })
+  progressMessage?: string;
+
+  @Field(() => Number, { nullable: true })
+  progressPercent?: number;
+
   @Field(() => Date)
   date!: Date;
 }
@@ -154,6 +205,21 @@ export class TaskGraphFrameResolver {
       assignedUserId: payload.AssignedUserID,
       completedCount: payload.CompletedCount,
       totalCount: payload.TotalCount,
+      edgeId: payload.EdgeID,
+      dependsOnTaskId: payload.DependsOnTaskID,
+      verdict: payload.Verdict,
+      conditionText: payload.ConditionText,
+      reason: payload.Reason,
+      claimEvent: payload.ClaimEvent,
+      claimedBy: payload.ClaimedBy,
+      claimExpiresAt: payload.ClaimExpiresAt,
+      passNumber: payload.PassNumber,
+      eligibleCount: payload.EligibleCount,
+      heldCount: payload.HeldCount,
+      claimedCount: payload.ClaimedCount,
+      inFlightCount: payload.InFlightCount,
+      progressMessage: payload.ProgressMessage,
+      progressPercent: payload.ProgressPercent,
       date: new Date(),
     };
   }

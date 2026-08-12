@@ -36,6 +36,7 @@ import {
 import { ComputeParentRollup, type TaskGraphNodeStatus, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import { TaskGraphService, TaskGraphSubmitContext } from '../TaskGraphService';
 import { LoadWorkflowDraftOperation } from './WorkflowDraftOperation';
+import { LoadTaskGraphDebugOperations } from './TaskGraphDebugOperations';
 
 /**
  * The columns `GetStatus` reads. `Status` is pinned to the algorithm's own node-status union rather
@@ -131,13 +132,16 @@ export class TaskGraphCancelServerOperation extends TaskGraphCancelOperation {
 @RegisterClass(BaseRemotableOperation, 'TaskGraph.RetryTask')
 export class TaskGraphRetryTaskServerOperation extends TaskGraphRetryTaskOperation {
     protected async InternalExecute(
-        input: TaskGraphRetryInput,
+        // Widened locally until CodeGen re-emits the base from the updated metadata row: the
+        // optional edited input rides the retry so an operator can correct the brief they watched
+        // fail. See the InputTypeDefinition on the `TaskGraph.RetryTask` metadata record.
+        input: TaskGraphRetryInput & { inputPayload?: Record<string, unknown> | string },
         provider: IMetadataProvider,
         user: UserInfo,
     ): Promise<TaskGraphControlOutput> {
         if (!input?.taskID) throw new Error('taskID is required');
 
-        const ok = await new TaskGraphService().Retry(input.taskID, submitContext(provider, user, ''));
+        const ok = await new TaskGraphService().Retry(input.taskID, submitContext(provider, user, ''), input.inputPayload);
         if (!ok) return { success: false, errorMessage: 'Retry failed; the task may not be in a Failed state.' };
 
         const task = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', user);
@@ -205,4 +209,8 @@ export function LoadTaskGraphOperations(): void {
     // Workflow authoring rides the same loader: a host that starts the dispatcher but never
     // registered these would accept a draft request and route it to the contract-only base.
     LoadWorkflowDraftOperation();
+    // The debug/runner control plane (pause, step, breakpoints, interventions) rides it too, for
+    // the same reason — a host with the dispatcher but no debug verbs would accept a console's
+    // pause request and route it to the throwing base.
+    LoadTaskGraphDebugOperations();
 }

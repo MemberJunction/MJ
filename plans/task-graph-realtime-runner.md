@@ -1,6 +1,6 @@
 # Workflow Run Console — realtime runner & debugger for task graphs
 
-**Status:** Proposal — for review
+**Status:** Implemented on this branch (RT-1 through RT-4 v1) — see §4 notes per phase
 **Date:** 2026-08-12
 **Origin:** Study of the task-graph program (PR [#3456](https://github.com/MemberJunction/MJ/pull/3456) plan v8, merged; hardening round 2, PR [#3749](https://github.com/MemberJunction/MJ/pull/3749)) plus the flow-agent realtime pipeline as shipped on `next`
 **Companion mockup:** [`mockups/workflow-ux/run-console-v1.html`](../mockups/workflow-ux/run-console-v1.html) — extends the committed Phase 5 design contract (`mockups/workflow-ux/phase5-overview-v1.html`)

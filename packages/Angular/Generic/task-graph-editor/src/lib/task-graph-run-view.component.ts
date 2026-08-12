@@ -36,7 +36,7 @@ import {
     type GraphNodePosition,
     type TaskGraphSpec,
 } from '@memberjunction/ai-core-plus';
-import { BuildRuntimeStatus } from './task-graph-runtime-source';
+import { BuildRuntimeStatus, NormalizeRuntimeState } from './task-graph-runtime-source';
 import type { TaskGraphRuntimeStatus } from './task-graph-canvas-adapter';
 import type { TaskGraphSelectionChangedEventArgs } from './task-graph-editor-events';
 
@@ -45,6 +45,22 @@ export type TaskGraphRunNodeSelectedEvent = {
     /** The `MJ: Tasks` row id. */
     TaskID: string;
     Task: MJTaskEntity | null;
+};
+
+/**
+ * One live dispatcher frame, as the HOST hands it in.
+ *
+ * Structural on purpose: the widget must not import the transport (`GraphQLDataProvider`'s
+ * `TaskGraphFrameEvent` satisfies this shape as-is), and the host owns the subscription — this
+ * component only renders what it is handed, which is the widgets-layer rule that keeps it embeddable
+ * anywhere. Fields beyond these are ignored, so a newer server cannot break an older widget.
+ */
+export type TaskGraphRunFrame = {
+    kind: string;
+    taskId?: string;
+    status?: string;
+    progressMessage?: string;
+    progressPercent?: number;
 };
 
 /** Statuses at which a graph has stopped moving, so polling can stop with it. */
@@ -111,11 +127,46 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
      */
     @Input() public ShowToolbar: boolean = true;
 
+    /**
+     * The latest live dispatcher frame, handed in by the host.
+     *
+     * The host owns the subscription (`GraphQLDataProvider.TaskGraphFrames` or anything shaped like
+     * it) and binds each arrival here; the widget folds it into the overlay. Frames are advisory —
+     * a task frame patches the node's status in place for sub-second feedback, and the frames that
+     * imply CASCADES (a skip, a block, settlement) trigger a debounced row reload, because the
+     * dispatcher's propagation writes rows this component cannot infer from one frame. Rows remain
+     * the truth; the existing poll (if enabled) remains the safety net.
+     */
+    @Input()
+    public set LiveFrame(frame: TaskGraphRunFrame | null) {
+        if (!frame) return;
+        this.foldFrame(frame);
+    }
+
+    /**
+     * Replay: render the run as it stood at this moment, reconstructed from each step's
+     * `StartedAt`/`CompletedAt`. Null (the default) renders the present. A step that had not
+     * started reads Pending; one mid-flight reads In Progress; one already finished reads its
+     * final status — the same three answers the rows would have given a viewer at that time.
+     */
+    @Input()
+    public set ReplayAt(value: Date | null) {
+        if (value?.getTime() === this.replayAt?.getTime()) return;
+        this.replayAt = value;
+        this.applyReplay();
+    }
+    public get ReplayAt(): Date | null {
+        return this.replayAt;
+    }
+
     @Output() public NodeSelected = new EventEmitter<TaskGraphRunNodeSelectedEvent>();
     /** The legend was toggled from the toolbar, so a host can remember the choice. */
     @Output() public LegendToggled = new EventEmitter<boolean>();
     /** Emitted once, when every step has reached a terminal status. */
     @Output() public Settled = new EventEmitter<void>();
+
+    /** What each running step says it is doing, from `NodeProgress` frames. Keyed by task row id. */
+    public LiveActivity = new Map<string, { Message: string; Percent?: number }>();
 
     public Spec: TaskGraphSpec | null = null;
     public RuntimeStatus: TaskGraphRuntimeStatus | null = null;
@@ -126,7 +177,9 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     /** Rows by id, so a selection event can hand the host the whole task rather than an id. */
     private taskByID = new Map<string, MJTaskEntity>();
     private parentTaskID: string | null = null;
+    private replayAt: Date | null = null;
     private pollTimer: ReturnType<typeof setTimeout> | null = null;
+    private frameReloadTimer: ReturnType<typeof setTimeout> | null = null;
     private destroyed = false;
 
     constructor(private cdr: ChangeDetectorRef) {
@@ -136,6 +189,10 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     public ngOnDestroy(): void {
         this.destroyed = true;
         this.stopPolling();
+        if (this.frameReloadTimer) {
+            clearTimeout(this.frameReloadTimer);
+            this.frameReloadTimer = null;
+        }
     }
 
     /** Steps in a terminal state, for the host's summary line. */
@@ -240,9 +297,35 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
         // case where an id match is exact. Name correlation exists for specs whose tempIds were
         // never real, and would be needlessly lossy here.
         const knownIDs = new Set(taskRows.map((t) => t.ID));
-        this.RuntimeStatus = BuildRuntimeStatus(taskRows, new Map(), knownIDs);
+        this.RuntimeStatus = this.replayAt
+            ? this.statusAt(this.replayAt)
+            : BuildRuntimeStatus(taskRows, new Map(), knownIDs);
 
         this.Positions = this.resolvePositions(projection.AuthoredPositions, taskRows, depRows);
+    }
+
+    /** Re-derives the overlay for the current replay position (or the present) from held rows. */
+    private applyReplay(): void {
+        if (this.taskByID.size === 0) return;
+        const rows = [...this.taskByID.values()];
+        this.RuntimeStatus = this.replayAt
+            ? this.statusAt(this.replayAt)
+            : BuildRuntimeStatus(rows, new Map(), new Set(rows.map((t) => t.ID)));
+        this.cdr.markForCheck();
+    }
+
+    /** The overlay as it stood at `moment`, from each row's own timestamps. */
+    private statusAt(moment: Date): TaskGraphRuntimeStatus {
+        const at = moment.getTime();
+        const status: TaskGraphRuntimeStatus = {};
+        for (const [id, row] of this.taskByID) {
+            const started = row.StartedAt?.getTime?.() ?? (row.StartedAt ? new Date(row.StartedAt).getTime() : null);
+            const completed = row.CompletedAt?.getTime?.() ?? (row.CompletedAt ? new Date(row.CompletedAt).getTime() : null);
+            if (started == null || started > at) status[id] = 'Pending';
+            else if (completed == null || completed > at) status[id] = 'In Progress';
+            else status[id] = NormalizeRuntimeState(row.Status);
+        }
+        return status;
     }
 
     /**
@@ -271,6 +354,57 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
 
     private isSettled(taskRows: MJTaskEntity[]): boolean {
         return taskRows.length > 0 && taskRows.every((t) => SETTLED.has(t.Status));
+    }
+
+    /**
+     * Folds one live frame into the overlay.
+     *
+     * Direct status frames patch in place — a new `RuntimeStatus` object, because the canvas is
+     * OnPush and mutation would render nothing. Frames whose consequences the dispatcher computes
+     * across the whole graph (skips cascade, blocks propagate, settlement rolls up) reload the rows
+     * instead: inferring a cascade client-side would be a second implementation of the engine's
+     * rules, free to drift.
+     */
+    private foldFrame(frame: TaskGraphRunFrame): void {
+        switch (frame.kind) {
+            case 'TaskStarted':
+            case 'TaskCompleted':
+            case 'TaskFailed':
+                if (frame.taskId && frame.status && this.RuntimeStatus) {
+                    const row = this.taskByID.get(frame.taskId);
+                    if (row) row.Status = frame.status as MJTaskEntity['Status'];
+                    this.RuntimeStatus = { ...this.RuntimeStatus, [frame.taskId]: NormalizeRuntimeState(frame.status) };
+                    if (frame.kind !== 'TaskStarted') this.LiveActivity.delete(frame.taskId);
+                    this.cdr.markForCheck();
+                }
+                break;
+            case 'NodeProgress':
+                if (frame.taskId && frame.progressMessage) {
+                    this.LiveActivity.set(frame.taskId, { Message: frame.progressMessage, Percent: frame.progressPercent });
+                    this.cdr.markForCheck();
+                }
+                break;
+            case 'TaskSkipped':
+            case 'TaskBlocked':
+            case 'TaskAwaitingHuman':
+            case 'GraphSettled':
+            case 'GraphResumed':
+                this.scheduleFrameReload();
+                break;
+            default:
+                // GateDecision / ClaimChanged / PassCompleted / GraphPaused / BreakpointHit are
+                // console-chrome concerns the HOST renders; unknown kinds are a newer server.
+                break;
+        }
+    }
+
+    /** One reload per burst of cascade frames, not one per frame. */
+    private scheduleFrameReload(): void {
+        if (this.frameReloadTimer) return;
+        this.frameReloadTimer = setTimeout(() => {
+            this.frameReloadTimer = null;
+            void this.load();
+        }, 250);
     }
 
     private schedulePoll(): void {

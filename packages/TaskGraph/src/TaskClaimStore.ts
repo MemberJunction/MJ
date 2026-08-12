@@ -453,6 +453,151 @@ export class TaskClaimStore {
         return (await this.affectedRows(db, sql, contextUser)) === 1;
     }
 
+    /**
+     * Replaces a graph's debug state — pause/step/breakpoints/edge overrides — in one guarded write.
+     *
+     * `$.debug` is written whole via `JSON_QUERY` rather than field-by-field, because the state is
+     * small and always authored as a unit by one verb (pause, resume, set-breakpoints); the
+     * transitions that genuinely race across instances — consuming a step allowance, pausing at a
+     * breakpoint — get their own CAS statements below. Type-scoped like every other payload write in
+     * this store: `MJ: Tasks` also holds conversation tasks and personal to-dos, and a mis-derived
+     * parent ID must not edit somebody's payload.
+     *
+     * @param debugJson the full `TaskGraphDebugState` as JSON, or `null` to clear debugging entirely
+     */
+    public async TryWriteDebugState(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        debugJson: string | null,
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const payload = db.QuoteIdentifier('InputPayload');
+        const value = debugJson == null ? 'NULL' : `JSON_QUERY('${this.escape(debugJson)}')`;
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${payload} = JSON_MODIFY(${payload}, '$.debug', ${value})
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
+              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
+              AND ISJSON(${payload}) = 1`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
+     * Consumes a paused graph's one-shot step allowance — exactly once, across every instance.
+     *
+     * The predicate `$.debug.step IS NOT NULL` is the whole contract: two dispatchers polling the
+     * same paused graph inside one interval both see the allowance, but only one statement clears it
+     * and sees rowcount 1. The loser claims nothing and waits for the next allowance, so "step" can
+     * never release two waves.
+     */
+    public async TryConsumeStepMarker(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const payload = db.QuoteIdentifier('InputPayload');
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${payload} = JSON_MODIFY(${payload}, '$.debug.step', NULL)
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
+              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
+              AND ISJSON(${payload}) = 1
+              AND JSON_VALUE(${payload}, '$.debug.step') IS NOT NULL`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
+     * Pauses a graph because an eligible task hit a breakpoint — once, whichever instance sees it
+     * first.
+     *
+     * Guarded on "not already paused" so two instances arriving at the same breakpoint in the same
+     * interval produce one `BreakpointHit` announcement, not two. The graph's existing breakpoint
+     * list and edge overrides are untouched — only the pause fields are written.
+     */
+    public async TryPauseAtBreakpoint(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        breakpointTaskID: string,
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const payload = db.QuoteIdentifier('InputPayload');
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${payload} = JSON_MODIFY(JSON_MODIFY(JSON_MODIFY(${payload},
+                    '$.debug.paused', CAST(1 AS BIT)),
+                    '$.debug.pausedReason', 'breakpoint'),
+                    '$.debug.pausedAtTaskID', '${this.escape(breakpointTaskID)}')
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
+              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
+              AND ISJSON(${payload}) = 1
+              AND (JSON_VALUE(${payload}, '$.debug.paused') IS NULL
+                   OR JSON_VALUE(${payload}, '$.debug.paused') = 'false')`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
+     * Declares a Pending branch not-taken — the operator's "skip this step".
+     *
+     * Guarded on `Status='Pending'`: skipping running, terminal, or claimed work would rewrite
+     * history or race an executor, and `Skipped` already means exactly "this branch was not taken,
+     * dependents proceed" — so downstream semantics come for free from the existing machinery.
+     */
+    public async TrySkipPending(
+        provider: IMetadataProvider,
+        taskID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${db.QuoteIdentifier('Status')} = 'Skipped'
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
+              AND ${db.QuoteIdentifier('Status')} = 'Pending'`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
+     * Marks a task Complete with an operator-supplied output — the escape hatch for a wedged or
+     * externally-resolved step.
+     *
+     * The guard is deliberately narrow: `Pending`, `Failed`, `Blocked`, or `In Progress` **with a
+     * lapsed claim**. A live claim means an executor is genuinely working, and force-completing
+     * underneath it would hand dependents an output the still-running body is about to contradict —
+     * that case must go through Cancel or wait for the claim to lapse. Downstream edges evaluate
+     * against the supplied output exactly as they would a runner's.
+     */
+    public async TryForceComplete(
+        provider: IMetadataProvider,
+        taskID: string,
+        outputPayload: string | null,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const nowIso = new Date().toISOString();
+        const output = outputPayload == null ? 'NULL' : `'${this.escape(outputPayload)}'`;
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${db.QuoteIdentifier('Status')} = 'Complete',
+                ${db.QuoteIdentifier('OutputPayload')} = ${output},
+                ${db.QuoteIdentifier('ErrorMessage')} = NULL,
+                ${db.QuoteIdentifier('CompletedAt')} = '${nowIso}',
+                ${db.QuoteIdentifier('PercentComplete')} = 100,
+                ${db.QuoteIdentifier('ClaimedBy')} = NULL,
+                ${db.QuoteIdentifier('ClaimExpiresAt')} = NULL
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
+              AND (${db.QuoteIdentifier('Status')} IN ('Pending','Failed','Blocked')
+                   OR (${db.QuoteIdentifier('Status')} = 'In Progress'
+                       AND (${db.QuoteIdentifier('ClaimExpiresAt')} IS NULL
+                            OR ${db.QuoteIdentifier('ClaimExpiresAt')} < '${nowIso}')))`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
     /** Runs the affected-rows statement, returning 0 on error rather than throwing into the loop. */
     private async affectedRows(db: DatabaseProviderBase, sql: string, contextUser: UserInfo): Promise<number> {
         try {
