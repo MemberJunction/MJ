@@ -32,6 +32,42 @@ const USER = {} as UserInfo;
 const PARENT = 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE';
 const WORKFLOW_TYPE = '11111111-2222-3333-4444-555555555555';
 
+describe('reclamation covers every task a dispatcher can execute (R2-1)', () => {
+    // The predicate here decides whether a crashed task is ever recoverable. It scoped to
+    // `AgentID OR ActionID` — written before `PromptID` existed — so a prompt task whose owner died
+    // was excluded from both statements: never returned to Pending, never retaken (TryClaim needs
+    // `Status='Pending'`), and not even reported by the orphan sweep. The graph wedges In Progress
+    // forever, its run stays Paused forever, and the stall detector calls it healthy because an
+    // In Progress node counts as active. There is no symptom to assert on — only the predicate.
+    let store: TaskClaimStore;
+    beforeEach(() => { store = new TaskClaimStore('instance-1', 300); });
+
+    it('releases an expired claim on a PROMPT task, not just agent and action ones', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.ReleaseExpiredClaims(provider, USER);
+        // Both statements — the SELECT that names what will be reclaimed, and the UPDATE that
+        // reclaims it — must agree, or the log describes a different set than the write touches.
+        for (const sql of statements) {
+            expect(sql).toContain('[PromptID] IS NOT NULL');
+        }
+    });
+
+    it('reports an orphaned PROMPT task rather than leaving it invisible', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.FindOrphanedInProgress(provider, USER);
+        expect(statements[0]).toContain('[PromptID] IS NOT NULL');
+    });
+
+    it('still exempts tasks a person completes — reclaiming those would reset an approval', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.ReleaseExpiredClaims(provider, USER);
+        // The exemption is expressed as "has no executor", so an unassigned human step (legitimate:
+        // "somebody needs to look at this") stays exempt too.
+        expect(statements[0]).toContain('[AgentID] IS NOT NULL');
+        expect(statements[0]).toContain('[ActionID] IS NOT NULL');
+    });
+});
+
 describe('TrySettleParent — the terminal write is column-scoped and guarded', () => {
     let store: TaskClaimStore;
     beforeEach(() => { store = new TaskClaimStore('instance-1', 300); });

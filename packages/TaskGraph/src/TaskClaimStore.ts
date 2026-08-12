@@ -23,6 +23,7 @@
  */
 import { IMetadataProvider, DatabaseProviderBase, LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { TERMINAL_TASK_GRAPH_STATUSES, type TerminalTaskGraphStatus } from '@memberjunction/ai-core-plus';
+import { MachineTaskSQL } from './task-predicates';
 import { ReconciliationEvent } from './types';
 
 /** Fields the claim protocol needs from a candidate task. */
@@ -197,10 +198,15 @@ export class TaskClaimStore {
      * Reclaims tasks whose claims have lapsed, returning them to `Pending` so any instance can pick
      * them up.
      *
-     * **Human tasks are exempt** (review round 2). A task assigned to a person (`UserID` set) never
-     * carries a claim, so `In Progress` with no claim is its *legitimate* parked shape — an approval
-     * waiting on someone. Normalizing it would reset that approval out from under the user. Their
-     * lifecycle is driven by `DueAt` notification and escalation, never by claim expiry.
+     * **Scoped to tasks a dispatcher executes**, via the one shared predicate — see `task-predicates`.
+     * Expressed that way rather than as a list of the runner columns that happened to exist when this
+     * was written: the earlier form named `AgentID` and `ActionID` only, and the day `PromptID`
+     * arrived, a crashed prompt task became unrecoverable and undiagnosable in the same stroke.
+     *
+     * **Tasks a person completes are exempt.** One never carries a claim, so `In Progress` with no
+     * claim is its *legitimate* parked shape — an approval waiting on someone. Normalizing it would
+     * reset that approval out from under the user. Their lifecycle is driven by `DueAt` notification
+     * and escalation, never by claim expiry.
      *
      * Only expired claims are reclaimed; a live claim is left strictly alone, which is what keeps a
      * slow-but-healthy task from being executed twice.
@@ -216,7 +222,7 @@ export class TaskClaimStore {
             `SELECT ${db.QuoteIdentifier('ID')}, ${db.QuoteIdentifier('Name')}, ${db.QuoteIdentifier('ClaimedBy')}
              FROM ${this.taskTable(provider)}
              WHERE ${db.QuoteIdentifier('Status')} = 'In Progress'
-               AND (${db.QuoteIdentifier('AgentID')} IS NOT NULL OR ${db.QuoteIdentifier('ActionID')} IS NOT NULL)
+               AND ${MachineTaskSQL(db.QuoteIdentifier.bind(db))}
                AND ${db.QuoteIdentifier('ClaimedBy')} IS NOT NULL
                AND ${db.QuoteIdentifier('ClaimExpiresAt')} IS NOT NULL
                AND ${db.QuoteIdentifier('ClaimExpiresAt')} < '${now}'`,
@@ -231,7 +237,7 @@ export class TaskClaimStore {
                 ${db.QuoteIdentifier('ClaimedBy')} = NULL,
                 ${db.QuoteIdentifier('ClaimExpiresAt')} = NULL
             WHERE ${db.QuoteIdentifier('Status')} = 'In Progress'
-              AND (${db.QuoteIdentifier('AgentID')} IS NOT NULL OR ${db.QuoteIdentifier('ActionID')} IS NOT NULL)
+              AND ${MachineTaskSQL(db.QuoteIdentifier.bind(db))}
               AND ${db.QuoteIdentifier('ClaimedBy')} IS NOT NULL
               AND ${db.QuoteIdentifier('ClaimExpiresAt')} IS NOT NULL
               AND ${db.QuoteIdentifier('ClaimExpiresAt')} < '${now}'`;
@@ -262,7 +268,7 @@ export class TaskClaimStore {
             `SELECT ${db.QuoteIdentifier('ID')}, ${db.QuoteIdentifier('Name')}
              FROM ${this.taskTable(provider)}
              WHERE ${db.QuoteIdentifier('Status')} = 'In Progress'
-               AND (${db.QuoteIdentifier('AgentID')} IS NOT NULL OR ${db.QuoteIdentifier('ActionID')} IS NOT NULL)
+               AND ${MachineTaskSQL(db.QuoteIdentifier.bind(db))}
                AND ${db.QuoteIdentifier('ClaimedBy')} IS NULL`,
             undefined, undefined, contextUser,
         );
@@ -401,7 +407,7 @@ export class TaskClaimStore {
     public async TryClaimContinuation(
         provider: IMetadataProvider,
         parentTaskID: string,
-        deliveredAs: 'delivered' | 'expired',
+        deliveredAs: 'delivered' | 'expired' | 'cancelled',
         workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
