@@ -112,8 +112,40 @@ export const TASK_GRAPH_SUBMITTER_KEY = 'TaskGraphSubmitter';
  * so the contract is enforced here rather than trusted.
  */
 export function GetTaskGraphSubmitter(): TaskGraphSubmitter | null {
+    if (submissionSuppressedBecause) return null;
     const submitter = MJGlobal.Instance.ClassFactory.CreateInstance<TaskGraphSubmitter>(
         TaskGraphSubmitter, TASK_GRAPH_SUBMITTER_KEY,
     );
     return typeof submitter?.Submit === 'function' ? submitter : null;
+}
+
+/** Set while this host has deliberately turned graph submission off. */
+let submissionSuppressedBecause: string | null = null;
+
+/**
+ * Turns graph submission off for this process, so callers take the no-submitter path.
+ *
+ * **Why a host needs this** (R3-11). The durable submitter registers through the generated
+ * ServerBootstrap manifest unconditionally, while the DISPATCHER can be switched off at boot with
+ * `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`. A host in that configuration therefore accepted graphs it
+ * had no intention of running: the agent found a submitter, submitted, told the user "I'll follow
+ * up when it finishes", and parked its run `Paused`. The graph sat `Pending` and the run sat
+ * `Paused` forever, with no per-submission diagnostics anywhere — recoverable only by somebody
+ * noticing, unsetting the flag and restarting, after which the stale graph executed hours later.
+ *
+ * The flag's authors got the sibling seam right: the entity-action submitter is registered INSIDE
+ * `StartTaskGraphDispatcher`, with a comment saying exactly why — "a submitter without a dispatcher
+ * writes Task rows nobody picks up". This extends the same treatment to the agent seam.
+ *
+ * Routed through the existing `null` return rather than a throw from `Submit`, because that path is
+ * already built to be honest: the agent reports that this host cannot run graphs instead of
+ * promising a follow-up that will never come.
+ */
+export function SuppressTaskGraphSubmission(reason: string): void {
+    submissionSuppressedBecause = reason;
+}
+
+/** Why submission is suppressed here, or null when it is not. For diagnostics. */
+export function TaskGraphSubmissionSuppressedBecause(): string | null {
+    return submissionSuppressedBecause;
 }

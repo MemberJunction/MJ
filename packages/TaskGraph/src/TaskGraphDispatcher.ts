@@ -1651,12 +1651,12 @@ export class TaskGraphDispatcher implements IShutdownable {
             // Nothing will change on a retry. Mark it so the loop stops, and leave the task Pending
             // and visible — a person can still see it in the Tasks UI, which is the fallback the
             // notification was only ever an accelerant for.
-            await this.markHumanTaskNotified(task);
+            await this.markHumanTaskNotified(task, provider);
             return;
         }
 
         if (!task.UserID) {
-            await this.markHumanTaskNotified(task);
+            await this.markHumanTaskNotified(task, provider);
             return;
         }
 
@@ -1673,7 +1673,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             LogError(`[TaskGraphDispatcher] Could not notify ${task.UserID} about task ${task.ID}: ${e instanceof Error ? e.message : String(e)}`);
         }
 
-        await this.markHumanTaskNotified(task);
+        await this.markHumanTaskNotified(task, provider);
 
         // Emitted once, alongside the marker, so a viewer sees the graph stop on a person rather
         // than appearing to stall for no reason.
@@ -1961,11 +1961,16 @@ export class TaskGraphDispatcher implements IShutdownable {
      * notification: the task stays visible in the inbox either way, whereas a notification storm is
      * not self-correcting.
      */
-    private async markHumanTaskNotified(task: MJTaskEntity): Promise<void> {
-        task.ClaimedBy = HUMAN_TASK_NOTIFIED_MARKER;
-        if (!(await task.Save())) {
-            LogError(`[TaskGraphDispatcher] Could not mark task ${task.ID} as notified; it may notify again.`);
+    private async markHumanTaskNotified(task: MJTaskEntity, provider: IMetadataProvider): Promise<void> {
+        // Guarded, not a full-row save against a snapshot (R3-5). This row was loaded at the top of
+        // the pass; a full-row write could revert a status it has reached since, and two instances
+        // could both stamp it after both having seen it absent. The predicate makes it once-only.
+        if (await this.claims.TryMarkHumanNotified(provider, task.ID, HUMAN_TASK_NOTIFIED_MARKER, this.contextUser)) {
+            task.ClaimedBy = HUMAN_TASK_NOTIFIED_MARKER;
+            return;
         }
+        // Rowcount 0 is ordinary: another instance marked it, or the task is no longer Pending.
+        // Either way this instance has nothing left to do about the notification.
     }
 
     /**
@@ -2027,7 +2032,24 @@ export class TaskGraphDispatcher implements IShutdownable {
                 request.ExpiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000);
             }
 
-            if (!(await request.Save())) {
+            if (await request.Save()) {
+                // INSERT-THEN-RESELECT (R3-5). The check above is read-then-write in a system whose
+                // every other cross-instance write is a CAS, and there is no unique index behind it —
+                // so two overlapping instances both read "none open", both insert, and both ping the
+                // assignee. When one is answered, `settleAnsweredHumanTasks` settles from the single
+                // latest terminal request and NOTHING ever touches the other: the withdrawal paths
+                // fire only on skips and cancels, and both human sweeps scope to `Pending` tasks,
+                // which the settled task no longer is. The duplicate becomes a durable, unanswerable,
+                // immortal inbox item — the zombie class R2-10 removed from the skip paths.
+                //
+                // Checking harder is what created the window, so the resolution is to let both
+                // inserts happen and then agree on a winner: the oldest open row. A loser withdraws
+                // its own row and returns `raised` — somebody IS waiting on this task, which is what
+                // the caller needs to know.
+                await this.withdrawDuplicateRequests(provider, task.ID, request.ID);
+                return 'raised';
+            }
+            {
                 LogError(
                     `[TaskGraphDispatcher] Could not raise a request for task ${task.ID}: ` +
                     `${request.LatestResult?.CompleteMessage ?? 'unknown error'}`,
@@ -2134,7 +2156,19 @@ export class TaskGraphDispatcher implements IShutdownable {
                     `[TaskGraphDispatcher] Could not settle human task ${task.ID}: ` +
                     `${task.LatestResult?.CompleteMessage ?? 'unknown error'}`,
                 );
+                continue;
             }
+
+            // WITHDRAW EVERY OTHER OPEN ASK FOR THIS STEP (R3-5).
+            //
+            // The step is terminal now, so both human sweeps — which scope to `Pending` tasks — will
+            // never look at it again, and any request still `Requested` is un-answerable and
+            // immortal: the assignee keeps seeing "a workflow is waiting on you" for a step that is
+            // finished. Duplicates only arose from the raise race fixed above, but this also
+            // retroactively cleans the ones already minted, which the raise-side fix cannot reach.
+            await this.withdrawOpenRequests(
+                provider, [task.ID], 'This step has been settled; the request is no longer open.',
+            );
         }
     }
 
@@ -2993,6 +3027,52 @@ export class TaskGraphDispatcher implements IShutdownable {
             Provider: provider,
             ContextUser: this.contextUser,
         });
+    }
+
+    /**
+     * Leaves exactly one open request standing for a task, withdrawing any others.
+     *
+     * The oldest wins — it is the one whose notification the assignee most likely already saw. Runs
+     * after every raise, so it also retroactively cleans duplicates minted before this existed.
+     *
+     * @param keepIfSole the row this instance just inserted, named only for the log
+     */
+    private async withdrawDuplicateRequests(
+        provider: IMetadataProvider,
+        taskID: string,
+        keepIfSole: string,
+    ): Promise<void> {
+        try {
+            const open = await RunView.FromMetadataProvider(provider).RunView<MJAIAgentRequestEntity>(
+                {
+                    EntityName: 'MJ: AI Agent Requests',
+                    ExtraFilter: `Status='Requested' AND OriginatingTaskID='${taskID}'`,
+                    OrderBy: '__mj_CreatedAt ASC, ID ASC',
+                    ResultType: 'entity_object',
+                    BypassCache: true,
+                },
+                this.contextUser,
+            );
+            const rows = open.Results ?? [];
+            if (rows.length <= 1) return;
+
+            LogStatus(
+                `[TaskGraphDispatcher] Task ${taskID} had ${rows.length} open requests — keeping the ` +
+                `oldest (${rows[0].ID}${rows[0].ID === keepIfSole ? ', this instance\'s' : ''}) and withdrawing the rest.`,
+            );
+            for (const duplicate of rows.slice(1)) {
+                duplicate.Status = 'Canceled';
+                duplicate.Comments = 'A duplicate request for the same step; the earlier one stands.';
+                if (!(await duplicate.Save())) {
+                    LogError(
+                        `[TaskGraphDispatcher] Could not withdraw duplicate request ${duplicate.ID}: ` +
+                        `${duplicate.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                    );
+                }
+            }
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not de-duplicate requests for task ${taskID}: ${e instanceof Error ? e.message : String(e)}`);
+        }
     }
 
     /**

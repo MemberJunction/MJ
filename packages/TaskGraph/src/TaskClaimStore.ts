@@ -462,6 +462,31 @@ export class TaskClaimStore {
     }
 
     /**
+     * Stamps the human-notified marker, once, without touching anything else.
+     *
+     * The marker lives in `ClaimedBy` because a human task has no executor claim, and it exists to
+     * stop the notify path re-raising on every poll. It was written with a full-row `Save()` against
+     * a snapshot — so it could revert a status the row had reached since, and two instances could
+     * both write it after both having seen it absent. Guarded on the marker being unset, it is
+     * naturally once-only and the rowcount says which instance did it.
+     */
+    public async TryMarkHumanNotified(
+        provider: IMetadataProvider,
+        taskID: string,
+        marker: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${db.QuoteIdentifier('ClaimedBy')} = '${this.escape(marker)}'
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
+              AND ${db.QuoteIdentifier('Status')} = 'Pending'
+              AND ${db.QuoteIdentifier('ClaimedBy')} IS NULL`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
      * Cancels one task, refusing if it settled while the caller was looking elsewhere.
      *
      * **The terminal check has to be IN the statement.** `Cancel` loaded every child, tested the

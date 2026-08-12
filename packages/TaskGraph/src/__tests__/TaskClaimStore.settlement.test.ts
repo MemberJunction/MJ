@@ -112,6 +112,24 @@ describe('TrySkipPending — a skip must not overwrite work that started (R3-1)'
     });
 });
 
+describe('TryMarkHumanNotified — once-only, and it cannot revert a status (R3-5)', () => {
+    it('guards on the marker being unset and on the task still being Pending', async () => {
+        const { provider, statements } = recordingProvider();
+        await new TaskClaimStore('i', 300).TryMarkHumanNotified(provider, PARENT, '__human-notified__', USER);
+        expect(statements[0]).toContain(`[Status] = 'Pending'`);
+        expect(statements[0]).toContain('[ClaimedBy] IS NULL');
+    });
+
+    it('writes the marker column alone', async () => {
+        const { provider, statements } = recordingProvider();
+        await new TaskClaimStore('i', 300).TryMarkHumanNotified(provider, PARENT, '__human-notified__', USER);
+        const setClause = statements[0].split('WHERE')[0];
+        expect(setClause).toContain('[ClaimedBy]');
+        expect(setClause).not.toContain('[Status]');
+        expect(setClause).not.toContain('[OutputPayload]');
+    });
+});
+
 describe('TryCancelTask — a cancel must not overwrite an outcome that landed first (R3-9)', () => {
     // `Cancel` tested the terminal set against an in-memory snapshot and wrote with a full-row
     // `Save()` — every updateable column, PK-only predicate. A child whose guarded `CompleteClaimed`
