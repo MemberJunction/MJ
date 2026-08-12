@@ -127,6 +127,72 @@ describe('ServerBootstrap', () => {
             expect(serve).toHaveBeenCalled();
         });
 
+        it("surfaces a found package's missing TRANSITIVE dependency on the warn path, not the lossy 'not found' line", async () => {
+            // A real on-disk host: the package RESOLVES from the config-file anchor but its own
+            // module graph is broken (imports a missing dep) — the ts-node/pnpm next-failure shape.
+            const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+            const { tmpdir } = await import('node:os');
+            const path = (await import('node:path')).default;
+            const hostDir = mkdtempSync(path.join(tmpdir(), 'sb-transitive-'));
+            try {
+                const pkgDir = path.join(hostDir, 'node_modules', '@sbtest', 'broken');
+                mkdirSync(pkgDir, { recursive: true });
+                writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ name: '@sbtest/broken', version: '1.0.0', type: 'module', main: 'index.js' }));
+                writeFileSync(path.join(pkgDir, 'index.js'), "import 'sbtest-definitely-missing-transitive-dep';");
+                const mockSearch = vi.fn().mockReturnValue({
+                    config: { dynamicPackages: { server: [{ PackageName: '@sbtest/broken', Enabled: true }] } },
+                    filepath: path.join(hostDir, 'mj.config.cjs'),
+                    isEmpty: false,
+                });
+                (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
+                const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+                const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+                await expect(createMJServer()).resolves.toBeUndefined();
+
+                // The failure names the missing TRANSITIVE dep — it must reach the operator via
+                // console.warn with the true cause, not be swallowed by the friendly line.
+                expect(warnSpy).toHaveBeenCalledWith(
+                    expect.stringContaining('Error loading Open App server package @sbtest/broken'),
+                    expect.objectContaining({ message: expect.stringContaining('sbtest-definitely-missing-transitive-dep') }),
+                );
+                expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining("not found (run 'npm install'?)"));
+                warnSpy.mockRestore();
+                logSpy.mockRestore();
+            } finally {
+                rmSync(hostDir, { recursive: true, force: true });
+            }
+        });
+
+        it("prints the friendly 'not found' line (and does NOT warn) when the package itself is genuinely missing", async () => {
+            const mockSearch = vi.fn().mockReturnValue({
+                config: {
+                    dynamicPackages: {
+                        server: [{ PackageName: '@nonexistent/genuinely-missing-server', Enabled: true }],
+                    },
+                },
+                filepath: '/test/mj.config.cjs',
+                isEmpty: false,
+            });
+            (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
+            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+            await expect(createMJServer()).resolves.toBeUndefined();
+
+            // The mirror of the transitive-dep test: when the error's quoted subject IS this
+            // package, the benign friendly line fires and the scary warn path stays silent.
+            expect(logSpy).toHaveBeenCalledWith(
+                expect.stringContaining("not found (run 'npm install'?): @nonexistent/genuinely-missing-server"),
+            );
+            expect(warnSpy).not.toHaveBeenCalledWith(
+                expect.stringContaining('Error loading Open App server package @nonexistent/genuinely-missing-server'),
+                expect.anything(),
+            );
+            warnSpy.mockRestore();
+            logSpy.mockRestore();
+        });
+
         it('skips disabled Open App server packages', async () => {
             const mockSearch = vi.fn().mockReturnValue({
                 config: {

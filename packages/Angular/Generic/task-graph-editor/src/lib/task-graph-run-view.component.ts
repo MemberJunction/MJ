@@ -91,7 +91,29 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     /** Height of the canvas. Hosts embed this in very different amounts of space. */
     @Input() public Height: string = '320px';
 
+    /**
+     * Whether the canvas legend shows. **Off by default here**, unlike the editor.
+     *
+     * The legend explains the authoring vocabulary — what a conditional edge means, what a duplicate
+     * default looks like. That is what someone drawing a graph needs. A run view answers a different
+     * question, "what happened", which the legend helps with not at all while covering a corner of
+     * the canvas the graph is usually occupying.
+     */
+    @Input() public ShowLegend: boolean = false;
+
+    /**
+     * Whether the canvas toolbar rides above the graph. **On**, unlike the legend.
+     *
+     * The two were switched off together, and they are not the same kind of thing. The legend
+     * explains authoring vocabulary, which a run does not need. The toolbar is how a person
+     * navigates the picture — zoom, fit, pan versus select — and a graph you cannot pan is a graph
+     * you can only read if it happens to fit.
+     */
+    @Input() public ShowToolbar: boolean = true;
+
     @Output() public NodeSelected = new EventEmitter<TaskGraphRunNodeSelectedEvent>();
+    /** The legend was toggled from the toolbar, so a host can remember the choice. */
+    @Output() public LegendToggled = new EventEmitter<boolean>();
     /** Emitted once, when every step has reached a terminal status. */
     @Output() public Settled = new EventEmitter<void>();
 
@@ -166,7 +188,15 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
                 {
                     EntityName: 'MJ: Tasks',
                     ExtraFilter: `ParentID='${this.parentTaskID}'`,
-                    OrderBy: '__mj_CreatedAt ASC',
+                    // Started work in the order it ran, unstarted last, persist order as the
+                    // tiebreak — the same rule GetAgentRunTree uses, so a graph reads identically
+                    // wherever it is shown.
+                    //
+                    // `__mj_CreatedAt ASC` alone was persist order, which is the COMPILER's walk
+                    // order, not the author's numbering and not what actually happened: a settled
+                    // graph listed its steps in an order unrelated to their execution, and a skipped
+                    // step could sit above work that ran.
+                    OrderBy: 'CASE WHEN StartedAt IS NULL THEN 1 ELSE 0 END, StartedAt, __mj_CreatedAt',
                     ResultType: 'entity_object',
                     BypassCache: true,
                 },

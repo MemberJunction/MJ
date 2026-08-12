@@ -176,7 +176,8 @@ export function FindUnknownDependencyRefs(
  */
 export function ComputeEligibleTasks(
     nodes: readonly TaskGraphNode[],
-    edges: readonly TaskGraphEdge[]
+    edges: readonly TaskGraphEdge[],
+    handledFailureIDs: ReadonlySet<string> = new Set()
 ): TaskGraphNode[] {
     const statusById = new Map(nodes.map((n) => [n.id, n.status]));
     const prerequisites = buildDependsOnAdjacency(edges.filter(isGatingEdge));
@@ -186,9 +187,16 @@ export function ComputeEligibleTasks(
         const deps = prerequisites.get(node.id) ?? [];
         // Skipped satisfies: a join downstream of an exclusive fork is reached by whichever branch
         // ran, and the branches that did not run must not hold it hostage forever.
+        //
+        // A HANDLED failure satisfies too, and without that a recovery path is unreachable: under
+        // `failureSemantics: 'edges'` a Failed origin with a satisfied outgoing edge is not Blocked
+        // and not Skipped, so its target was never blocked, never skipped, and never ELIGIBLE. The
+        // graph sat In Progress forever. Before the failure-semantics work it at least settled
+        // Failed; the recovery machinery turned a wrong answer into no answer, which is worse.
         return deps.every((depId) => {
             const st = statusById.get(depId);
-            return st !== undefined && SATISFIES_DEPENDENT.has(st);
+            if (st === undefined) return false;
+            return SATISFIES_DEPENDENT.has(st) || (st === 'Failed' && handledFailureIDs.has(depId));
         });
     });
 }
@@ -241,12 +249,39 @@ export function ComputeTasksToBlock(
     return [...toBlock];
 }
 
-/** Aggregate outcome of a graph's children, used to set the parent task honestly. */
-export type ParentRollup = {
-    status: TaskGraphNodeStatus;
-    percentComplete: number;
-    isTerminal: boolean;
-};
+/**
+ * The statuses from which a task never moves again.
+ *
+ * This list is the single definition of "settled" for the whole engine — the parent-write guards,
+ * the dispatcher's benign-failure check, and the unsettled sweep all derive from it, so a status
+ * added to the union above cannot become terminal in one place and live in another.
+ *
+ * `Skipped` is here because a branch that was not taken is *finished*, and `Blocked` because a task
+ * whose dependencies became unsatisfiable will never be reconsidered — leaving either out lets a
+ * later pass move a settled graph back out of a terminal state.
+ */
+export const TERMINAL_TASK_GRAPH_STATUSES = ['Complete', 'Failed', 'Cancelled', 'Skipped', 'Blocked'] as const;
+
+export type TerminalTaskGraphStatus = typeof TERMINAL_TASK_GRAPH_STATUSES[number];
+
+/**
+ * Aggregate outcome of a graph's children, used to set the parent task honestly.
+ *
+ * A discriminated union rather than a `status` + `isTerminal` pair, because the two fields are not
+ * independent: the outcome decides whether the caller settles the parent (a guarded, once-only write
+ * that stamps a completion time) or merely advances its progress, and those two writes accept
+ * different statuses. Modelled loosely, the caller has to assert its way from one to the other — and
+ * an assertion is exactly the thing that keeps being right until the day the rollup grows a case.
+ *
+ * **The discriminant is a string, not a boolean, and that is not a style choice.** These packages
+ * compile under `tsconfig.server.json`, which does not enable `strict` — and with `strictNullChecks`
+ * off TypeScript narrows a boolean discriminant in the truthy branch ONLY. `else` would keep the
+ * full status union and the compiler would wave through a terminal status reaching the progress
+ * write. A string discriminant narrows both ways under every setting.
+ */
+export type ParentRollup =
+    | { status: 'In Progress'; percentComplete: number; outcome: 'active' }
+    | { status: TerminalTaskGraphStatus; percentComplete: number; outcome: 'settled' };
 
 /**
  * Rolls child task outcomes up into the parent's status and progress.
@@ -276,7 +311,7 @@ export function ComputeParentRollup(
     handledFailureIDs: ReadonlySet<string> = new Set(),
 ): ParentRollup {
     if (children.length === 0) {
-        return { status: 'Complete', percentComplete: 100, isTerminal: true };
+        return { status: 'Complete', percentComplete: 100, outcome: 'settled' };
     }
 
     let complete = 0, failed = 0, blocked = 0, cancelled = 0, active = 0, settledAside = 0;
@@ -298,18 +333,18 @@ export function ComputeParentRollup(
     const percentComplete = Math.floor(((complete + settledAside) / children.length) * 100);
 
     if (active > 0) {
-        return { status: 'In Progress', percentComplete, isTerminal: false };
+        return { status: 'In Progress', percentComplete, outcome: 'active' };
     }
     if (failed > 0) {
-        return { status: 'Failed', percentComplete, isTerminal: true };
+        return { status: 'Failed', percentComplete, outcome: 'settled' };
     }
     if (blocked > 0) {
-        return { status: 'Blocked', percentComplete, isTerminal: true };
+        return { status: 'Blocked', percentComplete, outcome: 'settled' };
     }
     if (cancelled > 0) {
-        return { status: 'Cancelled', percentComplete, isTerminal: true };
+        return { status: 'Cancelled', percentComplete, outcome: 'settled' };
     }
-    return { status: 'Complete', percentComplete: 100, isTerminal: true };
+    return { status: 'Complete', percentComplete: 100, outcome: 'settled' };
 }
 
 /**
@@ -319,11 +354,22 @@ export function ComputeParentRollup(
  * Distinguishes "finished" from "wedged". A graph with `Pending` tasks and zero eligible tasks and
  * zero in-flight tasks is deadlocked — previously this exited the execution loop quietly and the
  * parent was marked complete.
+ *
+ * **Held tasks do not count as eligible.** A task held because its guard could not be evaluated has
+ * a live gating edge from a `Complete` origin, so eligibility says yes while the dispatcher refuses
+ * to claim it. Counting it made a graph that will wait forever report as healthy, with no
+ * diagnostics — the exact silence the hold mechanism exists to break.
+ *
+ * @param heldTaskIDs tasks the caller is refusing to start this cycle (undecided guards)
  */
-export function IsGraphStalled(nodes: readonly TaskGraphNode[], edges: readonly TaskGraphEdge[]): boolean {
+export function IsGraphStalled(
+    nodes: readonly TaskGraphNode[],
+    edges: readonly TaskGraphEdge[],
+    heldTaskIDs: ReadonlySet<string> = new Set(),
+): boolean {
     const anyActive = nodes.some((n) => n.status === 'In Progress');
     if (anyActive) return false;
-    if (ComputeEligibleTasks(nodes, edges).length > 0) return false;
+    if (ComputeEligibleTasks(nodes, edges).some((n) => !heldTaskIDs.has(n.id))) return false;
     return nodes.some((n) => n.status === 'Pending');
 }
 
@@ -480,6 +526,24 @@ export type ExclusiveGroupResolution = {
  *                       under `failureSemantics: 'edges'`, where a failed step's outgoing paths are
  *                       its recovery paths.
  */
+/**
+ * Which of two competing edges wins: higher priority, then lower sequence, then edge id.
+ *
+ * **The id is a tiebreak, not a preference** — and without it this ordering is not total. Priority
+ * and sequence both default to 0 and `Submit` persists those defaults, so a hand-authored or
+ * LLM-authored spec routinely produces a genuine tie; dependencies load with no `ORDER BY`, so the
+ * winner was decided by row order, which can differ between polls of the same graph. The worst
+ * interleaving is not a wrong branch but NO branch: poll 1 picks `X→B` and skips C; poll 2's row
+ * order flips, picks `Y→C` — already Skipped — and skips B. Both branches Skipped, and the graph
+ * settles Complete having executed neither.
+ *
+ * Also used to ask whether an unevaluable edge could have beaten the winner, so the two questions
+ * cannot disagree about what "beats" means.
+ */
+export function CompareEdgePrecedence(a: EvaluatedEdge, b: EvaluatedEdge): number {
+    return (b.priority - a.priority) || (a.sequence - b.sequence) || a.id.localeCompare(b.id);
+}
+
 export function ResolveExclusiveGroups(
     edges: readonly EvaluatedEdge[],
     terminalDecides: ReadonlySet<TaskGraphNodeStatus> = new Set<TaskGraphNodeStatus>(['Complete']),
@@ -492,33 +556,108 @@ export function ResolveExclusiveGroups(
 
     const keptEdgeIDs: string[] = [];
     const loserEdgeIDs: string[] = [];
-    const skipSeedTaskIDs: string[] = [];
+    const candidateSeeds: string[] = [];
     const holdTaskIDs: string[] = [];
+    /** Targets a kept edge points at, anywhere in this resolution. */
+    const keptTargets = new Set<string>();
+
+    const loseWholeGroup = (group: readonly EvaluatedEdge[]): void => {
+        for (const e of group) { loserEdgeIDs.push(e.id); candidateSeeds.push(e.taskId); }
+    };
 
     for (const group of byGroup.values()) {
         // Every edge in a group leaves the same origin (the validator enforces it), so any member
         // answers "has the origin finished?".
-        if (!terminalDecides.has(group[0].originStatus)) continue;
+        const originStatus = group[0].originStatus;
 
-        if (group.some((e) => e.conditionOutcome === 'unevaluable')) {
+        // A FORK ON A STEP THAT WAS ITSELF SKIPPED TAKES NO BRANCH (R2-8).
+        //
+        // `Skipped` is not in `terminalDecides`, so this group used to fall through as undecided and
+        // every edge stayed live — and `Skipped` satisfies prerequisites, so whichever target had
+        // its OTHER prerequisites healthy simply ran, chosen by graph accident with its guard never
+        // consulted. Ordinary conditional edges out of the same origin ARE decided (`DecideGate`
+        // drops them); the exclusive dialect was the one that bypassed the guard.
+        //
+        // Every branch loses. Join survival already protects a target another live route reaches, so
+        // this removes only the routes that genuinely were not taken — which is what the walker
+        // concluded by never standing at the origin in the first place.
+        if (originStatus === 'Skipped') { loseWholeGroup(group); continue; }
+
+        if (!terminalDecides.has(originStatus)) continue;
+
+        const satisfied = group.filter((e) => e.conditionOutcome === 'satisfied');
+        const unevaluable = group.filter((e) => e.conditionOutcome === 'unevaluable');
+        const winner = satisfied.length > 0 ? [...satisfied].sort(CompareEdgePrecedence)[0] : null;
+
+        // HOLD ONLY IF A BROKEN GUARD COULD HAVE CHANGED THE ANSWER (R2-3 refinement).
+        //
+        // Holding on ANY unevaluable member is too blunt: an edge that could never have won tells us
+        // nothing about the outcome, and stalling a fork whose winner is already known trades a
+        // decided branch for a permanent wait. With nothing satisfied at all, any unevaluable edge
+        // could have been the winner, so there is nothing to dominate it and the hold stands.
+        if (unevaluable.length > 0 &&
+            (!winner || unevaluable.some((u) => CompareEdgePrecedence(u, winner) < 0))) {
             for (const e of group) holdTaskIDs.push(e.taskId);
             continue;
         }
 
-        const satisfied = group.filter((e) => e.conditionOutcome === 'satisfied');
-        if (satisfied.length === 0) {
-            for (const e of group) { loserEdgeIDs.push(e.id); skipSeedTaskIDs.push(e.taskId); }
-            continue;
-        }
+        if (!winner) { loseWholeGroup(group); continue; }
 
-        const winner = [...satisfied].sort(
-            (a, b) => (b.priority - a.priority) || (a.sequence - b.sequence),
-        )[0];
         for (const e of group) {
-            if (e.id === winner.id) keptEdgeIDs.push(e.id);
-            else { loserEdgeIDs.push(e.id); skipSeedTaskIDs.push(e.taskId); }
+            if (e.id === winner.id) { keptEdgeIDs.push(e.id); keptTargets.add(e.taskId); }
+            else { loserEdgeIDs.push(e.id); candidateSeeds.push(e.taskId); }
         }
     }
 
+    // A LOSING EDGE DOES NOT DECIDE ITS TARGET — it only decides itself.
+    //
+    // Two edges in one group may point at the SAME task: `AIAgentStepPath` has no
+    // Origin+Destination unique constraint, so two conditions routing to one destination is
+    // drawable. One wins and one loses, which made the target simultaneously the winner's target
+    // and a skip seed — and it was skipped 100% of the time, while the legacy walker ran it.
+    //
+    // Checked across the whole resolution rather than within the group: a target a winner reaches
+    // is live no matter which fork that winner belongs to.
+    //
+    // This is the cheap half of the invariant. The other half — a route that survives through
+    // ORDINARY edges, which this function cannot see — is {@link ConfirmSkipSeeds}.
+    const skipSeedTaskIDs = candidateSeeds.filter((id) => !keptTargets.has(id));
+
     return { keptEdgeIDs, loserEdgeIDs, skipSeedTaskIDs, holdTaskIDs };
+}
+
+/**
+ * Which skip seeds are real — the ones nothing still reaches.
+ *
+ * **The invariant.** A task may be marked `Skipped` only when EVERY route into it has been cut.
+ * The dispatcher already enforces that for ordinary dropped edges (its `stillReachable` set), and
+ * {@link ComputeSkipCascade}'s own contract promises it for joins: *"a join that is also reachable
+ * from the winning branch therefore survives — which is the entire point, since a fork that
+ * reconverges must still run its join."* Exclusive losers bypassed both and were written `Skipped`
+ * directly.
+ *
+ * The shape that breaks: `A →(cond)→ Review → Publish` and `A →(else)→ Publish`. With the condition
+ * true, the losing edge `A→Publish` seeded **Publish** as Skipped while Review was still running.
+ * Review then completed, Publish was already terminal, `Skipped` satisfies dependents — and the
+ * graph settled **Complete with the publish step never executed**. No error and no stall, which is
+ * why it needed a test rather than a bug report.
+ *
+ * **Why the cascade cannot do this job.** `ComputeSkipCascade` decides over node STATUS — "every
+ * gating predecessor is Skipped". A genuine XOR loser's origin is `Complete`, not `Skipped`, so the
+ * cascade would refuse every legitimate loser. Seed confirmation is a question about EDGES: is any
+ * gating edge into this task still live? The two rules are complementary, and this is the one the
+ * cascade is missing.
+ *
+ * @param seedTaskIDs candidate skips (exclusive losers) this cycle
+ * @param liveEdges   edges that survived resolution — losers and definitely-false edges removed
+ * @returns the seeds with no live gating route remaining
+ */
+export function ConfirmSkipSeeds(
+    seedTaskIDs: readonly string[],
+    liveEdges: readonly TaskGraphEdge[],
+): string[] {
+    // Only GATING edges keep a task alive, matching ComputeEligibleTasks and ComputeSkipCascade: an
+    // edge that does not gate a task starting cannot argue that it will start.
+    const reached = new Set(liveEdges.filter(isGatingEdge).map((e) => e.taskId));
+    return seedTaskIDs.filter((id) => !reached.has(id));
 }

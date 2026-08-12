@@ -100,7 +100,7 @@ export type FlowCompilerOptions = {
 
 /** Why a flow could not be compiled, in workflow vocabulary (D18 — never graph/DAG/node). */
 export type FlowCompileError = {
-    Code: 'NoStartingStep' | 'LoopDetected' | 'UnresolvedReference' | 'UnsupportedStepType';
+    Code: 'NoStartingStep' | 'UnreachableStartingStep' | 'LoopDetected' | 'UnresolvedReference' | 'UnsupportedStepType';
     Message: string;
     /** The offending step, when attributable. */
     StepID?: string;
@@ -157,6 +157,26 @@ export function CompileFlowToTaskGraph(
     const reachable = computeReachable(entry.ID, livePaths);
     const compiledSteps = active.filter((s) => reachable.has(s.ID));
     for (const s of active) if (!reachable.has(s.ID)) excluded.push({ StepID: s.ID, Reason: 'Unreachable' });
+
+    // A step the author explicitly marked as a STARTING step, dropped for being unreachable, is
+    // reported rather than quietly excluded. Everything else pruned here was simply not wired up;
+    // this one was wired up *as an entry point* and the single-entry rule overruled it. Staying
+    // silent is how a workflow ships with half its work missing while looking correct on the canvas
+    // — which is exactly what happened to the Content Pipeline demo: its second research step was
+    // pruned, the join it fed had one input instead of two, and every draft was written from half
+    // the evidence. Nothing anywhere said so.
+    for (const s of startingSteps) {
+        if (reachable.has(s.ID)) continue;
+        errors.push({
+            Code: 'UnreachableStartingStep',
+            Message:
+                `Step "${s.Name}" is marked as a starting step, but this workflow begins at ` +
+                `"${entry.Name}" and nothing leads from there to it, so it would never run. ` +
+                `A workflow has ONE starting step: connect "${s.Name}" into the flow, or make it ` +
+                `the starting step instead.`,
+            StepID: s.ID,
+        });
+    }
 
     const compiledIDs = new Set(compiledSteps.map((s) => s.ID));
     const compiledPaths = livePaths.filter((p) => compiledIDs.has(p.OriginStepID) && compiledIDs.has(p.DestinationStepID));
@@ -342,6 +362,13 @@ function emitNode(
                 // The step's description IS what the person is being asked to do — the same
                 // convention a sub-agent step uses for its message.
                 instructions: step.Description ?? undefined,
+                // Carried so the dispatcher can put a real deadline on the request it raises. A
+                // positive number only: zero or a negative would mean "already overdue", which would
+                // expire the step before anyone could see it.
+                expiresInHours:
+                    typeof config['expiresInHours'] === 'number' && config['expiresInHours'] > 0
+                        ? config['expiresInHours']
+                        : undefined,
             });
         }
         case 'ForEach':

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RunView, IRunViewProvider, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { DateCellDayKey } from '../../shared/date-cell';
 import {
   MJCompanyIntegrationEntityMapEntity,
   MJCompanyIntegrationFieldMapEntity,
@@ -34,8 +35,8 @@ export interface IntegrationRow {
   Name: string;
   IsActive: boolean | null;
   LastRunID: string | null;
-  LastRunStartedAt: string | null;
-  LastRunEndedAt: string | null;
+  LastRunStartedAt: Date | string | null;
+  LastRunEndedAt: Date | string | null;
   Company: string;
   Integration: string;
   DriverClassName: string | null;
@@ -44,8 +45,8 @@ export interface IntegrationRow {
 export interface IntegrationRunRow {
   ID: string;
   CompanyIntegrationID: string;
-  StartedAt: string | null;
-  EndedAt: string | null;
+  StartedAt: Date | string | null;
+  EndedAt: Date | string | null;
   TotalRecords: number;
   Status: 'Failed' | 'In Progress' | 'Pending' | 'Success';
   ErrorLog: string | null;
@@ -162,7 +163,7 @@ export interface ActivityFeedItem {
   IntegrationName: string;
   Status: 'Failed' | 'In Progress' | 'Pending' | 'Success';
   StatusColor: 'amber' | 'green' | 'red';
-  StartedAt: string | null;
+  StartedAt: Date | string | null;
   RelativeTime: string;
   TotalRecords: number;
   RunByUser: string;
@@ -449,7 +450,7 @@ export class IntegrationDataService {
     return `${hours}h ${remainingMinutes}m`;
   }
 
-  ComputeRelativeTime(dateStr: string | null): string {
+  ComputeRelativeTime(dateStr: Date | string | null): string {
     return this.computeRelativeTime(dateStr);
   }
 
@@ -784,7 +785,7 @@ export class IntegrationDataService {
     companyIntegrationID: string,
     entityID: string,
     provider?: IRunViewProvider | null
-  ): Promise<{ StartedAt: string | null; EndedAt: string | null; Status: string; TotalRecords: number } | null> {
+  ): Promise<{ StartedAt: Date | string | null; EndedAt: Date | string | null; Status: string; TotalRecords: number } | null> {
     const rv = this.createRunView(provider);
     // Get runs for this integration, most recent first
     const runsResult = await rv.RunView<IntegrationRunRow>({
@@ -1086,7 +1087,7 @@ export class IntegrationDataService {
       const label = date.toLocaleDateString(undefined, { weekday: 'short' });
 
       const dayRecords = runs
-        .filter(r => r.StartedAt && r.StartedAt.startsWith(dateStr))
+        .filter(r => DateCellDayKey(r.StartedAt) === dateStr)
         .reduce((acc, r) => acc + r.TotalRecords, 0);
 
       result.push({ Date: dateStr, Label: label, Records: dayRecords });
@@ -1108,14 +1109,14 @@ export class IntegrationDataService {
     return 'gray';
   }
 
-  private isStale(startedAt: string | null): boolean {
+  private isStale(startedAt: Date | string | null): boolean {
     if (!startedAt) return true;
     const runDate = new Date(startedAt);
     const hoursAgo = (Date.now() - runDate.getTime()) / (1000 * 60 * 60);
     return hoursAgo > 24;
   }
 
-  private computeRelativeTime(dateStr: string | null): string {
+  private computeRelativeTime(dateStr: Date | string | null): string {
     if (!dateStr) return 'Never run';
     const date = new Date(dateStr);
     const diffMs = Date.now() - date.getTime();

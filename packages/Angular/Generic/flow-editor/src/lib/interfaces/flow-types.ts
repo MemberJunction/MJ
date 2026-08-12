@@ -40,7 +40,14 @@ export interface FlowNodeBadge {
 }
 
 /** Visual status of a node */
-export type FlowNodeStatus = 'default' | 'success' | 'error' | 'warning' | 'running' | 'disabled' | 'pending';
+/**
+ * How a node presents its state.
+ *
+ * `skipped` is deliberately its own value rather than a shade of `disabled`. Disabled means "this
+ * cannot run"; skipped means "the graph chose another route" — nothing is wrong, and a reader who
+ * cannot tell them apart goes looking for a failure that never happened.
+ */
+export type FlowNodeStatus = 'default' | 'success' | 'error' | 'warning' | 'running' | 'disabled' | 'pending' | 'skipped';
 
 /** A node in the flow graph */
 export interface FlowNode {

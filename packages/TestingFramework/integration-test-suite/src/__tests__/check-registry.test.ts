@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { ServerCacheChecks } from '../checks/server-cache.checks';
+import { CacheImmutabilityChecks } from '../checks/cache-immutability.checks';
 import { ClientCacheChecks } from '../checks/client-cache.checks';
 import { RunQueryCacheChecks } from '../checks/runquery-cache.checks';
 import { RlsIsolationChecks, RlsIsolationClientChecks } from '../checks/rls-isolation.checks';
@@ -94,6 +95,7 @@ describe('IntegrationCheckRegistry', () => {
 describe('migrated bundles (coverage-loss guard)', () => {
     const bundles: Array<[string, NamedCheck[], number]> = [
         ['server-cache', ServerCacheChecks, 32],
+        ['cache-immutability', CacheImmutabilityChecks, 15], // F1-F15 freeze-on-write runtime contract (IT77); F13/F14 cover review findings C1/C2, F15 covers M3 (dataset key collision)
         ['client-cache', ClientCacheChecks, 13],
         ['runquery-cache', RunQueryCacheChecks, 12], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20
         // RLS1–RLS10 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters) share one bundle
@@ -135,7 +137,12 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
         ['task-graph-orchestration', TaskGraphOrchestrationChecks, 18], // TG1-TG18 submission, validation and trigger bindings (IT71)
-        ['task-graph-execution', TaskGraphExecutionChecks, 7], // TX1-TX7 the dispatcher actually running graphs (IT74)
+        // TX1-TX17, the dispatcher actually running graphs (IT74). TX8-TX11 landed with Round 1
+        // (#3745), TX12-TX17 with Round 2. TX14 arrived last and in a substituted shape: the plan
+        // named an injected `Save()` failure, which is unreachable from the bundle, so it triggers
+        // the same run-half `defer` verdict through an unreadable run instead. The count moved
+        // deliberately, which is what this guard is for.
+        ['task-graph-execution', TaskGraphExecutionChecks, 17],
         ['entity-actions', EntityActionChecks, 8], // EA1-EA8 the entity-action substrate end to end (IT75)
     ];
 

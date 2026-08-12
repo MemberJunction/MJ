@@ -228,6 +228,18 @@ export class StartRealtimeClientSessionResult {
     ModelName?: string;
 
     /**
+     * `DriverClass` of the vendor that actually runs the session (e.g. `OpenAIRealtime`,
+     * `ElevenLabsRealtime`). Null when unknown.
+     *
+     * Surfaced to the BROWSER because on the default-model path the framework picks the vendor itself:
+     * without this the caller cannot tell which vendor spoke, and so cannot diagnose a voice that did
+     * not land (issue #3530). `ModelName` alone is not enough — one model can resolve to different
+     * vendors depending on which API keys a deployment configures.
+     */
+    @Field(() => String, { nullable: true })
+    DriverClass?: string;
+
+    /**
      * DB-driven progress-narration instruction template (contains a `{{ progressMessage }}`
      * placeholder). Null when the narration prompt is not present in this deployment's metadata —
      * the browser falls back to its built-in narration text.
@@ -1677,6 +1689,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             ExpiresAt: cfg.ExpiresAt,
             SessionConfigJson: JSON.stringify(cfg.SessionConfig),
             ModelName: prep.ModelName,
+            DriverClass: prep.DriverClass,
             NarrationInstructionsTemplate: prep.NarrationInstructionsTemplate,
             NarrationPaceMs: prep.NarrationPaceMs,
             EffectiveConfigJson: prep.EffectiveConfig ? JSON.stringify(prep.EffectiveConfig) : undefined,

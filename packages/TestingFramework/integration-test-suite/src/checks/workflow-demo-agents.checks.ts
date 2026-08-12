@@ -3,9 +3,14 @@
  *
  * **What these protect.** Two Flow agents ship as metadata (`Schema Documentation Sweep`,
  * `Content Pipeline`), and between them they are the only committed exercise of the graph shapes a
- * linear flow cannot express: an AND-join, a bounded `While` whose body revises in one pass, and an
- * exclusive pair where exactly one branch runs. They are also the first shipped agents to use
- * `Prompt` nodes as loop bodies.
+ * linear flow cannot express: a bounded `While` whose body revises in one pass, and an exclusive
+ * pair where exactly one branch runs. They are also the first shipped agents to use `Prompt` nodes
+ * as loop bodies.
+ *
+ * They deliberately do NOT contain an AND-join. A Flow agent compiles with TraversalMode
+ * 'sequential', where a step with two outgoing paths becomes one exclusive group — so a fan-out
+ * cannot mean "both", and an authored one silently ran half the graph. WD2 now asserts the inverse
+ * invariant: the only fan-out is the conditional pair, where choosing is the intent.
  *
  * Metadata is the easiest thing in this repo to break silently. A renamed action, a step whose
  * `Configuration` loses a key, a path whose condition is dropped — none of it fails a build, none of
@@ -20,13 +25,16 @@
  *   - WD3: Schema Documentation Sweep compiles, its Get Records output lands where the ForEach
  *          reads it, and its loop body is a Prompt
  *   - WD4: the run-tree stored query is callable end to end and assembles into a tree
+ *   - WD5: that query reports OWN cost, never the rollup it now feeds — the one place the real
+ *          SQL's cost basis is asserted, and the guard against a silently compounding total
  *
  * Deterministic — **no model calls**. Compilation is pure, and WD4 anchors on a run row the check
  * creates and the bundle Teardown removes.
  */
 import { RunView, type IMetadataProvider, type IRunQueryProvider } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { TaskGraphSpec, TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
-import { BuildAgentRunTree, LoadAgentRunTree } from '@memberjunction/ai-core-plus';
+import { BuildAgentRunTree, LoadAgentRunTree, SumAgentRunTreeCost } from '@memberjunction/ai-core-plus';
 import { MJAIAgentEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import {
     CompileFlowToTaskGraph,
@@ -121,6 +129,17 @@ async function compile(ctx: IntegrationCheckContext, agent: MJAIAgentEntity): Pr
     return result.Spec!;
 }
 
+/**
+ * The task id a dependency points at, in either form it can take.
+ *
+ * A dependency is normally an object carrying the id plus its condition; the bare-string form
+ * survives from older specs. Reading only one of them is how an assertion ends up permanently false
+ * while looking correct.
+ */
+function dependencyId(dep: unknown): string {
+    return typeof dep === 'string' ? dep : String((dep as { tempId?: string })?.tempId ?? '');
+}
+
 /** The node with this name, or a failure that names what WAS found. */
 function nodeNamed(spec: TaskGraphSpec, name: string): TaskGraphSpecNode {
     const match = spec.tasks.find((t) => t.name === name);
@@ -150,10 +169,12 @@ export const WorkflowDemoAgentChecks: NamedCheck[] = [
             );
             Assert(steps.Success, `could not read agent steps: ${steps.ErrorMessage}`);
 
-            const sweepSteps = (steps.Results ?? []).filter((s) => s.AgentID.toLowerCase() === sweep.ID.toLowerCase());
-            const pipelineSteps = (steps.Results ?? []).filter((s) => s.AgentID.toLowerCase() === pipeline.ID.toLowerCase());
+            const sweepSteps = (steps.Results ?? []).filter((s) => UUIDsEqual(s.AgentID, sweep.ID));
+            const pipelineSteps = (steps.Results ?? []).filter((s) => UUIDsEqual(s.AgentID, pipeline.ID));
 
-            AssertEqual(sweepSteps.length, 2, `${SCHEMA_SWEEP} should have 2 steps`);
+            // 3, not 2: the sweep gained its Human approval step when HITL landed. This assertion
+            // was merged stale — the demo changed in the same range and the check did not.
+            AssertEqual(sweepSteps.length, 3, `${SCHEMA_SWEEP} should have 3 steps`);
             AssertEqual(pipelineSteps.length, 6, `${CONTENT_PIPELINE} should have 6 steps`);
 
             console.log(`      → ${SCHEMA_SWEEP}: ${sweepSteps.length} steps · ${CONTENT_PIPELINE}: ${pipelineSteps.length} steps`);
@@ -162,16 +183,51 @@ export const WorkflowDemoAgentChecks: NamedCheck[] = [
 
     {
         Id: 'workflow-demo-agents.WD2',
-        Name: 'WD2: Content Pipeline compiles with a real AND-join, bounded loop, and exclusive pair',
+        Name: 'WD2: Content Pipeline compiles with no accidental fan-out, a bounded loop, and an exclusive pair',
         Fn: async (ctx: IntegrationCheckContext) => {
             const spec = await compile(ctx, await loadFlowAgent(ctx, CONTENT_PIPELINE));
 
-            // The AND-join. Asserted on the compiled EDGES rather than on the two research steps
-            // existing, because two steps pointing at a third is the only thing that actually makes
-            // the draft wait for both — and it is exactly what a careless edit drops.
+            // ── No UNCONDITIONAL fan-out anywhere ────────────────────────────────────────────
+            // This replaces an AND-join assertion, and the reason is the point of the check.
+            // A Flow agent compiles with TraversalMode 'sequential', where a step with two outgoing
+            // paths becomes ONE exclusive group: exactly one branch runs and the loser is Skipped.
+            // So an AND-join is not expressible here at all — wiring one produced a graph that
+            // LOOKED parallel and silently ran half of it, which is how this demo drafted from one
+            // research result for its entire life.
+            //
+            // The invariant that actually protects the workflow is therefore the opposite one: the
+            // only fan-out may be the CONDITIONAL pair at the review step, where choosing one branch
+            // is the intent. An unconditional fan-out is always an accident.
+            const byOrigin = new Map<string, { conditional: number; total: number }>();
+            for (const task of spec.tasks) {
+                for (const dep of task.dependsOn ?? []) {
+                    const originID = dependencyId(dep);
+                    const condition = typeof dep === 'string' ? undefined : (dep as { condition?: string }).condition;
+                    const seen = byOrigin.get(originID) ?? { conditional: 0, total: 0 };
+                    seen.total += 1;
+                    if (condition && condition.trim()) seen.conditional += 1;
+                    byOrigin.set(originID, seen);
+                }
+            }
+            for (const [originID, counts] of byOrigin) {
+                if (counts.total < 2) continue;
+                const originName = spec.tasks.find((t) => t.tempId === originID)?.name ?? originID;
+                AssertEqual(
+                    counts.conditional, counts.total,
+                    `'${originName}' fans out to ${counts.total} steps with only ${counts.conditional} ` +
+                    `condition(s). Sequential traversal turns a fan-out into an exclusive choice, so ` +
+                    `the unconditional branches here will be Skipped without comment.`,
+                );
+            }
+
+            // The research chain still reaches the draft — the fan-out is gone, the coverage is not.
             const draft = nodeNamed(spec, 'Draft the piece');
-            const intoDraft = spec.tasks.filter((t) => (t.dependsOn ?? []).includes(draft.tempId));
-            AssertEqual(intoDraft.length, 2, 'the draft step must join BOTH research steps, not one');
+            const draftDeps = (draft.dependsOn ?? []).map(dependencyId);
+            AssertEqual(draftDeps.length, 1, 'the draft step must follow the research chain');
+            AssertEqual(
+                spec.tasks.find((t) => t.tempId === draftDeps[0])?.name, 'Research: focused',
+                'the draft must come after BOTH research steps, i.e. after the second one in the chain',
+            );
 
             // The bounded loop. An unbounded revision loop on a model that will not converge is the
             // failure mode this cap exists to prevent, so the cap itself is the assertion.
@@ -186,7 +242,7 @@ export const WorkflowDemoAgentChecks: NamedCheck[] = [
             const approved = nodeNamed(spec, 'Close out: approved');
             const gaveUp = nodeNamed(spec, 'Close out: gave up');
             for (const [node, label] of [[approved, 'approved'], [gaveUp, 'gave up']] as const) {
-                const edges = (node.dependsOn ?? []);
+                const edges = (node.dependsOn ?? []).map(dependencyId);
                 Assert(edges.includes(review.tempId), `the '${label}' branch must follow the review step`);
             }
             Assert(
@@ -194,7 +250,7 @@ export const WorkflowDemoAgentChecks: NamedCheck[] = [
                 'the two closing steps collapsed into one — the exclusive pair is gone',
             );
 
-            console.log('      → AND-join (2 in), While bounded at 3, exclusive pair intact');
+            console.log('      → no unconditional fan-out, While bounded at 3, exclusive pair intact');
         },
     },
 
@@ -255,7 +311,7 @@ export const WorkflowDemoAgentChecks: NamedCheck[] = [
             Assert(!tree.ErrorMessage, `the run-tree query failed: ${tree.ErrorMessage}`);
             AssertEqual(tree.Rows.length, 1, 'a run with no steps must return exactly its own node');
             AssertEqual(tree.Root?.NodeType, 'Run', 'the root of a run tree must be the run');
-            AssertEqual(tree.Root?.NodeID.toLowerCase(), run.ID.toLowerCase(), 'the root must be the run asked for');
+            Assert(UUIDsEqual(tree.Root?.NodeID ?? '', run.ID), 'the root must be the run asked for');
             AssertEqual(tree.Truncated, false, 'a one-node tree cannot be truncated');
 
             // The assembler is pure and must agree with what the loader returned — if these ever
@@ -272,6 +328,76 @@ export const WorkflowDemoAgentChecks: NamedCheck[] = [
             AssertEqual(missing.Root, null, 'an unknown run must produce a null root');
 
             console.log('      → run tree loads, assembles, and returns empty for an unknown run');
+        },
+    },
+
+    {
+        Id: 'workflow-demo-agents.WD5',
+        Name: 'WD5: the run tree reports OWN cost, never the rollup it feeds',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // 🔒 THE RULING, ENCODED. Since v6.1 the settlement-time cost rollup on AIAgentRun is
+            // WRITTEN from this query (TaskGraphDispatcher.rollUpCostToSubmittingRun sums the tree).
+            // That is only safe because the query selects TotalCost — own spend — and never
+            // TotalCostRollup. If anyone "improves" it to read the rollup, the column becomes an
+            // input to its own computation: every settlement folds the previous total back in and
+            // the number inflates, compounding, with no error and no visible symptom until someone
+            // questions a bill.
+            //
+            // The unit tests cannot catch that — they assemble trees from fixtures and never touch
+            // the SQL. This check is the only place the real query's cost basis is asserted, which
+            // is why it plants an ABSURD rollup: if the query ever reads it, the failure is
+            // unmistakable rather than a plausible-looking number.
+            const agents = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJAIAgentEntity>(
+                { EntityName: 'MJ: AI Agents', MaxRows: 1, ResultType: 'entity_object' }, ctx.User,
+            );
+            Assert(agents.Success && (agents.Results ?? []).length > 0, 'no agents exist to anchor a run on');
+
+            const OWN_COST = 0.25;
+            const OWN_TOKENS = 1000;
+            const OWN_PROMPT_TOKENS = 700;
+            const OWN_COMPLETION_TOKENS = 300;
+            const ABSURD = 999.0;
+
+            const run = await ctx.Provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', ctx.User);
+            run.NewRecord();
+            run.AgentID = agents.Results![0].ID;
+            run.Status = 'Completed';
+            run.StartedAt = new Date();
+            run.CompletedAt = new Date();
+            run.RunName = 'mj-integration-test-cost-basis (safe to delete)';
+            run.TotalCost = OWN_COST;
+            run.TotalTokensUsed = OWN_TOKENS;
+            run.TotalPromptTokensUsed = OWN_PROMPT_TOKENS;
+            run.TotalCompletionTokensUsed = OWN_COMPLETION_TOKENS;
+            // Deliberately inconsistent with own-cost. A correct tree can never surface these.
+            run.TotalCostRollup = ABSURD;
+            run.TotalTokensUsedRollup = ABSURD;
+            Assert(await run.Save(), `could not save the cost-basis run: ${run.LatestResult?.CompleteMessage}`);
+            CREATED_RUN_IDS.push(run.ID);
+
+            const tree = await LoadAgentRunTree(run.ID, asRunQueryProvider(ctx.Provider), ctx.User);
+            Assert(!tree.ErrorMessage, `the run-tree query failed: ${tree.ErrorMessage}`);
+            Assert(!!tree.Root, 'the cost-basis run produced no tree');
+
+            AssertEqual(
+                tree.Root!.Cost, OWN_COST,
+                `the tree reported ${tree.Root!.Cost} for a run whose OWN cost is ${OWN_COST}. If this ` +
+                `is ${ABSURD}, the query is reading TotalCostRollup — which the dispatcher writes FROM ` +
+                `this query, so the total now compounds on every settlement.`,
+            );
+            AssertEqual(tree.Root!.Tokens, OWN_TOKENS, 'the tree must report own tokens, not the rollup');
+
+            // The widened projection: all four columns the rollup writes come from one basis.
+            AssertEqual(tree.Root!.PromptTokens, OWN_PROMPT_TOKENS, 'the tree lost the prompt-token split');
+            AssertEqual(tree.Root!.CompletionTokens, OWN_COMPLETION_TOKENS, 'the tree lost the completion-token split');
+
+            // And the sum a settlement would cache back is exactly the tree — the equality that IS
+            // the ruling ("the tree is the authority; the Rollup columns are its cache").
+            const totals = SumAgentRunTreeCost(tree.Root!);
+            AssertEqual(totals.Cost, OWN_COST, 'the settlement total disagreed with the tree it sums');
+            AssertEqual(totals.PromptTokens, OWN_PROMPT_TOKENS, 'the settlement prompt-token total disagreed with the tree');
+
+            console.log('      → tree reports own cost (not the rollup it feeds), with all four columns');
         },
     },
 ];

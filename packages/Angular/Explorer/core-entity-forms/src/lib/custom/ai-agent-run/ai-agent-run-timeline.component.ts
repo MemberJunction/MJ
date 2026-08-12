@@ -19,10 +19,26 @@ export interface TimelineItem {
    * and colour-coded so their provenance is visible without opening anything.
    */
   type: 'step' | 'subrun' | 'action' | 'prompt' | 'taskgraph' | 'task';
+  /**
+   * Where this row's work ran, when that is not obvious from its type.
+   *
+   * `'workflow'` means it ran on the task-graph dispatcher and outlives the agent run that
+   * submitted it. Kept separate from `type` on purpose: a workflow step that runs an action IS an
+   * action and should render as one — provenance styles it, it does not redefine it.
+   */
+  provenance?: 'workflow';
   title: string;
   subtitle: string;
   status: string;
-  startTime: Date;
+  /**
+   * When this row started, or NULL when it has not.
+   *
+   * Nullable on purpose. A projection that needed "sorts last" once filled this with the maximum
+   * Date, and every unstarted row then displayed that sentinel as a real clock time — identical on
+   * every row and indistinguishable from data. Ordering belongs to whatever produced the rows; a row
+   * that has not run has no start time, and says so by having none.
+   */
+  startTime: Date | null;
   endTime?: Date;
   duration?: string;
   icon: string;
