@@ -622,6 +622,13 @@ export class TaskGraphDispatcher implements IShutdownable {
         this.activePasses++;
         try {
             const provider = await this.providerFactory.CreateProvider();
+            // `running` is re-read after every await from here on. The entry check above only proves
+            // the dispatcher was live when the tick fired; each await is a point where `Stop` can
+            // land, and a stopped instance must neither mutate graph state nor take new work. Left
+            // unchecked, a stopped dispatcher goes on to roll up graphs (emitting GraphSettled to an
+            // observer nobody is listening to any more) and to claim tasks it will never run — which
+            // then sit claimed until their lease expires.
+            if (!this.running) return;
 
             // SETTLEMENT IS NOT GATED ON CAPACITY (R2-11).
             //
@@ -647,12 +654,12 @@ export class TaskGraphDispatcher implements IShutdownable {
 
             const candidates = await this.findClaimableTasks(provider, capacity);
             for (const task of candidates) {
-                // Re-checked EVERY iteration, not once before the loop (R2-13). `findClaimableTasks`
-                // loads and resolves every active graph and can run for seconds; a `Stop()` landing
-                // during it would otherwise still claim and launch every candidate it had already
-                // found — a shutting-down process taking ownership of work it is about to abandon,
+                // Re-checked EVERY iteration, not once before the loop (R2-13). Claiming is itself
+                // awaited, so a multi-task wave can straddle a `Stop`; and `findClaimableTasks` loads
+                // and resolves every active graph, so the scan before this loop can run for seconds.
+                // Unchecked, a shutting-down process takes ownership of work it is about to abandon,
                 // manufacturing the orphaned claims reconciliation exists to clean up.
-                if (!this.running) return;
+                if (!this.running) break;
                 if (this.inFlight.size >= this.config.MaxConcurrentTasks) break;
                 if (!(await this.claims.TryClaim(provider, task.ID, this.contextUser))) {
                     // Another instance won the race, or the task is no longer Pending. Normal.

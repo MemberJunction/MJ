@@ -1446,9 +1446,21 @@ END $$;
     // ─── METADATA MANAGEMENT: STORED PROCEDURE CALLS ─────────────────
 
     /** @inheritdoc */
-    callRoutineSQL(schema: string, routineName: string, params: string[], _paramNames?: string[]): string {
+    callRoutineSQL(schema: string, routineName: string, params: string[], _paramNames?: string[], discardResult?: boolean): string {
         const qualifiedName = pgDialect.QuoteSchema(schema, routineName);
         const paramList = params.join(', ');
+        if (discardResult) {
+            // `SELECT * FROM routine(...)` is not universally valid on PostgreSQL: a function
+            // declared `RETURNS SETOF record` — which spDeleteEntityWithCoreDependencies is — is
+            // rejected with "a column definition list is required for functions returning record",
+            // and a work-performing routine has no column list to supply. PERFORM runs the function
+            // and discards whatever it returns, which is exactly what these callers want.
+            //
+            // Left broken, this fails in a way that points somewhere else entirely: the
+            // entity-pruning pass throws per entity, CodeGen logs "Error removing metadata for
+            // entity undefined" and continues, and the run reports success having pruned nothing.
+            return `DO $$ BEGIN PERFORM ${qualifiedName}(${paramList}); END $$`;
+        }
         return `SELECT * FROM ${qualifiedName}(${paramList})`;
     }
 
