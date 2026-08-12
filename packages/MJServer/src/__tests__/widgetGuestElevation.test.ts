@@ -4,7 +4,7 @@ import type { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
 // Controls what UserCache.Instance.GetSystemUser() serves — undefined simulates an unpopulated
 // cache (no system user available), the fail-closed path.
 const getSystemUserMock = vi.fn<[], UserInfo | undefined>();
-vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
+vi.mock('@memberjunction/generic-database-provider', () => ({
   UserCache: {
     get Instance() {
       return { GetSystemUser: getSystemUserMock };

@@ -55,6 +55,7 @@ import {
     IMetadataProvider,
     UserInfo,
     LocalCacheManager,
+    CachedRunViewResult,
     LogError,
     LogStatus,
     LogStatusEx,
@@ -98,7 +99,7 @@ import { SimpleVectorServiceProvider } from '@memberjunction/ai-vectors-memory';
 import { ScoredCandidate } from '@memberjunction/core';
 import { QueueManager } from '@memberjunction/queue';
 import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
-import { ActionResult } from '@memberjunction/actions-base';
+import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -453,6 +454,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * synchronous half of the pipeline: `Validate` and `Before*` participate in the save and can
      * abort it, so skipping one would let a record through that should have been refused, and
      * deferring one would decide the save's outcome after it had already happened.
+     *
+     * **An After-hook binding may also ask to run durably** (`EntityAction.RunMode = 'Durable'`).
+     * After-hooks are dispatched fire-and-forget, so a process that dies mid-flight loses the work
+     * with nothing to retry it; durable dispatch hands it to the task-graph substrate instead (D14).
+     * `Validate` and `Before*` ignore RunMode entirely — deferring work that decides whether the
+     * save succeeds is not a durability improvement, it is a different feature.
      */
     protected override async HandleEntityActions(
         entity: BaseEntity,
@@ -461,10 +468,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         user: UserInfo,
         originatingEntityActionIDs?: string[],
     ): Promise<ActionResult[]> {
+        // FIRST STATEMENT, and deliberately before the first `await`. After-hooks are dispatched
+        // fire-and-forget, and the moment this method yields, the save completes and `finalizeSave()`
+        // reloads the entity — resetting every field's OldValue to its new value. A change context
+        // built any later would report that nothing changed. Everything below this line may yield;
+        // nothing above it does.
+        const entityChange = BuildEntityChangeContext(entity);
         try {
             const engine = EntityActionEngineServer.Instance;
             await engine.Config(false, user);
-            const newRecord = entity.IsSaved ? false : true;
+            const newRecord = entityChange.IsCreate;
             const baseTypeType = baseType === 'save' ? (newRecord ? 'Create' : 'Update') : 'Delete';
             const invocationType = baseType === 'validate' ? 'Validate' : before ? 'Before' + baseTypeType : 'After' + baseTypeType;
             const invocationTypeEntity = engine.InvocationTypes.find((i) => i.Name === invocationType);
@@ -487,11 +500,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 }
 
                 const runOnce = async () => {
+                    // Durability is NOT decided here. A binding's RunMode is honoured inside the
+                    // invocation path, after its scope check and its filters — deciding it at this
+                    // level would hand the work over before either gate ran.
                     const result = await engine.RunEntityAction({
                         EntityAction: a,
                         EntityObject: entity,
                         InvocationType: invocationTypeEntity,
                         ContextUser: user,
+                        EntityChange: entityChange,
                     });
                     // null means the binding is scoped (ScopeEntityID/ScopeRecordID) and this record falls
                     // outside it — the action never ran, so there is no result to report.
@@ -1655,13 +1672,33 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // caller's OrderBy — BuildKeysetSeekClause already validated that any caller-provided
             // OrderBy referenced the PK and we use the resolved direction.
             let rawOrderBy: string;
+            let orderByIsPkFallback = false;
             if (usingKeyset) {
                 rawOrderBy = `${keysetPkColumnName} ${keysetDirection}`;
             } else {
                 rawOrderBy = params.OrderBy ? (params.OrderBy as string) : (viewEntity ? viewEntity.OrderByClause ?? '' : '');
+                if (rawOrderBy.trim().length === 0 && maxRowsForQuery > 0 && entityInfo.FirstPrimaryKey) {
+                    // ── DETERMINISM FALLBACK ──
+                    // A row-LIMITED query with no ORDER BY returns an ARBITRARY subset: `TOP N` /
+                    // `LIMIT N` without an ordering is undefined by definition, and the engine is
+                    // free to return different rows run to run (or between two runs of the *same*
+                    // walk). Order by the PK so "the first N rows" means something.
+                    //
+                    // This is what broke keyset (AfterKey) pagination end to end. Page 1 of a walk
+                    // has no cursor yet, so `usingKeyset` is false and it landed here unordered,
+                    // while page 2+ force `ORDER BY <pk>` + `<pk> > @afterKey`. The two pages were
+                    // ordered differently, so a walk both RE-RETURNED page-1 rows and could silently
+                    // MISS others. Reproduced as 4 duplicates in an 8-row page (IT25 V10).
+                    //
+                    // OFFSET pagination already had exactly this fallback (see the pagination block
+                    // below); it was simply never applied to the TOP/LIMIT path. Same PK, so a
+                    // keyset walk's page 1 now agrees with every later page.
+                    rawOrderBy = this.QuoteIdentifier(entityInfo.FirstPrimaryKey.Name);
+                    orderByIsPkFallback = true;
+                }
             }
             const orderBy: string = rawOrderBy.length > 0
-                ? (usingKeyset ? rawOrderBy : this.TransformExternalSQLClause(rawOrderBy, entityInfo))
+                ? (usingKeyset || orderByIsPkFallback ? rawOrderBy : this.TransformExternalSQLClause(rawOrderBy, entityInfo))
                 : '';
 
             // View run logging (SQL Server-specific, others return null)
@@ -1674,16 +1711,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     viewSQL = logResult.executeViewSQL;
                     userViewRunID = logResult.runID;
                 } else if (orderBy.length > 0) {
-                    if (!usingKeyset && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
+                    if (!usingKeyset && !orderByIsPkFallback && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
                     viewSQL += ` ORDER BY ${orderBy}`;
                 }
             } else if (orderBy.length > 0) {
-                if (!usingKeyset && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
+                if (!usingKeyset && !orderByIsPkFallback && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
                 viewSQL += ` ORDER BY ${orderBy}`;
             }
 
             // ── Pagination / Non-paginated limit ──
             if (usingPagination && entityInfo.FirstPrimaryKey) {
+                // Belt-and-braces: the determinism fallback above already supplies ORDER BY <PK>
+                // for every row-limited query (pagination included), so `orderBy` is normally
+                // non-empty here. Kept because OFFSET/FETCH is a hard SYNTAX error without an
+                // ORDER BY — if the fallback above is ever narrowed, this must still hold.
                 if (!orderBy) {
                     viewSQL += ` ORDER BY ${this.QuoteIdentifier(entityInfo.FirstPrimaryKey.Name)}`;
                 }
@@ -2207,7 +2248,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // Phase 1: Check server's LocalCacheManager first (zero DB hits)
             const currentResults: RunViewWithCacheCheckResult<T>[] = [];
-            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] } }> = [];
+            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: CachedRunViewResult }> = [];
             const serverCacheMissItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo }> = [];
 
             for (const { index, item, entityInfo } of itemsNeedingValidation) {
@@ -2273,7 +2314,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             // Phase 3: For items without cacheStatus (client has nothing), check server cache before hitting DB
-            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] } }> = [];
+            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: CachedRunViewResult }> = [];
             const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
 
             for (const entry of itemsWithoutCacheCheck) {
@@ -2644,7 +2685,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         index: number,
         entityLabel: string,
         contextUser?: UserInfo,
-    ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } } | null> {
+    ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: CachedRunViewResult } | null> {
         if (!LocalCacheManager.Instance.IsInitialized) return null;
 
         const rlsWhereClause = this.ComputeRunViewRLSWhereClause(item.params, contextUser);
@@ -2668,13 +2709,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     private async serveFromServerCache<T = unknown>(
         viewIndex: number,
-        serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] },
+        serverCached: CachedRunViewResult,
         callerFields: string[] | null = null,
     ): Promise<RunViewWithCacheCheckResult<T>> {
         // The server cache stores the full-width superset — project down to the
         // caller's requested fields (∪ PK) before returning, exactly like the
         // ProviderBase hit path. Serving unprojected rows here previously leaked
         // whatever shape happened to be cached to every subsequent caller.
+        //
+        // `serverCached.results` are the cache's shared, deep-frozen rows — the runtime freeze
+        // is what actually protects the cache. See ProviderBase's hit path.
         const results = callerFields
             ? ProjectRowsToFields(serverCached.results as Record<string, unknown>[], callerFields)
             : serverCached.results;
@@ -2686,8 +2730,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             rowCount: serverCached.totalRowCount ?? serverCached.rowCount,
             // Carry aggregates through (B40-family, 4th drop). The server slot stores them and
             // GetRunViewResult returns them, but this serve-leg's inline serverCached type omitted
-            // the field, so TypeScript could not flag the drop. Both callers (noCacheStatus + stale)
-            // now widen their type to match, so the field flows.
+            // the field, so TypeScript could not flag the drop. Both legs now share the canonical
+            // CachedRunViewResult type, so a future field can no longer be silently dropped here.
             aggregateResults: serverCached.aggregateResults,
         };
     }
@@ -3474,6 +3518,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     QueryID: cached.queryId ?? query.ID,
                     QueryName: query.Name,
                     Success: true,
+                    // Transport boundary: `cached.results` is readonly (shared, deep-frozen cache
+                    // rows) while the outbound Results is mutable — the runtime freeze is the
+                    // enforcement. Same cast as the RunView hit paths in ProviderBase.
                     Results: cached.results as RunQueryResult['Results'],
                     RowCount: cached.results.length,
                     TotalRowCount: cached.rowCount ?? cached.results.length,
@@ -4212,7 +4259,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (cacheAvailable) {
                 const fingerprint = cache.GenerateRunViewFingerprint(
                     { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
-                    this.InstanceConnectionString
+                    this.InstanceConnectionString,
+                    undefined,
+                    this.datasetCacheSegment(datasetName, code)
                 );
                 const cached = await cache.GetRunViewResult(fingerprint);
                 if (cached) {
@@ -4254,7 +4303,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const fp = cacheAvailable
                 ? cache.GenerateRunViewFingerprint(
                     { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
-                    this.InstanceConnectionString
+                    this.InstanceConnectionString,
+                    undefined,
+                    this.datasetCacheSegment(datasetName, code)
                 )
                 : '';
             uncachedFingerprints.push(fp);
@@ -4299,7 +4350,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     ? this.extractMaxUpdatedAtFromRows(itemData, dateFieldToCheck)
                     : new Date(0).toISOString();
                 const syntheticParams = { EntityName: entityName } as RunViewParams;
-                await cache.SetRunViewResult(uncachedFingerprints[i], syntheticParams, itemData, maxUpdatedAt, undefined, undefined, this);
+                // ProviderInternalScaffolding — for the MJ_Metadata dataset ONLY. Those rows are
+                // consumed by this provider's own assembly steps, which mutate them in place by
+                // design: PostProcessEntityMetadata sorts the entity array and attaches child
+                // collections onto each entity/field row, and GetAllMetadata's Applications
+                // assembly writes ApplicationEntities/ApplicationSettings onto Application rows.
+                // Freezing them makes metadata bootstrap throw and the process starts blind.
+                //
+                // Every OTHER dataset is served to arbitrary consumers (BaseEngine.Load hands
+                // item.Results — these very arrays — to every engine subclass), so those slots
+                // must stay under the defensive deep-freeze like any RunView result.
+                const isMetadataScaffolding = datasetName === ProviderBase._mjMetadataDatasetName;
+                await cache.SetRunViewResult(
+                    uncachedFingerprints[i], syntheticParams, itemData, maxUpdatedAt,
+                    undefined, undefined, this, undefined,
+                    isMetadataScaffolding ? { ProviderInternalScaffolding: true } : undefined
+                );
             }
 
             sqlResults.push({
@@ -4431,7 +4497,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (cacheAvailable) {
                 const fingerprint = cache.GenerateRunViewFingerprint(
                     { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
-                    this.InstanceConnectionString
+                    this.InstanceConnectionString,
+                    undefined,
+                    this.datasetCacheSegment(datasetName, code)
                 );
                 const cached = await cache.GetRunViewResult(fingerprint);
                 if (cached) {
@@ -4582,9 +4650,29 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
 
     /**
+     * Key namespace for a dataset item's cached rows.
+     *
+     * Dataset items are cached through the same fingerprint builder ordinary RunViews use, with
+     * only `{ EntityName, ExtraFilter }` — and every shipped item has a NULL `WhereClause`, so
+     * without this segment a dataset item and a plain unfiltered read of the same entity produce
+     * an IDENTICAL key and share one slot. That leaks the `MJ_Metadata` scaffolding exemption
+     * (deliberately unfrozen rows) to ordinary callers of `MJ: Entities` / `MJ: Entity Fields`,
+     * and lets an ordinary read repopulate an evicted slot FROZEN, which then breaks the next
+     * metadata refresh.
+     *
+     * Keyed by dataset + item code so two items over the same entity also stay distinct.
+     * Callers must use this on the read, the write-through, and the status paths alike — the
+     * three must agree or dataset reads stop finding dataset writes.
+     */
+    protected datasetCacheSegment(datasetName: string, itemCode: string): string {
+        return `${datasetName}/${itemCode}`;
+    }
+
+    /**
      * Computes the latest update date for a dataset item from its result rows and dataset metadata.
      * Used by both the cache-hit and cache-miss paths in GetDatasetByName.
-     * @param rows - The result rows (from cache or SQL)
+     * @param rows - The result rows (from cache or SQL). `readonly` because cache-hit callers
+     *               pass the cache's shared, frozen rows; this method only scans them.
      * @param dateFieldToCheck - The field name to scan for latest date
      * @param item - The dataset item metadata row (contains DatasetItemUpdatedAt, DatasetUpdatedAt)
      * @returns The latest date across all rows and dataset metadata

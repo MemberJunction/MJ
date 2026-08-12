@@ -73,8 +73,9 @@ import {
     GeminiRealtime,
 } from '@memberjunction/ai-gemini';
 
-// @memberjunction/ai-groq (1 classes)
+// @memberjunction/ai-groq (2 classes)
 import {
+    GroqAudioGenerator,
     GroqLLM,
 } from '@memberjunction/ai-groq';
 
@@ -1156,13 +1157,14 @@ import {
     PredictiveStudioTrainModelServerOperation,
 } from '@memberjunction/predictive-studio';
 
-// @memberjunction/task-graph (7 classes)
+// @memberjunction/task-graph (8 classes)
 import {
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
     TaskGraphGetStatusServerOperation,
     TaskGraphRetryTaskServerOperation,
     TaskGraphSubmitServerOperation,
+    WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
 } from '@memberjunction/task-graph';
@@ -1173,8 +1175,9 @@ import {
     TeamsMessagingExtension,
 } from '@memberjunction/messaging-adapters';
 
-// @memberjunction/scheduling-engine (7 classes)
+// @memberjunction/scheduling-engine (8 classes)
 import {
+    ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
@@ -1238,7 +1241,7 @@ import {
     TimelineRelatedEntityGenerator,
 } from '@memberjunction/codegen-lib';
 
-// @memberjunction/core-actions (144 classes)
+// @memberjunction/core-actions (145 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1310,6 +1313,7 @@ import {
     GetObjectAction,
     GetRecordAction,
     GetRecordListMembershipAction,
+    GetRecordsAction,
     GetSignatureStatusAction,
     GetStockPriceAction,
     GetUploadUrlAction,
@@ -1448,6 +1452,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     GeminiImageGenerator,
     GeminiLLM,
     GeminiRealtime,
+    GroqAudioGenerator,
     GroqLLM,
     HeyGenVideoGenerator,
     InworldRealtime,
@@ -2192,10 +2197,12 @@ export const CLASS_REGISTRATIONS: any[] = [
     TaskGraphGetStatusServerOperation,
     TaskGraphRetryTaskServerOperation,
     TaskGraphSubmitServerOperation,
+    WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
     SlackMessagingExtension,
     TeamsMessagingExtension,
+    ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
@@ -2319,6 +2326,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     GetObjectAction,
     GetRecordAction,
     GetRecordListMembershipAction,
+    GetRecordsAction,
     GetSignatureStatusAction,
     GetStockPriceAction,
     GetUploadUrlAction,
@@ -2413,7 +2421,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 977;
+export const CLASS_REGISTRATIONS_COUNT = 981;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

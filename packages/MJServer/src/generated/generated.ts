@@ -1051,10 +1051,6 @@ export class MJActionExecutionLog_ {
     User: string;
         
     @Field({nullable: true}) 
-    @MaxLength(425)
-    EntityAction?: string;
-        
-    @Field({nullable: true}) 
     @MaxLength(255)
     EntityActionInvocationType?: string;
         
@@ -2207,6 +2203,9 @@ export class MJAction_ {
     @Field(() => [MJAISkillAction_])
     MJAISkillActions_ActionIDArray: MJAISkillAction_[]; // Link to MJAISkillActions
     
+    @Field(() => [MJTask_])
+    MJTasks_ActionIDArray: MJTask_[]; // Link to MJTasks
+    
 }
 
 //****************************************************************************
@@ -2565,6 +2564,16 @@ export class MJActionResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAISkillActions')} WHERE ${provider.QuoteIdentifier('ActionID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Skill Actions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaction_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Skill Actions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTask_])
+    async MJTasks_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tasks', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTasks')} WHERE ${provider.QuoteIdentifier('ActionID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tasks', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaction_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tasks', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -7525,6 +7534,10 @@ export class MJAIAgentRequest_ {
     @MaxLength(20)
     ResponseSource?: string;
         
+    @Field({nullable: true, description: `The workflow step (MJ: Tasks row) waiting on this request, when it came from a task graph rather than from a running agent. Distinct from OriginatingAgentRunStepID: a task graph outlives the agent run that submitted it, so the task — not the run — is what resumes when a person answers. NULL for requests raised by a run directly.`}) 
+    @MaxLength(36)
+    OriginatingTaskID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -7552,6 +7565,10 @@ export class MJAIAgentRequest_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     ResumingAgentRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    OriginatingTask?: string;
         
 }
 
@@ -7616,6 +7633,9 @@ export class CreateMJAIAgentRequestInput {
 
     @Field({ nullable: true })
     ResponseSource: string | null;
+
+    @Field({ nullable: true })
+    OriginatingTaskID: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -7683,6 +7703,9 @@ export class UpdateMJAIAgentRequestInput {
 
     @Field({ nullable: true })
     ResponseSource?: string | null;
+
+    @Field({ nullable: true })
+    OriginatingTaskID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -16507,6 +16530,9 @@ export class MJAIModelType_ {
     @Field({nullable: true, description: `Default fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Use {{prefill}} as a placeholder for the actual prefill text. Example: "IMPORTANT: You must begin your response with exactly: {{prefill}}". Individual AI Model Vendor records can override this. If null, a generic fallback is used.`}) 
     PrefillFallbackText?: string;
         
+    @Field({nullable: true, description: `Type-wide default of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape: LLM / Realtime / Vision / Audio sections). Base layer of the ModelConfiguration cascade — AIModel and AIModelVendor rows inherit from it per key and may override. NULL = contributes nothing.`}) 
+    ModelConfiguration?: string;
+        
     @Field() 
     @MaxLength(50)
     DefaultInputModality: string;
@@ -16549,6 +16575,9 @@ export class CreateMJAIModelTypeInput {
     @Field({ nullable: true })
     PrefillFallbackText: string | null;
 
+    @Field({ nullable: true })
+    ModelConfiguration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -16579,6 +16608,9 @@ export class UpdateMJAIModelTypeInput {
 
     @Field({ nullable: true })
     PrefillFallbackText?: string | null;
+
+    @Field({ nullable: true })
+    ModelConfiguration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -16771,6 +16803,9 @@ export class MJAIModelVendor_ {
     @Field({nullable: true, description: `Model-specific fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default. Use {{prefill}} as a placeholder. Allows tuning the fallback instruction per model since different models respond better to different phrasing.`}) 
     PrefillFallbackText?: string;
         
+    @Field({nullable: true, description: `Most-specific layer of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape) — configuration for THIS model on THIS provider. Deep-merges per key over the model and type layers. NULL = inherit the merged model/type configuration unchanged.`}) 
+    ModelConfiguration?: string;
+        
     @Field() 
     @MaxLength(50)
     Model: string;
@@ -16841,6 +16876,9 @@ export class CreateMJAIModelVendorInput {
     @Field({ nullable: true })
     PrefillFallbackText: string | null;
 
+    @Field({ nullable: true })
+    ModelConfiguration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -16898,6 +16936,9 @@ export class UpdateMJAIModelVendorInput {
 
     @Field({ nullable: true })
     PrefillFallbackText?: string | null;
+
+    @Field({ nullable: true })
+    ModelConfiguration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -17055,6 +17096,9 @@ export class MJAIModel_ {
         
     @Field({nullable: true, description: `Model-level fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default, can be further overridden per-vendor in AI Model Vendor. Use {{prefill}} as a placeholder.`}) 
     PrefillFallbackText?: string;
+        
+    @Field({nullable: true, description: `Per-model layer of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape). Deep-merges per key over the AIModelType default; AIModelVendor rows may override per key on top. NULL = inherit the type default unchanged.`}) 
+    ModelConfiguration?: string;
         
     @Field() 
     @MaxLength(50)
@@ -17214,6 +17258,9 @@ export class CreateMJAIModelInput {
     PrefillFallbackText: string | null;
 
     @Field({ nullable: true })
+    ModelConfiguration: string | null;
+
+    @Field({ nullable: true })
     Vendor: string | null;
 
     @Field({ nullable: true })
@@ -17282,6 +17329,9 @@ export class UpdateMJAIModelInput {
 
     @Field({ nullable: true })
     PrefillFallbackText?: string | null;
+
+    @Field({ nullable: true })
+    ModelConfiguration?: string | null;
 
     @Field({ nullable: true })
     Vendor?: string | null;
@@ -19961,6 +20011,9 @@ export class MJAIPrompt_ {
     @Field(() => [MJAIAgentType_])
     MJAIAgentTypes_ConversationSummaryPromptIDArray: MJAIAgentType_[]; // Link to MJAIAgentTypes
     
+    @Field(() => [MJTask_])
+    MJTasks_PromptIDArray: MJTask_[]; // Link to MJTasks
+    
 }
 
 //****************************************************************************
@@ -20561,6 +20614,16 @@ export class MJAIPromptResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentTypes')} WHERE ${provider.QuoteIdentifier('ConversationSummaryPromptID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Types', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaiprompt_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Types', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJTask_])
+    async MJTasks_PromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Tasks', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTasks')} WHERE ${provider.QuoteIdentifier('PromptID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tasks', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiprompt_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tasks', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -48585,10 +48648,6 @@ export class MJEntityActionFilter_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(425)
-    EntityAction: string;
-        
-    @Field() 
     ActionFilter: string;
         
 }
@@ -48948,10 +49007,6 @@ export class MJEntityActionInvocation_ {
     RuntimeUXDriverClass?: string;
         
     @Field() 
-    @MaxLength(425)
-    EntityAction: string;
-        
-    @Field() 
     @MaxLength(255)
     InvocationType: string;
         
@@ -49130,10 +49185,6 @@ export class MJEntityActionParam_ {
         
     @Field(() => Boolean, {nullable: true, description: `Optional per-binding override of ActionParam.LogValue. NULL (the default) inherits the parameter definition. Set to 0 when this particular binding passes something sensitive through a parameter that is ordinarily safe to log - a message body through a generic Text parameter, for instance. Cannot re-enable logging for a value type the hard rule suppresses.`}) 
     LogValue?: boolean;
-        
-    @Field() 
-    @MaxLength(425)
-    EntityAction: string;
         
     @Field() 
     @MaxLength(255)
@@ -49333,6 +49384,10 @@ export class MJEntityAction_ {
     @MaxLength(20)
     LoggingMode: string;
         
+    @Field({description: `How an After* dispatch of this binding executes. Inline (the default) runs it fire-and-forget in the saving process, which is fast but lost if that process dies. Durable submits a single-node task graph instead, so the work survives a restart and is reclaimed by the dispatcher — at the cost of a Task row, a dispatcher hop of latency, and the action's parameters being persisted (redacted) at rest. Ignored for Validate and Before* invocations, which run inside the save and cannot be deferred without changing whether the save succeeds.`}) 
+    @MaxLength(20)
+    RunMode: string;
+        
     @Field() 
     @MaxLength(255)
     Entity: string;
@@ -49388,6 +49443,9 @@ export class CreateMJEntityActionInput {
     @Field({ nullable: true })
     LoggingMode?: string;
 
+    @Field({ nullable: true })
+    RunMode?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -49421,6 +49479,9 @@ export class UpdateMJEntityActionInput {
 
     @Field({ nullable: true })
     LoggingMode?: string;
+
+    @Field({ nullable: true })
+    RunMode?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -84425,6 +84486,16 @@ export class MJTaskDependency_ {
     @Field({nullable: true, description: `Optional boolean expression gating this dependency edge. NULL (the default, and the value every pre-existing row carries) means the edge is unconditional, so adding this column changes the meaning of no existing graph. When present it is evaluated by the shared GraphTraversalEngine against the same context a design-time AIAgentStepPath.Condition sees, which is what lets a runtime task graph and a flow-editor graph be the same graph. A condition that evaluates false skips the edge; one that fails to evaluate ALSO skips it, but is reported distinctly so a graph stalled by a malformed expression cannot be mistaken for one that finished normally.`}) 
     Condition?: string;
         
+    @Field(() => Int, {description: `Ordering within an exclusive group — higher wins. Mirrors AIAgentStepPath.Priority so a compiled workflow chooses the same branch the flow editor shows. Ignored for edges that are not part of an ExclusiveGroup.`}) 
+    Priority: number;
+        
+    @Field(() => Int, {description: `Deterministic tiebreak when two edges in an ExclusiveGroup share a Priority, applied ascending. Load-bearing rather than cosmetic: compiled dependencies get fresh UUIDs and Priority defaults to 0, so without a stored ordinal a tie would resolve by row order and the same workflow could take a different branch on a different machine.`}) 
+    Sequence: number;
+        
+    @Field({nullable: true, description: `XOR group key: sibling edges leaving the same origin that share a non-null ExclusiveGroup are an exclusive fan-out. The highest-Priority satisfied edge wins, ties broken by ascending Sequence; the rest are Skipped. NULL (the default) means an ordinary dependency, so existing graphs are unaffected. An unevaluable condition anywhere in the group holds the whole group rather than firing every branch.`}) 
+    @MaxLength(255)
+    ExclusiveGroup?: string;
+        
     @Field() 
     @MaxLength(255)
     Task: string;
@@ -84455,6 +84526,15 @@ export class CreateMJTaskDependencyInput {
     @Field({ nullable: true })
     Condition: string | null;
 
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    ExclusiveGroup: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -84479,6 +84559,15 @@ export class UpdateMJTaskDependencyInput {
 
     @Field({ nullable: true })
     Condition?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    ExclusiveGroup?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -84780,7 +84869,7 @@ export class MJTask_ {
     @MaxLength(36)
     AgentID?: string;
         
-    @Field({description: `Current status of the task (Pending, In Progress, Complete, Cancelled, Failed, Blocked, Deferred)`}) 
+    @Field({description: `Lifecycle state. Pending awaits prerequisites; In Progress is claimed and running; Complete succeeded; Failed did not; Blocked can never run because a prerequisite is unsatisfiable; Cancelled was stopped deliberately; Deferred is waiting on a schedule. Skipped is a branch that was NOT TAKEN at an exclusive fan-out — a normal outcome, not a failure: it satisfies dependents (so a join downstream of a fork still runs) and is invisible to failure precedence when the parent rolls up.`}) 
     @MaxLength(50)
     Status: string;
         
@@ -84822,6 +84911,21 @@ export class MJTask_ {
     @Field({nullable: true, description: `When the current dispatcher claim lapses. Long-running tasks extend it by heartbeat; reconciliation treats an expired claim as an orphaned task and returns it to Pending.`}) 
     ClaimExpiresAt?: Date;
         
+    @Field({nullable: true, description: `The Action this task executes, when the node is action-assigned rather than agent-assigned or awaiting a person. Mutually exclusive with UserID and AgentID (CK_Task_Assignment). Set by durable entity-action dispatch, where a single-node graph carries one action to run with restart recovery.`}) 
+    @MaxLength(36)
+    ActionID?: string;
+        
+    @Field({nullable: true, description: `Which kind of workflow step this task represents. NULL for a task that is not part of a workflow, such as a hand-authored to-do. Determines which of AgentID/ActionID/PromptID/UserID is meaningful and how Configuration is read. This is the executable vocabulary and is deliberately not the same value list as AIAgentStep.StepType, which describes a step at design time.`}) 
+    @MaxLength(20)
+    StepType?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    PromptID?: string;
+        
+    @Field({nullable: true, description: `Everything about this step that has no column of its own, as JSON: the loop definition for a ForEach or While step, an agent step's message and template parameters, the mappings that move data between this step and the workflow payload, and the execution policy (timeout, retries, what to do on failure). Typed by ITaskStepConfiguration.`}) 
+    Configuration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -84855,6 +84959,14 @@ export class MJTask_ {
     AgentRun?: string;
         
     @Field({nullable: true}) 
+    @MaxLength(425)
+    Action?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Prompt?: string;
+        
+    @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
         
@@ -84863,6 +84975,9 @@ export class MJTask_ {
     
     @Field(() => [MJTaskDependency_])
     MJTaskDependencies_DependsOnTaskIDArray: MJTaskDependency_[]; // Link to MJTaskDependencies
+    
+    @Field(() => [MJAIAgentRequest_])
+    MJAIAgentRequests_OriginatingTaskIDArray: MJAIAgentRequest_[]; // Link to MJAIAgentRequests
     
     @Field(() => [MJTask_])
     MJTasks_ParentIDArray: MJTask_[]; // Link to MJTasks
@@ -84937,6 +85052,18 @@ export class CreateMJTaskInput {
     @Field({ nullable: true })
     ClaimExpiresAt: Date | null;
 
+    @Field({ nullable: true })
+    ActionID: string | null;
+
+    @Field({ nullable: true })
+    StepType: string | null;
+
+    @Field({ nullable: true })
+    PromptID: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -85009,6 +85136,18 @@ export class UpdateMJTaskInput {
 
     @Field({ nullable: true })
     ClaimExpiresAt?: Date | null;
+
+    @Field({ nullable: true })
+    ActionID?: string | null;
+
+    @Field({ nullable: true })
+    StepType?: string | null;
+
+    @Field({ nullable: true })
+    PromptID?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -85091,6 +85230,16 @@ export class MJTaskResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTaskDependencies')} WHERE ${provider.QuoteIdentifier('DependsOnTaskID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Task Dependencies', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjtask_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Task Dependencies', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentRequest_])
+    async MJAIAgentRequests_OriginatingTaskIDArray(@Root() mjtask_: MJTask_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Requests', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentRequests')} WHERE ${provider.QuoteIdentifier('OriginatingTaskID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Requests', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjtask_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Requests', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

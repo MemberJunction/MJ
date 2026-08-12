@@ -366,6 +366,19 @@ export class ActionResolver extends ResolverBase {
       // Run the entity action
       const result = await EntityActionEngineServer.Instance.RunEntityAction(params);
 
+      if (!result) {
+        // The binding is scoped (ScopeEntityID/ScopeRecordID) and this record falls outside it, so
+        // the action never ran. That is a legitimate answer, not a failure — dereferencing the null
+        // here turned "this binding does not apply to that record" into a server error for the
+        // caller. Reported as a successful no-op with an explicit message, so a client can tell it
+        // apart from an action that ran and did nothing.
+        return {
+          Success: true,
+          Message: 'The entity action did not run: its binding is scoped to different records.',
+          ResultData: JSON.stringify({ Ran: false, Reason: 'OutOfScope' })
+        };
+      }
+
       // Return the result
       return {
         Success: result.Success,

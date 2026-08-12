@@ -1,0 +1,326 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.wfr-status-filters {
+  display: flex;
+  gap: var(--mj-space-1);
+  align-items: center;
+}
+
+/* List alone until something is selected; two panes after. The canvas gets the larger share
+   because a graph is the thing being read once it is open. */
+.wfr-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--mj-space-3);
+  height: 100%;
+  min-height: 0;
+}
+
+.wfr-split-open {
+  grid-template-columns: minmax(28rem, 40%) 1fr;
+}
+
+@media (max-width: 900px) {
+  .wfr-split-open {
+    grid-template-columns: 1fr;
+  }
+}
+
+.wfr-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-1);
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.wfr-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mj-space-2);
+  width: 100%;
+  padding: var(--mj-space-2) var(--mj-space-3);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  text-align: left;
+  cursor: pointer;
+  color: var(--mj-text-primary);
+}
+
+.wfr-row:hover {
+  border-color: var(--mj-border-strong);
+}
+
+.wfr-row:focus-visible {
+  outline: 2px solid var(--mj-brand-primary);
+  outline-offset: 2px;
+}
+
+.wfr-row-selected {
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+}
+
+.wfr-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wfr-row-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wfr-row-when {
+  font-size: var(--mj-font-size-sm);
+  color: var(--mj-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.wfr-row-status {
+  flex: none;
+  font-size: var(--mj-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px var(--mj-space-2);
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-page);
+  color: var(--mj-text-secondary);
+  border: 1px solid var(--mj-border-default);
+}
+
+/* Status carries meaning, so it is encoded in colour as well as text — a failed run should be
+   findable without reading every row. Skipped stays grey on purpose: a branch that was not taken
+   is a normal outcome, not a warning. */
+.wfr-row-status[data-status='Complete'] {
+  color: var(--mj-status-success);
+  border-color: color-mix(in srgb, var(--mj-status-success) 40%, transparent);
+}
+
+.wfr-row-status[data-status='Failed'] {
+  color: var(--mj-status-error);
+  border-color: color-mix(in srgb, var(--mj-status-error) 40%, transparent);
+}
+
+.wfr-row-status[data-status='Running'] {
+  color: var(--mj-brand-primary);
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
+}
+
+.wfr-detail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  overflow: hidden;
+}
+
+.wfr-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-2) var(--mj-space-3);
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.wfr-detail-title {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  min-width: 0;
+}
+
+.wfr-detail-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wfr-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-1);
+  flex: none;
+}
+
+/* ============================================================
+   The run list as a sortable table
+   ============================================================
+   A run list is scanned for two things — the slowest run and the one that failed — and neither is
+   answerable by scrolling. Columns line up so a reader compares down a column rather than reading
+   each row; `tabular-nums` keeps the timestamps from jittering as digits change. */
+.wfr-head,
+.wfr-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) minmax(0, 0.7fr) minmax(0, 0.9fr);
+  gap: var(--mj-space-2);
+  align-items: center;
+}
+
+.wfr-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0 var(--mj-space-3) var(--mj-space-1);
+  background: var(--mj-bg-page);
+}
+
+.wfr-head-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: var(--mj-space-1) 0;
+  font-size: var(--mj-font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.wfr-head-cell:hover {
+  color: var(--mj-text-primary);
+}
+
+.wfr-head-cell i {
+  opacity: 0.65;
+  font-size: 0.85em;
+}
+
+.wfr-col-time,
+.wfr-col-duration {
+  font-size: var(--mj-font-size-sm);
+  color: var(--mj-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wfr-col-status {
+  justify-self: start;
+}
+
+/* ============================================================
+   Detail panel: canvas + step JSON, or the whole run as JSON
+   ============================================================ */
+.wfr-detail-tabs {
+  display: flex;
+  gap: var(--mj-space-1);
+  padding: 0 var(--mj-space-3);
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.wfr-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: var(--mj-space-2) var(--mj-space-2);
+  font-size: var(--mj-font-size-sm);
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+}
+
+.wfr-tab-active {
+  color: var(--mj-brand-primary);
+  border-bottom-color: var(--mj-brand-primary);
+}
+
+/* The canvas takes the larger share; the step pane below it is a reading surface, not a diagram. */
+.wfr-graph-pane {
+  flex: 1 1 55%;
+  min-height: 12rem;
+}
+
+.wfr-steps-pane {
+  flex: 1 1 45%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid var(--mj-border-default);
+  overflow: hidden;
+}
+
+.wfr-step-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mj-space-1);
+  padding: var(--mj-space-2);
+  border-bottom: 1px solid var(--mj-border-default);
+  max-height: 30%;
+  overflow-y: auto;
+}
+
+.wfr-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-1) var(--mj-space-2);
+  background: var(--mj-bg-page);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  color: var(--mj-text-primary);
+  font-size: var(--mj-font-size-sm);
+  cursor: pointer;
+  text-align: left;
+}
+
+.wfr-step:hover {
+  border-color: var(--mj-border-strong);
+}
+
+.wfr-step-selected {
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+}
+
+/* Work that never ran must not read like work that did — the same rule the run timeline follows. */
+.wfr-step[data-status='Skipped'] .wfr-step-name {
+  text-decoration: line-through;
+  color: var(--mj-text-secondary);
+}
+
+.wfr-step-name {
+  font-weight: 600;
+}
+
+.wfr-step-meta {
+  font-size: var(--mj-font-size-xs);
+  color: var(--mj-text-secondary);
+}
+
+.wfr-step-json,
+.wfr-json-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.wfr-step-json-head {
+  padding: var(--mj-space-1) var(--mj-space-3);
+  font-weight: 600;
+  font-size: var(--mj-font-size-sm);
+  color: var(--mj-text-secondary);
+}

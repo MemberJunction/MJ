@@ -1145,7 +1145,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     return 'amber';
   }
 
-  FormatDate(dateStr: string | null): string {
+  FormatDate(dateStr: Date | string | null): string {
     if (!dateStr) return '--';
     return new Date(dateStr).toLocaleString(undefined, {
       month: 'short', day: 'numeric',

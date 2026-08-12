@@ -5350,6 +5350,42 @@
             "lastModified": "2025-12-30T23:06:55.571Z",
             "checksum": "fbd12bfa05c65c757a03fb0afc939c952b7e3cf1547a44fa2be3bfc2db1a6f18"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Records",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "The rows returned by the query. This is the action's result — map it into the payload to use the records downstream, e.g. {\"Records\": \"accounts\"}.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "93B80E4B-36E6-4CFD-A957-E922A4264B17"
+          },
+          "sync": {
+            "lastModified": "2026-08-10T20:58:45.759Z",
+            "checksum": "54d3d4449ce81e7a96358b6effdadf17859f6d2e161f0c7efb52e52b2f4e7506"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total rows matching the filter, ignoring MaxRows. Useful for branching on whether there is anything to process before doing per-record work.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A4604694-D070-45FF-BE22-74A3AFC40D33"
+          },
+          "sync": {
+            "lastModified": "2026-08-10T20:58:45.789Z",
+            "checksum": "e51f5e36b840bb4e59725161f2e3005f2bccde1a1500a87a95336c234b46d66e"
+          }
         }
       ]
     },

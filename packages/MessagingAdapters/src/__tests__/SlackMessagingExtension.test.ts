@@ -42,7 +42,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return { ...orig, RunView: vi.fn(), LogError: vi.fn(), LogStatus: vi.fn() };
 });
 
-vi.mock('@memberjunction/sqlserver-dataprovider', () => {
+vi.mock('@memberjunction/generic-database-provider', () => {
     const users = [{ ID: 'fallback', Email: 'bot@company.com', Name: 'Service Account' }];
     class MockUserCache {
         get Users() { return users; }

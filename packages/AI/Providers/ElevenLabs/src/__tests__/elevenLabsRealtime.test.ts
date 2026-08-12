@@ -30,7 +30,10 @@ interface ParsedFrame {
     type?: string;
     user_audio_chunk?: string;
     text?: string;
-    conversation_config_override?: { agent?: { prompt?: { prompt?: string } }; tts?: { voice_id?: string } };
+    conversation_config_override?: {
+        agent?: { prompt?: { prompt?: string }; first_message?: string };
+        tts?: { voice_id?: string };
+    };
     tool_call_id?: string;
     result?: unknown;
     is_error?: boolean;
@@ -63,6 +66,7 @@ function makeAgentDetail(opts: {
     tools?: RealtimeToolDefinition[];
     promptOverrideEnabled?: boolean;
     voiceOverrideEnabled?: boolean;
+    firstMessageOverrideEnabled?: boolean;
     createdAtUnixSecs?: number;
 }): ElevenLabs.GetAgentResponseModel {
     return {
@@ -80,7 +84,10 @@ function makeAgentDetail(opts: {
         platformSettings: {
             overrides: {
                 conversationConfigOverride: {
-                    agent: { prompt: { prompt: opts.promptOverrideEnabled ?? true } },
+                    agent: {
+                        prompt: { prompt: opts.promptOverrideEnabled ?? true },
+                        firstMessage: opts.firstMessageOverrideEnabled ?? true,
+                    },
                     tts: { voiceId: opts.voiceOverrideEnabled ?? true },
                 },
             },
@@ -167,6 +174,19 @@ class TestElevenLabsRealtime extends ElevenLabsRealtime {
  */
 function promptOnlyOverrides(prompt = 'You are the session voice.'): Record<string, unknown> {
     return { agent: { prompt: { prompt } } };
+}
+
+/**
+ * The override object for a session that also configures a first message. Written as an explicit
+ * literal rather than a spread of {@link promptOnlyOverrides} because `first_message` is a SIBLING
+ * of `prompt` INSIDE `agent` — a shallow spread would silently drop one of the two, which is
+ * precisely the merge mistake these tests exist to catch.
+ */
+function promptAndFirstMessageOverrides(
+    firstMessage: string,
+    prompt = 'You are the session voice.'
+): Record<string, unknown> {
+    return { agent: { prompt: { prompt }, first_message: firstMessage } };
 }
 
 /** Every `true` leaf in a nested override-enablement object, as a key path. */
@@ -681,6 +701,120 @@ describe('ElevenLabsRealtime per-session voice', () => {
         // never fan out managed agents nor re-hit the REST surface
         expect(driver.CreateBodies).toHaveLength(1);
         expect(driver.ListCalls).toHaveLength(lookupsAfterFirst);
+    });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Per-session first message (issue #3557)                            */
+/* ------------------------------------------------------------------ */
+
+describe('ElevenLabsRealtime per-session first message', () => {
+    let driver: TestElevenLabsRealtime;
+
+    beforeEach(() => {
+        driver = new TestElevenLabsRealtime('fake-api-key');
+    });
+
+    it('carries the configured first message as a RAW-WIRE agent.first_message override alongside the prompt', async () => {
+        const cfg = await driver.CreateClientSession(
+            makeParams({ Config: { firstMessage: 'Hi, thanks for joining — ready when you are.' } })
+        );
+
+        // snake_case AND nested beside `prompt`: this object is forwarded VERBATIM onto the
+        // websocket, never through the SDK's camelCase serializer
+        expect(cfg.SessionConfig['overrides']).toEqual(
+            promptAndFirstMessageOverrides('Hi, thanks for joining — ready when you are.')
+        );
+    });
+
+    it('leaves a first-message-less session byte-for-byte as it was before this existed', async () => {
+        const cfg = await driver.CreateClientSession(makeParams());
+
+        expect(cfg.SessionConfig['overrides']).toEqual(promptOnlyOverrides());
+    });
+
+    it.each([
+        ['a blank string', '   '],
+        ['an empty string', ''],
+        ['a non-string', 42],
+        ['null', null],
+    ])('omits the first_message override entirely when it is %s', async (_label, firstMessage) => {
+        // an ENABLED-but-empty first_message is exactly the platform's wait-for-user default, so
+        // sending one is at best noise — omit the key instead
+        const cfg = await driver.CreateClientSession(makeParams({ Config: { firstMessage } }));
+
+        expect(cfg.SessionConfig['overrides']).toEqual(promptOnlyOverrides());
+    });
+
+    it('trims a padded first message', async () => {
+        const cfg = await driver.CreateClientSession(makeParams({ Config: { firstMessage: '  Hello there.  ' } }));
+
+        expect(cfg.SessionConfig['overrides']).toEqual(promptAndFirstMessageOverrides('Hello there.'));
+    });
+
+    it('sends the SAME first-message override on the server-bridged initiation frame (topology parity)', async () => {
+        await startSession(driver, { Config: { firstMessage: 'Hello there.' } });
+
+        expect(driver.Socket.SentFrames()[0]).toEqual({
+            type: 'conversation_initiation_client_data',
+            conversation_config_override: promptAndFirstMessageOverrides('Hello there.'),
+        });
+    });
+
+    it('composes with the voice override rather than displacing it', async () => {
+        const cfg = await driver.CreateClientSession(
+            makeParams({ Config: { firstMessage: 'Hello there.', voice: 'voice_abc' } })
+        );
+
+        expect(cfg.SessionConfig['overrides']).toEqual({
+            ...promptAndFirstMessageOverrides('Hello there.'),
+            tts: { voice_id: 'voice_abc' },
+        });
+    });
+
+    it('ENABLES the first-message override on the managed agent it provisions', async () => {
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+
+        // ElevenLabs DROPS any override the agent has not explicitly allowed, so the enablement
+        // must be written even for sessions that send no first message
+        expect(
+            driver.CreateBodies[0].platformSettings?.overrides?.conversationConfigOverride?.agent?.firstMessage
+        ).toBe(true);
+    });
+
+    it('does not vary the MANAGED AGENT by first message — it is per-session, so one agent is shared', async () => {
+        await driver.CreateClientSession(makeParams({ Config: { firstMessage: 'Greeting A' } }));
+        const lookupsAfterFirst = driver.ListCalls.length;
+        await driver.CreateClientSession(makeParams({ Config: { firstMessage: 'Greeting B' } }));
+
+        expect(driver.CreateBodies).toHaveLength(1);
+        expect(driver.ListCalls).toHaveLength(lookupsAfterFirst);
+    });
+
+    /**
+     * The #3374 failure mode, one override later. Every agent provisioned before this change
+     * enables prompt + voice and nothing else; unless `OverridesSatisfied` REQUIRES the new
+     * override, such an agent still matches on tools and is never re-PATCHed — so the platform
+     * silently drops the first message forever on every existing deployment.
+     */
+    it('PATCHes an agent provisioned BEFORE per-session first message (prompt + voice on, firstMessage missing)', async () => {
+        driver.Agents = [
+            makeAgentDetail({
+                agentId: 'agent_existing_7',
+                name: 'MJ Realtime Co-Agent',
+                tools: [WEATHER_TOOL],
+                firstMessageOverrideEnabled: false,
+            }),
+        ];
+
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+
+        expect(driver.UpdateCalls).toHaveLength(1);
+        const enabled = driver.UpdateCalls[0].body.platformSettings?.overrides?.conversationConfigOverride;
+        expect(enabled?.agent?.firstMessage).toBe(true);
+        // the overrides that were already enabled are not lost in the repair
+        expect(enabled?.agent?.prompt?.prompt).toBe(true);
+        expect(enabled?.tts?.voiceId).toBe(true);
     });
 });
 

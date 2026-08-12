@@ -166,17 +166,26 @@
   color: var(--mjd-header-ink-dim);
 }
 
+/*
+ * mj-version-select is the documentation-version switcher (ThemeSelect
+ * override) — same Starlight <Select> markup as the theme picker, so it needs
+ * the same navy-contrast treatment or it renders in the default header colors
+ * and disappears against the navy bar.
+ */
 .header .social-icons a,
-.header starlight-theme-select label {
+.header starlight-theme-select label,
+.header mj-version-select label {
   color: var(--mjd-header-ink);
 }
 
 .header .social-icons a:hover,
-.header starlight-theme-select label:hover {
+.header starlight-theme-select label:hover,
+.header mj-version-select label:hover {
   color: #ffffff;
 }
 
-.header starlight-theme-select select {
+.header starlight-theme-select select,
+.header mj-version-select select {
   color: var(--mjd-header-ink);
   background: transparent;
 }

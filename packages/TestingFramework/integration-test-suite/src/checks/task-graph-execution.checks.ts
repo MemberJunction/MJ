@@ -20,7 +20,7 @@
  */
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
-import type { TaskGraphSpec } from '@memberjunction/ai-core-plus';
+import type { TaskGraphSpec, TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
 import {
     TaskGraphDispatcher,
     TaskGraphService,
@@ -267,8 +267,9 @@ async function runUntilSettled(
     }
 }
 
-const agentTask = (tempId: string, name: string, agentName: string, dependsOn: string[] = []) =>
-    ({ tempId, name, description: name, agentName, dependsOn });
+/** One agent-assigned node. Spec v2: `kind` selects the configuration shape. */
+const agentTask = (tempId: string, name: string, agentName: string, dependsOn: string[] = []): TaskGraphSpecNode =>
+    ({ tempId, name, description: name, kind: 'Agent', configuration: { agentName }, dependsOn });
 
 export const TaskGraphExecutionChecks: NamedCheck[] = [
     {
@@ -397,7 +398,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
 
     {
         Id: 'task-graph-execution.TX4',
-        Name: 'TX4: a false edge condition skips its branch and the graph still settles',
+        Name: 'TX4: a false edge condition Skips its branch and the graph settles Complete',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             // TG9 proves TaskDependency.Condition round-trips as a column. This proves the dispatcher
@@ -423,14 +424,23 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             );
 
             const b = (await loadChildren(ctx, parentID)).get('B Conditional');
-            AssertEqual(b!.Status, 'Blocked', 'the untaken branch must be Blocked, not left Pending forever');
 
-            // Blocked, not Complete: the edge is a Prerequisite, so a graph that can never satisfy it
-            // has genuinely not finished its work. Expressing "skip this branch and still complete"
-            // is what an Optional dependency is for.
-            AssertEqual(parent.Status, 'Blocked', 'the graph settles as Blocked when a prerequisite branch is untaken');
+            // ── Skipped, not Blocked — this assertion was REWRITTEN, and the old one is why ──────
+            // It used to demand `Blocked` for both the branch and the graph, on the reasoning that a
+            // Prerequisite edge which can never be satisfied means the graph has genuinely not
+            // finished its work. R6 overruled that: a condition that is definitely false is a
+            // DECISION, not an obstruction. The branch was not taken, and a workflow that chose one
+            // of two routes has finished — reporting it as Blocked told an operator to go
+            // investigate a graph that had done exactly what its author drew.
+            //
+            // The dispatcher now routes definitely-false edges through the skip seeds, so the branch
+            // settles `Skipped` and the graph `Complete`. Leaving this check on the old contract
+            // meant it contradicted the live engine on every full run of the deterministic tier, and
+            // — worse — the comment taught the overruled doctrine as design intent.
+            AssertEqual(b!.Status, 'Skipped', 'the untaken branch must be Skipped: not taken is a decision, not an obstruction');
+            AssertEqual(parent.Status, 'Complete', 'a graph that chose one of two routes has finished');
 
-            console.log('      → false condition made its branch unreachable; graph settled as Blocked');
+            console.log('      → false condition skipped its branch; graph settled Complete');
         }
     },
 

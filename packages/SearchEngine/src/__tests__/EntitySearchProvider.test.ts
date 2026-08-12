@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// Hoisted mock variables that can be referenced inside vi.mock factories
-const { mockRunViewFn, mockEntities } = vi.hoisted(() => {
+// Hoisted mock variables that can be referenced inside vi.mock factories. mockLogErrorEx is
+// hoisted (not an inline vi.fn()) so it survives the vi.resetModules() re-imports the env-var
+// tests perform — the mock factory re-runs but keeps handing back this same stable spy.
+const { mockRunViewFn, mockEntities, mockLogErrorEx } = vi.hoisted(() => {
     const mockRunViewFn = vi.fn();
+    const mockLogErrorEx = vi.fn();
     const mockEntities: Array<{
         Name: string;
         AllowUserSearchAPI: boolean;
@@ -15,7 +18,7 @@ const { mockRunViewFn, mockEntities } = vi.hoisted(() => {
         }>;
         NameField?: { Name: string };
     }> = [];
-    return { mockRunViewFn, mockEntities };
+    return { mockRunViewFn, mockEntities, mockLogErrorEx };
 });
 
 vi.mock('@memberjunction/core', () => {
@@ -38,6 +41,7 @@ vi.mock('@memberjunction/core', () => {
         RunView: MockRunView,
         LogError: vi.fn(),
         LogStatus: vi.fn(),
+        LogErrorEx: mockLogErrorEx,
     };
 });
 
@@ -524,4 +528,132 @@ describe('EntitySearchProvider', () => {
             }
         });
     });
+
+    /**
+     * Per-entity hard timeout is a deployment-adjustable public static (PerEntityTimeoutMS).
+     * A single slow entity must not hold the whole fan-out hostage: after the timeout its
+     * result promise resolves to [] and the other entities' results still land.
+     */
+    describe('Search — PerEntityTimeoutMS (deployment-adjustable static)', () => {
+        const originalTimeout = EntitySearchProvider.PerEntityTimeoutMS;
+        afterEach(() => {
+            EntitySearchProvider.PerEntityTimeoutMS = originalTimeout;
+            vi.useRealTimers();
+        });
+
+        it('defaults to 3000ms', () => {
+            expect(EntitySearchProvider.PerEntityTimeoutMS).toBe(3000);
+        });
+
+        it('drops a slow entity after the tuned timeout while fast entities still land', async () => {
+            vi.useFakeTimers();
+            EntitySearchProvider.PerEntityTimeoutMS = 3_000;
+
+            const nameField = { Name: 'Name', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 };
+            mockEntities.push(
+                { Name: 'Fast', AllowUserSearchAPI: true, Fields: [nameField], NameField: { Name: 'Name' } },
+                { Name: 'Slow', AllowUserSearchAPI: true, Fields: [nameField], NameField: { Name: 'Name' } },
+            );
+
+            mockRunViewFn.mockImplementation((params: { EntityName: string }) => {
+                if (params.EntityName === 'Fast') {
+                    return Promise.resolve({ Success: true, Results: [{ ID: 'f1', Name: 'Findable' }] });
+                }
+                // Slow entity: RunView never resolves within the timeout window.
+                return new Promise(() => { /* never resolves */ });
+            });
+
+            const searchPromise = provider.Search('Find', 10, undefined, contextUser);
+            // Advance past PerEntityTimeoutMS so the slow entity's race resolves to [].
+            await vi.advanceTimersByTimeAsync(3_000);
+            const results = await searchPromise;
+
+            expect(results.map(r => r.EntityName)).toEqual(['Fast']);
+        });
+    });
+
+    /**
+     * Both deployment-adjustable statics also accept a default override from the environment at
+     * process start (MJ_SEARCH_PER_ENTITY_FETCH_DEPTH / MJ_SEARCH_PER_ENTITY_TIMEOUT_MS). The
+     * override is read once when the module is evaluated, so each case resets the module registry
+     * and re-imports the provider with the env var in place.
+     */
+    describe('env-var default overrides', () => {
+        const FETCH_KEY = 'MJ_SEARCH_PER_ENTITY_FETCH_DEPTH';
+        const TIMEOUT_KEY = 'MJ_SEARCH_PER_ENTITY_TIMEOUT_MS';
+        const originalFetch = process.env[FETCH_KEY];
+        const originalTimeout = process.env[TIMEOUT_KEY];
+
+        beforeEach(() => {
+            mockLogErrorEx.mockClear();
+        });
+
+        afterEach(() => {
+            restoreEnv(FETCH_KEY, originalFetch);
+            restoreEnv(TIMEOUT_KEY, originalTimeout);
+            vi.resetModules();
+        });
+
+        async function reimportProvider() {
+            vi.resetModules();
+            return (await import('../generic/EntitySearchProvider')).EntitySearchProvider;
+        }
+
+        it('reads PerEntityFetchDepth from MJ_SEARCH_PER_ENTITY_FETCH_DEPTH', async () => {
+            process.env[FETCH_KEY] = '42';
+            const Provider = await reimportProvider();
+            expect(Provider.PerEntityFetchDepth).toBe(42);
+            expect(mockLogErrorEx).not.toHaveBeenCalled();
+        });
+
+        it('reads PerEntityTimeoutMS from MJ_SEARCH_PER_ENTITY_TIMEOUT_MS', async () => {
+            process.env[TIMEOUT_KEY] = '15000';
+            const Provider = await reimportProvider();
+            expect(Provider.PerEntityTimeoutMS).toBe(15000);
+        });
+
+        it('floors a fractional override', async () => {
+            process.env[TIMEOUT_KEY] = '2500.9';
+            const Provider = await reimportProvider();
+            expect(Provider.PerEntityTimeoutMS).toBe(2500);
+        });
+
+        it('falls back to the default for a non-numeric value and warns', async () => {
+            process.env[TIMEOUT_KEY] = 'soon';
+            const Provider = await reimportProvider();
+            expect(Provider.PerEntityTimeoutMS).toBe(3000);
+            expect(mockLogErrorEx).toHaveBeenCalledWith(
+                expect.objectContaining({ severity: 'warning', message: expect.stringContaining(TIMEOUT_KEY) })
+            );
+        });
+
+        it('falls back to the default for a non-positive value and warns', async () => {
+            process.env[FETCH_KEY] = '0';
+            const Provider = await reimportProvider();
+            expect(Provider.PerEntityFetchDepth).toBe(15);
+            expect(mockLogErrorEx).toHaveBeenCalledWith(
+                expect.objectContaining({ severity: 'warning', message: expect.stringContaining(FETCH_KEY) })
+            );
+        });
+
+        it('falls back to the default when the var is unset — no warning', async () => {
+            delete process.env[FETCH_KEY];
+            delete process.env[TIMEOUT_KEY];
+            const Provider = await reimportProvider();
+            expect(Provider.PerEntityFetchDepth).toBe(15);
+            expect(Provider.PerEntityTimeoutMS).toBe(3000);
+            expect(mockLogErrorEx).not.toHaveBeenCalled();
+        });
+    });
 });
+
+/**
+ * Restore an env var to a prior value, deleting it when it was previously unset.
+ */
+function restoreEnv(key: string, priorValue: string | undefined): void {
+    if (priorValue === undefined) {
+        delete process.env[key];
+    } else {
+        process.env[key] = priorValue;
+    }
+}

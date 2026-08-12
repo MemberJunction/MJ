@@ -38,11 +38,20 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
         // 1. Status transitioned from 'Requested' to a responded status
         // 2. There's an originating run to resume from
         // 3. No resuming run has been created yet (guard against re-trigger)
+        // 4. It is not a WORKFLOW approval. A request raised by a task graph carries
+        //    OriginatingTaskID, and resuming is exactly the wrong thing for it: the graph OUTLIVES
+        //    the run that submitted it, so nothing is suspended and nothing needs resuming — the
+        //    dispatcher settles the waiting task and releases its dependents on the next poll.
+        //    Resuming re-runs the Flow agent, which submits a BRAND-NEW graph, which raises its own
+        //    new approval. Every dashboard or API approval would both settle the step (correct) and
+        //    silently start a duplicate execution — observed in the wild: approving one request at
+        //    13:56 produced a second, unasked-for graph at 14:05.
         const shouldResume =
             wasRequested &&
             isNowResponded &&
             this.OriginatingAgentRunID != null &&
-            this.ResumingAgentRunID == null;
+            this.ResumingAgentRunID == null &&
+            this.OriginatingTaskID == null;
 
         if (shouldResume) {
             // Fire-and-forget: don't block the save response

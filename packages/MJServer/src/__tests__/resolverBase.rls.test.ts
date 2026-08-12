@@ -16,6 +16,9 @@ const { mockUserCacheUsers } = vi.hoisted(() => ({
 // Stub external deps before imports
 vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
     SQLServerDataProvider: class {},
+}));
+
+vi.mock('@memberjunction/generic-database-provider', () => ({
     UserCache: {
         get Users() { return mockUserCacheUsers; },
     },
