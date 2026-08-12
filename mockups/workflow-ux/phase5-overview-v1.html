@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workflow UX — Phase 5 Mockups v1</title>
+<style>
+  :root{
+    --bg:#eef1f5; --panel:#ffffff; --border:#dfe5ec; --border-strong:#c3ccd8;
+    --ink:#1e2936; --ink-2:#54657a; --ink-3:#8394a8;
+    --blue:#2d6a9f; --blue-soft:#e8f1f8;
+    --action:#0891b2; --agent:#7c5295; --prompt:#2d6a9f; --human:#d97706; --loop:#4f7b48;
+    --ok:#16a34a; --run:#2563eb; --pend:#94a3b8; --warn:#d97706; --err:#dc2626;
+    --r:10px; --shadow:0 1px 3px rgba(16,32,51,.09), 0 4px 14px rgba(16,32,51,.06);
+  }
+  *{box-sizing:border-box; margin:0}
+  body{background:var(--bg); color:var(--ink); font:14px/1.45 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; padding:36px 28px 80px}
+  .intro{max-width:1240px; margin:0 auto 34px}
+  .intro h1{font-size:22px; font-weight:700}
+  .intro p{color:var(--ink-2); margin-top:6px; max-width:880px}
+  .mock{max-width:1240px; margin:0 auto 56px}
+  .mock>h2{font-size:15px; font-weight:700; letter-spacing:.02em; text-transform:uppercase; color:var(--blue); margin-bottom:4px}
+  .mock>p.cap{color:var(--ink-2); margin-bottom:14px; max-width:960px}
+  .frame{background:var(--panel); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden}
+
+  /* ============ app chrome ============ */
+  .topbar{display:flex; align-items:center; gap:14px; padding:12px 18px; border-bottom:1px solid var(--border); background:#fbfcfe}
+  .topbar .back{color:var(--ink-3); font-size:17px}
+  .wf-name{font-size:16px; font-weight:650}
+  .chip{display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; padding:3px 10px; border-radius:999px; border:1px solid var(--border-strong); color:var(--ink-2); background:#fff}
+  .chip.active{color:#0d7a3f; border-color:#bfe3cd; background:#effaf3}
+  .chip.eph{color:var(--agent); border-color:#e0d3ec; background:#f7f2fb}
+  .spacer{flex:1}
+  .seg{display:flex; border:1px solid var(--border-strong); border-radius:8px; overflow:hidden; font-size:12.5px; font-weight:600}
+  .seg span{padding:6px 12px; color:var(--ink-3); background:#fff}
+  .seg span.on{background:var(--blue); color:#fff}
+  .knob{font-size:12.5px; color:var(--ink-2); display:flex; align-items:center; gap:6px}
+  .knob b{border:1px solid var(--border-strong); border-radius:6px; padding:2px 9px; background:#fff; font-weight:650}
+  .btn{font-size:13px; font-weight:600; border-radius:8px; padding:7px 14px; border:1px solid var(--border-strong); background:#fff; color:var(--ink-2)}
+  .btn.primary{background:var(--blue); border-color:var(--blue); color:#fff}
+  .btn.star{border-color:#e8c98a; background:#fff8ec; color:#9a6a00}
+  .btn.danger{color:var(--err); border-color:#f2c4c4}
+
+  .body3{display:grid; grid-template-columns:190px 1fr 268px; min-height:520px}
+  .body2{display:grid; grid-template-columns:1fr 268px; min-height:520px}
+
+  /* palette */
+  .palette{border-right:1px solid var(--border); padding:14px; background:#fbfcfe}
+  .palette h4, .props h4, .feed h4{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-3); margin-bottom:10px}
+  .pal-item{display:flex; align-items:center; gap:9px; border:1px solid var(--border); background:#fff; border-radius:8px; padding:8px 10px; margin-bottom:8px; font-size:13px; font-weight:600; color:var(--ink-2); cursor:grab}
+  .dot{width:10px; height:10px; border-radius:3px; flex:none}
+  .pal-note{font-size:11.5px; color:var(--ink-3); margin-top:12px; line-height:1.5}
+
+  /* canvas */
+  .canvas{position:relative; background:
+      linear-gradient(90deg, rgba(45,106,159,.045) 1px, transparent 1px) 0 0/22px 22px,
+      linear-gradient(rgba(45,106,159,.045) 1px, transparent 1px) 0 0/22px 22px, #f7f9fc}
+  .canvas svg.wires{position:absolute; inset:0; width:100%; height:100%}
+  .wire{fill:none; stroke:#9fb2c6; stroke-width:2}
+  .wire.done{stroke:var(--ok)}
+  .wire.live{stroke:var(--run)}
+  .wire.rec{stroke:var(--warn); stroke-dasharray:6 5}
+  .wire-label{font-size:11px; font-weight:600; fill:#54657a}
+  .wire-label.rec{fill:var(--warn)}
+  .port{fill:#fff; stroke:#9fb2c6; stroke-width:2}
+
+  .node{position:absolute; width:200px; background:#fff; border:1px solid var(--border-strong); border-left-width:4px; border-radius:var(--r); box-shadow:var(--shadow); padding:10px 12px 9px}
+  .node .nt{display:flex; align-items:center; gap:8px}
+  .node .ic{width:24px; height:24px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:12.5px; color:#fff; flex:none}
+  .node .ttl{font-size:13px; font-weight:650; line-height:1.25}
+  .node .sub{font-size:11.5px; color:var(--ink-3); margin-top:4px}
+  .node.action{border-left-color:var(--action)} .node.action .ic{background:var(--action)}
+  .node.agent{border-left-color:var(--agent)}  .node.agent .ic{background:var(--agent)}
+  .node.human{border-left-color:var(--human)}  .node.human .ic{background:var(--human)}
+  .node.sel{outline:2px solid var(--blue); outline-offset:2px}
+  .node .join{position:absolute; top:-11px; left:10px; font-size:10.5px; font-weight:700; background:#334155; color:#fff; border-radius:999px; padding:2px 9px; letter-spacing:.03em}
+  .start{position:absolute; background:#334155; color:#fff; font-size:12.5px; font-weight:700; border-radius:999px; padding:9px 18px; box-shadow:var(--shadow)}
+
+  /* runtime status */
+  .st{position:absolute; top:-11px; right:10px; font-size:10.5px; font-weight:700; border-radius:999px; padding:2px 9px; color:#fff}
+  .st.ok{background:var(--ok)} .st.run{background:var(--run)} .st.wait{background:var(--warn)} .st.pend{background:var(--pend)}
+  .node.dim{opacity:.55}
+  .node.running{outline:2px solid var(--run); outline-offset:2px}
+  .node.waiting{outline:2px solid var(--warn); outline-offset:2px}
+  .meta{font-size:11px; color:var(--ink-3); margin-top:6px; display:flex; align-items:center; gap:6px}
+  .meta .ava{width:16px; height:16px; border-radius:50%; background:var(--human); color:#fff; font-size:9px; font-weight:700; display:inline-flex; align-items:center; justify-content:center}
+
+  /* props / feed */
+  .props, .feed{border-left:1px solid var(--border); padding:16px; background:#fbfcfe}
+  .fld{margin-bottom:14px}
+  .fld label{display:block; font-size:11.5px; font-weight:650; color:var(--ink-2); margin-bottom:5px}
+  .fld .in{border:1px solid var(--border-strong); border-radius:7px; background:#fff; padding:7px 10px; font-size:13px; color:var(--ink)}
+  .radio{display:flex; gap:8px; font-size:12.5px}
+  .radio span{border:1px solid var(--border-strong); border-radius:7px; padding:6px 10px; background:#fff; color:var(--ink-3); flex:1; text-align:center; font-weight:600}
+  .radio span.on{border-color:var(--blue); color:var(--blue); background:var(--blue-soft)}
+  .hint{font-size:11px; color:var(--ink-3); margin-top:4px}
+  .statusbar{display:flex; gap:18px; align-items:center; border-top:1px solid var(--border); background:#fbfcfe; padding:8px 18px; font-size:12px; color:var(--ink-2)}
+  .statusbar .okc{color:var(--ok); font-weight:650}
+
+  /* run header extras */
+  .progress{height:7px; border-radius:99px; background:#e2e8f0; width:180px; overflow:hidden}
+  .progress i{display:block; height:100%; width:66%; background:linear-gradient(90deg, var(--ok), #43b56c)}
+  .feed .ev{display:flex; gap:9px; margin-bottom:11px; font-size:12.5px}
+  .feed .tks{color:var(--ink-3); font-variant-numeric:tabular-nums; flex:none; width:44px}
+  .feed .ev b{font-weight:650}
+  .feed .pill{display:inline-block; font-size:10.5px; font-weight:700; border-radius:99px; padding:1px 8px; color:#fff}
+  .savebox{margin-top:14px; border:1px dashed #e0c68f; background:#fffaf0; border-radius:10px; padding:12px}
+  .savebox p{font-size:12px; color:#7a5b17; margin-bottom:9px}
+
+  /* chat mock */
+  .chat{max-width:760px; margin:0 auto; padding:26px 22px}
+  .msg{display:flex; gap:12px; margin-bottom:18px}
+  .msg .who{width:32px; height:32px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#fff}
+  .msg.user .who{background:#64748b}
+  .msg.sage .who{background:var(--blue)}
+  .bubble{background:#fff; border:1px solid var(--border); border-radius:12px; padding:12px 15px; box-shadow:var(--shadow); max-width:600px}
+  .bubble p{font-size:13.5px}
+  .plancard{margin-top:10px; border:1px solid var(--border-strong); border-radius:10px; overflow:hidden}
+  .plancard .pc-h{display:flex; align-items:center; gap:10px; padding:9px 13px; background:#f4f7fa; border-bottom:1px solid var(--border); font-size:12.5px; font-weight:700}
+  .plancard ul{list-style:none; padding:9px 13px}
+  .plancard li{display:flex; align-items:center; gap:9px; font-size:12.5px; padding:4px 0; color:var(--ink-2)}
+  .tick{width:16px; height:16px; border-radius:50%; flex:none; display:inline-flex; align-items:center; justify-content:center; font-size:9.5px; color:#fff; font-weight:800}
+  .tick.ok{background:var(--ok)} .tick.run{background:var(--run)} .tick.pend{background:#cbd5e1} .tick.wait{background:var(--warn)}
+  .indent{margin-left:22px}
+  .pc-f{display:flex; gap:8px; align-items:center; padding:9px 13px; border-top:1px solid var(--border); background:#fbfcfe}
+  .pc-f .grow{flex:1; font-size:11.5px; color:var(--ink-3)}
+
+  /* modal mock */
+  .modal-scrim{background:rgba(30,41,54,.45); padding:56px 0; display:flex; justify-content:center}
+  .modal{width:560px; background:#fff; border-radius:14px; box-shadow:0 18px 60px rgba(10,20,35,.35); overflow:hidden}
+  .modal .m-h{padding:16px 20px; border-bottom:1px solid var(--border); font-size:16px; font-weight:700}
+  .modal .m-b{padding:18px 20px}
+  .tiles{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:6px}
+  .tile{border:1.5px solid var(--border-strong); border-radius:10px; padding:12px; text-align:center; cursor:pointer}
+  .tile .t-ic{font-size:20px}
+  .tile b{display:block; font-size:12.5px; margin-top:6px}
+  .tile p{font-size:11px; color:var(--ink-3); margin-top:4px; line-height:1.35}
+  .tile.on{border-color:var(--blue); background:var(--blue-soft)}
+  .m-f{display:flex; justify-content:flex-end; gap:10px; padding:14px 20px; border-top:1px solid var(--border); background:#fbfcfe}
+  .note{font-size:12px; color:var(--ink-3); margin-top:10px}
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>Workflow UX — Phase 5 mockups <span style="color:var(--ink-3);font-weight:500">(v1, for iteration)</span></h1>
+  <p>Four views of one idea: <b>the same canvas</b> authors a workflow, watches it run, and receives promoted agent plans.
+  Terminology per D18 — users see “Workflow”; Flow Agent stays under the hood. Layout, spacing and color are directional, not final.</p>
+</div>
+
+<!-- ============================================================ A -->
+<div class="mock">
+  <h2>A · Workflow editor — design time</h2>
+  <p class="cap">Upgraded <code>ng-flow-editor</code> canvas. New in this mockup: the <b>parallel traversal</b> segmented control + concurrency cap in the toolbar, an <b>AND-join badge</b> on the approval step, a <b>Human Task node type</b> (palette + canvas), a labeled <b>recovery path</b> (dashed amber), and live validation in the status bar. Selected node’s properties on the right, including join type.</p>
+  <div class="frame">
+    <div class="topbar">
+      <span class="back">←</span>
+      <span class="wf-name">Deal Closed Won — Onboarding</span>
+      <span class="chip active">● Active</span>
+      <span class="chip">Workflow</span>
+      <div class="spacer"></div>
+      <span class="knob">Traversal</span>
+      <div class="seg"><span>Sequential</span><span class="on">Parallel</span></div>
+      <span class="knob">Max parallel <b>5</b></span>
+      <button class="btn">Validate</button>
+      <button class="btn">▶ Run</button>
+      <button class="btn primary">Save</button>
+    </div>
+    <div class="body3">
+      <div class="palette">
+        <h4>Steps</h4>
+        <div class="pal-item"><span class="dot" style="background:var(--prompt)"></span>Prompt (AI)</div>
+        <div class="pal-item"><span class="dot" style="background:var(--action)"></span>Action</div>
+        <div class="pal-item"><span class="dot" style="background:var(--agent)"></span>Sub-Workflow / Agent</div>
+        <div class="pal-item"><span class="dot" style="background:var(--human)"></span>Human Task</div>
+        <div class="pal-item"><span class="dot" style="background:var(--loop)"></span>For Each</div>
+        <div class="pal-item"><span class="dot" style="background:var(--loop)"></span>While</div>
+        <p class="pal-note">Drag onto the canvas. Connect ports to define order; steps with no path between them run <b>in parallel</b>.</p>
+      </div>
+      <div class="canvas" style="height:520px">
+        <svg class="wires">
+          <path class="wire" d="M120,258 C146,258 146,258 172,258"/>
+          <path class="wire" d="M372,258 C406,258 406,118 440,118"/>
+          <path class="wire" d="M372,258 C400,258 412,258 440,258"/>
+          <path class="wire" d="M372,258 C406,258 406,398 440,398"/>
+          <path class="wire" d="M640,118 C684,118 676,228 718,228"/>
+          <path class="wire" d="M640,258 C676,258 684,258 718,258"/>
+          <path class="wire" d="M640,398 C684,398 676,288 718,288"/>
+          <path class="wire" d="M940,258 C966,258 962,143 988,143"/>
+          <path class="wire rec" d="M940,258 C966,258 962,368 988,368"/>
+          <text class="wire-label" x="945" y="185">approved = true</text>
+          <text class="wire-label rec" x="945" y="340">otherwise · recovery</text>
+          <circle class="port" cx="172" cy="258" r="4"/><circle class="port" cx="372" cy="258" r="4"/>
+          <circle class="port" cx="440" cy="118" r="4"/><circle class="port" cx="640" cy="118" r="4"/>
+          <circle class="port" cx="440" cy="258" r="4"/><circle class="port" cx="640" cy="258" r="4"/>
+          <circle class="port" cx="440" cy="398" r="4"/><circle class="port" cx="640" cy="398" r="4"/>
+          <circle class="port" cx="718" cy="258" r="4"/><circle class="port" cx="940" cy="258" r="4"/>
+          <circle class="port" cx="988" cy="143" r="4"/><circle class="port" cx="988" cy="368" r="4"/>
+        </svg>
+        <div class="start" style="left:30px; top:240px">▶ Start</div>
+        <div class="node action" style="left:172px; top:224px">
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Enrich Deal Data</span></div>
+          <div class="sub">Action · Apollo Enrichment</div>
+        </div>
+        <div class="node agent" style="left:440px; top:84px">
+          <div class="nt"><span class="ic">✦</span><span class="ttl">Draft Contract</span></div>
+          <div class="sub">Agent · Contract Writer</div>
+        </div>
+        <div class="node action" style="left:440px; top:224px">
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Provision Accounts</span></div>
+          <div class="sub">Action · Create Customer Accounts</div>
+        </div>
+        <div class="node action" style="left:440px; top:364px">
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Notify Finance</span></div>
+          <div class="sub">Action · Send Single Message</div>
+        </div>
+        <div class="node human sel" style="left:718px; top:206px; width:222px">
+          <span class="join">⋀ AND · 3 inputs</span>
+          <div class="nt"><span class="ic">👤</span><span class="ttl">Manager Approval</span></div>
+          <div class="sub">Human Task · blocks until complete</div>
+          <div class="meta"><span class="ava">SM</span> Sales Manager · due 2 days</div>
+        </div>
+        <div class="node action" style="left:988px; top:109px">
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Send Kickoff Email</span></div>
+          <div class="sub">Action · Send To Audience</div>
+        </div>
+        <div class="node agent" style="left:988px; top:334px">
+          <div class="nt"><span class="ic">✦</span><span class="ttl">Revise Terms</span></div>
+          <div class="sub">Agent · Deal Desk</div>
+        </div>
+      </div>
+      <div class="props">
+        <h4>Step · Manager Approval</h4>
+        <div class="fld"><label>Type</label><div class="in">Human Task</div></div>
+        <div class="fld"><label>Assign to</label><div class="in">Role · Sales Manager</div></div>
+        <div class="fld"><label>Due</label><div class="in">2 days after step starts</div></div>
+        <div class="fld"><label>Join — wait for</label>
+          <div class="radio"><span class="on">⋀ All inputs</span><span>⋁ Any input</span></div>
+          <p class="hint">All 3 incoming steps must finish before this step starts.</p>
+        </div>
+        <div class="fld"><label>On error / rejection</label><div class="in">Follow recovery path</div></div>
+        <div class="fld"><label>Notify assignee via</label><div class="in">In-app + Email</div></div>
+      </div>
+    </div>
+    <div class="statusbar">
+      <span>8 steps · 9 paths</span>
+      <span class="okc">✓ Valid — no circular paths, all steps resolved</span>
+      <span>Parallel traversal · cap 5</span>
+      <div class="spacer"></div><span>100%</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ B -->
+<div class="mock">
+  <h2>B · The same canvas, watching a run</h2>
+  <p class="cap">Runtime overlay — works identically for a saved Workflow run <i>and</i> a durable task graph an agent emitted (this one came from Sage, hence the provenance chip and the prominent <b>Save as Workflow</b>). Node status is live off <code>AIAgentRunStep</code> / <code>MJ: Tasks</code> entity events. This view replaces the separate Tasks Gantt as the graph surface.</p>
+  <div class="frame">
+    <div class="topbar">
+      <span class="back">←</span>
+      <span class="wf-name">Deal Onboarding — Acme Corp</span>
+      <span class="chip eph">✦ Planned by Sage</span>
+      <div class="spacer"></div>
+      <div class="progress"><i></i></div>
+      <span class="knob"><b>5 / 8</b> steps</span>
+      <span class="knob">elapsed 4m 12s</span>
+      <button class="btn">Pause</button>
+      <button class="btn danger">Cancel</button>
+      <button class="btn star">☆ Save as Workflow</button>
+    </div>
+    <div class="body2">
+      <div class="canvas" style="height:520px">
+        <svg class="wires">
+          <path class="wire done" d="M120,258 C146,258 146,258 172,258"/>
+          <path class="wire done" d="M372,258 C406,258 406,118 440,118"/>
+          <path class="wire done" d="M372,258 C400,258 412,258 440,258"/>
+          <path class="wire done" d="M372,258 C406,258 406,398 440,398"/>
+          <path class="wire done" d="M640,118 C684,118 676,228 718,228"/>
+          <path class="wire live" d="M640,258 C676,258 684,258 718,258"/>
+          <path class="wire done" d="M640,398 C684,398 676,288 718,288"/>
+          <path class="wire" d="M940,258 C966,258 962,143 988,143"/>
+          <path class="wire rec" d="M940,258 C966,258 962,368 988,368"/>
+          <text class="wire-label" x="945" y="185">approved = true</text>
+          <text class="wire-label rec" x="945" y="340">otherwise · recovery</text>
+        </svg>
+        <div class="start" style="left:30px; top:240px">▶ Start</div>
+        <div class="node action" style="left:172px; top:224px">
+          <span class="st ok">✓ done</span>
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Enrich Deal Data</span></div>
+          <div class="sub">finished in 12s</div>
+        </div>
+        <div class="node agent" style="left:440px; top:84px">
+          <span class="st ok">✓ done</span>
+          <div class="nt"><span class="ic">✦</span><span class="ttl">Draft Contract</span></div>
+          <div class="sub">1m 48s · <u>open agent run</u></div>
+        </div>
+        <div class="node action running" style="left:440px; top:224px">
+          <span class="st run">● running</span>
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Provision Accounts</span></div>
+          <div class="sub">38s elapsed</div>
+        </div>
+        <div class="node action" style="left:440px; top:364px">
+          <span class="st ok">✓ done</span>
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Notify Finance</span></div>
+          <div class="sub">finished in 3s</div>
+        </div>
+        <div class="node human waiting" style="left:718px; top:206px; width:222px">
+          <span class="st wait">⏳ waiting on human</span>
+          <div class="nt"><span class="ic">👤</span><span class="ttl">Manager Approval</span></div>
+          <div class="sub">2 of 3 inputs complete</div>
+          <div class="meta"><span class="ava">JR</span> J. Rivera · due in 2h · <u>nudge</u></div>
+        </div>
+        <div class="node action dim" style="left:988px; top:109px">
+          <span class="st pend">pending</span>
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Send Kickoff Email</span></div>
+          <div class="sub">waiting on approval</div>
+        </div>
+        <div class="node agent dim" style="left:988px; top:334px">
+          <span class="st pend">pending</span>
+          <div class="nt"><span class="ic">✦</span><span class="ttl">Revise Terms</span></div>
+          <div class="sub">recovery — only on rejection</div>
+        </div>
+      </div>
+      <div class="feed">
+        <h4>Run activity</h4>
+        <div class="ev"><span class="tks">10:32</span><div>Plan submitted by <b>Sage</b> · 8 steps, 3 in parallel</div></div>
+        <div class="ev"><span class="tks">10:32</span><div><b>Enrich Deal Data</b> <span class="pill" style="background:var(--ok)">done</span></div></div>
+        <div class="ev"><span class="tks">10:33</span><div>3 steps launched in parallel</div></div>
+        <div class="ev"><span class="tks">10:34</span><div><b>Draft Contract</b> <span class="pill" style="background:var(--ok)">done</span> → artifact created</div></div>
+        <div class="ev"><span class="tks">10:35</span><div><b>Manager Approval</b> assigned to <b>J. Rivera</b> <span class="pill" style="background:var(--warn)">waiting</span></div></div>
+        <div class="savebox">
+          <p><b>This plan worked?</b> Save it as a reusable Workflow — run it on demand, on a schedule, or when a Deal changes.</p>
+          <button class="btn star" style="width:100%">☆ Save as Workflow</button>
+        </div>
+      </div>
+    </div>
+    <div class="statusbar">
+      <span>Run #4821 · started 10:32 AM · triggered from Chat</span>
+      <div class="spacer"></div>
+      <span>durable · survives restart · re-attaches on reload</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ C -->
+<div class="mock">
+  <h2>C · In chat — where a plan becomes a Workflow</h2>
+  <p class="cap">ng-conversations detects a task graph on the agent run. While running: a compact live checklist (tap → opens view B). When complete: the <b>Save as Workflow</b> moment.</p>
+  <div class="frame">
+    <div class="chat">
+      <div class="msg user"><span class="who">AM</span>
+        <div class="bubble"><p>Acme just signed — get the deal ready for onboarding and loop in their account manager.</p></div>
+      </div>
+      <div class="msg sage"><span class="who">S</span>
+        <div class="bubble">
+          <p>On it — I’ve planned this as 8 steps, running 3 in parallel. Manager approval gates the kickoff email.</p>
+          <div class="plancard">
+            <div class="pc-h">⛓ Deal Onboarding — Acme Corp <span class="chip" style="margin-left:auto">Running · 5/8</span></div>
+            <ul>
+              <li><span class="tick ok">✓</span> Enrich Deal Data</li>
+              <li><span class="tick ok">✓</span> Draft Contract <span style="color:var(--ink-3)">· artifact</span></li>
+              <li><span class="tick run">●</span> Provision Accounts</li>
+              <li><span class="tick ok">✓</span> Notify Finance</li>
+              <li><span class="tick wait">⏳</span> Manager Approval <span style="color:var(--ink-3)">· J. Rivera, due 2h</span></li>
+              <li class="indent"><span class="tick pend"> </span> Send Kickoff Email</li>
+            </ul>
+            <div class="pc-f"><span class="grow">Durable — keeps running if you close this tab.</span><button class="btn">View</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="msg sage"><span class="who">S</span>
+        <div class="bubble">
+          <p>All done — approval came through and the kickoff email went out. 🎉</p>
+          <div class="plancard">
+            <div class="pc-h">⛓ Deal Onboarding — Acme Corp <span class="chip active" style="margin-left:auto">Completed · 8/8 · 22m</span></div>
+            <div class="pc-f">
+              <span class="grow">Reuse this approach anytime — as a saved Workflow you can run, schedule, or trigger on a Deal change.</span>
+              <button class="btn">View</button>
+              <button class="btn star">☆ Save as Workflow</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ D -->
+<div class="mock">
+  <h2>D · “Create Workflow” — the front door</h2>
+  <p class="cap">First-class entry (nav + Agent Manager hand-off) that lands on the canvas — no more saving an AI Agent record first. Three starting points; “Describe it” drafts the graph via the Agent Manager, then opens the editor for refinement.</p>
+  <div class="frame modal-scrim">
+    <div class="modal">
+      <div class="m-h">Create Workflow</div>
+      <div class="m-b">
+        <div class="fld"><label>Name</label><div class="in">Deal Closed Won — Onboarding</div></div>
+        <div class="fld"><label>Description <span style="color:var(--ink-3);font-weight:400">(optional)</span></label><div class="in" style="color:var(--ink-3)">What should this workflow accomplish?</div></div>
+        <div class="fld"><label>Start from</label>
+          <div class="tiles">
+            <div class="tile"><div class="t-ic">▦</div><b>Blank canvas</b><p>Drag steps, connect paths</p></div>
+            <div class="tile on"><div class="t-ic">✦</div><b>Describe it</b><p>AI drafts the graph — you refine it on the canvas</p></div>
+            <div class="tile"><div class="t-ic">⟳</div><b>From a past run</b><p>Promote a task graph an agent already ran</p></div>
+          </div>
+        </div>
+        <p class="note">Workflows are deterministic pathways — they can include AI steps (prompts, agents) but always follow the graph.</p>
+      </div>
+      <div class="m-f"><button class="btn">Cancel</button><button class="btn primary">Create →</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="intro" style="margin-top:-18px">
+  <p style="font-size:12.5px"><b>Open questions for iteration:</b> ① toolbar vs. per-node placement for the concurrency cap · ② should the recovery path style (dashed amber) also cover Validate-rejection routes, or do those get their own color · ③ run view: right-panel activity feed vs. bottom timeline strip · ④ does “Save as Workflow” in chat prompt for name/trigger immediately, or drop you into the editor first · ⑤ minimap &amp; palette collapsed by default on smaller screens?</p>
+</div>
+
+</body>
+</html>
