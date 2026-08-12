@@ -13,6 +13,7 @@
  * @module @memberjunction/ai-core-plus
  */
 import { SafeExpressionEvaluator } from '@memberjunction/global';
+import { CONDITION_ROOTS, UnknownConditionRoots } from './condition-roots';
 import { DetectCycle, type TaskGraphEdge, type TaskGraphNode } from './graph-algorithms';
 import {
     MAX_TASKS_PER_GRAPH,
@@ -57,24 +58,52 @@ const KNOWN_KINDS: readonly TaskGraphNodeKind[] = [
  * which is why the message has to carry enough to explain itself to someone who was editing an
  * unrelated step in an old flow.
  */
-function checkConditionSyntax(task: TaskGraphSpecNode, errors: TaskGraphValidationError[]): void {
+function checkConditionSyntax(
+    task: TaskGraphSpecNode,
+    nameByTempId: ReadonlyMap<string, string>,
+    errors: TaskGraphValidationError[],
+): void {
+    // C7: name steps the way their author does. On the compiled-flow path `tempId` is a UUID, and a
+    // message reading `Task "9f1c2d33-…" has a condition on its dependency "4a7b0e91-…"` is illegible
+    // in exactly the place it has to explain itself — to somebody editing an unrelated step in an
+    // old flow who has just been told their save failed.
+    const label = task.name?.trim() || task.tempId;
+    const nameOf = (tempId: string): string => nameByTempId.get(tempId) || tempId;
     const report = (where: string, condition: string): void => {
         const verdict = CONDITION_SYNTAX.validateSyntax(condition);
         // Undecidable means this host cannot compile at all (a strict CSP) — not that the condition
         // is wrong. Refusing then would reject every condition in the browser while the same spec
         // validated fine on the server.
-        if (verdict.Valid || verdict.Undecidable) return;
-        errors.push({
-            Code: 'InvalidCondition',
-            Message: `Task "${task.tempId}" has ${where} that cannot be parsed: ${verdict.Error}. `
-                + `The condition was: ${condition}`,
-            TempId: task.tempId,
-        });
+        if (!verdict.Valid && !verdict.Undecidable) {
+            errors.push({
+                Code: 'InvalidCondition',
+                Message: `Task "${label}" has ${where} that cannot be parsed: ${verdict.Error}. `
+                    + `The condition was: ${condition}`,
+                TempId: task.tempId,
+            });
+            return;
+        }
+
+        // UNKNOWN ROOTS ARE DECIDABLE NOW, and leaving them to run time earns a permanent stall.
+        // Data absence reads as a false verdict since R2-3, so an unknown root is the one remaining
+        // way a condition holds a branch forever — on a terminal origin whose output can never
+        // change, the identical evaluation repeats until somebody reads a server log. The envelope
+        // is a closed set defined in code; this is the same knowledge, applied one step earlier.
+        const unknown = UnknownConditionRoots(condition);
+        if (unknown.length > 0) {
+            errors.push({
+                Code: 'InvalidCondition',
+                Message: `Task "${label}" has ${where} referring to ${unknown.map((u) => `"${u}"`).join(' and ')}, `
+                    + `which a condition cannot see. Available: ${[...CONDITION_ROOTS].sort().join(', ')}. `
+                    + `The condition was: ${condition}`,
+                TempId: task.tempId,
+            });
+        }
     };
 
     for (const raw of task.dependsOn ?? []) {
         const dep = NormalizeDependency(raw);
-        if (dep.condition?.trim()) report(`a condition on its dependency "${dep.tempId}"`, dep.condition);
+        if (dep.condition?.trim()) report(`a condition on its dependency "${nameOf(dep.tempId)}"`, dep.condition);
     }
 
     // A While step's loop condition is the same grammar evaluated by the same evaluator, and a typo
@@ -191,6 +220,11 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec): TaskGraphValidationR
     }
 
     // --- per-node checks -----------------------------------------------------
+    // Built once so every message can name a step the way its author does rather than by tempId,
+    // which is a UUID on the compiled-flow path. C7.
+    const nameByTempId = new Map<string, string>(
+        tasks.filter((t) => t.tempId && t.name?.trim()).map((t) => [t.tempId, t.name.trim()]),
+    );
     const seen = new Set<string>();
     for (const task of tasks) {
         if (!task.tempId || task.tempId.trim().length === 0) {
@@ -218,7 +252,7 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec): TaskGraphValidationR
         }
 
         checkConfiguration(task, errors);
-        checkConditionSyntax(task, errors);
+        checkConditionSyntax(task, nameByTempId, errors);
 
         for (const raw of task.dependsOn ?? []) {
             // NORMALISE before comparing. The object form `{ tempId: <own> }` used to slip past this
