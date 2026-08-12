@@ -51,6 +51,7 @@ import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequ
 import type { MJTaskEntity_ITaskStepConfiguration, MJTaskEntity_ITaskLoopIteration } from '@memberjunction/core-entities';
 import { TaskClaimStore, TERMINAL_PARENT_STATUSES, TERMINAL_PARENT_STATUS_SQL } from './TaskClaimStore';
 import { BuildConditionContext, DecideGate, ParseConditionOutput } from './condition-gate';
+import { HumanTaskSQL, IsHumanTask } from './task-predicates';
 import {
     IsSettlementExpired,
     SelectUnsettledGraphIDs,
@@ -1571,6 +1572,19 @@ export class TaskGraphDispatcher implements IShutdownable {
                     // is silent — the graph sits In Progress looking like it is still working.
                     if (!this.promptRunner) continue;
                 } else if (!entity.AgentID) {
+                    // No runner column at all — a person completes this one. Asked through the same
+                    // predicate the human settle/expiry sweeps use, so a task that gets NOTIFIED here
+                    // is a task those sweeps can later see; the two disagreeing is how a human task
+                    // ends up asked and then never settled.
+                    if (!IsHumanTask(entity)) {
+                        // Neither a runner nor a person: nothing can ever move this. Loud, because
+                        // the alternative is a graph that waits forever on nobody.
+                        LogError(
+                            `[TaskGraphDispatcher] Task '${entity.Name}' (${entity.ID}) has no runner ` +
+                            `assignment and is not a human step — nothing can execute it. The graph will stall.`,
+                        );
+                        continue;
+                    }
                     await this.notifyHumanTaskReady(entity, provider);
                     continue;
                 }
@@ -1728,7 +1742,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         const waiting = await RunView.FromMetadataProvider(provider).RunView<MJTaskEntity>(
             {
                 EntityName: 'MJ: Tasks',
-                ExtraFilter: `ParentID='${graphID}' AND StepType='Human' AND Status='Pending'`,
+                ExtraFilter: `ParentID='${graphID}' AND ${HumanTaskSQL()} AND Status='Pending'`,
                 ResultType: 'entity_object',
                 BypassCache: true,
             },
@@ -1794,7 +1808,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // unrelated work.
                 ExtraFilter:
                     `ParentID='${graphID}' AND Status='Pending' ` +
-                    `AND (StepType='Human' OR (StepType IS NULL AND UserID IS NOT NULL)) ` +
+                    `AND ${HumanTaskSQL()} ` +
                     `AND ClaimedBy='${HUMAN_TASK_NOTIFIED_MARKER}'`,
                 ResultType: 'entity_object',
                 BypassCache: true,
@@ -1859,7 +1873,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             {
                 EntityName: 'MJ: Tasks',
                 Fields: ['ID'],
-                ExtraFilter: `ParentID='${graphID}' AND StepType='Human' AND Status='Pending'`,
+                ExtraFilter: `ParentID='${graphID}' AND ${HumanTaskSQL()} AND Status='Pending'`,
                 ResultType: 'simple',
             },
             this.contextUser,
