@@ -58,6 +58,33 @@ import { NotificationEngine } from '@memberjunction/notifications';
 const HUMAN_TASK_NOTIFICATION_TYPE = 'Task Assignment';
 
 /**
+ * Statuses a graph parent has stopped moving from.
+ *
+ * Shared by the guarded terminal write and the unsettled-graph sweep, so "terminal" means exactly
+ * one thing in both — the two disagreeing is how a graph becomes invisible to the machinery that is
+ * supposed to rescue it.
+ */
+const TERMINAL_TASK_STATUSES: ReadonlySet<string> = new Set(['Complete', 'Failed', 'Cancelled', 'Skipped']);
+
+/**
+ * How far back the steady-state sweep looks for a graph that reached terminal without settling.
+ *
+ * Bounds the scan without bounding recovery: `__mj_UpdatedAt` advances on every settle attempt, so a
+ * graph actively being retried never ages out. What ages out is a graph nothing has touched for a
+ * day — abandonment, not age.
+ */
+const UNSETTLED_SWEEP_WINDOW_HOURS = 24;
+
+/**
+ * The window used ONCE at startup, mirroring what claim reconciliation already does.
+ *
+ * The realistic producer of a >24h-stale unsettled graph is the dispatcher itself being down — an
+ * outage or a long maintenance window — which is exactly P3's crash scenario at a larger scale.
+ * Under the steady-state window alone those runs would stay `Paused` forever, invisibly.
+ */
+const UNSETTLED_STARTUP_WINDOW_HOURS = 24 * 30;
+
+/**
  * Written to a human task's `ClaimedBy` once its assignee has been told it is ready.
  *
  * A human task has no executor, so the claim column is otherwise unused — which makes it the natural
@@ -393,6 +420,11 @@ export class TaskGraphDispatcher implements IShutdownable {
 
         LogStatus(`[TaskGraphDispatcher] Starting as instance '${this.config.InstanceID}'.`);
         await this.Reconcile();
+        // One wide pass over graphs that reached terminal without settling, mirroring what claim
+        // reconciliation above already does for tasks. The realistic producer of a >24h-stale
+        // unsettled graph is this process having been DOWN — an outage, a long deploy — which the
+        // steady-state window cannot see and which would otherwise leave those runs parked forever.
+        await this.sweepUnsettledGraphs(UNSETTLED_STARTUP_WINDOW_HOURS);
 
         this.pollTimer = setInterval(() => { void this.pollOnce(); }, this.config.PollIntervalSeconds * 1000);
         this.reconcileTimer = setInterval(
@@ -593,8 +625,8 @@ export class TaskGraphDispatcher implements IShutdownable {
      * All four decisions — what is eligible, what must block, what the parent status is, whether the
      * graph is wedged — are delegated to the pure algorithms, unchanged from Phase 1.
      */
-    private async propagateAndRollup(provider: IMetadataProvider): Promise<void> {
-        for (const parentID of await this.findActiveGraphIDs(provider)) {
+    private async propagateAndRollup(provider: IMetadataProvider, graphIDs?: readonly string[]): Promise<void> {
+        for (const parentID of graphIDs ?? await this.findActiveGraphIDs(provider)) {
             // Human steps settle BEFORE the graph state is read, so an answer given since the last
             // poll is already reflected when eligibility and rollup are computed. Doing it after
             // would delay every dependent branch by a full poll interval for no reason — and on a
@@ -698,15 +730,46 @@ export class TaskGraphDispatcher implements IShutdownable {
             // Taken from the earliest child rather than from the clock, because that is when work
             // genuinely began — a graph can sit Pending for a long time between submission (already
             // recorded as CreatedAt) and a dispatcher picking up its first task.
+            // Column-scoped for the same reason the terminal write is: a full-row save here would
+            // carry this instance's `InputPayload` snapshot and could erase a continuation marker
+            // another instance had just claimed. Guarded on `StartedAt IS NULL`, so calling it on
+            // every pass is free.
             const earliestChildStart = this.earliestStart(fresh.entityById);
-            const startedAtChanged = parent.StartedAt == null && earliestChildStart != null;
-            if (startedAtChanged) parent.StartedAt = earliestChildStart;
+            if (parent.StartedAt == null && earliestChildStart != null) {
+                await this.claims.TryStampParentStart(provider, parentID, earliestChildStart, this.contextUser);
+                parent.StartedAt = earliestChildStart;
+            }
 
-            if (startedAtChanged || parent.Status !== rollup.status || parent.PercentComplete !== rollup.percentComplete) {
+            // THE TERMINAL WRITE IS GUARDED AND COLUMN-SCOPED, not a full-row save.
+            //
+            // `GenerateSaveSQL` sends every updateable column on every save, so a full-row save
+            // carries the whole in-memory snapshot — including `InputPayload`, where the continuation
+            // marker lives. Two instances both compute the terminal rollup; if one claims the marker
+            // and the other then saves its pre-marker snapshot, the marker is ERASED and the
+            // settlement delivers twice. For `reinvoke` that is a second billed agent turn.
+            //
+            // Guarding on "not already terminal" also makes the write idempotent across the
+            // re-entrant settle path below, and replaces an unchecked `Save()` whose failure left the
+            // graph active — re-emitting frames and recomputing cost every poll, forever.
+            if (rollup.isTerminal) {
+                const settled = await this.claims.TrySettleParent(
+                    provider, parentID, rollup.status as Parameters<TaskClaimStore['TrySettleParent']>[2],
+                    rollup.percentComplete, this.contextUser,
+                );
+                if (!settled && !TERMINAL_TASK_STATUSES.has(parent.Status)) {
+                    // Neither "already terminal" nor a successful write: the statement failed. Leave
+                    // the graph active so the next pass retries rather than settling on a status the
+                    // database never accepted.
+                    LogError(`[TaskGraphDispatcher] Could not write terminal status for graph ${parentID}; leaving it active to retry.`);
+                    continue;
+                }
+                parent.Status = rollup.status;
+            } else if (parent.Status !== rollup.status || parent.PercentComplete !== rollup.percentComplete) {
                 parent.Status = rollup.status;
                 parent.PercentComplete = rollup.percentComplete;
-                if (rollup.isTerminal) parent.CompletedAt = new Date();
-                await parent.Save();
+                if (!(await parent.Save())) {
+                    LogError(`[TaskGraphDispatcher] Could not update progress for graph ${parentID}: ${parent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
             }
 
             if (rollup.isTerminal) {
@@ -1046,8 +1109,8 @@ export class TaskGraphDispatcher implements IShutdownable {
      * user-visible noise and, for `reinvoke`, an unbounded agent-run loop. Given one of the two has
      * to be chosen, the quiet failure is the safe one.
      *
-     * The marker is written with a compare-and-swap read-back, so two instances reconciling the same
-     * completed graph produce one winner rather than two.
+     * The marker is claimed with a real compare-and-swap (one guarded UPDATE, rowcount as verdict),
+     * so two instances reconciling the same completed graph produce one winner rather than two.
      */
     private async deliverContinuation(
         provider: IMetadataProvider,
@@ -1067,7 +1130,26 @@ export class TaskGraphDispatcher implements IShutdownable {
             );
         }
 
-        if (!(await this.claimContinuation(provider, parent.ID, meta))) return;
+        // A SETTLEMENT NOBODY IS WAITING FOR STILL SETTLES — it just does not get announced.
+        //
+        // Run settlement and cost rollup are status corrections and are always safe to apply late; a
+        // run left `Paused` forever is strictly worse than a stale notification skipped. A stale
+        // NOTIFICATION is not: posting a day-old "your workflow finished" into a live conversation,
+        // or worse starting a fresh billed agent turn for it, is the outcome the age-out exists to
+        // avoid. So an aged-out settlement claims the marker as `expired` and logs, which both
+        // records what happened and stops any later pass delivering it. Second rung on the ladder
+        // the reinvoke cap already established.
+        const expired = this.isSettlementExpired(parent);
+        if (!(await this.claimContinuation(provider, parent.ID, expired ? 'expired' : 'delivered'))) return;
+
+        if (expired) {
+            LogStatus(
+                `[TaskGraphDispatcher] Graph ${parent.ID} settled after its delivery window ` +
+                `(${UNSETTLED_SWEEP_WINDOW_HOURS}h); the run and its cost were corrected, but the ` +
+                `continuation was NOT delivered. Marked expired.`,
+            );
+            return;
+        }
 
         if (mode === 'none') return;
 
@@ -1124,23 +1206,30 @@ export class TaskGraphDispatcher implements IShutdownable {
      * `MJ: Tasks` stays user-writable (D20), so a plain "read, decide, write" is not enough — the
      * read-back is what makes a lost race observable instead of producing a duplicate delivery.
      */
+    /**
+     * True when this graph finished so long ago that announcing it would surprise rather than inform.
+     *
+     * Measured from the parent's completion, not from when we noticed: the point is how stale the
+     * NEWS is to whoever would receive it.
+     */
+    private isSettlementExpired(parent: MJTaskEntity): boolean {
+        if (!parent.CompletedAt) return false;
+        return Date.now() - parent.CompletedAt.getTime() > UNSETTLED_SWEEP_WINDOW_HOURS * 3600_000;
+    }
+
     private async claimContinuation(
         provider: IMetadataProvider,
         parentID: string,
-        meta: TaskGraphParentMetadata,
+        deliveredAs: 'delivered' | 'expired' = 'delivered',
     ): Promise<boolean> {
-        const row = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
-        if (!(await row.Load(parentID))) return false;
-
-        const current = this.readParentMetadata(row);
-        if (current.continuationDeliveredAt) return false; // a peer got there first
-
-        row.InputPayload = JSON.stringify({ ...meta, continuationDeliveredAt: new Date().toISOString() });
-        if (!(await row.Save())) {
-            LogError(`[TaskGraphDispatcher] Could not mark continuation delivered for ${parentID}; skipping to avoid a duplicate.`);
-            return false;
-        }
-        return true;
+        // ONE GUARDED STATEMENT — see TaskClaimStore.TryClaimContinuation.
+        //
+        // This was Load → check the marker → `Save()`: an unconditional last-write-wins UPDATE that
+        // two dispatchers could both pass. The comments here and at the call site called it a
+        // compare-and-swap read-back; it was read-check-write, and for `continuation: 'reinvoke'`
+        // losing that race means two fresh agent turns billed for one settlement, each able to
+        // submit further graphs.
+        return this.claims.TryClaimContinuation(provider, parentID, deliveredAs, this.contextUser);
     }
 
     /** One line describing how the graph ended, for the completion log and message delivery. */
@@ -1230,7 +1319,29 @@ export class TaskGraphDispatcher implements IShutdownable {
      * invalidate. Left cached, a completed task keeps reading as `In Progress` and the graph never
      * rolls up: submitted work simply never settles.
      */
-    private async findActiveGraphIDs(provider: IMetadataProvider): Promise<string[]> {
+    /**
+     * Settles graphs that reached terminal without completing their post-settlement sequence.
+     *
+     * Runs the ordinary propagation path, which is safe to re-enter by construction: the terminal
+     * write is guarded on not-already-terminal, the cost rollup assigns rather than accumulates, run
+     * settlement is guarded on `Paused`, and delivery is guarded by the continuation CAS. A revisit
+     * therefore corrects whatever is missing and does nothing where nothing is.
+     *
+     * @param windowHours how far back to look — wide once at startup, narrow in steady state
+     */
+    private async sweepUnsettledGraphs(windowHours: number): Promise<void> {
+        try {
+            const provider = await this.providerFactory.CreateProvider();
+            const ids = await this.findActiveGraphIDs(provider, windowHours);
+            if (ids.length === 0) return;
+            LogStatus(`[TaskGraphDispatcher] Startup sweep: reviewing ${ids.length} graph(s), including any that reached terminal without settling.`);
+            await this.propagateAndRollup(provider, ids);
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Unsettled-graph sweep failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    private async findActiveGraphIDs(provider: IMetadataProvider, windowHours: number = UNSETTLED_SWEEP_WINDOW_HOURS): Promise<string[]> {
         const rv = RunView.FromMetadataProvider(provider);
 
         // TWO queries, because "has work left to do" and "needs attention" are not the same set.
@@ -1244,7 +1355,21 @@ export class TaskGraphDispatcher implements IShutdownable {
         //
         // The second query closes it: a parent that is itself non-terminal still needs looking at,
         // whatever its children are doing.
-        const [withPendingWork, unsettledParents] = await rv.RunViews([
+        // THREE queries. The third rescues a graph that reached terminal without settling.
+        //
+        // The post-settlement sequence — cost rollup, run settlement, continuation delivery — runs
+        // AFTER the parent's terminal write, and a terminal parent with all-terminal children
+        // matches neither query above. So a process that died in that window left the submitting
+        // agent run `Paused` FOREVER: no rollup, no notification, and nothing that would ever look
+        // again. The metadata's own doc comment promised "the next sweep retries"; that sweep did
+        // not exist.
+        //
+        // Bounded rather than unbounded, because the marker lives in `InputPayload` JSON and cannot
+        // be filtered in SQL: the window is what keeps this a targeted rescue instead of a re-parse
+        // of every graph ever run. `__mj_UpdatedAt` advances on each settle attempt, so a graph
+        // being actively retried stays in the window — the bound is on ABANDONMENT, not on age.
+        const cutoff = new Date(Date.now() - windowHours * 3600_000).toISOString();
+        const [withPendingWork, unsettledParents, terminalRecent] = await rv.RunViews([
             {
                 EntityName: 'MJ: Tasks',
                 ExtraFilter: `ParentID IS NOT NULL AND Status IN ('Pending','In Progress')`,
@@ -1259,6 +1384,15 @@ export class TaskGraphDispatcher implements IShutdownable {
                 ResultType: 'simple',
                 BypassCache: true,
             },
+            {
+                EntityName: 'MJ: Tasks',
+                ExtraFilter:
+                    `ParentID IS NULL AND Status IN ('Complete','Failed','Cancelled','Skipped') ` +
+                    `AND __mj_UpdatedAt >= '${cutoff}'`,
+                Fields: ['ID', 'InputPayload'],
+                ResultType: 'simple',
+                BypassCache: true,
+            },
         ], this.contextUser);
 
         const ids = new Set<string>();
@@ -1269,6 +1403,14 @@ export class TaskGraphDispatcher implements IShutdownable {
         // nodes, so they cost one empty load and nothing else.
         for (const r of (unsettledParents?.Results ?? []) as Array<{ ID: string }>) {
             if (r.ID) ids.add(r.ID);
+        }
+        // The marker is JSON, so the filter is here rather than in SQL. Parsed with the SAME reader
+        // the writer's format is pinned to, which is what lets a graph settled before any of this
+        // existed be judged identically to one settled after.
+        for (const r of (terminalRecent?.Results ?? []) as Array<{ ID: string; InputPayload: string | null }>) {
+            if (!r.ID) continue;
+            if (ParseTaskGraphParentMetadata(r.InputPayload).continuationDeliveredAt) continue;
+            ids.add(r.ID);
         }
         return [...ids];
     }

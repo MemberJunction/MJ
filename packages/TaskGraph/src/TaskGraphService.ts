@@ -524,11 +524,22 @@ export class TaskGraphService {
             // that carry a deadline, and most do not.
             await this.cancelOpenRequests(children.map((c) => c.ID), context);
 
-            const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
-            if (!(await parent.Load(parentTaskID))) return false;
-            parent.Status = 'Cancelled';
-            parent.CompletedAt = new Date();
-            return await parent.Save();
+            // THE PARENT IS LEFT TO THE DISPATCHER, DELIBERATELY.
+            //
+            // Writing it terminal here skipped the settle path entirely — no cost rollup, no run
+            // settlement, no notification — so the submitting agent run stayed `Paused` forever.
+            // Worse, it was NONDETERMINISTIC: if a dispatcher poll happened to land between the
+            // child cancels above and the parent write, the graph settled through the normal path
+            // and the run WAS failed and messaged. Cancel behaved differently run to run depending
+            // on timing.
+            //
+            // With the children cancelled, `ComputeParentRollup` reaches `Cancelled` on its own and
+            // the ordinary settle sequence runs — rollup, run settlement, continuation — exactly as
+            // it does for a graph that finished by itself. Less code, one path, and a deterministic
+            // outcome.
+            //
+            // The parent stays non-terminal until then, so the sweep still sees it as active work.
+            return true;
         } catch (e) {
             LogError(`[TaskGraphService] Cancel failed for ${parentTaskID}: ${e instanceof Error ? e.message : String(e)}`);
             return false;
