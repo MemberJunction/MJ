@@ -66,6 +66,32 @@ export function IsAuthorableNodeType(type: TaskGraphRenderType): type is TaskGra
 /** A rendering entry — every shape the canvas can depict, authorable or not. */
 export type TaskGraphRenderTypeConfig = FlowNodeTypeConfig & { Type: TaskGraphRenderType };
 
+/**
+ * Port ids are scoped to their NODE, and must be.
+ *
+ * The canvas resolves a connection by looking its `fOutputId` / `fInputId` up among all registered
+ * ports — a flat, graph-wide namespace. Giving every node ports literally called `in` and `out` made
+ * every node's ports collide with every other node's, so a connection could not name which node's
+ * port it meant. The result was a workflow that drew its boxes correctly and **no edges at all**:
+ * nothing errored, because an unresolvable port is simply a connection with nowhere to attach.
+ *
+ * The Flow Agent editor — the other consumer of this canvas, whose edges have always drawn — scopes
+ * its ports the same way (`${stepId}-input` / `${stepId}-output`). This is that convention, named,
+ * so a future producer cannot reintroduce the collision by writing the obvious literal.
+ */
+export function InputPortID(tempId: string): string {
+    return `${tempId}-in`;
+}
+
+export function OutputPortID(tempId: string): string {
+    return `${tempId}-out`;
+}
+
+/**
+ * Palette defaults. These carry the bare names because a palette entry describes a node TYPE, not a
+ * placed node — there is no id to scope them to yet. {@link SpecToNodes} assigns the real, scoped
+ * ids when a node is actually placed on the canvas.
+ */
 const TASK_GRAPH_PORTS: FlowNodeTypeConfig['DefaultPorts'] = [
     { ID: 'in', Direction: 'input', Side: 'top', Multiple: true },
     { ID: 'out', Direction: 'output', Side: 'bottom', Multiple: true },
@@ -134,7 +160,10 @@ export type TaskGraphRuntimeState =
     | 'Failed'
     | 'Blocked'
     | 'Cancelled'
-    | 'Deferred';
+    | 'Deferred'
+    // A branch the workflow did not take. Absent from this union until now, which is why it fell
+    // through to the default rendering and a not-taken step drew as an ordinary one.
+    | 'Skipped';
 
 /**
  * Maps a durable task state onto the canvas's visual vocabulary.
@@ -151,6 +180,10 @@ export function RuntimeStateToNodeStatus(state: TaskGraphRuntimeState | undefine
         case 'Failed':      return 'error';
         case 'Blocked':     return 'warning';
         case 'Cancelled':   return 'disabled';
+        // Its own state, not a shade of disabled: a branch the workflow did not take is a normal
+        // outcome. Falling through to 'default' — which is what happened before — drew it as an
+        // ordinary node, so a conditional workflow looked like it had run every branch.
+        case 'Skipped':     return 'skipped';
         case 'Deferred':    return 'pending';
         case 'Pending':     return 'pending';
         default:            return 'default';
@@ -288,8 +321,8 @@ export function SpecToNodes(
             IsStartNode: entryIds.has(task.tempId),
             Position: known ? { ...known } : { X: 0, Y: 0 },
             Ports: [
-                { ID: 'in', Direction: 'input', Side: 'top', Multiple: true },
-                { ID: 'out', Direction: 'output', Side: 'bottom', Multiple: true },
+                { ID: InputPortID(task.tempId), Direction: 'input', Side: 'top', Multiple: true },
+                { ID: OutputPortID(task.tempId), Direction: 'output', Side: 'bottom', Multiple: true },
             ],
             Data: { TempId: task.tempId },
         };
@@ -338,7 +371,7 @@ function LoopBodyLabel(
  * validator reports them as `UnknownDependency`, and rendering a connection to nowhere would be a
  * second, worse way of saying the same thing.
  */
-export function SpecToConnections(spec: TaskGraphSpec): FlowConnection[] {
+export function SpecToConnections(spec: TaskGraphSpec, runtime?: TaskGraphRuntimeStatus): FlowConnection[] {
     const known = new Set((spec.tasks ?? []).map((t) => t.tempId));
     const connections: FlowConnection[] = [];
 
@@ -346,14 +379,27 @@ export function SpecToConnections(spec: TaskGraphSpec): FlowConnection[] {
         for (const dep of GetDependencies(task)) {
             if (!known.has(dep.tempId)) continue;
 
+            // RUN MODE DRAWS ONLY THE PATH TAKEN.
+            //
+            // An edge touching a step the workflow declined did not carry anything, and drawing it
+            // makes a conditional workflow look as though both branches ran. Both ENDS are checked:
+            // an edge out of a skipped step is as untravelled as one into it.
+            //
+            // Design mode keeps every edge, because there is no route yet — the graph is all the
+            // routes that COULD be taken, which is exactly what an author is arranging. `runtime`
+            // being present is what distinguishes the two, so the same function serves both.
+            if (runtime && (runtime[task.tempId] === 'Skipped' || runtime[dep.tempId] === 'Skipped')) continue;
+
             const conditional = !!dep.condition?.trim();
             connections.push({
                 ID: edgeId(dep.tempId, task.tempId),
                 // Reversed: dependsOn points back at the prerequisite, the drawn arrow points forward.
                 SourceNodeID: dep.tempId,
-                SourcePortID: 'out',
+                // Scoped to the node — see InputPortID/OutputPortID. Bare 'out'/'in' named a port
+                // that every node in the graph also had, so no connection could resolve one.
+                SourcePortID: OutputPortID(dep.tempId),
                 TargetNodeID: task.tempId,
-                TargetPortID: 'in',
+                TargetPortID: InputPortID(task.tempId),
                 Label: conditional ? 'if' : undefined,
                 LabelDetail: dep.condition ?? undefined,
                 LabelIcon: conditional ? 'fa-code-branch' : undefined,

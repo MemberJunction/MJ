@@ -1,9 +1,13 @@
-import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, HostListener } from '@angular/core';
 import { CompositeKey, RunView } from '@memberjunction/core';
-import { MJTaskEntity, ResourceData } from '@memberjunction/core-entities';
+import { MJTaskEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import { ParseJSONOptions, ParseJSONRecursive, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseDashboard, BaseResourceComponent } from '@memberjunction/ng-shared';
 import { SortWorkflowRuns, type WorkflowRunSortColumn } from './workflow-run-sorting';
+import { WorkflowRunLayout } from './workflow-run-layout';
+
+/** Below this the detail pane cannot hold a canvas AND a JSON pane side by side. */
+const STACK_INNER_BELOW_PX = 1100;
 
 /**
  * How the JSON panes unpack nested JSON.
@@ -114,6 +118,23 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     /** The step whose JSON is showing, or null when none is selected. */
     public SelectedStepID: string | null = null;
 
+    /**
+     * Pane sizes, panel visibility and the legend toggle — the rules live in `workflow-run-layout`,
+     * which is pure and therefore testable without standing up Angular.
+     *
+     * Preferences go through `UserInfoEngine` (`MJ: User Settings`), never `localStorage`: a pane
+     * width that vanishes when someone opens a different browser is exactly the kind of preference
+     * people notice when it disappears. Reads are a synchronous cache hit; writes are debounced,
+     * because dragging a splitter fires continuously.
+     */
+    public readonly Layout = new WorkflowRunLayout({
+        Get: (key) => UserInfoEngine.Instance.GetSetting(key),
+        Set: (key, value) => UserInfoEngine.Instance.SetSettingDebounced(key, value),
+    });
+
+    /** Stacked rather than side-by-side when the detail pane is too narrow for both. */
+    public InnerSplitDirection: 'horizontal' | 'vertical' = 'horizontal';
+
     constructor(private cdr: ChangeDetectorRef) {
         super();
     }
@@ -123,11 +144,52 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     }
 
     initDashboard(): void {
-        // Nothing to set up — loadData does the work and the filters default to "everything".
+        this.Layout.Restore();
+        this.applyViewportRules();
     }
 
     ngAfterViewInit(): void {
         this.publishAgentContext();
+    }
+
+    /** Re-evaluates the stacking rule; the detail pane's width follows the window's. */
+    @HostListener('window:resize')
+    public onViewportResized(): void {
+        const before = this.InnerSplitDirection;
+        this.applyViewportRules();
+        if (before !== this.InnerSplitDirection) this.cdr.markForCheck();
+    }
+
+    private applyViewportRules(): void {
+        // Three columns on a laptop gives each about 400px and the canvas stops being usable, so the
+        // inner pair stacks instead. Mirrors the outer split's existing breakpoint rather than
+        // inventing a second responsive scheme.
+        this.InnerSplitDirection = window.innerWidth < STACK_INNER_BELOW_PX ? 'vertical' : 'horizontal';
+    }
+
+    public OnSplitDragEnd(sizes: readonly (number | '*')[]): void {
+        this.Layout.OnSplitDragEnd(sizes);
+    }
+
+    public OnStepSplitDragEnd(sizes: readonly (number | '*')[]): void {
+        this.Layout.OnStepSplitDragEnd(sizes);
+    }
+
+    public ToggleStepPanel(): void {
+        this.Layout.ToggleStepPanel();
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * The legend was toggled on the canvas toolbar — remember it.
+     *
+     * Driven from the toolbar rather than a button of our own: the canvas already has a legend
+     * control in the place people look for one, and adding a second in the header would be two
+     * controls for one setting, free to disagree.
+     */
+    public OnLegendToggled(show: boolean): void {
+        this.Layout.SetLegendVisible(show);
+        this.cdr.markForCheck();
     }
 
     /** The rows after the active filter and search, in the chosen order — what the template renders. */
@@ -285,6 +347,9 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     /** A node was clicked on the canvas — show that step's JSON. */
     public OnGraphNodeSelected(event: { TaskID: string }): void {
         this.SelectedStepID = event.TaskID;
+        // Asking to see a step is asking for the panel. Leaving it closed would make the click look
+        // like it did nothing.
+        if (!this.Layout.StepPanelOpen) this.ToggleStepPanel();
         this.cdr.markForCheck();
     }
 
