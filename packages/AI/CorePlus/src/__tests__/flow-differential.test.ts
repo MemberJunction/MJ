@@ -140,6 +140,28 @@ const FLOWS: Record<string, Flow> = {
         ],
         paths: [path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'g', Condition: 'typo(' })],
     },
+    // R2-3 — a guard reaching through output a step never produced.
+    //
+    // Two details give this fixture its teeth, and both were needed. The JOIN means a held branch
+    // stops the walk one step short of the oracle's rather than merely omitting a leaf. And the
+    // absent-data edge carries the HIGHER priority, so it could have won: the dominated case is
+    // already handled by the group-resolution refinement, and a fixture built on it would pass
+    // whatever the classification said. Here the answer genuinely depends on reading absent data as
+    // false rather than as undecided.
+    'a guard on data the step never produced': {
+        steps: [
+            step({ ID: 'a', Name: 'A', StartingStep: true }),
+            step({ ID: 'g', Name: 'Guarded' }),
+            step({ ID: 'p', Name: 'Plain' }),
+            step({ ID: 'j', Name: 'Join' }),
+        ],
+        paths: [
+            path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'g', Condition: 'absentData', Priority: 10 }),
+            path({ ID: 'p2', OriginStepID: 'a', DestinationStepID: 'p', Priority: 1 }),
+            path({ ID: 'p3', OriginStepID: 'g', DestinationStepID: 'j' }),
+            path({ ID: 'p4', OriginStepID: 'p', DestinationStepID: 'j' }),
+        ],
+    },
     'no path matches — the walk ends': {
         steps: [step({ ID: 'a', Name: 'A', StartingStep: true }), step({ ID: 'b', Name: 'B' })],
         paths: [path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'b', Condition: 'never' })],
@@ -149,11 +171,25 @@ const FLOWS: Record<string, Flow> = {
 /** Condition truthiness, shared by both engines so the comparison isolates TRAVERSAL. */
 const CONTEXT: Record<string, boolean> = { ok: true, never: false };
 
+/**
+ * Conditions whose DATA IS ABSENT — the R2-3 class, which this simulator could not express at all.
+ *
+ * The old model had two states: a name in `CONTEXT` (true or false) or not in it (unevaluable). A
+ * condition that reaches through a step's missing output is neither. On the walker it is simply
+ * falsy — `payload` there is the agent's accumulated payload, an object, so `payload.approved` on a
+ * step that produced nothing is `undefined`. On the dispatcher it THREW, and every throw was a hold.
+ * Without a third state the fixture below cannot be written, and the divergence stays invisible.
+ */
+const ABSENT_DATA = new Set(['absentData']);
+
 const evaluator: IConditionEvaluator = {
-    Evaluate: (expression) =>
-        expression in CONTEXT
+    Evaluate: (expression) => {
+        // The oracle's reading: property access through a missing key is falsy, not an error.
+        if (ABSENT_DATA.has(expression)) return { Success: true, Value: false };
+        return expression in CONTEXT
             ? { Success: true, Value: CONTEXT[expression] }
-            : { Success: false, ErrorMessage: `unknown: ${expression}` },
+            : { Success: false, ErrorMessage: `unknown: ${expression}` };
+    },
 };
 
 // ── side A: the oracle ──────────────────────────────────────────────────────
@@ -247,9 +283,13 @@ function compiledOrder(flow: Flow): string[] {
                     sequence: d.sequence ?? 0,
                     conditionOutcome: !d.condition
                         ? 'satisfied'
-                        : d.condition in CONTEXT
-                            ? (CONTEXT[d.condition] ? 'satisfied' : 'unsatisfied')
-                            : 'unevaluable',
+                        // Absent data is the data answering NO (R2-3), in this dialect too — the
+                        // dispatcher classifies the throw rather than calling the group undecided.
+                        : ABSENT_DATA.has(d.condition)
+                            ? 'unsatisfied'
+                            : d.condition in CONTEXT
+                                ? (CONTEXT[d.condition] ? 'satisfied' : 'unsatisfied')
+                                : 'unevaluable',
                 } as EvaluatedEdge)),
         );
         const xor = ResolveExclusiveGroups(evaluated);
@@ -291,6 +331,13 @@ function compiledOrder(flow: Flow): string[] {
                 // guards through — reproducing the production bug rather than testing against it,
                 // and agreeing with a wrong answer. Unevaluable now HOLDS: neither skipped here nor
                 // eligible below.
+                // Absent data drops the edge, exactly as `DecideGate` now does — it does NOT hold.
+                // Before R2-3 this was a hold, which stalled the graph forever on a terminal origin
+                // whose output could never change.
+                if (ABSENT_DATA.has(d.condition)) {
+                    if (status.get(t.tempId) === 'Pending') status.set(t.tempId, 'Skipped');
+                    continue;
+                }
                 if (!(d.condition in CONTEXT)) { unevaluableHolds.add(t.tempId); continue; }
                 if (CONTEXT[d.condition] === false && status.get(t.tempId) === 'Pending') status.set(t.tempId, 'Skipped');
             }

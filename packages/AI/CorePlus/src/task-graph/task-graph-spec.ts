@@ -42,9 +42,26 @@ export type TaskGraphDependency = {
      */
     condition?: string;
     /**
-     * How this edge participates in the target's join. `Prerequisite` (the default) means the target
-     * waits for it; `Optional` means any one satisfied predecessor is enough; `Corequisite` means
-     * co-scheduled.
+     * How this edge participates in the target's join.
+     *
+     * `Prerequisite` (the default) is the only value that GATES: the target waits for it. Everything
+     * the engine does with joins — eligibility, the skip cascade, the block walk, seed confirmation —
+     * asks `isGatingEdge`, and that returns true for `Prerequisite` alone.
+     *
+     * **`Optional` therefore means "this edge does not make the target wait", not "any one satisfied
+     * predecessor is enough".** The doc used to claim the second, which is an OR-join, and the
+     * difference is not academic: a node whose incoming edges are ALL `Optional` has no gating edges
+     * at all, so it is eligible in wave one — before any of its predecessors has run. It also cannot
+     * be rescued by an `Optional` route when an exclusive loser seeds it for skipping, because seed
+     * confirmation asks the same question.
+     *
+     * An OR-join is a coherent thing to want and is NOT implemented. Nothing in the compiler emits
+     * `Optional` today, so the gap is latent; implementing it means teaching eligibility that a
+     * target with only optional routes waits for the FIRST of them, which is a real semantic change
+     * and not a doc fix. Recorded here so the next person reads the code's meaning rather than the
+     * intention it was described with.
+     *
+     * `Corequisite` is likewise non-gating today and carries no scheduling behaviour of its own.
      */
     dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional';
 
