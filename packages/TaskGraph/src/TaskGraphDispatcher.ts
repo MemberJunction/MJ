@@ -50,7 +50,7 @@ import { IShutdownable, ShutdownRegistry, UUIDsEqual } from '@memberjunction/glo
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import type { MJTaskEntity_ITaskStepConfiguration, MJTaskEntity_ITaskLoopIteration } from '@memberjunction/core-entities';
 import { TaskClaimStore, TERMINAL_PARENT_STATUSES, TERMINAL_PARENT_STATUS_SQL } from './TaskClaimStore';
-import { BuildConditionContext, DecideGate, ParseConditionOutput } from './condition-gate';
+import { BuildConditionContext, DecideGate, IsDataAbsence, ParseConditionOutput } from './condition-gate';
 import { HumanTaskSQL, IsHumanTask } from './task-predicates';
 import {
     IsSettlementExpired,
@@ -2420,7 +2420,11 @@ export class TaskGraphDispatcher implements IShutdownable {
             dep.Condition,
             BuildConditionContext(upstream, ParseConditionOutput(upstream.OutputPayload)),
         );
-        if (!result.Success) return 'unevaluable';
+        // SAME CLASSIFICATION AS THE ORDINARY DIALECT (R2-3). The null-safe envelope already makes
+        // one level of absence read as false here, but a deeper absent chain still throws — and
+        // calling that 'unevaluable' would hold the whole group forever on a terminal origin, while
+        // `DecideGate` would have dropped the identical condition. Two dialects, one question.
+        if (!result.Success) return IsDataAbsence(result.ErrorMessage) ? 'unsatisfied' : 'unevaluable';
         return result.Value ? 'satisfied' : 'unsatisfied';
     }
 

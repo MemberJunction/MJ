@@ -19,12 +19,15 @@
  * @module @memberjunction/integration-test-suite
  */
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity, MJTaskTypeEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import type { TaskGraphSpec, TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
 import {
     ParseTaskGraphParentMetadata,
     TaskGraphDispatcher,
     TaskGraphService,
+    type TaskPromptRunner,
+    type TaskPromptRunParams,
+    type TaskPromptRunResult,
     type ProviderFactory,
     type TaskAgentRunner,
     type TaskAgentRunParams,
@@ -42,6 +45,8 @@ import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-int
 const CREATED_PARENT_IDS: string[] = [];
 /** TaskTypes created only when the install had none. */
 const CREATED_TASK_TYPE_IDS: string[] = [];
+/** Agent runs minted by the settle-path checks, removed in teardown. */
+const CREATED_RUN_IDS: string[] = [];
 
 /** Poll fast enough that a four-node graph settles inside a test rather than in twenty seconds. */
 const TEST_POLL_SECONDS = 0.25;
@@ -60,6 +65,15 @@ const SETTLE_TIMEOUT_MS = 30_000;
  * narrowing it.
  */
 const SHARED_FAILURES = new Set<string>();
+
+/**
+ * Task names whose run produces NO output at all, keyed the same way as the failure policy.
+ *
+ * The shape R2-3 is about: an action that returns nothing, a human approval with no response data,
+ * a prompt that answered with silence. A condition on an edge out of one of these used to throw and
+ * hold the branch forever.
+ */
+const SILENT_TASKS = new Set<string>();
 
 /**
  * Stands in for the agent framework.
@@ -87,6 +101,11 @@ class StubAgentRunner implements TaskAgentRunner {
         if (SHARED_FAILURES.has(name)) {
             return { Success: false, ErrorMessage: `stub failure for ${name}` };
         }
+        // A step that genuinely produced nothing — not an empty object, no output at all. The
+        // distinction is the whole of R2-3: `OutputPayload` ends up null, and a condition reaching
+        // through it has nothing to read.
+        if (SILENT_TASKS.has(name)) return { Success: true };
+
         return {
             Success: true,
             // Echoed back so a dependent task's DependencyOutputs can be asserted downstream.
@@ -225,6 +244,7 @@ function buildDispatcher(
     observer?: TaskGraphObserver,
     deliverer?: TaskContinuationDeliverer,
     pollIntervalSeconds: number = TEST_POLL_SECONDS,
+    promptRunner?: TaskPromptRunner,
 ): TaskGraphDispatcher {
     return new TaskGraphDispatcher(
         providerFactory(ctx.Provider),
@@ -240,6 +260,8 @@ function buildDispatcher(
         },
         deliverer,  // usually absent: a test has no conversation to post into
         observer,
+        undefined,  // no action runner
+        promptRunner,
     );
 }
 
@@ -457,6 +479,72 @@ async function runUntilSettled(
     } finally {
         await dispatcher.Stop();
     }
+}
+
+/**
+ * Stands in for the prompt runner, recording which prompt tasks it was asked to run.
+ *
+ * The dispatcher routes on `PromptID` before it looks at `AgentID`, so a Prompt node never reaches
+ * the agent stub — without this seam the node is simply never claimable and TX12 would pass
+ * vacuously by testing nothing.
+ */
+class StubPromptRunner implements TaskPromptRunner {
+    public readonly Ran: string[] = [];
+    public async RunPromptForTask(params: TaskPromptRunParams): Promise<TaskPromptRunResult> {
+        this.Ran.push(params.TaskID);
+        return { Success: true, Output: { ranBy: 'prompt-stub' } };
+    }
+}
+
+/** Any real prompt — the graph must resolve one; the stub is what actually runs. */
+async function resolvePromptName(ctx: IntegrationCheckContext): Promise<string> {
+    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ Name: string }>(
+        { EntityName: 'MJ: AI Prompts', Fields: ['Name'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
+    );
+    const name = res.Results?.[0]?.Name;
+    Assert(!!name, 'could not resolve an AI Prompt');
+    return name!;
+}
+
+/** One prompt-assigned node — carries `PromptID` with neither AgentID nor ActionID. */
+const promptTask = (tempId: string, name: string, promptName: string, dependsOn: string[] = []): TaskGraphSpecNode =>
+    ({ tempId, name, description: name, kind: 'Prompt', configuration: { promptName }, dependsOn });
+
+/** The submitting agent run recorded in a graph's durable metadata, if any. */
+async function submittingRunID(ctx: IntegrationCheckContext, parentID: string): Promise<string | null> {
+    return ParseTaskGraphParentMetadata((await loadTask(ctx, parentID)).InputPayload).submittedByAgentRunID;
+}
+
+/** Stamps a graph's parent with a submitting run, so the settle path has a run to settle. */
+async function attachSubmittingRun(
+    ctx: IntegrationCheckContext,
+    parentID: string,
+    runID: string,
+): Promise<void> {
+    const parent = await loadTask(ctx, parentID);
+    const meta = ParseTaskGraphParentMetadata(parent.InputPayload) as Record<string, unknown>;
+    meta.submittedByAgentRunID = runID;
+    parent.InputPayload = JSON.stringify(meta);
+    parent.AgentRunID = runID;
+    Assert(await parent.Save(), `could not attach a submitting run: ${parent.LatestResult?.CompleteMessage ?? 'unknown'}`);
+}
+
+/** Creates an agent run in a chosen state, for the settle-path checks. */
+async function createRun(ctx: IntegrationCheckContext, status: 'Running' | 'Paused'): Promise<MJAIAgentRunEntity> {
+    const agents = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
+        { EntityName: 'MJ: AI Agents', Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
+    );
+    const agentID = agents.Results?.[0]?.ID;
+    Assert(!!agentID, 'could not resolve an AI Agent to own the run');
+
+    const run = await ctx.Provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', ctx.User);
+    run.NewRecord();
+    run.AgentID = agentID!;
+    run.Status = status;
+    run.StartedAt = new Date();
+    Assert(await run.Save(), `could not create the ${status} run: ${run.LatestResult?.CompleteMessage ?? 'unknown'}`);
+    CREATED_RUN_IDS.push(run.ID);
+    return run;
 }
 
 /** One agent-assigned node. Spec v2: `kind` selects the configuration shape. */
@@ -814,7 +902,12 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
                 ],
             });
 
-            const settled = await runUntilSettled(ctx, buildDispatcher(ctx, RUNNER, 'it-tx8-crashed'), parentID);
+            // The settling instance needs a deliverer of its own. Since R2-6 an instance that cannot
+            // deliver declines the CAS rather than winning and discarding the announcement — so
+            // without one there would be no marker here to remove, and this check would be staging a
+            // state that never occurs.
+            const settled = await runUntilSettled(
+                ctx, buildDispatcher(ctx, RUNNER, 'it-tx8-crashed', undefined, new CountingDeliverer()), parentID);
             AssertEqual(settled.Status, 'Complete', 'the graph must genuinely settle before its marker is removed');
             Assert(!!(await deliveryMarker(ctx, parentID)).At, 'settling should have claimed a marker to remove');
 
@@ -872,7 +965,8 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
                 workflowName: 'mj-it-exec-delivery-race (safe to delete)',
                 tasks: [agentTask('a', 'DR One', agentName)],
             });
-            const settled = await runUntilSettled(ctx, buildDispatcher(ctx, RUNNER, 'it-tx9-settler'), parentID);
+            const settled = await runUntilSettled(
+                ctx, buildDispatcher(ctx, RUNNER, 'it-tx9-settler', undefined, new CountingDeliverer()), parentID);
             AssertEqual(settled.Status, 'Complete', 'the graph must settle before its delivery is raced');
             await stripDeliveryMarker(ctx, parentID);
             const submitter = ParseTaskGraphParentMetadata(settled.InputPayload).submittedByAgentRunID;
@@ -1005,6 +1099,223 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             AssertEqual(unfinished.length, 0, 'Stop() returned while still holding a claim on unfinished work');
 
             console.log(`      → stopped cleanly mid-flight: ${framesAtStop} frames, then silence`);
+        }
+    },
+
+    {
+        Id: 'task-graph-execution.TX12',
+        Name: 'TX12: a crashed PROMPT task is reclaimed, not stranded forever',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // R2-1. A Prompt step carries `PromptID` with neither `AgentID` nor `ActionID`, and
+            // reclamation scoped to that pair — a predicate written before the column existed. So a
+            // prompt task whose owner died was excluded from BOTH reclamation statements: never
+            // returned to Pending, never retakeable, and not even reported by the orphan sweep. The
+            // graph wedges In Progress forever with zero diagnostics, which is why this asserts on
+            // recovery rather than waiting for an error that never comes.
+            const promptRunner = new StubPromptRunner();
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-prompt-recovery (safe to delete)',
+                tasks: [promptTask('p', 'PR One', await resolvePromptName(ctx))],
+            });
+
+            // The state a crash actually leaves: claimed by an instance that is gone, lease expired.
+            const child = (await loadChildren(ctx, parentID)).get('PR One')!;
+            child.Status = 'In Progress';
+            child.ClaimedBy = 'it-tx12-dead-instance';
+            child.ClaimExpiresAt = new Date(Date.now() - 60_000);
+            Assert(await child.Save(), `could not stage the orphaned prompt claim: ${child.LatestResult?.CompleteMessage ?? 'unknown'}`);
+
+            const survivor = buildDispatcher(ctx, RUNNER, 'it-tx12', undefined, undefined, TEST_POLL_SECONDS, promptRunner);
+            await survivor.Reconcile();
+
+            const reclaimed = (await loadChildren(ctx, parentID)).get('PR One')!;
+            AssertEqual(reclaimed.Status, 'Pending', 'reclamation did not return the prompt task to Pending');
+            AssertEqual(reclaimed.ClaimedBy, null, 'the dead instance still owns the prompt task');
+
+            const parent = await runUntilSettled(ctx, survivor, parentID);
+            AssertEqual(parent.Status, 'Complete', 'the recovered prompt graph must finish');
+            AssertEqual(promptRunner.Ran.length, 1, 'the reclaimed prompt task ran exactly once');
+
+            console.log('      → crashed prompt task reclaimed and completed');
+        }
+    },
+
+    {
+        Id: 'task-graph-execution.TX13',
+        Name: 'TX13: a graph that finishes before its submitter parks does not claim delivery',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // R2-2's sharpest case, and it needs no failure at all. `finalizeAgentRun` parks a run
+            // AFTER the graph is durable and dispatchable, so a fast graph settles first — and then
+            // both settle-path writes land wrong without saying so: the lifecycle write silently
+            // returns on its `Paused` guard, and the cost write is overwritten by finalize's own
+            // full-row save. Claiming the marker then makes that pass the LAST one ever to look at
+            // the graph, and the run stays Paused forever.
+            const agentName = await resolveAgentName(ctx);
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-early-settle (safe to delete)',
+                tasks: [agentTask('a', 'ES One', agentName)],
+            });
+
+            const run = await createRun(ctx, 'Running');
+            await attachSubmittingRun(ctx, parentID, run.ID);
+
+            const deliverer = new CountingDeliverer();
+            const settled = await runUntilSettled(
+                ctx, buildDispatcher(ctx, RUNNER, 'it-tx13', undefined, deliverer), parentID);
+            AssertEqual(settled.Status, 'Complete', 'the graph itself must still settle');
+
+            // The whole point: the graph is terminal and NOTHING has been delivered, because the
+            // pass could not do the submitting run's half.
+            AssertEqual((await deliveryMarker(ctx, parentID)).At, undefined,
+                'the marker was claimed while the submitting run was still Running — the run would stay Paused forever');
+            AssertEqual(deliverer.CountFor(parentID), 0, 'nothing should have been delivered yet');
+
+            // Now the submitter parks, exactly as finalize would have done moments later.
+            run.Status = 'Paused';
+            Assert(await run.Save(), `could not park the run: ${run.LatestResult?.CompleteMessage ?? 'unknown'}`);
+
+            const second = buildDispatcher(ctx, RUNNER, 'it-tx13-second', undefined, deliverer);
+            await runUntilDelivered(ctx, [second], parentID);
+
+            AssertEqual(deliverer.CountFor(parentID), 1, 'the next pass delivered exactly once');
+            AssertEqual((await deliveryMarker(ctx, parentID)).As, 'delivered', 'and recorded how');
+
+            const finished = await ctx.Provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', ctx.User);
+            Assert(await finished.Load(run.ID), 'could not re-read the submitting run');
+            AssertEqual(finished.Status, 'Completed', 'the run was never settled — the deferral did not resolve');
+
+            console.log('      → settlement deferred until the submitter parked, then delivered once');
+        }
+    },
+
+    {
+        Id: 'task-graph-execution.TX15',
+        Name: 'TX15: a condition on a step that produced nothing completes the graph',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // R2-3. `payload.approved === true` on a step whose output is null used to THROW, and
+            // every throw became a hold — permanent, because the origin is terminal and its output
+            // can never change. Both the legacy walker and the pre-P2 dispatcher ran this graph to
+            // completion; after P2 it stalled forever with no error. The assertion is that the graph
+            // SETTLES, because a stalled graph produces nothing to assert on at all.
+            const agentName = await resolveAgentName(ctx);
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-null-output (safe to delete)',
+                tasks: [
+                    agentTask('a', 'NO Silent', agentName),
+                    {
+                        tempId: 'b', name: 'NO Guarded', description: 'guarded', kind: 'Agent',
+                        configuration: { agentName },
+                        dependsOn: [{ tempId: 'a', condition: 'payload.approved === true' }],
+                    },
+                ],
+            });
+
+            // The origin produces NO output at all — an action that returns nothing, a human
+            // approval with no response data, a prompt that answered with silence.
+            SILENT_TASKS.add('NO Silent');
+            try {
+                const parent = await runUntilSettled(ctx, buildDispatcher(ctx, RUNNER, 'it-tx15'), parentID);
+                AssertEqual(parent.Status, 'Complete', 'the graph must settle rather than hold forever');
+            } finally {
+                SILENT_TASKS.delete('NO Silent');
+            }
+
+            const children = await loadChildren(ctx, parentID);
+            AssertEqual(children.get('NO Silent')!.Status, 'Complete', 'the origin ran');
+            // The condition asked about data that does not exist. That is the data answering NO —
+            // so the branch is not taken, and "not taken" is Skipped, never Blocked.
+            AssertEqual(children.get('NO Guarded')!.Status, 'Skipped', 'the guarded branch should be skipped, not held or blocked');
+
+            console.log('      → null-output condition read as false; graph settled instead of stalling');
+        }
+    },
+
+    {
+        Id: 'task-graph-execution.TX16',
+        Name: 'TX16: a dispatcher that cannot deliver does not win the right to',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // R2-6. `claimContinuation` ran before the deliverer check, so an instance built without
+            // one — a worker tier, this very bundle, a second dev session — could observe the
+            // settlement first, win the CAS, mark it `delivered`, and discard the message a capable
+            // peer would have posted moments later. Permanently, decided by poll timing.
+            const agentName = await resolveAgentName(ctx);
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-capability (safe to delete)',
+                tasks: [agentTask('a', 'CP One', agentName)],
+            });
+
+            const deliverer = new CountingDeliverer();
+            // The incapable instance is given a HEAD START, so if capability did not gate the claim
+            // it would win — the check would be vacuous if both raced fairly.
+            const blind = buildDispatcher(ctx, RUNNER, 'it-tx16-blind');
+            await blind.Start();
+            try {
+                await settle(1500);
+                AssertEqual((await deliveryMarker(ctx, parentID)).At, undefined,
+                    'the deliverer-less instance claimed delivery and discarded the announcement');
+
+                const capable = buildDispatcher(ctx, RUNNER, 'it-tx16-capable', undefined, deliverer);
+                await runUntilDelivered(ctx, [capable], parentID);
+            } finally {
+                await blind.Stop();
+            }
+
+            AssertEqual(deliverer.CountFor(parentID), 1, 'the capable instance delivered exactly once');
+            AssertEqual((await loadTask(ctx, parentID)).Status, 'Complete',
+                'the graph still settled — only the ANNOUNCEMENT was left to a peer');
+
+            console.log('      → incapable instance settled the graph and left the announcement to a peer');
+        }
+    },
+
+    {
+        Id: 'task-graph-execution.TX17',
+        Name: 'TX17: cancelling a workflow cancels what it started, and reports the truth',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // R2-9. A step can be an agent that submits a graph of its own, and those persist as
+            // ROOTS — linked back only through the child task's `AgentRunID`. So cancelling a
+            // workflow left its descendants running, and on settlement one of them could REINVOKE
+            // the cancelled workflow's own agent for a fresh billed turn: the user stopped a
+            // workflow and it started itself again.
+            const agentName = await resolveAgentName(ctx);
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-cancel-parent (safe to delete)',
+                tasks: [agentTask('a', 'CN Outer', agentName)],
+            });
+            const nestedID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-cancel-nested (safe to delete)',
+                tasks: [agentTask('a', 'CN Inner', agentName)],
+            });
+
+            // Wire the nested graph to the outer graph's step exactly as a real sub-graph is: the
+            // step records the run, and the sub-graph's root records the same run.
+            const run = await createRun(ctx, 'Running');
+            const outerChild = (await loadChildren(ctx, parentID)).get('CN Outer')!;
+            outerChild.AgentRunID = run.ID;
+            Assert(await outerChild.Save(), `could not link the outer step to its run: ${outerChild.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            await attachSubmittingRun(ctx, nestedID, run.ID);
+
+            const result = await new TaskGraphService().Cancel(parentID, {
+                EnvironmentID: await resolveEnvironmentID(ctx),
+                ConversationDetailID: null,
+                ContextUser: ctx.User,
+                Provider: ctx.Provider,
+            });
+
+            Assert(result.Success, `cancel reported failure: ${result.ErrorMessage}`);
+            AssertEqual(result.UncancelledTaskNames.join(', '), '', 'a clean cancel names nothing as surviving');
+
+            AssertEqual((await loadChildren(ctx, parentID)).get('CN Outer')!.Status, 'Cancelled',
+                'the outer step was not cancelled');
+            AssertEqual((await loadChildren(ctx, nestedID)).get('CN Inner')!.Status, 'Cancelled',
+                'the NESTED graph kept running — it would have settled and could have reinvoked the cancelled agent');
+
+            console.log('      → cancel reached the sub-graph the workflow started');
         }
     },
 ];
