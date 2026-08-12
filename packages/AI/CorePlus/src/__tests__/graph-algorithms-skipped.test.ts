@@ -343,6 +343,145 @@ describe('P1: what seed confirmation must NOT decide', () => {
  * "Something is eligible" then reads as "not stalled", and a graph that will wait forever produced
  * no diagnostics at all — which is the silence the hold mechanism exists to break.
  */
+describe('R2-4: a failure decides a fork only where the dialect says failures decide', () => {
+    // The dispatcher passed `['Complete','Failed']` unconditionally, with a comment claiming a
+    // loop-agent graph saw Complete-only. It did not — the same set went to every graph. Under
+    // `'block'`, the spec's DEFAULT, that was silently catastrophic: a Failed origin resolved its
+    // group, the losers were removed and seeded, ComputeSkipCascade confirmed them Skipped, Skipped
+    // satisfies dependents, and because the removed loser edges also sever ComputeTasksToBlock's
+    // forward walk, a join fed by an independent healthy route EXECUTED downstream of an unhandled
+    // failure. The parent still rolled up Failed — the verdict looked right, the side effects had
+    // already fired.
+
+    /** `E → F(fails)`, exclusive `(succeeded)→W` / `(failed)→R`. */
+    const failedFork = (): Parameters<typeof ResolveExclusiveGroups>[0] => ([
+        { id: 'e-w', taskId: 'W', dependsOnTaskId: 'F', exclusiveGroup: 'g',
+          originStatus: 'Failed', priority: 0, sequence: 0, conditionOutcome: 'unsatisfied' },
+        { id: 'e-r', taskId: 'R', dependsOnTaskId: 'F', exclusiveGroup: 'g',
+          originStatus: 'Failed', priority: 0, sequence: 1, conditionOutcome: 'satisfied' },
+    ]);
+
+    it('under BLOCK, a Failed origin decides nothing — the group stays unresolved', () => {
+        // Nothing kept, nothing lost, nothing seeded. Every edge stays live, so the ordinary block
+        // cascade owns everything downstream, which is what 'block' means.
+        const r = ResolveExclusiveGroups(failedFork(), new Set(['Complete']));
+        expect(r.keptEdgeIDs).toEqual([]);
+        expect(r.loserEdgeIDs).toEqual([]);
+        expect(r.skipSeedTaskIDs).toEqual([]);
+        expect(r.holdTaskIDs).toEqual([]);
+    });
+
+    it('under EDGES, a Failed origin still decides — the recovery path is the point', () => {
+        // A flow's failure handling IS its outgoing edges. This dialect must keep working exactly as
+        // it does today, or every drawn recovery route stops running.
+        const r = ResolveExclusiveGroups(failedFork(), new Set(['Complete', 'Failed']));
+        expect(r.keptEdgeIDs).toEqual(['e-r']);
+        expect(r.loserEdgeIDs).toEqual(['e-w']);
+        expect(r.skipSeedTaskIDs).toEqual(['W']);
+    });
+
+    it('a COMPLETE origin decides under either dialect', () => {
+        // The change is about failures only. A successful fork must behave identically in both.
+        const completed = failedFork().map((e) => ({ ...e, originStatus: 'Complete' as const }));
+        for (const decides of [new Set(['Complete']), new Set(['Complete', 'Failed'])]) {
+            const r = ResolveExclusiveGroups(completed, decides as ReadonlySet<TaskGraphNodeStatus>);
+            expect(r.keptEdgeIDs).toEqual(['e-r']);
+            expect(r.skipSeedTaskIDs).toEqual(['W']);
+        }
+    });
+
+    it('defaults to Complete-only when the caller says nothing', () => {
+        // The safe direction: a caller that has not decided must not resolve forks on the say-so of
+        // a failure.
+        expect(ResolveExclusiveGroups(failedFork()).loserEdgeIDs).toEqual([]);
+    });
+});
+
+describe('R2-4 composed: under block, nothing downstream of an unhandled failure runs', () => {
+    // The unit assertions above prove the resolution refuses to decide. This proves the CONSEQUENCE,
+    // which is where the damage was: the losing edges were removed, and removing them also severed
+    // ComputeTasksToBlock's forward walk — so a join fed by an independent healthy route became
+    // eligible and EXECUTED downstream of an unhandled failure, while the parent still rolled up
+    // Failed. The verdict looked right; the side effects had already fired.
+    //
+    //   F(Failed) ─exclusive─┬─(succeeded)→ W ─┐
+    //                        └─(failed)   → R  │
+    //                        H(Complete) ──────┴→ D
+    const shape = () => {
+        const nodes: TaskGraphNode[] = [
+            { id: 'F', status: 'Failed' },
+            { id: 'H', status: 'Complete' },
+            { id: 'W', status: 'Pending' },
+            { id: 'R', status: 'Pending' },
+            { id: 'D', status: 'Pending' },
+        ];
+        const exclusive: EvaluatedEdge[] = [
+            { id: 'e-w', taskId: 'W', dependsOnTaskId: 'F', exclusiveGroup: 'g',
+              originStatus: 'Failed', priority: 0, sequence: 0, conditionOutcome: 'unsatisfied' },
+            { id: 'e-r', taskId: 'R', dependsOnTaskId: 'F', exclusiveGroup: 'g',
+              originStatus: 'Failed', priority: 0, sequence: 1, conditionOutcome: 'satisfied' },
+        ];
+        const allEdges: TaskGraphEdge[] = [
+            { taskId: 'W', dependsOnTaskId: 'F' },
+            { taskId: 'R', dependsOnTaskId: 'F' },
+            { taskId: 'D', dependsOnTaskId: 'W' },
+            { taskId: 'D', dependsOnTaskId: 'H' },
+        ];
+        return { nodes, exclusive, allEdges };
+    };
+
+    /** Runs the dispatcher's pure sequence for one pass under a given dialect. */
+    const pass = (decides: ReadonlySet<TaskGraphNodeStatus>, handled: ReadonlySet<string>) => {
+        const { nodes, exclusive, allEdges } = shape();
+        const resolution = ResolveExclusiveGroups(exclusive, decides);
+        const losers = new Set(resolution.loserEdgeIDs);
+        // Losing edges are removed, exactly as the dispatcher removes them.
+        const live = allEdges.filter((e) =>
+            !(losers.has('e-w') && e.taskId === 'W' && e.dependsOnTaskId === 'F') &&
+            !(losers.has('e-r') && e.taskId === 'R' && e.dependsOnTaskId === 'F'));
+        const seeds = ConfirmSkipSeeds(resolution.skipSeedTaskIDs, live);
+        for (const id of seeds) { const n = nodes.find((x) => x.id === id); if (n) n.status = 'Skipped'; }
+        for (const id of ComputeSkipCascade(nodes, live, seeds)) {
+            const n = nodes.find((x) => x.id === id); if (n) n.status = 'Skipped';
+        }
+        return {
+            blocked: ComputeTasksToBlock(nodes, live, handled),
+            eligible: ComputeEligibleTasks(nodes, live, handled).map((n) => n.id),
+        };
+    };
+
+    it('BLOCKS the join instead of running it', () => {
+        const { blocked, eligible } = pass(new Set(['Complete']), new Set());
+        expect(eligible).not.toContain('D');
+        expect(blocked).toContain('D');
+    });
+
+    it('blocks both branch targets too — the fork was never decided', () => {
+        const { blocked, eligible } = pass(new Set(['Complete']), new Set());
+        expect(blocked).toEqual(expect.arrayContaining(['W', 'R']));
+        expect(eligible).toEqual([]);
+    });
+
+    it('and the OLD constant still reproduces the bug, so this fixture has teeth', () => {
+        // `['Complete','Failed']` is exactly what the dispatcher passed for every graph. Run the
+        // same shape through it and D becomes eligible: the fork resolved on a failure, W was
+        // seeded and cascaded to Skipped, Skipped satisfied D's prerequisite, and the severed loser
+        // edge took D out of the block walk's reach. A fixture that cannot show that is not
+        // guarding anything.
+        const { blocked, eligible } = pass(new Set(['Complete', 'Failed']), new Set());
+        expect(eligible).toContain('D');
+        expect(blocked).not.toContain('D');
+    });
+
+    it('under EDGES with the failure handled, the recovery branch still runs', () => {
+        // The other dialect must keep working: a drawn recovery path is the whole point of 'edges',
+        // and this fix must not cost it anything.
+        const { eligible } = pass(new Set(['Complete', 'Failed']), new Set(['F']));
+        expect(eligible).toContain('R');
+        expect(eligible).not.toContain('W');
+    });
+});
+
 describe('P2: IsGraphStalled sees holds', () => {
     const nodes = [n('A', 'Complete'), n('Guarded')];
     const edges = [e('Guarded', 'A')];

@@ -1131,21 +1131,13 @@ export class TaskGraphDispatcher implements IShutdownable {
      * as a recovery path; they are ordinary sequencing, and treating them as recovery would let a
      * graph sail past a failure it never anticipated.
      */
-    private async computeHandledFailures(
-        provider: IMetadataProvider,
-        parentTaskID: string,
+    private computeHandledFailures(
+        failureSemantics: TaskGraphParentMetadata['failureSemantics'],
         nodes: TaskGraphNode[],
         edges: TaskGraphEdge[],
-    ): Promise<Set<string>> {
+    ): Set<string> {
         const handled = new Set<string>();
-        // Cheap exit before touching the database: with no failures there is nothing to handle, and
-        // this runs on every poll for every active graph.
-        if (!nodes.some((n) => n.status === 'Failed')) return handled;
-
-        const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
-        if (!(await parent.Load(parentTaskID))) return handled;
-        const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
-        if (meta.failureSemantics !== 'edges') return handled;
+        if (failureSemantics !== 'edges') return handled;
 
         for (const node of nodes) {
             if (node.status !== 'Failed') continue;
@@ -1963,6 +1955,14 @@ export class TaskGraphDispatcher implements IShutdownable {
 
         const entityById = new Map(children.map((c) => [c.ID, c]));
 
+        // Read ONCE, and only when it can change an answer (R2-4). Both consumers below — which
+        // origin statuses may decide an exclusive group, and which failures count as handled — are
+        // no-ops unless something has actually failed, and this runs on every poll for every active
+        // graph, so the parent load stays behind the same cheap exit `computeHandledFailures` used.
+        const failureSemantics = children.some((c) => c.Status === 'Failed')
+            ? await this.readFailureSemantics(provider, parentTaskID)
+            : 'block';
+
         // Conditional edges are resolved HERE, before eligibility runs, by dropping edges whose
         // condition does not hold. Expressing it as edge removal rather than as a second rule inside
         // the eligibility algorithm is what keeps one definition of "ready": a task with no live
@@ -2000,9 +2000,22 @@ export class TaskGraphDispatcher implements IShutdownable {
                 sequence: d.Sequence ?? 0,
                 conditionOutcome: this.evaluateExclusiveCondition(d, entityById),
             })),
-            // A flow's failure handling is its outgoing edges, so a Failed origin still decides its
-            // group. For a loop-agent graph the set is Complete-only and nothing changes.
-            new Set<TaskGraphNodeStatus>(['Complete', 'Failed']),
+            // WHICH STATUSES MAY DECIDE — the graph's own failure dialect, not a constant.
+            //
+            // Under `'edges'`, a flow's failure handling IS its outgoing edges, so a Failed origin
+            // decides its group and the drawn recovery path runs. Under `'block'` — the spec's
+            // DEFAULT — a failure is terminal for everything downstream, and letting it decide was
+            // silently catastrophic: the losers were removed and seeded, `ComputeSkipCascade`
+            // confirmed them `Skipped`, `Skipped` satisfies dependents, and because the removed
+            // loser edges also sever `ComputeTasksToBlock`'s forward walk, a join fed by an
+            // independent healthy route EXECUTED downstream of an unhandled failure. The parent
+            // still rolled up Failed, so the verdict looked right while the side effects had fired.
+            //
+            // The old comment claimed a loop-agent graph saw Complete-only. It did not; the same
+            // hardcoded set was passed for every graph.
+            failureSemantics === 'edges'
+                ? new Set<TaskGraphNodeStatus>(['Complete', 'Failed'])
+                : new Set<TaskGraphNodeStatus>(['Complete']),
         );
         const loserEdgeIDs = new Set(resolution.loserEdgeIDs);
 
@@ -2066,7 +2079,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             // Exclusive holds and ordinary-condition holds are the same state and share one set:
             // "we cannot tell yet, so nothing may claim this."
             holdTaskIDs: new Set([...resolution.holdTaskIDs, ...heldByCondition]),
-            handledFailureIDs: await this.computeHandledFailures(provider, parentTaskID, nodes, liveEdges),
+            handledFailureIDs: this.computeHandledFailures(failureSemantics, nodes, liveEdges),
         };
     }
 
@@ -2593,6 +2606,26 @@ export class TaskGraphDispatcher implements IShutdownable {
             Provider: provider,
             ContextUser: this.contextUser,
         });
+    }
+
+    /**
+     * The graph's failure dialect, read from its parent's durable metadata.
+     *
+     * Defaults to `'block'` on any failure to read it, matching the spec's own default — and it is
+     * the safe direction besides: under `'block'` a failed step decides nothing, so a graph whose
+     * metadata we cannot read stalls visibly instead of resolving forks on the say-so of a failure.
+     */
+    private async readFailureSemantics(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+    ): Promise<TaskGraphParentMetadata['failureSemantics']> {
+        try {
+            const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+            if (!(await parent.Load(parentTaskID))) return 'block';
+            return ParseTaskGraphParentMetadata(parent.InputPayload).failureSemantics;
+        } catch {
+            return 'block';
+        }
     }
 
     /**
