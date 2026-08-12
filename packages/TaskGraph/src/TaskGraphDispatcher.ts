@@ -288,6 +288,17 @@ type GraphState = {
      */
     unreachableTaskIDs: Set<string>;
     /**
+     * Everything this pass will write `Skipped` — the confirmed seeds, the unreachable targets, AND
+     * the cascade's descendants.
+     *
+     * Held on the graph state rather than recomputed at skip time so the claim filter and the
+     * propagation pass read the SAME set. The skip writes are sequential per-entity saves, so a
+     * descendant is briefly eligible between its ancestor's write and its own — `Skipped` satisfies
+     * prerequisites — and another instance loading in that window would claim and execute a branch
+     * that was never taken (R2-14).
+     */
+    cascadeSkipTaskIDs: Set<string>;
+    /**
      * Targets of a LOSING exclusive edge. These become `Skipped`, not `Blocked` — a branch that was
      * not taken is a normal outcome, and blocking it would poison the parent rollup.
      */
@@ -792,11 +803,9 @@ export class TaskGraphDispatcher implements IShutdownable {
             // route" and "something upstream broke". A reader cannot tell those apart, so every
             // conditional workflow looked half-failed and people went hunting for bugs that did not
             // exist. `Blocked` is now reserved for FAILURE-driven unsatisfiability.
-            const skipSeeds = new Set([...graph.skipSeedTaskIDs, ...graph.unreachableTaskIDs]);
-            const toSkip = new Set([
-                ...skipSeeds,
-                ...ComputeSkipCascade(graph.nodes, graph.edges, [...skipSeeds]),
-            ]);
+            // Computed once in `loadGraphState` so the claim filter sees the same set this pass is
+            // about to write — see R2-14 there.
+            const toSkip = graph.cascadeSkipTaskIDs;
             const skippedByRoute: string[] = [];
             for (const taskID of toSkip) {
                 const entity = graph.entityById.get(taskID);
@@ -1058,8 +1067,18 @@ export class TaskGraphDispatcher implements IShutdownable {
             // absent, and `?? TotalCost` cannot save a reader from a non-null wrong number. So a
             // refusal CLEARS it, restoring the fallback's honest meaning: not settled.
             if (tree.ErrorMessage || !tree.Root) {
-                await this.clearStaleRollup(provider, runID,
-                    tree.ErrorMessage ?? 'the run tree came back empty');
+                // TRANSIENT — SO NOTHING IS CLEARED (R2-15). A query that failed says nothing about
+                // whether the stored rollup is stale, and clearing on it can null the four columns
+                // another instance wrote moments earlier; the claimed marker then stops anything
+                // recomputing them, so a momentary hiccup here permanently erases a correct total.
+                //
+                // Clearing stays for the two cases below, where staleness is PROVEN by a tree we
+                // successfully read: truncated, or not containing the graph that just settled.
+                LogError(
+                    `[TaskGraphDispatcher] Could not load the run tree for ${runID} to roll up graph ` +
+                    `${parent.ID}: ${tree.ErrorMessage ?? 'the run tree came back empty'}. Leaving any ` +
+                    `existing rollup alone and retrying on a later settlement.`,
+                );
                 return;
             }
             if (tree.Truncated) {
@@ -1745,7 +1764,12 @@ export class TaskGraphDispatcher implements IShutdownable {
                     // as decided: a task another live route still reaches was never a loser, so it
                     // must stay claimable and run when its own prerequisites are met.
                     !graph.skipSeedTaskIDs.has(n.id) &&
-                    !graph.unreachableTaskIDs.has(n.id));
+                    !graph.unreachableTaskIDs.has(n.id) &&
+                    // ...and everything the cascade is about to reach (R2-14). A descendant of a
+                    // seed is eligible for the moments between its ancestor's skip landing and its
+                    // own, because Skipped satisfies prerequisites — a window another instance can
+                    // and does claim inside.
+                    !graph.cascadeSkipTaskIDs.has(n.id));
             for (const node of eligible) {
                 const entity = graph.entityById.get(node.id);
                 if (!entity) continue;
@@ -2126,7 +2150,8 @@ export class TaskGraphDispatcher implements IShutdownable {
         if (children.length === 0) {
             return {
                 nodes: [], edges: [], entityById: new Map(),
-                unreachableTaskIDs: new Set(), skipSeedTaskIDs: new Set(), holdTaskIDs: new Set(),
+                unreachableTaskIDs: new Set(), cascadeSkipTaskIDs: new Set(),
+                skipSeedTaskIDs: new Set(), holdTaskIDs: new Set(),
                 handledFailureIDs: new Set(),
             };
         }
@@ -2255,11 +2280,29 @@ export class TaskGraphDispatcher implements IShutdownable {
 
         const nodes: TaskGraphNode[] = children.map((c) => ({ id: c.ID, status: c.Status as TaskGraphNodeStatus }));
 
+        // THE CASCADE IS COMPUTED HERE, NOT ONLY AT SKIP TIME (R2-14).
+        //
+        // The claim filter covered seeds, holds and unreachable targets but not the cascade's
+        // DESCENDANTS, and the skip writes are sequential per-entity saves. Between a seed's
+        // `Skipped` landing and its descendants', another instance's fresh load sees
+        // Skipped-satisfies-prerequisites and finds those descendants eligible — so it claims and
+        // executes a branch that was never taken, irreversibly if the step has side effects.
+        //
+        // The set is already needed by the propagation pass, so computing it once here costs
+        // nothing and closes the window by construction: nothing that is about to be skipped is
+        // claimable, whichever instance is looking.
+        const allSkipSeeds = [...confirmedSkipSeeds, ...unreachableTaskIDs];
+        const cascadeSkipTaskIDs = new Set([
+            ...allSkipSeeds,
+            ...ComputeSkipCascade(nodes, liveEdges, allSkipSeeds),
+        ]);
+
         return {
             nodes,
             edges: liveEdges,
             entityById,
             unreachableTaskIDs,
+            cascadeSkipTaskIDs,
             skipSeedTaskIDs: confirmedSkipSeeds,
             // Exclusive holds and ordinary-condition holds are the same state and share one set:
             // "we cannot tell yet, so nothing may claim this."
