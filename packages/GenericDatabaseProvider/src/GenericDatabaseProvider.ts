@@ -56,6 +56,7 @@ import {
     IMetadataProvider,
     UserInfo,
     LocalCacheManager,
+    CachedRunViewResult,
     LogError,
     LogStatus,
     LogStatusEx,
@@ -2325,7 +2326,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // Phase 1: Check server's LocalCacheManager first (zero DB hits)
             const currentResults: RunViewWithCacheCheckResult<T>[] = [];
-            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] } }> = [];
+            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: CachedRunViewResult }> = [];
             const serverCacheMissItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo }> = [];
 
             for (const { index, item, entityInfo } of itemsNeedingValidation) {
@@ -2391,7 +2392,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             // Phase 3: For items without cacheStatus (client has nothing), check server cache before hitting DB
-            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] } }> = [];
+            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: CachedRunViewResult }> = [];
             const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
 
             for (const entry of itemsWithoutCacheCheck) {
@@ -2769,7 +2770,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         index: number,
         entityLabel: string,
         contextUser?: UserInfo,
-    ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } } | null> {
+    ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: CachedRunViewResult } | null> {
         if (!LocalCacheManager.Instance.IsInitialized) return null;
 
         const rlsWhereClause = this.ComputeRunViewRLSWhereClause(item.params, contextUser);
@@ -2793,13 +2794,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     private async serveFromServerCache<T = unknown>(
         viewIndex: number,
-        serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number; aggregateResults?: AggregateResult[] },
+        serverCached: CachedRunViewResult,
         callerFields: string[] | null = null,
     ): Promise<RunViewWithCacheCheckResult<T>> {
         // The server cache stores the full-width superset — project down to the
         // caller's requested fields (∪ PK) before returning, exactly like the
         // ProviderBase hit path. Serving unprojected rows here previously leaked
         // whatever shape happened to be cached to every subsequent caller.
+        //
+        // `serverCached.results` are the cache's shared, deep-frozen rows — the runtime freeze
+        // is what actually protects the cache. See ProviderBase's hit path.
         const results = callerFields
             ? ProjectRowsToFields(serverCached.results as Record<string, unknown>[], callerFields)
             : serverCached.results;
@@ -2811,8 +2815,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             rowCount: serverCached.totalRowCount ?? serverCached.rowCount,
             // Carry aggregates through (B40-family, 4th drop). The server slot stores them and
             // GetRunViewResult returns them, but this serve-leg's inline serverCached type omitted
-            // the field, so TypeScript could not flag the drop. Both callers (noCacheStatus + stale)
-            // now widen their type to match, so the field flows.
+            // the field, so TypeScript could not flag the drop. Both legs now share the canonical
+            // CachedRunViewResult type, so a future field can no longer be silently dropped here.
             aggregateResults: serverCached.aggregateResults,
         };
     }
@@ -3950,6 +3954,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     QueryID: cached.queryId ?? query.ID,
                     QueryName: query.Name,
                     Success: true,
+                    // Transport boundary: `cached.results` is readonly (shared, deep-frozen cache
+                    // rows) while the outbound Results is mutable — the runtime freeze is the
+                    // enforcement. Same cast as the RunView hit paths in ProviderBase.
                     Results: cached.results as RunQueryResult['Results'],
                     RowCount: cached.results.length,
                     TotalRowCount: cached.rowCount ?? cached.results.length,
@@ -4689,7 +4696,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (cacheAvailable) {
                 const fingerprint = cache.GenerateRunViewFingerprint(
                     { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
-                    this.InstanceConnectionString
+                    this.InstanceConnectionString,
+                    undefined,
+                    this.datasetCacheSegment(datasetName, code)
                 );
                 const cached = await cache.GetRunViewResult(fingerprint);
                 if (cached) {
@@ -4731,7 +4740,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const fp = cacheAvailable
                 ? cache.GenerateRunViewFingerprint(
                     { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
-                    this.InstanceConnectionString
+                    this.InstanceConnectionString,
+                    undefined,
+                    this.datasetCacheSegment(datasetName, code)
                 )
                 : '';
             uncachedFingerprints.push(fp);
@@ -4776,7 +4787,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     ? this.extractMaxUpdatedAtFromRows(itemData, dateFieldToCheck)
                     : new Date(0).toISOString();
                 const syntheticParams = { EntityName: entityName } as RunViewParams;
-                await cache.SetRunViewResult(uncachedFingerprints[i], syntheticParams, itemData, maxUpdatedAt, undefined, undefined, this);
+                // ProviderInternalScaffolding — for the MJ_Metadata dataset ONLY. Those rows are
+                // consumed by this provider's own assembly steps, which mutate them in place by
+                // design: PostProcessEntityMetadata sorts the entity array and attaches child
+                // collections onto each entity/field row, and GetAllMetadata's Applications
+                // assembly writes ApplicationEntities/ApplicationSettings onto Application rows.
+                // Freezing them makes metadata bootstrap throw and the process starts blind.
+                //
+                // Every OTHER dataset is served to arbitrary consumers (BaseEngine.Load hands
+                // item.Results — these very arrays — to every engine subclass), so those slots
+                // must stay under the defensive deep-freeze like any RunView result.
+                const isMetadataScaffolding = datasetName === ProviderBase._mjMetadataDatasetName;
+                await cache.SetRunViewResult(
+                    uncachedFingerprints[i], syntheticParams, itemData, maxUpdatedAt,
+                    undefined, undefined, this, undefined,
+                    isMetadataScaffolding ? { ProviderInternalScaffolding: true } : undefined
+                );
             }
 
             sqlResults.push({
@@ -4908,7 +4934,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (cacheAvailable) {
                 const fingerprint = cache.GenerateRunViewFingerprint(
                     { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
-                    this.InstanceConnectionString
+                    this.InstanceConnectionString,
+                    undefined,
+                    this.datasetCacheSegment(datasetName, code)
                 );
                 const cached = await cache.GetRunViewResult(fingerprint);
                 if (cached) {
@@ -5059,9 +5087,29 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
 
     /**
+     * Key namespace for a dataset item's cached rows.
+     *
+     * Dataset items are cached through the same fingerprint builder ordinary RunViews use, with
+     * only `{ EntityName, ExtraFilter }` — and every shipped item has a NULL `WhereClause`, so
+     * without this segment a dataset item and a plain unfiltered read of the same entity produce
+     * an IDENTICAL key and share one slot. That leaks the `MJ_Metadata` scaffolding exemption
+     * (deliberately unfrozen rows) to ordinary callers of `MJ: Entities` / `MJ: Entity Fields`,
+     * and lets an ordinary read repopulate an evicted slot FROZEN, which then breaks the next
+     * metadata refresh.
+     *
+     * Keyed by dataset + item code so two items over the same entity also stay distinct.
+     * Callers must use this on the read, the write-through, and the status paths alike — the
+     * three must agree or dataset reads stop finding dataset writes.
+     */
+    protected datasetCacheSegment(datasetName: string, itemCode: string): string {
+        return `${datasetName}/${itemCode}`;
+    }
+
+    /**
      * Computes the latest update date for a dataset item from its result rows and dataset metadata.
      * Used by both the cache-hit and cache-miss paths in GetDatasetByName.
-     * @param rows - The result rows (from cache or SQL)
+     * @param rows - The result rows (from cache or SQL). `readonly` because cache-hit callers
+     *               pass the cache's shared, frozen rows; this method only scans them.
      * @param dateFieldToCheck - The field name to scan for latest date
      * @param item - The dataset item metadata row (contains DatasetItemUpdatedAt, DatasetUpdatedAt)
      * @returns The latest date across all rows and dataset metadata

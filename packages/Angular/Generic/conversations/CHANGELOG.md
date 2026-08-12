@@ -1,5 +1,194 @@
 # @memberjunction/ng-conversations
 
+## 6.1.0-edge.2
+
+### Minor Changes
+
+- 2792d97: Add a Skills button to the composer, beside Plan Mode.
+
+  `/` skill commands already worked, but were reachable only by knowing to type `/`. Nothing on
+  screen said the feature existed, so a user who had never been told about it had no way to find it.
+  The button is the visible door to the same trigger.
+
+  Clicking it calls the new `MentionEditorComponent.OpenTrigger('/')`, which opens the dropdown
+  WITHOUT writing anything into the editor. The trigger character only ever exists as the chip the
+  user picks, so dismissing leaves the message exactly as they left it. With no character to anchor
+  on, the editor captures a baseline length when a trigger opens this way, and three paths consult
+  it: typing filters against the baseline rather than searching for the character, chip insertion
+  removes only what was typed, and dismissal has nothing to undo.
+
+  It also toggles: a second click closes, because a disclosure control has to be able to close what
+  it opened. Without that the second click re-ran the open path, re-emitting the event pair and
+  re-capturing the baseline at the new caret.
+
+  Built as a sibling of the existing strip controls, with the same `attach-button-icon` chrome and
+  the same active treatment as Plan Mode. The ARIA deliberately differs: Plan Mode is a toggle button
+  (a mode that stays on) so `aria-pressed` is correct there, while this opens a popup and therefore
+  uses `aria-expanded` + `aria-haspopup`. Announcing "pressed" for revealing a list is the wrong
+  thing for a screen reader to say. It joins the strip's
+  visibility gate so a composer offering skills but no attachments, voice or plan mode still renders
+  the strip.
+
+  **Before/After pair, per `guides/UI_LAYERING_GUIDE.md` section 6.** Opening skills is an action a
+  host might veto, so it ships as `BeforeSkillsOpened` (carrying `BeforeSkillsOpenedEventArgs` with
+  `Cancel` / `CancelReason`) and `AfterSkillsOpened`. `After` is not emitted on the canceled path, and
+  not emitted when no active provider owns the trigger, so a host counting it counts dropdowns the
+  user saw rather than clicks. `Before` handlers must be synchronous: EventEmitter's synchronous
+  dispatch is how `Cancel` travels back.
+
+  The base, `CancellableComposerEventArgs`, is per-domain rather than shared. That matches the same
+  guide's naming table, which specifies `Cancellable<Domain>EventArgs` for exactly this class, and the
+  sixteen packages already following it. It is also the only option here on dependency grounds:
+  `ng-composer` is the generic layer and cannot import from `ng-conversations`.
+
+  **The expanded state is derived, not an input.** Plan Mode's active state is a persisted user
+  preference the host owns and threads down. "Is the skill dropdown open" is intrinsic to the
+  composer, so it reads `MentionEditorComponent.IsTriggerOpen('/')` instead. An `@Input` there would
+  be an API no host could answer, and would leave the button permanently collapsed if nobody bound it.
+
+  No new host-level cap: the button is gated on the existing `EnableSkillCommands` /
+  `enableSkillCommands` / `allowSkillCommands` chain, which already defaults true at every layer. The
+  button and the keystroke are two doors to one feature, so one flag governs both rather than letting
+  a composer advertise skills it will not serve.
+
+  **Two pre-existing dropdown bugs fixed along the way**, both of which affect every trigger
+  (`@`, `#`, `/`) rather than only the new button:
+  - **Click-away never dismissed.** Dismissal relied entirely on the editor's blur, and clicking a
+    non-focusable area does not blur a contenteditable, so the dropdown stayed open with nothing able
+    to close it. A `document:mousedown` listener now closes it, chosen over `click` because mousedown
+    fires before focus moves and therefore cannot race blur's 200ms timer. Clicks inside the
+    component are exempt, so a suggestion row still selects. The Skills button sits OUTSIDE the
+    editor's host, so it needs the same exemption: without it the button's mousedown read as an
+    outside press and closed the dropdown, then the click saw it already closed and reopened it, so
+    the toggle never appeared to work. That seam is covered by a DOM test that fires real bubbling
+    mousedown/click rather than calling the handler, which is what hid the bug.
+  - **The dropdown could land off screen.** Positioning measures the caret, and a collapsed range in
+    an empty editor measures 0x0 at 0,0 in every browser, pinning the menu to the bottom-left corner
+    of the viewport. It now falls back to the editor's own box. The menu also prefers to open ABOVE
+    the composer: the composer sits at the bottom of the chat, so a downward menu covers the text
+    being typed.
+  - **A button-opened menu anchors to the button, not the caret.** On the typed path the user's eyes
+    and query are both at the caret, so the caret is the right anchor. On the button path nobody is
+    looking at the caret. The anchored menu aligns left and grows rightward, flipping to right-aligned
+    only when that would overflow the viewport — and the flip aligns to the COMPOSER's right edge
+    rather than the button's, because the strip is pinned bottom-right and Skills is the leftmost of
+    five icons, so pinning to that one icon hangs the menu's whole width out to its left. Coordinates
+    are viewport-relative throughout, since the dropdown renders with `useFixedPositioning`.
+
+  `OpenTrigger` and `IsTriggerOpen` are public and generic. Any trigger character with an active
+  provider can now be opened from a control, and any control can reflect whether its trigger is open.
+
+  **BREAKING (renames), and the reason this is `minor` rather than `patch`.** `MessageInputBoxComponent`
+  was violating MJ's convention that public class members are `PascalCase`, so every public input,
+  output, getter and method on it is renamed: `placeholder` to `Placeholder`, `disabled` to `Disabled`,
+  `value` to `Value`, `valueChange` to `ValueChange`, `textSubmitted` to `TextSubmitted`,
+  `planModeToggle` to `PlanModeToggle`, `canSend` to `CanSend`, `onSendClick` to `OnSendClick`, and so
+  on for all of them. `TriggerProviders`, `ExcludedTriggerKeys` and `Provider` were already correct.
+
+  Native DOM bindings and framework members are deliberately untouched: `[disabled]` on a `<button>`
+  is a DOM property, `ngOnInit` / `writeValue` / `registerOnChange` are framework contracts, and
+  `mj-mention-editor`'s own inputs keep their current casing because that component is not renamed
+  here.
+
+  `mj-ai-composer` is updated to the new names. Any other consumer binding these inputs or listening
+  to these outputs must rename accordingly.
+
+- 9fc0e2d: Carry an authored realtime voice to any provider, not just OpenAI — both override builders filed the voice under a hardcoded `openai` provider key, so a session resolving to ElevenLabs, Gemini, Inworld, AssemblyAI or HuggingFace silently got nothing: the setting stayed visible in the effective config and never reached a driver. On the default-model path the framework picks the vendor itself and never disclosed which, making a provider-keyed voice unauthorable rather than merely wrong. Adds the provider-agnostic `realtime.voice.default.voice` slot, filed onto whichever driver resolves — every realtime driver already reads the same neutral `voice` bag key by design (ElevenLabs maps it to `tts.voice_id` on the wire), so no per-driver accessor is needed. Precedence is per-key: the agnostic value wins `voice` while a matching `providers.<key>` bag still contributes its other settings, so a runtime pick beats a vendor-pinned value in agent metadata. With no agnostic voice authored, behavior is unchanged. Also ends the silence around it — the mint log now carries the resolved driver and the voice that reached it, both realtime surfaces log when authored provider bags matched nothing, and the resolved `DriverClass` is surfaced to the browser on `StartRealtimeClientSessionResult` — and consolidates three byte-identical copies of the vendor-selection walk into one `SelectRealtimeVendorForModel`.
+
+  Minor rather than patch because the change is additive to the public API: `SelectRealtimeVendorForModel`, `RealtimeVendorSelection`, `MatchProviderVoiceSettings` and `WarnOnUnmatchedProviderVoice` are newly exported from `@memberjunction/ai-agents`, and `RealtimeClientSessionPrepResult` / `StartRealtimeClientSessionResult` gain `DriverClass`.
+
+  Three compatibility notes, in rough order of how likely they are to bite:
+  1. **Deploy the client and server together.** A new `@memberjunction/ng-conversations` against an older MJAPI silently drops a picked voice for **every** provider including OpenAI, because the older server's `normalizeVoice` does not carry `default.voice` through the cascade — a regression of currently-working behavior, so a same-version bump is not enough if the two deploy independently. The reverse (old client, new server) is safe: the `providers.openai` shape is still honored.
+  2. **The agent-type `ConfigSchema` reaches a database only via `mj sync push`.** The schema gains the agnostic slot and marks `providers.*.voiceId` deprecated (no driver has ever read it). Until that push runs, authoring `realtime.voice.default.voice` in an agent's `TypeConfiguration` **fails the save** — the old schema validates `voice.default` with `additionalProperties: false`. Runtime overrides are unaffected; they bypass that validator.
+  3. **Bridge hosts that supply a voice without pinning a model now forward that id to whatever vendor wins the priority walk.** `BridgeRealtimeSessionContext.RealtimeVoice` is host-supplied (LiveKit/Twilio/Teams) and independent of the model pin, so a previously inert misconfiguration becomes reachable: an OpenAI voice name like `echo` reaching ElevenLabs is sent as `tts.voice_id`, and an invalid voice id there fails the session rather than degrading. An agnostic voice is only as portable as the id itself — pin the model alongside the voice, or author per-vendor ids under `providers.<key>`.
+
+  One gap found here was closed separately in the same release: **Gemini** consumed the neutral `voice` key no further than its config object — `buildConnectConfig` assigned the bag onto a `LiveConnectConfig` with no `voice` property, so the value was dropped before the wire. `@memberjunction/ai-gemini` now maps it to `speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName` on both topologies (#3721). Separately, only `OpenAIRealtime`, `xAIRealtime` and `HuggingFaceRealtime` declare `SupportedVoices` (HuggingFace returns none) and the native picker's dropdown is gated on that list, so for the vendors this unblocks the voice is reachable through agent metadata and programmatic hosts rather than the picker.
+
+- 768980d: **A Workflows app, and the Create Workflow front door inside it.**
+
+  Phase 5 shipped every component this composes — the canvas, the properties panel, the runtime-overlay
+  source, both Save-as-Workflow surfaces — but not the front door, because the design was not locked.
+  It is now: `mockups/workflow-ux/front-door-v1.html` carries five ratified answers, and this builds
+  all three of its screens against them.
+
+  **Its own Explorer app, not a tab in AI.** D18 puts _Workflow_ in front of end users while _Flow
+  Agent_ survives in metadata and dev docs — filing the surface under "AI" would contradict that at the
+  navigation level, and D19 exists precisely because the editor is today buried inside a saved agent
+  record. Scheduling and Routines set the precedent for an AI-adjacent domain getting its own app.
+
+  **Three doors**, in the locked order, with "Describe it" pre-selected — the only one that needs no
+  prior knowledge of the product. Each states _when to pick it_, not just what it does, because that is
+  the actual question someone has on this screen. Only settled runs are promotable: an in-flight run
+  may still change shape under a retry or a recovery branch, so the saved workflow would not be the one
+  that ran. That is enforced three ways — the handler guards, the row leaves the tab order, and
+  `aria-disabled` is set — because dimming alone leaves a row clickable and keyboard-reachable.
+
+  **Save as Workflow now names it inline and offers the editor** (answer ④). The card previously
+  emitted a save with no name and no way to continue editing, leaving the host to invent both. The name
+  seeds from the plan's own — making someone invent another is the difference between saving and not
+  bothering — but once touched it keeps what was typed, including empty. "Open in editor" is secondary
+  on purpose: making the editor mandatory turns a two-second capture into a task.
+
+  **Nothing anywhere asks for a trigger or a schedule.** Saving is capture, not scheduling; a workflow
+  runs on demand until someone gives it a cadence, and the card says so rather than leaving it to be
+  discovered.
+
+  **D18 is enforced by test.** The vocabulary rule is invisible to a compiler and erodes one label at a
+  time, so the templates and user-facing copy are asserted to contain no _graph_ / _DAG_ / _node_ /
+  _Flow Agent_ — with a companion assertion that _step_ IS present, so the rule cannot be satisfied by
+  deleting the concept instead of renaming it.
+
+  The front door emits a draft rather than persisting anything, because the middle tile promises
+  "Nothing is saved until you approve it" in so many words, and approval happens on the canvas.
+
+### Patch Changes
+
+- Updated dependencies [2792d97]
+- Updated dependencies [255d506]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [59def38]
+- Updated dependencies [11de1a3]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [9a29da4]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/ng-composer@6.1.0-edge.2
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/ai@6.1.0-edge.2
+  - @memberjunction/ai-core-plus@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.2
+  - @memberjunction/ai-engine-base@6.1.0-edge.2
+  - @memberjunction/ai-realtime-client@6.1.0-edge.2
+  - @memberjunction/ng-user-routines@6.1.0-edge.2
+  - @memberjunction/ng-testing@6.1.0-edge.2
+  - @memberjunction/ng-artifacts@6.1.0-edge.2
+  - @memberjunction/ng-base-types@6.1.0-edge.2
+  - @memberjunction/ng-code-editor@6.1.0-edge.2
+  - @memberjunction/ng-notifications@6.1.0-edge.2
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.2
+  - @memberjunction/ng-shared-generic@6.1.0-edge.2
+  - @memberjunction/ng-task-graph-editor@6.1.0-edge.2
+  - @memberjunction/ng-tasks@6.1.0-edge.2
+  - @memberjunction/conversations-runtime@6.1.0-edge.2
+  - @memberjunction/ng-forms@6.1.0-edge.2
+  - @memberjunction/ai-agent-client@6.1.0-edge.2
+  - @memberjunction/ng-agent-client@6.1.0-edge.2
+  - @memberjunction/ng-container-directives@6.1.0-edge.2
+  - @memberjunction/ng-whiteboard@6.1.0-edge.2
+  - @memberjunction/ng-media-player@6.1.0-edge.2
+  - @memberjunction/interactive-component-types@6.1.0-edge.2
+  - @memberjunction/ng-markdown@6.1.0-edge.2
+  - @memberjunction/ng-ui-components@6.1.0-edge.2
+
 ## 6.1.0-edge.1
 
 ### Minor Changes

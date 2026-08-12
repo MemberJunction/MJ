@@ -29,6 +29,7 @@ import { CompileFlowToTaskGraph, type FlowCompilerPath, type FlowCompilerStep } 
 import {
     ComputeEligibleTasks,
     ComputeSkipCascade,
+    ConfirmSkipSeeds,
     ResolveExclusiveGroups,
     type EvaluatedEdge,
     type TaskGraphEdge,
@@ -99,6 +100,68 @@ const FLOWS: Record<string, Flow> = {
             path({ ID: 'p4', OriginStepID: 'c', DestinationStepID: 'j' }),
         ],
     },
+    // P1 shape 1 — the skip-a-step diamond. `A` forks: the taken branch goes through Review to
+    // Publish, the untaken branch goes straight to Publish. The losing edge `A→Publish` used to seed
+    // Publish as Skipped while Review was still running, and the graph settled Complete with the
+    // publish step never executed.
+    'a fork whose loser targets a step the winner also reaches': {
+        steps: [
+            step({ ID: 'a', Name: 'A', StartingStep: true }),
+            step({ ID: 'r', Name: 'Review' }),
+            step({ ID: 'p', Name: 'Publish' }),
+        ],
+        paths: [
+            path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'r', Condition: 'ok', Priority: 10 }),
+            path({ ID: 'p2', OriginStepID: 'a', DestinationStepID: 'p', Condition: 'never', Priority: 1 }),
+            path({ ID: 'p3', OriginStepID: 'r', DestinationStepID: 'p' }),
+        ],
+    },
+    // P1 shape 2 — two conditions routing to ONE destination. `AIAgentStepPath` has no
+    // Origin+Destination unique constraint, so this is drawable. One edge wins and the other loses,
+    // making the target simultaneously the winner's target and a skip seed: it was skipped every
+    // time, while the walker ran it.
+    'two paths from one step to the same destination': {
+        steps: [
+            step({ ID: 'a', Name: 'A', StartingStep: true }),
+            step({ ID: 'b', Name: 'B' }),
+        ],
+        paths: [
+            path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'b', Condition: 'ok', Priority: 10 }),
+            path({ ID: 'p2', OriginStepID: 'a', DestinationStepID: 'b', Condition: 'ok', Priority: 1 }),
+        ],
+    },
+    // P2 — an unevaluable guard must not open the gate. A SINGLE successor compiles to no exclusive
+    // group, so this is the ordinary-edge dialect: the one that used to treat "cannot evaluate" as
+    // "satisfied" and execute the guarded work.
+    'a guard that cannot be evaluated': {
+        steps: [
+            step({ ID: 'a', Name: 'A', StartingStep: true }),
+            step({ ID: 'g', Name: 'Guarded' }),
+        ],
+        paths: [path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'g', Condition: 'typo(' })],
+    },
+    // R2-3 — a guard reaching through output a step never produced.
+    //
+    // Two details give this fixture its teeth, and both were needed. The JOIN means a held branch
+    // stops the walk one step short of the oracle's rather than merely omitting a leaf. And the
+    // absent-data edge carries the HIGHER priority, so it could have won: the dominated case is
+    // already handled by the group-resolution refinement, and a fixture built on it would pass
+    // whatever the classification said. Here the answer genuinely depends on reading absent data as
+    // false rather than as undecided.
+    'a guard on data the step never produced': {
+        steps: [
+            step({ ID: 'a', Name: 'A', StartingStep: true }),
+            step({ ID: 'g', Name: 'Guarded' }),
+            step({ ID: 'p', Name: 'Plain' }),
+            step({ ID: 'j', Name: 'Join' }),
+        ],
+        paths: [
+            path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'g', Condition: 'absentData', Priority: 10 }),
+            path({ ID: 'p2', OriginStepID: 'a', DestinationStepID: 'p', Priority: 1 }),
+            path({ ID: 'p3', OriginStepID: 'g', DestinationStepID: 'j' }),
+            path({ ID: 'p4', OriginStepID: 'p', DestinationStepID: 'j' }),
+        ],
+    },
     'no path matches — the walk ends': {
         steps: [step({ ID: 'a', Name: 'A', StartingStep: true }), step({ ID: 'b', Name: 'B' })],
         paths: [path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'b', Condition: 'never' })],
@@ -108,11 +171,25 @@ const FLOWS: Record<string, Flow> = {
 /** Condition truthiness, shared by both engines so the comparison isolates TRAVERSAL. */
 const CONTEXT: Record<string, boolean> = { ok: true, never: false };
 
+/**
+ * Conditions whose DATA IS ABSENT — the R2-3 class, which this simulator could not express at all.
+ *
+ * The old model had two states: a name in `CONTEXT` (true or false) or not in it (unevaluable). A
+ * condition that reaches through a step's missing output is neither. On the walker it is simply
+ * falsy — `payload` there is the agent's accumulated payload, an object, so `payload.approved` on a
+ * step that produced nothing is `undefined`. On the dispatcher it THREW, and every throw was a hold.
+ * Without a third state the fixture below cannot be written, and the divergence stays invisible.
+ */
+const ABSENT_DATA = new Set(['absentData']);
+
 const evaluator: IConditionEvaluator = {
-    Evaluate: (expression) =>
-        expression in CONTEXT
+    Evaluate: (expression) => {
+        // The oracle's reading: property access through a missing key is falsy, not an error.
+        if (ABSENT_DATA.has(expression)) return { Success: true, Value: false };
+        return expression in CONTEXT
             ? { Success: true, Value: CONTEXT[expression] }
-            : { Success: false, ErrorMessage: `unknown: ${expression}` },
+            : { Success: false, ErrorMessage: `unknown: ${expression}` };
+    },
 };
 
 // ── side A: the oracle ──────────────────────────────────────────────────────
@@ -177,6 +254,13 @@ function compiledOrder(flow: Flow): string[] {
 
     const spec = compiled.Spec!;
     const status = new Map<string, TaskGraphNodeStatus>(spec.tasks.map((t) => [t.tempId, 'Pending']));
+    // Edge identity includes the ORDINAL, because `${dependsOn}->${task}` is not unique: two paths
+    // from one step to the same destination collapse onto one id, so the winner and the loser become
+    // indistinguishable and the simulator filters BOTH out of `liveEdges`. That made P1's
+    // same-destination shape invisible to this suite — the oracle could not see the bug it exists to
+    // catch. `dependsOn` carries no edge id of its own, so the ordinal is the identity.
+    const edgeKey = (taskId: string, dependsOnTaskId: string, ordinal: number) =>
+        `${dependsOnTaskId}->${taskId}#${ordinal}`;
     const edges: TaskGraphEdge[] = spec.tasks.flatMap((t) =>
         (t.dependsOn ?? []).map(NormalizeDependency).map((d) => ({ taskId: t.tempId, dependsOnTaskId: d.tempId })),
     );
@@ -189,8 +273,8 @@ function compiledOrder(flow: Flow): string[] {
         const evaluated: EvaluatedEdge[] = spec.tasks.flatMap((t) =>
             (t.dependsOn ?? []).map(NormalizeDependency)
                 .filter((d) => d.exclusiveGroup)
-                .map((d) => ({
-                    id: `${d.tempId}->${t.tempId}`,
+                .map((d, ordinal) => ({
+                    id: edgeKey(t.tempId, d.tempId, ordinal),
                     taskId: t.tempId,
                     dependsOnTaskId: d.tempId,
                     exclusiveGroup: d.exclusiveGroup!,
@@ -199,24 +283,40 @@ function compiledOrder(flow: Flow): string[] {
                     sequence: d.sequence ?? 0,
                     conditionOutcome: !d.condition
                         ? 'satisfied'
-                        : d.condition in CONTEXT
-                            ? (CONTEXT[d.condition] ? 'satisfied' : 'unsatisfied')
-                            : 'unevaluable',
+                        // Absent data is the data answering NO (R2-3), in this dialect too — the
+                        // dispatcher classifies the throw rather than calling the group undecided.
+                        : ABSENT_DATA.has(d.condition)
+                            ? 'unsatisfied'
+                            : d.condition in CONTEXT
+                                ? (CONTEXT[d.condition] ? 'satisfied' : 'unsatisfied')
+                                : 'unevaluable',
                 } as EvaluatedEdge)),
         );
         const xor = ResolveExclusiveGroups(evaluated);
 
         // A losing edge must not gate its target — it is removed, not left to block.
-        const loserTargets = new Set(xor.skipSeedTaskIDs);
-        const liveEdges = edges.filter((e) => !xor.loserEdgeIDs.includes(`${e.dependsOnTaskId}->${e.taskId}`));
+        const loserEdgeIDs = new Set(xor.loserEdgeIDs);
+        const liveEdges = spec.tasks.flatMap((t) =>
+            (t.dependsOn ?? []).map(NormalizeDependency)
+                .map((d, ordinal) => ({ d, ordinal }))
+                .filter(({ d, ordinal }) => !loserEdgeIDs.has(edgeKey(t.tempId, d.tempId, ordinal)))
+                .map(({ d }) => ({ taskId: t.tempId, dependsOnTaskId: d.tempId } as TaskGraphEdge)),
+        );
 
-        // 2. skips: seeds, then the cascade — BEFORE eligibility.
+        // 2. skips: CONFIRMED seeds, then the cascade — BEFORE eligibility.
+        //
+        // Seeds are confirmed against the surviving edges rather than written straight through. The
+        // simulator used to persist every seed, which mirrored the production bug: it compared a
+        // wrong answer against the walker and, for the diamond, disagreed only because the walker was
+        // right. Confirming here is what lets the fixture see the fix.
+        const loserTargets = new Set(ConfirmSkipSeeds(xor.skipSeedTaskIDs, liveEdges));
         for (const id of loserTargets) if (status.get(id) === 'Pending') status.set(id, 'Skipped');
         for (const id of ComputeSkipCascade([...status].map(([i, s]) => ({ id: i, status: s })), liveEdges, [...loserTargets])) {
             status.set(id, 'Skipped');
         }
 
         // A non-exclusive conditional edge that is false blocks its target the ordinary way.
+        const unevaluableHolds = new Set<string>();
         for (const t of spec.tasks) {
             for (const d of (t.dependsOn ?? []).map(NormalizeDependency)) {
                 if (d.exclusiveGroup || !d.condition) continue;
@@ -225,6 +325,20 @@ function compiledOrder(flow: Flow): string[] {
                 // used to write Blocked here, and because nothing pinned the two together the
                 // divergence sat hidden behind a green differential suite. Both now Skip (R6), and
                 // Blocked is reserved for failure-driven unsatisfiability.
+                //
+                // THREE outcomes, not two. `CONTEXT[cond] === false` is false for an UNEVALUABLE
+                // condition as well as for a satisfied one, so the simulator let unevaluable
+                // guards through — reproducing the production bug rather than testing against it,
+                // and agreeing with a wrong answer. Unevaluable now HOLDS: neither skipped here nor
+                // eligible below.
+                // Absent data drops the edge, exactly as `DecideGate` now does — it does NOT hold.
+                // Before R2-3 this was a hold, which stalled the graph forever on a terminal origin
+                // whose output could never change.
+                if (ABSENT_DATA.has(d.condition)) {
+                    if (status.get(t.tempId) === 'Pending') status.set(t.tempId, 'Skipped');
+                    continue;
+                }
+                if (!(d.condition in CONTEXT)) { unevaluableHolds.add(t.tempId); continue; }
                 if (CONTEXT[d.condition] === false && status.get(t.tempId) === 'Pending') status.set(t.tempId, 'Skipped');
             }
         }
@@ -233,7 +347,7 @@ function compiledOrder(flow: Flow): string[] {
         const eligible = ComputeEligibleTasks(
             [...status].map(([i, s]) => ({ id: i, status: s })),
             liveEdges,
-        ).filter((n) => !xor.holdTaskIDs.includes(n.id));
+        ).filter((n) => !xor.holdTaskIDs.includes(n.id) && !unevaluableHolds.has(n.id));
         if (eligible.length === 0) break;
 
         for (const n of eligible) { order.push(n.id); status.set(n.id, 'Complete'); }

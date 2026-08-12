@@ -32,6 +32,8 @@ const RUN_ROW = {
     DurationMs: 1410,
     Cost: '0.0125',
     Tokens: '900',
+    PromptTokens: '700',
+    CompletionTokens: '200',
     SourceEntity: 'MJ: AI Agent Runs',
     SourceID: 'run-1',
 };
@@ -89,6 +91,23 @@ describe('LoadAgentRunTree', () => {
 
         expect(result.Rows[0].Cost).toBe(0.0125);
         expect(result.Rows[0].Tokens).toBe(900);
+    });
+
+    it('projects the prompt/completion split, which the cost rollup writes to its own columns', async () => {
+        const result = await LoadAgentRunTree('run-1', providerReturning([RUN_ROW]));
+
+        expect(result.Rows[0].PromptTokens).toBe(700);
+        expect(result.Rows[0].CompletionTokens).toBe(200);
+    });
+
+    it('leaves the split NULL when the query does not return it', async () => {
+        // A row that predates the widened projection must not read as "zero prompt tokens" — the
+        // settlement rollup sums these, and a fabricated zero is indistinguishable from a real one.
+        const { PromptTokens: _p, CompletionTokens: _c, ...older } = RUN_ROW;
+        const result = await LoadAgentRunTree('run-1', providerReturning([older]));
+
+        expect(result.Rows[0].PromptTokens).toBeNull();
+        expect(result.Rows[0].CompletionTokens).toBeNull();
     });
 
     it('keeps an absent cost NULL rather than collapsing it to zero', async () => {

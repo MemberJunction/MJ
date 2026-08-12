@@ -919,7 +919,18 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT77 - Materialized Read Served From Snapshot",
+            "TestID": "@lookup:MJ: Tests.Name=IT77 - Cache Immutability (freeze-on-write)",
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CB7AAFCA-4913-4DCF-9D36-B6CD50E5BE96"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT78 - Materialized Entity Base-View Read Redirect",
             "Sequence": 33,
             "Status": "Active"
           }
@@ -927,7 +938,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT78 - Materialized Entity Base-View Read Redirect",
+            "TestID": "@lookup:MJ: Tests.Name=IT79 - Materialized Read Served From Snapshot",
             "Sequence": 33,
             "Status": "Active"
           }

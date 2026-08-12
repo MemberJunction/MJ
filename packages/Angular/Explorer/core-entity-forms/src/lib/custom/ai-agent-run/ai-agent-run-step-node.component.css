@@ -175,6 +175,54 @@
   color: var(--mj-status-warning);
 }
 
+.status[data-status="Blocked"] {
+  color: var(--mj-status-error);
+}
+
+.status[data-status="Waiting"] {
+  color: var(--mj-status-warning);
+}
+
+.status[data-status="Skipped"],
+.status[data-status="Pending"] {
+  color: var(--mj-text-secondary);
+}
+
+/* ============================================================
+   Work that never ran
+   ============================================================
+   A timeline is a record of what happened, so a step that did not happen must not read like one that
+   did. `Skipped` was rendered in the same weight and colour as everything else and distinguished
+   only by the word itself — so a workflow that took one of two branches looked, at a glance, like a
+   workflow where everything ran.
+
+   Hatching says "no-op" before any text is read; the dimmed content says it is still a real record
+   you can open. The row stays fully clickable — the detail panel is where the explanation lives. */
+.timeline-item[data-status="Skipped"] {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent,
+    transparent 6px,
+    color-mix(in srgb, var(--mj-text-disabled) 14%, transparent) 6px,
+    color-mix(in srgb, var(--mj-text-disabled) 14%, transparent) 12px
+  );
+}
+
+.timeline-item[data-status="Skipped"] .timeline-content {
+  opacity: 0.6;
+}
+
+.timeline-item[data-status="Skipped"] .timeline-header h4 {
+  text-decoration: line-through;
+  text-decoration-color: var(--mj-text-disabled);
+  text-decoration-thickness: 1px;
+}
+
+/* Never-started work keeps its colour but recedes: it may yet run, so it is not struck through. */
+.timeline-item[data-status="Pending"] .timeline-content {
+  opacity: 0.75;
+}
+
 /* Timeline Actions */
 .timeline-actions {
   display: flex;
@@ -281,4 +329,10 @@
   opacity: 0.75;
   padding-left: 4px;
   border-left: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+}
+
+/* A step that has not started shows an em dash, not a time. Muted so the eye skips it — the
+   absence of a timestamp is the information, and it should not read as a value. */
+.timeline-time--none {
+  color: var(--mj-text-disabled);
 }
