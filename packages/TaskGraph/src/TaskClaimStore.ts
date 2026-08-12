@@ -427,6 +427,77 @@ export class TaskClaimStore {
     }
 
     /**
+     * Skips one task, refusing if anything has taken it since the caller looked.
+     *
+     * **Why this cannot be a `Save()`** — and R3-1 is the proof that the earlier reasoning was wrong.
+     * The early-finish path skipped siblings with a full-row `BaseEntity.Save()` against a snapshot
+     * taken before the loop began, justified by "the siblings are Pending and unclaimed until the
+     * skip lands". They are not: `executeClaimed` is not awaited, so this instance's own next poll
+     * tick runs concurrently with the loop, and a sibling can be claimed and STARTED between the
+     * snapshot and its own write. The full-row save then overwrote `In Progress` back to `Skipped`
+     * and cleared `ClaimedBy` mid-execution — the agent's real side effects had already fired, its
+     * completion was refused by the claim guard, and its output was discarded. The graph settled
+     * `Complete` with no record anywhere that the step ran.
+     *
+     * **The predicate is `Status='Pending'` alone, deliberately.** `TryClaim` moves a task to
+     * `In Progress` in the same statement that stamps `ClaimedBy`, so a task an executor holds is
+     * never `Pending` — the status IS the claim test. Adding `ClaimedBy IS NULL` would look like
+     * defence in depth and would instead break a real case: a notified human task carries a marker
+     * in `ClaimedBy` while still `Pending`, and those must stay skippable.
+     *
+     * @returns true when this call is the one that skipped it; false means something else got there
+     */
+    public async TrySkipPending(
+        provider: IMetadataProvider,
+        taskID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${db.QuoteIdentifier('Status')} = 'Skipped'
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
+              AND ${db.QuoteIdentifier('Status')} = 'Pending'`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
+     * Records, durably and once, that a graph is finishing early.
+     *
+     * **The declaration has to outlive the deciding instance's memory.** An early finish is decided
+     * by one task's result (`result.ChatMessage`) and nothing else in the system knows: skip seeds
+     * are derived from durable condition and exclusive-group state, so no claim filter on any
+     * instance — including the deciding one, whose poll loop runs concurrently — can tell that the
+     * remaining steps are about to be skipped. Writing it here first is what lets
+     * `loadGraphState` fold those steps into the claim filter, closing the window for everyone
+     * rather than narrowing it for one.
+     *
+     * Guarded and once-only for the same reason the continuation marker is: two tasks can end the
+     * same flow, and the first declaration is the one that counts. Type-scoped like every other
+     * statement here that writes into a payload column.
+     *
+     * @returns true when this call is the one that declared it
+     */
+    public async TryDeclareEarlyFinish(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const payload = db.QuoteIdentifier('InputPayload');
+        const nowIso = new Date().toISOString();
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${payload} = JSON_MODIFY(${payload}, '$.earlyFinishedAt', '${this.escape(nowIso)}')
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
+              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
+              AND ISJSON(${payload}) = 1
+              AND JSON_VALUE(${payload}, '$.earlyFinishedAt') IS NULL`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
      * Records why a graph ended early, writing that column and no other.
      *
      * The hazard is the one {@link TrySettleParent} exists for, reached by a different route. A task

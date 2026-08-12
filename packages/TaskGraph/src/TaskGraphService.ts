@@ -112,6 +112,15 @@ export type TaskGraphParentMetadata = {
      * delivered one the moment anybody looks afterwards.
      */
     continuationDeliveredAs?: 'delivered' | 'expired' | 'cancelled';
+    /**
+     * Set, once and durably, when a step declares the workflow finished before its remaining steps.
+     *
+     * Read by `loadGraphState` so every instance's claim filter knows the remaining steps are about
+     * to be skipped. Without it the decision lives only in the deciding instance's memory, and a
+     * concurrent poll — including that same instance's, since task execution is not awaited — can
+     * claim and start a step the early finish is in the middle of skipping.
+     */
+    earlyFinishedAt?: string;
 };
 
 /**

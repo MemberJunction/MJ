@@ -825,8 +825,12 @@ export class TaskGraphDispatcher implements IShutdownable {
             for (const taskID of toSkip) {
                 const entity = graph.entityById.get(taskID);
                 if (!entity || entity.Status !== 'Pending') continue;
-                entity.Status = 'Skipped';
-                if (await entity.Save()) {
+                // The in-memory check above is a cheap pre-filter; the guard that matters is IN the
+                // statement (R3-1's audit item). This snapshot was loaded at the top of the pass and
+                // a task can be claimed and started before its skip write lands — R2-14 closed that
+                // window for the claim filter, and this closes it for the write itself.
+                if (await this.claims.TrySkipPending(provider, taskID, this.contextUser)) {
+                    entity.Status = 'Skipped';
                     skippedByRoute.push(taskID);
                     LogStatus(`[TaskGraphDispatcher] Skipped '${entity.Name}' (${taskID}) — another branch was taken.`);
                     // Announced separately from TaskBlocked because it means something different to
@@ -1223,21 +1227,48 @@ export class TaskGraphDispatcher implements IShutdownable {
         try {
             LogStatus(`[TaskGraphDispatcher] '${task.Name}' ended the workflow early: ${message}`);
 
+            // DECLARE BEFORE MUTATING (R3-1).
+            //
+            // The early finish is decided by one task's result and known to nothing else: skip seeds
+            // come from durable condition and exclusive-group state, so no claim filter anywhere —
+            // including this instance's own, since `executeClaimed` is not awaited and the poll loop
+            // runs concurrently — can tell the remaining steps are about to be skipped. Stamping it
+            // first is what lets `loadGraphState` fold them into the filter, which closes the window
+            // for every instance instead of narrowing it for one.
+            const typeID = await this.workflowTaskTypeID(provider);
+            if (typeID) await this.claims.TryDeclareEarlyFinish(provider, task.ParentID, typeID, this.contextUser);
+
             const skipped: string[] = [];
+            const claimedMeanwhile: string[] = [];
             for (const sibling of await this.loadChildTasks(provider, task.ParentID)) {
                 if (sibling.ID === task.ID || sibling.Status !== 'Pending') continue;
-                sibling.Status = 'Skipped';
-                if (await sibling.Save()) {
-                    skipped.push(sibling.ID);
-                    this.emit({
-                        Kind: 'TaskSkipped',
-                        ParentTaskID: task.ParentID,
-                        OwnerUserID: await this.resolveOwner(provider, task.ParentID),
-                        TaskID: sibling.ID,
-                        TaskName: sibling.Name,
-                        Status: 'Skipped',
-                    });
+                // GUARDED, not a full-row save against the snapshot above. A sibling claimed between
+                // that load and this write is mid-execution; overwriting it to `Skipped` discards a
+                // running step's outcome while its side effects have already fired. Rowcount is the
+                // verdict — see TaskClaimStore.TrySkipPending.
+                if (!(await this.claims.TrySkipPending(provider, sibling.ID, this.contextUser))) {
+                    claimedMeanwhile.push(sibling.Name);
+                    continue;
                 }
+                skipped.push(sibling.ID);
+                this.emit({
+                    Kind: 'TaskSkipped',
+                    ParentTaskID: task.ParentID,
+                    OwnerUserID: await this.resolveOwner(provider, task.ParentID),
+                    TaskID: sibling.ID,
+                    TaskName: sibling.Name,
+                    Status: 'Skipped',
+                });
+            }
+
+            if (claimedMeanwhile.length > 0) {
+                // Reported rather than forced. Those steps were already running when the workflow
+                // decided to stop; their results are real and are allowed to land. The graph settles
+                // once they finish, which is a pass later than it would have and correct.
+                LogStatus(
+                    `[TaskGraphDispatcher] Early finish left ${claimedMeanwhile.length} step(s) running ` +
+                    `(${claimedMeanwhile.join(', ')}) — they were claimed before the skip and their outcomes stand.`,
+                );
             }
 
             // WITHDRAW WHAT WE JUST SKIPPED (R2-10).
@@ -1254,7 +1285,6 @@ export class TaskGraphDispatcher implements IShutdownable {
             // terminal — so another instance can settle it and claim the marker before this line
             // runs. A full-row save from the snapshot we loaded first would undo both. See
             // TaskClaimStore.TrySetParentOutput.
-            const typeID = await this.workflowTaskTypeID(provider);
             if (typeID) {
                 await this.claims.TrySetParentOutput(
                     provider, task.ParentID, JSON.stringify({ message }), typeID, this.contextUser,
@@ -2208,9 +2238,9 @@ export class TaskGraphDispatcher implements IShutdownable {
         // origin statuses may decide an exclusive group, and which failures count as handled — are
         // no-ops unless something has actually failed, and this runs on every poll for every active
         // graph, so the parent load stays behind the same cheap exit `computeHandledFailures` used.
-        const failureSemantics = children.some((c) => c.Status === 'Failed')
-            ? await this.readFailureSemantics(provider, parentTaskID)
-            : 'block';
+        // One parent read serves both questions this pass asks of the metadata bag.
+        const parentMeta = await this.readParentMetadataFor(provider, parentTaskID);
+        const failureSemantics = parentMeta.failureSemantics;
 
         // Conditional edges are resolved HERE, before eligibility runs, by dropping edges whose
         // condition does not hold. Expressing it as edge removal rather than as a second rule inside
@@ -2335,6 +2365,18 @@ export class TaskGraphDispatcher implements IShutdownable {
             ...allSkipSeeds,
             ...ComputeSkipCascade(nodes, liveEdges, allSkipSeeds),
         ]);
+
+        // A DECLARED EARLY FINISH MAKES EVERY REMAINING STEP UNCLAIMABLE (R3-1).
+        //
+        // The declaration is durable, so this holds for every instance rather than only the one that
+        // decided it — which is the whole point. Folded into the same set the claim filter already
+        // consults, so nothing about to be skipped can be claimed and started in the window between
+        // the decision and the skip writes.
+        if (parentMeta.earlyFinishedAt) {
+            for (const node of nodes) {
+                if (node.status === 'Pending') cascadeSkipTaskIDs.add(node.id);
+            }
+        }
 
         return {
             nodes,
@@ -2966,23 +3008,22 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
-     * The graph's failure dialect, read from its parent's durable metadata.
+     * A graph's durable metadata bag, for the questions a pass asks of it.
      *
-     * Defaults to `'block'` on any failure to read it, matching the spec's own default — and it is
-     * the safe direction besides: under `'block'` a failed step decides nothing, so a graph whose
-     * metadata we cannot read stalls visibly instead of resolving forks on the say-so of a failure.
+     * Defaults on any failure to read it, and the defaults are the safe directions: `'block'` means
+     * a failed step decides nothing, so a graph whose metadata we cannot read stalls visibly instead
+     * of resolving forks on the say-so of a failure; and no early-finish declaration means nothing
+     * is removed from the claim filter on the strength of a read that did not work.
      */
-    private async readFailureSemantics(
+    private async readParentMetadataFor(
         provider: IMetadataProvider,
         parentTaskID: string,
-    ): Promise<TaskGraphParentMetadata['failureSemantics']> {
+    ): Promise<TaskGraphParentMetadata> {
         try {
             const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
-            if (!(await parent.Load(parentTaskID))) return 'block';
-            return ParseTaskGraphParentMetadata(parent.InputPayload).failureSemantics;
-        } catch {
-            return 'block';
-        }
+            if (await parent.Load(parentTaskID)) return ParseTaskGraphParentMetadata(parent.InputPayload);
+        } catch { /* fall through to the safe defaults */ }
+        return ParseTaskGraphParentMetadata(null);
     }
 
     /**

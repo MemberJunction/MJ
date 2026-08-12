@@ -68,6 +68,84 @@ describe('reclamation covers every task a dispatcher can execute (R2-1)', () => 
     });
 });
 
+describe('TrySkipPending — a skip must not overwrite work that started (R3-1)', () => {
+    // R2-10 moved the early-finish skips after `CompleteClaimed`, on the premise that "the siblings
+    // are Pending and unclaimed until the skip lands". They are not: `executeClaimed` is not
+    // awaited, so this instance's own poll tick runs concurrently with the skip loop, and a sibling
+    // can be claimed and STARTED between the snapshot and its write. A full-row save then reverted
+    // `In Progress` to `Skipped` mid-execution — the agent's side effects had fired, its completion
+    // was refused by the claim guard, and its output was discarded, with the graph settling
+    // `Complete` and nothing recording that the step ran.
+    let store: TaskClaimStore;
+    beforeEach(() => { store = new TaskClaimStore('instance-1', 300); });
+
+    it('refuses a task that is no longer Pending — the status IS the claim test', () => {
+        const { provider, statements } = recordingProvider();
+        return store.TrySkipPending(provider, PARENT, USER).then(() => {
+            expect(statements[0]).toContain(`[Status] = 'Pending'`);
+        });
+    });
+
+    it('writes Status and nothing else', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.TrySkipPending(provider, PARENT, USER);
+        const setClause = statements[0].split('WHERE')[0];
+        expect(setClause).toContain(`[Status] = 'Skipped'`);
+        expect(setClause).not.toContain('[ClaimedBy]');
+        expect(setClause).not.toContain('[OutputPayload]');
+        expect(setClause).not.toContain('[AgentRunID]');
+    });
+
+    it('does NOT test ClaimedBy — a notified human task carries a marker and must stay skippable', async () => {
+        // `TryClaim` moves a task to `In Progress` in the same statement that stamps `ClaimedBy`, so
+        // an executor's task is never `Pending` and the status covers it. Adding `ClaimedBy IS NULL`
+        // would look like defence in depth and would instead refuse to skip a notified human step,
+        // which is a case the early-finish path exists to handle.
+        const { provider, statements } = recordingProvider();
+        await store.TrySkipPending(provider, PARENT, USER);
+        expect(statements[0]).not.toContain('[ClaimedBy] IS NULL');
+    });
+
+    it('reports the loss when something claimed it first — the rowcount is the verdict', async () => {
+        const { provider } = recordingProvider(0);
+        expect(await store.TrySkipPending(provider, PARENT, USER)).toBe(false);
+    });
+});
+
+describe('TryDeclareEarlyFinish — the decision has to outlive one instance\'s memory (R3-1)', () => {
+    let store: TaskClaimStore;
+    beforeEach(() => { store = new TaskClaimStore('instance-1', 300); });
+
+    it('stamps the parent once, refusing a second declaration', async () => {
+        // Two tasks can end the same flow; the first declaration is the one that counts, exactly as
+        // with the continuation marker.
+        const { provider, statements } = recordingProvider();
+        await store.TryDeclareEarlyFinish(provider, PARENT, WORKFLOW_TYPE, USER);
+        expect(statements[0]).toContain(`JSON_VALUE([InputPayload], '$.earlyFinishedAt') IS NULL`);
+    });
+
+    it('is type-scoped like every other statement here that writes a payload', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.TryDeclareEarlyFinish(provider, PARENT, WORKFLOW_TYPE, USER);
+        expect(statements[0]).toContain(`[TypeID] = '${WORKFLOW_TYPE}'`);
+        expect(statements[0]).toContain('ISJSON([InputPayload]) = 1');
+    });
+
+    it('writes a timestamp the TS reader can parse', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.TryDeclareEarlyFinish(provider, PARENT, WORKFLOW_TYPE, USER);
+        const written = /\$\.earlyFinishedAt', '([^']+)'/.exec(statements[0])?.[1];
+        expect(written).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+        expect(ParseTaskGraphParentMetadata(JSON.stringify({ earlyFinishedAt: written })).earlyFinishedAt)
+            .toBe(written);
+    });
+
+    it('a graph with no declaration parses as not-early-finished', () => {
+        expect(ParseTaskGraphParentMetadata('{"continuation":"message"}').earlyFinishedAt).toBeUndefined();
+        expect(ParseTaskGraphParentMetadata(null).earlyFinishedAt).toBeUndefined();
+    });
+});
+
 describe('TrySettleParent — the terminal write is column-scoped and guarded', () => {
     let store: TaskClaimStore;
     beforeEach(() => { store = new TaskClaimStore('instance-1', 300); });
