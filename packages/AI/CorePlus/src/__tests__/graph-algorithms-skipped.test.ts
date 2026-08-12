@@ -397,6 +397,116 @@ describe('R2-4: a failure decides a fork only where the dialect says failures de
     });
 });
 
+describe('R2-5: a tied group resolves the same way every time', () => {
+    // Priority and sequence both default to 0, and `Submit` persists those defaults, so a
+    // hand-authored or LLM-authored spec routinely produces a genuine tie. Dependencies load with no
+    // ORDER BY, so the winner was decided by row order — which can differ between polls. Worst
+    // interleaving: poll 1 picks X→B and skips C; poll 2's row order flips, picks Y→C (already
+    // Skipped) and skips B. BOTH branches Skipped, graph settles Complete having executed neither.
+    const tied = (): EvaluatedEdge[] => ([
+        { id: 'edge-x', taskId: 'B', dependsOnTaskId: 'A', exclusiveGroup: 'g',
+          originStatus: 'Complete', priority: 0, sequence: 0, conditionOutcome: 'satisfied' },
+        { id: 'edge-y', taskId: 'C', dependsOnTaskId: 'A', exclusiveGroup: 'g',
+          originStatus: 'Complete', priority: 0, sequence: 0, conditionOutcome: 'satisfied' },
+    ]);
+
+    it('picks the same winner whichever order the rows arrive in', () => {
+        const forward = ResolveExclusiveGroups(tied());
+        const reversed = ResolveExclusiveGroups([...tied()].reverse());
+        expect(forward.keptEdgeIDs).toEqual(reversed.keptEdgeIDs);
+        expect(forward.skipSeedTaskIDs).toEqual(reversed.skipSeedTaskIDs);
+    });
+
+    it('still honours priority and sequence first — the tiebreak is a LAST key', () => {
+        // Edge id is arbitrary, so it must never outrank a stated intent. 'edge-a' sorts before
+        // 'edge-z' alphabetically; priority has to win anyway.
+        const stated: EvaluatedEdge[] = [
+            { id: 'edge-z', taskId: 'B', dependsOnTaskId: 'A', exclusiveGroup: 'g',
+              originStatus: 'Complete', priority: 10, sequence: 5, conditionOutcome: 'satisfied' },
+            { id: 'edge-a', taskId: 'C', dependsOnTaskId: 'A', exclusiveGroup: 'g',
+              originStatus: 'Complete', priority: 1, sequence: 0, conditionOutcome: 'satisfied' },
+        ];
+        expect(ResolveExclusiveGroups(stated).keptEdgeIDs).toEqual(['edge-z']);
+    });
+});
+
+describe('R2-3 refinement: a dominated unevaluable edge must not stall a decided fork', () => {
+    // Holding on ANY unevaluable member is too blunt. An edge that could never have won — lower
+    // priority than a satisfied one — tells us nothing about the outcome, and holding the group on
+    // its account stalls a fork whose winner is already known.
+    const withUnevaluable = (priority: number): EvaluatedEdge[] => ([
+        { id: 'e-good', taskId: 'W', dependsOnTaskId: 'A', exclusiveGroup: 'g',
+          originStatus: 'Complete', priority: 5, sequence: 0, conditionOutcome: 'satisfied' },
+        { id: 'e-broken', taskId: 'X', dependsOnTaskId: 'A', exclusiveGroup: 'g',
+          originStatus: 'Complete', priority, sequence: 0, conditionOutcome: 'unevaluable' },
+    ]);
+
+    it('resolves when the unevaluable edge could never have won', () => {
+        const r = ResolveExclusiveGroups(withUnevaluable(1));
+        expect(r.holdTaskIDs).toEqual([]);
+        expect(r.keptEdgeIDs).toEqual(['e-good']);
+        // The dominated edge loses like any other loser: it could not have been taken either way.
+        expect(r.skipSeedTaskIDs).toEqual(['X']);
+    });
+
+    it('HOLDS when the unevaluable edge could have beaten the winner', () => {
+        // Now the answer genuinely depends on the broken guard, so guessing is not available.
+        expect(ResolveExclusiveGroups(withUnevaluable(10)).holdTaskIDs).toEqual(['W', 'X']);
+    });
+
+    it('holds when it ties on priority but would win on sequence', () => {
+        const contender = withUnevaluable(5);
+        contender[1].sequence = -1;
+        expect(ResolveExclusiveGroups(contender).holdTaskIDs).toEqual(['W', 'X']);
+    });
+
+    it('HOLDS when nothing is satisfied at all — any unevaluable edge could have been the winner', () => {
+        const none: EvaluatedEdge[] = [
+            { id: 'e1', taskId: 'W', dependsOnTaskId: 'A', exclusiveGroup: 'g',
+              originStatus: 'Complete', priority: 0, sequence: 0, conditionOutcome: 'unsatisfied' },
+            { id: 'e2', taskId: 'X', dependsOnTaskId: 'A', exclusiveGroup: 'g',
+              originStatus: 'Complete', priority: 0, sequence: 1, conditionOutcome: 'unevaluable' },
+        ];
+        expect(ResolveExclusiveGroups(none).holdTaskIDs).toEqual(['W', 'X']);
+    });
+});
+
+describe('R2-8: a fork on a step that was itself skipped takes no branch', () => {
+    // `Skipped` is not in `terminalDecides`, so the group never resolved and every edge stayed live
+    // — and `Skipped` satisfies prerequisites, so whichever target had its OTHER prerequisites
+    // healthy simply ran, chosen by graph accident with its guard never consulted. Ordinary
+    // conditional edges out of the same origin ARE decided; the exclusive dialect bypassed the guard.
+    const forkOnSkipped = (): EvaluatedEdge[] => ([
+        { id: 'e-w', taskId: 'W', dependsOnTaskId: 'S', exclusiveGroup: 'g',
+          originStatus: 'Skipped', priority: 0, sequence: 0, conditionOutcome: 'satisfied' },
+        { id: 'e-l', taskId: 'L', dependsOnTaskId: 'S', exclusiveGroup: 'g',
+          originStatus: 'Skipped', priority: 0, sequence: 1, conditionOutcome: 'unsatisfied' },
+    ]);
+
+    it('loses every branch rather than leaving them all live', () => {
+        const r = ResolveExclusiveGroups(forkOnSkipped());
+        expect(r.keptEdgeIDs).toEqual([]);
+        expect(r.loserEdgeIDs).toEqual(['e-w', 'e-l']);
+        expect(r.skipSeedTaskIDs).toEqual(['W', 'L']);
+    });
+
+    it('does so regardless of what the conditions would have said', () => {
+        // Including an unevaluable one: a step that did not run cannot have a guard worth reading,
+        // so this must not become a hold either.
+        const broken = forkOnSkipped();
+        broken[0].conditionOutcome = 'unevaluable';
+        const r = ResolveExclusiveGroups(broken);
+        expect(r.holdTaskIDs).toEqual([]);
+        expect(r.skipSeedTaskIDs).toEqual(['W', 'L']);
+    });
+
+    it('agrees with the ordinary-edge dialect, which drops a Skipped origin\'s edges', () => {
+        // Two dialects for one question is how this stayed hidden. `DecideGate` returns 'drop' for a
+        // Skipped origin; this is the same answer in the exclusive vocabulary.
+        expect(ResolveExclusiveGroups(forkOnSkipped()).keptEdgeIDs).toEqual([]);
+    });
+});
+
 describe('R2-4 composed: under block, nothing downstream of an unhandled failure runs', () => {
     // The unit assertions above prove the resolution refuses to decide. This proves the CONSEQUENCE,
     // which is where the damage was: the losing edges were removed, and removing them also severed
