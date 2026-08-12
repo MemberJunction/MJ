@@ -58,6 +58,29 @@ export interface ConnectorCreationPipelineOptions {
      * false so it never disables what it didn't look at. Threaded to PersistDiscoveredSchema.
      */
     DeactivateAbsent?: boolean;
+    /**
+     * Hard ceiling for the WHOLE run. Default {@link DEFAULT_RUN_DEADLINE_MS}; 0 disables it.
+     *
+     * Every other budget in this system bounds something INSIDE a stage, and none of them can preempt
+     * an `await` that never settles. A connector's `outOfTime()` is only checked BETWEEN requests; an
+     * HTTP abort signal governs only its own request; the discovery sample budget is spent by the code
+     * reading the stream. There is always one more layer able to stall — and when one does, this
+     * pipeline waits on it forever.
+     *
+     * Forever is literal. `complete()` and `fail()` are the only writers of `result.json` and both sit
+     * inside the try/catch around the stages, so a stage that never returns reaches neither. Since
+     * `isInFlight` is computed as "result.json is absent", the run then reports itself running for the
+     * rest of time: no client can learn otherwise and no retry clears it.
+     *
+     * Observed live 2026-08-12 three times on one connector: ConnectionTest completes in ~1s, Introspect
+     * starts, and the event stream is flat for ten minutes and counting — against a reference run that
+     * finished the entire pipeline in 3m53s.
+     *
+     * This does NOT stop the stalled work; a promise is not cancellable, so it keeps running until the
+     * process ends. It stops WAITING on it, so the run fails honestly, writes its artifact, and becomes
+     * retryable. A reported failure you can act on beats silence you cannot.
+     */
+    RunDeadlineMs?: number;
 }
 
 /** Outcome of a single pipeline invocation. */
@@ -128,6 +151,12 @@ export class IntegrationConnectorCreationPipeline {
      * requests, nothing more.
      */
     private static readonly IN_FLIGHT_MAX_AGE_MS = 20 * 60_000;
+    /**
+     * Default whole-run ceiling. Deliberately far above any healthy run — the reference Totara run
+     * completes in under four minutes and a large Salesforce-backed catalog in tens — so this only ever
+     * fires on work that has genuinely stopped, never on work that is merely big.
+     */
+    private static readonly DEFAULT_RUN_DEADLINE_MS = 45 * 60_000;
     /** Just-completed runs by CompanyIntegrationID — coalesces a *sequential* duplicate within the window. */
     private static readonly recentRuns = new Map<string, { result: ConnectorCreationPipelineResult; at: number }>();
     /** Default coalesce window (ms) when the env override is unset/invalid. */
@@ -321,13 +350,42 @@ export class IntegrationConnectorCreationPipeline {
             rootDir: opts.ArtifactRootDir,
             consoleMirror: opts.ConsoleMirror,
         });
+        const startedMs = Date.now();
         emitter.runStart(`Connector creation pipeline started for ${opts.CompanyIntegration.Integration ?? '(integration)'} run=${runID}`);
 
+        // THE RUN MUST END. Raced rather than awaited: a stage that never settles cannot be cancelled,
+        // but it can be stopped being waited on — which is the difference between a run that fails and
+        // one that is in-flight forever. See RunDeadlineMs.
+        const deadlineMs = opts.RunDeadlineMs ?? IntegrationConnectorCreationPipeline.DEFAULT_RUN_DEADLINE_MS;
+        let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+        const withDeadline = async <T>(stage: string, work: Promise<T>): Promise<T> => {
+            if (deadlineMs <= 0) return work;
+            const remaining = deadlineMs - (Date.now() - startedMs);
+            if (remaining <= 0) {
+                throw new Error(`Run deadline of ${Math.round(deadlineMs / 60000)}min exceeded before stage "${stage}" could start.`);
+            }
+            return Promise.race([
+                work,
+                new Promise<never>((_, reject) => {
+                    deadlineTimer = setTimeout(
+                        () => reject(new Error(
+                            `Stage "${stage}" did not finish within the run deadline of ` +
+                            `${Math.round(deadlineMs / 60000)}min. The work may still be running on this ` +
+                            `process — it cannot be cancelled — but the run is being failed so it stops ` +
+                            `reporting itself in-flight and can be retried.`)),
+                        remaining,
+                    );
+                    // Never hold the process open for a deadline nobody is waiting on.
+                    (deadlineTimer as unknown as { unref?: () => void }).unref?.();
+                }),
+            ]).finally(() => { if (deadlineTimer) clearTimeout(deadlineTimer); }) as Promise<T>;
+        };
+
         try {
-            await this.StageConnectionTest(emitter, opts);
-            const sourceSchema = await this.StageIntrospect(emitter, opts);
-            const persistResult = await this.StagePersist(emitter, opts, sourceSchema);
-            const { verdicts, unresolved } = await this.StagePKClassify(emitter, opts);
+            await withDeadline('ConnectionTest', this.StageConnectionTest(emitter, opts));
+            const sourceSchema = await withDeadline('Introspect', this.StageIntrospect(emitter, opts));
+            const persistResult = await withDeadline('Persist', this.StagePersist(emitter, opts, sourceSchema));
+            const { verdicts, unresolved } = await withDeadline('PKClassify', this.StagePKClassify(emitter, opts));
 
             emitter.stageComplete('Pipeline', {
                 processed: persistResult.ObjectsCreated + persistResult.ObjectsUpdated,
