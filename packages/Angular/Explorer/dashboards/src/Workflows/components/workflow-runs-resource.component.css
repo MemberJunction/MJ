@@ -145,6 +145,9 @@
 .wfr-detail {
   display: flex;
   flex-direction: column;
+  /* Fills its split area. Without it the column sizes to its CONTENT, so the canvas below —
+     `flex: 1 1 auto` of an auto-height parent — got its intrinsic height and left dead space. */
+  height: 100%;
   min-height: 0;
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-default);
