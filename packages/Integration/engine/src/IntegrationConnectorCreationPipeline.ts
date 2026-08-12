@@ -1,5 +1,5 @@
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { Metadata } from '@memberjunction/core';
+import { LogError, Metadata } from '@memberjunction/core';
 import type {
     MJCompanyIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -99,8 +99,35 @@ export interface ConnectorCreationPipelineResult {
  * `__mj.Entity`. The pipeline emits `entity.skipped-no-pk` events for visibility.
  */
 export class IntegrationConnectorCreationPipeline {
-    /** In-flight runs by CompanyIntegrationID — coalesces a concurrent duplicate onto the same promise. */
-    private static readonly inFlightRuns = new Map<string, Promise<ConnectorCreationPipelineResult>>();
+    /**
+     * In-flight runs by CompanyIntegrationID — coalesces a concurrent duplicate onto the same promise.
+     *
+     * Carries `at` because the entry is removed in a `finally`, which only fires when the promise
+     * SETTLES. A run that hangs therefore owns this slot forever, and every later refresh for that
+     * connector takes the `if (inFlight) return inFlight` path and attaches to a promise that will
+     * never resolve. No new run starts, no run.start is emitted, nothing reaches the workspace log —
+     * from outside the request simply vanishes, and the connector is unrefreshable until the process
+     * restarts.
+     *
+     * That is the whole explanation for behaviour that looked random for two days: a fresh process
+     * discovers in ~4 minutes; one hang poisons the slot; every attempt after it hangs; a restart
+     * clears the map and it "works again" until the next hang. Observed live 2026-08-12 — a run stuck
+     * at EventCount 5 with healthy runs on either side of it.
+     *
+     * Coalescing is right for concurrent callers, but it is only SAFE if runs terminate, and nothing
+     * guarantees that. So the entry expires: past {@link IN_FLIGHT_MAX_AGE_MS} a caller stops trusting
+     * it and runs fresh. That does not stop the stalled work (a promise is not cancellable) — it stops
+     * one hang from costing every future attempt.
+     */
+    private static readonly inFlightRuns = new Map<string, { promise: Promise<ConnectorCreationPipelineResult>; at: number }>();
+    /**
+     * How long a coalescing entry may be trusted before a new caller runs fresh instead of joining it.
+     *
+     * Generous on purpose: a legitimate large discovery must still coalesce, and re-running one is
+     * expensive. This is not a run deadline — it bounds how long ONE hang can hijack other people's
+     * requests, nothing more.
+     */
+    private static readonly IN_FLIGHT_MAX_AGE_MS = 20 * 60_000;
     /** Just-completed runs by CompanyIntegrationID — coalesces a *sequential* duplicate within the window. */
     private static readonly recentRuns = new Map<string, { result: ConnectorCreationPipelineResult; at: number }>();
     /** Default coalesce window (ms) when the env override is unset/invalid. */
@@ -142,20 +169,44 @@ export class IntegrationConnectorCreationPipeline {
 
         const cls = IntegrationConnectorCreationPipeline;
         const inFlight = cls.inFlightRuns.get(ciID);
-        if (inFlight) return this.honourRequestedRunID(opts, await inFlight); // concurrent run — share it
+        if (inFlight) {
+            if (Date.now() - inFlight.at < cls.IN_FLIGHT_MAX_AGE_MS) {
+                // A concurrent run is already going — share it, but THROUGH honourRequestedRunID so a
+                // caller that supplied its own RunID still gets that ID published as a tailable alias.
+                // Returning `inFlight.promise` directly (as this branch did before the rebase) discards
+                // the requested ID, which is exactly the defect #3354 fixed: the client polls a run
+                // directory that is never created and reads "Run not found" forever, indistinguishable
+                // from "hasn't started yet".
+                return this.honourRequestedRunID(opts, await inFlight.promise);
+            }
+            // Too old to be believed. Evicted rather than awaited: joining it is how one hang made a
+            // connector permanently unrefreshable. The stalled work carries on unattended — nothing
+            // here can cancel it — but this caller gets a real run instead of inheriting the stall.
+            LogError(
+                `[ConnectorCreationPipeline] Discarding an in-flight run for ${ciID} that has not settled in ` +
+                `${Math.round((Date.now() - inFlight.at) / 60000)}min — starting a fresh run. The previous run is ` +
+                `stuck and will never terminate; its artifact stays in-flight until the workspace restarts.`
+            );
+            cls.inFlightRuns.delete(ciID);
+        }
 
         cls.pruneRecentRuns();
         const recent = cls.recentRuns.get(ciID);
         if (recent) return this.honourRequestedRunID(opts, recent.result); // just completed — reuse it
 
         const promise = this.runInternal(opts);
-        cls.inFlightRuns.set(ciID, promise);
+        cls.inFlightRuns.set(ciID, { promise, at: Date.now() });
         try {
             const result = await promise;
             cls.recentRuns.set(ciID, { result, at: Date.now() });
             return result;
         } finally {
-            cls.inFlightRuns.delete(ciID);
+            // Only clear the slot if it is still OURS. An eviction above may have handed it to a newer
+            // run; deleting blindly would drop that entry and let a third caller start yet another
+            // duplicate.
+            if (cls.inFlightRuns.get(ciID)?.promise === promise) {
+                cls.inFlightRuns.delete(ciID);
+            }
         }
     }
 
