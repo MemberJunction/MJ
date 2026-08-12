@@ -51,6 +51,37 @@ export const TERMINAL_FOR_CONDITIONS: ReadonlySet<string> = new Set([
     'Skipped',
 ]);
 
+/**
+ * Stands in for output a step never produced, so a condition reading through it does not throw.
+ *
+ * **This is a parity fix, not a convenience.** In the flow engine `payload` is the agent's
+ * accumulated payload — an object, always — so `payload.approved` on a step that produced nothing is
+ * `undefined`, which is simply falsy, and the flow carries on. The dispatcher mapped a null output
+ * to `payload: null`, so the same condition THREW, and every throw became a permanent hold: the
+ * origin is terminal, its output is frozen, and the identical evaluation repeats forever.
+ *
+ * Frozen and shared because it is only ever read. A caller that mutates what a step "returned" is
+ * doing something the engine should not quietly permit.
+ */
+const NO_OUTPUT: Readonly<Record<string, unknown>> = Object.freeze({});
+
+/**
+ * Error signatures that mean *the data is not there*, as opposed to *the guard is broken*.
+ *
+ * Matched on message text because `SafeExpressionEvaluator` re-wraps the original error
+ * (`'Expression evaluation failed: ' + e.message`), so the class is gone by the time it reaches us
+ * and only the sentence survives.
+ *
+ * The polarity is deliberate: this list decides what is DEMOTED to a false verdict, and everything
+ * unmatched stays a hold. An unrecognised failure is then visible and recoverable rather than a
+ * silently dropped branch — which is the same reasoning P2 used, applied to a narrower class.
+ */
+const DATA_ABSENCE_SIGNATURES: readonly RegExp[] = [
+    /cannot read propert(?:y|ies) .* of (?:undefined|null)/i,
+    /cannot read propert(?:y|ies) of (?:undefined|null)/i,
+    /(?:undefined|null) is not an object/i,      // WebKit's phrasing of the same thing
+];
+
 /** A malformed `OutputPayload` is not grounds to drop a prerequisite — it reads as no output. */
 export function ParseConditionOutput(payload: string | null | undefined): unknown {
     if (!payload) return null;
@@ -75,21 +106,30 @@ export function ParseConditionOutput(payload: string | null | undefined): unknow
  * engine never had.
  */
 export function BuildConditionContext(origin: ConditionOrigin, output: unknown): Record<string, unknown> {
+    // The envelope and the spec's declared roots (`CONDITION_ROOTS`, in ai-core-plus) are one
+    // contract split across two packages, and the validator refuses conditions on the strength of
+    // that list. A key here with no entry there is a root nobody may reference; an entry there with
+    // no key here is a root that resolves to nothing at run time. Both are silent, so the two are
+    // pinned to each other by test rather than by hope.
     const envelope = (output && typeof output === 'object' ? output : {}) as Record<string, unknown>;
     const succeeded = origin.Status === 'Complete';
+    // Every object-shaped root is null-safe; the STATUS roots stay exactly as real as they were.
+    // Absence of output is not absence of outcome — a recovery edge reading `failed` or
+    // `stepResult.Success` has to keep working on a step that died before producing anything.
+    const readable = (value: unknown): unknown => value ?? NO_OUTPUT;
     return {
         // dispatcher dialect
         status: origin.Status,
         succeeded,
         failed: origin.Status === 'Failed',
-        output,
+        output: readable(output),
         errorMessage: origin.ErrorMessage ?? null,
         // flow dialect
-        payload: envelope.payload ?? output,
-        stepResult: { Success: succeeded, step: origin.Name, result: envelope.result ?? output },
+        payload: readable(envelope.payload ?? output),
+        stepResult: { Success: succeeded, step: origin.Name, result: readable(envelope.result ?? output) },
         flowContext: { currentStepId: origin.ID, completedSteps: [], executionPath: [], stepCount: 0 },
-        data: envelope.data ?? {},
-        context: envelope.context ?? {},
+        data: envelope.data ?? NO_OUTPUT,
+        context: envelope.context ?? NO_OUTPUT,
     };
 }
 
@@ -106,16 +146,46 @@ export function BuildConditionContext(origin: ConditionOrigin, output: unknown):
  * @param evaluate     runs the condition; only called once the origin can decide it
  */
 export function DecideGate(originStatus: string, evaluate: () => ConditionVerdict): GateOutcome {
+    // A BRANCH THAT WAS NOT TAKEN DOES NOT GET A VOTE.
+    //
+    // The walker never stood at a skipped step, so it never read that step's outgoing guards. This
+    // dropped the edge without asking, and asking is not equivalent: against an empty envelope a
+    // NEGATED condition — `!payload.error`, `payload.count === 0`, the common shapes — comes out
+    // TRUE, the edge is kept, and because `Skipped` satisfies prerequisites the target then runs on
+    // a path nobody took. Evaluating here would trade a permanent stall for wrong execution.
+    //
+    // Dropping is also right for the target: it loses only THIS route. One reached by a live branch
+    // still runs; one reached by nothing else is unreachable, which is precisely what the walker
+    // concluded by never arriving.
+    if (originStatus === 'Skipped') return 'drop';
+
     // A non-terminal origin is UNDECIDED, and 'keep' is the safe reading of undecided: the
     // prerequisite gate already stops the target starting early, so keeping costs nothing while
     // dropping is irreversible.
     if (!TERMINAL_FOR_CONDITIONS.has(originStatus)) return 'keep';
 
     const result = evaluate();
-    // Not satisfied, and not false either. The layer's own contract says a condition that fails to
-    // evaluate does NOT open the gate (`task-graph-spec.ts`), the legacy walker refused the edge,
-    // and exclusive groups already held. Ordinary edges were the one dialect with inverted failure
-    // semantics.
-    if (!result.Success) return 'hold';
-    return result.Value ? 'keep' : 'drop';
+    if (result.Success) return result.Value ? 'keep' : 'drop';
+
+    // FAILED TO EVALUATE — but there are two of those, and they are not the same thing.
+    //
+    // "The guard is broken" (an unknown root: a typo, a name outside the envelope) does NOT open the
+    // gate. That is P2's contract, the layer's own spec, and what the legacy walker did.
+    //
+    // "The data is not there" (a property reached through something absent) is the data answering
+    // no. Holding it is a permanent stall on a terminal origin whose output can never change — and
+    // since Q1 now refuses syntax errors at the door, this became almost the only way the hold
+    // mechanism fired in production, on conditions their authors meant as false.
+    return IsDataAbsence(result.ErrorMessage) ? 'drop' : 'hold';
+}
+
+/**
+ * Whether an evaluation failure means the data was absent rather than the guard broken.
+ *
+ * Exported because the boundary is the fix, and a boundary that cannot be tested directly is a
+ * boundary nobody will notice moving.
+ */
+export function IsDataAbsence(errorMessage: string | undefined): boolean {
+    if (!errorMessage) return false;
+    return DATA_ABSENCE_SIGNATURES.some((pattern) => pattern.test(errorMessage));
 }
