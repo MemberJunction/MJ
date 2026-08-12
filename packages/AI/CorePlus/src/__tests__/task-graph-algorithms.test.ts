@@ -187,7 +187,7 @@ describe('ComputeTasksToBlock', () => {
 describe('ComputeParentRollup', () => {
     it('reports Complete at 100% when all children succeed', () => {
         const r = ComputeParentRollup([node('a', 'Complete'), node('b', 'Complete')]);
-        expect(r).toEqual({ status: 'Complete', percentComplete: 100, isTerminal: true });
+        expect(r).toEqual({ status: 'Complete', percentComplete: 100, outcome: 'settled' });
     });
 
     it('reports Failed — not Complete — when any child failed', () => {
@@ -195,7 +195,7 @@ describe('ComputeParentRollup', () => {
         const r = ComputeParentRollup([node('a', 'Complete'), node('b', 'Failed')]);
         expect(r.status).toBe('Failed');
         expect(r.percentComplete).toBe(50);
-        expect(r.isTerminal).toBe(true);
+        expect(r.outcome).toBe('settled');
     });
 
     it('reports Blocked when children are blocked but none failed', () => {
@@ -215,7 +215,7 @@ describe('ComputeParentRollup', () => {
     it('stays In Progress while any child is unsettled, even if another failed', () => {
         const r = ComputeParentRollup([node('a', 'Failed'), node('b', 'In Progress')]);
         expect(r.status).toBe('In Progress');
-        expect(r.isTerminal).toBe(false);
+        expect(r.outcome).toBe('active');
     });
 
     it('counts Deferred as unsettled', () => {
@@ -232,7 +232,7 @@ describe('ComputeParentRollup', () => {
     });
 
     it('treats an empty graph as vacuously complete', () => {
-        expect(ComputeParentRollup([])).toEqual({ status: 'Complete', percentComplete: 100, isTerminal: true });
+        expect(ComputeParentRollup([])).toEqual({ status: 'Complete', percentComplete: 100, outcome: 'settled' });
     });
 });
 

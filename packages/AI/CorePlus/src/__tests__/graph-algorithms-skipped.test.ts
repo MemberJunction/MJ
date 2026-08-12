@@ -164,7 +164,7 @@ describe('ComputeParentRollup with Skipped', () => {
         // Without this a sequential flow containing ONE fork would settle Blocked every time.
         const roll = ComputeParentRollup([n('a', 'Complete'), n('b', 'Skipped')]);
         expect(roll.status).toBe('Complete');
-        expect(roll.isTerminal).toBe(true);
+        expect(roll.outcome).toBe('settled');
     });
 
     it('counts a skipped child as done, so a branching flow can reach 100%', () => {

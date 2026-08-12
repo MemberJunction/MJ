@@ -249,12 +249,39 @@ export function ComputeTasksToBlock(
     return [...toBlock];
 }
 
-/** Aggregate outcome of a graph's children, used to set the parent task honestly. */
-export type ParentRollup = {
-    status: TaskGraphNodeStatus;
-    percentComplete: number;
-    isTerminal: boolean;
-};
+/**
+ * The statuses from which a task never moves again.
+ *
+ * This list is the single definition of "settled" for the whole engine — the parent-write guards,
+ * the dispatcher's benign-failure check, and the unsettled sweep all derive from it, so a status
+ * added to the union above cannot become terminal in one place and live in another.
+ *
+ * `Skipped` is here because a branch that was not taken is *finished*, and `Blocked` because a task
+ * whose dependencies became unsatisfiable will never be reconsidered — leaving either out lets a
+ * later pass move a settled graph back out of a terminal state.
+ */
+export const TERMINAL_TASK_GRAPH_STATUSES = ['Complete', 'Failed', 'Cancelled', 'Skipped', 'Blocked'] as const;
+
+export type TerminalTaskGraphStatus = typeof TERMINAL_TASK_GRAPH_STATUSES[number];
+
+/**
+ * Aggregate outcome of a graph's children, used to set the parent task honestly.
+ *
+ * A discriminated union rather than a `status` + `isTerminal` pair, because the two fields are not
+ * independent: the outcome decides whether the caller settles the parent (a guarded, once-only write
+ * that stamps a completion time) or merely advances its progress, and those two writes accept
+ * different statuses. Modelled loosely, the caller has to assert its way from one to the other — and
+ * an assertion is exactly the thing that keeps being right until the day the rollup grows a case.
+ *
+ * **The discriminant is a string, not a boolean, and that is not a style choice.** These packages
+ * compile under `tsconfig.server.json`, which does not enable `strict` — and with `strictNullChecks`
+ * off TypeScript narrows a boolean discriminant in the truthy branch ONLY. `else` would keep the
+ * full status union and the compiler would wave through a terminal status reaching the progress
+ * write. A string discriminant narrows both ways under every setting.
+ */
+export type ParentRollup =
+    | { status: 'In Progress'; percentComplete: number; outcome: 'active' }
+    | { status: TerminalTaskGraphStatus; percentComplete: number; outcome: 'settled' };
 
 /**
  * Rolls child task outcomes up into the parent's status and progress.
@@ -284,7 +311,7 @@ export function ComputeParentRollup(
     handledFailureIDs: ReadonlySet<string> = new Set(),
 ): ParentRollup {
     if (children.length === 0) {
-        return { status: 'Complete', percentComplete: 100, isTerminal: true };
+        return { status: 'Complete', percentComplete: 100, outcome: 'settled' };
     }
 
     let complete = 0, failed = 0, blocked = 0, cancelled = 0, active = 0, settledAside = 0;
@@ -306,18 +333,18 @@ export function ComputeParentRollup(
     const percentComplete = Math.floor(((complete + settledAside) / children.length) * 100);
 
     if (active > 0) {
-        return { status: 'In Progress', percentComplete, isTerminal: false };
+        return { status: 'In Progress', percentComplete, outcome: 'active' };
     }
     if (failed > 0) {
-        return { status: 'Failed', percentComplete, isTerminal: true };
+        return { status: 'Failed', percentComplete, outcome: 'settled' };
     }
     if (blocked > 0) {
-        return { status: 'Blocked', percentComplete, isTerminal: true };
+        return { status: 'Blocked', percentComplete, outcome: 'settled' };
     }
     if (cancelled > 0) {
-        return { status: 'Cancelled', percentComplete, isTerminal: true };
+        return { status: 'Cancelled', percentComplete, outcome: 'settled' };
     }
-    return { status: 'Complete', percentComplete: 100, isTerminal: true };
+    return { status: 'Complete', percentComplete: 100, outcome: 'settled' };
 }
 
 /**
