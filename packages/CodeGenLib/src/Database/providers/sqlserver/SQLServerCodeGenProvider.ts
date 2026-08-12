@@ -1115,7 +1115,9 @@ GO
      * are provided, generates named parameter syntax (`@ParamName=value`); otherwise uses
      * positional parameter values. Returns just `EXEC [schema].[routine]` if no params.
      */
-    callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[]): string {
+    callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[], _discardResult?: boolean): string {
+        // `_discardResult` is a PostgreSQL concern only — `EXEC` neither returns a result set the
+        // caller must consume nor cares whether one is produced.
         const qualifiedName = `[${schema}].[${routineName}]`;
         if (!params || params.length === 0) {
             return `EXEC ${qualifiedName}`;
