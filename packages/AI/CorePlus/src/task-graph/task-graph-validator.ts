@@ -16,10 +16,93 @@ import { DetectCycle, type TaskGraphEdge, type TaskGraphNode } from './graph-alg
 import {
     MAX_TASKS_PER_GRAPH,
     TaskGraphSpec,
+    TaskGraphSpecNode,
     TaskGraphValidationError,
     TaskGraphValidationResult,
     NormalizeDependency,
+    type TaskGraphNodeConfigMap,
+    type TaskGraphNodeKind,
 } from './task-graph-spec';
+
+/** Kinds this build knows how to configure. Derived from the map so the two can never drift. */
+const KNOWN_KINDS: readonly TaskGraphNodeKind[] = [
+    'Agent', 'Action', 'Human', 'Prompt', 'ForEach', 'While', 'External',
+];
+
+/**
+ * Which `configuration` fields each kind requires.
+ *
+ * `Human` requires nothing — an unassigned person step is a legitimate "somebody needs to look at
+ * this", and `assignToUserID` stays optional until self-assignment lands (#3524).
+ */
+const REQUIRED_CONFIG_FIELDS: Record<TaskGraphNodeKind, readonly string[]> = {
+    Agent: ['agentName'],
+    Action: ['actionName'],
+    Human: [],
+    Prompt: ['promptName'],
+    ForEach: ['collectionPath', 'itemVariable'],
+    // A While loop has NO items — it repeats until a condition stops holding — so `itemVariable`
+    // is a ForEach concept and requiring it here rejected every valid While graph with a message
+    // about a setting that does not apply to it.
+    While: ['condition'],
+    External: ['domain'],
+};
+
+/** Reports a node whose `configuration` is missing something its `kind` needs. */
+function checkConfiguration(task: TaskGraphSpecNode, errors: TaskGraphValidationError[]): void {
+    if (!task.kind) return;   // absence is reported as NoAssignment, not as a configuration fault
+
+    if (!KNOWN_KINDS.includes(task.kind)) {
+        errors.push({
+            Code: 'UnknownKind',
+            Message: `Task "${task.tempId}" has kind "${task.kind}", which this version does not know how to run.`,
+            TempId: task.tempId,
+        });
+        return;
+    }
+
+    const config = (task.configuration ?? {}) as Record<string, unknown>;
+    const missing = REQUIRED_CONFIG_FIELDS[task.kind].filter((f) => {
+        const v = config[f];
+        return v === undefined || v === null || (typeof v === 'string' && v.trim().length === 0);
+    });
+    if (missing.length > 0) {
+        errors.push({
+            Code: 'InvalidConfiguration',
+            Message: `Task "${task.tempId}" is a ${task.kind} step but its configuration is missing ${missing.join(' and ')}.`,
+            TempId: task.tempId,
+        });
+    }
+}
+
+/**
+ * Exclusive groups must be sibling edges — every member has to leave the SAME origin.
+ *
+ * A group spanning two origins is not an exclusive choice at all: the two origins complete
+ * independently, so "pick one winner" has no single moment at which to be decided, and the loser
+ * subtree would be Skipped on the say-so of a branch that never ran.
+ */
+function checkExclusiveGroups(tasks: readonly TaskGraphSpecNode[], errors: TaskGraphValidationError[]): void {
+    // group key -> the set of origin tempIds its member edges leave from
+    const originsByGroup = new Map<string, Set<string>>();
+    for (const task of tasks) {
+        for (const raw of task.dependsOn ?? []) {
+            const dep = NormalizeDependency(raw);
+            if (!dep.exclusiveGroup) continue;
+            let origins = originsByGroup.get(dep.exclusiveGroup);
+            if (!origins) { origins = new Set<string>(); originsByGroup.set(dep.exclusiveGroup, origins); }
+            origins.add(dep.tempId);
+        }
+    }
+    for (const [group, origins] of originsByGroup) {
+        if (origins.size > 1) {
+            errors.push({
+                Code: 'InvalidExclusiveGroup',
+                Message: `Exclusive group "${group}" contains edges from ${origins.size} different origins (${[...origins].join(', ')}). An exclusive choice is decided at one origin; edges from different origins cannot be alternatives to each other.`,
+            });
+        }
+    }
+}
 
 /**
  * Validates a spec's structure.
@@ -64,27 +147,26 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec): TaskGraphValidationR
         }
         seen.add(task.tempId);
 
-        // Mirrors the Task table's UserID-xor-AgentID constraint, caught here so the producer gets
-        // a useful message instead of a constraint violation at persist time.
-        const hasAgent = !!task.agentName;
-        const hasUser = task.assignToUser === true;
-        if (hasAgent && hasUser) {
-            errors.push({
-                Code: 'AssignmentConflict',
-                Message: `Task "${task.tempId}" sets both agentName and assignToUser; a task is executed by an agent OR a person, never both.`,
-                TempId: task.tempId,
-            });
-        }
-        if (!hasAgent && !hasUser) {
+        // A node carries exactly one `kind`, so a CONFLICTING assignment is unrepresentable — there
+        // is no rule to write, which is the point of the union. Only absence is still reachable, and
+        // only from a JavaScript caller the compiler never saw.
+        if (!task.kind) {
             errors.push({
                 Code: 'NoAssignment',
-                Message: `Task "${task.tempId}" has neither agentName nor assignToUser; nothing would execute it.`,
+                Message: `Task "${task.tempId}" has no kind; nothing would execute it.`,
                 TempId: task.tempId,
             });
         }
 
-        for (const dep of task.dependsOn ?? []) {
-            if (dep === task.tempId) {
+        checkConfiguration(task, errors);
+
+        for (const raw of task.dependsOn ?? []) {
+            // NORMALISE before comparing. The object form `{ tempId: <own> }` used to slip past this
+            // check (it compared the raw union against a string), and because a self-dependency is
+            // then excluded from BOTH the UnknownDependency check and cycle detection, an
+            // object-form self-edge passed validation entirely and produced a task that could never
+            // become eligible.
+            if (NormalizeDependency(raw).tempId === task.tempId) {
                 errors.push({
                     Code: 'SelfDependency',
                     Message: `Task "${task.tempId}" depends on itself.`,
@@ -93,6 +175,8 @@ export function ValidateTaskGraphSpec(spec: TaskGraphSpec): TaskGraphValidationR
             }
         }
     }
+
+    checkExclusiveGroups(tasks, errors);
 
     // --- graph-level checks --------------------------------------------------
     const known = new Set(tasks.map((t) => t.tempId).filter(Boolean));

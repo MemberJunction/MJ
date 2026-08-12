@@ -442,7 +442,7 @@
       "RequiresSystemUser": false,
       "Status": "Active",
       "InputTypeName": "TaskGraphSubmitInput",
-      "InputTypeDefinition": "/** Input for `TaskGraph.Submit`. */\nexport interface TaskGraphSubmitInput {\n    /** The graph to submit, as a `TaskGraphSpec`. */\n    spec: {\n        workflowName: string;\n        reasoning?: string;\n        tasks: Array<{\n            tempId: string;\n            name: string;\n            description: string;\n            agentName?: string;\n            assignToUser?: boolean;\n            dependsOn: string[];\n            inputPayload?: Record<string, unknown>;\n        }>;\n        continuation?: 'message' | 'reinvoke' | 'none';\n        durable?: boolean;\n    };\n    /** Environment the tasks belong to. */\n    environmentID: string;\n    /** Conversation this graph answers, when submitted from a conversational channel. */\n    conversationDetailID?: string;\n}",
+      "InputTypeDefinition": "/** Input for `TaskGraph.Submit`. */\nexport interface TaskGraphSubmitInput {\n    /** The graph to submit, as a `TaskGraphSpec`. */\n    spec: {\n        workflowName: string;\n        reasoning?: string;\n        tasks: Array<{\n            /** One step. `kind` selects which `configuration` shape applies. */\n            tempId: string;\n            name: string;\n            description: string;\n            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External';\n            configuration:\n                | { agentName: string; message?: string; templateParameters?: Record<string, string> }\n                | { actionName: string; inputMapping?: string; outputMapping?: string }\n                | { assignToUserID?: string; instructions?: string }\n                | { promptName: string; templateParameters?: Record<string, string> }\n                | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }\n                | { condition: string; itemVariable?: string; maxIterations?: number }\n                | { domain: string; ref?: string };\n            dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;\n            policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };\n            /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */\n            layout?: { x?: number; y?: number; width?: number; height?: number };\n            inputPayload?: Record<string, unknown>;\n        }>;\n        continuation?: 'message' | 'reinvoke' | 'none';\n        durable?: boolean;\n        /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */\n        failureSemantics?: 'block' | 'edges';\n    };\n    /** Environment the tasks belong to. */\n    environmentID: string;\n    /** Conversation this graph answers, when submitted from a conversational channel. */\n    conversationDetailID?: string;\n}",
       "OutputTypeName": "TaskGraphSubmitOutput",
       "OutputTypeDefinition": "/** Output of `TaskGraph.Submit`. */\nexport interface TaskGraphSubmitOutput {\n    /** True when the graph was validated and persisted. */\n    success: boolean;\n    /** Parent task representing the whole graph — the handle for status, cancel and retry. */\n    parentTaskID?: string;\n    /** Every validation failure, not just the first, when the graph was rejected. */\n    errorMessage?: string;\n}"
     },
@@ -450,8 +450,8 @@
       "ID": "9A3CAF75-D794-4223-9AEE-A40AE8A0A012"
     },
     "sync": {
-      "lastModified": "2026-08-08T15:49:55.778Z",
-      "checksum": "5c706e323d64108c07f34914a1029076e60669ed6d653d5b3f02541d668252af"
+      "lastModified": "2026-08-11T22:51:23.062Z",
+      "checksum": "4f72d0b464e9dc8133154227eb24f9c1b7674afa479f3c869435de04fe08e4f1"
     }
   },
   {
@@ -474,7 +474,7 @@
       "ID": "4B4F21F7-7C47-471C-A573-B39275EF23BB"
     },
     "sync": {
-      "lastModified": "2026-08-08T15:49:55.796Z",
+      "lastModified": "2026-08-07T23:58:30.463Z",
       "checksum": "16a65ee1663d8826d6a7566c6b1116c018bd8d3eb5a1e09806ca74f545014e4a"
     }
   },
@@ -498,7 +498,7 @@
       "ID": "4EB01F8A-B68E-4F59-AC0C-4A5D470A4808"
     },
     "sync": {
-      "lastModified": "2026-08-08T15:49:55.812Z",
+      "lastModified": "2026-08-07T23:58:30.479Z",
       "checksum": "a511cd2319d56bbd059cb425bc535a83b901a5b024b9412946aed50b89d8efea"
     }
   },
@@ -522,7 +522,7 @@
       "ID": "3A126CFF-363D-4272-B905-D35BE0F9956F"
     },
     "sync": {
-      "lastModified": "2026-08-08T15:49:55.826Z",
+      "lastModified": "2026-08-07T23:58:30.492Z",
       "checksum": "ba6016d3d02a397c562a4d3ca14e3cfb48c52c0d9929342e60e57a8669a8886c"
     }
   },
@@ -533,7 +533,7 @@
       "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Record Processes",
       "Description": "Validate and persist a workflow — its graph of steps AND the triggers that fire it — by reconciling the substrates that already exist (a Flow agent for the graph, Scheduled Jobs for schedules). Creates no new storage: there is no Workflow table, because a second definition of a scheduled thing would give the scheduler two masters. Producer-agnostic — an agent over MCP, an Action, or the workflow editor all call this. Implemented by WorkflowSaveServerOperation in @memberjunction/task-graph.",
       "InputTypeName": "WorkflowSaveInput",
-      "InputTypeDefinition": "/** Input for `Workflow.Save`. */\nexport interface WorkflowSaveInput {\n    /** The workflow to save, as a `WorkflowSpec`. */\n    spec: {\n        name: string;\n        description?: string;\n        status: 'Active' | 'Paused' | 'Draft';\n        graph: {\n            workflowName: string;\n            reasoning?: string;\n            tasks: Array<{\n                tempId: string;\n                name: string;\n                description: string;\n                agentName?: string;\n                assignToUser?: boolean;\n                dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional' }>;\n                inputPayload?: Record<string, unknown>;\n            }>;\n            continuation?: 'message' | 'reinvoke' | 'none';\n            durable?: boolean;\n        };\n        triggers: Array<\n            | { type: 'EntityEvent'; entityName: string; invocationType: string; filter?: string; scopeEntityName?: string; scopeRecordID?: string }\n            | { type: 'Schedule'; cron: string; timezone?: string }\n            | { type: 'OnDemand' }>;\n        notifications?: { condition: 'Always' | 'OnFailure' | 'OnChange'; recipients: string[] };\n    };\n}",
+      "InputTypeDefinition": "/** Input for `Workflow.Save`. */\nexport interface WorkflowSaveInput {\n    /** The workflow to save, as a `WorkflowSpec`. */\n    spec: {\n        name: string;\n        description?: string;\n        status: 'Active' | 'Paused' | 'Draft';\n        graph: {\n            workflowName: string;\n            reasoning?: string;\n            tasks: Array<{\n                /** One step. `kind` selects which `configuration` shape applies. */\n                tempId: string;\n                name: string;\n                description: string;\n                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External';\n                configuration:\n                    | { agentName: string; message?: string; templateParameters?: Record<string, string> }\n                    | { actionName: string; inputMapping?: string; outputMapping?: string }\n                    | { assignToUserID?: string; instructions?: string }\n                    | { promptName: string; templateParameters?: Record<string, string> }\n                    | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }\n                    | { condition: string; itemVariable?: string; maxIterations?: number }\n                    | { domain: string; ref?: string };\n                dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;\n                policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };\n                /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */\n                layout?: { x?: number; y?: number; width?: number; height?: number };\n                inputPayload?: Record<string, unknown>;\n            }>;\n            continuation?: 'message' | 'reinvoke' | 'none';\n            durable?: boolean;\n            /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */\n            failureSemantics?: 'block' | 'edges';\n        };\n        triggers: Array<\n            | { type: 'EntityEvent'; entityName: string; invocationType: string; filter?: string; scopeEntityName?: string; scopeRecordID?: string }\n            | { type: 'Schedule'; cron: string; timezone?: string }\n            | { type: 'OnDemand' }>;\n        notifications?: { condition: 'Always' | 'OnFailure' | 'OnChange'; recipients: string[] };\n    };\n}",
       "OutputTypeName": "WorkflowSaveOutput",
       "OutputTypeDefinition": "/** Output of `Workflow.Save`. */\nexport interface WorkflowSaveOutput {\n    /** True when the workflow was validated and every substrate reconciled. */\n    success: boolean;\n    /** The Flow agent the workflow's graph persisted as — the handle for everything downstream. */\n    agentID?: string;\n    /** Scheduled Jobs created, updated or disabled by this save. */\n    scheduledJobIDs?: string[];\n    /** Triggers the spec asked for that this build cannot yet reconcile, stated rather than dropped. */\n    unreconciled?: string[];\n    /** Every validation failure, not just the first, when the workflow was rejected. */\n    errorMessage?: string;\n}",
       "ExecutionMode": "Sync",
@@ -546,8 +546,8 @@
       "ID": "8C89A2A0-DB22-4EE2-86CF-40555401BAF0"
     },
     "sync": {
-      "lastModified": "2026-08-08T15:49:55.852Z",
-      "checksum": "e7ee6e8ad1da19e6fd2441f906d1501f299b92dba669c9e917f95660b3924cc3"
+      "lastModified": "2026-08-11T22:51:23.098Z",
+      "checksum": "561f101e8049a0b88ea4af8a2fb8a6db653deb2a4c322db446e5dfdb54186749"
     }
   },
   {
@@ -557,7 +557,7 @@
       "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Record Processes",
       "Description": "Check a workflow for problems without saving it. Runs the identical validation Workflow.Save runs, so a workflow that validates here cannot be rejected for a different reason on save. Exists so an agent drafting a workflow can iterate before committing anything — the draft-then-confirm shape dry-run and Plan Mode already established. Implemented by WorkflowValidateServerOperation in @memberjunction/task-graph.",
       "InputTypeName": "WorkflowSaveInput",
-      "InputTypeDefinition": "/** Input for `Workflow.Save`. */\nexport interface WorkflowSaveInput {\n    /** The workflow to save, as a `WorkflowSpec`. */\n    spec: {\n        name: string;\n        description?: string;\n        status: 'Active' | 'Paused' | 'Draft';\n        graph: {\n            workflowName: string;\n            reasoning?: string;\n            tasks: Array<{\n                tempId: string;\n                name: string;\n                description: string;\n                agentName?: string;\n                assignToUser?: boolean;\n                dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional' }>;\n                inputPayload?: Record<string, unknown>;\n            }>;\n            continuation?: 'message' | 'reinvoke' | 'none';\n            durable?: boolean;\n        };\n        triggers: Array<\n            | { type: 'EntityEvent'; entityName: string; invocationType: string; filter?: string; scopeEntityName?: string; scopeRecordID?: string }\n            | { type: 'Schedule'; cron: string; timezone?: string }\n            | { type: 'OnDemand' }>;\n        notifications?: { condition: 'Always' | 'OnFailure' | 'OnChange'; recipients: string[] };\n    };\n}",
+      "InputTypeDefinition": "/** Input for `Workflow.Save`. */\nexport interface WorkflowSaveInput {\n    /** The workflow to save, as a `WorkflowSpec`. */\n    spec: {\n        name: string;\n        description?: string;\n        status: 'Active' | 'Paused' | 'Draft';\n        graph: {\n            workflowName: string;\n            reasoning?: string;\n            tasks: Array<{\n                /** One step. `kind` selects which `configuration` shape applies. */\n                tempId: string;\n                name: string;\n                description: string;\n                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External';\n                configuration:\n                    | { agentName: string; message?: string; templateParameters?: Record<string, string> }\n                    | { actionName: string; inputMapping?: string; outputMapping?: string }\n                    | { assignToUserID?: string; instructions?: string }\n                    | { promptName: string; templateParameters?: Record<string, string> }\n                    | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }\n                    | { condition: string; itemVariable?: string; maxIterations?: number }\n                    | { domain: string; ref?: string };\n                dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;\n                policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };\n                /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */\n                layout?: { x?: number; y?: number; width?: number; height?: number };\n                inputPayload?: Record<string, unknown>;\n            }>;\n            continuation?: 'message' | 'reinvoke' | 'none';\n            durable?: boolean;\n            /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */\n            failureSemantics?: 'block' | 'edges';\n        };\n        triggers: Array<\n            | { type: 'EntityEvent'; entityName: string; invocationType: string; filter?: string; scopeEntityName?: string; scopeRecordID?: string }\n            | { type: 'Schedule'; cron: string; timezone?: string }\n            | { type: 'OnDemand' }>;\n        notifications?: { condition: 'Always' | 'OnFailure' | 'OnChange'; recipients: string[] };\n    };\n}",
       "OutputTypeName": "WorkflowValidateOutput",
       "OutputTypeDefinition": "/** Output of `Workflow.Validate`. */\nexport interface WorkflowValidateOutput {\n    valid: boolean;\n    /** One entry per problem, each carrying a machine-readable code. */\n    errors?: Array<{ code: string; message: string; triggerIndex?: number }>;\n}",
       "ExecutionMode": "Sync",
@@ -570,8 +570,32 @@
       "ID": "7F7EDC70-2668-49CA-BBE6-2E86808D256C"
     },
     "sync": {
-      "lastModified": "2026-08-08T15:49:55.868Z",
-      "checksum": "a39161dbca099253dc351b30c6bdeec74c8644a165332e257ab918d15ab19457"
+      "lastModified": "2026-08-11T22:51:23.118Z",
+      "checksum": "cda79f30eefb25edd2a784cf7dafcedf08ab9a0930bc95b1d88288fffadc30a3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Draft Workflow",
+      "OperationKey": "Workflow.Draft",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Record Processes",
+      "Description": "Draft a workflow's steps from a plain-English description. Returns a TaskGraphSpec and persists NOTHING — the draft goes to the canvas for the author to review, and only Workflow.Save commits it, which is what makes the front door's \"nothing is saved until you approve it\" promise true rather than merely stated. Constrained to agents that actually exist on the instance, because a workflow referencing an unknown agent cannot be saved and a draft that cannot be saved wastes the author's time. Validated with the SAME ValidateTaskGraphSpec the canvas and Workflow.Save run, so a draft that comes back cannot be rejected later for a reason drafting never checked. Implemented by WorkflowDraftServerOperation in @memberjunction/task-graph.",
+      "InputTypeName": "WorkflowDraftInput",
+      "InputTypeDefinition": "/** Input for `Workflow.Draft`. */\nexport interface WorkflowDraftInput {\n    /** What the person wants done, in their own words. */\n    description: string;\n    /** What to call the workflow. Carried through to the draft's `workflowName`. */\n    workflowName: string;\n}",
+      "OutputTypeName": "WorkflowDraftOutput",
+      "OutputTypeDefinition": "/** Output of `Workflow.Draft`. */\nexport interface WorkflowDraftOutput {\n    /** True when a structurally valid draft came back. */\n    success: boolean;\n    /**\n     * The drafted graph, in the same `TaskGraphSpec` shape the canvas and `Workflow.Save` use.\n     *\n     * A DRAFT — nothing is persisted. The author reviews it on the canvas and commits with\n     * `Workflow.Save`, which is what makes \"nothing is saved until you approve it\" true rather than\n     * merely promised.\n     */\n    graph?: {\n        workflowName: string;\n        reasoning?: string;\n        tasks: Array<{\n            /** One step. `kind` selects which `configuration` shape applies. */\n            tempId: string;\n            name: string;\n            description: string;\n            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External';\n            configuration:\n                | { agentName: string; message?: string; templateParameters?: Record<string, string> }\n                | { actionName: string; inputMapping?: string; outputMapping?: string }\n                | { assignToUserID?: string; instructions?: string }\n                | { promptName: string; templateParameters?: Record<string, string> }\n                | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }\n                | { condition: string; itemVariable?: string; maxIterations?: number }\n                | { domain: string; ref?: string };\n            dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;\n            policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };\n            /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */\n            layout?: { x?: number; y?: number; width?: number; height?: number };\n            inputPayload?: Record<string, unknown>;\n        }>;\n        continuation?: 'message' | 'reinvoke' | 'none';\n        durable?: boolean;\n        /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */\n        failureSemantics?: 'block' | 'edges';\n    };\n    /** Why drafting failed, or why the model's output was rejected. */\n    errorMessage?: string;\n}",
+      "ExecutionMode": "Sync",
+      "RequiredScope": "workflow:read",
+      "RequiresSystemUser": "False",
+      "GenerationType": "Manual",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "3456242D-6BC8-4EC0-9AA5-F671B2FCE644"
+    },
+    "sync": {
+      "lastModified": "2026-08-11T22:51:23.155Z",
+      "checksum": "86b91cbac083f799953044b24182b004ec201d22e670252968786a2f2623ad67"
     }
   }
 ]

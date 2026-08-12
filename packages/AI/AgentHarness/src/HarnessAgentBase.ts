@@ -877,6 +877,16 @@ export class HarnessAgentBase extends BaseAgent {
         };
     }
 
+    /**
+     * Wires {@link EndHarnessSession} into `BaseAgent.Execute()`'s per-run teardown. `Execute()`
+     * calls this exactly once per call, from its top-level `finally` block, regardless of outcome —
+     * without it, `startHarnessSession()`'s provisioned sandbox (a live Docker container or a
+     * workspace directory) is never finalized and leaks for the life of the host process.
+     */
+    protected override async finalizeRun(outcome: 'success' | 'failure' | 'cancelled'): Promise<void> {
+        await this.EndHarnessSession(outcome);
+    }
+
     /** Tears the session and sandbox down on every exit path. */
     public async EndHarnessSession(outcome: 'success' | 'failure' | 'cancelled'): Promise<void> {
         try {

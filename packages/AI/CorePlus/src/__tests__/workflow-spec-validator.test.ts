@@ -22,7 +22,7 @@ import type { TaskGraphSpec } from '../task-graph/task-graph-spec';
 
 const graph = (over: Partial<TaskGraphSpec> = {}): TaskGraphSpec => ({
     workflowName: 'W',
-    tasks: [{ tempId: 'a', name: 'A', description: 'a', agentName: 'Sage', dependsOn: [] }],
+    tasks: [{ tempId: 'a', name: 'A', description: 'a', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] }],
     ...over,
 });
 
@@ -51,7 +51,7 @@ describe('ValidateWorkflowSpec', () => {
 
     it('DELEGATES graph validation rather than re-implementing it', () => {
         // A second definition of "valid graph" would let a workflow accept steps the engine rejects.
-        const bad = spec({ graph: graph({ tasks: [{ tempId: 'a', name: 'A', description: 'a', agentName: 'Sage', dependsOn: ['ghost'] }] }) });
+        const bad = spec({ graph: graph({ tasks: [{ tempId: 'a', name: 'A', description: 'a', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['ghost'] }] }) });
         const result = ValidateWorkflowSpec(bad);
         expect(result.Valid).toBe(false);
         const err = result.Errors.find((e) => e.Code === 'InvalidGraph')!;
@@ -294,22 +294,34 @@ describe('invocation-type validation', () => {
     });
 });
 
-describe('filter is refused, not silently ignored', () => {
+describe('filter is honored, and checked while it can still be fixed', () => {
     const withFilter = (filter: string) =>
         spec({ triggers: [{ type: 'EntityEvent', entityName: 'Invoices', invocationType: 'Update', filter }] });
 
-    it('REJECTS a predicate rather than saving a workflow that fires on every save', () => {
-        // Deciding "this invoice crossed 90 days" needs the before/after values of the change, a
-        // contract that does not exist yet. Accepting the field would hand the author a workflow
-        // firing on every save while they believed it was narrowed — and a workflow runs an agent,
-        // so over-firing costs real money.
-        expect(codes(withFilter('Amount > 100'))).toContain('UnsupportedFilter');
+    it('ACCEPTS a predicate — the change contract it needs now exists', () => {
+        // Superseded the blanket refusal: deciding "this invoice crossed 90 days" needs the
+        // before/after values of the change, and EntityChangeContext now carries them to the filter.
+        expect(ValidateWorkflowSpec(withFilter("DidFieldChangeToValue('Status','Approved')")).Valid).toBe(true);
     });
 
-    it('points at the narrowing that DOES work', () => {
-        const err = ValidateWorkflowSpec(withFilter('Amount > 100')).Errors
-            .find((e) => e.Code === 'UnsupportedFilter')!;
-        expect(err.Message).toContain('scopeRecordID');
+    it('accepts an expression over the raw before/after bags', () => {
+        expect(ValidateWorkflowSpec(withFilter('NewValues.Amount > 100 && OldValues.Amount <= 100')).Valid).toBe(true);
+    });
+
+    it('REJECTS an expression that does not parse', () => {
+        // Filters fail closed at runtime, so a syntax error is not a loud failure — it is a trigger
+        // that silently never fires. Catching it here is the only place the author sees it.
+        expect(codes(withFilter('Amount >'))).toContain('InvalidFilter');
+    });
+
+    it('rejects a statement where an expression belongs', () => {
+        expect(codes(withFilter('const x = 1;'))).toContain('InvalidFilter');
+    });
+
+    it('names the shape it wanted, so the message is actionable', () => {
+        const err = ValidateWorkflowSpec(withFilter('Amount >')).Errors
+            .find((e) => e.Code === 'InvalidFilter')!;
+        expect(err.Message).toContain('DidFieldChangeToValue');
     });
 
     it('ignores an empty filter — absent and blank mean the same thing', () => {

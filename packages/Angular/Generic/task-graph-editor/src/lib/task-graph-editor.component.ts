@@ -24,25 +24,33 @@
  *
  * @module @memberjunction/ng-task-graph-editor
  */
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnDestroy, Output, ViewChild } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import {
+    ConfigOf,
     ValidateTaskGraphSpec,
     type TaskGraphSpec,
     type TaskGraphSpecNode,
     type TaskGraphValidationError,
 } from '@memberjunction/ai-core-plus';
+import { FlowEditorComponent } from '@memberjunction/ng-flow-editor';
 import type {
     FlowConnection,
     FlowConnectionCreatedEvent,
     FlowLayoutDirection,
     FlowNode,
+    FlowNodeAddedEvent,
+    FlowNodeMovedEvent,
     FlowNodeTypeConfig,
+    FlowPosition,
 } from '@memberjunction/ng-flow-editor';
 import {
     AddDependency,
     AddTask,
     GetDependents,
+    GetNodeTypeConfig,
+    IsAuthorableNodeType,
+    NewTaskFromNodeType,
     NextTempId,
     RemoveDependency,
     RemoveTask,
@@ -53,6 +61,10 @@ import {
     WouldCreateCycle,
     type TaskGraphRuntimeStatus,
 } from './task-graph-canvas-adapter';
+import type {
+    DependencyConditionChangeRequestedEventArgs,
+    TaskPropertyChangeRequestedEventArgs,
+} from './task-graph-properties-panel.component';
 import {
     AfterDependencyAddedEventArgs,
     AfterDependencyRemovedEventArgs,
@@ -77,7 +89,7 @@ import {
     templateUrl: './task-graph-editor.component.html',
     styleUrls: ['./task-graph-editor.component.css'],
 })
-export class TaskGraphEditorComponent extends BaseAngularComponent {
+export class TaskGraphEditorComponent extends BaseAngularComponent implements OnDestroy {
     // ── Inputs ───────────────────────────────────────────────────────────────
 
     /**
@@ -108,6 +120,31 @@ export class TaskGraphEditorComponent extends BaseAngularComponent {
         return this.currentRuntime;
     }
 
+    /**
+     * Geometry for the nodes, keyed by `tempId`. Supplying it places the graph instead of laying it
+     * out.
+     *
+     * **Why a host must be able to supply this.** The spec has no layout field, so without it every
+     * node projects to the origin — all of them, stacked in one place — and the canvas is left to
+     * rescue the situation with a deferred Dagre pass. That pass is fine in the editor, where the
+     * author is present and can rearrange. It was not fine in the RUN views, which held the real
+     * geometry (a workflow's authored positions, or a computed layout) and had no way to hand it
+     * over: every run rendered its steps piled on the origin, and the zoom-to-fit that followed
+     * fitted a bounding box one node wide and blew the viewport up past 250%.
+     *
+     * Applied as the starting geometry only. Once the canvas reports positions of its own — a drag,
+     * an arrange — those win, because the person moving a node is the authority on where it goes.
+     */
+    @Input()
+    public set NodePositions(value: ReadonlyMap<string, FlowPosition> | null) {
+        if (!value || value.size === 0) return;
+        for (const [id, position] of value) this.knownPositions.set(id, { ...position });
+        // Real geometry means the one-time Dagre pass has nothing to rescue.
+        this.hasLaidOut = true;
+        this.project();
+        this.zoomToFitSoon();
+    }
+
     /** Read-only mode. The same component is the viewer — there is no second, weaker renderer. */
     @Input() public ReadOnly: boolean = false;
 
@@ -116,6 +153,25 @@ export class TaskGraphEditorComponent extends BaseAngularComponent {
     @Input() public ShowMinimap: boolean = true;
     @Input() public ShowStatusBar: boolean = true;
     @Input() public AutoLayoutDirection: FlowLayoutDirection = 'vertical';
+
+    /**
+     * Whether the properties panel rides alongside the canvas.
+     *
+     * On by default, because without it a step added from the palette can never be named or
+     * assigned — the canvas draws structure, the panel supplies content, and one without the other
+     * is a graph the author can build but not finish. Hosts embedding the read-only viewer in a chat
+     * card turn it off.
+     */
+    @Input() public ShowProperties: boolean = true;
+
+    /**
+     * Agent names offered when assigning a step. Supplied by the host, which owns data access —
+     * this is a widgets-layer component and does not query.
+     */
+    @Input() public AvailableAgentNames: readonly string[] = [];
+
+    /** Action names offered when assigning a step. Same ownership rule as `AvailableAgentNames`. */
+    @Input() public AvailableActionNames: readonly string[] = [];
 
     /** Shown when there is nothing to draw yet. */
     @Input() public EmptyStateMessage: string = 'No steps yet. Add one to start building this workflow.';
@@ -146,10 +202,12 @@ export class TaskGraphEditorComponent extends BaseAngularComponent {
 
     public Nodes: FlowNode[] = [];
     public Connections: FlowConnection[] = [];
-    public NodeTypes: FlowNodeTypeConfig[] = TASK_GRAPH_NODE_TYPES;
+    public NodeTypes: FlowNodeTypeConfig[] = [...TASK_GRAPH_NODE_TYPES];
     public SelectedTask: TaskGraphSpecNode | null = null;
     public ValidationErrors: readonly TaskGraphValidationError[] = [];
     public IsValid: boolean = true;
+
+    @ViewChild(FlowEditorComponent) protected canvas: FlowEditorComponent | undefined;
 
     private currentSpec: TaskGraphSpec | null = null;
     private currentRuntime: TaskGraphRuntimeStatus | null = null;
@@ -183,13 +241,18 @@ export class TaskGraphEditorComponent extends BaseAngularComponent {
     public AddTask(partial: Partial<TaskGraphSpecNode> = {}): TaskGraphSpecNode | null {
         if (this.ReadOnly || !this.currentSpec) return null;
 
+        // Kind and configuration travel together — a partial that supplies one without the other
+        // would be a node the engine cannot run, so an unspecified partial defaults to an unassigned
+        // Agent step and the validator says so immediately.
         const task: TaskGraphSpecNode = {
             tempId: partial.tempId ?? NextTempId(this.currentSpec),
             name: partial.name ?? 'New step',
             description: partial.description ?? '',
-            agentName: partial.agentName,
-            assignToUser: partial.assignToUser,
+            kind: partial.kind ?? 'Agent',
+            configuration: partial.configuration ?? { agentName: '' },
             dependsOn: partial.dependsOn ?? [],
+            policy: partial.policy,
+            layout: partial.layout,
             inputPayload: partial.inputPayload,
         };
 
@@ -285,8 +348,9 @@ export class TaskGraphEditorComponent extends BaseAngularComponent {
 
     /** Asks the host to open the agent behind a task. */
     public RequestAgentOpen(task: TaskGraphSpecNode): void {
-        if (task.agentName) {
-            this.AgentOpenRequested.emit(new AgentOpenRequestedEventArgs(task.agentName, task));
+        const agentName = ConfigOf(task, 'Agent')?.agentName;
+        if (agentName) {
+            this.AgentOpenRequested.emit(new AgentOpenRequestedEventArgs(agentName, task));
         }
     }
 
@@ -299,6 +363,55 @@ export class TaskGraphEditorComponent extends BaseAngularComponent {
 
     public OnNodeSelected(node: FlowNode | null): void {
         this.selectTask(node ? this.findTask(node.ID) : null);
+    }
+
+    /**
+     * A palette entry was clicked or dragged onto the canvas.
+     *
+     * **This binding is the bug.** The canvas has always emitted `NodeAdded` for a palette drop, and
+     * this component simply never listened — so the node the canvas announced was thrown away, the
+     * spec never gained a task, and the author was told "a task graph must contain at least one
+     * task" no matter how many times they tried to add one. The canvas does not mutate its own
+     * `Nodes` on purpose (the host owns the model); an unheard event is therefore a silent no-op
+     * rather than a visible failure, which is why it survived.
+     *
+     * The new step is selected immediately: it lands unnamed and, for an agent or action step with
+     * nothing available to default to, unassigned — so the properties panel is where the author has
+     * to go next, and putting them there beats making them find it.
+     */
+    public OnNodeAdded(event: FlowNodeAddedEvent): void {
+        if (this.ReadOnly || !this.currentSpec) return;
+        const type = GetNodeTypeConfig(event.Node.Type)?.Type;
+        // Only an authorable shape can be dropped from the palette. The render set is wider, and a
+        // display-only kind arriving here would mean the palette offered something with no editor.
+        if (!type || !IsAuthorableNodeType(type)) return;
+
+        const added = this.AddTask(
+            NewTaskFromNodeType(this.currentSpec, type, {
+                agentName: this.AvailableAgentNames[0],
+                actionName: this.AvailableActionNames[0],
+            }),
+        );
+        if (!added) return;
+
+        // Remember where the canvas put it BEFORE anything re-projects. The spec has no geometry
+        // field, so this map is the only record that the author dropped (or clicked) it here — and
+        // without it the node would snap back to the origin on the very next edit.
+        this.knownPositions.set(added.tempId, { ...event.Node.Position });
+        // A graph that has received a hand-placed node is laid out, by definition. Marking it here
+        // stops the one-time Dagre pass from firing later and discarding that placement.
+        this.hasLaidOut = true;
+        this.selectTask(added);
+    }
+
+    /** Applies a properties-panel edit through the same vetoable path a canvas edit takes. */
+    public OnTaskPropertyChangeRequested(args: TaskPropertyChangeRequestedEventArgs): void {
+        this.UpdateTask(args.TempId, args.Next);
+    }
+
+    /** Applies a properties-panel edge-condition edit. */
+    public OnDependencyConditionChangeRequested(args: DependencyConditionChangeRequestedEventArgs): void {
+        this.SetDependencyCondition(args.FromTempId, args.ToTempId, args.Condition);
     }
 
     public OnConnectionCreated(event: FlowConnectionCreatedEvent): void {
@@ -338,10 +451,100 @@ export class TaskGraphEditorComponent extends BaseAngularComponent {
             this.Connections = [];
             this.ValidationErrors = [];
             this.IsValid = true;
+            this.hasLaidOut = false;
+            this.knownPositions.clear();
             return;
         }
-        this.Nodes = SpecToNodes(this.currentSpec, this.currentRuntime ?? undefined);
+        this.Nodes = SpecToNodes(this.currentSpec, this.currentRuntime ?? undefined, this.knownPositions);
         this.Connections = SpecToConnections(this.currentSpec);
         this.Validate();
+        this.arrangeIfNeverLaidOut();
     }
+
+    /**
+     * Lays the graph out ONCE — when it arrives with no geometry of its own.
+     *
+     * A `TaskGraphSpec` carries no positions, so a spec opened for the first time projects with
+     * every node at the origin and needs Dagre to make it readable. After that the author's layout
+     * is the layout: `knownPositions` carries it across re-projections, and re-arranging again would
+     * throw away the arrangement they just made.
+     *
+     * It must also not run on every edit, because `AutoArrange` ends in `ZoomToFit` — so arranging
+     * per change meant the viewport snapped to fit after every added step and every drawn
+     * connection, which on a one-node graph zooms to maximum. That is the behaviour being fixed
+     * here; the rule mirrors the Flow Agent editor's (`flow-agent-editor.component.ts`), which has
+     * always arranged only when every node sits at the origin.
+     */
+    private arrangeIfNeverLaidOut(): void {
+        if (this.Nodes.length === 0) return;
+        if (this.hasLaidOut) return;
+
+        // Nothing to rescue a layout from: a spec whose nodes all sit at the origin has never been
+        // arranged. One node at the origin is the legitimate starting case too.
+        const allAtOrigin = this.Nodes.every((n) => n.Position.X === 0 && n.Position.Y === 0);
+        if (!allAtOrigin) { this.hasLaidOut = true; return; }
+
+        this.hasLaidOut = true;
+        // Deferred one turn: the canvas has to render the nodes before Dagre can measure them.
+        // Cleared on destroy so a pending layout cannot run against a torn-down view.
+        if (this.pendingLayout !== null) clearTimeout(this.pendingLayout);
+        this.pendingLayout = setTimeout(() => {
+            this.pendingLayout = null;
+            this.canvas?.AutoArrange(this.AutoLayoutDirection);
+        });
+    }
+
+    /**
+     * Fits the viewport to the graph, once the canvas has drawn it.
+     *
+     * Deferred for the same reason the layout pass is: `fitToScreen` measures the rendered nodes, so
+     * calling it in the same turn as the projection fits whatever was on screen a moment ago. With
+     * every node still at the origin that bounding box is a single node wide, and "fit" means zoom
+     * to ~265% — the symptom that made a four-step workflow look like one enormous box.
+     */
+    private zoomToFitSoon(): void {
+        if (this.pendingLayout !== null) clearTimeout(this.pendingLayout);
+        this.pendingLayout = setTimeout(() => {
+            this.pendingLayout = null;
+            this.canvas?.ZoomToFit();
+        });
+    }
+
+    /**
+     * The canvas is the authority on geometry, so remember what it reports.
+     *
+     * Without this the spec — which has no geometry field — is the only survivor of a re-projection,
+     * and every edit silently moved every node back to the origin. That is what forced a re-arrange
+     * (and therefore a re-zoom) on each change.
+     */
+    public OnNodesChanged(nodes: FlowNode[]): void {
+        for (const n of nodes) this.knownPositions.set(n.ID, { ...n.Position });
+    }
+
+    /** A single node was dragged. Same authority, narrower event. */
+    public OnNodeMoved(event: FlowNodeMovedEvent): void {
+        this.knownPositions.set(event.NodeID, { ...event.NewPosition });
+    }
+
+    public ngOnDestroy(): void {
+        if (this.pendingLayout !== null) {
+            clearTimeout(this.pendingLayout);
+            this.pendingLayout = null;
+        }
+    }
+
+    /** The topology the current layout was computed for; '' when nothing has been laid out. */
+    /**
+     * Node geometry, which the spec cannot hold.
+     *
+     * `TaskGraphSpec` is an execution contract with no layout field, so a re-projection would
+     * otherwise return every node to the origin. Keyed by `tempId`; written from the canvas
+     * (`NodesChanged` / `NodeMoved`) and from the drop position of a newly added node, and read back
+     * by `SpecToNodes` on every projection.
+     */
+    private readonly knownPositions = new Map<string, FlowPosition>();
+
+    /** Whether the one-time Dagre pass has run (or been made unnecessary by a hand-placed node). */
+    private hasLaidOut: boolean = false;
+    private pendingLayout: ReturnType<typeof setTimeout> | null = null;
 }

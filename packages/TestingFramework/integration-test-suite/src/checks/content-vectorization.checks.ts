@@ -94,19 +94,15 @@ function installStubs(): void {
 
     seams.createEmbeddingInstance = () => ({ EmbedTexts: async () => ({ vectors: [] }) });
     seams.createVectorDBInstance = () => ({
-        // Mirrors PineconeDatabase.GetSourceRecordFieldPaths — declares `namespaceField` as a
-        // source-record dependency so the pipeline resolves it (including single-hop dotted
-        // paths) BEFORE BuildProviderDirectives runs. Required: the engine calls this on every
-        // vectorization pass, so a stub without it throws "is not a function" and fails CV1-CV6.
-        GetSourceRecordFieldPaths: (providerConfig: Record<string, unknown>) => {
-            const field = typeof providerConfig?.['namespaceField'] === 'string' ? (providerConfig['namespaceField'] as string).trim() : '';
-            return field ? [field] : [];
-        },
         // Mimic Pinecone's namespace derivation so namespace routing is exercised for real.
         BuildProviderDirectives: (sourceRecord: Record<string, unknown>, providerConfig: Record<string, unknown>) => {
             const field = typeof providerConfig?.['namespaceField'] === 'string' ? (providerConfig['namespaceField'] as string) : undefined;
             return field && sourceRecord?.[field] != null ? { namespace: String(sourceRecord[field]) } : {};
         },
+        // Declares no source-record dependencies — the namespace field lives on the item itself, so
+        // resolveDriverFieldPaths short-circuits and CV6 still exercises namespace routing through
+        // BuildProviderDirectives. Mirrors the unit-test double in AutotagBaseEngine.test.ts.
+        GetSourceRecordFieldPaths: () => [] as string[],
         CreateRecords: async (records: CapturedRecord[], _indexName?: string, providerConfig?: Record<string, unknown>) => {
             S.Upserts.push({ providerConfig, records: records.map(r => ({ id: r.id, metadata: r.metadata, providerTemporaryDirectives: r.providerTemporaryDirectives })) });
             return { success: true, message: 'stubbed upsert (captured)' };

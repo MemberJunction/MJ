@@ -1,4 +1,4 @@
-import { MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
+import { IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
@@ -801,6 +801,22 @@ export abstract class BaseEntity<T = unknown> {
      * authoritative source.
      */
     private _raw: Record<string, unknown> | null = null;
+
+    /**
+     * Per-instance memo for values `Get()` derives from `_raw` — a parsed `Date`, an rtrimmed
+     * fixed-width string. Lazily created; only converted fields ever get an entry.
+     *
+     * This deliberately does NOT write back into `_raw`. `LoadFromData`'s fast path keeps the
+     * caller's row BY REFERENCE, and that row is frequently a LocalCacheManager entry, which the
+     * cache deep-freezes on reference-sharing providers. Memoizing into the row therefore made a
+     * plain field READ throw — and gating that write on a once-sampled `Object.isFrozen` could
+     * not be made correct, because the freeze is asynchronous relative to the consumer (cache
+     * writes are not always awaited), so the sample can be stale by the first read.
+     *
+     * Keeping the memo here makes freeze timing irrelevant AND restores the optimization on
+     * frozen rows, which the isFrozen-guard version had to give up.
+     */
+    private _rawConverted: Map<string, unknown> | null = null;
 
     /**
      * Whether a database record has been loaded into this instance (via `Load`, `NewRecord`,
@@ -2437,6 +2453,11 @@ export abstract class BaseEntity<T = unknown> {
      * @param FieldName
      * @returns
      */
+    /** Records a value derived from `_raw` so later reads skip the conversion. See {@link _rawConverted}. */
+    private memoizeRawConversion(fieldName: string, value: unknown): void {
+        (this._rawConverted ??= new Map<string, unknown>()).set(fieldName, value);
+    }
+
     public Get(FieldName: string): any {
         // IS-A routing: return the authoritative value from the parent entity
         if (this._parentEntity && this._parentEntityFieldNames?.has(FieldName)) {
@@ -2458,20 +2479,24 @@ export abstract class BaseEntity<T = unknown> {
         if (!this._fieldsHydrated && this._raw) {
             let value = this._raw[FieldName];
             if (value === undefined) return null;
-            // Date conversion mirrors the hydrated path. Mutating _raw to cache the converted
-            // Date avoids reparsing on every read.
+            // Conversions mirror the hydrated path, and memoize into `_rawConverted` rather than
+            // back into `_raw` — the row may be shared, frozen cache state. Fields needing no
+            // conversion (the vast majority) never touch the memo at all, so the fast path stays
+            // a single property read.
             const fi = this._EntityInfo?.FieldByName(FieldName);
             if (fi?.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
+                const memo = this._rawConverted?.get(FieldName);
+                if (memo !== undefined) return memo;
                 const d = new Date(value);
-                this._raw[FieldName] = d;
+                this.memoizeRawConversion(FieldName, d);
                 return d;
             }
-            // Mirror the EntityField.Value setter: rtrim padding for fixed-
-            // width string columns. Memoize back into _raw so we don't
-            // re-trim on every read.
+            // Mirror the EntityField.Value setter: rtrim padding for fixed-width string columns.
             if (typeof value === 'string' && fi?.FixedWidthColumn) {
+                const memo = this._rawConverted?.get(FieldName);
+                if (memo !== undefined) return memo;
                 value = value.replace(/ +$/, '');
-                this._raw[FieldName] = value;
+                this.memoizeRawConversion(FieldName, value);
             }
             return value;
         }
@@ -2764,6 +2789,7 @@ export abstract class BaseEntity<T = unknown> {
         this._Fields = [];
         this._fieldsHydrated = false;
         this._raw = null;
+        this._rawConverted = null;
         this._fieldCache = null;
         this._codeNameCache = null;
         // Field construction is deferred to hydrateFieldsIfNeeded(). Constructor / init() stays
@@ -2821,8 +2847,10 @@ export abstract class BaseEntity<T = unknown> {
                 }
             }
             // Raw data has been promoted into Fields — release the reference so we don't carry
-            // duplicate state.
+            // duplicate state. Fields hold their own copies, so a frozen source no longer
+            // constrains anything from here on.
             this._raw = null;
+            this._rawConverted = null;
         }
     }
 
@@ -3245,11 +3273,29 @@ export abstract class BaseEntity<T = unknown> {
                         // First run synchronous validation
                         valResult = this.Validate();
 
-                        // Determine if we should run async validation:
-                        // 1. Explicitly set in options, OR
-                        // 2. Use the subclass's default if not specified in options
-                        const skipAsyncValidation = _options.SkipAsyncValidation !== undefined ?
-                            _options.SkipAsyncValidation : this.DefaultSkipAsyncValidation;
+                        // Determine if we should run async validation, in order of authority:
+                        //   1. An explicit SkipAsyncValidation in the options.
+                        //   2. An explicit DefaultSkipAsyncValidation override on the subclass.
+                        //   3. Neither: run it if — and only if — a subclass wrote a ValidateAsync
+                        //      to run. Overriding the method IS the request to run it.
+                        //
+                        // Case 3 is the fix for a silent no-op. The default is `true`, and the base
+                        // ValidateAsync just returns success, so skipping costs a subclass that did
+                        // not override it precisely nothing. The flag's only reachable effect was
+                        // therefore to disable the async rules of subclasses that WROTE async rules
+                        // and never learned a second, separate getter had to be overridden too —
+                        // which the ValidateAsync docstring did not mention while promising the
+                        // method was "automatically called by Save()".
+                        //
+                        // That is how OrderEntityServer.ValidateAsync — holding both the "cannot
+                        // confirm an order with no lines" guard and an entire per-line validation
+                        // loop — was dead on every save in production, and it is the same reasoning
+                        // that already exempts companions below.
+                        const skipAsyncValidation = _options.SkipAsyncValidation !== undefined
+                            ? _options.SkipAsyncValidation
+                            : IsMemberOverridden(this, 'DefaultSkipAsyncValidation', BaseEntity)
+                                ? this.DefaultSkipAsyncValidation
+                                : !IsMemberOverridden(this, 'ValidateAsync', BaseEntity);
 
                         // If not skipping async validation, run it - even if sync validation failed
                         // This ensures all validation errors (sync and async) are collected
@@ -3780,6 +3826,10 @@ export abstract class BaseEntity<T = unknown> {
 
         if (canTakeFastPath) {
             this._raw = data as Record<string, unknown>;
+            // Drop any conversions memoized from a previously-loaded row — they describe the old
+            // `_raw`, not this one. No isFrozen probe is needed: `Get()` never writes to `_raw`,
+            // so whether the row is frozen (now, or at any point later) does not affect reads.
+            this._rawConverted = null;
 
             // Mirror the "are PKs present?" check that the hydrated path does, but read straight
             // from the raw data so we don't trigger hydration.
@@ -3942,12 +3992,20 @@ export abstract class BaseEntity<T = unknown> {
     
     /**
      * Default value for whether async validation should be skipped.
-     * Subclasses can override this property to enable async validation by default.
-     * When the options object is passed to Save(), and it includes a value for the 
-     * SkipAsyncValidation property, that value will take precedence over this default.
-     * 
+     *
+     * @remarks
+     * Override this to state a policy explicitly; an explicit override always wins over the
+     * inference described below. When the options object passed to `Save()` includes
+     * `SkipAsyncValidation`, that value takes precedence over both.
+     *
+     * **If no subclass overrides this getter**, the answer is inferred instead: async validation
+     * runs when a subclass has overridden {@link ValidateAsync}, and is skipped when none has.
+     * Reading the literal `true` below as "async validation is off unless you find this getter"
+     * made every hand-written `ValidateAsync` a silent no-op — see the note on that method.
+     *
      * @see {@link Save}
-     * 
+     * @see {@link ValidateAsync}
+     *
      * @protected
      */
     public get DefaultSkipAsyncValidation(): boolean {
@@ -3957,11 +4015,20 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Asynchronous validation method that can be overridden by subclasses to add custom async validation logic.
      * This method is automatically called by Save() AFTER the synchronous Validate() passes.
-     * 
-     * IMPORTANT: 
+     *
+     * IMPORTANT:
      * 1. This should NEVER be called INSTEAD of the synchronous Validate() method
      * 2. This is meant to be overridden by subclasses that need to perform async validations
      * 3. The base implementation just returns success - no actual validation is performed
+     * 4. Overriding this method is what turns it on. You do NOT also have to override
+     *    {@link DefaultSkipAsyncValidation} — that getter is for stating a policy explicitly, and
+     *    an explicit override of it (either value) still wins. To suppress async validation for one
+     *    call, pass `SkipAsyncValidation: true` in the save options.
+     *
+     * Point 4 used to be the opposite, and it was not discoverable: `DefaultSkipAsyncValidation`
+     * defaults to `true`, so an override written against this docstring alone never ran. It reads
+     * as enforced, reviews as enforced, and was not — the failure mode that let an order confirm
+     * with no lines in production.
      * 
      * Subclasses should override this to add complex validations that require database queries 
      * or other async operations that cannot be performed in the synchronous Validate() method.

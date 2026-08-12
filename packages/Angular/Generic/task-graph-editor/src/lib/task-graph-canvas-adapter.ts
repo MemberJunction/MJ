@@ -16,25 +16,78 @@
  * @module @memberjunction/ng-task-graph-editor
  */
 import {
+    ConfigOf,
     NormalizeDependency,
+    TaskNode,
+    type TaskNodeBase,
     type TaskGraphSpec,
     type TaskGraphSpecNode,
     type TaskGraphDependency,
 } from '@memberjunction/ai-core-plus';
-import type { FlowConnection, FlowNode, FlowNodeStatus, FlowNodeTypeConfig } from '@memberjunction/ng-flow-editor';
+import type { FlowConnection, FlowNode, FlowNodeStatus, FlowNodeTypeConfig, FlowPosition } from '@memberjunction/ng-flow-editor';
 
-/** Node types the palette offers. Two, because a task is either an agent's or a person's. */
-export const TASK_GRAPH_NODE_TYPES: FlowNodeTypeConfig[] = [
+/**
+ * The shapes this canvas can DRAW.
+ *
+ * Three of the spec's seven `kind`s, and the choice is the canvas's: these are the shapes a person
+ * authors. `Prompt`, `ForEach`, `While` and `External` are expressible in the spec but have no
+ * authoring affordance here — a palette entry that cannot be configured would be worse than none.
+ *
+ * **Drawing and RENDERING are different questions**, which this type used to conflate. A run's
+ * graph is displayed on the same canvas, and it contains kinds nobody can draw — so mapping them
+ * all to `AgentTask` made a fully-configured ForEach render as "AGENT STEP · No agent chosen yet",
+ * which is not merely imprecise: it says the step is broken. See {@link TaskGraphRenderType}.
+ */
+export type TaskGraphNodeType = 'AgentTask' | 'ActionTask' | 'HumanTask';
+
+/**
+ * The shapes this canvas can SHOW — a superset of what it can draw.
+ *
+ * Display-only kinds exist because a task graph is rendered in two places: the editor, where a
+ * person builds one, and a run view, where one that already ran is shown. The second must be able
+ * to depict every kind the dispatcher can execute, whether or not the palette offers it.
+ */
+export type TaskGraphRenderType = TaskGraphNodeType | 'PromptTask' | 'ForEachTask' | 'WhileTask' | 'ExternalTask';
+
+/** A palette entry, pinned to one of the three authorable shapes. */
+export type TaskGraphNodeTypeConfig = FlowNodeTypeConfig & { Type: TaskGraphNodeType };
+
+/**
+ * Whether a shape is one a person can actually author here.
+ *
+ * The authoring paths — the palette, `NewTaskFromNodeType`, the properties panel — only handle the
+ * three drawable shapes. Rendering handles more. This is the seam between the two, stated as a type
+ * guard so the compiler enforces it rather than a cast pretending the distinction does not exist.
+ */
+export function IsAuthorableNodeType(type: TaskGraphRenderType): type is TaskGraphNodeType {
+    return type === 'AgentTask' || type === 'ActionTask' || type === 'HumanTask';
+}
+
+/** A rendering entry — every shape the canvas can depict, authorable or not. */
+export type TaskGraphRenderTypeConfig = FlowNodeTypeConfig & { Type: TaskGraphRenderType };
+
+const TASK_GRAPH_PORTS: FlowNodeTypeConfig['DefaultPorts'] = [
+    { ID: 'in', Direction: 'input', Side: 'top', Multiple: true },
+    { ID: 'out', Direction: 'output', Side: 'bottom', Multiple: true },
+];
+
+/** What the palette offers — one entry per assignment shape the spec supports. */
+export const TASK_GRAPH_NODE_TYPES: readonly TaskGraphNodeTypeConfig[] = [
     {
         Type: 'AgentTask',
         Label: 'Agent Step',
         Icon: 'fa-robot',
         Color: '#4A6FA5',
         Category: 'Steps',
-        DefaultPorts: [
-            { ID: 'in', Direction: 'input', Side: 'top', Multiple: true },
-            { ID: 'out', Direction: 'output', Side: 'bottom', Multiple: true },
-        ],
+        DefaultPorts: TASK_GRAPH_PORTS,
+    },
+    {
+        Type: 'ActionTask',
+        Label: 'Action Step',
+        Icon: 'fa-bolt',
+        Color: '#3B82F6',
+        Category: 'Steps',
+        DefaultPorts: TASK_GRAPH_PORTS,
     },
     {
         Type: 'HumanTask',
@@ -42,12 +95,33 @@ export const TASK_GRAPH_NODE_TYPES: FlowNodeTypeConfig[] = [
         Icon: 'fa-user-check',
         Color: '#7B1FA2',
         Category: 'Steps',
-        DefaultPorts: [
-            { ID: 'in', Direction: 'input', Side: 'top', Multiple: true },
-            { ID: 'out', Direction: 'output', Side: 'bottom', Multiple: true },
-        ],
+        DefaultPorts: TASK_GRAPH_PORTS,
     },
 ];
+
+/**
+ * Everything the canvas can DEPICT: the palette, plus the kinds that only ever arrive from a run.
+ *
+ * Deliberately a superset rather than an extension of the palette — adding these to
+ * `TASK_GRAPH_NODE_TYPES` would put un-configurable entries in the authoring toolbox.
+ */
+export const TASK_GRAPH_RENDER_TYPES: readonly TaskGraphRenderTypeConfig[] = [
+    ...TASK_GRAPH_NODE_TYPES,
+    { Type: 'PromptTask',   Label: 'Prompt Step',   Icon: 'fa-comment-dots', Color: '#8B5CF6', Category: 'Steps', DefaultPorts: TASK_GRAPH_PORTS },
+    { Type: 'ForEachTask',  Label: 'For Each Step', Icon: 'fa-repeat',       Color: '#D97706', Category: 'Steps', DefaultPorts: TASK_GRAPH_PORTS },
+    { Type: 'WhileTask',    Label: 'While Step',    Icon: 'fa-rotate',       Color: '#D97706', Category: 'Steps', DefaultPorts: TASK_GRAPH_PORTS },
+    { Type: 'ExternalTask', Label: 'External Step', Icon: 'fa-arrow-up-right-from-square', Color: '#0891B2', Category: 'Steps', DefaultPorts: TASK_GRAPH_PORTS },
+];
+
+/**
+ * The config for a node type, or null when the type is not one of ours.
+ *
+ * Searches the RENDER set, so a run's ForEach resolves to its own icon and label instead of
+ * silently falling back to the agent shape.
+ */
+export function GetNodeTypeConfig(type: string): TaskGraphRenderTypeConfig | null {
+    return TASK_GRAPH_RENDER_TYPES.find((c) => c.Type === type) ?? null;
+}
 
 /** Live per-task state for the runtime overlay, keyed by `tempId`. */
 export type TaskGraphRuntimeStatus = Record<string, TaskGraphRuntimeState>;
@@ -83,10 +157,77 @@ export function RuntimeStateToNodeStatus(state: TaskGraphRuntimeState | undefine
     }
 }
 
-/** True when the node is a person's step rather than an agent's. */
+/**
+ * True when the node is a person's step.
+ *
+ * One field decides it now: spec v2 gives every node exactly one `kind`, so "is this a person's
+ * step" stopped being an inference over three optional flags and became a comparison.
+ */
 export function IsHumanTask(node: TaskGraphSpecNode): boolean {
-    return !node.agentName;
+    return node.kind === 'Human';
 }
+
+/**
+ * Which of the three shapes a node is, for rendering.
+ *
+ * An unassigned node (just added, nothing picked yet) reads as an agent step: it is the commonest
+ * intent, and the validator is already telling the author, in words, that it needs an assignee.
+ * Guessing "person" instead — which is what the old `!agentName` rule did — put a step in the
+ * graph that claimed to be waiting on someone when nobody had said so.
+ */
+export function GetTaskNodeType(node: TaskGraphSpecNode): TaskGraphRenderType {
+    switch (node.kind) {
+        case 'Human':    return 'HumanTask';
+        case 'Action':   return 'ActionTask';
+        case 'Prompt':   return 'PromptTask';
+        case 'ForEach':  return 'ForEachTask';
+        case 'While':    return 'WhileTask';
+        case 'External': return 'ExternalTask';
+        // An unassigned node — just added, nothing picked — reads as an agent step: the commonest
+        // intent, and the validator is already saying in words that it needs an assignee.
+        default:         return 'AgentTask';
+    }
+}
+
+/**
+ * Builds the task a palette entry stands for.
+ *
+ * Pure, and here rather than in the component, because "what does clicking *Person Step* actually
+ * put in the graph" is a fact about the spec — testable without a TestBed, and the one place the
+ * assignment xor is honoured on creation.
+ *
+ * `defaultAgentName` / `defaultActionName` are what the host has to offer. When it has nothing, the
+ * step is created unassigned on purpose: inventing an agent name that may not exist would produce a
+ * graph that passes the canvas and fails at submission, whereas an unassigned step is reported
+ * immediately by the same validator the engine runs.
+ */
+export function NewTaskFromNodeType(
+    spec: TaskGraphSpec,
+    type: TaskGraphNodeType,
+    defaults: { agentName?: string; actionName?: string } = {},
+): TaskGraphSpecNode {
+    const base: TaskNodeBase = {
+        tempId: NextTempId(spec),
+        name: NEW_TASK_NAMES[type],
+        description: '',
+        dependsOn: [],
+    };
+    switch (type) {
+        case 'HumanTask':  return TaskNode.Human(base);
+        // A step created before the host has any names to offer is created with an empty one on
+        // purpose: the validator reports it immediately, whereas inventing a name would produce a
+        // graph that passes here and fails at submission.
+        case 'ActionTask': return TaskNode.Action(base, { actionName: defaults.actionName ?? '' });
+        default:           return TaskNode.Agent(base, { agentName: defaults.agentName ?? '' });
+    }
+}
+
+/** Default step names, so a new box says what it is before the author renames it. */
+const NEW_TASK_NAMES: Record<TaskGraphNodeType, string> = {
+    AgentTask: 'New agent step',
+    ActionTask: 'New action step',
+    HumanTask: 'New person step',
+};
 
 /** Entry points: nodes nothing else has to finish first. Same rule the traversal engine uses. */
 export function GetEntryTempIds(spec: TaskGraphSpec): string[] {
@@ -117,21 +258,35 @@ function edgeId(fromTempId: string, toTempId: string): string {
  * geometry precisely because a task graph is a *logical* structure. An agent that emitted one never
  * had an opinion about where the boxes go.
  */
-export function SpecToNodes(spec: TaskGraphSpec, runtime?: TaskGraphRuntimeStatus): FlowNode[] {
+/**
+ * Projects the spec onto canvas nodes.
+ *
+ * `positions` carries geometry the spec cannot hold. `TaskGraphSpec` is an execution contract with
+ * no layout field, so without a caller-held map every re-projection would return every node to the
+ * origin — which is what previously forced a full re-arrange (and a viewport re-zoom) after every
+ * single edit. Unknown ids fall back to the origin, which is also the correct starting state for a
+ * graph that has never been laid out.
+ */
+export function SpecToNodes(
+    spec: TaskGraphSpec,
+    runtime?: TaskGraphRuntimeStatus,
+    positions?: ReadonlyMap<string, FlowPosition>,
+): FlowNode[] {
     const entryIds = new Set(GetEntryTempIds(spec));
 
     return (spec.tasks ?? []).map((task) => {
-        const human = IsHumanTask(task);
+        const type = GetTaskNodeType(task);
+        const known = positions?.get(task.tempId);
         return {
             ID: task.tempId,
-            Type: human ? 'HumanTask' : 'AgentTask',
+            Type: type,
             Label: task.name,
-            Subtitle: human ? 'Waiting on a person' : task.agentName,
-            Icon: human ? 'fa-user-check' : 'fa-robot',
+            Subtitle: TaskSubtitle(task, type),
+            Icon: GetNodeTypeConfig(type)?.Icon ?? 'fa-circle-nodes',
             Status: RuntimeStateToNodeStatus(runtime?.[task.tempId]),
             StatusMessage: task.description,
             IsStartNode: entryIds.has(task.tempId),
-            Position: { X: 0, Y: 0 },
+            Position: known ? { ...known } : { X: 0, Y: 0 },
             Ports: [
                 { ID: 'in', Direction: 'input', Side: 'top', Multiple: true },
                 { ID: 'out', Direction: 'output', Side: 'bottom', Multiple: true },
@@ -139,6 +294,37 @@ export function SpecToNodes(spec: TaskGraphSpec, runtime?: TaskGraphRuntimeStatu
             Data: { TempId: task.tempId },
         };
     });
+}
+
+/**
+ * The one line under a node's name: who or what runs it.
+ *
+ * An unassigned step says so rather than showing nothing — a blank subtitle looks like a step that
+ * is fine, and this one is the reason the validation banner is complaining.
+ */
+export function TaskSubtitle(task: TaskGraphSpecNode, type: TaskGraphRenderType = GetTaskNodeType(task)): string {
+    switch (type) {
+        case 'HumanTask':    return 'Waiting on a person';
+        case 'ActionTask':   return ConfigOf(task, 'Action')?.actionName || 'No action chosen yet';
+        case 'PromptTask':   return ConfigOf(task, 'Prompt')?.promptName || 'No prompt chosen yet';
+        // A loop's subtitle is what it REPEATS — the one fact that makes the node readable.
+        case 'ForEachTask':  return LoopBodyLabel(ConfigOf(task, 'ForEach')) ?? 'Repeats for each item';
+        case 'WhileTask':    return LoopBodyLabel(ConfigOf(task, 'While')) ?? 'Repeats until its condition is false';
+        case 'ExternalTask': return ConfigOf(task, 'External')?.domain || 'Completed by an outside system';
+        // Only a genuinely unassigned node reaches this now. It used to catch Prompt, ForEach,
+        // While and External too — so a fully-configured loop displayed "No agent chosen yet",
+        // which reads as a broken step rather than an unrecognised one.
+        default:             return ConfigOf(task, 'Agent')?.agentName || 'No agent chosen yet';
+    }
+}
+
+/** What a loop repeats, when it says. */
+function LoopBodyLabel(
+    op: { action?: { name: string }; subAgent?: { name: string }; prompt?: { name: string } } | null | undefined,
+): string | null {
+    if (!op) return null;
+    const body = op.action?.name ?? op.subAgent?.name ?? op.prompt?.name;
+    return body ? `Repeats: ${body}` : null;
 }
 
 /**

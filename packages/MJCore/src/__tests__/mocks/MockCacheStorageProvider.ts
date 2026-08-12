@@ -10,6 +10,14 @@ import { CacheCategory } from '../../generic/localCacheManager';
  * Simple in-memory implementation of ILocalStorageProvider for testing
  */
 export class MockCacheStorageProvider implements ILocalStorageProvider {
+    /**
+     * `true` — SetItem stores the value as-is (no JSON round-trip), so this mock has the
+     * same reference-sharing semantics as the production in-memory provider. That is
+     * deliberate: it keeps the cache's defensive freeze ACTIVE under unit tests, so a
+     * regression that mutates cached rows fails in CI rather than in production.
+     */
+    public readonly SharesReferences = true;
+
     private storage: Map<string, Map<string, string>> = new Map();
     private _getCallCount = 0;
     private _setCallCount = 0;

@@ -2,7 +2,7 @@
   "name": "@memberjunction/ai-agent-harness",
   "type": "module",
   "version": "6.1.0-edge.1",
-  "description": "MemberJunction: External Agent Harness integration — run Claude Code, Codex, OpenCode, Gemini CLI or Pi as the reasoning substrate for an MJ agent",
+  "description": "MemberJunction: External Agent Harness integration \u2014 run Claude Code, Codex, OpenCode, Gemini CLI or Pi as the reasoning substrate for an MJ agent",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

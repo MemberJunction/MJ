@@ -41,8 +41,10 @@ there without this file needing an edit.
 > **Why the folder matters even though Flyway ignores it.** `migrationsLocation` is
 > `filesystem:./migrations`, scanned recursively, and the version comes from the *filename* —
 > so a migration in the wrong era folder still executes in the right order. What breaks is
-> **PostgreSQL parity**: counterparts are paired per folder (`migrations/vN` ↔ `migrations-pg/vN`)
-> by `scripts/check-pg-migration-parity.mjs`. A misfiled migration strands its counterpart.
+> **PostgreSQL parity**: counterparts are paired per folder (`migrations/vN` ↔ `migrations-pg/vN`).
+> A misfiled migration strands the counterpart the
+> build engineer later generates for it — you do not write that counterpart yourself, see
+> [PostgreSQL counterparts are BUILD-ENGINEER work](#-postgresql-counterparts-are-build-engineer-work--do-not-author-one-in-a-feature-pr).
 > Two 6.1.x migrations landed in `v5/` this way in Aug 2026, following this file's stale guidance.
 
 ## Version 3.0 Baseline Migration
@@ -125,6 +127,48 @@ V[YYYYMMDDHHMM]__v[VERSION].x_[DESCRIPTION].sql
 
 > 🚨 **Value lists / dropdowns / generated unions come FROM THE SCHEMA, not from hand-written metadata.** A field's `EntityFieldValue` list, its `EntityField.ValueListType`, and its generated TypeScript union are all **derived by CodeGen from the column's CHECK constraint**. To change the allowed values of such a field, **drop the old CHECK constraint and add a new one (with the changed value set) in a SINGLE migration**, then run `mj codegen` — which re-syncs the `EntityFieldValue` rows + `ValueListType` and regenerates the union automatically. **NEVER `INSERT`/`UPDATE` `EntityFieldValue`, and NEVER `UPDATE EntityField.ValueListType`, directly in a migration** — that bypasses the source of truth and silently drifts from (or is overwritten by) CodeGen. (To allow values beyond the listed set, that's a CodeGen/metadata concern — don't force it with hand-written rows.)
 
+### 🚨 PostgreSQL counterparts are BUILD-ENGINEER work — do NOT author one in a feature PR
+
+**A feature PR ships the T-SQL migration ONLY.** Do not hand-write, generate, or commit the
+`migrations-pg/vN/*.pg.sql` counterpart for your own migration, and do not run `/pg-migrate*`
+to produce one.
+
+**Nor do you build tooling for it.** Do not write scripts that check, generate, diff, or gate PG
+parity. T-SQL → PG is *deterministic transpilation* — `mj migrate convert`, the `SQLConverter`
+package's AST dialect, and the `/pg-migrate-v2` process own it end to end. Hand-rolled helpers and
+LLM-inferred PG SQL are precisely what that toolchain replaces: they drift from the converter's
+behavior, they gate feature PRs on release work, and they rot silently (a parity gate lived here for
+months, was never wired in, and when it finally was it started failing PRs for migrations their
+authors were never meant to convert). If conversion output looks wrong, **fix the converter** or
+hand it to the build engineer — do not route around it with a bespoke script.
+
+The PostgreSQL set is produced by the **build engineer at release time**, on the same cadence and
+for the same reason as the consolidated metadata-sync migration (see the rule above): conversion is
+accurate only with the whole release's DDL in view. Per-PR conversion is worse than no conversion —
+it is generated against a moving schema, it churns on every rebase, and a migration that later moves
+folders or gets squashed strands the counterpart it was paired with.
+
+So, in a feature PR:
+
+- ✅ Write the T-SQL migration in `migrations/vN/`, run CodeGen, append its output, done.
+- ❌ Do NOT create `migrations-pg/vN/<same-name>.pg.sql`.
+- ✅ Do say in the PR description that the PG counterpart is deferred to the release build, so a
+  reviewer does not read the gap as an oversight.
+
+**There is no counterpart-existence gate, by design.** A `check-pg-migration-parity.mjs` script used
+to fail CI for exactly this, which taught engineers to convert against a moving schema; it was
+removed. What CI still runs is `scripts/check-pg-migration-content.mjs` — it inspects only the
+counterparts that *exist* and fails an empty stub, which is a real defect at any time (a 126-byte
+`.pg.sql` against 12,041 lines of T-SQL shipped a silently broken v5.45).
+
+The `.github/workflows/pg-migrations.yml` workflow is scoped to match: it triggers on
+`migrations-pg/**` and on the conversion toolchain — **not** on `migrations/**` — so it runs on the
+release/build PR that carries the converted set, and on manual dispatch, but never on a feature PR
+that merely adds a T-SQL migration.
+
+Counterpart coverage is reconciled at release time by the build engineer, who clears the whole set
+in one pass (`mj migrate convert`, `mj migrate rebake`, `/pg-migrate-v2`) before cutting the build.
+
 ### 🚨 Appending CodeGen Output to a Migration — Separator Convention (REQUIRED)
 
 When a schema migration's CodeGen output (the `CodeGen_Run_*.sql` file produced by `mj codegen`) is concatenated onto the bottom of the hand-written migration DDL, **never butt the two sections together**. The concat MUST be separated by:
@@ -135,6 +179,102 @@ When a schema migration's CodeGen output (the `CodeGen_Run_*.sql` file produced 
 This makes the hand-DDL/generated boundary unmissable when scrolling a 9,000-line migration, and keeps reviewers from mistaking generated plumbing for reviewable hand-written schema. After appending, **delete the standalone `CodeGen_Run_*.sql` file** — the migration file is the single artifact.
 
 Reference example: `V202607020230__v5.45.x__AISkill_ActivationMode.sql`.
+
+### 🚨 A CodeGen `EntityField` INSERT must never carry a LITERAL `Sequence`
+
+If an appended CodeGen block inserts `EntityField` rows, the `Sequence` must be an expression
+evaluated **at apply time**, never the number CodeGen wrote:
+
+```sql
+-- ✅ correct — what CodeGen now emits. The offset is the field's SCHEMA ORDINAL, so a batch of
+--    new fields keeps its relative order regardless of the order the INSERTs execute.
+(SELECT COALESCE(MAX([Sequence]), 0)
+   FROM [${flyway:defaultSchema}].[EntityField]
+  WHERE [EntityID] = '<entity-id>') + <schema-ordinal>
+
+-- ✅ also fine for a HAND-written correction of a single field, where there is no batch to order
+(SELECT COALESCE(MAX([Sequence]), 0) + 1
+   FROM [${flyway:defaultSchema}].[EntityField]
+  WHERE [EntityID] = '<entity-id>')
+
+-- ❌ wrong — a placeholder that was only ever valid on the database CodeGen ran against
+100025,
+```
+
+**Values are disposable; order is not.** `spUpdateExistingEntityFieldsFromSchema` overwrites `Sequence`
+from the schema on its next pass (`ef.Sequence = fr.Sequence`), so the numbers themselves are
+throwaway — two independent from-scratch builds land on identical sequences. What must hold is that
+base (non-virtual) fields sort **before** virtual ones, because the providers' positional
+save-capture depends on that alignment. Encoding the ordinal in the emitted value keeps that true
+without depending on statement execution order.
+
+**Why this is not a style preference.** The number CodeGen emits is a *temporary* placeholder —
+`MAX(Sequence) + 100000 + ordinal` — that `spUpdateExistingEntityFieldsFromSchema` rewrites to a
+proper low value moments later, both live and from `R__RefreshMetadata.sql`. Locally it is always
+correct by the time anyone looks.
+
+But Flyway runs **every versioned migration before any repeatable script**. On a database built only
+from migrations, that renumber never happens in between. So two migrations that add columns to the
+**same entity** within one release each carry a placeholder derived from the same low `MAX` — and
+the second collides on `UQ_EntityField_EntityID_Sequence`.
+
+**The failure lies about itself.** These scripts do not `SET XACT_ABORT ON`, so the unique violation
+aborts only that *statement*; execution continues and the run dies further down on a FOREIGN KEY
+error against `EntityFieldValue`, whose rows point at the field that was never inserted. Debugging
+the reported error leads nowhere — see MJ#3670, where this cost real time.
+
+Note what makes this invisible to ordinary review: whether your migration collides depends on a
+migration **someone else wrote**, and on the state of a database **nobody is looking at**. It cannot
+fail on a working dev database. It fails only on fresh installs — CI, new developers, releases.
+
+CodeGen now emits the computed form (`manage-metadata.ts`, `getPendingEntityFieldINSERTSQL`), so
+newly generated blocks are already correct. Two guard rails back it up:
+
+```bash
+.github/scripts/check-migration-entityfield-sequence.sh              # changed migrations (CI gate)
+.github/scripts/check-migration-entityfield-sequence.sh --self-test  # the detector's own tests
+```
+
+Existing migrations using the literal form are left alone deliberately — they apply cleanly today,
+and rewriting them would change Flyway checksums on every existing database for no benefit.
+
+**The backstop for this whole class of defect is a from-scratch database build** — the
+`bootstrap-clean-db` skill. A migration whose correctness depends on local state cannot be caught
+any other way, and is cheapest to fix before a release cut.
+
+### 🚨 ONE DATABASE PER AGENT — never point two sessions at the same one
+
+**Before running `mj migrate`, `mj codegen`, or `mj sync push`, confirm the database in your
+`.env` is not in use by another agent or another session.** If someone else is working, use a
+different database — copy the `.env`, change `DB_DATABASE`, and migrate that one.
+
+**A git worktree does not isolate the database.** It isolates the *filesystem*, which is what makes
+it feel safe. Two agents in two worktrees, both pointed at the same `DB_DATABASE`, are one agent as
+far as the schema is concerned — and the collision surfaces in the other person's running server,
+not in your terminal.
+
+**Why this is worse than an ordinary conflict.** `mj codegen` regenerates base views and reconciles
+`EntityField` metadata as *separate steps* against a live database. An interleaved run leaves a
+window where metadata demands a column the freshly-regenerated view no longer emits, and the symptom
+is a runtime `Invalid column name` on every load of that entity — with no error at either agent's
+CodeGen, both of which report success. It self-heals only when someone happens to regenerate again.
+
+This happened on 2026-08-08: a full CodeGen for a *metadata-only* change dropped the denormalized
+`EntityAction` column from three `vwEntityAction*` views, and the next server boot logged 975
+`Invalid column name 'EntityAction'` errors before an unrelated `mj migrate` from another session
+incidentally repaired it. Both agents' commands reported success throughout.
+
+**Corollaries worth internalizing:**
+
+- **Do not run a full `mj codegen` for a change with no schema DDL.** Metadata-only work —
+  a new Remote Operation, a prompt, an Action — needs `mj codegen --skipdb`, which emits the
+  TypeScript and touches no view. Regenerating 374 entities' views to obtain three interfaces is how
+  the incident above started.
+- **A shared database also means shared *migration state*.** Another session's `mj migrate` moves
+  your schema forward without your knowledge, so a build that passed an hour ago may not match the
+  database it is now talking to.
+- **When you must share** (a single dev DB by policy), say so explicitly and serialize: announce the
+  run, complete it, confirm, then hand over. Concurrency is the hazard, not the sharing.
 
 ### 🚨 CodeGen Ordering — run `mj sync push` BEFORE `mj codegen` (REQUIRED)
 
