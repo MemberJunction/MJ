@@ -131,7 +131,12 @@ export class WorkflowRunLayout {
     }
 
     public ToggleLegend(): void {
-        this.ShowLegend = !this.ShowLegend;
-        this.settings.Set(WORKFLOW_RUN_LAYOUT_KEYS.ShowLegend, String(this.ShowLegend));
+        this.SetLegendVisible(!this.ShowLegend);
+    }
+
+    /** Records an explicit choice — what the canvas toolbar reports. */
+    public SetLegendVisible(show: boolean): void {
+        this.ShowLegend = show;
+        this.settings.Set(WORKFLOW_RUN_LAYOUT_KEYS.ShowLegend, String(show));
     }
 }

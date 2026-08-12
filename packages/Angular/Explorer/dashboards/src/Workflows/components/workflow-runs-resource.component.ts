@@ -180,8 +180,15 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
         this.cdr.markForCheck();
     }
 
-    public ToggleLegend(): void {
-        this.Layout.ToggleLegend();
+    /**
+     * The legend was toggled on the canvas toolbar — remember it.
+     *
+     * Driven from the toolbar rather than a button of our own: the canvas already has a legend
+     * control in the place people look for one, and adding a second in the header would be two
+     * controls for one setting, free to disagree.
+     */
+    public OnLegendToggled(show: boolean): void {
+        this.Layout.SetLegendVisible(show);
         this.cdr.markForCheck();
     }
 

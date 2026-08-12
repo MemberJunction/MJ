@@ -4,6 +4,7 @@ import { MJAIAgentRunStepEntity, MJAIAgentRunStepEntity_AgentSkillInvocation } f
 import { ResolveTaskGraphPositions, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import type { FlowPosition } from '@memberjunction/ng-flow-editor';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
+import type { IMetadataProvider } from '@memberjunction/core';
 
 interface ScratchpadSnapshotView {
   notes: string;
@@ -23,6 +24,8 @@ interface ScratchpadSnapshotView {
 })
 export class AIAgentRunStepDetailComponent {
   @Input() selectedTimelineItem: TimelineItem | null = null;
+  /** The provider the host is on, so the run view reads through the right one. */
+  @Input() Provider: IMetadataProvider | null = null;
   @Output() closePanel = new EventEmitter<void>();
   @Output() navigateToActionLog = new EventEmitter<string>();
   @Output() copyToClipboard = new EventEmitter<string>();
@@ -309,6 +312,31 @@ export class AIAgentRunStepDetailComponent {
     const spec = this.stepTaskGraph;
     if (!spec) return null;
     return ResolveTaskGraphPositions(spec);
+  }
+
+  /**
+   * The graph's parent `MJ: Tasks` row, when this step actually dispatched one.
+   *
+   * **This is what turns the panel from a picture of the plan into a picture of the run.** With it,
+   * the same `mj-task-graph-run-view` the Workflows app uses reads the Task rows and draws what
+   * happened — declined branches hatched, untravelled edges absent, the toolbar available and the
+   * legend off. Without it the panel had only the SPEC, so it rendered in design mode: every branch
+   * drawn as though it had run, on a canvas that could not know otherwise.
+   *
+   * Null for a graph that was constant-folded (D9) — it never reached the dispatcher, so there are no
+   * rows and no run to show. The spec view is the honest rendering there: it is a plan, and it is
+   * drawn as one.
+   */
+  get stepTaskGraphParentTaskID(): string | null {
+    const raw = this.selectedTimelineItem?.data?.OutputData;
+    if (!raw) return null;
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const id = (parsed as { parentTaskID?: unknown })?.parentTaskID;
+      return typeof id === 'string' && id.length > 0 ? id : null;
+    } catch {
+      return null;
+    }
   }
 
   /** True when the recorded graph was constant-folded rather than dispatched (D9). */

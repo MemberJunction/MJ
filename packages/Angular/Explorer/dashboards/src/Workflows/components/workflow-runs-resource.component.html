@@ -118,10 +118,6 @@
                   </button>
                 }
                 @if (DetailTab === 'graph') {
-                  <button mjButton variant="flat" size="sm" (click)="ToggleLegend()"
-                          [title]="Layout.ShowLegend ? 'Hide the legend' : 'Show the legend'">
-                    <i class="fa-solid fa-list-check" aria-hidden="true"></i>
-                  </button>
                   <button mjButton variant="flat" size="sm" (click)="ToggleStepPanel()"
                           [title]="Layout.StepPanelOpen ? 'Hide step details' : 'Show step details'">
                     <i class="fa-solid" [class.fa-square-caret-right]="Layout.StepPanelOpen"
@@ -159,7 +155,8 @@
                       [LiveUpdates]="selected.Status === 'Running' || selected.Status === 'In Progress'"
                       [ShowLegend]="Layout.ShowLegend"
                       Height="100%"
-                      (NodeSelected)="OnGraphNodeSelected($event)">
+                      (NodeSelected)="OnGraphNodeSelected($event)"
+                      (LegendToggled)="OnLegendToggled($event)">
                     </mj-task-graph-run-view>
                   </div>
                 </as-split-area>

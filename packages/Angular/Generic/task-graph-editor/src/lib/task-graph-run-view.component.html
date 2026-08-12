@@ -9,7 +9,7 @@
     Message="This workflow has not created any steps.">
   </mj-empty-state>
 } @else {
-  <div class="run-view">
+  <div class="run-view" [style.height]="Height">
     <div class="run-view-summary">
       <span class="run-view-count">{{ CompletedCount }} of {{ TotalCount }} complete</span>
       @if (SkippedCount > 0) {
@@ -17,19 +17,20 @@
       }
     </div>
 
-    <div class="run-view-canvas" [style.height]="Height">
+    <div class="run-view-canvas">
       <mj-task-graph-editor
         [Spec]="Spec"
         [RuntimeStatus]="RuntimeStatus"
         [NodePositions]="Positions"
         [ReadOnly]="true"
-        [ShowToolbar]="false"
+        [ShowToolbar]="ShowToolbar"
         [ShowPalette]="false"
         [ShowProperties]="false"
         [ShowMinimap]="false"
         [ShowStatusBar]="false"
         [ShowLegend]="ShowLegend"
-        (SelectionChanged)="OnSelectionChanged($event)">
+        (SelectionChanged)="OnSelectionChanged($event)"
+        (LegendToggled)="LegendToggled.emit($event)">
       </mj-task-graph-editor>
     </div>
   </div>
