@@ -94,6 +94,13 @@ const STOP_DRAIN_TIMEOUT_MS = 30_000;
  */
 const MAX_SETTLEMENT_RETRY_PASSES = 20;
 
+/** Whether the submitting run's half may proceed, and whether anyone is still waiting for it. */
+type SubmittingRunReadiness = {
+    Verdict: 'ready' | 'defer';
+    /** The submitter was cancelled: settle the graph, announce nothing. */
+    SubmitterCancelled: boolean;
+};
+
 /**
  * Written to a human task's `ClaimedBy` once its assignee has been told it is ready.
  *
@@ -339,6 +346,9 @@ export class TaskGraphDispatcher implements IShutdownable {
      * 24h window, for as long as it kept failing.
      */
     private readonly announcedSettlements = new Set<string>();
+
+    /** Graphs already reported as settled-but-undeliverable by this instance. */
+    private readonly reportedUndeliverable = new Set<string>();
 
     /** Live claim heartbeats by task ID, so the drain can silence the ones it gives up waiting for. */
     private readonly heartbeats = new Map<string, ReturnType<typeof setInterval>>();
@@ -933,7 +943,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // terminal-and-undelivered and the rescue sweep brings it back next pass, by which
                 // time finalize has parked the run and both writes land.
                 const readiness = await this.submittingRunReadiness(provider, parent);
-                if (readiness === 'defer') { this.keepRetryingSettlement(parentID); continue; }
+                if (readiness.Verdict === 'defer') { this.keepRetryingSettlement(parentID); continue; }
 
                 await this.rollUpCostToSubmittingRun(provider, parent);
                 // Deliberately AFTER the rollup and OUTSIDE its refusal paths. The rollup declines
@@ -949,11 +959,16 @@ export class TaskGraphDispatcher implements IShutdownable {
                     this.keepRetryingSettlement(parentID);
                     continue;
                 }
-                await this.deliverContinuation(provider, parent, fresh);
-                // Delivered, expired, or lost the CAS to a peer — every one of those means this graph
-                // is somebody's finished business and needs no further re-queueing from here.
-                this.retryingSettlement.delete(parentID);
-                this.announcedSettlements.delete(parentID);
+                if (await this.deliverContinuation(provider, parent, fresh, readiness.SubmitterCancelled)) {
+                    // Delivered, expired, or lost the CAS to a peer — every one of those means this
+                    // graph is somebody's finished business and needs nothing further from here.
+                    this.retryingSettlement.delete(parentID);
+                    this.announcedSettlements.delete(parentID);
+                } else {
+                    // This instance cannot deliver. Stay quiet about it — the frame is already out —
+                    // and leave the graph for a capable peer via the sweep.
+                    this.keepRetryingSettlement(parentID);
+                }
             }
         }
     }
@@ -1272,9 +1287,24 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
         parent: MJTaskEntity,
         graph: GraphState,
-    ): Promise<void> {
+        submitterCancelled: boolean,
+    ): Promise<boolean> {
         const meta = this.readParentMetadata(parent);
-        if (meta.continuationDeliveredAt) return;
+        if (meta.continuationDeliveredAt) return true;
+
+        // Nobody is waiting: the run that submitted this graph was cancelled. Claim the marker so
+        // nothing re-offers the graph, and record WHY nothing was announced — "we chose not to" and
+        // "we found it too late" are different facts about a settlement, and a reader afterwards
+        // should be able to tell them apart.
+        if (submitterCancelled) {
+            if (await this.claimContinuation(provider, parent.ID, 'cancelled')) {
+                LogStatus(
+                    `[TaskGraphDispatcher] Graph ${parent.ID} settled, but the run that submitted it was ` +
+                    `cancelled — no message posted and no reinvoke started.`,
+                );
+            }
+            return true;
+        }
 
         // At the cap, downgrade rather than refuse: the results still reach the user, the chain just
         // stops growing. Refusing outright would lose the outcome of work that actually completed.
@@ -1296,7 +1326,27 @@ export class TaskGraphDispatcher implements IShutdownable {
         // records what happened and stops any later pass delivering it. Second rung on the ladder
         // the reinvoke cap already established.
         const expired = IsSettlementExpired(parent.CompletedAt, new Date());
-        if (!(await this.claimContinuation(provider, parent.ID, expired ? 'expired' : 'delivered'))) return;
+
+        // ONLY AN INSTANCE THAT CAN DELIVER MAY CLAIM THE RIGHT TO (R2-6).
+        //
+        // The claim ran before the deliverer check, so an instance constructed WITHOUT one — a
+        // worker tier, an integration bundle, a second dev session — could observe the settlement
+        // first, win the CAS, mark the graph `delivered`, and discard the message or reinvoke a
+        // capable peer would have made moments later. Permanently, decided by poll timing.
+        //
+        // Declining leaves the marker unset, so the rescue sweep keeps offering the graph until an
+        // instance that can deliver takes it. Run settlement and cost rollup have already happened
+        // above and are not held up by this — what is deferred is the announcement, which is the only
+        // part this instance genuinely cannot do.
+        //
+        // `expired` is exempt: recording "too old to deliver" requires no deliverer, and a graph past
+        // its window has nothing left for a capable peer to do.
+        if (!expired && mode !== 'none' && !this.continuationDeliverer) {
+            this.reportUndeliverableOnce(parent.ID);
+            return false;
+        }
+
+        if (!(await this.claimContinuation(provider, parent.ID, expired ? 'expired' : 'delivered'))) return true;
 
         if (expired) {
             LogStatus(
@@ -1304,15 +1354,13 @@ export class TaskGraphDispatcher implements IShutdownable {
                 `(${UNSETTLED_SWEEP_WINDOW_HOURS}h); the run and its cost were corrected, but the ` +
                 `continuation was NOT delivered. Marked expired.`,
             );
-            return;
+            return true;
         }
 
-        if (mode === 'none') return;
+        if (mode === 'none') return true;
 
         const summary = this.buildContinuationSummary(parent, graph);
         LogStatus(`[TaskGraphDispatcher] Graph ${parent.ID} finished — ${summary}`);
-
-        if (!this.continuationDeliverer) return;
 
         const params: TaskContinuationParams = {
             ParentTaskID: parent.ID,
@@ -1371,7 +1419,7 @@ export class TaskGraphDispatcher implements IShutdownable {
     private async claimContinuation(
         provider: IMetadataProvider,
         parentID: string,
-        deliveredAs: 'delivered' | 'expired' = 'delivered',
+        deliveredAs: 'delivered' | 'expired' | 'cancelled' = 'delivered',
     ): Promise<boolean> {
         // ONE GUARDED STATEMENT — see TaskClaimStore.TryClaimContinuation.
         //
@@ -2704,6 +2752,23 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
+     * Says once, per graph, that this instance settled work it cannot announce.
+     *
+     * Once because the sweep re-offers the graph every poll for the rest of its window, and a line
+     * per poll would bury the thing it is trying to report — which is a DEPLOYMENT fact, not a graph
+     * fact: if no instance anywhere carries a deliverer, these settlements never reach anyone.
+     */
+    private reportUndeliverableOnce(parentID: string): void {
+        if (this.reportedUndeliverable.has(parentID)) return;
+        this.reportedUndeliverable.add(parentID);
+        LogStatus(
+            `[TaskGraphDispatcher] Graph ${parentID} has settled but this instance has no continuation ` +
+            `deliverer, so it is leaving the announcement to a peer that has one. If no instance in ` +
+            `this deployment can deliver, the settlement will never be announced.`,
+        );
+    }
+
+    /**
      * Keeps a graph in this instance's sweep regardless of what its row timestamp says.
      *
      * Bounded, and the bound is about noise rather than surrender: past the cap the graph has failed
@@ -2770,29 +2835,36 @@ export class TaskGraphDispatcher implements IShutdownable {
     private async submittingRunReadiness(
         provider: IMetadataProvider,
         parent: MJTaskEntity,
-    ): Promise<'ready' | 'defer'> {
+    ): Promise<SubmittingRunReadiness> {
         const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
-        if (!meta.submittedByAgentRunID) return 'ready';
+        if (!meta.submittedByAgentRunID) return { Verdict: 'ready', SubmitterCancelled: false };
 
         try {
             const run = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
             if (!(await run.Load(meta.submittedByAgentRunID))) {
                 // Transient, most likely. Deferring costs a poll; proceeding costs the marker.
                 LogError(`[TaskGraphDispatcher] Could not read run ${meta.submittedByAgentRunID} to check whether graph ${parent.ID} may settle it; retrying next pass.`);
-                return 'defer';
+                return { Verdict: 'defer', SubmitterCancelled: false };
             }
+            // A CANCELLED SUBMITTER HAS NOBODY WAITING (R2-9). Settlement still runs — the graph's
+            // own bookkeeping is owed either way — but announcing it would message a conversation
+            // about a workflow the user stopped, and for `reinvoke` would start a fresh billed turn
+            // for the agent they cancelled.
+            const cancelled = run.Status === 'Cancelled';
             const settledFor = parent.CompletedAt ? Date.now() - parent.CompletedAt.getTime() : 0;
-            if (IsSubmittingRunReady(run.Status, settledFor)) return 'ready';
+            if (IsSubmittingRunReady(run.Status, settledFor)) {
+                return { Verdict: 'ready', SubmitterCancelled: cancelled };
+            }
 
             LogError(
                 `[TaskGraphDispatcher] Run ${run.ID} has been Running for ${Math.round(settledFor / 1000)}s ` +
                 `since graph ${parent.ID} settled — it never parked, so its submitting process most ` +
                 `likely died. Settling and delivering the graph anyway; the run needs separate attention.`,
             );
-            return 'ready';
+            return { Verdict: 'ready', SubmitterCancelled: cancelled };
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Could not check the run waiting on graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
-            return 'defer';
+            return { Verdict: 'defer', SubmitterCancelled: false };
         }
     }
 

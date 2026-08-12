@@ -111,7 +111,7 @@ export type TaskGraphParentMetadata = {
      * distinction has to survive in the row, or an expired settlement is indistinguishable from a
      * delivered one the moment anybody looks afterwards.
      */
-    continuationDeliveredAs?: 'delivered' | 'expired';
+    continuationDeliveredAs?: 'delivered' | 'expired' | 'cancelled';
 };
 
 /**
@@ -163,7 +163,7 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
             reinvokeDepth: Number.isFinite(parsed.reinvokeDepth) ? Number(parsed.reinvokeDepth) : 0,
             // Guarded like the others: this is read to explain a settlement after the fact, and an
             // arbitrary string arriving from a hand edit should read as "unknown", not be echoed.
-            continuationDeliveredAs: parsed.continuationDeliveredAs === 'delivered' || parsed.continuationDeliveredAs === 'expired'
+            continuationDeliveredAs: DELIVERY_OUTCOMES.has(parsed.continuationDeliveredAs as string)
                 ? parsed.continuationDeliveredAs
                 : undefined,
         };
@@ -171,6 +171,27 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
         return { ...DEFAULT_PARENT_METADATA };
     }
 }
+
+/**
+ * How a settlement's announcement ended — the values `TryClaimContinuation` may record.
+ *
+ * `expired` means found too late to announce; `cancelled` means there was deliberately nobody left
+ * to announce to, because the run that submitted the graph was cancelled. Both are settlements that
+ * completed WITHOUT an announcement, and keeping them distinct is the difference between "we missed
+ * it" and "we chose not to".
+ */
+const DELIVERY_OUTCOMES: ReadonlySet<string> = new Set(['delivered', 'expired', 'cancelled']);
+
+/** What a cancellation actually managed to do. */
+export type TaskGraphCancelResult = {
+    /** False when anything the caller asked to stop is still running. */
+    Success: boolean;
+    /** True only when every non-terminal task in the graph — and its descendants — is Cancelled. */
+    Cancelled: boolean;
+    /** Named so the caller can say which parts of the workflow are still going. */
+    UncancelledTaskNames: string[];
+    ErrorMessage?: string;
+};
 
 /** True when a continuation chain has gone as far as it may. */
 export function IsReinvokeCapReached(meta: TaskGraphParentMetadata): boolean {
@@ -513,21 +534,30 @@ export class TaskGraphService {
     }
 
     /**
-     * Cancels a graph and everything in it that has not already settled.
+     * Cancels a graph, everything in it that has not already settled, and everything it started.
      *
      * Cancels children first: a parent marked `Cancelled` while children are still `Pending` would
      * leave the dispatcher free to pick those children up, which is the opposite of what the caller
      * asked for.
+     *
+     * **The verdict is the outcome, not the attempt** (R2-9). This returned `true` unconditionally
+     * while logging each child that failed to cancel — so one failed save left that child `Pending`,
+     * told the caller cancellation had succeeded, and let the dispatcher run the child afterwards.
+     * The graph could then settle `Complete` and ANNOUNCE ITS COMPLETION into the conversation of a
+     * workflow the user had cancelled. A partial cancel now says so and names what survived; the
+     * graph stays active, so retrying is meaningful rather than cosmetic.
      */
-    public async Cancel(parentTaskID: string, context: TaskGraphSubmitContext): Promise<boolean> {
+    public async Cancel(parentTaskID: string, context: TaskGraphSubmitContext): Promise<TaskGraphCancelResult> {
         try {
             const children = await this.loadChildren(parentTaskID, context);
+            const uncancelled: string[] = [];
             for (const child of children) {
                 // Terminal work is left alone — cancelling a completed task would rewrite history.
                 if (['Complete', 'Failed', 'Cancelled'].includes(child.Status)) continue;
                 child.Status = 'Cancelled';
                 if (!(await child.Save())) {
                     LogError(`[TaskGraphService] Failed to cancel task ${child.ID}: ${child.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                    uncancelled.push(child.Name);
                 }
             }
 
@@ -554,11 +584,80 @@ export class TaskGraphService {
             // outcome.
             //
             // The parent stays non-terminal until then, so the sweep still sees it as active work.
-            return true;
+
+            // WHAT THIS WORKFLOW STARTED IS ALSO CANCELLED (R2-9).
+            //
+            // A graph's step can be an agent that submits a graph of its own, and those sub-graphs
+            // persist as ROOTS — linked back only through the child task's `AgentRunID`. So
+            // cancelling a workflow left its descendants running, and on settlement one of them can
+            // REINVOKE the cancelled workflow's own agent for a fresh billed turn: the user stopped
+            // a workflow and it started itself again.
+            //
+            // Bounded by the reinvoke depth cap, which is what bounds the chain in the first place.
+            const nested = await this.cancelNestedGraphs(children, context, 0);
+            uncancelled.push(...nested);
+
+            if (uncancelled.length > 0) {
+                return {
+                    Success: false,
+                    Cancelled: false,
+                    UncancelledTaskNames: uncancelled,
+                    ErrorMessage:
+                        `Cancelled what it could, but ${uncancelled.length} task(s) could not be cancelled ` +
+                        `(${uncancelled.join(', ')}). The workflow is still active — retry the cancel.`,
+                };
+            }
+            return { Success: true, Cancelled: true, UncancelledTaskNames: [] };
         } catch (e) {
-            LogError(`[TaskGraphService] Cancel failed for ${parentTaskID}: ${e instanceof Error ? e.message : String(e)}`);
-            return false;
+            const message = e instanceof Error ? e.message : String(e);
+            LogError(`[TaskGraphService] Cancel failed for ${parentTaskID}: ${message}`);
+            return { Success: false, Cancelled: false, UncancelledTaskNames: [], ErrorMessage: message };
         }
+    }
+
+    /**
+     * Cancels the graphs that this graph's own steps submitted, one level at a time.
+     *
+     * The linkage is `child task → AgentRunID → the graphs that run submitted`, which is exactly how
+     * the continuation chain finds its way back up; walking it downward is the same relation read the
+     * other way. Depth-capped by the same constant that caps reinvocation, so a self-referencing
+     * workflow cannot make cancellation recurse further than it could have spawned.
+     *
+     * @returns names of tasks in descendant graphs that could not be cancelled
+     */
+    private async cancelNestedGraphs(
+        children: readonly MJTaskEntity[],
+        context: TaskGraphSubmitContext,
+        depth: number,
+    ): Promise<string[]> {
+        if (depth >= MAX_REINVOKE_DEPTH) return [];
+        const runIDs = [...new Set(children.map((c) => c.AgentRunID).filter((id): id is string => !!id))];
+        if (runIDs.length === 0) return [];
+
+        const rv = RunView.FromMetadataProvider(context.Provider);
+        const inList = runIDs.map((id) => `'${id}'`).join(',');
+        // Graphs those runs submitted: root tasks of the workflow type carrying the run's ID.
+        const subGraphs = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Tasks',
+                ExtraFilter: `ParentID IS NULL AND AgentRunID IN (${inList})`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+                BypassCache: true,
+            },
+            context.ContextUser,
+        );
+        if (!subGraphs.Success) {
+            LogError(`[TaskGraphService] Could not look for sub-graphs while cancelling: ${subGraphs.ErrorMessage}`);
+            return [];
+        }
+
+        const failures: string[] = [];
+        for (const row of subGraphs.Results ?? []) {
+            const result = await this.Cancel(row.ID, context);
+            if (!result.Success) failures.push(...result.UncancelledTaskNames);
+        }
+        return failures;
     }
 
     /**

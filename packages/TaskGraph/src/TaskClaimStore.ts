@@ -407,7 +407,7 @@ export class TaskClaimStore {
     public async TryClaimContinuation(
         provider: IMetadataProvider,
         parentTaskID: string,
-        deliveredAs: 'delivered' | 'expired',
+        deliveredAs: 'delivered' | 'expired' | 'cancelled',
         workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {

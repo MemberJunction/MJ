@@ -113,8 +113,12 @@ export class TaskGraphCancelServerOperation extends TaskGraphCancelOperation {
 
         // EnvironmentID is unused on the cancel path — the graph already exists, so nothing new is
         // created that would need one.
-        const ok = await new TaskGraphService().Cancel(input.parentTaskID, submitContext(provider, user, ''));
-        if (!ok) return { success: false, errorMessage: 'Cancel failed; see the server log for detail.' };
+        const result = await new TaskGraphService().Cancel(input.parentTaskID, submitContext(provider, user, ''));
+        // The verdict names what survived, so the caller can tell the user which parts of their
+        // workflow are still running rather than reporting a success the graph does not reflect.
+        if (!result.Success) {
+            return { success: false, errorMessage: result.ErrorMessage ?? 'Cancel failed; see the server log for detail.' };
+        }
 
         const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', user);
         const loaded = await parent.Load(input.parentTaskID);
