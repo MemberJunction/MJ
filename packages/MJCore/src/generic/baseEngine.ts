@@ -15,6 +15,7 @@ import { BaseEngineRegistry } from "./baseEngineRegistry";
 import { IStartupSink } from "./RegisterForStartup";
 import { CacheChangedEvent, LocalCacheManager } from "./localCacheManager";
 import { ProviderBase } from "./providerBase";
+import { TransformSimpleObjectToEntityObject } from "./util";
 /**
  * Property configuration for the BaseEngine class to automatically load/set properties on the class.
  */
@@ -2045,16 +2046,28 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             try {
                 const parsed = JSON.parse(event.Data);
                 if (parsed?.results && Array.isArray(parsed.results)) {
-                    this.HandleSingleViewResult(config, {
-                        Success: true,
-                        Results: parsed.results,
-                        RowCount: parsed.results.length,
-                        TotalRowCount: parsed.totalRowCount ?? parsed.results.length,
-                        ExecutionTime: 0,
-                        ErrorMessage: '',
-                        UserViewRunID: '',
-                    });
-                    return;
+                    // Claim a refresh generation BEFORE the awaited materialization — the same
+                    // protocol LoadSingleConfig uses around its awaited RunView. Without it, two
+                    // overlapping cache events (or an event racing a full reload) can resolve out
+                    // of order and the stale result would be the one that assigns last.
+                    const generation = this.beginConfigRefresh(config.PropertyName);
+                    const rows = await this.materializeCacheEventRows(config, parsed.results);
+                    if (!this.isLatestConfigRefresh(config.PropertyName, generation)) {
+                        return; // superseded while materializing — the newer refresh owns the property
+                    }
+                    if (rows) {
+                        this.HandleSingleViewResult(config, {
+                            Success: true,
+                            Results: rows,
+                            RowCount: rows.length,
+                            TotalRowCount: parsed.totalRowCount ?? rows.length,
+                            ExecutionTime: 0,
+                            ErrorMessage: '',
+                            UserViewRunID: '',
+                        });
+                        return;
+                    }
+                    // rows === null → cannot safely materialize; fall through to a full reload
                 }
             } catch {
                 // Fall through to full reload
@@ -2062,6 +2075,35 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
         // Fallback: reload this config from the database
         await this.LoadSingleConfig(config, this._contextUser);
+    }
+
+    /**
+     * Converts rows from a cache-change payload into the shape this config's property expects.
+     *
+     * Cache payloads are JSON, so their rows are plain objects with string dates. A config loaded
+     * as `entity_object` must not receive them directly — the property's declared element type
+     * would be violated and BaseEntity's coercing accessors bypassed, which is what turns a typed
+     * `__mj_CreatedAt` into a raw string at runtime. Mirrors the conversion the RunView cache-hit
+     * path performs, and enforces in this direction the same type-homogeneity invariant
+     * {@link canUseImmediateMutation} enforces for the sibling mutation path.
+     *
+     * @returns the rows to assign, or null when they cannot be safely materialized (caller should
+     *          fall back to a full reload).
+     */
+    private async materializeCacheEventRows(
+        config: BaseEnginePropertyConfig,
+        rows: Array<Record<string, unknown>>
+    ): Promise<Array<BaseEntity> | Array<Record<string, unknown>> | null> {
+        const effectiveResultType = config.ResultType || this.EngineDefaultResultType;
+        if (effectiveResultType === 'simple') {
+            return rows; // property holds plain objects by design
+        }
+        if (!config.EntityName) {
+            return null; // entity_object needs an entity to build against — reload instead
+        }
+        return TransformSimpleObjectToEntityObject(
+            this.ProviderToUse, config.EntityName, rows, this._contextUser
+        );
     }
 
     /**

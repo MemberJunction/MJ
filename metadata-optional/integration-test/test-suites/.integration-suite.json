@@ -926,6 +926,17 @@
           "primaryKey": {
             "ID": "CB7AAFCA-4913-4DCF-9D36-B6CD50E5BE96"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT78 - Agent Note Cache Types (entity_object invariant)",
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "1AA3CA8B-2292-41C0-AB16-2486D406AFCC"
+          }
         }
       ]
     },

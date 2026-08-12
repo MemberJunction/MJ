@@ -78,6 +78,14 @@ vi.mock('@memberjunction/core', () => ({
         Set(_field: string, _val: unknown) {}
     },
     LogError: vi.fn(),
+    // Real implementation, not a stub: the fallback-cache sorts under test call this to survive
+    // string dates, so a stubbed version would test nothing. Kept in sync by MJCore's own
+    // util.toEpochMs.test.ts, which pins the contract this mirrors.
+    ToEpochMs: (value: Date | string | number | null | undefined): number => {
+        if (value == null) return 0;
+        const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
+        return Number.isNaN(ms) ? 0 : ms;
+    },
     Metadata: class Metadata {},
     UserInfo: class UserInfo {},
     IMetadataProvider: class IMetadataProvider {},
@@ -191,7 +199,12 @@ vi.mock('@memberjunction/global', () => {
     };
 });
 
-vi.mock('@memberjunction/core-entities', () => ({}));
+vi.mock('@memberjunction/core-entities', () => ({
+    // Real behaviour, mirroring INJECTABLE_NOTE_STATUSES — the fallback-cache note filter calls
+    // this before sorting, so an empty mock makes it throw before the sort is ever reached.
+    IsInjectableNoteStatus: (status: string | null | undefined): boolean =>
+        status === 'Active' || status === 'Provisional',
+}));
 vi.mock('@memberjunction/ai-core-plus', () => ({
     MJAIAgentEntityExtended: class MJAIAgentEntityExtended {},
     MJAIModelEntityExtended: class MJAIModelEntityExtended {},
@@ -1512,6 +1525,93 @@ describe('AIEngine', () => {
             await engine.EmbedText(model, longText);
 
             expect(mockEmbeddingInstance.EmbedText).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    // ======================================================================
+    // Fallback-from-cache sorts with string dates (poisoned cache)
+    // ======================================================================
+
+    /**
+     * These two fallbacks are the widest exposure of the date-sort crash. `FindSimilarAgentNotes`
+     * / `FindSimilarAgentExamples` drop into them whenever the vector service is uninitialized or
+     * the query embedding fails — so even a 'Relevant'/'Semantic' call with real input text
+     * reaches them. Pre-fix they called `.getTime()` directly, which throws once a cross-server
+     * cache event has replaced the cached entities with plain JSON objects whose `__mj_CreatedAt`
+     * is a raw ISO string.
+     *
+     * The getters are shadowed with an own instance property (which wins over the prototype
+     * getter) so the sorts can be driven without standing up the engine's config machinery,
+     * which this suite mocks away wholesale.
+     */
+    describe('fallback-from-cache sorts tolerate string dates', () => {
+        const OLDER = '2026-08-01T00:00:00.000Z';
+        const NEWER = '2026-08-02T00:00:00.000Z';
+
+        function seed(property: 'AgentNotes' | 'AgentExamples', rows: unknown[]): void {
+            Object.defineProperty(engine, property, { value: rows, configurable: true, writable: true });
+        }
+
+        function callFallback(method: string): Array<Record<string, unknown>> {
+            return (engine as unknown as Record<string, (...args: unknown[]) => Array<Record<string, unknown>>>)[method]();
+        }
+
+        it('fallbackGetNotesFromCache sorts newest-first instead of throwing', () => {
+            seed('AgentNotes', [
+                { ID: 'old', Status: 'Active', AgentID: null, UserID: null, CompanyID: null, __mj_CreatedAt: OLDER },
+                { ID: 'new', Status: 'Active', AgentID: null, UserID: null, CompanyID: null, __mj_CreatedAt: NEWER },
+            ]);
+
+            const results = callFallback('fallbackGetNotesFromCache');
+
+            expect(results.map((r) => (r.note as { ID: string }).ID)).toEqual(['new', 'old']);
+            // Similarity 0 signals "no semantic ranking applied" — the fallback's contract.
+            expect(results.every((r) => r.similarity === 0)).toBe(true);
+        });
+
+        it('fallbackGetNotesFromCache still excludes non-injectable statuses', () => {
+            seed('AgentNotes', [
+                { ID: 'active', Status: 'Active', AgentID: null, UserID: null, CompanyID: null, __mj_CreatedAt: OLDER },
+                { ID: 'provisional', Status: 'Provisional', AgentID: null, UserID: null, CompanyID: null, __mj_CreatedAt: NEWER },
+                { ID: 'archived', Status: 'Archived', AgentID: null, UserID: null, CompanyID: null, __mj_CreatedAt: NEWER },
+            ]);
+
+            const results = callFallback('fallbackGetNotesFromCache');
+
+            expect(results.map((r) => (r.note as { ID: string }).ID)).toEqual(['provisional', 'active']);
+        });
+
+        it('fallbackGetExamplesFromCache breaks a SuccessScore tie by date instead of throwing', () => {
+            seed('AgentExamples', [
+                { ID: 'old', Status: 'Active', SuccessScore: 5, AgentID: null, UserID: null, CompanyID: null, __mj_CreatedAt: OLDER },
+                { ID: 'new', Status: 'Active', SuccessScore: 5, AgentID: null, UserID: null, CompanyID: null, __mj_CreatedAt: NEWER },
+            ]);
+
+            const results = callFallback('fallbackGetExamplesFromCache');
+
+            expect(results.map((r) => (r.example as { ID: string }).ID)).toEqual(['new', 'old']);
+        });
+
+        it('fallbackGetExamplesFromCache still ranks by SuccessScore first', () => {
+            seed('AgentExamples', [
+                { ID: 'low-but-new', Status: 'Active', SuccessScore: 1, AgentID: null, UserID: null, CompanyID: null, __mj_CreatedAt: NEWER },
+                { ID: 'high-but-old', Status: 'Active', SuccessScore: 9, AgentID: null, UserID: null, CompanyID: null, __mj_CreatedAt: OLDER },
+            ]);
+
+            const results = callFallback('fallbackGetExamplesFromCache');
+
+            expect(results.map((r) => (r.example as { ID: string }).ID)).toEqual(['high-but-old', 'low-but-new']);
+        });
+
+        it('handles a mixed array of real Date and string dates', () => {
+            seed('AgentNotes', [
+                { ID: 'string-old', Status: 'Active', AgentID: null, UserID: null, CompanyID: null, __mj_CreatedAt: OLDER },
+                { ID: 'date-new', Status: 'Active', AgentID: null, UserID: null, CompanyID: null, __mj_CreatedAt: new Date(NEWER) },
+            ]);
+
+            const results = callFallback('fallbackGetNotesFromCache');
+
+            expect(results.map((r) => (r.note as { ID: string }).ID)).toEqual(['date-new', 'string-old']);
         });
     });
 
