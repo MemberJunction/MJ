@@ -12,6 +12,8 @@ import {
     ComputeParentRollup,
     ComputeSkipCascade,
     ComputeTasksToBlock,
+    ConfirmSkipSeeds,
+    IsGraphStalled,
     ResolveExclusiveGroups,
     type EvaluatedEdge,
     type TaskGraphEdge,
@@ -162,7 +164,7 @@ describe('ComputeParentRollup with Skipped', () => {
         // Without this a sequential flow containing ONE fork would settle Blocked every time.
         const roll = ComputeParentRollup([n('a', 'Complete'), n('b', 'Skipped')]);
         expect(roll.status).toBe('Complete');
-        expect(roll.isTerminal).toBe(true);
+        expect(roll.outcome).toBe('settled');
     });
 
     it('counts a skipped child as done, so a branching flow can reach 100%', () => {
@@ -226,5 +228,135 @@ describe('a handled failure releases its recovery path', () => {
         // `slow` is itself eligible — it has no prerequisites. The assertion is about `recover`.
         const eligible = ComputeEligibleTasks(nodes, edges, new Set(['risky'])).map((x) => x.id);
         expect(eligible).not.toContain('recover');
+    });
+});
+
+/**
+ * P1 — a task may be marked Skipped only when EVERY route into it has been cut.
+ *
+ * The dispatcher already states that invariant for ordinary dropped edges (`stillReachable`), and
+ * `ComputeSkipCascade`'s own doc promises it for joins: "a join that is also reachable from the
+ * winning branch therefore survives". Exclusive losers bypassed both — every loser's target was
+ * seeded and written `Skipped` unconditionally.
+ *
+ * Both failure shapes settle the graph **Complete with the work never executed**. No error, no
+ * stall: the strongest reason this is HIGH.
+ */
+describe('P1: an exclusive loser cannot skip a task another route still reaches', () => {
+    it('does not seed a target the WINNER also points at', () => {
+        // Two conditions routing to one destination. `AIAgentStepPath` has no Origin+Destination
+        // unique constraint, so this is drawable — and one edge wins while the other loses, making
+        // the target simultaneously the winner's target and a skip seed. It was skipped 100% of the
+        // time; the legacy walker ran it.
+        const res = ResolveExclusiveGroups([
+            xedge({ id: 'e1', taskId: 'B', priority: 5 }),
+            xedge({ id: 'e2', taskId: 'B', priority: 1 }),
+        ]);
+        expect(res.keptEdgeIDs).toEqual(['e1']);
+        expect(res.loserEdgeIDs).toEqual(['e2']);
+        expect(res.skipSeedTaskIDs).toEqual([]);
+    });
+
+    it('still seeds a loser whose target the winner does NOT reach', () => {
+        // The ordinary case must keep working — this is the guard against over-correcting.
+        const res = ResolveExclusiveGroups([
+            xedge({ id: 'win', taskId: 'B', priority: 5 }),
+            xedge({ id: 'lose', taskId: 'C', priority: 1 }),
+        ]);
+        expect(res.skipSeedTaskIDs).toEqual(['C']);
+    });
+
+    it('confirms a seed only when no live gating edge still reaches it', () => {
+        // The skip-a-step diamond: A →(cond)→ Review → Publish, A →(else)→ Publish.
+        // The loser edge A→Publish seeds Publish while Review is still running. Publish must
+        // survive: Review→Publish is live, so a route into it remains.
+        const live: TaskGraphEdge[] = [e('Review', 'A'), e('Publish', 'Review')];
+        expect(ConfirmSkipSeeds(['Publish'], live)).toEqual([]);
+    });
+
+    it('confirms a seed with every route cut', () => {
+        // A →(c)→ B, A →(!c)→ C with c true: C's only route was the losing edge, which is not in
+        // `liveEdges`. Nothing reaches C, so the skip is real.
+        expect(ConfirmSkipSeeds(['C'], [e('B', 'A')])).toEqual(['C']);
+    });
+
+    it('ignores non-gating edges when deciding whether a route survives', () => {
+        // Optional/Corequisite edges do not gate a task starting, so they cannot keep it alive —
+        // the same rule ComputeEligibleTasks and ComputeSkipCascade already follow.
+        const live: TaskGraphEdge[] = [e('C', 'A', 'Optional')];
+        expect(ConfirmSkipSeeds(['C'], live)).toEqual(['C']);
+    });
+});
+
+/**
+ * The three properties the reviewing agent asked confirmation to hold (PR #3745).
+ *
+ * Seed confirmation decides only whether a seed becomes `Skipped` *now*. It must never take work
+ * away from the two mechanisms that own the other outcomes: the blocking machinery (failure) and the
+ * cascade (descendants).
+ */
+describe('P1: what seed confirmation must NOT decide', () => {
+    it('declines to confirm when a route survives — delay, never wrong execution', () => {
+        // Property 1: an unconfirmed seed is simply not-skipped-yet. It stays claim-filtered for the
+        // pass and a later pass decides. The worst case is a cycle of delay; the alternative is
+        // executing or skipping the wrong thing irreversibly.
+        expect(ConfirmSkipSeeds(['J'], [e('J', 'Live')])).toEqual([]);
+    });
+
+    it('does NOT confirm a seed whose surviving route is failure-dead — Blocked owns that', () => {
+        // Property 2: failure precedence. A route from a Failed origin cannot satisfy its dependent,
+        // but the node must end up Blocked, not Skipped — the two mean different things to a reader
+        // ("something broke" vs "the workflow went the other way").
+        //
+        // Confirmation stays out of it by construction: the edge from the failed origin is still a
+        // live gating edge, so the seed is declined and ComputeTasksToBlock decides.
+        const live: TaskGraphEdge[] = [e('J', 'Boom')];
+        expect(ConfirmSkipSeeds(['J'], live)).toEqual([]);
+
+        const nodes = [n('Boom', 'Failed'), n('J')];
+        expect(ComputeTasksToBlock(nodes, live)).toContain('J');
+    });
+
+    it('leaves descendants to the cascade — a chain behind a confirmed seed still skips', () => {
+        // Property 3: confirmation gates SEED GENERATION only. loser → B → C, C reachable only
+        // through B: B is confirmed, and C follows via the cascade's status rule.
+        const chain: TaskGraphEdge[] = [e('C', 'B')];
+        expect(ConfirmSkipSeeds(['B'], chain)).toEqual(['B']);
+
+        const nodes = [n('A', 'Complete'), n('B'), n('C')];
+        expect(ComputeSkipCascade(nodes, chain, ['B'])).toEqual(['C']);
+    });
+
+    it('and a descendant with a second live route survives the cascade', () => {
+        // The join case, one level down: C is reached by the skipped B AND by a live D.
+        const edges: TaskGraphEdge[] = [e('C', 'B'), e('C', 'D')];
+        const nodes = [n('B'), n('C'), n('D')];
+        expect(ComputeSkipCascade(nodes, edges, ['B'])).toEqual([]);
+    });
+});
+
+/**
+ * P2 — a held graph must not report as healthy.
+ *
+ * A task held because its guard could not be evaluated has a live gating edge from a `Complete`
+ * origin, so `ComputeEligibleTasks` says it is eligible while the dispatcher refuses to claim it.
+ * "Something is eligible" then reads as "not stalled", and a graph that will wait forever produced
+ * no diagnostics at all — which is the silence the hold mechanism exists to break.
+ */
+describe('P2: IsGraphStalled sees holds', () => {
+    const nodes = [n('A', 'Complete'), n('Guarded')];
+    const edges = [e('Guarded', 'A')];
+
+    it('reports a graph stalled when its only eligible task is held', () => {
+        expect(IsGraphStalled(nodes, edges, new Set(['Guarded']))).toBe(true);
+    });
+
+    it('reports the same graph healthy when nothing is held', () => {
+        expect(IsGraphStalled(nodes, edges)).toBe(false);
+    });
+
+    it('is not fooled into stalling while other work is genuinely eligible', () => {
+        const wider = [...nodes, n('Other')];
+        expect(IsGraphStalled(wider, edges, new Set(['Guarded']))).toBe(false);
     });
 });
