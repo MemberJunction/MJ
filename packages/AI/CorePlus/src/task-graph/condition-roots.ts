@@ -31,6 +31,28 @@ const LANGUAGE_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Ambient globals a condition may use, because the evaluator already resolves them.
+ *
+ * `SafeExpressionEvaluator` compiles through a plain strict-mode `new Function(...roots, body)`, so
+ * anything on the global object is in scope at run time and none of these are on its policy screen.
+ * `Number(payload.count) > 3` and `Math.abs(output.delta) < 5` are exactly the shapes authored specs
+ * use, and they work — so a door that refused them would be rejecting specs that run correctly,
+ * which is the one thing this check promised not to do.
+ *
+ * **Curated, not `name in globalThis`.** Reflecting over the global object would bless `globalThis`,
+ * `Reflect`, `process` and everything else the host happens to expose — an allowlist that grows
+ * silently with the runtime. This list is a decision; a test pins it to what the evaluator actually
+ * resolves, so it cannot claim something the runtime would reject either.
+ *
+ * Adding a name here grants no new capability: it was already reachable. It only stops the door
+ * predicting a failure that will not happen.
+ */
+export const RESOLVABLE_GLOBALS: ReadonlySet<string> = new Set([
+    'Math', 'Number', 'String', 'Boolean', 'Array', 'Object', 'JSON', 'Date',
+    'parseInt', 'parseFloat', 'isNaN', 'isFinite',
+]);
+
+/**
  * Root identifiers an expression references that the runtime envelope does not provide.
  *
  * Roots only — a property this engine cannot see (`payload.whatever`) is a question about data that
@@ -55,7 +77,7 @@ export function UnknownConditionRoots(expression: string): string[] {
     // Lookbehind excludes both property access (`.includes`) and identifier tails, including the
     // exponent in a numeric literal (`2e5`), which is otherwise indistinguishable from a name.
     for (const [name] of code.matchAll(/(?<![A-Za-z0-9_$.])[A-Za-z_$][A-Za-z0-9_$]*/g)) {
-        if (LANGUAGE_NAMES.has(name) || CONDITION_ROOTS.has(name)) continue;
+        if (LANGUAGE_NAMES.has(name) || RESOLVABLE_GLOBALS.has(name) || CONDITION_ROOTS.has(name)) continue;
         unknown.add(name);
     }
     return [...unknown];

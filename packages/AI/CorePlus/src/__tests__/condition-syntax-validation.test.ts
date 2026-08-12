@@ -11,7 +11,8 @@
  * has already written, and over-refusing would break saving workflows that work.
  */
 import { describe, it, expect } from 'vitest';
-import { UnknownConditionRoots } from '../task-graph/condition-roots';
+import { SafeExpressionEvaluator } from '@memberjunction/global';
+import { RESOLVABLE_GLOBALS, UnknownConditionRoots } from '../task-graph/condition-roots';
 import { ValidateTaskGraphSpec } from '../task-graph/task-graph-validator';
 import type { TaskGraphSpec } from '../task-graph/task-graph-spec';
 
@@ -83,6 +84,41 @@ describe('UnknownConditionRoots — the door now answers what it can answer (R2-
         // in the direction that matters: it may miss a typo, it will never invent one.
         expect(UnknownConditionRoots('payload.items.some(item => item.price > 100)')).toEqual([]);
         expect(UnknownConditionRoots('nonsense.some(x => x)')).toEqual([]);
+    });
+
+    it.each([
+        'isNaN(payload.count)',
+        'Number(payload.count) > 3',
+        'Math.abs(output.delta) < 5',
+        'Array.isArray(output)',
+        'JSON.stringify(payload) !== \'\'',
+        'parseInt(payload.raw) > 0',
+        'String(payload.id).length > 0',
+    ])('accepts %s — the evaluator resolves these, so the door must too', (expression) => {
+        // The door's promise is that it refuses only what is guaranteed to fail. These are ambient
+        // globals the evaluator compiles straight through, and they are exactly the shapes authored
+        // specs use — refusing them would reject specs that RUN CORRECTLY, which is the one failure
+        // mode this check is not allowed to have.
+        expect(UnknownConditionRoots(expression)).toEqual([]);
+    });
+
+    it('every allowed global is one the evaluator actually resolves', () => {
+        // Pins the allowlist to runtime behaviour the same way the envelope is pinned to
+        // CONDITION_ROOTS. A curated list can drift from the runtime in both directions; this
+        // catches the direction where the door blesses a name that would fail anyway.
+        const evaluator = new SafeExpressionEvaluator();
+        for (const name of RESOLVABLE_GLOBALS) {
+            const verdict = evaluator.evaluate(`${name} !== undefined`, {});
+            expect(verdict.success, `${name} does not resolve at run time`).toBe(true);
+            expect(verdict.value, `${name} resolved to undefined`).toBe(true);
+        }
+    });
+
+    it('does not bless the reflective globals a runtime scan would have', () => {
+        // `name in globalThis` would have allowed all of these. The list is a decision, not a scan.
+        for (const name of ['globalThis', 'Reflect', 'process', 'Proxy', 'Symbol']) {
+            expect(RESOLVABLE_GLOBALS.has(name)).toBe(false);
+        }
     });
 
     it('treats language names as grammar rather than scope', () => {

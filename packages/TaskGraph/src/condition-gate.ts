@@ -1,5 +1,3 @@
-import { CONDITION_ROOTS } from '@memberjunction/ai-core-plus';
-
 /**
  * What a conditional edge means, decided without touching the database.
  *
@@ -108,10 +106,11 @@ export function ParseConditionOutput(payload: string | null | undefined): unknow
  * engine never had.
  */
 export function BuildConditionContext(origin: ConditionOrigin, output: unknown): Record<string, unknown> {
-    // The envelope and the spec's declared roots are one contract split across two packages, and the
-    // validator refuses conditions on the strength of that list. A key here with no entry there is a
-    // root nobody may reference; an entry there with no key here is a root that resolves to nothing
-    // at run time. Both are silent, so they are checked where they can only be wrong together.
+    // The envelope and the spec's declared roots (`CONDITION_ROOTS`, in ai-core-plus) are one
+    // contract split across two packages, and the validator refuses conditions on the strength of
+    // that list. A key here with no entry there is a root nobody may reference; an entry there with
+    // no key here is a root that resolves to nothing at run time. Both are silent, so the two are
+    // pinned to each other by test rather than by hope.
     const envelope = (output && typeof output === 'object' ? output : {}) as Record<string, unknown>;
     const succeeded = origin.Status === 'Complete';
     // Every object-shaped root is null-safe; the STATUS roots stay exactly as real as they were.
