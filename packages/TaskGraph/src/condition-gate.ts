@@ -99,9 +99,15 @@ const NO_OUTPUT: Readonly<Record<string, unknown>> = Object.freeze({});
  * silently dropped branch — which is the same reasoning P2 used, applied to a narrower class.
  */
 const DATA_ABSENCE_SIGNATURES: readonly RegExp[] = [
+    // Property reads — the original list.
     /cannot read propert(?:y|ies) .* of (?:undefined|null)/i,
     /cannot read propert(?:y|ies) of (?:undefined|null)/i,
-    /(?:undefined|null) is not an object/i,      // WebKit's phrasing of the same thing
+    /(?:undefined|null) is not an object/i,            // WebKit's phrasing of the same thing
+    // R3-6: absence reached through the OTHER operators the door blesses.
+    /cannot use '?in'? operator/i,                     // `'x' in payload.missing`
+    /cannot convert undefined or null to object/i,     // `Object.keys(payload.missing)`
+    /(?:undefined|null) is not iterable/i,             // spread / for-of over an absent collection
+    /is not a function/i,                              // `payload.missing.map(...)` — see below
 ];
 
 /** A malformed `OutputPayload` is not grounds to drop a prerequisite — it reads as no output. */
@@ -253,7 +259,16 @@ export function DecideGate(
     // no. Holding it is a permanent stall on a terminal origin whose output can never change — and
     // since Q1 now refuses syntax errors at the door, this became almost the only way the hold
     // mechanism fired in production, on conditions their authors meant as false.
-    return IsDataAbsence(result.ErrorMessage) ? 'drop' : 'hold';
+    // A verdict that failed without saying WHY is not evidence of absence — it is evidence of
+    // nothing, and the conservative reading of nothing is the visible one.
+    if (!result.ErrorMessage) return 'hold';
+
+    // Inverted from "is this a known absence shape?" to "is this a broken guard?" (R3-6). The
+    // envelope guarantees declared roots resolve, so a ReferenceError is the only failure that can
+    // mean the guard names something that does not exist; every other throw is the expression
+    // meeting data that is not there. Enumerating absence messages closed the shapes we had seen
+    // and left the next operator's shape open.
+    return IsBrokenGuard(result.ErrorMessage) ? 'hold' : 'drop';
 }
 
 /**
@@ -265,4 +280,23 @@ export function DecideGate(
 export function IsDataAbsence(errorMessage: string | undefined): boolean {
     if (!errorMessage) return false;
     return DATA_ABSENCE_SIGNATURES.some((pattern) => pattern.test(errorMessage));
+}
+
+/**
+ * Whether an evaluation failure is a BROKEN GUARD rather than absent data.
+ *
+ * **This is the structural half of R3-6, and it is the one that matters.** Enumerating V8 message
+ * strings closes today's holes and leaves tomorrow's open: `'in'` and `Object` were both blessed at
+ * the door while their absence messages went unmatched, and each miss is a permanent silent stall on
+ * a terminal origin whose output can never change.
+ *
+ * Since the null-safe envelope guarantees every declared ROOT resolves, a `ReferenceError` is the
+ * only failure that can mean "this guard names something that does not exist" — everything else is
+ * the expression tripping over data that is not there, whatever operator it tripped over. So the
+ * classification is inverted: name the broken-guard case, and treat the rest as absence. The
+ * signature list above is kept as a fast path and as documentation of the shapes seen in the wild.
+ */
+export function IsBrokenGuard(errorMessage: string | undefined): boolean {
+    if (!errorMessage) return false;
+    return /is not defined|reference ?error|can't find variable/i.test(errorMessage);
 }

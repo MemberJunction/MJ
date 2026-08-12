@@ -53,7 +53,7 @@ import { TaskClaimStore, TERMINAL_PARENT_STATUSES, TERMINAL_PARENT_STATUS_SQL } 
 import {
     BuildConditionContext,
     DecideGate,
-    IsDataAbsence,
+    IsBrokenGuard,
     ParseConditionOutput,
     type ConditionInvocation,
 } from './condition-gate';
@@ -512,11 +512,37 @@ export class TaskGraphDispatcher implements IShutdownable {
             this.activePasses--;
         }
 
+        // A `Stop()` LANDING DURING THE BOOT AWAITS MUST NOT BE UNDONE HERE (R3-4).
+        //
+        // Everything above this line is awaited — reconciliation and the counted startup sweep,
+        // which R2-13's own fix makes `Stop()` wait out. So a host that shuts down during boot
+        // drains correctly, logs "Stopped.", and returns with both timer fields null — and then
+        // this continuation ran anyway and installed both timers on the stopped instance.
+        //
+        // `pollOnce` was inert (its own `running` guard), but `Reconcile` had no such guard: it
+        // minted a provider and ran `ReleaseExpiredClaims` — a real UPDATE returning tasks to
+        // Pending — every two minutes forever, against a pool the host may have torn down. Nothing
+        // would ever call `Stop()` again, since `ShutdownRegistry.ShutdownAll` clears its items
+        // after one pass, and the intervals pinned the event loop so the process could not exit.
+        if (!this.running) {
+            LogStatus(`[TaskGraphDispatcher] Stopped during startup; not installing timers.`);
+            return;
+        }
+
         this.pollTimer = setInterval(() => { void this.pollOnce(); }, this.config.PollIntervalSeconds * 1000);
         this.reconcileTimer = setInterval(
-            () => { void this.Reconcile(); },
+            // Guarded HERE rather than inside `Reconcile` (R3-4). The defect is a stopped
+            // instance's TIMER executing `ReleaseExpiredClaims` — a real UPDATE — forever; the
+            // public method itself stays callable, because reconciling on demand before starting is
+            // a legitimate use (IT74's crash-recovery check does exactly that) and a guard there
+            // would silently no-op it, which is the class of failure this whole effort is about.
+            () => { if (this.running) void this.Reconcile(); },
             this.config.ReconciliationIntervalSeconds * 1000,
         );
+        // Belt and suspenders: `Stop()` remains the real teardown, but an un-`unref`'d interval
+        // keeps the event loop alive on its own, so a leaked instance can prevent process exit.
+        this.pollTimer.unref?.();
+        this.reconcileTimer.unref?.();
     }
 
     /**
@@ -2488,7 +2514,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         // one level of absence read as false here, but a deeper absent chain still throws — and
         // calling that 'unevaluable' would hold the whole group forever on a terminal origin, while
         // `DecideGate` would have dropped the identical condition. Two dialects, one question.
-        if (!result.Success) return IsDataAbsence(result.ErrorMessage) ? 'unsatisfied' : 'unevaluable';
+        if (!result.Success) return IsBrokenGuard(result.ErrorMessage) ? 'unevaluable' : 'unsatisfied';
         return result.Value ? 'satisfied' : 'unsatisfied';
     }
 

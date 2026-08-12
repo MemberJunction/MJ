@@ -75,10 +75,12 @@ describe('DecideGate — "false" and "cannot tell" are different answers', () =>
         expect(DecideGate('Complete', 'edges', () => broken('x is not defined'))).toBe('hold');
     });
 
-    it('holds rather than dropping, so the target is not skipped as unreachable', () => {
+    it('holds rather than dropping for a BROKEN guard, so the target is not skipped as unreachable', () => {
         // Dropping would turn "we cannot tell" into "definitely not taken": the target may have
-        // other live routes, and an unreachable target is skipped, not retried.
-        expect(DecideGate('Complete', 'edges', () => broken('TypeError'))).not.toBe('drop');
+        // other live routes, and an unreachable target is skipped, not retried. Since R3-6 the
+        // class that earns this is the broken guard specifically — an unknown ROOT — rather than
+        // any unrecognised message.
+        expect(DecideGate('Complete', 'edges', () => broken('typoRoot is not defined'))).not.toBe('drop');
     });
 
     it('reads truthiness, not strict equality with true', () => {
@@ -93,7 +95,9 @@ describe('DecideGate — "false" and "cannot tell" are different answers', () =>
     });
 
     it('a failed verdict holds even when it carries a truthy Value', () => {
-        // Success is the discriminator, not Value. A half-populated verdict must not read as a pass.
+        // Success is the discriminator, not Value. A half-populated verdict must not read as a pass —
+        // and with no message it is not evidence of absence either, which is evidence of nothing,
+        // whose conservative reading is the visible one.
         expect(DecideGate('Complete', 'edges', () => ({ Success: false, Value: true }))).toBe('hold');
     });
 });
@@ -154,10 +158,34 @@ describe('R2-3: data absence is the data answering no, not a broken guard', () =
         expect(DecideGate('Complete', 'edges', () => broken('unknownVar is not defined'))).toBe('hold');
     });
 
-    it('holds on an error it cannot classify — the conservative default is unchanged', () => {
-        // Silently dropping a branch is invisible; a hold is visible and recoverable. An
-        // unrecognised failure must land on the visible side.
-        expect(DecideGate('Complete', 'edges', () => broken('something nobody has seen before'))).toBe('hold');
+    it('R3-6: an unrecognised throw is ABSENCE now, not a hold — the classification is inverted', () => {
+        // Round 2 enumerated absence messages and held on anything unmatched, which closed the
+        // shapes we had seen and left the next operator's open. The envelope guarantees declared
+        // roots resolve, so a ReferenceError is the only failure that can mean "this guard names
+        // something that does not exist"; everything else is the expression meeting data that is
+        // not there, whatever operator it tripped over. Naming the broken-guard case is what stops
+        // the hole reopening per operator.
+        expect(DecideGate('Complete', 'edges', () => broken('something nobody has seen before'))).toBe('drop');
+    });
+
+    it.each([
+        [`Cannot use 'in' operator to search for 'approved' in undefined`, "'approved' in payload.details"],
+        ['Cannot convert undefined or null to object', 'Object.keys(payload.missing)'],
+        ['undefined is not iterable', 'spread over an absent collection'],
+        ['payload.missing.map is not a function', 'a method call on an absent value'],
+    ])('R3-6: reads %s as absence, not a permanent hold', (message) => {
+        // Every one of these operators is blessed at the door — `in` is a language name, `Object` is
+        // a resolvable global — so the door promised the condition would run and the runtime then
+        // stalled it forever on a terminal origin whose output can never change. The walker
+        // completed these graphs.
+        expect(DecideGate('Complete', 'edges', () => broken(message))).toBe('drop');
+    });
+
+    it.each([
+        'unknownVar is not defined',
+        "Can't find variable: unknownVar",
+    ])('R3-6: still HOLDS a broken guard (%s)', (message) => {
+        expect(DecideGate('Complete', 'edges', () => broken(message))).toBe('hold');
     });
 });
 
