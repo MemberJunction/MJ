@@ -497,6 +497,9 @@ function assertMarkerUnclaimed(marker: { At: string | undefined }, provenLocally
     AssertEqual(marker.At, undefined, what);
 }
 
+/** A well-formed run ID that will never exist, for TX14's read-failure trigger. */
+const NONEXISTENT_RUN_ID = 'DEAD0000-0000-4000-8000-000000000BAD';
+
 /** Instance name for TX11, shared between the dispatcher and the claims assertion. */
 const INSTANCE_TX11 = 'it-tx11';
 
@@ -589,6 +592,25 @@ const promptTask = (tempId: string, name: string, promptName: string, dependsOn:
 /** The submitting agent run recorded in a graph's durable metadata, if any. */
 async function submittingRunID(ctx: IntegrationCheckContext, parentID: string): Promise<string | null> {
     return ParseTaskGraphParentMetadata((await loadTask(ctx, parentID)).InputPayload).submittedByAgentRunID;
+}
+
+/**
+ * Rewrites which run a graph records as its submitter, leaving everything else alone.
+ *
+ * Used to make the run half fail and then recover, without touching the graph's own state. The
+ * `AgentRunID` COLUMN is deliberately not changed — the dispatcher reads the metadata bag, so this
+ * isolates the read failure to exactly the path under test.
+ */
+async function repointSubmittingRun(
+    ctx: IntegrationCheckContext,
+    parentID: string,
+    runID: string,
+): Promise<void> {
+    const parent = await loadTask(ctx, parentID);
+    const meta = ParseTaskGraphParentMetadata(parent.InputPayload) as Record<string, unknown>;
+    meta.submittedByAgentRunID = runID;
+    parent.InputPayload = JSON.stringify(meta);
+    Assert(await parent.Save(), `could not repoint the submitting run: ${parent.LatestResult?.CompleteMessage ?? 'unknown'}`);
 }
 
 /** Creates an agent run in a chosen state, for the settle-path checks. */
@@ -1256,6 +1278,66 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             AssertEqual(finished.Status, 'Completed', 'the run was never settled — the deferral did not resolve');
 
             console.log('      → settlement deferred until the submitter parked, then delivered once');
+        }
+    },
+
+
+    {
+        Id: 'task-graph-execution.TX14',
+        Name: 'TX14: a run-half failure leaves the marker unclaimed, and the next pass finishes the job',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // R2-2's other half. TX13 covers the graph finishing before its submitter parks; this
+            // covers the submitting-run half FAILING, which must produce the same outcome: nothing
+            // claims the marker, so the rescue sweep brings the graph back and a later pass completes
+            // settlement and delivery exactly once.
+            //
+            // THE TRIGGER IS AN UNREADABLE RUN, NOT AN INJECTED `Save()` FAILURE. The plan names the
+            // save, and a save cannot be made to fail from here — the dispatcher runs in this process
+            // but the write goes through the entity layer against a real database, so there is no
+            // seam to inject at without a mock, and a mock would be asserting that the mock agrees
+            // with itself. Pointing the graph's metadata at a run ID that does not exist reaches the
+            // SAME verdict through the same function (`submittingRunReadiness` and
+            // `settleSubmittingRun` both return 'defer' when the run cannot be loaded), and the
+            // consequence under test — marker unclaimed, graph retried, delivered once later — is
+            // identical. What is not covered is the save statement itself; that path is unit-tested
+            // in the settle-verdict tests.
+            const agentName = await resolveAgentName(ctx);
+            const run = await createRun(ctx, 'Paused');
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-run-half-failure (safe to delete)',
+                tasks: [agentTask('a', 'RH One', agentName)],
+            }, run.ID);
+
+            // Point the metadata at a run that does not exist. The COLUMN keeps the real ID, so this
+            // is precisely a run-half read failure and nothing else about the graph changes.
+            await repointSubmittingRun(ctx, parentID, NONEXISTENT_RUN_ID);
+
+            const deliverer = new CountingDeliverer();
+            const settled = await runUntilSettled(
+                ctx, buildDispatcher(ctx, RUNNER, 'it-tx14', undefined, deliverer), parentID);
+            AssertEqual(settled.Status, 'Complete', 'the graph itself must still settle — only the run half failed');
+
+            AssertEqual(deliverer.CountFor(parentID), 0,
+                'this instance delivered despite being unable to settle the submitting run');
+            assertMarkerUnclaimed(
+                await deliveryMarker(ctx, parentID), true,
+                'the marker was claimed by a pass that could not complete the run half',
+            );
+
+            // The condition clears — as a transient failure would.
+            await repointSubmittingRun(ctx, parentID, run.ID);
+            await runUntilDelivered(
+                ctx, [buildDispatcher(ctx, RUNNER, 'it-tx14-second', undefined, deliverer)], parentID);
+
+            AssertEqual(deliverer.CountFor(parentID), 1, 'the recovering pass delivered exactly once');
+            AssertEqual((await deliveryMarker(ctx, parentID)).As, 'delivered', 'and recorded how');
+
+            const finished = await ctx.Provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', ctx.User);
+            Assert(await finished.Load(run.ID), 'could not re-read the submitting run');
+            AssertEqual(finished.Status, 'Completed', 'the run was never settled — the retry did not resolve');
+
+            console.log('      → run-half failure deferred delivery; the next pass completed it once');
         }
     },
 
