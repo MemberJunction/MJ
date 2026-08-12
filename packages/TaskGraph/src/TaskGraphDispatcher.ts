@@ -860,7 +860,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             // between "answered and moving" and "answered and apparently still stuck".
             await this.expireOverdueRequests(provider, parentID);
             await this.settleAnsweredHumanTasks(provider, parentID);
-            await this.reopenCancelledHumanTasks(provider, parentID);
+            await this.reconcileWaitingHumanTasks(provider, parentID);
 
             const graph = await this.loadGraphState(provider, parentID);
             if (graph.nodes.length === 0) continue;
@@ -1315,7 +1315,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             const skipped: string[] = [];
             const claimedMeanwhile: string[] = [];
             for (const sibling of await this.loadChildTasks(provider, task.ParentID)) {
-                if (sibling.ID === task.ID || sibling.Status !== 'Pending') continue;
+                if (UUIDsEqual(sibling.ID, task.ID) || sibling.Status !== 'Pending') continue;
                 // GUARDED, not a full-row save against the snapshot above. A sibling claimed between
                 // that load and this write is mid-execution; overwriting it to `Skipped` discards a
                 // running step's outcome while its side effects have already fired. Rowcount is the
@@ -2006,8 +2006,13 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
     ): Promise<'raised' | 'permanent-failure' | 'transient-failure'> {
         try {
-            const existing = await this.findOpenRequest(provider, task.ID);
-            if (existing) return 'raised';   // already waiting on someone
+            const existing = await this.findOpenRequests(provider, task.ID);
+            if (existing.length > 0) {
+                // Somebody IS waiting on this task — but "somebody" may be two rows, so collapse
+                // before returning. Free: the rows are already in hand.
+                await this.withdrawDuplicateRequests(provider, task.ID, existing, existing[0].ID);
+                return 'raised';
+            }
 
             const request = await provider.GetEntityObject<MJAIAgentRequestEntity>(
                 'MJ: AI Agent Requests', this.contextUser,
@@ -2061,7 +2066,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // inserts happen and then agree on a winner: the oldest open row. A loser withdraws
                 // its own row and returns `raised` — somebody IS waiting on this task, which is what
                 // the caller needs to know.
-                await this.withdrawDuplicateRequests(provider, task.ID, request.ID);
+                await this.withdrawDuplicateRequests(
+                    provider, task.ID, await this.findOpenRequests(provider, task.ID), request.ID);
                 return 'raised';
             }
             {
@@ -2103,21 +2109,31 @@ export class TaskGraphDispatcher implements IShutdownable {
         }
     }
 
-    /** The still-open request for a task, if one exists. */
-    private async findOpenRequest(
+    /**
+     * Every still-open request for a task, oldest first.
+     *
+     * Plural, and ordered, for one reason each. Ordered, because the oldest row is the one every
+     * instance must agree is "the" request — it is the one the assignee most likely already saw,
+     * and the one `withdrawDuplicateRequests` keeps; unordered, two instances could each decide a
+     * different duplicate was the keeper and withdraw each other's. Plural, because a caller that
+     * only ever sees the first cannot notice there are two, which is how the duplicate below
+     * survived: every reader of this took `[0]` and moved on.
+     */
+    private async findOpenRequests(
         provider: IMetadataProvider,
         taskID: string,
-    ): Promise<MJAIAgentRequestEntity | null> {
+    ): Promise<MJAIAgentRequestEntity[]> {
         const result = await RunView.FromMetadataProvider(provider).RunView<MJAIAgentRequestEntity>(
             {
                 EntityName: 'MJ: AI Agent Requests',
                 ExtraFilter: `OriginatingTaskID='${taskID}' AND Status='Requested'`,
+                OrderBy: '__mj_CreatedAt ASC, ID ASC',
                 ResultType: 'entity_object',
                 BypassCache: true,
             },
             this.contextUser,
         );
-        return (result.Success ? result.Results?.[0] : null) ?? null;
+        return (result.Success ? result.Results : null) ?? [];
     }
 
     /**
@@ -2188,7 +2204,14 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
-     * Re-opens a human step whose request was CANCELLED.
+     * Reconciles the requests behind human steps that are waiting on somebody.
+     *
+     * Two things can be wrong with a waiting step, and both are silent. It can have NO open request
+     * — the cancel case below — or it can have MORE than one, which the raise cannot fix because it
+     * never runs again for a notified task. Both are corrected here, on the only sweep that visits
+     * these tasks every pass.
+     *
+     * **Re-opening a human step whose request was CANCELLED.**
      *
      * `answeredRequestFor` deliberately excludes `Canceled`, because cancelling withdraws the ASK
      * rather than deciding the step — the task is supposed to keep waiting "for whatever replaces
@@ -2201,7 +2224,7 @@ export class TaskGraphDispatcher implements IShutdownable {
      * and raises a fresh request, which is exactly the replacement the design assumed. Bounded by
      * human action: it takes another person cancelling again to come back here.
      */
-    private async reopenCancelledHumanTasks(provider: IMetadataProvider, graphID: string): Promise<void> {
+    private async reconcileWaitingHumanTasks(provider: IMetadataProvider, graphID: string): Promise<void> {
         const waiting = await RunView.FromMetadataProvider(provider).RunView<MJTaskEntity>(
             {
                 EntityName: 'MJ: Tasks',
@@ -2227,7 +2250,13 @@ export class TaskGraphDispatcher implements IShutdownable {
             // Only when there is nothing live AND nothing terminal. A task with an open request is
             // simply waiting; one with a terminal request is settled on the next pass by
             // settleAnsweredHumanTasks, and re-raising either would ask the same question twice.
-            if (await this.findOpenRequest(provider, task.ID)) continue;
+            const open = await this.findOpenRequests(provider, task.ID);
+            if (open.length > 0) {
+                // Waiting, correctly — but on however many asks happen to exist. Collapse them here
+                // or nothing ever will: the raise is behind the notified marker for good.
+                await this.withdrawDuplicateRequests(provider, task.ID, open, open[0].ID);
+                continue;
+            }
             if (await this.answeredRequestFor(provider, task.ID)) continue;
 
             LogStatus(
@@ -3047,35 +3076,31 @@ export class TaskGraphDispatcher implements IShutdownable {
     /**
      * Leaves exactly one open request standing for a task, withdrawing any others.
      *
-     * The oldest wins — it is the one whose notification the assignee most likely already saw. Runs
-     * after every raise, so it also retroactively cleans duplicates minted before this existed.
+     * The oldest wins — it is the one whose notification the assignee most likely already saw.
      *
-     * @param keepIfSole the row this instance just inserted, named only for the log
+     * **Called from every path that reads a task's open requests**, not only from the raise. That is
+     * deliberate and it is the half R3-5 first got wrong: a task is notified exactly once, and
+     * `notifyHumanTaskReady` returns at the marker forever after, so a duplicate minted after that
+     * pass — by an instance that crashed between its insert and its de-dup, or by any build older
+     * than this one — was never looked at again by the only code that could have collapsed it. The
+     * waiting-task sweep is what actually reaches those.
+     *
+     * @param open the task's open requests, oldest first
+     * @param keepIfSole the row this caller is responsible for, named only for the log
      */
     private async withdrawDuplicateRequests(
         provider: IMetadataProvider,
         taskID: string,
+        open: readonly MJAIAgentRequestEntity[],
         keepIfSole: string,
     ): Promise<void> {
+        if (open.length <= 1) return;
         try {
-            const open = await RunView.FromMetadataProvider(provider).RunView<MJAIAgentRequestEntity>(
-                {
-                    EntityName: 'MJ: AI Agent Requests',
-                    ExtraFilter: `Status='Requested' AND OriginatingTaskID='${taskID}'`,
-                    OrderBy: '__mj_CreatedAt ASC, ID ASC',
-                    ResultType: 'entity_object',
-                    BypassCache: true,
-                },
-                this.contextUser,
-            );
-            const rows = open.Results ?? [];
-            if (rows.length <= 1) return;
-
             LogStatus(
-                `[TaskGraphDispatcher] Task ${taskID} had ${rows.length} open requests — keeping the ` +
-                `oldest (${rows[0].ID}${UUIDsEqual(rows[0].ID, keepIfSole) ? ', this instance\'s' : ''}) and withdrawing the rest.`,
+                `[TaskGraphDispatcher] Task ${taskID} had ${open.length} open requests — keeping the ` +
+                `oldest (${open[0].ID}${UUIDsEqual(open[0].ID, keepIfSole) ? ', this instance\'s' : ''}) and withdrawing the rest.`,
             );
-            for (const duplicate of rows.slice(1)) {
+            for (const duplicate of open.slice(1)) {
                 duplicate.Status = 'Canceled';
                 duplicate.Comments = 'A duplicate request for the same step; the earlier one stands.';
                 if (!(await duplicate.Save())) {
