@@ -33,6 +33,16 @@ import { PostgreSQLTransactionGroup } from './PostgreSQLTransactionGroup.js';
 const pgDialect = new PostgreSQLDialect();
 
 /**
+ * Escape every regex metacharacter in `literal` so it can be interpolated into a
+ * `RegExp` and match itself. PostgreSQL identifiers may legally contain `$`, `.`
+ * and parentheses; injecting one raw silently changes the pattern's meaning
+ * (a `$` becomes an end-anchor and the pattern then matches nothing).
+ */
+function escapeRegExp(literal: string): string {
+    return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Soft ceiling on PostgreSQL CRUD sproc parameter counts. PG's hard
  * `FUNC_MAX_ARGS` is 100 (compiled into the server, not adjustable on managed
  * services). 90 leaves 10 args of headroom so adding a column to an entity
@@ -628,7 +638,9 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      */
     protected override buildPerFieldSearchPredicate(field: EntityFieldInfo, escapedTerm: string, rawSafeTerm: string): string {
         if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0) {
-            return field.UserSearchParamFormatAPI.replace('{0}', rawSafeTerm);
+            // Function replacement: the term is end-user input, so `$&`/`` $` ``/`$'`/`$$`
+            // in it must be data, not splice directives. See issue #3171.
+            return field.UserSearchParamFormatAPI.replace('{0}', () => rawSafeTerm);
         }
         if (!this.isTextSearchableType(field)) return '';
         const pred = (field.UserSearchPredicateAPI ?? 'Contains').trim();
@@ -1224,8 +1236,16 @@ SELECT * FROM delete_result`;
             // Negative lookahead: don't quote words followed by ( — those are function calls
             // (e.g., LENGTH(...), LEFT(...)), not column references. Without this, a field
             // named "Length" causes LENGTH() to be quoted as "Length"() which PG can't resolve.
-            const re = new RegExp(`\\b${fieldName}\\b(?!\\s*\\()`, 'gi');
-            token = token.replace(re, pgDialect.QuoteIdentifier(fieldName));
+            // `fieldName` is escaped before interpolation: PostgreSQL identifiers may
+            // legally contain regex metacharacters (`$`, `(`, `.`), and injecting one
+            // raw built a pattern that either matched nothing — a `$` became an
+            // end-anchor, so `a$$b` was never quoted at all — or matched the wrong
+            // text. Discovered alongside issue #3171.
+            const re = new RegExp(`\\b${escapeRegExp(fieldName)}\\b(?!\\s*\\()`, 'gi');
+            // Function replacement, for the same reason on the other side: a quoted
+            // identifier containing `$` would be expanded by a string replacement.
+            const quoted = pgDialect.QuoteIdentifier(fieldName);
+            token = token.replace(re, () => quoted);
         }
         return token;
     }

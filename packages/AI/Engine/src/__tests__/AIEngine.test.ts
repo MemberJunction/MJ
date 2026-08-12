@@ -995,6 +995,18 @@ describe('AIEngine', () => {
             expect(result).toBe('');
         });
 
+        /**
+         * Field values are data. A string replacement expanded `$$`/`$&`/`` $` ``/`$'`
+         * inside them, splicing the surrounding message into the substituted value.
+         * See issue #3171.
+         */
+        for (const value of ['a$$b', 'a$&b', 'a$`b', "a$'b", 'a$1b', 'a$b']) {
+            it(`should substitute a field value containing ${JSON.stringify(value)} verbatim`, () => {
+                const result = callMarkup({ Name: value }, 'Hello {Name}!');
+                expect(result).toBe(`Hello ${value}!`);
+            });
+        }
+
         it('should handle multiple occurrences of the same token', () => {
             const result = callMarkup(
                 { Name: 'Bob' },

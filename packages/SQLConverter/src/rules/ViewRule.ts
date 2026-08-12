@@ -63,14 +63,24 @@ export class ViewRule implements IConversionRule {
     result = convertIdentifiers(result);
 
     // Schema normalization: "schema".Name → schema."Name"
+    // Function replacements throughout: `schema` is a configured identifier that
+    // may legally contain `$`, and a string replacement would expand it (and any
+    // `$&`/`` $` ``/`$'`) while emitting SQL. Capture groups are carried through
+    // as named callback parameters instead of `$1`/`$2`. See issue #3171.
     const quotedSchemaPattern = new RegExp(`"${schema}"\\.(?!")`, 'g');
-    result = result.replace(quotedSchemaPattern, `${schema}.`);
+    result = result.replace(quotedSchemaPattern, () => `${schema}.`);
     // Quote unquoted table references after schema.
     const bareSchemaPattern = new RegExp(`\\b${schema}\\.(?!")((?:vw)?[A-Za-z]\\w+)\\b`, 'g');
-    result = result.replace(bareSchemaPattern, `${schema}."$1"`);
+    result = result.replace(bareSchemaPattern, (_match, table: string) => `${schema}."${table}"`);
     // Add schema to bare view references: FROM vwXxx → FROM schema."vwXxx"
-    result = result.replace(/(\bFROM\s+)(vw\w+)\b/gi, `$1${schema}."$2"`);
-    result = result.replace(/(\bJOIN\s+)(vw\w+)\b/gi, `$1${schema}."$2"`);
+    result = result.replace(
+        /(\bFROM\s+)(vw\w+)\b/gi,
+        (_match, keyword: string, view: string) => `${keyword}${schema}."${view}"`,
+    );
+    result = result.replace(
+        /(\bJOIN\s+)(vw\w+)\b/gi,
+        (_match, keyword: string, view: string) => `${keyword}${schema}."${view}"`,
+    );
 
     // PascalCase column and alias quoting
     result = this.quoteColumnRefs(result);

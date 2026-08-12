@@ -2735,8 +2735,11 @@ export class EntityInfo extends BaseInfo {
                     // Fall back to exact match if no custom expression defined
                     return `${fieldExpression} = '${escapedValue}'`;
                 }
-                const normalizedField = expr.replace(/\{\{FieldName\}\}/g, fieldExpression);
-                const normalizedValue = expr.replace(/\{\{FieldName\}\}/g, `'${escapedValue}'`);
+                // Replacement functions: `escapedValue` is a data value, so `$&`/`` $` ``/
+                // `$'`/`$$` in it would otherwise splice the custom expression's own text
+                // into the SQL literal. See issue #3171.
+                const normalizedField = expr.replace(/\{\{FieldName\}\}/g, () => fieldExpression);
+                const normalizedValue = expr.replace(/\{\{FieldName\}\}/g, () => `'${escapedValue}'`);
                 return `${normalizedField} = ${normalizedValue}`;
             }
             default:
@@ -2774,7 +2777,8 @@ export class EntityInfo extends BaseInfo {
             case 'Custom': {
                 const expr = organicKey.CustomNormalizationExpression;
                 if (!expr) return fieldExpression;
-                return expr.replace(/\{\{FieldName\}\}/g, fieldExpression);
+                // Replacement function — see WrapWithNormalization (#3171).
+                return expr.replace(/\{\{FieldName\}\}/g, () => fieldExpression);
             }
             default: return fieldExpression;
         }
@@ -2792,7 +2796,8 @@ export class EntityInfo extends BaseInfo {
             case 'Custom': {
                 const expr = organicKey.CustomNormalizationExpression;
                 if (!expr) return `'${escapedValue}'`;
-                return expr.replace(/\{\{FieldName\}\}/g, `'${escapedValue}'`);
+                // Replacement function — see WrapWithNormalization (#3171).
+                return expr.replace(/\{\{FieldName\}\}/g, () => `'${escapedValue}'`);
             }
             default: return `'${escapedValue}'`;
         }
