@@ -923,6 +923,14 @@
             "Sequence": 33,
             "Status": "Active"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT78 - Materialized Entity Base-View Read Redirect",
+            "Sequence": 33,
+            "Status": "Active"
+          }
         }
       ]
     },
