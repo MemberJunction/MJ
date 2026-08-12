@@ -34,6 +34,7 @@ import {
     type TaskGraphFrame,
     type TaskGraphObserver,
 } from '@memberjunction/task-graph';
+import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -94,11 +95,28 @@ class StubAgentRunner implements TaskAgentRunner {
         };
     }
 
+    /**
+     * Names registered at submission time, so the hot path needs no query.
+     *
+     * Reading the name from the database at execution time made every recorded start depend on a
+     * concurrent read succeeding. When one transiently failed — the shared connection reports
+     * `Requests can only be made in the LoggedIn state` under a fanned-out wave — the catch below
+     * fell through to the task ID, and every assertion that filters by NAME silently dropped that
+     * execution. The task had run; the check reported it had not, so a healthy engine failed as
+     * "the gate task must still run" or "expected 4, got 3".
+     */
+    public readonly NamesByID = new Map<string, string>();
+
     /** The task's own name, read where the work happens — see SHARED_FAILURES. */
     private async resolveName(params: TaskAgentRunParams): Promise<string> {
+        const known = this.NamesByID.get(params.TaskID);
+        if (known) return known;
         try {
             const t = await params.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', params.ContextUser);
-            if (await t.Load(params.TaskID)) return t.Name;
+            if (await t.Load(params.TaskID)) {
+                this.NamesByID.set(params.TaskID, t.Name);
+                return t.Name;
+            }
         } catch { /* fall through to the ID */ }
         return params.TaskID;
     }
@@ -122,14 +140,34 @@ class RecordingObserver implements TaskGraphObserver {
 }
 
 /**
- * Hands the dispatcher the check's own provider.
+ * Mints one provider per task, over the check's pool — what production does.
  *
- * Production mints one provider per task so parallel work never shares a transaction scope; a check
- * runs against a single connection and has no such contention, so sharing is both safe and simpler.
- * The seam is what is being exercised here, not the pooling.
+ * This used to hand every task the check's single provider, on the reasoning that a check has no
+ * real contention. That reasoning was wrong, and it is the root cause of this bundle's long-running
+ * intermittency. A `SQLServerDataProvider` wraps one request context: issue two queries on it
+ * concurrently and `mssql` rejects the second with `Requests can only be made in the LoggedIn state,
+ * not the SentClientRequest state`. Any check that runs work in parallel — TX2's diamond branches,
+ * TX6's two dispatchers — does exactly that, so a claim query or a rollup read would fail at random.
+ * `pollOnce` catches and logs the failure, so the visible symptom was never the driver error but
+ * whatever the lost query would have done: a task that never got claimed, a graph that never
+ * settled, an execution that never showed up.
+ *
+ * The pool is the concurrency governor, exactly as `TaskGraphProviderFactory` documents. Client
+ * bundles have no pool and no parallel dispatcher, so they keep the shared provider.
  */
-function providerFactory(provider: IMetadataProvider): ProviderFactory {
-    return { CreateProvider: async () => provider };
+function providerFactory(ctx: IntegrationCheckContext): ProviderFactory {
+    const pool = ctx.Pool;
+    if (!pool) return { CreateProvider: async () => ctx.Provider };
+    return {
+        CreateProvider: async () => {
+            // `loadIfNeeded = false` reuses already-loaded metadata rather than re-reading it per
+            // provider — the difference between cheap-per-task and prohibitive.
+            const config = new SQLServerProviderConfigData(pool, ctx.Schema ?? '__mj', 0, undefined, undefined, false);
+            const provider = new SQLServerDataProvider();
+            await provider.Config(config);
+            return provider as unknown as IMetadataProvider;
+        },
+    };
 }
 
 /** Resolves a TaskType, creating a disposable one if the install has none. */
@@ -180,6 +218,13 @@ async function submitGraph(ctx: IntegrationCheckContext, spec: TaskGraphSpec): P
     Assert(result.Success, `submission failed: ${result.ErrorMessage}`);
     Assert(!!result.ParentTaskID, 'submission returned no parent task');
     CREATED_PARENT_IDS.push(result.ParentTaskID!);
+
+    // Register the names now, while nothing is executing and the read is uncontended. This is the
+    // only moment that is true: once the dispatcher starts, a name lookup competes with the wave it
+    // is describing. See StubAgentRunner.NamesByID.
+    for (const child of (await loadChildren(ctx, result.ParentTaskID!)).values()) {
+        RUNNER.NamesByID.set(child.ID, child.Name);
+    }
     return result.ParentTaskID!;
 }
 
@@ -227,7 +272,7 @@ function buildDispatcher(
     pollIntervalSeconds: number = TEST_POLL_SECONDS,
 ): TaskGraphDispatcher {
     return new TaskGraphDispatcher(
-        providerFactory(ctx.Provider),
+        providerFactory(ctx),
         runner,
         ctx.User as UserInfo,
         {
