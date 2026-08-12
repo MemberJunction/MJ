@@ -16,12 +16,20 @@ export interface FileSelectInfo {
 
 export type FileUploadEvent = { success: true; file: MJFileEntity } | { success: false; file: FileSelectInfo };
 
+// NOTE: deliberately does NOT request the `_mj__CreatedAt` / `_mj__UpdatedAt`
+// transport aliases. GraphQL reserves the `__` prefix, so MJ exposes `__mj_*`
+// columns under a `_mj__*` alias — but the alias is the WIRE name, not an entity
+// field name. The response object is handed straight to `LoadFromData()` below,
+// and `BaseEntity.SetMany` rejects unknown keys ("Field _mj__CreatedAt does not
+// exist on MJ: Files"). Nothing here consumes the timestamps either — the zod
+// schema explicitly omits them — so requesting them only manufactured keys the
+// entity cannot accept. If they're ever needed, reverse-map with
+// `FieldMapper.ReverseMapFields` before hydrating rather than passing them through.
 const FileFieldsFragment = gql`
   fragment FileFields on MJFile_ {
     Category
     CategoryID
     ContentType
-    _mj__CreatedAt
     Description
     ID
     Name
@@ -29,7 +37,6 @@ const FileFieldsFragment = gql`
     ProviderID
     ProviderKey
     Status
-    _mj__UpdatedAt
   }
 `;
 
