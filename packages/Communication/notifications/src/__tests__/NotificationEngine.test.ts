@@ -114,7 +114,7 @@ vi.mock('@memberjunction/communication-types', () => ({
   },
 }));
 
-vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
+vi.mock('@memberjunction/generic-database-provider', () => ({
   UserCache: {
     Instance: {
       Users: [

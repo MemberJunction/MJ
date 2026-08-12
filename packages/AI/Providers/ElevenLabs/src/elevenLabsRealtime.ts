@@ -67,9 +67,27 @@ const MANAGED_AGENT_BASE_PROMPT =
  */
 function buildRequiredOverrideEnablement(): ElevenLabs.ConversationConfigClientOverrideConfigInput {
     return {
-        agent: { prompt: { prompt: true } },
+        agent: { prompt: { prompt: true }, firstMessage: true },
         tts: { voiceId: true },
     };
+}
+
+/**
+ * A neutral config-bag key as a usable string, or `undefined` when it is absent, blank, or not a
+ * string — the shared rule behind every per-session override this driver resolves.
+ *
+ * Blank-is-absent, rather than blank-is-a-value, because for each of these keys the empty form is
+ * the setting being UNSET rather than a value worth sending: an empty `voice_id` would kill the
+ * whole session over a misconfigured persona, and an empty `first_message` IS the platform's
+ * wait-for-the-user default. Sending either would be noise at best.
+ */
+function resolveTrimmedConfigString(config: JSONObject | undefined, key: string): string | undefined {
+    const value = config?.[key];
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
 }
 
 // ── Tool-parameter schema sanitization (ElevenLabs client-tool validator quirks) ──
@@ -297,15 +315,20 @@ interface NativeWebSocketLike {
  * - `params.Model` starting with `agent_` → used VERBATIM as a deployment-managed agent id.
  * - any other value → the NAME of the driver-managed agent: find-by-name; create-if-missing
  *   (with the session's client-tool set and the override enablement that lets each session
- *   supply its own system prompt and voice); PATCH when the order-insensitive tool fingerprint
+ *   supply its own system prompt, voice and opening utterance); PATCH when the order-insensitive tool fingerprint
  *   differs or any required override is not enabled. Results are instance-cached per name+tools.
  *
- * **Per-session prompt AND voice authority** stays with MJ: the managed agent stores only a
- * placeholder prompt and explicitly enables the overrides in
- * {@link buildRequiredOverrideEnablement} (`agent.prompt.prompt` + `tts.voice_id`); every
- * session (server-bridged or client-direct) sends the real system prompt — and its voice, when
- * one is configured — in its `conversation_initiation_client_data` frame. The voice is a
- * per-session override, so sessions with different voices still share ONE managed agent.
+ * **Per-session prompt, voice AND opening-utterance authority** stays with MJ: the managed agent
+ * stores only a placeholder prompt and explicitly enables the overrides in
+ * {@link buildRequiredOverrideEnablement} (`agent.prompt.prompt` + `agent.first_message` +
+ * `tts.voice_id`); every session (server-bridged or client-direct) sends the real system prompt —
+ * plus its voice and first message, when configured — in its `conversation_initiation_client_data`
+ * frame. All three are per-session overrides, so sessions differing in any of them still share ONE
+ * managed agent.
+ *
+ * **The agent can speak first** only because `agent.first_message` is among those overrides: with
+ * none set, ElevenLabs waits for user audio before producing any, and no wording of the persona
+ * prompt changes that (issue #3557).
  *
  * **Topologies:**
  * - Server-bridged ({@link StartSession}): the driver opens the conversation websocket itself
@@ -399,24 +422,36 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
 
     /**
      * Builds the RAW-WIRE `conversation_config_override` for one session: the server-authored
-     * system prompt, plus the per-session TTS voice when the config bag carries one.
+     * system prompt, plus the per-session TTS voice and opening utterance when the config bag
+     * carries them.
      *
      * **Mind the casing split.** This object is forwarded VERBATIM onto the conversation
      * websocket (by this driver server-bridged, by the `'elevenlabs'` client driver
-     * client-direct), so it is snake_case — `tts.voice_id`. The matching ENABLEMENT in
-     * {@link buildRequiredOverrideEnablement} goes out through the SDK's serializer instead and
-     * is therefore camelCase — `tts.voiceId`. `agent.prompt.prompt` reads the same in both,
-     * which is why the split only becomes visible with the voice override.
+     * client-direct), so it is snake_case — `tts.voice_id`, `agent.first_message`. The matching
+     * ENABLEMENT in {@link buildRequiredOverrideEnablement} goes out through the SDK's serializer
+     * instead and is therefore camelCase — `tts.voiceId`, `agent.firstMessage`. Only
+     * `agent.prompt.prompt` reads the same in both, so every override added after it has to be
+     * spelled twice, differently.
      *
-     * The `tts` key is omitted ENTIRELY when no voice is configured, so a voice-less session is
-     * byte-for-byte the frame it was before per-session voice existed.
+     * Each optional key is omitted ENTIRELY when unconfigured, so a session that configures
+     * neither is byte-for-byte the frame it was before either existed. That is what preserves
+     * the platform's wait-for-the-user default: an ENABLED-but-empty `first_message` means
+     * exactly "no opening utterance", so omitting the key and sending it blank are the same
+     * behavior — and omitting keeps the frame honest.
      *
      * @param systemPrompt The per-session system prompt (the standing prompt override).
      * @param config The session's open config bag (`realtime.voice.providers.elevenlabs` merged in).
      * @returns The wire-shaped override object.
      */
     public static BuildSessionOverrides(systemPrompt: string, config?: JSONObject): JSONObject {
-        const overrides: JSONObject = { agent: { prompt: { prompt: systemPrompt } } };
+        // `first_message` is a SIBLING of `prompt` inside `agent`, so the agent object is built
+        // once and added to — assigning `overrides['agent']` a second time would drop the prompt.
+        const agent: JSONObject = { prompt: { prompt: systemPrompt } };
+        const firstMessage = ElevenLabsRealtime.ResolveFirstMessage(config);
+        if (firstMessage) {
+            agent['first_message'] = firstMessage;
+        }
+        const overrides: JSONObject = { agent };
         const voiceId = ElevenLabsRealtime.ResolveVoiceID(config);
         if (voiceId) {
             overrides['tts'] = { voice_id: voiceId };
@@ -438,12 +473,27 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      * @returns The trimmed ElevenLabs voice id, or `undefined` when none is configured.
      */
     public static ResolveVoiceID(config?: JSONObject): string | undefined {
-        const voice = config?.['voice'];
-        if (typeof voice !== 'string') {
-            return undefined;
-        }
-        const trimmed = voice.trim();
-        return trimmed.length > 0 ? trimmed : undefined;
+        return resolveTrimmedConfigString(config, 'voice');
+    }
+
+    /**
+     * Reads the session's opening utterance out of the config bag — the `firstMessage` key, which
+     * maps to ElevenLabs' `agent.first_message` override.
+     *
+     * **This is spoken VERBATIM, not interpreted.** It is the literal first thing the agent says,
+     * not an instruction to the model about how to open — which is also why it is immune to the
+     * ordering of {@link ElevenLabsRealtimeSession.SendInitiation}'s deferred initial-context
+     * injection: there is no generation to race.
+     *
+     * A missing, blank, or non-string value yields `undefined` so the override is omitted rather
+     * than sent empty. An empty `first_message` IS the platform's wait-for-the-user default, so
+     * this is a no-op either way — omitting simply keeps the frame free of meaningless keys.
+     *
+     * @param config The session's open config bag.
+     * @returns The trimmed opening utterance, or `undefined` when none is configured.
+     */
+    public static ResolveFirstMessage(config?: JSONObject): string | undefined {
+        return resolveTrimmedConfigString(config, 'firstMessage');
     }
 
     // ── Managed-agent strategy ─────────────────────────────────────────────────
@@ -672,7 +722,11 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      */
     public static OverridesSatisfied(agent: ElevenLabs.GetAgentResponseModel): boolean {
         const overrides = agent.platformSettings?.overrides?.conversationConfigOverride;
-        return overrides?.agent?.prompt?.prompt === true && overrides?.tts?.voiceId === true;
+        return (
+            overrides?.agent?.prompt?.prompt === true &&
+            overrides?.agent?.firstMessage === true &&
+            overrides?.tts?.voiceId === true
+        );
     }
 
     /**

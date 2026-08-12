@@ -27,6 +27,10 @@ describe('ParseTaskGraphParentMetadata', () => {
             reinvokeDepth: 2,
             submittedByAgentRunID: 'run-1',
             submittedByUserID: 'user-1',
+            // Persisted because the instance that settles a graph is routinely not the one that
+            // accepted it, and the spec is long gone by then — without this every recovery path a
+            // flow author draws is dead machinery.
+            failureSemantics: 'edges',
         };
         expect(ParseTaskGraphParentMetadata(JSON.stringify(written))).toEqual(written);
     });
@@ -52,6 +56,14 @@ describe('ParseTaskGraphParentMetadata', () => {
             continuationDeliveredAt: '2026-08-07T00:00:00.000Z',
         });
         expect(ParseTaskGraphParentMetadata(raw).continuationDeliveredAt).toBe('2026-08-07T00:00:00.000Z');
+    });
+
+    it('defaults failureSemantics to block for a graph written before it existed', () => {
+        // 'block' is the conservative reading: a failure stays terminal for its dependents unless the
+        // graph explicitly said its edges are recovery routes. Defaulting to 'edges' would let an old
+        // graph sail past a failure nobody planned around.
+        const raw = JSON.stringify({ continuation: 'message', reinvokeDepth: 0, submittedByAgentRunID: null });
+        expect(ParseTaskGraphParentMetadata(raw).failureSemantics).toBe('block');
     });
 
     it.each([null, undefined, ''])('defaults to message for %p', (raw) => {
@@ -99,6 +111,33 @@ describe('ParseTaskGraphParentMetadata', () => {
     it('keeps a real depth', () => {
         const raw = JSON.stringify({ continuation: 'reinvoke', reinvokeDepth: 3, submittedByAgentRunID: null });
         expect(ParseTaskGraphParentMetadata(raw).reinvokeDepth).toBe(3);
+    });
+});
+
+describe('continuationDeliveredAs — how a settlement ended, kept in the row', () => {
+    // Written by the same compare-and-swap that sets the timestamp, and read afterwards to tell a
+    // settlement that was ANNOUNCED from one that was found too late to announce. Untyped, that
+    // distinction survived only in whatever string happened to be in the JSON.
+    it('reads the two values the claim statement writes', () => {
+        expect(ParseTaskGraphParentMetadata('{"continuationDeliveredAs":"delivered"}').continuationDeliveredAs)
+            .toBe('delivered');
+        expect(ParseTaskGraphParentMetadata('{"continuationDeliveredAs":"expired"}').continuationDeliveredAs)
+            .toBe('expired');
+    });
+
+    it('reads anything else as unknown rather than echoing it', () => {
+        // Guarded like `continuation` and `reinvokeDepth`: a hand edit or a future producer can put
+        // anything here, and a caller branching on it should see "we do not know" instead of a
+        // string that merely is not one of the two it tests for.
+        expect(ParseTaskGraphParentMetadata('{"continuationDeliveredAs":"sent"}').continuationDeliveredAs)
+            .toBeUndefined();
+        expect(ParseTaskGraphParentMetadata('{"continuationDeliveredAs":7}').continuationDeliveredAs)
+            .toBeUndefined();
+    });
+
+    it('is absent on a graph that has not been delivered', () => {
+        expect(ParseTaskGraphParentMetadata('{"continuation":"message"}').continuationDeliveredAs).toBeUndefined();
+        expect(ParseTaskGraphParentMetadata(null).continuationDeliveredAs).toBeUndefined();
     });
 });
 

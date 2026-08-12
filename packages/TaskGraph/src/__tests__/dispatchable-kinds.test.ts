@@ -17,12 +17,14 @@
  * named, because the person who can fix it is the workflow's author, not an operator reading Task
  * rows.
  *
- * The dispatchable set grows as runners land — loops moved into it when `TaskLoopExecutor` shipped.
+ * The dispatchable set grows as runners land — loops moved in with `TaskLoopExecutor`, and prompts
+ * with `TaskPromptRunner` (which unbroke the shipped User Onboarding Flow Agent, whose six Prompt
+ * steps were refused at submission).
  * When it grows again, these expectations are supposed to fail: that is the reminder that the
  * refusal message and the persistence switch both need the same edit.
  */
 import { describe, it, expect } from 'vitest';
-import { BuildStepConfiguration, FindUnrunnableKinds } from '../TaskGraphService';
+import { BuildStepConfiguration, FindCrossUserAssignments, FindUnrunnableKinds } from '../TaskGraphService';
 import { TaskNode, type TaskGraphSpec, type TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
 
 const base = (tempId: string, name: string) => ({ tempId, name, description: '', dependsOn: [] });
@@ -41,11 +43,12 @@ describe('FindUnrunnableKinds', () => {
             TaskNode.Human(base('c', 'Approve'), {}),
             TaskNode.ForEach(base('d', 'ForEach Loop Demo'), { collectionPath: 'static:[1,2,3]' }),
             TaskNode.While(base('e', 'Retry until settled'), { condition: 'payload.done !== true' }),
+            TaskNode.Prompt(base('f', 'Classify the request'), { promptName: 'Classifier' }),
         ]));
         expect(result).toBeNull();
     });
 
-    it.each(['Prompt', 'External'] as const)('refuses a %s step, which nothing can run yet', (kind) => {
+    it.each(['External'] as const)('refuses a %s step, which nothing can run yet', (kind) => {
         // Both are legitimate parts of the spec — there is simply no runner. Persisting one would
         // produce a task that waits forever, which reads as a workflow politely in progress.
         const node = { ...base('x', 'Unsupported step'), kind, configuration: {} } as TaskGraphSpecNode;
@@ -58,16 +61,16 @@ describe('FindUnrunnableKinds', () => {
     it('reports EVERY unrunnable step, not just the first', () => {
         // A one-at-a-time refusal makes fixing a workflow an N-round trip through the editor.
         const nodes = [
-            { ...base('a', 'First prompt'), kind: 'Prompt', configuration: {} },
-            { ...base('b', 'Second prompt'), kind: 'External', configuration: {} },
+            { ...base('a', 'First external'), kind: 'External', configuration: {} },
+            { ...base('b', 'Second external'), kind: 'External', configuration: {} },
         ] as TaskGraphSpecNode[];
         const result = FindUnrunnableKinds(graph(nodes));
-        expect(result).toContain('First prompt');
-        expect(result).toContain('Second prompt');
+        expect(result).toContain('First external');
+        expect(result).toContain('Second external');
     });
 
     it('names the workflow, so a refusal read from a log identifies its subject', () => {
-        const node = { ...base('a', 'Ask the model'), kind: 'Prompt', configuration: {} } as TaskGraphSpecNode;
+        const node = { ...base('a', 'Ask the model'), kind: 'External', configuration: {} } as TaskGraphSpecNode;
         expect(FindUnrunnableKinds(graph([node]))).toContain('Demo Flow Agent');
     });
 });
@@ -134,5 +137,69 @@ describe('BuildStepConfiguration', () => {
         // can still change, and go stale the moment it did.
         const node = { ...TaskNode.Action(base('Emitted'), { actionName: 'X' }), layout: {} };
         expect(BuildStepConfiguration(node)?.layout).toBeUndefined();
+    });
+});
+
+/**
+ * The same rule as `FindUnrunnableKinds`, applied to WHO a step may be assigned to.
+ *
+ * Persist wrote `task.UserID = submitter` unconditionally, so an authored `assignToUserID` was
+ * overwritten without a word. Every layer above accepts the field, which is what made the silence
+ * dangerous: the graph submits, the step lands in the wrong person's inbox, and the person actually
+ * named never learns a workflow was waiting on them.
+ */
+const SUBMITTER = '11111111-1111-1111-1111-111111111111';
+const SOMEONE_ELSE = '22222222-2222-2222-2222-222222222222';
+
+describe('FindCrossUserAssignments', () => {
+    it('accepts a human step with no assignee — the normal case', () => {
+        const result = FindCrossUserAssignments(
+            graph([TaskNode.Human(base('c', 'Approve'), {})]), SUBMITTER,
+        );
+        expect(result).toBeNull();
+    });
+
+    it('accepts an explicit self-assignment, which is what persist does anyway', () => {
+        const result = FindCrossUserAssignments(
+            graph([TaskNode.Human(base('c', 'Approve'), { assignToUserID: SUBMITTER })]), SUBMITTER,
+        );
+        expect(result).toBeNull();
+    });
+
+    it('accepts a self-assignment written in a different case', () => {
+        // UUIDs arrive from metadata, the compiler and hand-authored JSON in whatever case they were
+        // written; a case difference is not a different person.
+        const result = FindCrossUserAssignments(
+            graph([TaskNode.Human(base('c', 'Approve'), { assignToUserID: SUBMITTER.toUpperCase() })]),
+            SUBMITTER,
+        );
+        expect(result).toBeNull();
+    });
+
+    it('REFUSES a step assigned to someone else, and names it', () => {
+        const result = FindCrossUserAssignments(
+            graph([
+                TaskNode.Action(base('a', 'Research'), { actionName: 'Web Search' }),
+                TaskNode.Human(base('c', 'Legal sign-off'), { assignToUserID: SOMEONE_ELSE }),
+            ]),
+            SUBMITTER,
+        );
+
+        // Named, because the person who can fix it is the author — an operator reading Task rows
+        // cannot tell an intended assignment from an overwritten one.
+        expect(result).toContain('Legal sign-off');
+        expect(result).toContain('#3524');
+    });
+
+    it('names every offending step, not just the first', () => {
+        const result = FindCrossUserAssignments(
+            graph([
+                TaskNode.Human(base('c', 'Legal sign-off'), { assignToUserID: SOMEONE_ELSE }),
+                TaskNode.Human(base('d', 'Finance sign-off'), { assignToUserID: SOMEONE_ELSE }),
+            ]),
+            SUBMITTER,
+        );
+        expect(result).toContain('Legal sign-off');
+        expect(result).toContain('Finance sign-off');
     });
 });

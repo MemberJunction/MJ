@@ -1,4 +1,13 @@
 /* Design tokens only — no hardcoded colors (see .claude/rules/design-tokens.md). */
+
+/* Same reason as the flow editor's host: a custom element is inline with auto height, so the
+   `height: 100%` on `.mj-tge` below had nothing to resolve against. */
+:host {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
 .mj-tge {
   display: flex;
   flex-direction: column;

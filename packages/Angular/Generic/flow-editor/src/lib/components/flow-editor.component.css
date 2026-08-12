@@ -2,6 +2,19 @@
    Flow Editor — Main container styles
    ============================================================ */
 
+/* The HOST is a custom element, which is `display: inline` with auto height until told otherwise.
+   Without this, `.mj-flow-editor { height: 100% }` below resolved against an auto-height parent —
+   which means auto — so the canvas fell back to its `min-height` floor and sat at 400px no matter
+   how much room its pane actually had.
+
+   `height: 100%` here is safe for hosts that DON'T give it a box: it resolves to auto in that case,
+   and the floor takes over exactly as before. */
+:host {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
 .mj-flow-editor {
   display: flex;
   flex-direction: column;

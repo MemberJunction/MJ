@@ -71,15 +71,22 @@ describe('phase 1 — exclusion', () => {
 });
 
 describe('phase 2 — single entry', () => {
-    it('takes the alphabetically-first starting step, matching the walker', () => {
+    it('takes the alphabetically-first starting step, and REFUSES the orphaned one', () => {
         const res = CompileFlowToTaskGraph(
             [step({ ID: 'z', Name: 'Zebra', StartingStep: true }), step({ ID: 'a', Name: 'Apple', StartingStep: true })],
             [],
             options,
         );
         // Apple is the entry; Zebra is not reachable from it and is pruned rather than becoming a
-        // second root that runs work the flow never ran.
-        expect(res.Spec!.tasks.map((t) => t.tempId)).toEqual(['a']);
+        // second root that runs work the flow never ran. That much is unchanged.
+        //
+        // What changed is that this now FAILS to compile. It used to succeed, quietly shipping a
+        // workflow missing a step its author had explicitly marked as an entry — which is how the
+        // Content Pipeline demo drafted from half its research for its entire life, with nothing
+        // anywhere reporting a problem. Refusing at submission, before anything runs, is strictly
+        // better than running half a workflow and reporting success.
+        expect(res.Success).toBe(false);
+        expect(res.Errors.map((e) => e.Code)).toContain('UnreachableStartingStep');
         expect(res.Excluded).toContainEqual({ StepID: 'z', Reason: 'Unreachable' });
     });
 
@@ -291,5 +298,115 @@ describe('the compiled graph is accepted by the engine’s own validator', () =>
         );
         expect(res.Success).toBe(true);
         expect(ValidateTaskGraphSpec(res.Spec!)).toEqual({ Valid: true, Errors: [] });
+    });
+});
+
+describe('human steps', () => {
+    it('compiles a Human step, carrying its description as the instructions', () => {
+        // The description IS what the person is being asked to do — the same convention a sub-agent
+        // step uses for its message. Losing it leaves someone an inbox item with a title and no
+        // statement of what they are approving.
+        const res = CompileFlowToTaskGraph(
+            [step({
+                ID: 'h', Name: 'Approve', StepType: 'Human', StartingStep: true,
+                Description: 'Approve the proposed descriptions.',
+            })],
+            [],
+            options,
+        );
+
+        expect(res.Success).toBe(true);
+        const node = res.Spec!.tasks.find((t) => t.tempId === 'h')!;
+        expect(node.kind).toBe('Human');
+        expect((node.configuration as { instructions?: string }).instructions)
+            .toBe('Approve the proposed descriptions.');
+    });
+
+    it('compiles an UNASSIGNED human step rather than rejecting it', () => {
+        // "Somebody needs to look at this" is a legitimate step. Requiring an assignee at authoring
+        // time would force a name onto every approval, including the ones whose right owner depends
+        // on what the run produced.
+        const res = CompileFlowToTaskGraph(
+            [step({ ID: 'h', Name: 'Approve', StepType: 'Human', StartingStep: true })],
+            [],
+            options,
+        );
+
+        expect(res.Success).toBe(true);
+        expect((res.Spec!.tasks[0].configuration as { assignToUserID?: string }).assignToUserID).toBeUndefined();
+    });
+
+    it('reads an explicit assignee out of the step configuration', () => {
+        const res = CompileFlowToTaskGraph(
+            [step({
+                ID: 'h', Name: 'Approve', StepType: 'Human', StartingStep: true,
+                Configuration: JSON.stringify({ assignToUserID: 'user-7' }),
+            })],
+            [],
+            options,
+        );
+
+        expect((res.Spec!.tasks[0].configuration as { assignToUserID?: string }).assignToUserID).toBe('user-7');
+    });
+
+    it('lets a human step sit mid-graph with dependents behind it', () => {
+        // The shape that matters: work AFTER a person. If the edge were dropped the downstream step
+        // would have no prerequisites and run immediately — approving nothing.
+        const res = CompileFlowToTaskGraph(
+            [
+                step({ ID: 'a', Name: 'Propose', StartingStep: true }),
+                step({ ID: 'h', Name: 'Approve', StepType: 'Human' }),
+                step({ ID: 'w', Name: 'Write' }),
+            ],
+            [
+                path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'h' }),
+                path({ ID: 'p2', OriginStepID: 'h', DestinationStepID: 'w' }),
+            ],
+            options,
+        );
+
+        expect(res.Success).toBe(true);
+        // Dependencies normalize to objects, so the assertion is on the id they carry.
+        const deps = depsOf(res.Spec!, 'w').map((d) => (typeof d === 'string' ? d : (d as { tempId: string }).tempId));
+        expect(deps).toContain('h');
+    });
+});
+
+describe('a second starting step is reported, not silently dropped', () => {
+    it('names the step that would never run', () => {
+        // A workflow has ONE entry. A step flagged as a second one is pruned as unreachable — and
+        // pruning it in silence is how a workflow ships with half its work missing while looking
+        // complete on the canvas. The Content Pipeline demo lived that: its second research step
+        // was dropped, the join it fed had one input instead of two, and every draft was written
+        // from half the evidence with nothing anywhere saying so.
+        const res = CompileFlowToTaskGraph(
+            [
+                step({ ID: 'a', Name: 'A first', StartingStep: true }),
+                step({ ID: 'b', Name: 'B second', StartingStep: true }),
+            ],
+            [],
+            options,
+        );
+
+        const unreachable = res.Errors.filter((e) => e.Code === 'UnreachableStartingStep');
+        expect(unreachable).toHaveLength(1);
+        expect(unreachable[0].Message).toContain('B second');
+        expect(unreachable[0].Message).toContain('A first');   // says where it DOES begin
+    });
+
+    it('stays quiet when the second starting step is reachable from the entry', () => {
+        // Wired into the flow, it runs — the flag is redundant but harmless, and warning here would
+        // train people to ignore the message that matters.
+        const res = CompileFlowToTaskGraph(
+            [
+                step({ ID: 'a', Name: 'A first', StartingStep: true }),
+                step({ ID: 'b', Name: 'B second', StartingStep: true }),
+            ],
+            [path({ ID: 'p', OriginStepID: 'a', DestinationStepID: 'b' })],
+            options,
+        );
+
+        expect(res.Errors.filter((e) => e.Code === 'UnreachableStartingStep')).toHaveLength(0);
+        expect(res.Spec!.tasks.map((t) => t.tempId).sort()).toEqual(['a', 'b']);
     });
 });

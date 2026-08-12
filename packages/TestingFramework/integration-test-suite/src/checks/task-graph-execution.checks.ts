@@ -22,15 +22,19 @@ import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/
 import { MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
 import type { TaskGraphSpec, TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
 import {
+    ParseTaskGraphParentMetadata,
     TaskGraphDispatcher,
     TaskGraphService,
     type ProviderFactory,
     type TaskAgentRunner,
     type TaskAgentRunParams,
     type TaskAgentRunResult,
+    type TaskContinuationDeliverer,
+    type TaskContinuationParams,
     type TaskGraphFrame,
     type TaskGraphObserver,
 } from '@memberjunction/task-graph';
+import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -91,11 +95,28 @@ class StubAgentRunner implements TaskAgentRunner {
         };
     }
 
+    /**
+     * Names registered at submission time, so the hot path needs no query.
+     *
+     * Reading the name from the database at execution time made every recorded start depend on a
+     * concurrent read succeeding. When one transiently failed — the shared connection reports
+     * `Requests can only be made in the LoggedIn state` under a fanned-out wave — the catch below
+     * fell through to the task ID, and every assertion that filters by NAME silently dropped that
+     * execution. The task had run; the check reported it had not, so a healthy engine failed as
+     * "the gate task must still run" or "expected 4, got 3".
+     */
+    public readonly NamesByID = new Map<string, string>();
+
     /** The task's own name, read where the work happens — see SHARED_FAILURES. */
     private async resolveName(params: TaskAgentRunParams): Promise<string> {
+        const known = this.NamesByID.get(params.TaskID);
+        if (known) return known;
         try {
             const t = await params.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', params.ContextUser);
-            if (await t.Load(params.TaskID)) return t.Name;
+            if (await t.Load(params.TaskID)) {
+                this.NamesByID.set(params.TaskID, t.Name);
+                return t.Name;
+            }
         } catch { /* fall through to the ID */ }
         return params.TaskID;
     }
@@ -119,14 +140,34 @@ class RecordingObserver implements TaskGraphObserver {
 }
 
 /**
- * Hands the dispatcher the check's own provider.
+ * Mints one provider per task, over the check's pool — what production does.
  *
- * Production mints one provider per task so parallel work never shares a transaction scope; a check
- * runs against a single connection and has no such contention, so sharing is both safe and simpler.
- * The seam is what is being exercised here, not the pooling.
+ * This used to hand every task the check's single provider, on the reasoning that a check has no
+ * real contention. That reasoning was wrong, and it is the root cause of this bundle's long-running
+ * intermittency. A `SQLServerDataProvider` wraps one request context: issue two queries on it
+ * concurrently and `mssql` rejects the second with `Requests can only be made in the LoggedIn state,
+ * not the SentClientRequest state`. Any check that runs work in parallel — TX2's diamond branches,
+ * TX6's two dispatchers — does exactly that, so a claim query or a rollup read would fail at random.
+ * `pollOnce` catches and logs the failure, so the visible symptom was never the driver error but
+ * whatever the lost query would have done: a task that never got claimed, a graph that never
+ * settled, an execution that never showed up.
+ *
+ * The pool is the concurrency governor, exactly as `TaskGraphProviderFactory` documents. Client
+ * bundles have no pool and no parallel dispatcher, so they keep the shared provider.
  */
-function providerFactory(provider: IMetadataProvider): ProviderFactory {
-    return { CreateProvider: async () => provider };
+function providerFactory(ctx: IntegrationCheckContext): ProviderFactory {
+    const pool = ctx.Pool;
+    if (!pool) return { CreateProvider: async () => ctx.Provider };
+    return {
+        CreateProvider: async () => {
+            // `loadIfNeeded = false` reuses already-loaded metadata rather than re-reading it per
+            // provider — the difference between cheap-per-task and prohibitive.
+            const config = new SQLServerProviderConfigData(pool, ctx.Schema ?? '__mj', 0, undefined, undefined, false);
+            const provider = new SQLServerDataProvider();
+            await provider.Config(config);
+            return provider as unknown as IMetadataProvider;
+        },
+    };
 }
 
 /** Resolves a TaskType, creating a disposable one if the install has none. */
@@ -177,6 +218,13 @@ async function submitGraph(ctx: IntegrationCheckContext, spec: TaskGraphSpec): P
     Assert(result.Success, `submission failed: ${result.ErrorMessage}`);
     Assert(!!result.ParentTaskID, 'submission returned no parent task');
     CREATED_PARENT_IDS.push(result.ParentTaskID!);
+
+    // Register the names now, while nothing is executing and the read is uncontended. This is the
+    // only moment that is true: once the dispatcher starts, a name lookup competes with the wave it
+    // is describing. See StubAgentRunner.NamesByID.
+    for (const child of (await loadChildren(ctx, result.ParentTaskID!)).values()) {
+        RUNNER.NamesByID.set(child.ID, child.Name);
+    }
     return result.ParentTaskID!;
 }
 
@@ -220,22 +268,211 @@ function buildDispatcher(
     runner: TaskAgentRunner,
     instanceID: string,
     observer?: TaskGraphObserver,
+    deliverer?: TaskContinuationDeliverer,
+    pollIntervalSeconds: number = TEST_POLL_SECONDS,
 ): TaskGraphDispatcher {
     return new TaskGraphDispatcher(
-        providerFactory(ctx.Provider),
+        providerFactory(ctx),
         runner,
         ctx.User as UserInfo,
         {
             InstanceID: instanceID,
-            PollIntervalSeconds: TEST_POLL_SECONDS,
+            PollIntervalSeconds: pollIntervalSeconds,
             // Long enough that nothing self-reclaims mid-check; TX7 drives reconciliation explicitly.
             ClaimTTLSeconds: 300,
             ReconciliationIntervalSeconds: 3600,
             MaxConcurrentTasks: 5,
         },
-        undefined,  // no continuation deliverer — a test has no conversation to post into
+        deliverer,  // usually absent: a test has no conversation to post into
         observer,
     );
+}
+
+
+/**
+ * Counts continuation deliveries, per graph.
+ *
+ * The end-to-end half of P4. `TaskClaimStore.settlement.test.ts` proves the CAS statement says what
+ * we think it says and `verify-settlement-races.ts` proves the database honours it; this proves the
+ * dispatcher actually gates the *delivery* on it. For `continuation: 'reinvoke'` a second delivery
+ * is a second billed agent turn, so "exactly once" is the property, not "at least once".
+ */
+class CountingDeliverer implements TaskContinuationDeliverer {
+    private readonly counts = new Map<string, number>();
+
+    public async PostMessage(params: TaskContinuationParams): Promise<void> {
+        this.counts.set(params.ParentTaskID, (this.counts.get(params.ParentTaskID) ?? 0) + 1);
+    }
+
+    public CountFor(parentTaskID: string): number {
+        return this.counts.get(parentTaskID) ?? 0;
+    }
+}
+
+/**
+ * Puts a genuinely-settled graph back into the state a crash mid-settlement leaves: delivered
+ * nothing, and no record that it ever tried.
+ *
+ * Removing the marker from a REAL settlement rather than hand-writing a terminal parent is the
+ * difference between testing the rescue and testing a fixture. Everything else about the row — the
+ * status the rollup computed, the `CompletedAt` the guarded write stamped, the metadata bag `Submit`
+ * wrote — stays exactly as the dispatcher left it, so what the sweep sees is the real shape a crash
+ * between the terminal write and the delivery produces.
+ */
+async function stripDeliveryMarker(ctx: IntegrationCheckContext, parentID: string): Promise<void> {
+    const parent = await loadTask(ctx, parentID);
+    const meta = ParseTaskGraphParentMetadata(parent.InputPayload) as Record<string, unknown>;
+    delete meta.continuationDeliveredAt;
+    delete meta.continuationDeliveredAs;
+    parent.InputPayload = JSON.stringify(meta);
+    Assert(await parent.Save(), `could not strip the delivery marker: ${parent.LatestResult?.CompleteMessage ?? 'unknown'}`);
+}
+
+/** The delivery marker on a graph's parent, or null while it has not been claimed. */
+async function deliveryMarker(
+    ctx: IntegrationCheckContext,
+    parentID: string,
+): Promise<{ At: string | undefined; As: string | undefined; SubmittedByAgentRunID: string | null }> {
+    const parent = await loadTask(ctx, parentID);
+    const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
+    return {
+        At: meta.continuationDeliveredAt,
+        As: meta.continuationDeliveredAs,
+        SubmittedByAgentRunID: meta.submittedByAgentRunID,
+    };
+}
+
+/**
+ * Creates a root task hierarchy that is NOT a workflow — a stand-in for a conversation task or a
+ * user's own to-do list, which share `MJ: Tasks` with graphs.
+ *
+ * Deliberately shaped like the thing an unscoped sweep would have mistaken for a graph: a root task
+ * with a child, both non-terminal, with valid JSON in `InputPayload` so a claim statement would have
+ * succeeded in editing it rather than being turned away by the `ISJSON` guard.
+ */
+async function createForeignTaskHierarchy(ctx: IntegrationCheckContext): Promise<string> {
+    const typeID = await resolveForeignTaskTypeID(ctx);
+    const environmentID = await resolveEnvironmentID(ctx);
+
+    const parent = await ctx.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', ctx.User);
+    parent.NewRecord();
+    parent.Name = 'mj-it-foreign-parent (safe to delete)';
+    parent.Description = 'Not a workflow. The dispatcher must never touch this.';
+    parent.TypeID = typeID;
+    parent.EnvironmentID = environmentID;
+    parent.Status = 'In Progress';
+    parent.PercentComplete = 25;
+    parent.InputPayload = JSON.stringify({ personal: 'buy milk', notes: ['and eggs'] });
+    Assert(await parent.Save(), `could not create the foreign parent: ${parent.LatestResult?.CompleteMessage ?? 'unknown'}`);
+    CREATED_PARENT_IDS.push(parent.ID);
+
+    const child = await ctx.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', ctx.User);
+    child.NewRecord();
+    child.Name = 'mj-it-foreign-child (safe to delete)';
+    child.Description = 'A plain sub-task.';
+    child.TypeID = typeID;
+    child.EnvironmentID = environmentID;
+    child.ParentID = parent.ID;
+    child.Status = 'Pending';
+    Assert(await child.Save(), `could not create the foreign child: ${child.LatestResult?.CompleteMessage ?? 'unknown'}`);
+
+    return parent.ID;
+}
+
+/** A task type that is deliberately NOT the workflow one. Created once, torn down with the rest. */
+async function resolveForeignTaskTypeID(ctx: IntegrationCheckContext): Promise<string> {
+    const name = 'mj-integration-test-foreign-task-type (safe to delete)';
+    const existing = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
+        { EntityName: 'MJ: Task Types', ExtraFilter: `Name='${name}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
+    );
+    const found = existing.Results?.[0]?.ID;
+    if (found) return found;
+
+    const tt = await ctx.Provider.GetEntityObject<MJTaskTypeEntity>('MJ: Task Types', ctx.User);
+    tt.NewRecord();
+    tt.Name = name;
+    tt.Description = 'Stands in for a conversation task or a personal to-do, which are not workflows.';
+    Assert(await tt.Save(), `could not create the foreign TaskType: ${tt.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    CREATED_TASK_TYPE_IDS.push(tt.ID);
+    return tt.ID;
+}
+
+/**
+ * Asserts how many of a graph's tasks THIS BUNDLE'S stub ran, and explains a shortfall.
+ *
+ * The bundle assumes it is the only dispatcher on the database — every "ran exactly once" assertion
+ * depends on it. That assumption is invisible until it breaks, and when it breaks it produces the
+ * least informative failure available: `expected 1, got 0` on a task that plainly reached `Complete`.
+ * The cause is always the same and is never in this repository's code — another process (an MJAPI
+ * left running against the same dev database, a second agent's session) claimed the task and ran it
+ * with its own runner, so this stub never saw it.
+ *
+ * So when the count is short, the claim column is read and the foreign instance NAMED. The check
+ * still fails — the run genuinely proved nothing — but it fails with the sentence that identifies
+ * the environment problem instead of implicating the dispatcher.
+ */
+async function assertStubRan(
+    ctx: IntegrationCheckContext,
+    parentID: string,
+    names: string[],
+    expected: number,
+    what: string,
+): Promise<string[]> {
+    const started = RUNNER.StartedAmong(names);
+    if (started.length < expected) {
+        // The inference is on the RUNNER's record, not on the claim column: a completing task clears
+        // `ClaimedBy` (TaskClaimStore sets it NULL on the terminal write), so by the time an
+        // assertion fails the evidence of who held it is already gone. What cannot be erased is the
+        // combination "this task reached a terminal status" AND "our stub never started it" — which
+        // only a runner outside this bundle can produce.
+        const ranByOthers = [...(await loadChildren(ctx, parentID)).values()]
+            .filter((t) => TERMINAL_FOR_FOREIGN_CHECK.has(t.Status) && !RUNNER.Started.includes(t.Name))
+            .map((t) => `${t.Name} (${t.Status})`);
+        Assert(
+            ranByOthers.length === 0,
+            `${what} — but ${ranByOthers.length} task(s) reached a terminal status without this `
+            + `bundle's stub ever running them: ${ranByOthers.join(', ')}. Another dispatcher on this `
+            + `database executed them with its own runner, so this check exercised nothing. IT74 `
+            + `requires exclusive use of the database (an MJAPI pointed at it, or another agent's `
+            + `session, will race every check here). Stop the other dispatcher and re-run.`,
+        );
+    }
+    AssertEqual(started.length, expected, what);
+    return started;
+}
+
+/** Statuses that mean a task was RUN by somebody, for the foreign-runner inference above. */
+const TERMINAL_FOR_FOREIGN_CHECK: ReadonlySet<string> = new Set(['Complete', 'Failed']);
+
+/** Instance name for TX11, shared between the dispatcher and the claims assertion. */
+const INSTANCE_TX11 = 'it-tx11';
+
+/** Which of a graph's tasks one named instance currently holds a claim on. */
+async function claimsHeldBy(ctx: IntegrationCheckContext, parentID: string, instanceID: string): Promise<string> {
+    return [...(await loadChildren(ctx, parentID)).values()]
+        .filter((t) => t.ClaimedBy === instanceID)
+        .map((t) => `${t.Name}:${t.Status}`)
+        .sort()
+        .join('|');
+}
+
+/** Runs dispatchers until the graph's continuation has been claimed, then stops them. */
+async function runUntilDelivered(
+    ctx: IntegrationCheckContext,
+    dispatchers: TaskGraphDispatcher[],
+    parentID: string,
+): Promise<void> {
+    await Promise.all(dispatchers.map((d) => d.Start()));
+    try {
+        const deadline = Date.now() + SETTLE_TIMEOUT_MS;
+        while (Date.now() < deadline) {
+            await settle(200);
+            if ((await deliveryMarker(ctx, parentID)).At) return;
+        }
+        Assert(false, `graph ${parentID} was never delivered within ${SETTLE_TIMEOUT_MS}ms`);
+    } finally {
+        await Promise.all(dispatchers.map((d) => d.Stop()));
+    }
 }
 
 /** Runs the dispatcher until the parent reaches a terminal status, then stops it. */
@@ -290,7 +527,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             AssertEqual(parent.Status, 'Complete', 'the parent must roll up to Complete');
             AssertEqual(parent.PercentComplete, 100, 'a fully complete graph is 100%');
             Assert(!!parent.CompletedAt, 'a settled graph records CompletedAt');
-            AssertEqual(RUNNER.StartedAmong(mine).length, 1, 'the single task ran exactly once');
+            await assertStubRan(ctx, parentID, mine, 1, 'the single task ran exactly once');
 
             const child = (await loadChildren(ctx, parentID)).get('Only Step');
             Assert(!!child, 'the child task disappeared');
@@ -332,7 +569,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             }
 
             AssertEqual(parent.Status, 'Complete', 'the whole diamond must complete');
-            const started = RUNNER.StartedAmong(mine);
+            const started = await assertStubRan(ctx, parentID, mine, mine.length, 'every task ran exactly once');
             AssertEqual(started.length, 4, 'every node ran exactly once');
             AssertEqual(started[0], 'A Root', 'the root must run first');
             AssertEqual(started[3], 'D Join', 'the join must run last');
@@ -398,7 +635,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
 
     {
         Id: 'task-graph-execution.TX4',
-        Name: 'TX4: a false edge condition skips its branch and the graph still settles',
+        Name: 'TX4: a false edge condition Skips its branch and the graph settles Complete',
         RequiresMutation: true,
         Fn: async (ctx: IntegrationCheckContext) => {
             // TG9 proves TaskDependency.Condition round-trips as a column. This proves the dispatcher
@@ -415,7 +652,9 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             const mine = await taskNames(ctx, parentID);
             const parent = await runUntilSettled(ctx, buildDispatcher(ctx, RUNNER, 'it-tx4'), parentID);
 
-            const started = RUNNER.StartedAmong(mine);
+            // One of the two nodes is deliberately NOT run, so the count assertion that guards the
+            // other checks would be wrong here — what is asserted is which one ran.
+            const started = await assertStubRan(ctx, parentID, mine, 1, 'exactly one side of the gate ran');
             Assert(started.includes('A Gate'), 'the gate task must still run');
             Assert(
                 !started.includes('B Conditional'),
@@ -424,14 +663,23 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             );
 
             const b = (await loadChildren(ctx, parentID)).get('B Conditional');
-            AssertEqual(b!.Status, 'Blocked', 'the untaken branch must be Blocked, not left Pending forever');
 
-            // Blocked, not Complete: the edge is a Prerequisite, so a graph that can never satisfy it
-            // has genuinely not finished its work. Expressing "skip this branch and still complete"
-            // is what an Optional dependency is for.
-            AssertEqual(parent.Status, 'Blocked', 'the graph settles as Blocked when a prerequisite branch is untaken');
+            // ── Skipped, not Blocked — this assertion was REWRITTEN, and the old one is why ──────
+            // It used to demand `Blocked` for both the branch and the graph, on the reasoning that a
+            // Prerequisite edge which can never be satisfied means the graph has genuinely not
+            // finished its work. R6 overruled that: a condition that is definitely false is a
+            // DECISION, not an obstruction. The branch was not taken, and a workflow that chose one
+            // of two routes has finished — reporting it as Blocked told an operator to go
+            // investigate a graph that had done exactly what its author drew.
+            //
+            // The dispatcher now routes definitely-false edges through the skip seeds, so the branch
+            // settles `Skipped` and the graph `Complete`. Leaving this check on the old contract
+            // meant it contradicted the live engine on every full run of the deterministic tier, and
+            // — worse — the comment taught the overruled doctrine as design intent.
+            AssertEqual(b!.Status, 'Skipped', 'the untaken branch must be Skipped: not taken is a decision, not an obstruction');
+            AssertEqual(parent.Status, 'Complete', 'a graph that chose one of two routes has finished');
 
-            console.log('      → false condition made its branch unreachable; graph settled as Blocked');
+            console.log('      → false condition skipped its branch; graph settled Complete');
         }
     },
 
@@ -572,7 +820,7 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             const parent = await runUntilSettled(ctx, survivor, parentID);
 
             AssertEqual(parent.Status, 'Complete', 'the recovered graph must finish');
-            AssertEqual(RUNNER.StartedAmong(mine).length, 1, 'the reclaimed task ran exactly once');
+            await assertStubRan(ctx, parentID, mine, 1, 'the reclaimed task ran exactly once');
 
             const recovered = (await loadChildren(ctx, parentID)).get('R One')!;
             AssertEqual(recovered.Status, 'Complete', 'the reclaimed task completed');
@@ -582,6 +830,226 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             );
 
             console.log('      → orphaned claim reclaimed after a simulated crash; graph completed');
+        }
+    },
+
+    {
+        Id: 'task-graph-execution.TX8',
+        Name: 'TX8: a settlement lost to a crash is rescued by a fresh process, delivered exactly once',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // P3's whole premise, end to end and ACROSS A PROCESS BOUNDARY. Settlement is two steps
+            // that are not one transaction — the parent's terminal write, then cost rollup + run
+            // settlement + continuation delivery — and a process that died between them left a graph
+            // that read as FINISHED to every sweep while having delivered nothing. The submitting
+            // agent run stayed `Paused` forever, with nothing that would ever look again. The
+            // metadata's own doc comment promised "the next sweep retries"; that sweep did not exist.
+            //
+            // The graph is settled FOR REAL first and then has its marker removed, rather than being
+            // hand-written into a terminal shape. Everything else — the status the rollup computed,
+            // the CompletedAt the guarded write stamped, the metadata bag Submit wrote — is left
+            // exactly as the dispatcher left it, so the rescue sees the real post-crash row and not
+            // a fixture that happens to resemble one.
+            const agentName = await resolveAgentName(ctx);
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-crash-window (safe to delete)',
+                tasks: [
+                    agentTask('a', 'CW One', agentName),
+                    agentTask('b', 'CW Two', agentName, ['a']),
+                ],
+            });
+
+            const settled = await runUntilSettled(ctx, buildDispatcher(ctx, RUNNER, 'it-tx8-crashed'), parentID);
+            AssertEqual(settled.Status, 'Complete', 'the graph must genuinely settle before its marker is removed');
+            Assert(!!(await deliveryMarker(ctx, parentID)).At, 'settling should have claimed a marker to remove');
+
+            await stripDeliveryMarker(ctx, parentID);
+            AssertEqual((await deliveryMarker(ctx, parentID)).At, undefined, 'the crash state must start undelivered');
+
+            // A FRESH dispatcher, and one that cannot poll: at an hour's interval the steady-state
+            // pass provably has not run by the time `Start()` returns, so anything that happens is
+            // the STARTUP sweep — the arm that exists for the case where the rescue is needed most,
+            // a process that was down while the graph was stranded.
+            const deliverer = new CountingDeliverer();
+            const rescuer = buildDispatcher(ctx, RUNNER, 'it-tx8-rescuer', undefined, deliverer, 3600);
+            await rescuer.Start();
+            try {
+                const after = await deliveryMarker(ctx, parentID);
+                Assert(!!after.At, 'the startup sweep did not rescue a terminal-but-undelivered graph');
+                AssertEqual(after.As, 'delivered', 'a fresh settlement is delivered, not expired');
+                AssertEqual(deliverer.CountFor(parentID), 1, 'the rescued settlement delivered exactly once');
+                AssertEqual(
+                    after.SubmittedByAgentRunID,
+                    ParseTaskGraphParentMetadata(settled.InputPayload).submittedByAgentRunID,
+                    'the rescue overwrote the metadata bag it needed to read',
+                );
+                AssertEqual((await loadTask(ctx, parentID)).Status, 'Complete', 'the rescue must not disturb the settled status');
+
+                // The second half, and the reason the marker exists at all: a rescue that
+                // re-delivered on every subsequent sweep would be worse than the bug it fixes.
+                const second = new CountingDeliverer();
+                const again = buildDispatcher(ctx, RUNNER, 'it-tx8-second', undefined, second, 3600);
+                await again.Start();
+                await again.Stop();
+
+                AssertEqual(second.CountFor(parentID), 0, 'a delivered graph is rescued again by the next process');
+                AssertEqual((await deliveryMarker(ctx, parentID)).At, after.At, 'the marker was rewritten');
+
+                console.log(`      → startup sweep rescued a crashed settlement; delivered once at ${after.At}`);
+            } finally {
+                await rescuer.Stop();
+            }
+        }
+    },
+
+    {
+        Id: 'task-graph-execution.TX9',
+        Name: 'TX9: two dispatchers reaching one settlement deliver it once between them',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // The claim was Load → check the marker → `Save()`: both instances read "no marker",
+            // both wrote, both delivered. Nothing about that is exotic — two dispatchers polling the
+            // same settled graph inside one interval is the NORMAL multi-instance case, and for
+            // `continuation: 'reinvoke'` losing it means two fresh billed agent turns for one
+            // settlement, each able to submit further graphs.
+            const agentName = await resolveAgentName(ctx);
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-delivery-race (safe to delete)',
+                tasks: [agentTask('a', 'DR One', agentName)],
+            });
+            const settled = await runUntilSettled(ctx, buildDispatcher(ctx, RUNNER, 'it-tx9-settler'), parentID);
+            AssertEqual(settled.Status, 'Complete', 'the graph must settle before its delivery is raced');
+            await stripDeliveryMarker(ctx, parentID);
+            const submitter = ParseTaskGraphParentMetadata(settled.InputPayload).submittedByAgentRunID;
+
+            // One deliverer shared by both, so the count is across instances rather than per instance.
+            const deliverer = new CountingDeliverer();
+            await runUntilDelivered(ctx, [
+                buildDispatcher(ctx, RUNNER, 'it-tx9-one', undefined, deliverer),
+                buildDispatcher(ctx, RUNNER, 'it-tx9-two', undefined, deliverer),
+            ], parentID);
+
+            // Both instances keep polling for a moment after the winner claims, which is when a
+            // loser would deliver a second time.
+            await settle(1000);
+
+            AssertEqual(deliverer.CountFor(parentID), 1, 'exactly one of the two instances delivered');
+
+            const marker = await deliveryMarker(ctx, parentID);
+            AssertEqual(marker.As, 'delivered', 'the winning claim recorded how it settled');
+            AssertEqual(
+                marker.SubmittedByAgentRunID, submitter,
+                'the loser\'s full-row snapshot overwrote the payload — the rest of the metadata bag is gone',
+            );
+            AssertEqual((await loadTask(ctx, parentID)).Status, 'Complete', 'no instance reverted the settled status');
+
+            console.log('      → 2 dispatchers, 1 settlement, 1 delivery; metadata bag intact');
+        }
+    },
+
+    {
+        Id: 'task-graph-execution.TX10',
+        Name: 'TX10: a task hierarchy that is not a workflow is never touched',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // `MJ: Tasks` is general-purpose: conversation tasks and users' own to-do lists live in
+            // the same table. An unscoped sweep treats every root hierarchy as a workflow — rolling
+            // up and OVERWRITING somebody's status, raising agent requests against plain tasks, and
+            // injecting continuation-marker keys into a payload that is not ours to edit.
+            const foreignParentID = await createForeignTaskHierarchy(ctx);
+            const beforeParent = await loadTask(ctx, foreignParentID);
+            const beforePayload = beforeParent.InputPayload;
+            const beforeStatus = beforeParent.Status;
+            const beforePercent = beforeParent.PercentComplete;
+
+            // Run a REAL graph alongside it, so the dispatcher is genuinely sweeping rather than
+            // idling — an untouched row proves nothing if nothing ran.
+            const agentName = await resolveAgentName(ctx);
+            const workflowID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-scoping (safe to delete)',
+                tasks: [agentTask('a', 'SC One', agentName)],
+            });
+            const parent = await runUntilSettled(ctx, buildDispatcher(ctx, RUNNER, 'it-tx10'), workflowID);
+            AssertEqual(parent.Status, 'Complete', 'the workflow graph must actually have run');
+
+            // Any damage here is the exact shape an UNSCOPED sweep produces, so the message says so:
+            // the most likely cause by far is a dispatcher built before the TypeID filter running
+            // against this database (an MJAPI left up from an earlier build), not the code under
+            // test — and the two are indistinguishable from the row alone.
+            const blame = 'If this fails, a dispatcher WITHOUT the workflow-type filter is running '
+                + 'against this database — that is precisely the damage the filter prevents, and it '
+                + 'is being done by another process. Restart or stop it and re-run.';
+
+            const afterParent = await loadTask(ctx, foreignParentID);
+            AssertEqual(afterParent.Status, beforeStatus, `the foreign hierarchy's status was rewritten. ${blame}`);
+            AssertEqual(afterParent.PercentComplete, beforePercent, `the foreign hierarchy's progress was rewritten. ${blame}`);
+            AssertEqual(afterParent.InputPayload, beforePayload, `the foreign hierarchy's payload was edited. ${blame}`);
+            AssertEqual(afterParent.CompletedAt, null, `the foreign hierarchy was settled by a dispatcher. ${blame}`);
+
+            const foreignChildren = [...(await loadChildren(ctx, foreignParentID)).values()];
+            AssertEqual(foreignChildren.length, 1, 'the foreign child should still be there');
+            AssertEqual(foreignChildren[0].Status, 'Pending', `the foreign child was executed. ${blame}`);
+            AssertEqual(foreignChildren[0].ClaimedBy, null, `the foreign child was CLAIMED by a dispatcher. ${blame}`);
+
+            console.log('      → a non-workflow hierarchy survived a live sweep byte-identical');
+        }
+    },
+
+    {
+        Id: 'task-graph-execution.TX11',
+        Name: 'TX11: a stopped dispatcher has stopped writing',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // `Stop()` waited on in-flight TASKS but not on the timer passes, which are `void`-ed
+            // promises nothing held — so it returned mid-pass and that pass went on to settle
+            // graphs, emit frames and claim new work afterwards. Quiet in three ways: a settlement
+            // frame arriving after every subscriber had gone, a shutting-down process manufacturing
+            // the orphaned claims reconciliation exists to clean up, and statements landing on a
+            // connection the host had already taken back. TX5 is what caught it.
+            //
+            // ASSERTED PER INSTANCE, NOT PER GRAPH. "The rows stopped changing" is not this
+            // dispatcher's property to have: any other dispatcher on the same database — an MJAPI
+            // in a dev environment, another check's instance — legitimately keeps working on the
+            // same graph, and a check that forbade that would be asserting exclusivity it does not
+            // own. What this instance owes is that IT stops: no frames of its own, and no claims of
+            // its own, after `Stop()` returns.
+            const agentName = await resolveAgentName(ctx);
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-drain (safe to delete)',
+                tasks: [
+                    agentTask('a', 'DN One', agentName),
+                    agentTask('b', 'DN Two', agentName, ['a']),
+                    agentTask('c', 'DN Three', agentName, ['b']),
+                ],
+            });
+
+            const observer = new RecordingObserver();
+            const dispatcher = buildDispatcher(ctx, RUNNER, INSTANCE_TX11, observer);
+            await dispatcher.Start();
+            // Stop mid-flight — the chain guarantees work is still outstanding.
+            await settle(400);
+            await dispatcher.Stop();
+
+            const framesAtStop = observer.Frames.length;
+            const claimedAtStop = await claimsHeldBy(ctx, parentID, INSTANCE_TX11);
+
+            // Several poll intervals: an undrained pass would have emitted or claimed by now.
+            await settle(2000);
+
+            AssertEqual(
+                observer.Frames.length, framesAtStop,
+                'the dispatcher emitted a frame AFTER Stop() returned — a settlement nobody is subscribed to',
+            );
+            AssertEqual(
+                await claimsHeldBy(ctx, parentID, INSTANCE_TX11), claimedAtStop,
+                'the dispatcher claimed work AFTER Stop() returned — claims a shutting-down process will only abandon',
+            );
+
+            const unfinished = [...(await loadChildren(ctx, parentID)).values()]
+                .filter((t) => t.ClaimedBy === INSTANCE_TX11 && t.Status === 'In Progress');
+            AssertEqual(unfinished.length, 0, 'Stop() returned while still holding a claim on unfinished work');
+
+            console.log(`      → stopped cleanly mid-flight: ${framesAtStop} frames, then silence`);
         }
     },
 ];

@@ -763,6 +763,19 @@ describe('OpenAIRealtime GA features (reasoning effort / parallel tool calls / M
         expect(session.reasoningEffort).toBeUndefined();
     });
 
+    /**
+     * `firstMessage` is a NEUTRAL MJ key (issue #3557): a persona authors an opening utterance
+     * without naming a vendor, and `GetProviderVoiceSettings` files it onto whichever driver
+     * resolves — including this one, which has no opening-utterance concept. An unconsumed neutral
+     * key must be scrubbed, not forwarded: this endpoint rejects a malformed session object
+     * wholesale, taking the prompt and tools down with it.
+     */
+    it('never sends the neutral firstMessage key, which it does not consume', async () => {
+        const session = await startAndGetSession({ firstMessage: 'Good morning, thanks for joining.' });
+        expect(session.firstMessage).toBeUndefined();
+        expect(session.first_message).toBeUndefined();
+    });
+
     it('translates Config.parallelToolCalls to session parallel_tool_calls (and never sends the raw key)', async () => {
         const session = await startAndGetSession({ parallelToolCalls: false });
         expect(session.parallel_tool_calls).toBe(false);
@@ -839,6 +852,7 @@ describe('OpenAIRealtime GA features (reasoning effort / parallel tool calls / M
                 parallelToolCalls: true,
                 mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com', require_approval: 'never' }],
                 voice: 'sage',
+                firstMessage: 'Good morning, thanks for joining.',
             },
         });
         const sc = cfg.SessionConfig as Record<string, unknown>;
@@ -853,6 +867,9 @@ describe('OpenAIRealtime GA features (reasoning effort / parallel tool calls / M
         expect(sc.parallelToolCalls).toBeUndefined();
         expect(sc.mcpTools).toBeUndefined();
         expect(sc.voice).toBeUndefined();
+        // The minted client-direct session is built from the SAME residual bag as the
+        // server-bridged session.update, so an unscrubbed neutral key leaks on both paths.
+        expect(sc.firstMessage).toBeUndefined();
     });
 });
 

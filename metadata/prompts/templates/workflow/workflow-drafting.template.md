@@ -33,7 +33,8 @@ Return **only** a JSON object of this shape. No prose, no markdown fence, no com
       "tempId": "short-stable-handle",
       "name": "What this step does, as a person would say it",
       "description": "One or two sentences: what this step takes in, and what it produces.",
-      "agentName": "exact name from the available list",
+      "kind": "Agent",
+      "configuration": { "agentName": "exact name from the available list" },
       "dependsOn": ["tempId of a step this waits for"]
     }
   ]
@@ -42,9 +43,16 @@ Return **only** a JSON object of this shape. No prose, no markdown fence, no com
 
 ## Rules that matter
 
-**Every step needs an assignment.** Give each step an `agentName` from the list above. If a step is
-genuinely something a *person* must do — an approval, a judgement call, a physical action — set
-`"assignToUser": true` instead of `agentName`, and never both.
+**Every step declares what KIND it is, and carries the settings for that kind.** A step has a `kind`
+and a `configuration` bag matching it. The two you will use:
+
+- `"kind": "Agent"` with `"configuration": { "agentName": "..." }` — an agent does the work.
+- `"kind": "Human"` with `"configuration": {}` — a *person* must do it: an approval, a judgement
+  call, a physical action.
+
+There is no way to say both, which is the point: a step is one kind. Never put `agentName` at the
+top level of a step — that shape was retired, and a workflow using it is rejected outright rather
+than half-understood.
 
 **`dependsOn` is what makes it a route, not a list.** A step with an empty `dependsOn` starts
 immediately. Steps that could genuinely run at the same time should *both* depend on whatever came

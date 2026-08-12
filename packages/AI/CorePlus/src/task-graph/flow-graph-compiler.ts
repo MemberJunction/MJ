@@ -17,6 +17,7 @@
  * @module @memberjunction/ai-core-plus
  */
 import type { MJAIAgentStepEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { DetectCycle, type TaskGraphEdge, type TaskGraphNode } from './graph-algorithms';
 import {
     TaskNode,
@@ -99,7 +100,7 @@ export type FlowCompilerOptions = {
 
 /** Why a flow could not be compiled, in workflow vocabulary (D18 — never graph/DAG/node). */
 export type FlowCompileError = {
-    Code: 'NoStartingStep' | 'LoopDetected' | 'UnresolvedReference' | 'UnsupportedStepType';
+    Code: 'NoStartingStep' | 'UnreachableStartingStep' | 'LoopDetected' | 'UnresolvedReference' | 'UnsupportedStepType';
     Message: string;
     /** The offending step, when attributable. */
     StepID?: string;
@@ -157,6 +158,26 @@ export function CompileFlowToTaskGraph(
     const compiledSteps = active.filter((s) => reachable.has(s.ID));
     for (const s of active) if (!reachable.has(s.ID)) excluded.push({ StepID: s.ID, Reason: 'Unreachable' });
 
+    // A step the author explicitly marked as a STARTING step, dropped for being unreachable, is
+    // reported rather than quietly excluded. Everything else pruned here was simply not wired up;
+    // this one was wired up *as an entry point* and the single-entry rule overruled it. Staying
+    // silent is how a workflow ships with half its work missing while looking correct on the canvas
+    // — which is exactly what happened to the Content Pipeline demo: its second research step was
+    // pruned, the join it fed had one input instead of two, and every draft was written from half
+    // the evidence. Nothing anywhere said so.
+    for (const s of startingSteps) {
+        if (reachable.has(s.ID)) continue;
+        errors.push({
+            Code: 'UnreachableStartingStep',
+            Message:
+                `Step "${s.Name}" is marked as a starting step, but this workflow begins at ` +
+                `"${entry.Name}" and nothing leads from there to it, so it would never run. ` +
+                `A workflow has ONE starting step: connect "${s.Name}" into the flow, or make it ` +
+                `the starting step instead.`,
+            StepID: s.ID,
+        });
+    }
+
     const compiledIDs = new Set(compiledSteps.map((s) => s.ID));
     const compiledPaths = livePaths.filter((p) => compiledIDs.has(p.OriginStepID) && compiledIDs.has(p.DestinationStepID));
 
@@ -171,7 +192,7 @@ export function CompileFlowToTaskGraph(
     }));
     const cycle = DetectCycle(cycleNodes, cycleEdges);
     if (cycle.hasCycle) {
-        const names = cycle.path.map((id) => compiledSteps.find((s) => s.ID === id)?.Name ?? id);
+        const names = cycle.path.map((id) => compiledSteps.find((s) => UUIDsEqual(s.ID, id))?.Name ?? id);
         errors.push({
             Code: 'LoopDetected',
             Message: `These steps form a loop: ${names.join(' → ')}. A workflow runs each step once, so express repetition with a ForEach or While step instead.`,
@@ -329,6 +350,27 @@ function emitNode(
             if (!promptName) return unresolved('a prompt', step.PromptID);
             return TaskNode.Prompt(base, { promptName });
         }
+        case 'Human': {
+            // A person's step. It compiles with no assignee resolved here on purpose: who should be
+            // asked can be a fixed user OR left open, and an unassigned human step is a legitimate
+            // "somebody needs to look at this" rather than a configuration error. The dispatcher
+            // raises the request when the step becomes eligible, which is the only moment anyone
+            // can act on it.
+            const config = parseJSONObject(step.Configuration);
+            return TaskNode.Human(base, {
+                assignToUserID: typeof config['assignToUserID'] === 'string' ? config['assignToUserID'] : undefined,
+                // The step's description IS what the person is being asked to do — the same
+                // convention a sub-agent step uses for its message.
+                instructions: step.Description ?? undefined,
+                // Carried so the dispatcher can put a real deadline on the request it raises. A
+                // positive number only: zero or a negative would mean "already overdue", which would
+                // expire the step before anyone could see it.
+                expiresInHours:
+                    typeof config['expiresInHours'] === 'number' && config['expiresInHours'] > 0
+                        ? config['expiresInHours']
+                        : undefined,
+            });
+        }
         case 'ForEach':
             return TaskNode.ForEach(base, buildForEach(step, options, errors));
         case 'While':
@@ -420,7 +462,7 @@ function buildLoopBody(
     step: FlowCompilerStep,
     options: FlowCompilerOptions,
     errors: FlowCompileError[],
-): Pick<ForEachOperation, 'action' | 'subAgent'> {
+): Pick<ForEachOperation, 'action' | 'subAgent' | 'prompt'> {
     switch (step.LoopBodyType) {
         case 'Action': {
             const actionName = step.ActionID ? options.ResolveActionName(step.ActionID) : null;
@@ -444,15 +486,24 @@ function buildLoopBody(
             if (!agentName) break;
             return { subAgent: { name: agentName, message: step.Description ?? '' } };
         }
-        case 'Prompt':
-            // The in-run engine fails outright on a Prompt loop body ("not yet fully supported"), so
-            // this is not a parity gap — the capability arrives with the Prompt runner in C1.5.
-            errors.push({
-                Code: 'UnsupportedStepType',
-                Message: `Step "${step.Name}" repeats a prompt, which is not supported yet. Use an action or a sub-agent as the repeated step.`,
-                StepID: step.ID,
-            });
-            return {};
+        case 'Prompt': {
+            // Supported since the Prompt runner landed. Previously refused outright, on the grounds
+            // that the in-run engine could not execute one either — true at the time, and the
+            // refusal outlived the reason for it.
+            const promptName = step.PromptID ? options.ResolvePromptName?.(step.PromptID) ?? null : null;
+            if (!promptName) break;
+            const config = parseJSONObject(step.Configuration);
+            return {
+                prompt: {
+                    name: promptName,
+                    templateParameters: config['templateParameters'] as Record<string, string> | undefined,
+                    // Carried UNRESOLVED, for the same reason an action body's params are: the
+                    // mapping references the item and index this loop binds on each pass, so
+                    // resolving it here would freeze every iteration to the first one's values.
+                    outputMapping: step.ActionOutputMapping ?? undefined,
+                },
+            };
+        }
     }
     errors.push({
         Code: 'UnresolvedReference',
