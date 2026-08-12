@@ -43,6 +43,7 @@ import {
     type WhileOperation,
     ConfigOf,
 } from '@memberjunction/ai-core-plus';
+import { TaskClaimStore } from './TaskClaimStore';
 import { UUIDsEqual } from '@memberjunction/global';
 
 /** Context a submission carries beyond the graph itself. */
@@ -435,6 +436,15 @@ export function FindCrossUserAssignments(spec: TaskGraphSpec, submitterUserID: s
 
 export class TaskGraphService {
     /**
+     * Guarded single-statement writes, shared with the dispatcher.
+     *
+     * The instance id is descriptive only — this service never CLAIMS anything, it only issues
+     * guarded transitions whose predicates are about the row's own status rather than about who
+     * holds it.
+     */
+    private readonly claims = new TaskClaimStore('task-graph-service', 0);
+
+    /**
      * Validates and persists a task graph, returning as soon as it is durable.
      *
      * Deliberately does NOT start execution: the dispatcher discovers `Pending` work by polling
@@ -572,17 +582,53 @@ export class TaskGraphService {
      * graph stays active, so retrying is meaningful rather than cosmetic.
      */
     public async Cancel(parentTaskID: string, context: TaskGraphSubmitContext): Promise<TaskGraphCancelResult> {
+        return this.cancelWithDepth(parentTaskID, context, 0, new Set());
+    }
+
+    /**
+     * `Cancel`, carrying the recursion state the public entry point does not expose.
+     *
+     * **The depth cap was dead code** (R3-10): `Cancel` passed a literal 0, and the recursion
+     * re-entered through `this.Cancel`, which restarted at 0 — so the check could never fire and
+     * the "bounded by the reinvoke depth cap" promise was false. A hand-edited `AgentRunID` cycle
+     * recursed to stack overflow mid-cancel.
+     *
+     * The visited set is cheap armour on top: the cap bounds how DEEP a legitimate chain goes, and
+     * a cycle is not deep, it is circular. Arithmetic alone would eventually stop it; a visited set
+     * stops it immediately and covers linkage shapes the arithmetic does not anticipate.
+     */
+    private async cancelWithDepth(
+        parentTaskID: string,
+        context: TaskGraphSubmitContext,
+        depth: number,
+        visited: Set<string>,
+    ): Promise<TaskGraphCancelResult> {
+        if (visited.has(parentTaskID)) {
+            return { Success: true, Cancelled: true, UncancelledTaskNames: [] };
+        }
+        visited.add(parentTaskID);
         try {
             const children = await this.loadChildren(parentTaskID, context);
             const uncancelled: string[] = [];
+            const settledMeanwhile: string[] = [];
             for (const child of children) {
                 // Terminal work is left alone — cancelling a completed task would rewrite history.
-                if (['Complete', 'Failed', 'Cancelled'].includes(child.Status)) continue;
-                child.Status = 'Cancelled';
-                if (!(await child.Save())) {
-                    LogError(`[TaskGraphService] Failed to cancel task ${child.ID}: ${child.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-                    uncancelled.push(child.Name);
-                }
+                // The in-memory test is a cheap pre-filter; the one that MATTERS is in the statement
+                // (R3-9), because a child can settle between this snapshot and its own write, and
+                // the full-row save this replaces overwrote that outcome wholesale.
+                if (['Complete', 'Failed', 'Cancelled', 'Skipped'].includes(child.Status)) continue;
+                if (await this.claims.TryCancelTask(context.Provider, child.ID, context.ContextUser)) continue;
+
+                // Rowcount 0 means it reached a terminal status while we were cancelling its
+                // siblings. Its outcome is real and stays; the verdict says so rather than pretending
+                // the cancel was total.
+                settledMeanwhile.push(child.Name);
+            }
+            if (settledMeanwhile.length > 0) {
+                LogStatus(
+                    `[TaskGraphService] ${settledMeanwhile.length} task(s) settled while the cancel ran ` +
+                    `(${settledMeanwhile.join(', ')}); their outcomes are kept.`,
+                );
             }
 
             // Withdraw the questions too. A human step that was waiting has an open
@@ -618,7 +664,7 @@ export class TaskGraphService {
             // a workflow and it started itself again.
             //
             // Bounded by the reinvoke depth cap, which is what bounds the chain in the first place.
-            const nested = await this.cancelNestedGraphs(children, context, 0);
+            const nested = await this.cancelNestedGraphs(children, context, depth, visited);
             uncancelled.push(...nested);
 
             if (uncancelled.length > 0) {
@@ -653,18 +699,31 @@ export class TaskGraphService {
         children: readonly MJTaskEntity[],
         context: TaskGraphSubmitContext,
         depth: number,
+        visited: Set<string>,
     ): Promise<string[]> {
-        if (depth >= MAX_REINVOKE_DEPTH) return [];
+        if (depth >= MAX_REINVOKE_DEPTH) {
+            LogError(
+                `[TaskGraphService] Nested cancel stopped at depth ${depth}; a deeper sub-graph chain ` +
+                `than the reinvoke cap allows may still be running.`,
+            );
+            return [];
+        }
         const runIDs = [...new Set(children.map((c) => c.AgentRunID).filter((id): id is string => !!id))];
         if (runIDs.length === 0) return [];
 
         const rv = RunView.FromMetadataProvider(context.Provider);
         const inList = runIDs.map((id) => `'${id}'`).join(',');
-        // Graphs those runs submitted: root tasks of the workflow type carrying the run's ID.
+        // TYPE-SCOPED, like every other graph-mutating walk over this table (R3-10). `MJ: Tasks` is
+        // general-purpose, and without the predicate any non-workflow root hierarchy that happens to
+        // carry a cancelled run's ID gets `Cancelled` written over its children and its requests
+        // withdrawn — the user-writable-table threat the claim store's guards exist to defend
+        // against. The comment here already claimed this scoping; the query did not have it.
+        const typeID = await this.findTaskTypeID(context);
+        if (!typeID) return [];
         const subGraphs = await rv.RunView<{ ID: string }>(
             {
                 EntityName: 'MJ: Tasks',
-                ExtraFilter: `ParentID IS NULL AND AgentRunID IN (${inList})`,
+                ExtraFilter: `TypeID='${typeID}' AND ParentID IS NULL AND AgentRunID IN (${inList})`,
                 Fields: ['ID'],
                 ResultType: 'simple',
                 BypassCache: true,
@@ -678,7 +737,8 @@ export class TaskGraphService {
 
         const failures: string[] = [];
         for (const row of subGraphs.Results ?? []) {
-            const result = await this.Cancel(row.ID, context);
+            // Through the depth-carrying overload, so the cap actually engages.
+            const result = await this.cancelWithDepth(row.ID, context, depth + 1, visited);
             if (!result.Success) failures.push(...result.UncancelledTaskNames);
         }
         return failures;
@@ -1154,8 +1214,17 @@ export class TaskGraphService {
         // "leave terminal work alone" guard would pass for a task that has since completed, and
         // write `Cancelled` over a `Complete` row. That is precisely the history-rewriting the guard
         // exists to prevent, performed by the guard itself.
+        // Type-scoped for the same reason the sub-graph walk is (R3-10): these rows are about to be
+        // written, and `MJ: Tasks` holds conversation tasks and users' own to-dos too.
+        const typeID = await this.findTaskTypeID(context);
+        const ofType = typeID ? `TypeID='${typeID}' AND ` : '';
         const result = await RunView.FromMetadataProvider(context.Provider).RunView<MJTaskEntity>(
-            { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentTaskID}'`, ResultType: 'entity_object', BypassCache: true },
+            {
+                EntityName: 'MJ: Tasks',
+                ExtraFilter: `${ofType}ParentID='${parentTaskID}'`,
+                ResultType: 'entity_object',
+                BypassCache: true,
+            },
             context.ContextUser,
         );
         return (result.Success ? result.Results : []) ?? [];

@@ -112,6 +112,37 @@ describe('TrySkipPending — a skip must not overwrite work that started (R3-1)'
     });
 });
 
+describe('TryCancelTask — a cancel must not overwrite an outcome that landed first (R3-9)', () => {
+    // `Cancel` tested the terminal set against an in-memory snapshot and wrote with a full-row
+    // `Save()` — every updateable column, PK-only predicate. A child whose guarded `CompleteClaimed`
+    // landed between that load and its save had its whole outcome overwritten: Complete back to
+    // Cancelled, OutputPayload to NULL, AgentRunID and CompletedAt reverted, stale claim columns
+    // re-instated on a terminal row. The moment users cancel is exactly when tasks are running.
+    let store: TaskClaimStore;
+    beforeEach(() => { store = new TaskClaimStore('svc', 0); });
+
+    it('refuses a child that has already settled — the check is IN the statement', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.TryCancelTask(provider, PARENT, USER);
+        expect(statements[0]).toContain(`NOT IN ('Complete','Failed','Cancelled','Skipped','Blocked')`);
+    });
+
+    it('writes Status and nothing else — the columns the full-row save was destroying', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.TryCancelTask(provider, PARENT, USER);
+        const setClause = statements[0].split('WHERE')[0];
+        expect(setClause).toContain(`[Status] = 'Cancelled'`);
+        for (const column of ['[OutputPayload]', '[AgentRunID]', '[CompletedAt]', '[Configuration]', '[ClaimedBy]']) {
+            expect(setClause).not.toContain(column);
+        }
+    });
+
+    it('reports the loss so the verdict can stay honest', async () => {
+        const { provider } = recordingProvider(0);
+        expect(await store.TryCancelTask(provider, PARENT, USER)).toBe(false);
+    });
+});
+
 describe('TryDeclareEarlyFinish — the decision has to outlive one instance\'s memory (R3-1)', () => {
     let store: TaskClaimStore;
     beforeEach(() => { store = new TaskClaimStore('instance-1', 300); });

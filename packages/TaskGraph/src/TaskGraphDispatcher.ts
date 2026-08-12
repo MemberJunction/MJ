@@ -100,6 +100,16 @@ const STOP_DRAIN_TIMEOUT_MS = 30_000;
  */
 const MAX_SETTLEMENT_RETRY_PASSES = 20;
 
+/**
+ * What the cost rollup managed to do.
+ *
+ * `refused-permanent` is a decision the next pass would repeat identically — a truncated tree, a
+ * graph the tree cannot see — so the settlement proceeds without a number. `failed-transient` is a
+ * condition that may clear, so the pass defers rather than claiming the marker and locking the
+ * wrong answer in.
+ */
+type RollupVerdict = 'landed' | 'refused-permanent' | 'failed-transient';
+
 /** Whether the submitting run's half may proceed, and whether anyone is still waiting for it. */
 type SubmittingRunReadiness = {
     Verdict: 'ready' | 'defer';
@@ -1026,7 +1036,16 @@ export class TaskGraphDispatcher implements IShutdownable {
                 const readiness = await this.submittingRunReadiness(provider, parent);
                 if (readiness.Verdict === 'defer') { this.keepRetryingSettlement(parentID); continue; }
 
-                await this.rollUpCostToSubmittingRun(provider, parent);
+                // R3-8: the rollup gets a verdict, and a TRANSIENT failure defers exactly as a
+                // failed lifecycle write does. Continuing past one would settle the run and claim
+                // the marker, which permanently excludes the graph from the rescue sweep — making
+                // the rollup's own "retrying on a later settlement" log a promise it could not keep.
+                // Permanent refusals (truncated tree, graph not in the tree) proceed as before:
+                // those do not clear on their own, and deferring on them would stall forever.
+                if (await this.rollUpCostToSubmittingRun(provider, parent) === 'failed-transient') {
+                    this.keepRetryingSettlement(parentID);
+                    continue;
+                }
                 // Deliberately AFTER the rollup and OUTSIDE its refusal paths. The rollup declines
                 // to write a number it cannot stand behind — a truncated tree, an unreachable graph
                 // — and every one of those returns early. If the run's lifecycle were settled in
@@ -1093,16 +1112,21 @@ export class TaskGraphDispatcher implements IShutdownable {
      * A graph with no submitting run (a scheduled job, a remote-operation caller) simply has nobody
      * to credit — its own Task rows still carry the truth, and this returns quietly.
      */
-    private async rollUpCostToSubmittingRun(provider: IMetadataProvider, parent: MJTaskEntity): Promise<void> {
+    private async rollUpCostToSubmittingRun(
+        provider: IMetadataProvider,
+        parent: MJTaskEntity,
+    ): Promise<RollupVerdict> {
         const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
-        if (!meta.submittedByAgentRunID) return;
+        if (!meta.submittedByAgentRunID) return 'landed';
         const runID = meta.submittedByAgentRunID;
 
         try {
             const runQuery = asRunQueryProvider(provider);
             if (!runQuery) {
+                // Permanent for this host: a provider that cannot run queries will not grow the
+                // ability on the next pass, so deferring would stall the graph forever.
                 LogError(`[TaskGraphDispatcher] Cannot roll up cost for run ${runID}: provider cannot run queries.`);
-                return;
+                return 'refused-permanent';
             }
 
             const tree = await LoadAgentRunTree(runID, runQuery, this.contextUser);
@@ -1118,35 +1142,39 @@ export class TaskGraphDispatcher implements IShutdownable {
             // absent, and `?? TotalCost` cannot save a reader from a non-null wrong number. So a
             // refusal CLEARS it, restoring the fallback's honest meaning: not settled.
             if (tree.ErrorMessage || !tree.Root) {
-                // TRANSIENT — SO NOTHING IS CLEARED (R2-15). A query that failed says nothing about
-                // whether the stored rollup is stale, and clearing on it can null the four columns
-                // another instance wrote moments earlier; the claimed marker then stops anything
-                // recomputing them, so a momentary hiccup here permanently erases a correct total.
+                // TRANSIENT — nothing cleared (R2-15), and now nothing delivered either (R3-8).
                 //
-                // Clearing stays for the two cases below, where staleness is PROVEN by a tree we
-                // successfully read: truncated, or not containing the graph that just settled.
+                // R2-15 stopped this path erasing a correct total. What it did not stop was the pass
+                // CONTINUING: settlement flipped the run terminal and delivery claimed the marker,
+                // which permanently excludes the graph from the rescue sweep — so this function's
+                // own promise of "retrying on a later settlement" was structurally impossible to
+                // keep. One transient DB error, no interleaving, and a multi-graph run kept a wrong
+                // non-null authoritative total forever while a first-graph run stayed null.
                 LogError(
                     `[TaskGraphDispatcher] Could not load the run tree for ${runID} to roll up graph ` +
                     `${parent.ID}: ${tree.ErrorMessage ?? 'the run tree came back empty'}. Leaving any ` +
-                    `existing rollup alone and retrying on a later settlement.`,
+                    `existing rollup alone and deferring settlement so a later pass can retry.`,
                 );
-                return;
+                return 'failed-transient';
             }
             if (tree.Truncated) {
+                // PERMANENT: the tree is genuinely too deep, and it will be just as deep next pass.
                 await this.clearStaleRollup(provider, runID,
                     `the run tree hit the depth cap, so any total would silently under-report ` +
                     `(graph ${parent.ID} still carries its own costs)`);
-                return;
+                return 'refused-permanent';
             }
             // The graph that just settled must appear in the tree. If it does not, the tree stopped
             // at the run — the submitting step never recorded its parentTaskID — and the sum is
             // merely the run's own spend wearing the name of a rollup. That is precisely the silent
             // under-count this rewrite exists to remove, so it is reported rather than written.
             if (!this.treeContainsGraph(tree.Root, parent.ID)) {
+                // PERMANENT: a missing parentTaskID link is a fact about how the graph was
+                // submitted, not a condition that clears on its own.
                 await this.clearStaleRollup(provider, runID,
                     `graph ${parent.ID} is not reachable from it, so the tree cannot see the work. ` +
                     `Did the submitting step record parentTaskID?`);
-                return;
+                return 'refused-permanent';
             }
 
             const totals = SumAgentRunTreeCost(tree.Root);
@@ -1154,7 +1182,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             const submitting = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
             if (!(await submitting.Load(runID))) {
                 LogError(`[TaskGraphDispatcher] Could not load run ${runID} to record graph cost against it.`);
-                return;
+                return 'failed-transient';
             }
 
             // Assignment, never accumulation. The tree already contains the run's own spend as its
@@ -1171,7 +1199,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     `[TaskGraphDispatcher] Could not record graph cost against run ${runID}: ` +
                     `${submitting.LatestResult?.CompleteMessage ?? 'unknown error'}`,
                 );
-                return;
+                return 'failed-transient';
             }
 
             LogStatus(
@@ -1182,8 +1210,13 @@ export class TaskGraphDispatcher implements IShutdownable {
             // A failed rollup must never fail the graph. The work finished; only the accounting for
             // it is missing, and a graph marked Failed because its cost could not be summed would be
             // a far worse lie than a cost of null.
+            // A throw is transient by default: nothing here proves the condition will persist, and
+            // the cost of being wrong in this direction is one deferred pass rather than a
+            // permanently wrong authoritative total.
             LogError(`[TaskGraphDispatcher] Cost rollup failed for graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
+            return 'failed-transient';
         }
+        return 'landed';
     }
 
     /**

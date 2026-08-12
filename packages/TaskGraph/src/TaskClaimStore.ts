@@ -462,6 +462,38 @@ export class TaskClaimStore {
     }
 
     /**
+     * Cancels one task, refusing if it settled while the caller was looking elsewhere.
+     *
+     * **The terminal check has to be IN the statement.** `Cancel` loaded every child, tested the
+     * terminal set against that in-memory snapshot, and wrote `Status='Cancelled'` with a full-row
+     * `BaseEntity.Save()` — an unconditional UPDATE sending every updateable column against a
+     * PK-only predicate. A child whose executor's guarded `CompleteClaimed` landed between the load
+     * and its save had its entire outcome overwritten: `Complete` back to `Cancelled`,
+     * `OutputPayload` to NULL (the null-clear companions make those explicit clears),
+     * `AgentRunID`/`CompletedAt`/runtime `Configuration` reverted, and stale claim columns
+     * re-instated on a terminal row.
+     *
+     * The moment users cancel is exactly the moment tasks are running, so this is not a narrow
+     * window. The reverse ordering was always safe — `CompleteClaimed`'s own predicate refuses a
+     * cancelled row — so the hazard lived entirely in this write.
+     *
+     * @returns true when this call cancelled it; false means it had already settled
+     */
+    public async TryCancelTask(
+        provider: IMetadataProvider,
+        taskID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${db.QuoteIdentifier('Status')} = 'Cancelled'
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
+              AND ${db.QuoteIdentifier('Status')} NOT IN (${TERMINAL_PARENT_STATUS_SQL})`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
      * Records, durably and once, that a graph is finishing early.
      *
      * **The declaration has to outlive the deciding instance's memory.** An early finish is decided
