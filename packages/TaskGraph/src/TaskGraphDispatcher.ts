@@ -54,6 +54,7 @@ import { BuildConditionContext, DecideGate, ParseConditionOutput } from './condi
 import { HumanTaskSQL, IsHumanTask } from './task-predicates';
 import {
     IsSettlementExpired,
+    IsSubmittingRunReady,
     SelectUnsettledGraphIDs,
     SweepCutoff,
     UNSETTLED_SWEEP_WINDOW_HOURS,
@@ -832,6 +833,22 @@ export class TaskGraphDispatcher implements IShutdownable {
                     CompletedCount: fresh.nodes.filter((n) => n.status === 'Complete').length,
                     TotalCount: fresh.nodes.length,
                 });
+                // READ-ONLY GATE, before any write to the submitting run's half (R2-2).
+                //
+                // A graph can settle before the run that submitted it has parked at all. `BaseAgent`
+                // sets `Paused` in `finalizeAgentRun`, AFTER the graph is durable and dispatchable —
+                // so a fast graph finishes first, and both writes below then land wrong: the
+                // lifecycle write silently returns (its guard is `Status === 'Paused'`), and the cost
+                // write is overwritten moments later by finalize's own full-row save, which carries
+                // the in-memory nulls it had before the dispatcher wrote anything.
+                //
+                // Deferring the whole half — rather than doing the parts that happen to work — is
+                // what keeps the marker honest: nothing below claims it, so the graph stays
+                // terminal-and-undelivered and the rescue sweep brings it back next pass, by which
+                // time finalize has parked the run and both writes land.
+                const readiness = await this.submittingRunReadiness(provider, parent);
+                if (readiness === 'defer') continue;
+
                 await this.rollUpCostToSubmittingRun(provider, parent);
                 // Deliberately AFTER the rollup and OUTSIDE its refusal paths. The rollup declines
                 // to write a number it cannot stand behind — a truncated tree, an unreachable graph
@@ -839,7 +856,12 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // there, a refused rollup would strand the run parked forever, which is a far worse
                 // failure than a missing cost figure. Cost and lifecycle are separate concerns with
                 // separate failure modes, so they get separate writes.
-                await this.settleSubmittingRun(provider, parent, rollup.status);
+                if (await this.settleSubmittingRun(provider, parent, rollup.status) === 'defer') {
+                    // The lifecycle write did not land. Delivering now would claim the marker and
+                    // make this the LAST pass to look at the graph — leaving the run Paused forever,
+                    // which is the exact permanence R2-2 removes. Leave the marker unset and retry.
+                    continue;
+                }
                 await this.deliverContinuation(provider, parent, fresh);
             }
         }
@@ -2574,6 +2596,58 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
+     * Whether the submitting run is in a state where this pass's writes to it will mean anything.
+     *
+     * **Read-only on purpose.** The settled branch's write order — layout, frame, cost, lifecycle,
+     * delivery — is load-bearing and documented at each step; this asks the question those writes
+     * depend on without joining them. What it prevents is a pass that goes through the motions and
+     * then claims the delivery marker, making itself the last pass ever to look at the graph.
+     *
+     * Three answers, and the middle one is the bug:
+     *
+     *  - **no run** — a scheduled or remote-triggered graph has nobody waiting. Proceed.
+     *  - **still `Running`** — `finalizeAgentRun` has not parked it yet. The graph beat its own
+     *    submitter to the finish line, which is ordinary for a fast graph and lasts milliseconds.
+     *    Defer: one poll later the run is parked and everything lands.
+     *  - **anything else** — `Paused` (settle it), or already `Completed`/`Failed`/`Cancelled` for
+     *    its own reasons (leave it; the lifecycle write's own guard declines). Proceed.
+     *
+     * **The deferral is bounded**, because "not parked yet" and "the submitting process died before
+     * it could park" look identical from here. Waiting forever on the second would lose the outcome
+     * of work that actually completed — strictly worse than announcing it late — so past the grace
+     * period this proceeds and says why. The run itself stays `Running`, which is visibly wrong and
+     * belongs to whatever reconciles abandoned runs, not to the graph that finished correctly.
+     */
+    private async submittingRunReadiness(
+        provider: IMetadataProvider,
+        parent: MJTaskEntity,
+    ): Promise<'ready' | 'defer'> {
+        const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
+        if (!meta.submittedByAgentRunID) return 'ready';
+
+        try {
+            const run = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+            if (!(await run.Load(meta.submittedByAgentRunID))) {
+                // Transient, most likely. Deferring costs a poll; proceeding costs the marker.
+                LogError(`[TaskGraphDispatcher] Could not read run ${meta.submittedByAgentRunID} to check whether graph ${parent.ID} may settle it; retrying next pass.`);
+                return 'defer';
+            }
+            const settledFor = parent.CompletedAt ? Date.now() - parent.CompletedAt.getTime() : 0;
+            if (IsSubmittingRunReady(run.Status, settledFor)) return 'ready';
+
+            LogError(
+                `[TaskGraphDispatcher] Run ${run.ID} has been Running for ${Math.round(settledFor / 1000)}s ` +
+                `since graph ${parent.ID} settled — it never parked, so its submitting process most ` +
+                `likely died. Settling and delivering the graph anyway; the run needs separate attention.`,
+            );
+            return 'ready';
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not check the run waiting on graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
+            return 'defer';
+        }
+    }
+
+    /**
      * Completes the agent run that parked on this graph.
      *
      * **This is the other half of submit-and-detach.** A run that dispatches a graph does not
@@ -2599,17 +2673,17 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
         parent: MJTaskEntity,
         graphStatus: TaskGraphNodeStatus,
-    ): Promise<void> {
+    ): Promise<'done' | 'defer'> {
         const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
-        if (!meta.submittedByAgentRunID) return; // a scheduled or remote-triggered graph has nobody waiting
+        if (!meta.submittedByAgentRunID) return 'done'; // a scheduled or remote-triggered graph has nobody waiting
 
         try {
             const run = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
             if (!(await run.Load(meta.submittedByAgentRunID))) {
                 LogError(`[TaskGraphDispatcher] Could not load run ${meta.submittedByAgentRunID} to settle it against graph ${parent.ID}.`);
-                return;
+                return 'defer';
             }
-            if (run.Status !== 'Paused') return;
+            if (run.Status !== 'Paused') return 'done';
 
             // The workflow's outcome becomes the run's outcome. A graph that ended any way other than
             // Complete did not do what the run started it to do, and a run reporting success over it
@@ -2629,13 +2703,15 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // not land would be the same lie this whole change removes.
                 LogError(
                     `[TaskGraphDispatcher] Could not settle run ${run.ID} against graph ${parent.ID}: ` +
-                    `${run.LatestResult?.CompleteMessage ?? 'unknown error'}. It remains Paused.`,
+                    `${run.LatestResult?.CompleteMessage ?? 'unknown error'}. It remains Paused; retrying next pass.`,
                 );
-                return;
+                return 'defer';
             }
             LogStatus(`[TaskGraphDispatcher] Run ${run.ID} settled ${run.Status} — workflow "${parent.Name}" ended ${graphStatus}.`);
+            return 'done';
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Could not settle the run waiting on graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
+            return 'defer';
         }
     }
 
