@@ -23,7 +23,57 @@
  */
 import { IMetadataProvider, DatabaseProviderBase, LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { TERMINAL_TASK_GRAPH_STATUSES, type TerminalTaskGraphStatus } from '@memberjunction/ai-core-plus';
+import { MachineTaskSQL } from './task-predicates';
 import { ReconciliationEvent } from './types';
+
+/**
+ * A value one debug-bag field is being set to.
+ *
+ * Discriminated so the statement renders each with the right JSON type — a boolean stored as the
+ * string `"true"` reads back as truthy-but-wrong, and an object stored as a string reads back as a
+ * string. `null` deletes the key.
+ */
+export type TaskGraphDebugFieldValue =
+    | { Kind: 'null' }
+    | { Kind: 'bool'; Value: boolean }
+    | { Kind: 'string'; Value: string }
+    /** Pre-serialized JSON for an object or array. */
+    | { Kind: 'json'; Value: string };
+
+/** One field of the debug bag, addressed by its JSON path. */
+export type TaskGraphDebugFieldWrite = {
+    Path: string;
+    Value: TaskGraphDebugFieldValue;
+};
+
+/**
+ * Every object path that must exist for a JSON path to be writable — i.e. its proper prefixes,
+ * excluding the root and the leaf itself.
+ *
+ * `$.debug.edgeOverrides."abc"` → `['$.debug', '$.debug.edgeOverrides']`.
+ *
+ * Exported and pure because the rule ("JSON_MODIFY does not create intermediate objects") is the
+ * kind of database behaviour that is easy to assume wrongly and cheap to pin with a test.
+ */
+export function ContainingPaths(path: string): string[] {
+    const segments: string[] = [];
+    let current = '';
+    let quoted = false;
+    for (const char of path) {
+        if (char === '"') { quoted = !quoted; current += char; continue; }
+        if (char === '.' && !quoted) { segments.push(current); current = ''; continue; }
+        current += char;
+    }
+    segments.push(current);
+
+    // Drop the root ('$') and the leaf: neither needs creating — the root is the document, and the
+    // leaf is what the caller is about to write.
+    const containers: string[] = [];
+    for (let i = 2; i < segments.length; i++) {
+        containers.push(segments.slice(0, i).join('.'));
+    }
+    return containers;
+}
 
 /** Fields the claim protocol needs from a candidate task. */
 export type ClaimableTask = {
@@ -197,10 +247,15 @@ export class TaskClaimStore {
      * Reclaims tasks whose claims have lapsed, returning them to `Pending` so any instance can pick
      * them up.
      *
-     * **Human tasks are exempt** (review round 2). A task assigned to a person (`UserID` set) never
-     * carries a claim, so `In Progress` with no claim is its *legitimate* parked shape — an approval
-     * waiting on someone. Normalizing it would reset that approval out from under the user. Their
-     * lifecycle is driven by `DueAt` notification and escalation, never by claim expiry.
+     * **Scoped to tasks a dispatcher executes**, via the one shared predicate — see `task-predicates`.
+     * Expressed that way rather than as a list of the runner columns that happened to exist when this
+     * was written: the earlier form named `AgentID` and `ActionID` only, and the day `PromptID`
+     * arrived, a crashed prompt task became unrecoverable and undiagnosable in the same stroke.
+     *
+     * **Tasks a person completes are exempt.** One never carries a claim, so `In Progress` with no
+     * claim is its *legitimate* parked shape — an approval waiting on someone. Normalizing it would
+     * reset that approval out from under the user. Their lifecycle is driven by `DueAt` notification
+     * and escalation, never by claim expiry.
      *
      * Only expired claims are reclaimed; a live claim is left strictly alone, which is what keeps a
      * slow-but-healthy task from being executed twice.
@@ -216,7 +271,7 @@ export class TaskClaimStore {
             `SELECT ${db.QuoteIdentifier('ID')}, ${db.QuoteIdentifier('Name')}, ${db.QuoteIdentifier('ClaimedBy')}
              FROM ${this.taskTable(provider)}
              WHERE ${db.QuoteIdentifier('Status')} = 'In Progress'
-               AND (${db.QuoteIdentifier('AgentID')} IS NOT NULL OR ${db.QuoteIdentifier('ActionID')} IS NOT NULL)
+               AND ${MachineTaskSQL(db.QuoteIdentifier.bind(db))}
                AND ${db.QuoteIdentifier('ClaimedBy')} IS NOT NULL
                AND ${db.QuoteIdentifier('ClaimExpiresAt')} IS NOT NULL
                AND ${db.QuoteIdentifier('ClaimExpiresAt')} < '${now}'`,
@@ -231,7 +286,7 @@ export class TaskClaimStore {
                 ${db.QuoteIdentifier('ClaimedBy')} = NULL,
                 ${db.QuoteIdentifier('ClaimExpiresAt')} = NULL
             WHERE ${db.QuoteIdentifier('Status')} = 'In Progress'
-              AND (${db.QuoteIdentifier('AgentID')} IS NOT NULL OR ${db.QuoteIdentifier('ActionID')} IS NOT NULL)
+              AND ${MachineTaskSQL(db.QuoteIdentifier.bind(db))}
               AND ${db.QuoteIdentifier('ClaimedBy')} IS NOT NULL
               AND ${db.QuoteIdentifier('ClaimExpiresAt')} IS NOT NULL
               AND ${db.QuoteIdentifier('ClaimExpiresAt')} < '${now}'`;
@@ -262,7 +317,7 @@ export class TaskClaimStore {
             `SELECT ${db.QuoteIdentifier('ID')}, ${db.QuoteIdentifier('Name')}
              FROM ${this.taskTable(provider)}
              WHERE ${db.QuoteIdentifier('Status')} = 'In Progress'
-               AND (${db.QuoteIdentifier('AgentID')} IS NOT NULL OR ${db.QuoteIdentifier('ActionID')} IS NOT NULL)
+               AND ${MachineTaskSQL(db.QuoteIdentifier.bind(db))}
                AND ${db.QuoteIdentifier('ClaimedBy')} IS NULL`,
             undefined, undefined, contextUser,
         );
@@ -401,7 +456,7 @@ export class TaskClaimStore {
     public async TryClaimContinuation(
         provider: IMetadataProvider,
         parentTaskID: string,
-        deliveredAs: 'delivered' | 'expired',
+        deliveredAs: 'delivered' | 'expired' | 'cancelled',
         workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
@@ -454,34 +509,120 @@ export class TaskClaimStore {
     }
 
     /**
-     * Replaces a graph's debug state — pause/step/breakpoints/edge overrides — in one guarded write.
+     * Clears a graph's debug state entirely — the "stop debugging this run" write.
      *
-     * `$.debug` is written whole via `JSON_QUERY` rather than field-by-field, because the state is
-     * small and always authored as a unit by one verb (pause, resume, set-breakpoints); the
-     * transitions that genuinely race across instances — consuming a step allowance, pausing at a
-     * breakpoint — get their own CAS statements below. Type-scoped like every other payload write in
-     * this store: `MJ: Tasks` also holds conversation tasks and personal to-dos, and a mis-derived
-     * parent ID must not edit somebody's payload.
-     *
-     * @param debugJson the full `TaskGraphDebugState` as JSON, or `null` to clear debugging entirely
+     * Whole-bag, and safe to be: deleting `$.debug` is the one operation that genuinely owns every
+     * field in it. Every PARTIAL change goes through {@link TryWriteDebugFields}, because a
+     * read-merge-write of the whole bag puts back whatever the fields a verb does not own held at
+     * read time — most sharply resurrecting a step allowance the dispatcher consumed in between.
      */
-    public async TryWriteDebugState(
+    public async TryClearDebugState(
         provider: IMetadataProvider,
         parentTaskID: string,
-        debugJson: string | null,
         workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
         const db = this.sql(provider);
         const payload = db.QuoteIdentifier('InputPayload');
-        const value = debugJson == null ? 'NULL' : `JSON_QUERY('${this.escape(debugJson)}')`;
         const sql = `
             UPDATE ${this.taskTable(provider)}
-            SET ${payload} = JSON_MODIFY(${payload}, '$.debug', ${value})
+            SET ${payload} = JSON_MODIFY(${payload}, '$.debug', NULL)
             WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
               AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
               AND ISJSON(${payload}) = 1`;
         return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
+     * One field of the debug bag, as a value the statement can write.
+     *
+     * Typed rather than a raw SQL fragment so a caller cannot inject one: the shape decides how the
+     * value is rendered, and every string goes through {@link escape}.
+     */
+    public static DebugField(path: string, value: TaskGraphDebugFieldValue): TaskGraphDebugFieldWrite {
+        return { Path: path, Value: value };
+    }
+
+    /**
+     * Writes named fields of a graph's debug bag, leaving every other field alone.
+     *
+     * **Why field-scoped rather than rewriting `$.debug`.** A read-merge-write of the whole bag is
+     * the same stale-snapshot hazard as a full-row save, one level down: a verb that reads the bag,
+     * merges its own change, and writes the result puts back whatever the fields it does NOT own
+     * held at read time. The sharp case is the step allowance — if the dispatcher consumes it
+     * between a `SetBreakpoints` read and its write, the rewrite *resurrects* the consumed
+     * allowance and one press of Step releases two waves, straight through the CAS that exists to
+     * prevent exactly that. Writing only the paths a verb owns removes the class rather than
+     * narrowing the window.
+     *
+     * Paths are nested `JSON_MODIFY` calls, so the whole set lands in one statement.
+     */
+    public async TryWriteDebugFields(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        fields: readonly TaskGraphDebugFieldWrite[],
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        if (fields.length === 0) return true;
+        const db = this.sql(provider);
+        const payload = db.QuoteIdentifier('InputPayload');
+
+        // Innermost first, so the outermost JSON_MODIFY sees every prior change — and every write
+        // starts from a payload whose containing objects are known to exist (see ensureObjects).
+        const expression = fields.reduce(
+            (inner, field) => `JSON_MODIFY(${inner}, '${this.escape(field.Path)}', ${this.renderDebugValue(field.Value)})`,
+            this.ensureObjects(payload, fields.map((f) => f.Path)),
+        );
+
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${payload} = ${expression}
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
+              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
+              AND ISJSON(${payload}) = 1`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
+     * Wraps a payload expression so every object CONTAINING one of these paths exists.
+     *
+     * `JSON_MODIFY` does not create intermediate objects: writing `$.debug.paused` into a payload
+     * with no `debug` key, or `$.debug.edgeOverrides."<id>"` with no override map yet, silently
+     * changes nothing — which for a control verb means the write reports success (rowcount 1, the
+     * row WAS updated, just not the way anyone meant) and the workflow never pauses. A graph only
+     * acquires a `debug` key the first time somebody debugs it, so this is the NORMAL first call,
+     * not an edge case.
+     *
+     * Each containing object is created only when absent, shallowest first, so an existing bag is
+     * never replaced.
+     */
+    private ensureObjects(payload: string, paths: readonly string[]): string {
+        const parents = new Set<string>();
+        for (const path of paths) {
+            for (const prefix of ContainingPaths(path)) parents.add(prefix);
+        }
+        // Shallowest first: `$.debug` must exist before `$.debug.edgeOverrides` can be added to it.
+        const ordered = [...parents].sort((a, b) => a.length - b.length);
+        return ordered.reduce(
+            (inner, parent) =>
+                `CASE WHEN JSON_QUERY(${inner}, '${this.escape(parent)}') IS NULL` +
+                ` THEN JSON_MODIFY(${inner}, '${this.escape(parent)}', JSON_QUERY('{}'))` +
+                ` ELSE ${inner} END`,
+            payload,
+        );
+    }
+
+    /** Renders one debug value as a SQL literal `JSON_MODIFY` will store with the right JSON type. */
+    private renderDebugValue(value: TaskGraphDebugFieldValue): string {
+        switch (value.Kind) {
+            // `NULL` in lax mode DELETES the key, which is what "this verb cleared it" should mean.
+            case 'null': return 'NULL';
+            case 'bool': return `CAST(${value.Value ? 1 : 0} AS BIT)`;
+            case 'string': return `'${this.escape(value.Value)}'`;
+            // JSON_QUERY keeps objects and arrays as JSON rather than storing them as a string.
+            case 'json': return `JSON_QUERY('${this.escape(value.Value)}')`;
+        }
     }
 
     /**
@@ -517,6 +658,11 @@ export class TaskClaimStore {
      * Guarded on "not already paused" so two instances arriving at the same breakpoint in the same
      * interval produce one `BreakpointHit` announcement, not two. The graph's existing breakpoint
      * list and edge overrides are untouched — only the pause fields are written.
+     *
+     * The `$.debug` object is created when absent, for the same reason
+     * {@link TaskGraphService.SetBreakpoints}' write needs it: a graph whose breakpoints were set
+     * and then cleared has no `debug` key, and `JSON_MODIFY` will not create one — so without this
+     * the pause would report success and the workflow would run straight through its breakpoint.
      */
     public async TryPauseAtBreakpoint(
         provider: IMetadataProvider,
@@ -527,9 +673,10 @@ export class TaskClaimStore {
     ): Promise<boolean> {
         const db = this.sql(provider);
         const payload = db.QuoteIdentifier('InputPayload');
+        const base = this.ensureObjects(payload, ['$.debug.paused']);
         const sql = `
             UPDATE ${this.taskTable(provider)}
-            SET ${payload} = JSON_MODIFY(JSON_MODIFY(JSON_MODIFY(${payload},
+            SET ${payload} = JSON_MODIFY(JSON_MODIFY(JSON_MODIFY(${base},
                     '$.debug.paused', CAST(1 AS BIT)),
                     '$.debug.pausedReason', 'breakpoint'),
                     '$.debug.pausedAtTaskID', '${this.escape(breakpointTaskID)}')
@@ -547,10 +694,17 @@ export class TaskClaimStore {
      * Guarded on `Status='Pending'`: skipping running, terminal, or claimed work would rewrite
      * history or race an executor, and `Skipped` already means exactly "this branch was not taken,
      * dependents proceed" — so downstream semantics come for free from the existing machinery.
+     *
+     * **Type-scoped, like every other write in this store that a caller-supplied ID reaches.**
+     * `MJ: Tasks` also holds conversation tasks and users' personal to-dos; without the
+     * discriminator an operator verb pointed at a mis-derived (or hostile) ID could write `Skipped`
+     * onto somebody's to-do. The row is proven to be a step of a workflow graph by its own type,
+     * not by the caller's say-so.
      */
     public async TrySkipPending(
         provider: IMetadataProvider,
         taskID: string,
+        workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
         const db = this.sql(provider);
@@ -558,7 +712,42 @@ export class TaskClaimStore {
             UPDATE ${this.taskTable(provider)}
             SET ${db.QuoteIdentifier('Status')} = 'Skipped'
             WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
+              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
               AND ${db.QuoteIdentifier('Status')} = 'Pending'`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
+     * Replaces a task's input, guarded on the status the caller believes it is in.
+     *
+     * **Why this is a guarded statement and not `task.Save()`.** The obvious shape — load, check
+     * `Status === 'Pending'` in memory, save — is an unconditional full-row UPDATE carrying the
+     * whole loaded snapshot. A task claimed between the load and the save has its `Status`,
+     * `ClaimedBy` and `ClaimExpiresAt` reverted to that snapshot *while its body executes*, after
+     * which a second instance claims it again and the step runs twice. That is the stale-snapshot
+     * class this file's header exists to prevent, and it does not become safe because the window is
+     * small — the dispatcher polls every few seconds.
+     *
+     * `expectedStatus` is a parameter because two verbs need it: editing the brief of a step that
+     * has not started (`Pending`) and correcting the brief of one that failed, on the way into a
+     * retry (`Failed`).
+     */
+    public async TryUpdateInputPayload(
+        provider: IMetadataProvider,
+        taskID: string,
+        inputPayload: string | null,
+        expectedStatus: 'Pending' | 'Failed',
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const value = inputPayload == null ? 'NULL' : `'${this.escape(inputPayload)}'`;
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${db.QuoteIdentifier('InputPayload')} = ${value}
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
+              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
+              AND ${db.QuoteIdentifier('Status')} = '${this.escape(expectedStatus)}'`;
         return (await this.affectedRows(db, sql, contextUser)) === 1;
     }
 
@@ -571,30 +760,41 @@ export class TaskClaimStore {
      * underneath it would hand dependents an output the still-running body is about to contradict —
      * that case must go through Cancel or wait for the claim to lapse. Downstream edges evaluate
      * against the supplied output exactly as they would a runner's.
+     *
+     * **The lapsed-claim test uses the DATABASE clock, not this process's.** With app/DB skew — or
+     * skew between two app servers — a claim that is live on the clock that wrote it can read as
+     * expired on the clock that judges it, and this verb would then complete a task underneath a
+     * running executor. That interleaving is the entire reason the gate is narrow, so the gate must
+     * not be the thing that gets it wrong. The database is the one reference every instance shares.
+     * (Residual asymmetry, stated rather than hidden: `ClaimExpiresAt` is *written* from the
+     * claiming process's clock by `TryClaim`, so this trades app-vs-app skew for app-vs-DB skew.
+     * Moving the write to `SYSUTCDATETIME()` too would close it completely, but that is a change to
+     * the Round 1 claim protocol itself and does not belong in a debug verb.)
      */
     public async TryForceComplete(
         provider: IMetadataProvider,
         taskID: string,
         outputPayload: string | null,
+        workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
         const db = this.sql(provider);
-        const nowIso = new Date().toISOString();
         const output = outputPayload == null ? 'NULL' : `'${this.escape(outputPayload)}'`;
         const sql = `
             UPDATE ${this.taskTable(provider)}
             SET ${db.QuoteIdentifier('Status')} = 'Complete',
                 ${db.QuoteIdentifier('OutputPayload')} = ${output},
                 ${db.QuoteIdentifier('ErrorMessage')} = NULL,
-                ${db.QuoteIdentifier('CompletedAt')} = '${nowIso}',
+                ${db.QuoteIdentifier('CompletedAt')} = SYSUTCDATETIME(),
                 ${db.QuoteIdentifier('PercentComplete')} = 100,
                 ${db.QuoteIdentifier('ClaimedBy')} = NULL,
                 ${db.QuoteIdentifier('ClaimExpiresAt')} = NULL
             WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
+              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
               AND (${db.QuoteIdentifier('Status')} IN ('Pending','Failed','Blocked')
                    OR (${db.QuoteIdentifier('Status')} = 'In Progress'
                        AND (${db.QuoteIdentifier('ClaimExpiresAt')} IS NULL
-                            OR ${db.QuoteIdentifier('ClaimExpiresAt')} < '${nowIso}')))`;
+                            OR ${db.QuoteIdentifier('ClaimExpiresAt')} < SYSUTCDATETIME())))`;
         return (await this.affectedRows(db, sql, contextUser)) === 1;
     }
 

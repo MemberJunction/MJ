@@ -21,10 +21,10 @@
  * @module @memberjunction/task-graph
  */
 import { RegisterClass } from '@memberjunction/global';
-import { BaseRemotableOperation, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { BaseRemotableOperation, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity } from '@memberjunction/core-entities';
-import { ParseTaskGraphParentMetadata, TaskGraphService, TaskGraphSubmitContext } from '../TaskGraphService';
+import { ParseTaskGraphParentMetadata, TASK_TYPE_NAME, TaskGraphService, TaskGraphSubmitContext } from '../TaskGraphService';
 import type { EdgeOverrideVerdict, StepTarget, TaskGraphDebugState } from '../debug-state';
 
 // ── wire contracts ─────────────────────────────────────────────────────────
@@ -105,7 +105,16 @@ async function authorizeGraphControl(
     return null;
 }
 
-/** Resolves a child task's graph, so task-scoped verbs authorize against the same owner. */
+/**
+ * Resolves a child task's graph, so task-scoped verbs authorize against the same owner.
+ *
+ * **Proves the parent is a WORKFLOW graph, not merely that the task has one.** `MJ: Tasks` holds
+ * conversation tasks and users' personal to-dos alongside workflow steps, and both of those can be
+ * parented too — so "has a ParentID" is not "is a step of a workflow run". Without the type check
+ * the ownership gate below is the only thing standing between these verbs and any parented row in
+ * the table, and for an Owner-type caller that gate returns before loading anything. The guarded
+ * statements carry the same discriminator as a second layer; this is the first.
+ */
 async function graphOfTask(
     taskID: string,
     provider: IMetadataProvider,
@@ -114,7 +123,35 @@ async function graphOfTask(
     const task = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', user);
     if (!(await task.Load(taskID))) return { error: 'No such step.' };
     if (!task.ParentID) return { error: 'That task is not a step of a workflow run.' };
+
+    const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', user);
+    if (!(await parent.Load(task.ParentID))) return { error: 'That step\'s workflow run could not be read.' };
+    const workflowTypeID = await resolveWorkflowTaskTypeID(provider, user);
+    if (!workflowTypeID || !UUIDsEqual(parent.TypeID ?? '', workflowTypeID)) {
+        return { error: 'That task is not a step of a workflow run.' };
+    }
     return { parentTaskID: task.ParentID };
+}
+
+/**
+ * The `AI Workflow` task type's ID, or null when the row does not exist.
+ *
+ * Read rather than created: these verbs act on graphs that already exist, so an absent type row
+ * means there are no workflow graphs to act on — minting one from a debug verb would be a write on
+ * a read path, and would make the check it feeds vacuously pass.
+ */
+async function resolveWorkflowTaskTypeID(provider: IMetadataProvider, user: UserInfo): Promise<string | null> {
+    const result = await RunView.FromMetadataProvider(provider).RunView<{ ID: string }>(
+        {
+            EntityName: 'MJ: Task Types',
+            ExtraFilter: `Name='${TASK_TYPE_NAME}'`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            MaxRows: 1,
+        },
+        user,
+    );
+    return result.Success ? (result.Results?.[0]?.ID ?? null) : null;
 }
 
 function failed(errorMessage: string): TaskGraphDebugControlOutput {

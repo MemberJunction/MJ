@@ -93,8 +93,9 @@ export class TaskGraphFrameNotification {
   @Field(() => Number, { nullable: true })
   claimedCount?: number;
 
+  /** The dispatcher instance's own load across every graph — not this graph's in-flight count. */
   @Field(() => Number, { nullable: true })
-  inFlightCount?: number;
+  instanceInFlightCount?: number;
 
   // ── NodeProgress ──────────────────────────────────────────────────────────
   @Field(() => String, { nullable: true })
@@ -217,7 +218,7 @@ export class TaskGraphFrameResolver {
       eligibleCount: payload.EligibleCount,
       heldCount: payload.HeldCount,
       claimedCount: payload.ClaimedCount,
-      inFlightCount: payload.InFlightCount,
+      instanceInFlightCount: payload.InstanceInFlightCount,
       progressMessage: payload.ProgressMessage,
       progressPercent: payload.ProgressPercent,
       date: new Date(),

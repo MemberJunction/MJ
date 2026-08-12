@@ -43,7 +43,7 @@ import {
     ConfigOf,
 } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
-import { TaskClaimStore } from './TaskClaimStore';
+import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
 import { ParseTaskGraphDebugState, type EdgeOverrideVerdict, type StepTarget, type TaskGraphDebugState } from './debug-state';
 
 /** Context a submission carries beyond the graph itself. */
@@ -113,7 +113,7 @@ export type TaskGraphParentMetadata = {
      * distinction has to survive in the row, or an expired settlement is indistinguishable from a
      * delivered one the moment anybody looks afterwards.
      */
-    continuationDeliveredAs?: 'delivered' | 'expired';
+    continuationDeliveredAs?: 'delivered' | 'expired' | 'cancelled';
 };
 
 /**
@@ -165,7 +165,7 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
             reinvokeDepth: Number.isFinite(parsed.reinvokeDepth) ? Number(parsed.reinvokeDepth) : 0,
             // Guarded like the others: this is read to explain a settlement after the fact, and an
             // arbitrary string arriving from a hand edit should read as "unknown", not be echoed.
-            continuationDeliveredAs: parsed.continuationDeliveredAs === 'delivered' || parsed.continuationDeliveredAs === 'expired'
+            continuationDeliveredAs: DELIVERY_OUTCOMES.has(parsed.continuationDeliveredAs as string)
                 ? parsed.continuationDeliveredAs
                 : undefined,
         };
@@ -173,6 +173,27 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
         return { ...DEFAULT_PARENT_METADATA };
     }
 }
+
+/**
+ * How a settlement's announcement ended — the values `TryClaimContinuation` may record.
+ *
+ * `expired` means found too late to announce; `cancelled` means there was deliberately nobody left
+ * to announce to, because the run that submitted the graph was cancelled. Both are settlements that
+ * completed WITHOUT an announcement, and keeping them distinct is the difference between "we missed
+ * it" and "we chose not to".
+ */
+const DELIVERY_OUTCOMES: ReadonlySet<string> = new Set(['delivered', 'expired', 'cancelled']);
+
+/** What a cancellation actually managed to do. */
+export type TaskGraphCancelResult = {
+    /** False when anything the caller asked to stop is still running. */
+    Success: boolean;
+    /** True only when every non-terminal task in the graph — and its descendants — is Cancelled. */
+    Cancelled: boolean;
+    /** Named so the caller can say which parts of the workflow are still going. */
+    UncancelledTaskNames: string[];
+    ErrorMessage?: string;
+};
 
 /** True when a continuation chain has gone as far as it may. */
 export function IsReinvokeCapReached(meta: TaskGraphParentMetadata): boolean {
@@ -515,21 +536,30 @@ export class TaskGraphService {
     }
 
     /**
-     * Cancels a graph and everything in it that has not already settled.
+     * Cancels a graph, everything in it that has not already settled, and everything it started.
      *
      * Cancels children first: a parent marked `Cancelled` while children are still `Pending` would
      * leave the dispatcher free to pick those children up, which is the opposite of what the caller
      * asked for.
+     *
+     * **The verdict is the outcome, not the attempt** (R2-9). This returned `true` unconditionally
+     * while logging each child that failed to cancel — so one failed save left that child `Pending`,
+     * told the caller cancellation had succeeded, and let the dispatcher run the child afterwards.
+     * The graph could then settle `Complete` and ANNOUNCE ITS COMPLETION into the conversation of a
+     * workflow the user had cancelled. A partial cancel now says so and names what survived; the
+     * graph stays active, so retrying is meaningful rather than cosmetic.
      */
-    public async Cancel(parentTaskID: string, context: TaskGraphSubmitContext): Promise<boolean> {
+    public async Cancel(parentTaskID: string, context: TaskGraphSubmitContext): Promise<TaskGraphCancelResult> {
         try {
             const children = await this.loadChildren(parentTaskID, context);
+            const uncancelled: string[] = [];
             for (const child of children) {
                 // Terminal work is left alone — cancelling a completed task would rewrite history.
                 if (['Complete', 'Failed', 'Cancelled'].includes(child.Status)) continue;
                 child.Status = 'Cancelled';
                 if (!(await child.Save())) {
                     LogError(`[TaskGraphService] Failed to cancel task ${child.ID}: ${child.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                    uncancelled.push(child.Name);
                 }
             }
 
@@ -556,11 +586,80 @@ export class TaskGraphService {
             // outcome.
             //
             // The parent stays non-terminal until then, so the sweep still sees it as active work.
-            return true;
+
+            // WHAT THIS WORKFLOW STARTED IS ALSO CANCELLED (R2-9).
+            //
+            // A graph's step can be an agent that submits a graph of its own, and those sub-graphs
+            // persist as ROOTS — linked back only through the child task's `AgentRunID`. So
+            // cancelling a workflow left its descendants running, and on settlement one of them can
+            // REINVOKE the cancelled workflow's own agent for a fresh billed turn: the user stopped
+            // a workflow and it started itself again.
+            //
+            // Bounded by the reinvoke depth cap, which is what bounds the chain in the first place.
+            const nested = await this.cancelNestedGraphs(children, context, 0);
+            uncancelled.push(...nested);
+
+            if (uncancelled.length > 0) {
+                return {
+                    Success: false,
+                    Cancelled: false,
+                    UncancelledTaskNames: uncancelled,
+                    ErrorMessage:
+                        `Cancelled what it could, but ${uncancelled.length} task(s) could not be cancelled ` +
+                        `(${uncancelled.join(', ')}). The workflow is still active — retry the cancel.`,
+                };
+            }
+            return { Success: true, Cancelled: true, UncancelledTaskNames: [] };
         } catch (e) {
-            LogError(`[TaskGraphService] Cancel failed for ${parentTaskID}: ${e instanceof Error ? e.message : String(e)}`);
-            return false;
+            const message = e instanceof Error ? e.message : String(e);
+            LogError(`[TaskGraphService] Cancel failed for ${parentTaskID}: ${message}`);
+            return { Success: false, Cancelled: false, UncancelledTaskNames: [], ErrorMessage: message };
         }
+    }
+
+    /**
+     * Cancels the graphs that this graph's own steps submitted, one level at a time.
+     *
+     * The linkage is `child task → AgentRunID → the graphs that run submitted`, which is exactly how
+     * the continuation chain finds its way back up; walking it downward is the same relation read the
+     * other way. Depth-capped by the same constant that caps reinvocation, so a self-referencing
+     * workflow cannot make cancellation recurse further than it could have spawned.
+     *
+     * @returns names of tasks in descendant graphs that could not be cancelled
+     */
+    private async cancelNestedGraphs(
+        children: readonly MJTaskEntity[],
+        context: TaskGraphSubmitContext,
+        depth: number,
+    ): Promise<string[]> {
+        if (depth >= MAX_REINVOKE_DEPTH) return [];
+        const runIDs = [...new Set(children.map((c) => c.AgentRunID).filter((id): id is string => !!id))];
+        if (runIDs.length === 0) return [];
+
+        const rv = RunView.FromMetadataProvider(context.Provider);
+        const inList = runIDs.map((id) => `'${id}'`).join(',');
+        // Graphs those runs submitted: root tasks of the workflow type carrying the run's ID.
+        const subGraphs = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Tasks',
+                ExtraFilter: `ParentID IS NULL AND AgentRunID IN (${inList})`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+                BypassCache: true,
+            },
+            context.ContextUser,
+        );
+        if (!subGraphs.Success) {
+            LogError(`[TaskGraphService] Could not look for sub-graphs while cancelling: ${subGraphs.ErrorMessage}`);
+            return [];
+        }
+
+        const failures: string[] = [];
+        for (const row of subGraphs.Results ?? []) {
+            const result = await this.Cancel(row.ID, context);
+            if (!result.Success) failures.push(...result.UncancelledTaskNames);
+        }
+        return failures;
     }
 
     /**
@@ -630,8 +729,26 @@ export class TaskGraphService {
 
             // An edited input rides the retry: the operator saw WHY it failed and is re-running the
             // step with a corrected brief. Applies to this run only — the graph's spec is long gone.
+            //
+            // Written through the GUARDED statement rather than onto the in-memory row, so the edit
+            // cannot ride along on the full-row save below. The window here is narrower than
+            // `UpdateTaskInput`'s (the pre-state is `Failed`, so a concurrent claim is not the
+            // hazard — a concurrent human retry is), but the shape is the same and it costs one
+            // statement to not have it. The rest of this method's full-row save predates this PR
+            // and is Round 3's to purge; the new write does not add to it.
             if (inputPayload !== undefined) {
-                task.InputPayload = typeof inputPayload === 'string' ? inputPayload : JSON.stringify(inputPayload);
+                const typeID = await this.ensureTaskType(context);
+                const json = typeof inputPayload === 'string' ? inputPayload : JSON.stringify(inputPayload);
+                const wrote = await this.debugWrites.TryUpdateInputPayload(
+                    context.Provider, taskID, json, 'Failed', typeID, context.ContextUser,
+                );
+                if (!wrote) {
+                    LogError(`[TaskGraphService] Could not apply the edited input to task ${taskID}; retry refused rather than re-running the old brief.`);
+                    return false;
+                }
+                // Keep the in-memory row in step with what was just written, so the save below does
+                // not put the old input back.
+                task.InputPayload = json;
             }
             task.Status = 'Pending';
             task.ErrorMessage = null;
@@ -708,22 +825,34 @@ export class TaskGraphService {
         return { typeID, inputPayload: row.InputPayload, status: row.Status };
     }
 
-    /** Merges an update over a graph's current debug state and writes the result, guarded. */
-    private async writeDebugState(
+    /**
+     * Writes the debug-bag fields a verb OWNS, and reports the state that results.
+     *
+     * Field-scoped on purpose — see {@link TaskClaimStore.TryWriteDebugFields}. A verb declares the
+     * paths it is responsible for; everything else in the bag is left exactly as the database has
+     * it, so a concurrent step-consume, breakpoint edit, or override cannot be undone by a verb that
+     * was not talking about them.
+     *
+     * The returned state is this instance's best view (read + the fields just written) and is
+     * advisory — the same posture the console takes toward frames.
+     */
+    private async writeDebugFields(
         parentTaskID: string,
         context: TaskGraphSubmitContext,
-        mutate: (current: TaskGraphDebugState) => TaskGraphDebugState | null,
+        build: (current: TaskGraphDebugState) => {
+            Fields: readonly TaskGraphDebugFieldWrite[];
+            Next: TaskGraphDebugState;
+        },
     ): Promise<{ Success: boolean; Debug?: TaskGraphDebugState; ErrorMessage?: string }> {
         const parent = await this.loadWorkflowParent(parentTaskID, context);
         if (!parent) return this.controlResult(false, undefined, 'Not a workflow graph this control plane can act on.');
 
-        const next = mutate(ParseTaskGraphDebugState(parent.inputPayload));
-        const json = next === null || Object.keys(next).length === 0 ? null : JSON.stringify(next);
-        const ok = await this.debugWrites.TryWriteDebugState(
-            context.Provider, parentTaskID, json, parent.typeID, context.ContextUser,
+        const { Fields, Next } = build(ParseTaskGraphDebugState(parent.inputPayload));
+        const ok = await this.debugWrites.TryWriteDebugFields(
+            context.Provider, parentTaskID, Fields, parent.typeID, context.ContextUser,
         );
         if (!ok) return this.controlResult(false, undefined, 'The debug state could not be written; see the server log.');
-        return this.controlResult(true, next ?? {});
+        return this.controlResult(true, Next);
     }
 
     /**
@@ -732,26 +861,41 @@ export class TaskGraphService {
      * why there is no "what happens to the claim" question to answer.
      */
     public async PauseGraph(parentTaskID: string, context: TaskGraphSubmitContext, pausedByUserID?: string | null) {
-        return this.writeDebugState(parentTaskID, context, (current) => ({
-            ...current,
-            paused: true,
-            pausedBy: pausedByUserID ?? context.ContextUser?.ID ?? null,
-            pausedReason: 'user',
-            pausedAtTaskID: null,
-            step: undefined,
+        const pausedBy = pausedByUserID ?? context.ContextUser?.ID ?? null;
+        return this.writeDebugFields(parentTaskID, context, (current) => ({
+            // Pause owns the pause fields AND the step allowance: an allowance armed a moment ago is
+            // for a run the operator has now stopped, so clearing it is the verb's meaning rather
+            // than a side effect. Breakpoints and overrides are untouched — they outlive a pause.
+            Fields: [
+                TaskClaimStore.DebugField('$.debug.paused', { Kind: 'bool', Value: true }),
+                TaskClaimStore.DebugField('$.debug.pausedReason', { Kind: 'string', Value: 'user' }),
+                TaskClaimStore.DebugField('$.debug.pausedBy', pausedBy ? { Kind: 'string', Value: pausedBy } : { Kind: 'null' }),
+                TaskClaimStore.DebugField('$.debug.pausedAtTaskID', { Kind: 'null' }),
+                TaskClaimStore.DebugField('$.debug.step', { Kind: 'null' }),
+            ],
+            Next: { ...current, paused: true, pausedBy, pausedReason: 'user', pausedAtTaskID: null, step: undefined },
         }));
     }
 
     /** Resumes a paused graph. Breakpoints and edge overrides survive — only the pause clears. */
     public async ResumeGraph(parentTaskID: string, context: TaskGraphSubmitContext) {
-        return this.writeDebugState(parentTaskID, context, (current) => {
+        return this.writeDebugFields(parentTaskID, context, (current) => {
             const next: TaskGraphDebugState = { ...current };
             delete next.paused;
             delete next.pausedBy;
             delete next.pausedReason;
             delete next.pausedAtTaskID;
             delete next.step;
-            return next;
+            return {
+                Fields: [
+                    TaskClaimStore.DebugField('$.debug.paused', { Kind: 'null' }),
+                    TaskClaimStore.DebugField('$.debug.pausedReason', { Kind: 'null' }),
+                    TaskClaimStore.DebugField('$.debug.pausedBy', { Kind: 'null' }),
+                    TaskClaimStore.DebugField('$.debug.pausedAtTaskID', { Kind: 'null' }),
+                    TaskClaimStore.DebugField('$.debug.step', { Kind: 'null' }),
+                ],
+                Next: next,
+            };
         });
     }
 
@@ -767,7 +911,10 @@ export class TaskGraphService {
         if (!current.paused) {
             return this.controlResult(false, current, 'Step only applies to a paused workflow — pause it first.');
         }
-        return this.writeDebugState(parentTaskID, context, (state) => ({ ...state, step: target }));
+        return this.writeDebugFields(parentTaskID, context, (state) => ({
+            Fields: [TaskClaimStore.DebugField('$.debug.step', { Kind: 'string', Value: target })],
+            Next: { ...state, step: target },
+        }));
     }
 
     /**
@@ -781,11 +928,19 @@ export class TaskGraphService {
         if (foreign.length > 0) {
             return this.controlResult(false, undefined, `Not steps of this workflow: ${foreign.join(', ')}`);
         }
-        return this.writeDebugState(parentTaskID, context, (current) => {
+        return this.writeDebugFields(parentTaskID, context, (current) => {
             const next: TaskGraphDebugState = { ...current };
             if (taskIDs.length > 0) next.breakpoints = [...taskIDs];
             else delete next.breakpoints;
-            return next;
+            return {
+                Fields: [
+                    TaskClaimStore.DebugField(
+                        '$.debug.breakpoints',
+                        taskIDs.length > 0 ? { Kind: 'json', Value: JSON.stringify(taskIDs) } : { Kind: 'null' },
+                    ),
+                ],
+                Next: next,
+            };
         });
     }
 
@@ -808,14 +963,41 @@ export class TaskGraphService {
             return this.controlResult(false, undefined, 'That path does not belong to this workflow.');
         }
 
-        return this.writeDebugState(parentTaskID, context, (current) => {
+        // AN UNCONDITIONAL PATH CANNOT BE OVERRIDDEN — refused here so the two dialects agree.
+        //
+        // The engine reads overrides at different depths: an ordinary edge only consults one when
+        // it HAS a condition, while the exclusive evaluator consults it before its no-condition
+        // early return. Left open, the same override would force an unconditional exclusive edge to
+        // lose while doing nothing at all to an unconditional ordinary one — the operator's answer
+        // meaning two different things depending on a property of the graph they cannot see.
+        // Refusing is the conservative reading, and it costs nothing: "don't take this branch" is
+        // already expressible, precisely, as SkipTask on the step itself.
+        if (verdict !== null && !edge.Condition?.trim()) {
+            return this.controlResult(
+                false,
+                undefined,
+                'That path has no condition to answer — it is always taken. To stop the branch, skip its step instead.',
+            );
+        }
+
+        return this.writeDebugFields(parentTaskID, context, (current) => {
             const overrides = { ...(current.edgeOverrides ?? {}) };
             if (verdict === null) delete overrides[edgeID];
             else overrides[edgeID] = verdict;
             const next: TaskGraphDebugState = { ...current };
             if (Object.keys(overrides).length > 0) next.edgeOverrides = overrides;
             else delete next.edgeOverrides;
-            return next;
+            return {
+                // Scoped to THIS edge's key, not the whole map: two operators answering two
+                // different held paths at once must not overwrite each other's answer.
+                Fields: [
+                    TaskClaimStore.DebugField(
+                        `$.debug.edgeOverrides."${edgeID}"`,
+                        verdict === null ? { Kind: 'null' } : { Kind: 'string', Value: verdict },
+                    ),
+                ],
+                Next: next,
+            };
         });
     }
 
@@ -825,7 +1007,8 @@ export class TaskGraphService {
      * ask for work the operator decided against.
      */
     public async SkipTask(taskID: string, context: TaskGraphSubmitContext): Promise<{ Success: boolean; ErrorMessage?: string }> {
-        const ok = await this.debugWrites.TrySkipPending(context.Provider, taskID, context.ContextUser);
+        const typeID = await this.ensureTaskType(context);
+        const ok = await this.debugWrites.TrySkipPending(context.Provider, taskID, typeID, context.ContextUser);
         if (!ok) {
             return { Success: false, ErrorMessage: 'Only a step that has not started can be skipped.' };
         }
@@ -853,7 +1036,8 @@ export class TaskGraphService {
         const json = outputPayload == null
             ? null
             : typeof outputPayload === 'string' ? outputPayload : JSON.stringify(outputPayload);
-        const ok = await this.debugWrites.TryForceComplete(context.Provider, taskID, json, context.ContextUser);
+        const typeID = await this.ensureTaskType(context);
+        const ok = await this.debugWrites.TryForceComplete(context.Provider, taskID, json, typeID, context.ContextUser);
         if (!ok) {
             return {
                 Success: false,
@@ -866,6 +1050,13 @@ export class TaskGraphService {
     /**
      * Replaces a Pending step's input — the "edit the brief before stepping" move at a breakpoint.
      * Applies to this run only; the step must not have started.
+     *
+     * **A guarded statement, not load-check-save.** The in-memory `Status === 'Pending'` check plus
+     * `task.Save()` is an unconditional full-row UPDATE: a task claimed in the window between the
+     * load and the save has its claim columns reverted to the pre-claim snapshot *while its body
+     * runs*, and a second instance then claims it again — the step executes twice. See
+     * {@link TaskClaimStore.TryUpdateInputPayload}, which makes the check and the write one atomic
+     * operation whose rowcount is the answer.
      */
     public async UpdateTaskInput(
         taskID: string,
@@ -873,14 +1064,16 @@ export class TaskGraphService {
         context: TaskGraphSubmitContext,
     ): Promise<{ Success: boolean; ErrorMessage?: string }> {
         try {
-            const task = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
-            if (!(await task.Load(taskID))) return { Success: false, ErrorMessage: 'No such step.' };
-            if (task.Status !== 'Pending') {
-                return { Success: false, ErrorMessage: 'Only a step that has not started can have its input edited.' };
-            }
-            task.InputPayload = typeof inputPayload === 'string' ? inputPayload : JSON.stringify(inputPayload);
-            if (!(await task.Save())) {
-                return { Success: false, ErrorMessage: task.LatestResult?.CompleteMessage ?? 'Save failed.' };
+            const typeID = await this.ensureTaskType(context);
+            const json = typeof inputPayload === 'string' ? inputPayload : JSON.stringify(inputPayload);
+            const ok = await this.debugWrites.TryUpdateInputPayload(
+                context.Provider, taskID, json, 'Pending', typeID, context.ContextUser,
+            );
+            if (!ok) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Only a workflow step that has not started can have its input edited.',
+                };
             }
             return { Success: true };
         } catch (e) {
@@ -988,23 +1181,69 @@ export class TaskGraphService {
         return { Success: true, Map: found };
     }
 
-    /** Finds or creates the task type used for orchestrated graphs. */
+    /**
+     * Finds or creates the task type used for orchestrated graphs — exactly one of it, ever.
+     *
+     * **This resolves the engine's discriminator, not a label** (R2-7). Round 1 scoped every sweep
+     * arm and both payload-writing guards to this type, so a second row sharing the name lets
+     * different processes bind different IDs — and a graph stamped with the other one is invisible
+     * to the sweep, never claimed, never settled, its submitting run `Paused` forever, with no
+     * error anywhere.
+     *
+     * Race-safe by INSERT-then-reselect rather than by checking harder. Two concurrent first-ever
+     * submissions both read "not there" and both insert; the unique index added in this round makes
+     * the loser's insert fail, and the loser then re-reads and finds the winner's row. Checking
+     * first is what created the window, so the fix cannot be a better check.
+     */
     private async ensureTaskType(context: TaskGraphSubmitContext): Promise<string> {
-        const existing = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string }>(
-            { EntityName: 'MJ: Task Types', ExtraFilter: `Name='${TASK_TYPE_NAME}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
-            context.ContextUser,
-        );
-        const found = existing.Results?.[0]?.ID;
+        const found = await this.findTaskTypeID(context);
         if (found) return found;
 
         const tt = await context.Provider.GetEntityObject<MJTaskTypeEntity>('MJ: Task Types', context.ContextUser);
         tt.NewRecord();
         tt.Name = TASK_TYPE_NAME;
         tt.Description = 'Tasks created by agent-orchestrated workflows.';
-        if (!(await tt.Save())) {
-            throw new Error(`Could not create task type: ${tt.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        if (await tt.Save()) return tt.ID;
+
+        // The insert lost. Almost certainly to the unique index and another process that got there
+        // first — so re-read before treating it as a failure. Any other cause falls through to the
+        // throw below with its own message intact.
+        const winner = await this.findTaskTypeID(context);
+        if (winner) return winner;
+
+        throw new Error(`Could not create task type: ${tt.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    }
+
+    /**
+     * The `AI Workflow` task type's ID, resolved deterministically.
+     *
+     * `ORDER BY` is not decoration: two rows sharing the name come back in whatever order the engine
+     * chooses, so an unordered `MaxRows: 1` lets two processes bind different IDs from the same
+     * data. The index this round adds makes duplicates impossible going forward; the ordering makes
+     * the resolution deterministic on a database that still has some, and the warning makes the
+     * situation visible rather than merely survivable.
+     */
+    private async findTaskTypeID(context: TaskGraphSubmitContext): Promise<string | null> {
+        const existing = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Task Types',
+                ExtraFilter: `Name='${TASK_TYPE_NAME}'`,
+                Fields: ['ID'],
+                OrderBy: '__mj_CreatedAt ASC, ID ASC',
+                ResultType: 'simple',
+                MaxRows: 2,
+            },
+            context.ContextUser,
+        );
+        const rows = existing.Results ?? [];
+        if (rows.length > 1) {
+            LogError(
+                `[TaskGraphService] More than one '${TASK_TYPE_NAME}' task type exists. Binding the oldest ` +
+                `(${rows[0].ID}), but graphs stamped with the other are invisible to the dispatcher's ` +
+                `sweep and will never settle. Merge them.`,
+            );
         }
-        return tt.ID;
+        return rows[0]?.ID ?? null;
     }
 
     /** Writes the parent task that represents the graph as a whole. */
@@ -1211,8 +1450,14 @@ export class TaskGraphService {
     }
 
     private async loadChildren(parentTaskID: string, context: TaskGraphSubmitContext): Promise<MJTaskEntity[]> {
+        // `BypassCache` for the reason the dispatcher documents at every one of its reads (C4): task
+        // status is written by the claim protocol's direct SQL, which fires no cache invalidation.
+        // A cached read here returns PRE-EXECUTION state, and both callers act on status — Cancel's
+        // "leave terminal work alone" guard would pass for a task that has since completed, and
+        // write `Cancelled` over a `Complete` row. That is precisely the history-rewriting the guard
+        // exists to prevent, performed by the guard itself.
         const result = await RunView.FromMetadataProvider(context.Provider).RunView<MJTaskEntity>(
-            { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentTaskID}'`, ResultType: 'entity_object' },
+            { EntityName: 'MJ: Tasks', ExtraFilter: `ParentID='${parentTaskID}'`, ResultType: 'entity_object', BypassCache: true },
             context.ContextUser,
         );
         return (result.Success ? result.Results : []) ?? [];

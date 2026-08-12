@@ -195,6 +195,14 @@ export type TaskGraphFrameKind =
      */
     | 'BreakpointHit'
     /**
+     * A step allowance could not release anything on this pass — the named work is already running,
+     * or this host has no runner for it. The allowance is NOT spent, and `Reason` says so.
+     *
+     * Exists because the alternative is the worst shape a control can have: the button reports
+     * nothing, the allowance is gone, and the run does not move.
+     */
+    | 'StepRefused'
+    /**
      * A runner reported progress inside one task — message and optional percentage.
      *
      * The bridge from node-level execution (an agent run's own progress stream) up to graph-level
@@ -267,10 +275,18 @@ export type TaskGraphFrame = {
     EligibleCount?: number;
     /** Tasks held by an unanswerable condition or undecided fork. */
     HeldCount?: number;
-    /** Tasks this instance claimed on this pass. */
+    /** Tasks this instance claimed on this pass, for THIS graph. */
     ClaimedCount?: number;
-    /** Tasks this instance is executing right now. */
-    InFlightCount?: number;
+    /**
+     * Tasks this INSTANCE is executing right now, across every graph it is working — not this
+     * graph's in-flight count.
+     *
+     * Named for what it measures because the two readings differ and a viewer cannot tell them
+     * apart: it is the dispatcher's own load against `MaxConcurrentTasks`, which is what explains a
+     * graph whose steps are ready but not starting. A per-graph count would answer a different
+     * question (and is visible anyway as the steps rendered running on the canvas).
+     */
+    InstanceInFlightCount?: number;
 
     // ── NodeProgress ────────────────────────────────────────────────────────
     /** What the runner says it is doing. */

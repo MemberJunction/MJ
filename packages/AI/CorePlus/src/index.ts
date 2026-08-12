@@ -24,6 +24,7 @@ export * from './MJAIAgentRunStepEntityExtended';
 export * from './MJAIPromptRunEntityExtended';
 export * from './MJEntityDocumentEntityExtended';
 export * from './task-graph/graph-algorithms';
+export * from './task-graph/condition-roots';
 export * from './task-graph/task-graph-spec';
 export * from './task-graph/task-graph-validator';
 export * from './task-graph/flow-graph-compiler';

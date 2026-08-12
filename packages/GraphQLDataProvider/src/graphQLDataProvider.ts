@@ -82,7 +82,8 @@ export interface TaskGraphFrameEvent {
     eligibleCount?: number;
     heldCount?: number;
     claimedCount?: number;
-    inFlightCount?: number;
+    /** The dispatcher instance's own load across every graph — not this graph's in-flight count. */
+    instanceInFlightCount?: number;
     /** NodeProgress */
     progressMessage?: string;
     progressPercent?: number;
@@ -3409,7 +3410,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 eligibleCount
                 heldCount
                 claimedCount
-                inFlightCount
+                instanceInFlightCount
                 progressMessage
                 progressPercent
                 date

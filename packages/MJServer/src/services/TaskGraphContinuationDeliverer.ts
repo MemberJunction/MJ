@@ -135,7 +135,17 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                 continuationDepth: params.ReinvokeDepth + 1,
             });
         } catch (e) {
-            LogError(`[TaskGraphContinuationDeliverer] Reinvoking for "${params.WorkflowName}" threw`, undefined, e);
+            // FALL BACK, don't just log (C3). Both load-failure paths above already post instead of
+            // reinvoking, on the principle that a completed workflow's outcome must reach the user
+            // somehow — but a throw out of `RunAgent` skipped that and lost the outcome entirely.
+            // The marker has been claimed by the time this runs, so nothing will look at the graph
+            // again: the work finished, and the only record of it is a server log line.
+            LogError(`[TaskGraphContinuationDeliverer] Reinvoking for "${params.WorkflowName}" threw — posting instead`, undefined, e);
+            try {
+                await this.PostMessage(params);
+            } catch (fallbackError) {
+                LogError(`[TaskGraphContinuationDeliverer] The fallback post for "${params.WorkflowName}" also failed`, undefined, fallbackError);
+            }
         }
     }
 

@@ -111,6 +111,24 @@ The console is the observability half of the hardening program — each R2 headl
 
 The debugger does not *replace* the fixes — it makes the next ring of seams discoverable in minutes instead of a four-track adversarial review.
 
+## 5a. Review round 1 — dispositions (hardening-loop review of `6cd337d`, applied)
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | `UpdateTaskInput` was a load-check-then-full-row-save (the R3-9 stale-snapshot class): a task claimed inside the window had its claim columns reverted mid-execution, so a second instance could claim and run it again | **Fixed.** New `TaskClaimStore.TryUpdateInputPayload` — a guarded single statement with a rowcount verdict, parameterized on the expected status so both the edit-at-breakpoint (`Pending`) and the retry ride-along (`Failed`) use it |
+| 2 | Task-level verbs were not type-scoped: for an Owner-type caller the ownership gate returns before loading anything, so a mis-derived ID could write onto conversation tasks or personal to-dos | **Fixed, both layers.** `graphOfTask` now proves the parent's `TypeID` is the workflow type, and `TrySkipPending` / `TryForceComplete` / `TryUpdateInputPayload` all carry the `TypeID` predicate |
+| 3 | Branch predated Round 2; PR conflicted and the reviewed tree lacked the mechanisms the PR body cited | **Fixed.** `next` merged; dispatcher integration re-verified against the engine as it actually is (see the R2-4 note below) |
+| 4 | `TryForceComplete` judged claim expiry on the app-server clock, so skew could complete a task under a live claim | **Fixed.** Both the expiry test and `CompletedAt` now use `SYSUTCDATETIME()`. Residual asymmetry stated in the method doc: `ClaimExpiresAt` is still *written* from the claiming process's clock by `TryClaim`, so this trades app-vs-app skew for app-vs-DB skew — closing it fully is a change to the Round 1 claim protocol, not a debug verb |
+| 5 | `writeDebugState`'s read-merge-write could resurrect a step allowance the dispatcher consumed in between — one press releasing two waves | **Fixed by removing the class.** Partial changes now go through `TryWriteDebugFields`, which writes only the paths a verb owns; the whole-bag write survives only as `TryClearDebugState`, the one operation that genuinely owns every field. Edge overrides are keyed per edge, so two operators answering two held paths cannot overwrite each other |
+| 6 | A consumed step allowance could release nothing (no runner, already in flight) and say nothing | **Fixed.** The allowance is consumed only after the allowed set survives the local runner/in-flight filters; when nothing is releasable the allowance stays armed and a new `StepRefused` frame names why, surfaced in the console's stall banner |
+| 7 | `emittedGateVerdicts` / `nodeProgressLastEmit` / `announcedPaused` grew for the process lifetime | **Fixed.** Re-keyed by graph and purged on settlement. `ownerByParentID` is deliberately kept — it is the delivery key for the settlement frame itself, one string per graph |
+| Note | Override asymmetry between the ordinary and exclusive dialects | **Fixed conservatively:** `SetEdgeOverride` refuses an override on an unconditional path, since "don't take this branch" is already precisely expressible as `SkipTask` |
+| Note | `PassCompleted.InFlightCount` is instance-global but the frame is per-graph | **Renamed** to `InstanceInFlightCount`, documented as the dispatcher's own load against `MaxConcurrentTasks` — which is what explains a graph whose steps are ready but not starting |
+| Note | R3-2 coordination on the terminal-decides set | **Already live and consumed.** R2-4 landed `failureSemantics`-driven `terminalDecides`; the gate-frame emission now reads the same `decidingStatuses` value the resolution uses, so the console cannot announce a fork the engine left undecided under `'block'` |
+| Note | `readDebugState` cost one query per graph per pass | **Batched.** `primeDebugStates` reads every graph a pass touches in one query; pass cost is flat in the number of live workflows |
+
+One defect was found while fixing #5 and is not in the review: `JSON_MODIFY` does not create intermediate objects, so every debug-bag write — including the original `TryPauseAtBreakpoint` — silently no-opped on a graph that had never carried debug state, while the UPDATE still reported a row. `ContainingPaths` + `ensureObjects` create the containers first, pinned by five tests.
+
 ## 6. Risks & open questions
 
 - **Frame volume on wide graphs** — per-transition emission with dedup should hold; if not, `GateDecision` batches per pass. Measure in RT-2.

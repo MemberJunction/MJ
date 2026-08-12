@@ -398,6 +398,11 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
                     this.StallNotice = `"${frame.taskName ?? 'A step'}" is waiting on a path that can't be answered${frame.reason ? ` — ${frame.reason}` : ''}.`;
                 }
                 break;
+            case 'StepRefused':
+                // The step press could not release anything yet. Said out loud rather than left as
+                // a button that appeared to do nothing — the allowance is still armed.
+                this.StallNotice = frame.reason ?? 'The step could not start yet; it stays queued.';
+                break;
             case 'GraphSettled':
                 this.StallNotice = null;
                 void this.loadData(); // the list row's status/duration just changed

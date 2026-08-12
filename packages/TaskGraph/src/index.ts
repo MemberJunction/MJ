@@ -12,6 +12,7 @@ export * from './TaskGraphService';
 export * from './TaskClaimStore';
 export * from './settlement-rescue';
 export * from './condition-gate';
+export * from './task-predicates';
 export * from './DispatcherConditionEvaluator';
 export * from './TaskGraphDispatcher';
 export * from './TaskGraphSubmitterImpl';

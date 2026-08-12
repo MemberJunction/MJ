@@ -12,6 +12,7 @@
  *    with side effects. So the test is that failure and falsehood take different branches.
  */
 import { describe, it, expect, vi } from 'vitest';
+import { CONDITION_ROOTS } from '@memberjunction/ai-core-plus';
 import {
     BuildConditionContext,
     DecideGate,
@@ -44,7 +45,7 @@ describe('DecideGate — an undecided origin is never asked', () => {
         expect(DecideGate('Pending', () => ok(true))).toBe('keep');
     });
 
-    it.each([...TERMINAL_FOR_CONDITIONS])('evaluates a %s origin', (status) => {
+    it.each([...TERMINAL_FOR_CONDITIONS].filter((s) => s !== 'Skipped'))('evaluates a %s origin', (status) => {
         const evaluate = vi.fn(() => ok(true));
         DecideGate(status, evaluate);
         expect(evaluate).toHaveBeenCalledOnce();
@@ -52,7 +53,8 @@ describe('DecideGate — an undecided origin is never asked', () => {
 
     it('decides an edge leaving a SKIPPED origin instead of hanging on it', () => {
         // A branch that was not taken is settled. If conditions on its outgoing edges never resolved,
-        // the tail of every losing branch would wait forever.
+        // the tail of every losing branch would wait forever. It is decided WITHOUT evaluating —
+        // see the R2-3 block below for why asking would be worse than not deciding at all.
         expect(DecideGate('Skipped', () => ok(false))).toBe('drop');
     });
 });
@@ -93,6 +95,97 @@ describe('DecideGate — "false" and "cannot tell" are different answers', () =>
     it('a failed verdict holds even when it carries a truthy Value', () => {
         // Success is the discriminator, not Value. A half-populated verdict must not read as a pass.
         expect(DecideGate('Complete', () => ({ Success: false, Value: true }))).toBe('hold');
+    });
+});
+
+describe('R2-3: data absence is the data answering no, not a broken guard', () => {
+    // The classification boundary, and it was in the wrong place. `BuildConditionContext` mapped a
+    // null origin output to `payload: null`, so the documented dialect — `payload.approved === true`
+    // — THREW, and every throw became a hold. A hold on a terminal origin can never resolve: the
+    // output is frozen and the same evaluation repeats forever. Both the legacy walker and the
+    // pre-P2 dispatcher ran these graphs to completion.
+    //
+    // Parity target: in the flow engine `payload` is the agent's accumulated payload — an object,
+    // never null — so `payload.x` on a missing key is `undefined`, which is simply falsy.
+
+    it('gives a no-output origin a payload that property access survives', () => {
+        const ctx = BuildConditionContext(origin({ Status: 'Complete' }), null);
+        expect(() => (ctx.payload as Record<string, unknown>).approved).not.toThrow();
+        expect((ctx.payload as Record<string, unknown>).approved).toBeUndefined();
+    });
+
+    it('does the same for the other object-shaped roots', () => {
+        // `output` is the dispatcher dialect's accessor and `stepResult.result` the flow dialect's;
+        // a condition reaching through either on a step that produced nothing must not stall.
+        const ctx = BuildConditionContext(origin({ Status: 'Complete' }), null);
+        for (const root of [ctx.output, ctx.data, ctx.context]) {
+            expect(root).toBeTruthy();
+            expect(() => (root as Record<string, unknown>).anything).not.toThrow();
+        }
+        expect((ctx.stepResult as { result: unknown }).result).toBeTruthy();
+    });
+
+    it('still reports the origin honestly — absence of output is not absence of outcome', () => {
+        // The status dialect stays real. A recovery edge reading `failed` or `stepResult.Success`
+        // must keep working on a step that died before producing anything.
+        const ctx = BuildConditionContext(origin({ Status: 'Failed', ErrorMessage: 'boom' }), null);
+        expect(ctx.failed).toBe(true);
+        expect(ctx.succeeded).toBe(false);
+        expect(ctx.errorMessage).toBe('boom');
+        expect(ctx.stepResult).toMatchObject({ Success: false });
+    });
+
+    it('does not fabricate data when the origin DID produce output', () => {
+        const ctx = BuildConditionContext(origin(), { payload: { approved: true } });
+        expect(ctx.payload).toEqual({ approved: true });
+    });
+
+    it('reads a deeper absent chain as false, not as a permanent hold', () => {
+        // `payload.a.b` on an absent `a` throws even with a null-safe root. That is the data being
+        // absent, not the guard being broken, and the difference is a graph that completes versus
+        // one that waits forever.
+        expect(DecideGate('Complete', () => broken(`Cannot read properties of undefined (reading 'b')`)))
+            .toBe('drop');
+    });
+
+    it('still HOLDS an unknown root — that IS a broken guard', () => {
+        // A name outside the envelope is a typo or a scope the engine does not provide. P2's contract
+        // stands for exactly this case: a condition that fails to evaluate does not open the gate.
+        expect(DecideGate('Complete', () => broken('unknownVar is not defined'))).toBe('hold');
+    });
+
+    it('holds on an error it cannot classify — the conservative default is unchanged', () => {
+        // Silently dropping a branch is invisible; a hold is visible and recoverable. An
+        // unrecognised failure must land on the visible side.
+        expect(DecideGate('Complete', () => broken('something nobody has seen before'))).toBe('hold');
+    });
+});
+
+describe('R2-3: a branch that was not taken does not get a vote', () => {
+    it('DROPS a conditional edge out of a Skipped origin without evaluating it', () => {
+        // The walker never stood at a skipped step, so it never read that step's outgoing guards.
+        // Evaluating them here against an empty envelope is not equivalent: a NEGATED condition
+        // (`!payload.error`, `payload.count === 0`) comes out TRUE, the edge is kept, and a skipped
+        // branch hands its target a satisfied prerequisite — work runs on a path nobody took.
+        const evaluate = vi.fn(() => ok(true));
+        expect(DecideGate('Skipped', evaluate)).toBe('drop');
+        expect(evaluate).not.toHaveBeenCalled();
+    });
+
+    it('drops it whatever the condition would have said', () => {
+        expect(DecideGate('Skipped', () => ok(false))).toBe('drop');
+        expect(DecideGate('Skipped', () => broken('anything'))).toBe('drop');
+    });
+});
+
+describe('the envelope and the spec\'s declared roots are one contract', () => {
+    it('provides exactly the roots the spec says a condition may reference', () => {
+        // Split across two packages: the validator refuses conditions on the strength of
+        // CONDITION_ROOTS, and this builds what actually resolves at run time. A key here with no
+        // entry there is a root nobody is allowed to reference; an entry there with no key here is a
+        // root that resolves to nothing. Both are silent, so they are pinned to each other.
+        const provided = Object.keys(BuildConditionContext(origin(), null)).sort();
+        expect(provided).toEqual([...CONDITION_ROOTS].sort());
     });
 });
 
