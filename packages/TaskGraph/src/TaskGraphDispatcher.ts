@@ -1630,7 +1630,17 @@ export class TaskGraphDispatcher implements IShutdownable {
     private async workflowTaskTypeID(provider: IMetadataProvider): Promise<string | null> {
         if (this.cachedWorkflowTaskTypeID) return this.cachedWorkflowTaskTypeID;
         const result = await RunView.FromMetadataProvider(provider).RunView<{ ID: string }>(
-            { EntityName: 'MJ: Task Types', ExtraFilter: `Name='${TASK_TYPE_NAME}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
+            {
+                EntityName: 'MJ: Task Types',
+                ExtraFilter: `Name='${TASK_TYPE_NAME}'`,
+                Fields: ['ID'],
+                // Ordered, and reading two (R2-7). An unordered `MaxRows: 1` against two rows sharing
+                // the name lets this instance bind a different ID than `Submit` did — after which
+                // every graph the other stamped is invisible to all three sweep arms here.
+                OrderBy: '__mj_CreatedAt ASC, ID ASC',
+                ResultType: 'simple',
+                MaxRows: 2,
+            },
             this.contextUser,
         );
         if (!result.Success) {
@@ -1639,7 +1649,15 @@ export class TaskGraphDispatcher implements IShutdownable {
             LogError(`[TaskGraphDispatcher] Could not resolve the '${TASK_TYPE_NAME}' task type: ${result.ErrorMessage}`);
             return null;
         }
-        this.cachedWorkflowTaskTypeID = result.Results?.[0]?.ID ?? null;
+        const rows = result.Results ?? [];
+        if (rows.length > 1) {
+            LogError(
+                `[TaskGraphDispatcher] More than one '${TASK_TYPE_NAME}' task type exists. Binding the ` +
+                `oldest (${rows[0].ID}); any graph stamped with the other is invisible to this sweep and ` +
+                `will never settle. Merge them.`,
+            );
+        }
+        this.cachedWorkflowTaskTypeID = rows[0]?.ID ?? null;
         return this.cachedWorkflowTaskTypeID;
     }
 
