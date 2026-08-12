@@ -429,5 +429,173 @@
       "lastModified": "2026-07-01T17:33:49.233Z",
       "checksum": "78dddb644c91a4a7ded6c5a6dce59ee727f9537911165d8df1f9c22610432e88"
     }
+  },
+  {
+    "fields": {
+      "Name": "Submit Task Graph",
+      "OperationKey": "TaskGraph.Submit",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Control",
+      "Description": "Validate and durably persist a dependency-ordered task graph, returning as soon as it is safe. Does NOT wait for execution: the durable dispatcher runs the graph independently, so a submitted graph outlives the submitting request, agent run, and server. Producer-agnostic — an agent, deterministic code, or a UI can all submit. Implemented by TaskGraphSubmitOperation in @memberjunction/task-graph.",
+      "GenerationType": "Manual",
+      "ExecutionMode": "Sync",
+      "RequiredScope": "taskgraph:execute",
+      "RequiresSystemUser": false,
+      "Status": "Active",
+      "InputTypeName": "TaskGraphSubmitInput",
+      "InputTypeDefinition": "/** Input for `TaskGraph.Submit`. */\nexport interface TaskGraphSubmitInput {\n    /** The graph to submit, as a `TaskGraphSpec`. */\n    spec: {\n        workflowName: string;\n        reasoning?: string;\n        tasks: Array<{\n            /** One step. `kind` selects which `configuration` shape applies. */\n            tempId: string;\n            name: string;\n            description: string;\n            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External';\n            configuration:\n                | { agentName: string; message?: string; templateParameters?: Record<string, string> }\n                | { actionName: string; inputMapping?: string; outputMapping?: string }\n                | { assignToUserID?: string; instructions?: string }\n                | { promptName: string; templateParameters?: Record<string, string> }\n                | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }\n                | { condition: string; itemVariable?: string; maxIterations?: number }\n                | { domain: string; ref?: string };\n            dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;\n            policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };\n            /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */\n            layout?: { x?: number; y?: number; width?: number; height?: number };\n            inputPayload?: Record<string, unknown>;\n        }>;\n        continuation?: 'message' | 'reinvoke' | 'none';\n        durable?: boolean;\n        /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */\n        failureSemantics?: 'block' | 'edges';\n    };\n    /** Environment the tasks belong to. */\n    environmentID: string;\n    /** Conversation this graph answers, when submitted from a conversational channel. */\n    conversationDetailID?: string;\n}",
+      "OutputTypeName": "TaskGraphSubmitOutput",
+      "OutputTypeDefinition": "/** Output of `TaskGraph.Submit`. */\nexport interface TaskGraphSubmitOutput {\n    /** True when the graph was validated and persisted. */\n    success: boolean;\n    /** Parent task representing the whole graph — the handle for status, cancel and retry. */\n    parentTaskID?: string;\n    /** Every validation failure, not just the first, when the graph was rejected. */\n    errorMessage?: string;\n}"
+    },
+    "primaryKey": {
+      "ID": "9A3CAF75-D794-4223-9AEE-A40AE8A0A012"
+    },
+    "sync": {
+      "lastModified": "2026-08-11T22:51:23.062Z",
+      "checksum": "4f72d0b464e9dc8133154227eb24f9c1b7674afa479f3c869435de04fe08e4f1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cancel Task Graph",
+      "OperationKey": "TaskGraph.Cancel",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Control",
+      "Description": "Cancel a task graph and every task in it that has not already settled. Children are cancelled before the parent so the dispatcher cannot pick up pending work mid-cancel. Terminal tasks are left untouched. Implemented by TaskGraphCancelOperation in @memberjunction/task-graph.",
+      "GenerationType": "Manual",
+      "ExecutionMode": "Sync",
+      "RequiredScope": "taskgraph:execute",
+      "RequiresSystemUser": false,
+      "Status": "Active",
+      "InputTypeName": "TaskGraphControlInput",
+      "InputTypeDefinition": "/** Input for the task-graph control operations. */\nexport interface TaskGraphControlInput {\n    /** Parent task ID identifying the graph. */\n    parentTaskID: string;\n}",
+      "OutputTypeName": "TaskGraphControlOutput",
+      "OutputTypeDefinition": "/** Output of the task-graph control operations — the graph's status after the action. */\nexport interface TaskGraphControlOutput {\n    success: boolean;\n    /** The parent task's status after the action. */\n    status?: string;\n    errorMessage?: string;\n}"
+    },
+    "primaryKey": {
+      "ID": "4B4F21F7-7C47-471C-A573-B39275EF23BB"
+    },
+    "sync": {
+      "lastModified": "2026-08-07T23:58:30.463Z",
+      "checksum": "16a65ee1663d8826d6a7566c6b1116c018bd8d3eb5a1e09806ca74f545014e4a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Retry Task",
+      "OperationKey": "TaskGraph.RetryTask",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Control",
+      "Description": "Return a failed task to Pending so the dispatcher runs it again, and clear any dependents it had Blocked. Unblocking is not optional: retrying a task while its dependents stay Blocked leaves the graph exactly as stuck as before. Implemented by TaskGraphRetryTaskOperation in @memberjunction/task-graph.",
+      "GenerationType": "Manual",
+      "ExecutionMode": "Sync",
+      "RequiredScope": "taskgraph:execute",
+      "RequiresSystemUser": false,
+      "Status": "Active",
+      "InputTypeName": "TaskGraphRetryInput",
+      "InputTypeDefinition": "/** Input for `TaskGraph.RetryTask`. */\nexport interface TaskGraphRetryInput {\n    /** The failed task to retry. */\n    taskID: string;\n}",
+      "OutputTypeName": "TaskGraphControlOutput",
+      "OutputTypeDefinition": null
+    },
+    "primaryKey": {
+      "ID": "4EB01F8A-B68E-4F59-AC0C-4A5D470A4808"
+    },
+    "sync": {
+      "lastModified": "2026-08-07T23:58:30.479Z",
+      "checksum": "a511cd2319d56bbd059cb425bc535a83b901a5b024b9412946aed50b89d8efea"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Task Graph Status",
+      "OperationKey": "TaskGraph.GetStatus",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Control",
+      "Description": "Return a snapshot of a task graph's progress — the parent's rolled-up status and per-task states — without waiting for anything. This is how a client, an agent, or an external caller observes a running graph now that execution is durable and nobody holds a request open. Implemented by TaskGraphGetStatusOperation in @memberjunction/task-graph.",
+      "GenerationType": "Manual",
+      "ExecutionMode": "Sync",
+      "RequiredScope": "taskgraph:read",
+      "RequiresSystemUser": false,
+      "Status": "Active",
+      "InputTypeName": "TaskGraphControlInput",
+      "InputTypeDefinition": null,
+      "OutputTypeName": "TaskGraphStatusOutput",
+      "OutputTypeDefinition": "/** Output of `TaskGraph.GetStatus`. */\nexport interface TaskGraphStatusOutput {\n    success: boolean;\n    /** Rolled-up parent status: In Progress | Complete | Failed | Blocked | Cancelled. */\n    status?: string;\n    /** Percent complete, counting only tasks that actually completed. */\n    percentComplete?: number;\n    /** Per-task snapshot. */\n    tasks?: Array<{\n        taskID: string;\n        name: string;\n        status: string;\n        agentRunID?: string;\n        errorMessage?: string;\n    }>;\n    errorMessage?: string;\n}"
+    },
+    "primaryKey": {
+      "ID": "3A126CFF-363D-4272-B905-D35BE0F9956F"
+    },
+    "sync": {
+      "lastModified": "2026-08-07T23:58:30.492Z",
+      "checksum": "ba6016d3d02a397c562a4d3ca14e3cfb48c52c0d9929342e60e57a8669a8886c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Save Workflow",
+      "OperationKey": "Workflow.Save",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Record Processes",
+      "Description": "Validate and persist a workflow — its graph of steps AND the triggers that fire it — by reconciling the substrates that already exist (a Flow agent for the graph, Scheduled Jobs for schedules). Creates no new storage: there is no Workflow table, because a second definition of a scheduled thing would give the scheduler two masters. Producer-agnostic — an agent over MCP, an Action, or the workflow editor all call this. Implemented by WorkflowSaveServerOperation in @memberjunction/task-graph.",
+      "InputTypeName": "WorkflowSaveInput",
+      "InputTypeDefinition": "/** Input for `Workflow.Save`. */\nexport interface WorkflowSaveInput {\n    /** The workflow to save, as a `WorkflowSpec`. */\n    spec: {\n        name: string;\n        description?: string;\n        status: 'Active' | 'Paused' | 'Draft';\n        graph: {\n            workflowName: string;\n            reasoning?: string;\n            tasks: Array<{\n                /** One step. `kind` selects which `configuration` shape applies. */\n                tempId: string;\n                name: string;\n                description: string;\n                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External';\n                configuration:\n                    | { agentName: string; message?: string; templateParameters?: Record<string, string> }\n                    | { actionName: string; inputMapping?: string; outputMapping?: string }\n                    | { assignToUserID?: string; instructions?: string }\n                    | { promptName: string; templateParameters?: Record<string, string> }\n                    | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }\n                    | { condition: string; itemVariable?: string; maxIterations?: number }\n                    | { domain: string; ref?: string };\n                dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;\n                policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };\n                /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */\n                layout?: { x?: number; y?: number; width?: number; height?: number };\n                inputPayload?: Record<string, unknown>;\n            }>;\n            continuation?: 'message' | 'reinvoke' | 'none';\n            durable?: boolean;\n            /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */\n            failureSemantics?: 'block' | 'edges';\n        };\n        triggers: Array<\n            | { type: 'EntityEvent'; entityName: string; invocationType: string; filter?: string; scopeEntityName?: string; scopeRecordID?: string }\n            | { type: 'Schedule'; cron: string; timezone?: string }\n            | { type: 'OnDemand' }>;\n        notifications?: { condition: 'Always' | 'OnFailure' | 'OnChange'; recipients: string[] };\n    };\n}",
+      "OutputTypeName": "WorkflowSaveOutput",
+      "OutputTypeDefinition": "/** Output of `Workflow.Save`. */\nexport interface WorkflowSaveOutput {\n    /** True when the workflow was validated and every substrate reconciled. */\n    success: boolean;\n    /** The Flow agent the workflow's graph persisted as — the handle for everything downstream. */\n    agentID?: string;\n    /** Scheduled Jobs created, updated or disabled by this save. */\n    scheduledJobIDs?: string[];\n    /** Triggers the spec asked for that this build cannot yet reconcile, stated rather than dropped. */\n    unreconciled?: string[];\n    /** Every validation failure, not just the first, when the workflow was rejected. */\n    errorMessage?: string;\n}",
+      "ExecutionMode": "Sync",
+      "RequiredScope": "workflow:write",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8C89A2A0-DB22-4EE2-86CF-40555401BAF0"
+    },
+    "sync": {
+      "lastModified": "2026-08-11T22:51:23.098Z",
+      "checksum": "561f101e8049a0b88ea4af8a2fb8a6db653deb2a4c322db446e5dfdb54186749"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Validate Workflow",
+      "OperationKey": "Workflow.Validate",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Record Processes",
+      "Description": "Check a workflow for problems without saving it. Runs the identical validation Workflow.Save runs, so a workflow that validates here cannot be rejected for a different reason on save. Exists so an agent drafting a workflow can iterate before committing anything — the draft-then-confirm shape dry-run and Plan Mode already established. Implemented by WorkflowValidateServerOperation in @memberjunction/task-graph.",
+      "InputTypeName": "WorkflowSaveInput",
+      "InputTypeDefinition": "/** Input for `Workflow.Save`. */\nexport interface WorkflowSaveInput {\n    /** The workflow to save, as a `WorkflowSpec`. */\n    spec: {\n        name: string;\n        description?: string;\n        status: 'Active' | 'Paused' | 'Draft';\n        graph: {\n            workflowName: string;\n            reasoning?: string;\n            tasks: Array<{\n                /** One step. `kind` selects which `configuration` shape applies. */\n                tempId: string;\n                name: string;\n                description: string;\n                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External';\n                configuration:\n                    | { agentName: string; message?: string; templateParameters?: Record<string, string> }\n                    | { actionName: string; inputMapping?: string; outputMapping?: string }\n                    | { assignToUserID?: string; instructions?: string }\n                    | { promptName: string; templateParameters?: Record<string, string> }\n                    | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }\n                    | { condition: string; itemVariable?: string; maxIterations?: number }\n                    | { domain: string; ref?: string };\n                dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;\n                policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };\n                /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */\n                layout?: { x?: number; y?: number; width?: number; height?: number };\n                inputPayload?: Record<string, unknown>;\n            }>;\n            continuation?: 'message' | 'reinvoke' | 'none';\n            durable?: boolean;\n            /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */\n            failureSemantics?: 'block' | 'edges';\n        };\n        triggers: Array<\n            | { type: 'EntityEvent'; entityName: string; invocationType: string; filter?: string; scopeEntityName?: string; scopeRecordID?: string }\n            | { type: 'Schedule'; cron: string; timezone?: string }\n            | { type: 'OnDemand' }>;\n        notifications?: { condition: 'Always' | 'OnFailure' | 'OnChange'; recipients: string[] };\n    };\n}",
+      "OutputTypeName": "WorkflowValidateOutput",
+      "OutputTypeDefinition": "/** Output of `Workflow.Validate`. */\nexport interface WorkflowValidateOutput {\n    valid: boolean;\n    /** One entry per problem, each carrying a machine-readable code. */\n    errors?: Array<{ code: string; message: string; triggerIndex?: number }>;\n}",
+      "ExecutionMode": "Sync",
+      "RequiredScope": "workflow:read",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "7F7EDC70-2668-49CA-BBE6-2E86808D256C"
+    },
+    "sync": {
+      "lastModified": "2026-08-11T22:51:23.118Z",
+      "checksum": "cda79f30eefb25edd2a784cf7dafcedf08ab9a0930bc95b1d88288fffadc30a3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Draft Workflow",
+      "OperationKey": "Workflow.Draft",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Record Processes",
+      "Description": "Draft a workflow's steps from a plain-English description. Returns a TaskGraphSpec and persists NOTHING — the draft goes to the canvas for the author to review, and only Workflow.Save commits it, which is what makes the front door's \"nothing is saved until you approve it\" promise true rather than merely stated. Constrained to agents that actually exist on the instance, because a workflow referencing an unknown agent cannot be saved and a draft that cannot be saved wastes the author's time. Validated with the SAME ValidateTaskGraphSpec the canvas and Workflow.Save run, so a draft that comes back cannot be rejected later for a reason drafting never checked. Implemented by WorkflowDraftServerOperation in @memberjunction/task-graph.",
+      "InputTypeName": "WorkflowDraftInput",
+      "InputTypeDefinition": "/** Input for `Workflow.Draft`. */\nexport interface WorkflowDraftInput {\n    /** What the person wants done, in their own words. */\n    description: string;\n    /** What to call the workflow. Carried through to the draft's `workflowName`. */\n    workflowName: string;\n}",
+      "OutputTypeName": "WorkflowDraftOutput",
+      "OutputTypeDefinition": "/** Output of `Workflow.Draft`. */\nexport interface WorkflowDraftOutput {\n    /** True when a structurally valid draft came back. */\n    success: boolean;\n    /**\n     * The drafted graph, in the same `TaskGraphSpec` shape the canvas and `Workflow.Save` use.\n     *\n     * A DRAFT — nothing is persisted. The author reviews it on the canvas and commits with\n     * `Workflow.Save`, which is what makes \"nothing is saved until you approve it\" true rather than\n     * merely promised.\n     */\n    graph?: {\n        workflowName: string;\n        reasoning?: string;\n        tasks: Array<{\n            /** One step. `kind` selects which `configuration` shape applies. */\n            tempId: string;\n            name: string;\n            description: string;\n            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External';\n            configuration:\n                | { agentName: string; message?: string; templateParameters?: Record<string, string> }\n                | { actionName: string; inputMapping?: string; outputMapping?: string }\n                | { assignToUserID?: string; instructions?: string }\n                | { promptName: string; templateParameters?: Record<string, string> }\n                | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }\n                | { condition: string; itemVariable?: string; maxIterations?: number }\n                | { domain: string; ref?: string };\n            dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;\n            policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };\n            /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */\n            layout?: { x?: number; y?: number; width?: number; height?: number };\n            inputPayload?: Record<string, unknown>;\n        }>;\n        continuation?: 'message' | 'reinvoke' | 'none';\n        durable?: boolean;\n        /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */\n        failureSemantics?: 'block' | 'edges';\n    };\n    /** Why drafting failed, or why the model's output was rejected. */\n    errorMessage?: string;\n}",
+      "ExecutionMode": "Sync",
+      "RequiredScope": "workflow:read",
+      "RequiresSystemUser": "False",
+      "GenerationType": "Manual",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "3456242D-6BC8-4EC0-9AA5-F671B2FCE644"
+    },
+    "sync": {
+      "lastModified": "2026-08-11T22:51:23.155Z",
+      "checksum": "86b91cbac083f799953044b24182b004ec201d22e670252968786a2f2623ad67"
+    }
   }
 ]

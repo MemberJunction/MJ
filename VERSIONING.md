@@ -63,6 +63,32 @@ Plain semver versions are only ever candidates or certified builds. Anything exp
 carries an `-edge.N` suffix. The machine-readable source of truth for what's certified,
 maintained, or end-of-life is [`release-lines.json`](release-lines.json).
 
+### "Does this update touch my database?" — read `dbImpact`, not the digits
+
+**Never infer a schema change from the version number.** On a certified line **everything is a
+patch**, migrations included — a metadata migration, a CodeGen repair, and (rarely) a schema
+migration all ship as `6.1.5` → `6.1.6`. So a patch tells you nothing about your database either
+way, and a minor is a new certified line rather than an announcement about DDL.
+
+The signal is [`dbImpact`](release-lines.json), carried per release and surfaced by `mj versions`
+and the release notes — deliberately, as the honest replacement for smuggling that signal into
+version digits:
+
+| `dbImpact` | Means |
+|---|---|
+| `none` | Code only. |
+| `metadata` | Data-only migration — metadata and config tables. |
+| `repair` | CodeGen-owned procs/views/indexes re-created. Your schema does not change. |
+| `schema` | DDL. Rare on a line, and security-driven when it happens. |
+
+**Do not read MJ's `minor` as "new API", or its `patch` as "no new API" either.** Every package
+shares one `fixed` group (`.changeset/config.json`), so all ~300 move to the same version whether or
+not they changed — a consumer of one package already receives bumps driven entirely by packages they
+do not use. The version number cannot carry per-package semver meaning; `dbImpact` and the release
+notes are where the meaning lives.
+
+Authoring side, for contributors and agents: [`.claude/rules/changesets.md`](.claude/rules/changesets.md).
+
 ### npm dist-tags
 
 | Tag | Meaning |

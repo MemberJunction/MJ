@@ -16,7 +16,8 @@
 import sql from 'mssql';
 import { LoadEnv, LoadDbConfig, Assert } from './harness';
 import { RunView, UserInfo } from '@memberjunction/core';
-import { setupSQLServerClient, SQLServerProviderConfigData, SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { setupSQLServerClient, SQLServerProviderConfigData, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { AIEngine } from '@memberjunction/aiengine';
 // Registers entity subclasses + the AI provider / agent-type / prompt drivers needed to run prompts and
 // agents. The "lite" bootstrap deliberately EXCLUDES @memberjunction/server, so importing it does not drag
@@ -44,7 +45,7 @@ export async function bootstrapAI(): Promise<AICtx> {
     }).connect();
 
     const provider = await setupSQLServerClient(new SQLServerProviderConfigData(pool, db.Schema));
-    await UserCache.Instance.Refresh(pool);
+    await UserCache.Instance.Refresh(provider);
 
     const email = process.env.MJ_TEST_USER_EMAIL?.toLowerCase();
     const user =

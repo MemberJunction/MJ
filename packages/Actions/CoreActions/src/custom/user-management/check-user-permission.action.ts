@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from '@memberjunction/actions';
 import { Metadata, RunView } from "@memberjunction/core";
-import { UserCache } from "@memberjunction/sqlserver-dataprovider";
+import { UserCache } from "@memberjunction/generic-database-provider";
 
 /**
  * Verifies if the current user has a specific role or permission to perform administrative tasks.

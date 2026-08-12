@@ -12,16 +12,21 @@
         <div class="mj-flow-palette-category">
           <div class="mj-flow-palette-category-label">{{ category }}</div>
           @for (nodeType of GetTypesForCategory(category); track nodeType) {
-            <div
+            <!-- A real <button>, not a <div>: clicking a palette entry is the gesture most people
+                 try first, and it used to do literally nothing. The button also brings keyboard
+                 activation and a focus ring with it. fExternalItem still supplies drag-to-place. -->
+            <button
+              type="button"
               class="mj-flow-palette-item"
               fExternalItem
               [fData]="nodeType.Type"
-              [title]="nodeType.Label">
-              <div class="mj-flow-palette-item-icon" [style.backgroundColor]="GetBgColor(nodeType.Color, 0.08)" [style.color]="nodeType.Color">
+              [title]="'Click to add a ' + nodeType.Label + ', or drag it onto the canvas'"
+              (click)="OnNodeTypeActivated(nodeType)">
+              <span class="mj-flow-palette-item-icon" [style.backgroundColor]="GetBgColor(nodeType.Color, 0.08)" [style.color]="nodeType.Color">
                 <i class="fa-solid" [ngClass]="nodeType.Icon"></i>
-              </div>
+              </span>
               <span class="mj-flow-palette-item-label">{{ nodeType.Label }}</span>
-            </div>
+            </button>
           }
         </div>
       }

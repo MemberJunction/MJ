@@ -77,7 +77,7 @@
               </div>
             </div>
             <!-- Schedule indicator -->
-            @if (card.ScheduledActionID) {
+            @if (card.ScheduledJobID) {
               <div class="at-schedule-indicator" (click)="RemoveSchedule(card); $event.stopPropagation()" title="Click to remove schedule">
                 <i class="fa-regular fa-clock"></i>
                 <span>{{ GetScheduleLabel(card) }}</span>
@@ -87,7 +87,7 @@
               <button class="at-source-action-btn" (click)="onEditSource(card); $event.stopPropagation()"><i class="fa-solid fa-pen"></i> Edit</button>
               <button class="at-source-action-btn" (click)="onRunSource(card.ID); $event.stopPropagation()"><i class="fa-solid fa-play"></i> Run</button>
               <button class="at-source-action-btn" (click)="OpenDryRunPreview(card); $event.stopPropagation()"><i class="fa-solid fa-flask"></i> Preview</button>
-              @if (!card.ScheduledActionID) {
+              @if (!card.ScheduledJobID) {
                 <button class="at-source-action-btn at-source-schedule-btn" (click)="OpenScheduleDialog(card); $event.stopPropagation()"><i class="fa-regular fa-clock"></i> Schedule</button>
               }
               <button class="at-source-action-btn at-source-delete-btn" (click)="DeleteSource(card); $event.stopPropagation()"><i class="fa-solid fa-trash"></i> Delete</button>

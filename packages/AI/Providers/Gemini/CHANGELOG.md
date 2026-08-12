@@ -1,5 +1,47 @@
 # Change Log - @memberjunction/ai-gemini
 
+## 6.1.0-edge.2
+
+### Minor Changes
+
+- 5ecfdb4: Realtime voice agents can now **speak first**.
+
+  Conversation-start behavior is not instruction-following: an ElevenLabs realtime agent with no `first_message` produces no audio at all until it receives user audio, whatever the persona prompt says. Every ElevenLabs realtime session therefore opened in silence, waiting for the human to guess they should talk (issue #3557).
+  - **`ElevenLabsRealtime`** now sends an `agent.first_message` conversation-config override, built alongside the existing prompt and voice overrides, so both topologies (server-bridged and client-direct) carry it. The managed agent enables the override, and — because `OverridesSatisfied` requires it too — an agent provisioned by an earlier MJ version is re-PATCHed on next use instead of silently dropping it forever (the failure mode behind #3374). Omitting it preserves today's wait-for-the-user behavior exactly.
+  - **New persona slot `realtime.voice.default.firstMessage`** authors the opening utterance without naming a vendor, filed onto whichever driver resolves under the neutral `firstMessage` key — the same shape as the agnostic `voice`. It reaches both realtime host paths (`BaseAgent` server-bridged and `RealtimeClientSessionService` client-direct). The text is spoken VERBATIM; it is the literal opening line, not guidance about how to open.
+  - **`AssemblyAIRealtime`** honors the same neutral `firstMessage` key for its `greeting` wire slot. The legacy `greeting` config key still works; `firstMessage` wins when it carries something. Both go through the same trim-and-drop-blank rule as the ElevenLabs driver, so one authored value means the same thing whichever vendor runs — in particular a blank `firstMessage` reads as "none authored" and does not suppress a valid legacy `greeting`.
+  - **`firstMessage` is registered in `REALTIME_SHARED_CONFIG_KEYS`**, and the drivers that do not consume it now scrub it. Because an agnostic persona slot is filed onto _whichever_ driver resolves, an unregistered neutral key survives each driver's residual-bag spread and reaches the provider as an unknown session field — it was reaching the OpenAI (and xAI) `session.update` payload on both topologies, and Inworld's raw-override loop was copying it onto the session verbatim. On the OpenAI-protocol endpoints a malformed session object is rejected wholesale, taking the prompt and tools with it. Inworld now scrubs the whole shared vocabulary, closing the same class of leak for the other shared keys too.
+
+  Drivers without a provider-native opening utterance ignore the key and open silently, as before.
+
+### Patch Changes
+
+- 102a692: Map the driver-neutral realtime `voice` key to Gemini's `speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName`, so an authored voice actually reaches a Gemini Live session. Gemini was exempted from the shared-key scrub on the grounds that `voice` is meaningful to it — and it is, but nothing ever translated it: `buildConnectConfig` spread the config bag onto a `LiveConnectConfig`, which has no `voice` property, through an `as` cast that hid the mismatch from `tsc`. The `@google/genai` config converter is a path allowlist, so the value was dropped with no error and nothing on the wire — the same silent-drop bug class fixed one layer up in #3530, one layer down. Fixes #3721.
+
+  `voice` is now consumed before the merge (as `disableAutoResponse` already was) so it can never spread raw, and both realtime topologies are covered by the one mapping: `StartSession` and `CreateClientSession` share `buildConnectConfig`, and the browser driver applies the server-built config verbatim. Because `speechConfig` is a generation-level field it is mask-safe, so the ephemeral-token mint now **token-locks** the voice under `lockAdditionalFields: []` — the server's choice is authoritative on client-direct rather than merely suggested.
+
+  Precedence is per-key at the leaf, matching the #3530 cascade: a caller-supplied raw `speechConfig` keeps whatever voice it already names (a prebuilt voice, a replicated/cloned voice, or a multi-speaker config — documented as mutually exclusive with `voiceConfig`, and rejected outright on any Live session, so a voice is never fabricated beside it), but a raw block that sets only e.g. `languageCode` still receives the authored voice. Block-level winner-takes-all would have re-created the same silent drop in a narrower case. Nothing is dropped in silence: a discarded voice, a blank voice, a non-string `voice`, a `speechConfig` that is not an object, and a `multiSpeakerVoiceConfig` that Live cannot accept are each logged.
+
+  **Behavior change worth watching**: this converts a silent no-op into a live value, so a cross-vendor voice id that previously did nothing on Gemini is now sent as `voiceName`. Verified against the live Gemini API: an invalid name passes the ephemeral-token mint without complaint and then **kills the session when the socket opens** — close code `1007`, `No matching speaker voice found for name: alloy and language:`, surfaced as a `Fatal` session error. So the failure is late and total, not a silent degrade — the same shape as the ElevenLabs note in #3530. Pin the model alongside the voice, or author per-vendor ids under `realtime.voice.providers.<key>`. The driver deliberately does not rewrite that provider error to name the MJ config key: the message already quotes the offending value, so the only thing a translation would add is the key name, and buying it would mean string-matching Google's wording and carrying the sent voice on the session purely to annotate a close frame.
+
+  Unrelated and still open: only `OpenAIRealtime`, `xAIRealtime` and `HuggingFaceRealtime` declare `SupportedVoices` and the native picker's dropdown is gated on that list, so Gemini voices remain reachable through agent metadata and programmatic hosts rather than the picker. The `@google/genai` typings do not enumerate Gemini's prebuilt voice names, so populating that list needs a source outside the SDK.
+
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [11de1a3]
+- Updated dependencies [080f4cd]
+- Updated dependencies [48ff99f]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [de343b5]
+  - @memberjunction/ai@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- @memberjunction/ai@6.1.0-edge.1
+- @memberjunction/global@6.1.0-edge.1
+
 ## 6.1.0-edge.0
 
 ### Patch Changes

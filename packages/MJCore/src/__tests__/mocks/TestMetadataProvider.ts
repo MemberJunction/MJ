@@ -11,6 +11,9 @@ import {
     PotentialDuplicateRequest,
     PotentialDuplicateResponse,
     RunQueryResult,
+    RunViewResult,
+    EntityRecordNameInput,
+    EntityRecordNameResult,
     DatasetResultType,
     DatasetStatusResultType,
     DatasetItemFilterType,
@@ -23,6 +26,8 @@ import { RecordDependency, RecordMergeRequest, RecordMergeResult } from '../../g
 import { CompositeKey } from '../../generic/compositeKey';
 import { TransactionGroupBase } from '../../generic/transactionGroup';
 import { QueryExecutionSpec } from '../../generic/queryExecutionSpec';
+import { RunViewParams } from '../../views/runView';
+import { ScoredCandidate } from '../../generic/scoring/ReciprocalRankFusion';
 
 export class TestMetadataProvider extends ProviderBase {
     private _allowRefresh = true;
@@ -86,11 +91,32 @@ export class TestMetadataProvider extends ProviderBase {
         // No-op
     }
 
-    protected async InternalRunView(): Promise<any> {
+    protected async InternalGetEntityRecordName(_entityName: string, _compositeKey: CompositeKey, _contextUser?: UserInfo): Promise<string> {
+        return 'Test Record';
+    }
+
+    protected async InternalGetEntityRecordNames(_info: EntityRecordNameInput[], _contextUser?: UserInfo): Promise<EntityRecordNameResult[]> {
+        return [];
+    }
+
+    protected async searchEntitiesSemanticPass(
+        _entityDocumentId: string,
+        _searchText: string,
+        _overFetch: number,
+        _embeddingAIModelId: string | null,
+        _contextUser: UserInfo | undefined
+    ): Promise<ScoredCandidate[]> {
+        return [];
+    }
+
+    // Match the abstract signatures (params, contextUser?) so subclass overrides that use the
+    // arguments — e.g. providerBase.dedup.test.ts, providerBase.batchTelemetry.test.ts — stay
+    // assignable to the base type.
+    protected async InternalRunView<T = any>(_params: RunViewParams, _contextUser?: UserInfo): Promise<RunViewResult<T>> {
         return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
     }
 
-    protected async InternalRunViews(): Promise<any[]> {
+    protected async InternalRunViews<T = any>(_params: RunViewParams[], _contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         return [];
     }
 

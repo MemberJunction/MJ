@@ -15,7 +15,7 @@
 
 import { RunView, LogError, type UserInfo, type DatabaseProviderBase } from '@memberjunction/core';
 import type { MJConversationWidgetInstanceEntity } from '@memberjunction/core-entities';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import type { UserPayload } from '../types.js';
 
 const WIDGET_ENTITY = 'MJ: Conversation Widget Instances';

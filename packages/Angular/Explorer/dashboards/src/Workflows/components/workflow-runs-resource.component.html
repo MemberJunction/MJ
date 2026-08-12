@@ -1,0 +1,223 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Runs"
+    Icon="fa-solid fa-timeline"
+    Subtitle="Every workflow that has run — however it was started.">
+
+    <div meta>
+      @if (!IsLoading && Runs.length > 0) {
+        <mj-stat-badge
+          [Count]="VisibleRuns.length"
+          [Total]="Runs.length"
+          Label="runs"></mj-stat-badge>
+      }
+    </div>
+
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="loadData()"></mj-refresh-button>
+    </div>
+
+    <div toolbar>
+      <mj-page-search
+        [Value]="SearchText"
+        Placeholder="Search runs"
+        (ValueChange)="OnSearch($event)"></mj-page-search>
+
+      <div class="wfr-status-filters">
+        @for (status of StatusFilters; track status) {
+          <button
+            type="button"
+            mjButton
+            [variant]="StatusFilter === status ? 'primary' : 'flat'"
+            size="sm"
+            (click)="OnFilterByStatus(status)">
+            {{ status === 'all' ? 'All' : status }}
+          </button>
+        }
+      </div>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+    @if (IsLoading) {
+      <mj-loading text="Loading runs..."></mj-loading>
+    } @else if (LoadError) {
+      <mj-alert Variant="error" [Message]="LoadError"></mj-alert>
+    } @else if (Runs.length === 0) {
+      <mj-empty-state
+        Icon="fa-solid fa-timeline"
+        Title="Nothing has run yet"
+        Message="When a workflow runs — started by hand, on a schedule, or by an agent — it will appear here.">
+      </mj-empty-state>
+    } @else if (VisibleRuns.length === 0) {
+      <mj-empty-state
+        Icon="fa-solid fa-filter"
+        Title="No runs match"
+        Message="Nothing matches the current filter. Clear it to see everything that has run.">
+      </mj-empty-state>
+    } @else {
+      <as-split class="wfr-split" direction="horizontal" unit="percent"
+                [gutterSize]="8" [disabled]="!SelectedRun" (dragEnd)="OnSplitDragEnd($event.sizes)">
+        <as-split-area [size]="SelectedRun ? Layout.SplitSizes[0] : 100" [minSize]="20">
+        <div class="wfr-list">
+          <!-- A header row that sorts. Every column a person scans by is sortable, because "the
+               longest run" and "the one that failed this morning" are the two questions this list
+               exists to answer and neither is answerable by scrolling. -->
+          <div class="wfr-head" role="row">
+            <button type="button" class="wfr-head-cell wfr-col-name" (click)="OnSort('Name')">
+              Workflow <i [ngClass]="SortIcon('Name')" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="wfr-head-cell wfr-col-time" (click)="OnSort('StartedAt')">
+              Started <i [ngClass]="SortIcon('StartedAt')" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="wfr-head-cell wfr-col-time" (click)="OnSort('CompletedAt')">
+              Ended <i [ngClass]="SortIcon('CompletedAt')" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="wfr-head-cell wfr-col-duration" (click)="OnSort('Duration')">
+              Duration <i [ngClass]="SortIcon('Duration')" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="wfr-head-cell wfr-col-status" (click)="OnSort('Status')">
+              Status <i [ngClass]="SortIcon('Status')" aria-hidden="true"></i>
+            </button>
+          </div>
+
+          @for (run of VisibleRuns; track run.ID) {
+            <button
+              type="button"
+              class="wfr-row"
+              [class.wfr-row-selected]="run.ID === SelectedRunID"
+              (click)="OnSelectRun(run)">
+              <span class="wfr-col-name wfr-row-name">{{ run.Name }}</span>
+              <!-- An em dash, never a fabricated time: a run that has not started has no start, and
+                   printing one would read as data. -->
+              <span class="wfr-col-time">{{ run.StartedAt ? (run.StartedAt | date:'MMM d, h:mm:ss a') : '—' }}</span>
+              <span class="wfr-col-time">{{ run.CompletedAt ? (run.CompletedAt | date:'MMM d, h:mm:ss a') : '—' }}</span>
+              <span class="wfr-col-duration">{{ run.Duration }}</span>
+              <span class="wfr-col-status wfr-row-status" [attr.data-status]="run.Status">{{ run.Status }}</span>
+            </button>
+          }
+        </div>
+        </as-split-area>
+
+        <as-split-area [size]="SelectedRun ? Layout.SplitSizes[1] : 0" [minSize]="25" [visible]="!!SelectedRun">
+        @if (SelectedRun; as selected) {
+          <!-- The canvas lives in the RIGHT PANEL on selection, not nested inside the list row.
+               A graph needs room to be read; inlining one per row turns a scannable list into a
+               stack of diagrams. -->
+          <aside class="wfr-detail">
+            <header class="wfr-detail-head">
+              <div class="wfr-detail-title">
+                <span class="wfr-detail-name">{{ selected.Name }}</span>
+                <span class="wfr-row-status" [attr.data-status]="selected.Status">{{ selected.Status }}</span>
+              </div>
+              <div class="wfr-detail-actions">
+                @if (selected.AgentRunID) {
+                  <button mjButton variant="flat" size="sm" (click)="OnOpenAgentRun(selected)">
+                    <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                    Agent run
+                  </button>
+                }
+                @if (DetailTab === 'graph') {
+                  <button mjButton variant="flat" size="sm" (click)="ToggleStepPanel()"
+                          [title]="Layout.StepPanelOpen ? 'Hide step details' : 'Show step details'">
+                    <i class="fa-solid" [class.fa-square-caret-right]="Layout.StepPanelOpen"
+                       [class.fa-square-caret-left]="!Layout.StepPanelOpen" aria-hidden="true"></i>
+                  </button>
+                }
+                <button mjButton variant="flat" size="sm" (click)="OnSelectRun(selected)" aria-label="Close">
+                  <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+              </div>
+            </header>
+
+            <div class="wfr-detail-tabs" role="tablist">
+              <button type="button" class="wfr-tab" [class.wfr-tab-active]="DetailTab === 'graph'"
+                      (click)="OnDetailTab('graph')">
+                <i class="fa-solid fa-diagram-project" aria-hidden="true"></i> Workflow
+              </button>
+              <button type="button" class="wfr-tab" [class.wfr-tab-active]="DetailTab === 'json'"
+                      (click)="OnDetailTab('json')">
+                <i class="fa-solid fa-code" aria-hidden="true"></i> JSON
+              </button>
+            </div>
+
+            @if (DetailTab === 'graph') {
+              <!-- Canvas BESIDE the step it opened, not above it. A JSON record in a strip along the
+                   bottom shows about ten lines, which is not enough of a record to read. -->
+              <as-split class="wfr-graph-split" [direction]="InnerSplitDirection" unit="percent"
+                        [gutterSize]="8" (dragEnd)="OnStepSplitDragEnd($event.sizes)">
+                <as-split-area [size]="Layout.StepPanelOpen ? Layout.StepSplitSizes[0] : 100" [minSize]="25">
+                  <div class="wfr-graph-pane">
+                    <mj-task-graph-run-view
+                      [Provider]="ProviderToUse"
+                      [ParentTaskID]="selected.ID"
+                      [WorkflowName]="selected.Name"
+                      [LiveUpdates]="selected.Status === 'Running' || selected.Status === 'In Progress'"
+                      [ShowLegend]="Layout.ShowLegend"
+                      Height="100%"
+                      (NodeSelected)="OnGraphNodeSelected($event)"
+                      (LegendToggled)="OnLegendToggled($event)">
+                    </mj-task-graph-run-view>
+                  </div>
+                </as-split-area>
+
+                <as-split-area [size]="Layout.StepPanelOpen ? Layout.StepSplitSizes[1] : 0" [minSize]="20"
+                               [visible]="Layout.StepPanelOpen">
+                  <div class="wfr-steps-pane">
+                    @if (StepsLoading) {
+                      <mj-loading text="Loading steps..."></mj-loading>
+                    } @else {
+                      <div class="wfr-step-list">
+                        @for (step of SelectedSteps; track step.ID) {
+                          <button type="button" class="wfr-step"
+                                  [class.wfr-step-selected]="step.ID === SelectedStepID"
+                                  [attr.data-status]="step.Status"
+                                  (click)="OnSelectStep(step)">
+                            <span class="wfr-step-name">{{ step.Name }}</span>
+                            <span class="wfr-step-meta">{{ step.StepType || 'Step' }}</span>
+                          </button>
+                        }
+                      </div>
+
+                      @if (SelectedStep; as step) {
+                        <div class="wfr-step-json">
+                          <div class="wfr-step-json-head">
+                            <span>{{ step.Name }}</span>
+                            <span class="wfr-row-status" [attr.data-status]="step.Status">{{ step.Status }}</span>
+                          </div>
+                          <mj-code-editor
+                            [ngModel]="SelectedStepJson"
+                            [language]="'json'"
+                            [readonly]="true"
+                            style="width: 100%;">
+                          </mj-code-editor>
+                        </div>
+                      } @else {
+                        <mj-empty-state
+                          Size="compact"
+                          Icon="fa-solid fa-hand-pointer"
+                          Title="Select a step"
+                          Message="Click a step on the canvas or in the list to see everything it recorded.">
+                        </mj-empty-state>
+                      }
+                    }
+                  </div>
+                </as-split-area>
+              </as-split>
+            } @else {
+              <div class="wfr-json-pane">
+                <mj-code-editor
+                  [ngModel]="SelectedRunJson"
+                  [language]="'json'"
+                  [readonly]="true"
+                  style="width: 100%;">
+                </mj-code-editor>
+              </div>
+            }
+          </aside>
+        }
+        </as-split-area>
+      </as-split>
+    }
+  </mj-page-body>
+</mj-page-layout>

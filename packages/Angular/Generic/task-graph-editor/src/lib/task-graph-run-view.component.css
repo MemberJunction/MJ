@@ -1,0 +1,43 @@
+/* `height: 100%` here resolves to auto when the host's parent has no definite height, so this is
+   safe for both callers: one that gives the widget a box to fill, and one that asks for 320px. */
+:host { display: block; height: 100%; min-height: 0; }
+
+.run-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-2);
+  height: 100%;
+  min-height: 0;
+}
+
+.run-view-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3);
+  font-size: var(--mj-font-size-sm);
+  color: var(--mj-text-secondary);
+}
+
+.run-view-count { font-weight: 500; }
+
+/* Not-taken reads as neutral, never as a failure: a skipped branch is a normal outcome, and
+   colouring it like an error sends people hunting for a bug that does not exist. */
+.run-view-skipped { color: var(--mj-text-tertiary); }
+
+/* Takes what the summary line leaves, rather than a percentage of an ancestor that may not have a
+   definite height — which is what left a canvas stopping halfway down its pane with dead space
+   below it. */
+.run-view-canvas {
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  overflow: hidden;
+  background: var(--mj-bg-surface);
+}
+
+.run-view-loading {
+  padding: var(--mj-space-4);
+  color: var(--mj-text-secondary);
+  font-size: var(--mj-font-size-sm);
+}

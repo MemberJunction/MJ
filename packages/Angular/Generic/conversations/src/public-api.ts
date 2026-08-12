@@ -104,6 +104,7 @@ export * from './lib/components/export/export-modal.component';
 export * from './lib/components/library/library-full-view.component';
 export * from './lib/components/members/members-modal.component';
 export * from './lib/components/message/actionable-commands.component';
+export * from './lib/components/message/workflow-plan-card.component';
 export * from './lib/components/search/search-panel.component';
 export * from './lib/components/shared/user-picker.component';
 export * from './lib/components/tasks/tasks-dropdown.component';
