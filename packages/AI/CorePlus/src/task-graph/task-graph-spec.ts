@@ -41,6 +41,22 @@ export type TaskGraphDependency = {
      * a graph stalled by a typo cannot be mistaken for one that simply took another branch.
      */
     condition?: string;
+    /*
+     * WHICH ORIGIN STATUSES DECIDE A CONDITION (settled in Round 3, R3-2):
+     *
+     *   Complete   — always decides, under either `failureSemantics`.
+     *   Failed     — decides ONLY under `failureSemantics: 'edges'`, where a flow's failure handling
+     *                IS its outgoing edges. Under `'block'` (the default) the edge is neither
+     *                evaluated nor dropped: it stays live so the block cascade traverses it and owns
+     *                everything downstream, which is what `'block'` means.
+     *   Cancelled  — NEVER decides, under either. A cancelled step did not run, so its guards have
+     *                no outcome to describe.
+     *   Skipped    — never evaluated; the edge drops. A branch that was not taken does not get a
+     *                vote, and evaluating against an empty envelope would let a negated condition
+     *                hand its target a satisfied prerequisite.
+     *   Pending / In Progress / Deferred — undecided; the edge is kept and the prerequisite gate
+     *                keeps the target waiting.
+     */
     /**
      * How this edge participates in the target's join.
      *

@@ -35,19 +35,19 @@ describe('DecideGate — an undecided origin is never asked', () => {
         // Evaluating here returns a confident, wrong `false` and there is nothing in any log to say
         // a guess was made.
         const evaluate = vi.fn(() => ok(false));
-        expect(DecideGate(status, evaluate)).toBe('keep');
+        expect(DecideGate(status, 'edges', evaluate)).toBe('keep');
         expect(evaluate).not.toHaveBeenCalled();
     });
 
     it('keeps an undecided edge rather than dropping it', () => {
         // 'keep' is the safe reading of undecided: the prerequisite gate still stops the target
         // starting early, so keeping costs nothing, while dropping is irreversible.
-        expect(DecideGate('Pending', () => ok(true))).toBe('keep');
+        expect(DecideGate('Pending', 'edges', () => ok(true))).toBe('keep');
     });
 
-    it.each([...TERMINAL_FOR_CONDITIONS].filter((s) => s !== 'Skipped'))('evaluates a %s origin', (status) => {
+    it.each(['Complete', 'Failed'])('evaluates a %s origin under edge semantics', (status) => {
         const evaluate = vi.fn(() => ok(true));
-        DecideGate(status, evaluate);
+        DecideGate(status, 'edges', evaluate);
         expect(evaluate).toHaveBeenCalledOnce();
     });
 
@@ -55,46 +55,46 @@ describe('DecideGate — an undecided origin is never asked', () => {
         // A branch that was not taken is settled. If conditions on its outgoing edges never resolved,
         // the tail of every losing branch would wait forever. It is decided WITHOUT evaluating —
         // see the R2-3 block below for why asking would be worse than not deciding at all.
-        expect(DecideGate('Skipped', () => ok(false))).toBe('drop');
+        expect(DecideGate('Skipped', 'edges', () => ok(false))).toBe('drop');
     });
 });
 
 describe('DecideGate — "false" and "cannot tell" are different answers', () => {
     it('drops a condition that is genuinely false', () => {
-        expect(DecideGate('Complete', () => ok(false))).toBe('drop');
+        expect(DecideGate('Complete', 'edges', () => ok(false))).toBe('drop');
     });
 
     it('keeps a condition that is genuinely true', () => {
-        expect(DecideGate('Complete', () => ok(true))).toBe('keep');
+        expect(DecideGate('Complete', 'edges', () => ok(true))).toBe('keep');
     });
 
     it('HOLDS a condition that could not be evaluated — it does not open the gate', () => {
         // The old failure path returned 'keep'. From a Complete origin that IS a satisfied
         // prerequisite, so a broken guard ran the step it was guarding. The layer's own contract
         // said the opposite, the legacy walker refused the edge, and exclusive groups already held.
-        expect(DecideGate('Complete', () => broken('x is not defined'))).toBe('hold');
+        expect(DecideGate('Complete', 'edges', () => broken('x is not defined'))).toBe('hold');
     });
 
     it('holds rather than dropping, so the target is not skipped as unreachable', () => {
         // Dropping would turn "we cannot tell" into "definitely not taken": the target may have
         // other live routes, and an unreachable target is skipped, not retried.
-        expect(DecideGate('Complete', () => broken('TypeError'))).not.toBe('drop');
+        expect(DecideGate('Complete', 'edges', () => broken('TypeError'))).not.toBe('drop');
     });
 
     it('reads truthiness, not strict equality with true', () => {
         // Conditions in the wild return counts and strings, not booleans. `=== true` here would
         // silently drop every edge guarded by `payload.items.length`.
-        expect(DecideGate('Complete', () => ok(1))).toBe('keep');
-        expect(DecideGate('Complete', () => ok('yes'))).toBe('keep');
-        expect(DecideGate('Complete', () => ok(0))).toBe('drop');
-        expect(DecideGate('Complete', () => ok(''))).toBe('drop');
-        expect(DecideGate('Complete', () => ok(null))).toBe('drop');
-        expect(DecideGate('Complete', () => ok(undefined))).toBe('drop');
+        expect(DecideGate('Complete', 'edges', () => ok(1))).toBe('keep');
+        expect(DecideGate('Complete', 'edges', () => ok('yes'))).toBe('keep');
+        expect(DecideGate('Complete', 'edges', () => ok(0))).toBe('drop');
+        expect(DecideGate('Complete', 'edges', () => ok(''))).toBe('drop');
+        expect(DecideGate('Complete', 'edges', () => ok(null))).toBe('drop');
+        expect(DecideGate('Complete', 'edges', () => ok(undefined))).toBe('drop');
     });
 
     it('a failed verdict holds even when it carries a truthy Value', () => {
         // Success is the discriminator, not Value. A half-populated verdict must not read as a pass.
-        expect(DecideGate('Complete', () => ({ Success: false, Value: true }))).toBe('hold');
+        expect(DecideGate('Complete', 'edges', () => ({ Success: false, Value: true }))).toBe('hold');
     });
 });
 
@@ -144,20 +144,72 @@ describe('R2-3: data absence is the data answering no, not a broken guard', () =
         // `payload.a.b` on an absent `a` throws even with a null-safe root. That is the data being
         // absent, not the guard being broken, and the difference is a graph that completes versus
         // one that waits forever.
-        expect(DecideGate('Complete', () => broken(`Cannot read properties of undefined (reading 'b')`)))
+        expect(DecideGate('Complete', 'edges', () => broken(`Cannot read properties of undefined (reading 'b')`)))
             .toBe('drop');
     });
 
     it('still HOLDS an unknown root — that IS a broken guard', () => {
         // A name outside the envelope is a typo or a scope the engine does not provide. P2's contract
         // stands for exactly this case: a condition that fails to evaluate does not open the gate.
-        expect(DecideGate('Complete', () => broken('unknownVar is not defined'))).toBe('hold');
+        expect(DecideGate('Complete', 'edges', () => broken('unknownVar is not defined'))).toBe('hold');
     });
 
     it('holds on an error it cannot classify — the conservative default is unchanged', () => {
         // Silently dropping a branch is invisible; a hold is visible and recoverable. An
         // unrecognised failure must land on the visible side.
-        expect(DecideGate('Complete', () => broken('something nobody has seen before'))).toBe('hold');
+        expect(DecideGate('Complete', 'edges', () => broken('something nobody has seen before'))).toBe('hold');
+    });
+});
+
+describe('R3-2: a failure decides an ordinary edge only where the dialect says failures decide', () => {
+    // R2-4 threaded semantics into the EXCLUSIVE dialect and left this one blind, which reproduced
+    // R2-4's own catastrophe through the other door. Under `'block'` — the spec DEFAULT — a Failed
+    // origin's false conditional edge was dropped, its target landed in `unreachableTaskIDs` and
+    // seeded the skip cascade, and the dropped edge simultaneously severed `ComputeTasksToBlock`'s
+    // forward walk. `Skipped` satisfies prerequisites, so a join fed by an independent healthy route
+    // executed downstream of an unhandled failure — under a parent that still rolled up Failed.
+
+    it('does not even ASK a Failed origin under block semantics', () => {
+        // Keeping the edge unevaluated is what hands the graph back to the block cascade: the edge
+        // stays live, the walk traverses it, everything downstream blocks.
+        const evaluate = vi.fn(() => ok(false));
+        expect(DecideGate('Failed', 'block', evaluate)).toBe('keep');
+        expect(evaluate).not.toHaveBeenCalled();
+    });
+
+    it('keeps it whatever the condition would have said', () => {
+        for (const verdict of [ok(true), ok(false), broken('Cannot read properties of undefined')]) {
+            expect(DecideGate('Failed', 'block', () => verdict)).toBe('keep');
+        }
+    });
+
+    it('still lets a Failed origin decide under EDGE semantics — the recovery path is the point', () => {
+        expect(DecideGate('Failed', 'edges', () => ok(true))).toBe('keep');
+        expect(DecideGate('Failed', 'edges', () => ok(false))).toBe('drop');
+    });
+
+    it('never lets a CANCELLED origin decide, under either dialect', () => {
+        // A cancelled step did not run, so its guards have no outcome to describe. And since R2-9's
+        // partial cancel deliberately leaves a graph active, a false edge here would skip-release
+        // downstream work in a workflow the user stopped.
+        for (const semantics of ['block', 'edges'] as const) {
+            const evaluate = vi.fn(() => ok(false));
+            expect(DecideGate('Cancelled', semantics, evaluate)).toBe('keep');
+            expect(evaluate).not.toHaveBeenCalled();
+        }
+    });
+
+    it('leaves Complete origins alone under both dialects — this changes failures only', () => {
+        for (const semantics of ['block', 'edges'] as const) {
+            expect(DecideGate('Complete', semantics, () => ok(true))).toBe('keep');
+            expect(DecideGate('Complete', semantics, () => ok(false))).toBe('drop');
+        }
+    });
+
+    it('and a Skipped origin still drops under both — that rule is about not-taken, not failure', () => {
+        for (const semantics of ['block', 'edges'] as const) {
+            expect(DecideGate('Skipped', semantics, () => ok(true))).toBe('drop');
+        }
     });
 });
 
@@ -168,13 +220,13 @@ describe('R2-3: a branch that was not taken does not get a vote', () => {
         // (`!payload.error`, `payload.count === 0`) comes out TRUE, the edge is kept, and a skipped
         // branch hands its target a satisfied prerequisite — work runs on a path nobody took.
         const evaluate = vi.fn(() => ok(true));
-        expect(DecideGate('Skipped', evaluate)).toBe('drop');
+        expect(DecideGate('Skipped', 'edges', evaluate)).toBe('drop');
         expect(evaluate).not.toHaveBeenCalled();
     });
 
     it('drops it whatever the condition would have said', () => {
-        expect(DecideGate('Skipped', () => ok(false))).toBe('drop');
-        expect(DecideGate('Skipped', () => broken('anything'))).toBe('drop');
+        expect(DecideGate('Skipped', 'edges', () => ok(false))).toBe('drop');
+        expect(DecideGate('Skipped', 'edges', () => broken('anything'))).toBe('drop');
     });
 });
 

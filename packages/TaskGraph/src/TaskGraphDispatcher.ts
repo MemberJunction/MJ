@@ -2305,7 +2305,7 @@ export class TaskGraphDispatcher implements IShutdownable {
 
         for (const d of ordinary) {
             if (d.Condition?.trim()) {
-                const outcome = this.evaluateEdgeCondition(d, entityById);
+                const outcome = this.evaluateEdgeCondition(d, entityById, failureSemantics);
                 if (outcome === 'drop') { droppedInto.add(d.TaskID); continue; }
                 if (outcome === 'hold') heldByCondition.add(d.TaskID);
             }
@@ -2422,6 +2422,7 @@ export class TaskGraphDispatcher implements IShutdownable {
     private evaluateEdgeCondition(
         dep: MJTaskDependencyEntity,
         entityById: Map<string, MJTaskEntity>,
+        failureSemantics: TaskGraphParentMetadata['failureSemantics'],
     ): 'keep' | 'drop' | 'hold' {
         const upstream = entityById.get(dep.DependsOnTaskID);
         if (!upstream) return 'keep';
@@ -2434,7 +2435,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         // `false`, the edge is dropped, and the target is Blocked at wave one before the origin ever
         // ran. That killed every conditioned linear chain, with no error anywhere.
         let unevaluableError: string | undefined;
-        const outcome = DecideGate(upstream.Status, () => {
+        const outcome = DecideGate(upstream.Status, failureSemantics, () => {
             const result = this.conditionEvaluator.Evaluate(
                 dep.Condition!,
                 BuildConditionContext(upstream, ParseConditionOutput(upstream.OutputPayload)),

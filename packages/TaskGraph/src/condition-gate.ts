@@ -27,6 +27,15 @@
  */
 export type GateOutcome = 'keep' | 'drop' | 'hold';
 
+/**
+ * How a failure propagates in a graph — the spec's `failureSemantics`, restated here so this module
+ * stays free of entity imports.
+ *
+ * `'block'` (the default) means a failure is terminal for everything downstream. `'edges'` means a
+ * flow's failure handling IS its outgoing edges, so a failed step's drawn recovery path runs.
+ */
+export type FailureSemantics = 'block' | 'edges';
+
 /** The evaluator's answer, in the shape `IConditionEvaluator` returns. */
 export type ConditionVerdict = { Success: boolean; Value?: unknown; ErrorMessage?: string };
 
@@ -145,7 +154,38 @@ export function BuildConditionContext(origin: ConditionOrigin, output: unknown):
  * @param originStatus the origin task's status right now
  * @param evaluate     runs the condition; only called once the origin can decide it
  */
-export function DecideGate(originStatus: string, evaluate: () => ConditionVerdict): GateOutcome {
+export function DecideGate(
+    originStatus: string,
+    failureSemantics: FailureSemantics,
+    evaluate: () => ConditionVerdict,
+): GateOutcome {
+    // A FAILURE DECIDES AN ORDINARY EDGE ONLY WHERE THE DIALECT SAYS FAILURES DECIDE (R3-2).
+    //
+    // R2-4 threaded semantics into the EXCLUSIVE dialect and left this one blind, which reproduced
+    // R2-4's own catastrophe through the other door. Under `'block'` — the spec's default — a Failed
+    // origin's conditional edge that evaluated false was DROPPED, its target landed in
+    // `unreachableTaskIDs`, it seeded the skip cascade, and the dropped edge simultaneously severed
+    // `ComputeTasksToBlock`'s forward walk: `Skipped` satisfies prerequisites, so a join fed by an
+    // independent healthy route executed downstream of an unhandled failure while the parent still
+    // rolled up Failed.
+    //
+    // R2-3 made it far more reachable, not less: a failed step almost never has output, so the
+    // null-safe envelope answers nearly every positive condition with a confident false→drop where
+    // it previously threw→held visibly.
+    //
+    // Keeping the edge is what hands the graph back to the block cascade — the edge stays in
+    // `liveEdges`, the walk traverses it, and everything downstream blocks, which is what `'block'`
+    // means. Under `'edges'`, a flow's failure handling IS its outgoing edges, so it still decides.
+    if (originStatus === 'Failed' && failureSemantics !== 'edges') return 'keep';
+
+    // A CANCELLED ORIGIN NEVER DECIDES, under either dialect. A cancelled step's guards were never
+    // meant to route anything — the step did not run, so there is no outcome for them to describe —
+    // and after R2-9's partial cancel deliberately leaves a graph active, letting a Cancelled
+    // child's false edge skip-release downstream work would run steps in a workflow the user
+    // stopped. Keeping the edge leaves it to the block cascade, which treats Cancelled as
+    // unsatisfiable.
+    if (originStatus === 'Cancelled') return 'keep';
+
     // A BRANCH THAT WAS NOT TAKEN DOES NOT GET A VOTE.
     //
     // The walker never stood at a skipped step, so it never read that step's outgoing guards. This
