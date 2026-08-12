@@ -102,6 +102,16 @@ export type TaskGraphParentMetadata = {
      * racing the same completion produce one winner rather than two notifications.
      */
     continuationDeliveredAt?: string;
+    /**
+     * HOW it was delivered — written by the same compare-and-swap that sets the timestamp.
+     *
+     * `'expired'` means the settlement was found after its delivery window, so the run and its cost
+     * were corrected but nothing was announced: posting a week-old "your workflow finished" into a
+     * live conversation, or starting a fresh billed turn for it, is worse than staying quiet. The
+     * distinction has to survive in the row, or an expired settlement is indistinguishable from a
+     * delivered one the moment anybody looks afterwards.
+     */
+    continuationDeliveredAs?: 'delivered' | 'expired';
 };
 
 /**
@@ -151,6 +161,11 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
                 : 'message',
             failureSemantics: parsed.failureSemantics === 'edges' ? 'edges' : 'block',
             reinvokeDepth: Number.isFinite(parsed.reinvokeDepth) ? Number(parsed.reinvokeDepth) : 0,
+            // Guarded like the others: this is read to explain a settlement after the fact, and an
+            // arbitrary string arriving from a hand edit should read as "unknown", not be echoed.
+            continuationDeliveredAs: parsed.continuationDeliveredAs === 'delivered' || parsed.continuationDeliveredAs === 'expired'
+                ? parsed.continuationDeliveredAs
+                : undefined,
         };
     } catch {
         return { ...DEFAULT_PARENT_METADATA };
@@ -172,7 +187,7 @@ export type TaskGraphSubmitResult = {
 };
 
 /** Name of the task type used for agent-orchestrated graphs. */
-const TASK_TYPE_NAME = 'AI Workflow';
+export const TASK_TYPE_NAME = 'AI Workflow';
 
 /**
  * The node kinds a `Task` row can actually represent, and therefore the ones the dispatcher can run.
@@ -524,11 +539,22 @@ export class TaskGraphService {
             // that carry a deadline, and most do not.
             await this.cancelOpenRequests(children.map((c) => c.ID), context);
 
-            const parent = await context.Provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', context.ContextUser);
-            if (!(await parent.Load(parentTaskID))) return false;
-            parent.Status = 'Cancelled';
-            parent.CompletedAt = new Date();
-            return await parent.Save();
+            // THE PARENT IS LEFT TO THE DISPATCHER, DELIBERATELY.
+            //
+            // Writing it terminal here skipped the settle path entirely — no cost rollup, no run
+            // settlement, no notification — so the submitting agent run stayed `Paused` forever.
+            // Worse, it was NONDETERMINISTIC: if a dispatcher poll happened to land between the
+            // child cancels above and the parent write, the graph settled through the normal path
+            // and the run WAS failed and messaged. Cancel behaved differently run to run depending
+            // on timing.
+            //
+            // With the children cancelled, `ComputeParentRollup` reaches `Cancelled` on its own and
+            // the ordinary settle sequence runs — rollup, run settlement, continuation — exactly as
+            // it does for a graph that finished by itself. Less code, one path, and a deterministic
+            // outcome.
+            //
+            // The parent stays non-terminal until then, so the sweep still sees it as active work.
+            return true;
         } catch (e) {
             LogError(`[TaskGraphService] Cancel failed for ${parentTaskID}: ${e instanceof Error ? e.message : String(e)}`);
             return false;

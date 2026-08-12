@@ -470,3 +470,30 @@ mj-flow-node {
     box-shadow: 0 0 0 6px transparent;
   }
 }
+
+/* ============================================================
+   A step the graph did not take
+   ============================================================
+   Its own treatment rather than a shade of `disabled`: disabled means "cannot run", skipped means
+   "the workflow chose another route". A reader who cannot tell them apart goes looking for a
+   failure that never happened.
+
+   Hatching + strike-through, deliberately the same language the run timeline uses for the same
+   fact, so a step reads identically whether someone is looking at the list or the diagram. */
+.mj-flow-node-body--skipped {
+  opacity: 0.55;
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent,
+    transparent 5px,
+    color-mix(in srgb, var(--mj-text-disabled) 22%, transparent) 5px,
+    color-mix(in srgb, var(--mj-text-disabled) 22%, transparent) 10px
+  );
+}
+
+.mj-flow-node-body--skipped .mj-flow-node-title {
+  text-decoration: line-through;
+  text-decoration-color: var(--mj-text-disabled);
+}
+
+.mj-flow-node-status--skipped { color: var(--mj-text-disabled); }
