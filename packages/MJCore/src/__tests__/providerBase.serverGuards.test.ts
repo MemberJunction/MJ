@@ -25,6 +25,9 @@ import { DatabaseProviderBase } from '../generic/databaseProviderBase';
 // In-memory local storage provider that tracks calls for spying
 // ---------------------------------------------------------------------------
 class SpyableLocalStorageProvider implements ILocalStorageProvider {
+    /** `true` — the Map stores values as-is, so this spy shares references like the production in-memory provider. */
+    public readonly SharesReferences = true;
+
     private _store = new Map<string, string>();
 
     async GetItem(key: string): Promise<string | null> {
@@ -267,6 +270,21 @@ describe('ProviderBase Server-Side Guards', () => {
             const client = new ClientTestProvider();
             const wouldCoalesce = ProviderBase.CoalesceWindowMs > 0 && !client.ExposedTrustLocalCacheCompletely;
             expect(wouldCoalesce).toBe(false);
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    // ILocalStorageProvider runtime contract (PR #3425 review, finding M1)
+    // -----------------------------------------------------------------------
+    describe('ILocalStorageProvider runtime contract', () => {
+        it('SpyableLocalStorageProvider declares its reference-sharing semantics', () => {
+            // `SharesReferences` is OPTIONAL on the interface (so adding the contract could not
+            // break existing external implementations), and LocalCacheManager probes any provider
+            // that omits it. In-repo providers should still declare it: it documents intent at the
+            // implementation site and skips the probe. This asserts that for the spy — which is
+            // Map-backed, so the freeze must be armed in the suites that use it.
+            const sp: ILocalStorageProvider = new SpyableLocalStorageProvider();
+            expect(sp.SharesReferences).toBe(true);
         });
     });
 });

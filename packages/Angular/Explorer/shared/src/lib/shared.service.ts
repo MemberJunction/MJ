@@ -153,9 +153,6 @@ export class SharedService {
   public get DashboardResourceType(): MJResourceTypeEntity {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'dashboards')!;
   }
-  public get ReportResourceType(): MJResourceTypeEntity {
-    return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'reports')!;
-  }
   public get SearchResultsResourceType(): MJResourceTypeEntity {
     return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'search results')!;
   }
@@ -321,7 +318,6 @@ export class SharedService {
     { routeSegment: 'record', name: 'records' },
     { routeSegment: 'view', name: 'user views' },
     { routeSegment: 'search', name: 'search results' },
-    { routeSegment: 'report', name: 'reports' },
     { routeSegment: 'query', name: 'queries' },
     { routeSegment: 'dashboard', name: 'dashboards' },
     { routeSegment: 'list', name: 'lists' },

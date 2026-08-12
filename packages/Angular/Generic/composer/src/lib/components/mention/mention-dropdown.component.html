@@ -2,11 +2,12 @@
   <div
     class="mention-dropdown"
     [class.show-above]="showAbove"
+    [class.align-right]="alignRight"
     [class.fixed-position]="useFixedPositioning"
     [style.top.px]="position.top"
     [style.left.px]="position.left"
     >
-    <!-- Suggestions List -->
+    <!-- suggestions List -->
     @if (suggestions.length > 0) {
       <div class="mention-suggestions">
         @for (suggestion of suggestions; track trackBySuggestion(i, suggestion); let i = $index) {

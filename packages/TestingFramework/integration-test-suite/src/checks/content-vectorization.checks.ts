@@ -99,6 +99,10 @@ function installStubs(): void {
             const field = typeof providerConfig?.['namespaceField'] === 'string' ? (providerConfig['namespaceField'] as string) : undefined;
             return field && sourceRecord?.[field] != null ? { namespace: String(sourceRecord[field]) } : {};
         },
+        // Declares no source-record dependencies — the namespace field lives on the item itself, so
+        // resolveDriverFieldPaths short-circuits and CV6 still exercises namespace routing through
+        // BuildProviderDirectives. Mirrors the unit-test double in AutotagBaseEngine.test.ts.
+        GetSourceRecordFieldPaths: () => [] as string[],
         CreateRecords: async (records: CapturedRecord[], _indexName?: string, providerConfig?: Record<string, unknown>) => {
             S.Upserts.push({ providerConfig, records: records.map(r => ({ id: r.id, metadata: r.metadata, providerTemporaryDirectives: r.providerTemporaryDirectives })) });
             return { success: true, message: 'stubbed upsert (captured)' };

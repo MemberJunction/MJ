@@ -1067,14 +1067,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         return;
       }
 
-      // Check for app-scoped report URL: /app/:appName/report/:reportId
-      const appReportMatch = urlPath.match(/^\/app\/([^\/]+)\/report\/(.+)$/);
-      if (appReportMatch) {
-        const reportId = appReportMatch[2];
-        this.navigationService.OpenReport(reportId, 'Report');
-        return;
-      }
-
       // Check for app-scoped search URL: /app/:appName/search/:searchInput
       const appSearchMatch = urlPath.match(/^\/app\/([^\/]+)\/search\/(.+)$/);
       if (appSearchMatch) {
@@ -1308,20 +1300,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         const tabQueryId = (tabConfig['queryId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
 
         return resourceType === 'queries' && tabQueryId === queryId;
-      }) || null;
-    }
-
-    // Report: /app/:appName/report/:reportId
-    const appReportMatch = urlPath.match(/^\/app\/([^\/]+)\/report\/(.+)$/);
-    if (appReportMatch) {
-      const reportId = appReportMatch[2];
-
-      return tabs.find(tab => {
-        const tabConfig = tab.configuration || {};
-        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-        const tabReportId = (tabConfig['reportId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
-
-        return resourceType === 'reports' && tabReportId === reportId;
       }) || null;
     }
 
@@ -1617,13 +1595,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           // /app/:appName/query/:queryId
           if (recordId) {
             return appendQP(`/app/${encodeURIComponent(appPath)}/query/${recordId}`);
-          }
-          break;
-
-        case 'reports':
-          // /app/:appName/report/:reportId
-          if (recordId) {
-            return appendQP(`/app/${encodeURIComponent(appPath)}/report/${recordId}`);
           }
           break;
 
@@ -2621,7 +2592,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     if (rt === 'Dashboards' || config['dashboardId']) return 'Dashboards';
     if (rt === 'User Views' || rt === 'MJ: User Views' || config['viewId']) return 'User Views';
     if (rt === 'Queries' || config['queryId']) return 'Queries';
-    if (rt === 'Reports' || config['reportId']) return 'Reports';
     if (rt === 'Records' || (config['Entity'] && config['recordId'])) return 'Records';
     if (rt === 'Custom' || config['navItemName']) return 'Custom';
     return rt || 'Custom';

@@ -318,7 +318,7 @@ export const MJActionExecutionLogSchema = z.object({
         * * Description: Timestamp when the action execution ended (timezone-aware)`),
     Params: z.string().nullable().describe(`
         * * Field Name: Params
-        * * Display Name: Params
+        * * Display Name: Input Parameters
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON-formatted input parameters AS THE ACTION WAS CALLED, captured once when execution starts and never overwritten. Custom and Generated actions mutate their parameter array in place, so this is the only durable record of the values actually passed in; the final state lives in ResultParams. Parameter values may be redacted per ActionParam.LogValue / EntityActionParam.LogValue, and whole-record value types are never written - see the parameter's own documentation.`),
     ResultCode: z.string().nullable().describe(`
@@ -333,7 +333,7 @@ export const MJActionExecutionLogSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     RetentionPeriod: z.number().nullable().describe(`
         * * Field Name: RetentionPeriod
-        * * Display Name: Retention Period
+        * * Display Name: Retention Period (Days)
         * * SQL Data Type: int
         * * Description: Number of days to retain the log; NULL for indefinite retention.`),
     __mj_CreatedAt: z.date().describe(`
@@ -359,7 +359,7 @@ export const MJActionExecutionLogSchema = z.object({
         * * Description: Optional. The Entity Action binding that caused this run. NULL when the action was invoked directly - from a resolver, a script, an agent step or a scheduled action.`),
     EntityActionInvocationTypeID: z.string().nullable().describe(`
         * * Field Name: EntityActionInvocationTypeID
-        * * Display Name: Entity Action Invocation Type ID
+        * * Display Name: Invocation Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Action Invocation Types (vwEntityActionInvocationTypes.ID)
         * * Description: Optional. Which lifecycle event fired the binding - AfterUpdate, Validate, List and so on. Recorded separately from EntityActionID because one binding may be attached to several invocation types, and telling a Validate refusal apart from an AfterUpdate side effect is the first question anyone asks of this log.`),
@@ -376,24 +376,20 @@ export const MJActionExecutionLogSchema = z.object({
         * * Description: Optional. The primary key of the record this run operated on, as text, paired with TargetEntityID. For multi-record invocation types (List, View) one log row is written per record, so this is always a single record.`),
     ResultParams: z.string().nullable().describe(`
         * * Field Name: ResultParams
-        * * Display Name: Result Params
+        * * Display Name: Result Parameters
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON-formatted FINAL parameter set captured when the action finished - the inputs as the action left them, plus any output parameters it produced. Written on FAILURE exactly as on success, under the same redaction rules: a failed run's partially-mutated inputs are usually the most diagnostic thing available, and an audit trail that records only successes is not an audit trail. Distinct from Params, which holds the values the action was called with and is never overwritten. NULL means one thing only - the run never finished (process died, host killed) - so it is a signal rather than an absence, and must not be backfilled.`),
     Action: z.string().describe(`
         * * Field Name: Action
-        * * Display Name: Action
+        * * Display Name: Action Name
         * * SQL Data Type: nvarchar(425)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
-    EntityAction: z.string().nullable().describe(`
-        * * Field Name: EntityAction
-        * * Display Name: Entity Action
-        * * SQL Data Type: nvarchar(425)`),
     EntityActionInvocationType: z.string().nullable().describe(`
         * * Field Name: EntityActionInvocationType
-        * * Display Name: Entity Action Invocation Type
+        * * Display Name: Invocation Type
         * * SQL Data Type: nvarchar(255)`),
     TargetEntity: z.string().nullable().describe(`
         * * Field Name: TargetEntity
@@ -2731,7 +2727,7 @@ export const MJAIAgentRequestSchema = z.object({
         * * Description: Current status of the request (Requested, Approved, Rejected, Canceled).`),
     Request: z.string().describe(`
         * * Field Name: Request
-        * * Display Name: Request
+        * * Display Name: Request Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Details of what the AI Agent is requesting.`),
     Response: z.string().nullable().describe(`
@@ -2741,7 +2737,7 @@ export const MJAIAgentRequestSchema = z.object({
         * * Description: Response provided by the human to the agent request.`),
     ResponseByUserID: z.string().nullable().describe(`
         * * Field Name: ResponseByUserID
-        * * Display Name: Response By User
+        * * Display Name: Responded By User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: Populated when a user responds indicating which user responded to the request.`),
@@ -2820,17 +2816,23 @@ export const MJAIAgentRequestSchema = z.object({
     *   * Conversation
     *   * Dashboard
         * * Description: Identifies where the response originated: Conversation (handled by chat resolver), Dashboard (slide-in panel), or API (external integration). Used by the server-side entity subclass to determine whether agent resumption is needed.`),
+    OriginatingTaskID: z.string().nullable().describe(`
+        * * Field Name: OriginatingTaskID
+        * * Display Name: Originating Task
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
+        * * Description: The workflow step (MJ: Tasks row) waiting on this request, when it came from a task graph rather than from a running agent. Distinct from OriginatingAgentRunStepID: a task graph outlives the agent run that submitted it, so the task — not the run — is what resumes when a person answers. NULL for requests raised by a run directly.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
     RequestForUser: z.string().nullable().describe(`
         * * Field Name: RequestForUser
-        * * Display Name: Request For User Name
+        * * Display Name: Target User
         * * SQL Data Type: nvarchar(100)`),
     ResponseByUser: z.string().nullable().describe(`
         * * Field Name: ResponseByUser
-        * * Display Name: Response By User Name
+        * * Display Name: Responded By
         * * SQL Data Type: nvarchar(100)`),
     RequestType: z.string().nullable().describe(`
         * * Field Name: RequestType
@@ -2847,6 +2849,10 @@ export const MJAIAgentRequestSchema = z.object({
     ResumingAgentRun: z.string().nullable().describe(`
         * * Field Name: ResumingAgentRun
         * * Display Name: Resuming Agent Run Name
+        * * SQL Data Type: nvarchar(255)`),
+    OriginatingTask: z.string().nullable().describe(`
+        * * Field Name: OriginatingTask
+        * * Display Name: Originating Task Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -2982,7 +2988,7 @@ export const MJAIAgentRunStepSchema = z.object({
         * * Display Name: Step Number
         * * SQL Data Type: int
         * * Description: Sequential number of this step within the agent run, starting from 1`),
-    StepType: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Compaction'), z.literal('Decision'), z.literal('ForEach'), z.literal('Plan'), z.literal('Prompt'), z.literal('Skill'), z.literal('Sub-Agent'), z.literal('Tool'), z.literal('Validation'), z.literal('While')]).describe(`
+    StepType: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Compaction'), z.literal('Decision'), z.literal('ForEach'), z.literal('Plan'), z.literal('Prompt'), z.literal('Skill'), z.literal('Sub-Agent'), z.literal('TaskGraph'), z.literal('Tool'), z.literal('Validation'), z.literal('While')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(50)
@@ -2998,6 +3004,7 @@ export const MJAIAgentRunStepSchema = z.object({
     *   * Prompt
     *   * Skill
     *   * Sub-Agent
+    *   * TaskGraph
     *   * Tool
     *   * Validation
     *   * While
@@ -3217,7 +3224,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: JSON serialization of the complete agent state, including conversation context, variables, and execution state. Enables pause/resume functionality.`),
     TotalTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalTokensUsed
-        * * Display Name: Total Tokens
+        * * Display Name: Total Tokens Used
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Total number of tokens consumed by all LLM calls during this agent run`),
@@ -3275,7 +3282,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: Optional tracking of a specific conversation detail (e.g. a specific message) that spawned this agent run`),
     ConversationDetailSequence: z.number().nullable().describe(`
         * * Field Name: ConversationDetailSequence
-        * * Display Name: Sequence
+        * * Display Name: Detail Sequence
         * * SQL Data Type: int
         * * Description: If a conversation detail spawned multiple agent runs, tracks the order of their spawn/execution`),
     CancellationReason: z.union([z.literal('System'), z.literal('Timeout'), z.literal('User Request')]).nullable().describe(`
@@ -3326,7 +3333,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: The initial payload provided at the start of this run. Can be populated from the FinalPayload of the LastRun.`),
     TotalPromptIterations: z.number().describe(`
         * * Field Name: TotalPromptIterations
-        * * Display Name: Total Prompt Iterations
+        * * Display Name: Prompt Iterations
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Total number of prompt iterations executed during this agent run. Incremented
@@ -3339,19 +3346,19 @@ each time the agent processes a prompt step.`),
         * * Description: The AI Configuration used for this agent execution. When set, this configuration was used for all prompts executed by this agent and its sub-agents.`),
     OverrideModelID: z.string().nullable().describe(`
         * * Field Name: OverrideModelID
-        * * Display Name: Model Override
+        * * Display Name: Override Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
         * * Description: Runtime model override that was used for this execution. When set, this model took precedence over all other model selection methods.`),
     OverrideVendorID: z.string().nullable().describe(`
         * * Field Name: OverrideVendorID
-        * * Display Name: Vendor Override
+        * * Display Name: Override Vendor
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
         * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.`),
     Data: z.string().nullable().describe(`
         * * Field Name: Data
-        * * Display Name: Input Data
+        * * Display Name: Execution Data
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.`),
     Verbose: z.boolean().nullable().describe(`
@@ -3389,13 +3396,13 @@ each time the agent processes a prompt step.`),
         * * Description: Optional Foreign Key - Links this agent run to a test run if this execution was part of a test. Allows navigation from agent execution to test context.`),
     PrimaryScopeEntityID: z.string().nullable().describe(`
         * * Field Name: PrimaryScopeEntityID
-        * * Display Name: Scope Entity
+        * * Display Name: Primary Scope Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
         * * Description: Foreign key to Entity table identifying which entity type is used for primary scoping (e.g., Organizations, Tenants)`),
     PrimaryScopeRecordID: z.string().nullable().describe(`
         * * Field Name: PrimaryScopeRecordID
-        * * Display Name: Scope Record ID
+        * * Display Name: Primary Scope Record
         * * SQL Data Type: nvarchar(100)
         * * Description: The record ID within the primary scope entity (e.g., the specific OrganizationID). Indexed for fast multi-tenant filtering.`),
     SecondaryScopes: z.any().nullable().describe(`
@@ -3406,7 +3413,7 @@ each time the agent processes a prompt step.`),
         * * Description: JSON object containing additional scope dimensions beyond the primary scope. Example: {"ContactID":"abc-123","TeamID":"team-456"}`),
     ExternalReferenceID: z.string().nullable().describe(`
         * * Field Name: ExternalReferenceID
-        * * Display Name: External Reference ID
+        * * Display Name: External Reference
         * * SQL Data Type: nvarchar(200)
         * * Description: Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.`),
     CompanyID: z.string().nullable().describe(`
@@ -3443,56 +3450,62 @@ each time the agent processes a prompt step.`),
         * * Description: 1 when this run executed under plan mode (whether via the per-request planMode flag or the agent's RequirePlanMode setting). Drives plan-mode indicators in the run UX and supports plan-drift auditing (comparing the approved plan against the steps that actually executed).`),
     ExternalSessionID: z.string().nullable().describe(`
         * * Field Name: ExternalSessionID
-        * * Display Name: External Session ID
+        * * Display Name: External Session
         * * SQL Data Type: nvarchar(255)
         * * Description: Session identifier reported by the external harness backing this run. Kept for two reasons that outlive the run: resuming the session across turns, and correlating this run with the vendor's own session logs when diagnosing behaviour INSIDE the sandbox, where MJ's audit trail necessarily stops at the turn boundary. NULL for every run not backed by a harness.`),
+    ContinuationDepth: z.number().describe(`
+        * * Field Name: ContinuationDepth
+        * * Display Name: Continuation Depth
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: How many task-graph continuations led to this run. 0 (the default, and the value every ordinary run carries) means the run was not started by a finished graph. A run started because a graph declared continuation='reinvoke' records its source graph's depth plus one, and any graph that run subsequently submits inherits that value — which is what allows MAX_REINVOKE_DEPTH to bound a chain of graph-reinvokes-agent-emits-graph. Without a durable value here the cap could never fire, because a reinvoked agent has no other way to learn it was a continuation. Distinct from ParentRunID, which tracks sub-agent lineage within a single turn; a continuation is a NEW top-level turn caused by work that already completed.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent Detail
+        * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
     ParentRun: z.string().nullable().describe(`
         * * Field Name: ParentRun
-        * * Display Name: Parent Run Detail
+        * * Display Name: Parent Run Info
         * * SQL Data Type: nvarchar(255)`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
-        * * Display Name: Conversation Detail
+        * * Display Name: Conversation Info
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User Detail
+        * * Display Name: User Info
         * * SQL Data Type: nvarchar(100)`),
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail Record
+        * * Display Name: Conversation Detail Info
         * * SQL Data Type: nvarchar(100)`),
     LastRun: z.string().nullable().describe(`
         * * Field Name: LastRun
-        * * Display Name: Last Run Detail
+        * * Display Name: Last Run Info
         * * SQL Data Type: nvarchar(255)`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
-        * * Display Name: Configuration Detail
+        * * Display Name: Configuration Info
         * * SQL Data Type: nvarchar(100)`),
     OverrideModel: z.string().nullable().describe(`
         * * Field Name: OverrideModel
-        * * Display Name: Model Override Detail
+        * * Display Name: Override Model Info
         * * SQL Data Type: nvarchar(50)`),
     OverrideVendor: z.string().nullable().describe(`
         * * Field Name: OverrideVendor
-        * * Display Name: Vendor Override Detail
+        * * Display Name: Override Vendor Info
         * * SQL Data Type: nvarchar(50)`),
     ScheduledJobRun: z.string().nullable().describe(`
         * * Field Name: ScheduledJobRun
-        * * Display Name: Scheduled Job Run Detail
+        * * Display Name: Scheduled Job Run Info
         * * SQL Data Type: nvarchar(200)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run Detail
+        * * Display Name: Test Run Info
         * * SQL Data Type: nvarchar(255)`),
     PrimaryScopeEntity: z.string().nullable().describe(`
         * * Field Name: PrimaryScopeEntity
-        * * Display Name: Scope Entity Detail
+        * * Display Name: Primary Scope Entity Info
         * * SQL Data Type: nvarchar(255)`),
     RootParentRunID: z.string().nullable().describe(`
         * * Field Name: RootParentRunID
@@ -4181,7 +4194,7 @@ export const MJAIAgentStepSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    StepType: z.union([z.literal('Action'), z.literal('ForEach'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('While')]).describe(`
+    StepType: z.union([z.literal('Action'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('While')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(20)
@@ -4189,6 +4202,7 @@ export const MJAIAgentStepSchema = z.object({
     * * Possible Values 
     *   * Action
     *   * ForEach
+    *   * Human
     *   * Prompt
     *   * Sub-Agent
     *   * While
@@ -6145,6 +6159,12 @@ export const MJAIModelTypeSchema = z.object({
         * * Display Name: Prefill Fallback Text
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Default fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Use {{prefill}} as a placeholder for the actual prefill text. Example: "IMPORTANT: You must begin your response with exactly: {{prefill}}". Individual AI Model Vendor records can override this. If null, a generic fallback is used.`),
+    ModelConfiguration: z.any().nullable().describe(`
+        * * Field Name: ModelConfiguration
+        * * Display Name: Model Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIModelTypeEntity_IAIModelConfiguration
+        * * Description: Type-wide default of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape: LLM / Realtime / Vision / Audio sections). Base layer of the ModelConfiguration cascade — AIModel and AIModelVendor rows inherit from it per key and may override. NULL = contributes nothing.`),
     DefaultInputModality: z.string().describe(`
         * * Field Name: DefaultInputModality
         * * Display Name: Default Input Modality Name
@@ -6249,7 +6269,7 @@ export const MJAIModelVendorSchema = z.object({
         * * Default Value: getutcdate()`),
     TypeID: z.string().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type
+        * * Display Name: Vendor Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)
         * * Description: References the type/role of the vendor for this model (e.g., model developer, inference provider)`),
@@ -6263,6 +6283,12 @@ export const MJAIModelVendorSchema = z.object({
         * * Display Name: Prefill Fallback Text
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Model-specific fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default. Use {{prefill}} as a placeholder. Allows tuning the fallback instruction per model since different models respond better to different phrasing.`),
+    ModelConfiguration: z.any().nullable().describe(`
+        * * Field Name: ModelConfiguration
+        * * Display Name: Model Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIModelVendorEntity_IAIModelConfiguration
+        * * Description: Most-specific layer of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape) — configuration for THIS model on THIS provider. Deep-merges per key over the model and type layers. NULL = inherit the merged model/type configuration unchanged.`),
     Model: z.string().describe(`
         * * Field Name: Model
         * * Display Name: Model Name
@@ -6273,7 +6299,7 @@ export const MJAIModelVendorSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type Name
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -6298,7 +6324,7 @@ export const MJAIModelSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     AIModelTypeID: z.string().describe(`
         * * Field Name: AIModelTypeID
-        * * Display Name: AI Model Type
+        * * Display Name: AI Model Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Model Types (vwAIModelTypes.ID)`),
     PowerRank: z.number().nullable().describe(`
@@ -6309,7 +6335,7 @@ export const MJAIModelSchema = z.object({
         * * Description: Optional column that ranks the power of the AI model. Default is 0 and should be non-negative.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Active
+        * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Controls whether this AI model is available for use in the system.`),
@@ -6362,9 +6388,15 @@ export const MJAIModelSchema = z.object({
         * * Display Name: Prefill Fallback Text
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Model-level fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default, can be further overridden per-vendor in AI Model Vendor. Use {{prefill}} as a placeholder.`),
+    ModelConfiguration: z.any().nullable().describe(`
+        * * Field Name: ModelConfiguration
+        * * Display Name: Model Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIModelEntity_IAIModelConfiguration
+        * * Description: Per-model layer of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape). Deep-merges per key over the AIModelType default; AIModelVendor rows may override per key on top. NULL = inherit the type default unchanged.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
-        * * Display Name: Model Type Name
+        * * Display Name: AI Model Type
         * * SQL Data Type: nvarchar(50)`),
     Vendor: z.string().nullable().describe(`
         * * Field Name: Vendor
@@ -13241,22 +13273,16 @@ export const MJContentSourceSchema = z.object({
         * * Description: JSON configuration blob for source-instance settings. Conforms to the IContentSourceConfiguration interface. Includes tag taxonomy mode (constrained/auto-grow/free-flow), tag root ID, match threshold, LLM taxonomy sharing, and vectorization toggle.`),
     EntityID: z.string().nullable().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity
+        * * Display Name: Source Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
         * * Description: For Entity-type content sources, the MJ Entity to pull records from. NULL for non-entity sources (files, RSS, websites, etc.).`),
     EntityDocumentID: z.string().nullable().describe(`
         * * Field Name: EntityDocumentID
-        * * Display Name: Entity Document
+        * * Display Name: Entity Document Template
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Documents (vwEntityDocuments.ID)
         * * Description: For Entity-type content sources, the Entity Document template used to render entity records into text for autotagging. The template defines which fields to include, how to format them, and related record inclusion. NULL for non-entity sources.`),
-    ScheduledActionID: z.string().nullable().describe(`
-        * * Field Name: ScheduledActionID
-        * * Display Name: Scheduled Action
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Scheduled Actions (vwScheduledActions.ID)
-        * * Description: Optional link to a MJ Scheduled Action that automatically runs the classification pipeline for this source on a cron schedule.`),
     SegmenterKey: z.string().nullable().describe(`
         * * Field Name: SegmenterKey
         * * Display Name: Segmenter Strategy
@@ -13267,6 +13293,12 @@ export const MJContentSourceSchema = z.object({
         * * Display Name: Cleaner Strategy
         * * SQL Data Type: nvarchar(100)
         * * Description: Registration key of the content-cleaning strategy applied to this source before segmentation — for example Html (CSS-selector-driven extraction that drops navigation, sidebars, and advertising) or PlainText (whitespace normalization only). Cleaning is separate from segmentation because the two change for different reasons: a new site template needs new selectors, not a new chunking strategy. NULL falls back to the Content Type's value, then to a default inferred from the content's mime type.`),
+    ScheduledJobID: z.string().nullable().describe(`
+        * * Field Name: ScheduledJobID
+        * * Display Name: Scheduled Job
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Scheduled Jobs (vwScheduledJobs.ID)
+        * * Description: Optional link to the Scheduled Job that runs this content source on a recurring basis. Replaces the retired ScheduledActionID link; the job is of type Action and carries its action + parameters in ScheduledJob.Configuration.`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type Name
@@ -13295,10 +13327,10 @@ export const MJContentSourceSchema = z.object({
         * * Field Name: EntityDocument
         * * Display Name: Entity Document Name
         * * SQL Data Type: nvarchar(250)`),
-    ScheduledAction: z.string().nullable().describe(`
-        * * Field Name: ScheduledAction
-        * * Display Name: Scheduled Action Name
-        * * SQL Data Type: nvarchar(255)`),
+    ScheduledJob: z.string().nullable().describe(`
+        * * Field Name: ScheduledJob
+        * * Display Name: Scheduled Job Name
+        * * SQL Data Type: nvarchar(200)`),
 });
 
 export type MJContentSourceEntityType = z.infer<typeof MJContentSourceSchema>;
@@ -16824,10 +16856,6 @@ export const MJEntityActionFilterSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EntityAction: z.string().describe(`
-        * * Field Name: EntityAction
-        * * Display Name: Entity Action Name
-        * * SQL Data Type: nvarchar(425)`),
     ActionFilter: z.string().describe(`
         * * Field Name: ActionFilter
         * * Display Name: Action Filter Name
@@ -16920,10 +16948,6 @@ export const MJEntityActionInvocationSchema = z.object({
         * * Display Name: Runtime UX Driver Class
         * * SQL Data Type: nvarchar(255)
         * * Description: Optional class name of a registered runtime-UX driver component (a BaseEntityActionRuntimeUX subclass resolved via MJGlobal.ClassFactory) that owns this invocation's interaction — parameter collection, dry-run preview, confirmation, and progress. NULL invokes the action directly with no custom UX. This lets any action opt into a richer, reusable runtime experience while the grid/toolbar stays operation-agnostic.`),
-    EntityAction: z.string().describe(`
-        * * Field Name: EntityAction
-        * * Display Name: Entity Action Name
-        * * SQL Data Type: nvarchar(425)`),
     InvocationType: z.string().describe(`
         * * Field Name: InvocationType
         * * Display Name: Invocation Type Name
@@ -16943,12 +16967,12 @@ export const MJEntityActionParamSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityActionID: z.string().describe(`
         * * Field Name: EntityActionID
-        * * Display Name: Entity Action ID
+        * * Display Name: Entity Action
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Actions (vwEntityActions.ID)`),
     ActionParamID: z.string().describe(`
         * * Field Name: ActionParamID
-        * * Display Name: Action Parameter ID
+        * * Display Name: Action Parameter
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Action Params (vwActionParams.ID)`),
     ValueType: z.union([z.literal('Entity Field'), z.literal('Entity Object'), z.literal('Entity Object Data'), z.literal('Script'), z.literal('Static')]).describe(`
@@ -16988,13 +17012,9 @@ export const MJEntityActionParamSchema = z.object({
         * * Display Name: Log Value
         * * SQL Data Type: bit
         * * Description: Optional per-binding override of ActionParam.LogValue. NULL (the default) inherits the parameter definition. Set to 0 when this particular binding passes something sensitive through a parameter that is ordinarily safe to log - a message body through a generic Text parameter, for instance. Cannot re-enable logging for a value type the hard rule suppresses.`),
-    EntityAction: z.string().describe(`
-        * * Field Name: EntityAction
-        * * Display Name: Entity Action
-        * * SQL Data Type: nvarchar(425)`),
     ActionParam: z.string().describe(`
         * * Field Name: ActionParam
-        * * Display Name: Action Parameter
+        * * Display Name: Action Parameter Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -17006,12 +17026,12 @@ export type MJEntityActionParamEntityType = z.infer<typeof MJEntityActionParamSc
 export const MJEntityActionSchema = z.object({
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     ActionID: z.string().describe(`
         * * Field Name: ActionID
-        * * Display Name: Action ID
+        * * Display Name: Action
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)`),
     Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Pending')]).describe(`
@@ -17027,12 +17047,12 @@ export const MJEntityActionSchema = z.object({
         * * Description: Status of the entity action (Pending, Active, Disabled).`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     ID: z.string().describe(`
@@ -17068,17 +17088,27 @@ export const MJEntityActionSchema = z.object({
     *   * FailuresOnly
     *   * None
         * * Description: How much of this binding's activity reaches ActionExecutionLog. All (default) writes a row per invocation. FailuresOnly writes only runs that did not succeed - the right setting for a high-frequency binding on a busy entity, where the successful runs are noise. None disables logging for the binding entirely and should be rare, because it also removes the failure record.`),
+    RunMode: z.union([z.literal('Durable'), z.literal('Inline')]).describe(`
+        * * Field Name: RunMode
+        * * Display Name: Run Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Inline
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Durable
+    *   * Inline
+        * * Description: How an After* dispatch of this binding executes. Inline (the default) runs it fire-and-forget in the saving process, which is fast but lost if that process dies. Durable submits a single-node task graph instead, so the work survives a restart and is reclaimed by the dispatcher — at the cost of a Task row, a dispatcher hop of latency, and the action's parameters being persisted (redacted) at rest. Ignored for Validate and Before* invocations, which run inside the save and cannot be deferred without changing whether the save succeeds.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     Action: z.string().describe(`
         * * Field Name: Action
-        * * Display Name: Action
+        * * Display Name: Action Name
         * * SQL Data Type: nvarchar(425)`),
     ScopeEntity: z.string().nullable().describe(`
         * * Field Name: ScopeEntity
-        * * Display Name: Scope Entity
+        * * Display Name: Scope Entity Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -18630,11 +18660,12 @@ export type MJEntityRelationshipDisplayComponentEntityType = z.infer<typeof MJEn
 export const MJEntityRelationshipSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     Sequence: z.number().describe(`
@@ -18645,7 +18676,7 @@ export const MJEntityRelationshipSchema = z.object({
         * * Description: Used for display order in generated forms and in other places in the UI where relationships for an entity are shown`),
     RelatedEntityID: z.string().describe(`
         * * Field Name: RelatedEntityID
-        * * Display Name: Related Entity ID
+        * * Display Name: Related Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     BundleInAPI: z.boolean().describe(`
@@ -18656,12 +18687,13 @@ export const MJEntityRelationshipSchema = z.object({
         * * Description: Whether to include related records when fetching the parent entity via API.`),
     IncludeInParentAllQuery: z.boolean().describe(`
         * * Field Name: IncludeInParentAllQuery
-        * * Display Name: Include In Parent All Query
+        * * Display Name: Include In Parent Query
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether to include this relationship when querying all fields of the parent entity.`),
     Type: z.union([z.literal('Many To Many'), z.literal('One To Many')]).describe(`
         * * Field Name: Type
+        * * Display Name: Relationship Type
         * * SQL Data Type: nchar(20)
         * * Default Value: One To Many
     * * Value List Type: List
@@ -18733,48 +18765,55 @@ export const MJEntityRelationshipSchema = z.object({
         * * Description: If specified, the icon `),
     DisplayUserViewID: z.string().nullable().describe(`
         * * Field Name: DisplayUserViewID
-        * * Display Name: Display User View ID
+        * * Display Name: Display User View
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: User Views (vwUserViews.ID)`),
     DisplayComponentID: z.string().nullable().describe(`
         * * Field Name: DisplayComponentID
-        * * Display Name: Display Component ID
+        * * Display Name: Display Component
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Relationship Display Components (vwEntityRelationshipDisplayComponents.ID)`),
     DisplayComponentConfiguration: z.string().nullable().describe(`
         * * Field Name: DisplayComponentConfiguration
-        * * Display Name: Display Component Configuration
+        * * Display Name: Display Component Config
         * * SQL Data Type: nvarchar(MAX)
         * * Description: If DisplayComponentID is specified, this field can optionally be used to track component-specific and relationship-specific configuration details that will be used by CodeGen to provide to the display component selected.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     AutoUpdateFromSchema: z.boolean().describe(`
         * * Field Name: AutoUpdateFromSchema
-        * * Display Name: Auto Update From Schema
+        * * Display Name: Auto-Update From Schema
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates whether this relationship should be automatically updated by CodeGen. When set to 0, the record will not be modified by CodeGen. Defaults to 1.`),
     AdditionalFieldsToInclude: z.string().nullable().describe(`
         * * Field Name: AdditionalFieldsToInclude
-        * * Display Name: Additional Fields To Include
+        * * Display Name: Additional Fields
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of additional field names to include when joining through this relationship (for junction tables, e.g., ["RoleName", "UserEmail"])`),
     AutoUpdateAdditionalFieldsToInclude: z.boolean().describe(`
         * * Field Name: AutoUpdateAdditionalFieldsToInclude
-        * * Display Name: Auto Update Additional Fields To Include
+        * * Display Name: Auto-Update Additional Fields
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When 1, allows system/LLM to auto-update AdditionalFieldsToInclude; when 0, user has locked this field`),
+    RelatedRecordCollection: z.any().nullable().describe(`
+        * * Field Name: RelatedRecordCollection
+        * * Display Name: Related Record Collection Policy
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJEntityRelationshipEntity_IRelatedRecordCollectionConfig
+        * * Description: Optional JSON policy object that declares this relationship as a first-class related-record collection, so CodeGen can emit a typed DeclareRelatedRecords(...) declaration on the entity subclass. Shape is IRelatedRecordCollectionConfig: Name (the generated property name, e.g. "Lines"), Load ('explicit' | 'immediate' | 'lazy' | 'never'), Source ('database' | 'cache'), ReadOnly, OnRemove ('delete' | 'orphan' | 'refuse'), OrderBy, Sequence ({ Field, From }), and ClearAfterSave. Source 'cache' reads the related records from whichever loaded BaseEngine already holds that entity, costing no query, and defaults ReadOnly to true because those are the engine's own instances; 'lazy' fills on first access and requires both. RelatedEntity and RelatedEntityJoinField are NOT repeated here — they are read from this row's own columns. NULL means the relationship is not a declared collection, which is the default and reproduces pre-6.2 behaviour exactly.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     EntityBaseTable: z.string().describe(`
         * * Field Name: EntityBaseTable
@@ -18786,7 +18825,7 @@ export const MJEntityRelationshipSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     RelatedEntity: z.string().describe(`
         * * Field Name: RelatedEntity
-        * * Display Name: Related Entity
+        * * Display Name: Related Entity Name
         * * SQL Data Type: nvarchar(255)`),
     RelatedEntityBaseTable: z.string().describe(`
         * * Field Name: RelatedEntityBaseTable
@@ -23594,37 +23633,6 @@ export const MJOutputFormatTypeSchema = z.object({
 export type MJOutputFormatTypeEntityType = z.infer<typeof MJOutputFormatTypeSchema>;
 
 /**
- * zod schema definition for the entity MJ: Output Trigger Types
- */
-export const MJOutputTriggerTypeSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    Name: z.string().describe(`
-        * * Field Name: Name
-        * * Display Name: Name
-        * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullable().describe(`
-        * * Field Name: Description
-        * * Display Name: Description
-        * * SQL Data Type: nvarchar(MAX)`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-});
-
-export type MJOutputTriggerTypeEntityType = z.infer<typeof MJOutputTriggerTypeSchema>;
-
-/**
  * zod schema definition for the entity MJ: Permission Domains
  */
 export const MJPermissionDomainSchema = z.object({
@@ -26347,362 +26355,6 @@ export const MJRemoteOperationSchema = z.object({
 export type MJRemoteOperationEntityType = z.infer<typeof MJRemoteOperationSchema>;
 
 /**
- * zod schema definition for the entity MJ: Report Categories
- */
-export const MJReportCategorySchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    Name: z.string().describe(`
-        * * Field Name: Name
-        * * Display Name: Name
-        * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullable().describe(`
-        * * Field Name: Description
-        * * Display Name: Description
-        * * SQL Data Type: nvarchar(MAX)`),
-    ParentID: z.string().nullable().describe(`
-        * * Field Name: ParentID
-        * * Display Name: Parent ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Report Categories (vwReportCategories.ID)`),
-    UserID: z.string().describe(`
-        * * Field Name: UserID
-        * * Display Name: User ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    Parent: z.string().nullable().describe(`
-        * * Field Name: Parent
-        * * Display Name: Parent
-        * * SQL Data Type: nvarchar(100)`),
-    User: z.string().describe(`
-        * * Field Name: User
-        * * Display Name: User
-        * * SQL Data Type: nvarchar(100)`),
-    RootParentID: z.string().nullable().describe(`
-        * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
-        * * SQL Data Type: uniqueidentifier`),
-});
-
-export type MJReportCategoryEntityType = z.infer<typeof MJReportCategorySchema>;
-
-/**
- * zod schema definition for the entity MJ: Report Snapshots
- */
-export const MJReportSnapshotSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    ReportID: z.string().describe(`
-        * * Field Name: ReportID
-        * * Display Name: Report ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Reports (vwReports.ID)`),
-    ResultSet: z.string().describe(`
-        * * Field Name: ResultSet
-        * * Display Name: Result Set
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: Field ResultSet for entity Report Snapshots.`),
-    UserID: z.string().describe(`
-        * * Field Name: UserID
-        * * Display Name: User ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    Report: z.string().describe(`
-        * * Field Name: Report
-        * * Display Name: Report
-        * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
-        * * Field Name: User
-        * * Display Name: User
-        * * SQL Data Type: nvarchar(100)`),
-});
-
-export type MJReportSnapshotEntityType = z.infer<typeof MJReportSnapshotSchema>;
-
-/**
- * zod schema definition for the entity MJ: Report User States
- */
-export const MJReportUserStateSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    ReportID: z.string().describe(`
-        * * Field Name: ReportID
-        * * Display Name: Report ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Reports (vwReports.ID)`),
-    UserID: z.string().describe(`
-        * * Field Name: UserID
-        * * Display Name: User ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
-    ReportState: z.string().nullable().describe(`
-        * * Field Name: ReportState
-        * * Display Name: Report State
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON serialized state of user interaction with the report`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    Report: z.string().describe(`
-        * * Field Name: Report
-        * * Display Name: Report
-        * * SQL Data Type: nvarchar(255)`),
-    User: z.string().describe(`
-        * * Field Name: User
-        * * Display Name: User
-        * * SQL Data Type: nvarchar(100)`),
-});
-
-export type MJReportUserStateEntityType = z.infer<typeof MJReportUserStateSchema>;
-
-/**
- * zod schema definition for the entity MJ: Report Versions
- */
-export const MJReportVersionSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    ReportID: z.string().describe(`
-        * * Field Name: ReportID
-        * * Display Name: Report ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Reports (vwReports.ID)`),
-    VersionNumber: z.number().describe(`
-        * * Field Name: VersionNumber
-        * * Display Name: Version Number
-        * * SQL Data Type: int
-        * * Description: Report version number, sequential per report starting at 1`),
-    Name: z.string().describe(`
-        * * Field Name: Name
-        * * Display Name: Name
-        * * SQL Data Type: nvarchar(255)
-        * * Description: Name of this report version`),
-    Description: z.string().nullable().describe(`
-        * * Field Name: Description
-        * * Display Name: Description
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: Description of this report version`),
-    Configuration: z.string().nullable().describe(`
-        * * Field Name: Configuration
-        * * Display Name: Configuration
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON configuration of report structure, layout and logic`),
-    DataContextUpdated: z.boolean().describe(`
-        * * Field Name: DataContextUpdated
-        * * Display Name: Data Context Updated
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: Indicates if the data context was updated in this version`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    Report: z.string().describe(`
-        * * Field Name: Report
-        * * Display Name: Report
-        * * SQL Data Type: nvarchar(255)`),
-});
-
-export type MJReportVersionEntityType = z.infer<typeof MJReportVersionSchema>;
-
-/**
- * zod schema definition for the entity MJ: Reports
- */
-export const MJReportSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    Name: z.string().describe(`
-        * * Field Name: Name
-        * * Display Name: Name
-        * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullable().describe(`
-        * * Field Name: Description
-        * * Display Name: Description
-        * * SQL Data Type: nvarchar(MAX)`),
-    CategoryID: z.string().nullable().describe(`
-        * * Field Name: CategoryID
-        * * Display Name: Category
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Report Categories (vwReportCategories.ID)`),
-    UserID: z.string().describe(`
-        * * Field Name: UserID
-        * * Display Name: User
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
-    SharingScope: z.union([z.literal('Everyone'), z.literal('None'), z.literal('Specific')]).describe(`
-        * * Field Name: SharingScope
-        * * Display Name: Sharing Scope
-        * * SQL Data Type: nvarchar(20)
-        * * Default Value: Personal
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Everyone
-    *   * None
-    *   * Specific
-        * * Description: Field SharingScope for entity Reports.`),
-    ConversationID: z.string().nullable().describe(`
-        * * Field Name: ConversationID
-        * * Display Name: Conversation
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)`),
-    ConversationDetailID: z.string().nullable().describe(`
-        * * Field Name: ConversationDetailID
-        * * Display Name: Conversation Detail
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)`),
-    DataContextID: z.string().nullable().describe(`
-        * * Field Name: DataContextID
-        * * Display Name: Data Context
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Data Contexts (vwDataContexts.ID)`),
-    Configuration: z.string().nullable().describe(`
-        * * Field Name: Configuration
-        * * Display Name: Configuration
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: Field Configuration for entity Reports.`),
-    OutputTriggerTypeID: z.string().nullable().describe(`
-        * * Field Name: OutputTriggerTypeID
-        * * Display Name: Output Trigger Type
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Output Trigger Types (vwOutputTriggerTypes.ID)`),
-    OutputFormatTypeID: z.string().nullable().describe(`
-        * * Field Name: OutputFormatTypeID
-        * * Display Name: Output Format Type
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Output Format Types (vwOutputFormatTypes.ID)`),
-    OutputDeliveryTypeID: z.string().nullable().describe(`
-        * * Field Name: OutputDeliveryTypeID
-        * * Display Name: Output Delivery Type
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Output Delivery Types (vwOutputDeliveryTypes.ID)`),
-    OutputFrequency: z.string().nullable().describe(`
-        * * Field Name: OutputFrequency
-        * * Display Name: Output Frequency
-        * * SQL Data Type: nvarchar(50)
-        * * Description: For scheduled reports, the frequency of generation (Daily, Weekly, Monthly, etc.).`),
-    OutputTargetEmail: z.string().nullable().describe(`
-        * * Field Name: OutputTargetEmail
-        * * Display Name: Output Target Email
-        * * SQL Data Type: nvarchar(255)
-        * * Description: Email address(es) to send the report to when using email delivery.`),
-    OutputWorkflowID: z.string().nullable().describe(`
-        * * Field Name: OutputWorkflowID
-        * * Display Name: Output Workflow
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Workflows (vwWorkflows.ID)`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    Thumbnail: z.string().nullable().describe(`
-        * * Field Name: Thumbnail
-        * * Display Name: Thumbnail
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: Thumbnail image for the report that can be displayed in gallery views. Can contain either a URL to an image file or a Base64-encoded image string.`),
-    EnvironmentID: z.string().describe(`
-        * * Field Name: EnvironmentID
-        * * Display Name: Environment
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
-        * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
-    Category: z.string().nullable().describe(`
-        * * Field Name: Category
-        * * Display Name: Category Name
-        * * SQL Data Type: nvarchar(100)`),
-    User: z.string().describe(`
-        * * Field Name: User
-        * * Display Name: User Name
-        * * SQL Data Type: nvarchar(100)`),
-    Conversation: z.string().nullable().describe(`
-        * * Field Name: Conversation
-        * * Display Name: Conversation Name
-        * * SQL Data Type: nvarchar(255)`),
-    ConversationDetail: z.string().nullable().describe(`
-        * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail Name
-        * * SQL Data Type: nvarchar(100)`),
-    DataContext: z.string().nullable().describe(`
-        * * Field Name: DataContext
-        * * Display Name: Data Context Name
-        * * SQL Data Type: nvarchar(255)`),
-    OutputTriggerType: z.string().nullable().describe(`
-        * * Field Name: OutputTriggerType
-        * * Display Name: Output Trigger Type Name
-        * * SQL Data Type: nvarchar(255)`),
-    OutputFormatType: z.string().nullable().describe(`
-        * * Field Name: OutputFormatType
-        * * Display Name: Output Format Type Name
-        * * SQL Data Type: nvarchar(255)`),
-    OutputDeliveryType: z.string().nullable().describe(`
-        * * Field Name: OutputDeliveryType
-        * * Display Name: Output Delivery Type Name
-        * * SQL Data Type: nvarchar(255)`),
-    OutputWorkflow: z.string().nullable().describe(`
-        * * Field Name: OutputWorkflow
-        * * Display Name: Output Workflow Name
-        * * SQL Data Type: nvarchar(100)`),
-    Environment: z.string().describe(`
-        * * Field Name: Environment
-        * * Display Name: Environment Name
-        * * SQL Data Type: nvarchar(255)`),
-});
-
-export type MJReportEntityType = z.infer<typeof MJReportSchema>;
-
-/**
  * zod schema definition for the entity MJ: Resource Links
  */
 export const MJResourceLinkSchema = z.object({
@@ -27005,173 +26657,6 @@ export const MJRowLevelSecurityFilterSchema = z.object({
 export type MJRowLevelSecurityFilterEntityType = z.infer<typeof MJRowLevelSecurityFilterSchema>;
 
 /**
- * zod schema definition for the entity MJ: Scheduled Action Params
- */
-export const MJScheduledActionParamSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    ScheduledActionID: z.string().describe(`
-        * * Field Name: ScheduledActionID
-        * * Display Name: Scheduled Action ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Scheduled Actions (vwScheduledActions.ID)`),
-    ActionParamID: z.string().describe(`
-        * * Field Name: ActionParamID
-        * * Display Name: Action Param ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Action Params (vwActionParams.ID)`),
-    ValueType: z.union([z.literal('SQL Statement'), z.literal('Static')]).describe(`
-        * * Field Name: ValueType
-        * * Display Name: Value Type
-        * * SQL Data Type: nvarchar(20)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * SQL Statement
-    *   * Static
-        * * Description: Field ValueType for entity Scheduled Action Params.`),
-    Value: z.string().nullable().describe(`
-        * * Field Name: Value
-        * * Display Name: Value
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: Field Value for entity Scheduled Action Params.`),
-    Comments: z.string().nullable().describe(`
-        * * Field Name: Comments
-        * * Display Name: Comments
-        * * SQL Data Type: nvarchar(MAX)`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    ScheduledAction: z.string().describe(`
-        * * Field Name: ScheduledAction
-        * * Display Name: Scheduled Action
-        * * SQL Data Type: nvarchar(255)`),
-    ActionParam: z.string().describe(`
-        * * Field Name: ActionParam
-        * * Display Name: Action Param
-        * * SQL Data Type: nvarchar(255)`),
-});
-
-export type MJScheduledActionParamEntityType = z.infer<typeof MJScheduledActionParamSchema>;
-
-/**
- * zod schema definition for the entity MJ: Scheduled Actions
- */
-export const MJScheduledActionSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    Name: z.string().describe(`
-        * * Field Name: Name
-        * * Display Name: Name
-        * * SQL Data Type: nvarchar(255)`),
-    Description: z.string().nullable().describe(`
-        * * Field Name: Description
-        * * Display Name: Description
-        * * SQL Data Type: nvarchar(MAX)`),
-    CreatedByUserID: z.string().describe(`
-        * * Field Name: CreatedByUserID
-        * * Display Name: Created By User ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
-    ActionID: z.string().describe(`
-        * * Field Name: ActionID
-        * * Display Name: Action ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)`),
-    Type: z.union([z.literal('Custom'), z.literal('Daily'), z.literal('Monthly'), z.literal('Weekly'), z.literal('Yearly')]).describe(`
-        * * Field Name: Type
-        * * Display Name: Type
-        * * SQL Data Type: nvarchar(20)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Custom
-    *   * Daily
-    *   * Monthly
-    *   * Weekly
-    *   * Yearly
-        * * Description: Type of the scheduled action (Daily, Weekly, Monthly, Yearly, Custom)`),
-    CronExpression: z.string().nullable().describe(`
-        * * Field Name: CronExpression
-        * * Display Name: Cron Expression
-        * * SQL Data Type: nvarchar(100)
-        * * Description: Cron expression defining the schedule, automatically maintained by the system unless Type is Custom, in which case the user directly sets this`),
-    Timezone: z.string().describe(`
-        * * Field Name: Timezone
-        * * Display Name: Timezone
-        * * SQL Data Type: nvarchar(100)
-        * * Description: Timezone for the scheduled action, if not specified defaults to UTC/Z`),
-    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Expired'), z.literal('Pending')]).describe(`
-        * * Field Name: Status
-        * * Display Name: Status
-        * * SQL Data Type: nvarchar(20)
-        * * Default Value: Pending
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Active
-    *   * Disabled
-    *   * Expired
-    *   * Pending
-        * * Description: Status of the scheduled action (Pending, Active, Disabled, Expired)`),
-    IntervalDays: z.number().nullable().describe(`
-        * * Field Name: IntervalDays
-        * * Display Name: Interval Days
-        * * SQL Data Type: int
-        * * Description: Interval in days for the scheduled action`),
-    DayOfWeek: z.string().nullable().describe(`
-        * * Field Name: DayOfWeek
-        * * Display Name: Day Of Week
-        * * SQL Data Type: nvarchar(20)
-        * * Description: Day of the week for the scheduled action`),
-    DayOfMonth: z.number().nullable().describe(`
-        * * Field Name: DayOfMonth
-        * * Display Name: Day Of Month
-        * * SQL Data Type: int
-        * * Description: Day of the month for the scheduled action`),
-    Month: z.string().nullable().describe(`
-        * * Field Name: Month
-        * * Display Name: Month
-        * * SQL Data Type: nvarchar(20)
-        * * Description: Month for the scheduled action`),
-    CustomCronExpression: z.string().nullable().describe(`
-        * * Field Name: CustomCronExpression
-        * * Display Name: Custom Cron Expression
-        * * SQL Data Type: nvarchar(255)
-        * * Description: Field CustomCronExpression for entity Scheduled Actions.`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    CreatedByUser: z.string().describe(`
-        * * Field Name: CreatedByUser
-        * * Display Name: Created By User
-        * * SQL Data Type: nvarchar(100)`),
-    Action: z.string().describe(`
-        * * Field Name: Action
-        * * Display Name: Action
-        * * SQL Data Type: nvarchar(425)`),
-});
-
-export type MJScheduledActionEntityType = z.infer<typeof MJScheduledActionSchema>;
-
-/**
  * zod schema definition for the entity MJ: Scheduled Job Runs
  */
 export const MJScheduledJobRunSchema = z.object({
@@ -27322,7 +26807,7 @@ export const MJScheduledJobSchema = z.object({
         * * Default Value: newsequentialid()`),
     JobTypeID: z.string().describe(`
         * * Field Name: JobTypeID
-        * * Display Name: Job Type
+        * * Display Name: Job Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Scheduled Job Types (vwScheduledJobTypes.ID)`),
     Name: z.string().describe(`
@@ -27376,7 +26861,7 @@ export const MJScheduledJobSchema = z.object({
         * * Description: Job-type specific configuration stored as JSON. Schema is defined by the ScheduledJobType plugin. For Agents: includes AgentID, StartingPayload, InitialMessage, etc. For Actions: includes ActionID and parameter mappings.`),
     OwnerUserID: z.string().nullable().describe(`
         * * Field Name: OwnerUserID
-        * * Display Name: Owner
+        * * Display Name: Owner User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: User who owns this schedule. Used as the execution context if no specific user is configured in the job-specific configuration.`),
@@ -27422,7 +26907,7 @@ export const MJScheduledJobSchema = z.object({
         * * Description: Whether to send notifications when the job fails. Defaults to true for alerting on failures.`),
     NotifyUserID: z.string().nullable().describe(`
         * * Field Name: NotifyUserID
-        * * Display Name: Notify User
+        * * Display Name: Notify User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: User to notify about job execution results. If NULL and notifications are enabled, falls back to OwnerUserID.`),
@@ -27487,20 +26972,31 @@ export const MJScheduledJobSchema = z.object({
         * * Description: When true AND LastRunAt IS NULL, the scheduler sets NextRunAt to now() instead of the next cron tick on initialization, so the job runs on the next polling cycle. Useful for newly-seeded jobs that should not wait up to a full cron interval before their first execution.`),
     MaxRuntimeMinutes: z.number().nullable().describe(`
         * * Field Name: MaxRuntimeMinutes
-        * * Display Name: Max Runtime (Minutes)
+        * * Display Name: Max Runtime Minutes
         * * SQL Data Type: int
         * * Description: Optional per-job override for the acquire-time lock lease length, in minutes. When set and positive, the engine uses max(default lease, MaxRuntimeMinutes) as the initial ExpectedCompletionAt — so it only ever EXTENDS the default lease, never shrinks it. Intended for jobs whose work is a single long-running call that cannot heartbeat mid-flight (e.g. one slow synchronous action). Jobs that heartbeat via the plugin opt-in pattern do not need this. NULL = use the engine default lease (LeaseTimeoutMinutes). See plans/scheduled-job-engine-heartbeat-lease.md (GH #2749).`),
+    MissedRunPolicy: z.union([z.literal('RunAll'), z.literal('RunOnce'), z.literal('Skip')]).describe(`
+        * * Field Name: MissedRunPolicy
+        * * Display Name: Missed Run Policy
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: RunOnce
+    * * Value List Type: List
+    * * Possible Values 
+    *   * RunAll
+    *   * RunOnce
+    *   * Skip
+        * * Description: What this job does about fire times that passed while the scheduler was not running (a deploy, a crash, a sleeping machine). RunOnce (the default) performs a single catch-up run and then resumes the normal schedule — correct for digests, syncs and anything where only the latest state matters, and identical to the behavior every job had before this column existed. RunAll replays each missed occurrence, one per poll tick so a long outage drains gradually rather than dispatching at once — correct for per-period work such as billing or metric snapshots, where skipping a period loses data nothing else recreates. Skip performs no catch-up at all and simply advances to the next future occurrence — correct for work whose value expires, such as a cache warm. A run is only treated as missed when a LATER occurrence has also come due, so a job that merely became due seconds ago is never misclassified; this is evaluated cron-relatively rather than against a fixed grace window, which would misjudge both a per-minute job after a short pause and a monthly job that is a week late.`),
     JobType: z.string().describe(`
         * * Field Name: JobType
-        * * Display Name: Job Type Name
+        * * Display Name: Job Type
         * * SQL Data Type: nvarchar(100)`),
     OwnerUser: z.string().nullable().describe(`
         * * Field Name: OwnerUser
-        * * Display Name: Owner User Name
+        * * Display Name: Owner User
         * * SQL Data Type: nvarchar(100)`),
     NotifyUser: z.string().nullable().describe(`
         * * Field Name: NotifyUser
-        * * Display Name: Notify User Name
+        * * Display Name: Notify User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -29701,7 +29197,7 @@ export const MJTaskDependencySchema = z.object({
         * * Default Value: newsequentialid()`),
     TaskID: z.string().describe(`
         * * Field Name: TaskID
-        * * Display Name: Task ID
+        * * Display Name: Task
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)`),
     DependsOnTaskID: z.string().describe(`
@@ -29730,13 +29226,35 @@ export const MJTaskDependencySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Condition: z.string().nullable().describe(`
+        * * Field Name: Condition
+        * * Display Name: Condition
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional boolean expression gating this dependency edge. NULL (the default, and the value every pre-existing row carries) means the edge is unconditional, so adding this column changes the meaning of no existing graph. When present it is evaluated by the shared GraphTraversalEngine against the same context a design-time AIAgentStepPath.Condition sees, which is what lets a runtime task graph and a flow-editor graph be the same graph. A condition that evaluates false skips the edge; one that fails to evaluate ALSO skips it, but is reported distinctly so a graph stalled by a malformed expression cannot be mistaken for one that finished normally.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Ordering within an exclusive group — higher wins. Mirrors AIAgentStepPath.Priority so a compiled workflow chooses the same branch the flow editor shows. Ignored for edges that are not part of an ExclusiveGroup.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Deterministic tiebreak when two edges in an ExclusiveGroup share a Priority, applied ascending. Load-bearing rather than cosmetic: compiled dependencies get fresh UUIDs and Priority defaults to 0, so without a stored ordinal a tie would resolve by row order and the same workflow could take a different branch on a different machine.`),
+    ExclusiveGroup: z.string().nullable().describe(`
+        * * Field Name: ExclusiveGroup
+        * * Display Name: Exclusive Group
+        * * SQL Data Type: nvarchar(255)
+        * * Description: XOR group key: sibling edges leaving the same origin that share a non-null ExclusiveGroup are an exclusive fan-out. The highest-Priority satisfied edge wins, ties broken by ascending Sequence; the rest are Skipped. NULL (the default) means an ordinary dependency, so existing graphs are unaffected. An unevaluable condition anywhere in the group holds the whole group rather than firing every branch.`),
     Task: z.string().describe(`
         * * Field Name: Task
-        * * Display Name: Task
+        * * Display Name: Task Name
         * * SQL Data Type: nvarchar(255)`),
     DependsOnTask: z.string().describe(`
         * * Field Name: DependsOnTask
-        * * Display Name: Depends On Task
+        * * Display Name: Depends On Task Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -29786,12 +29304,12 @@ export const MJTaskSchema = z.object({
         * * Default Value: newsequentialid()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent
+        * * Display Name: Parent Task
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: Name
+        * * Display Name: Task Name
         * * SQL Data Type: nvarchar(255)
         * * Description: Display name for the task`),
     Description: z.string().nullable().describe(`
@@ -29801,7 +29319,7 @@ export const MJTaskSchema = z.object({
         * * Description: Detailed description of the task requirements and objectives`),
     TypeID: z.string().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type
+        * * Display Name: Task Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Task Types (vwTaskTypes.ID)`),
     EnvironmentID: z.string().describe(`
@@ -29822,15 +29340,15 @@ export const MJTaskSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: Assigned User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     AgentID: z.string().nullable().describe(`
         * * Field Name: AgentID
-        * * Display Name: Agent
+        * * Display Name: Assigned Agent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)`),
-    Status: z.union([z.literal('Blocked'), z.literal('Cancelled'), z.literal('Complete'), z.literal('Deferred'), z.literal('Failed'), z.literal('In Progress'), z.literal('Pending')]).describe(`
+    Status: z.union([z.literal('Blocked'), z.literal('Cancelled'), z.literal('Complete'), z.literal('Deferred'), z.literal('Failed'), z.literal('In Progress'), z.literal('Pending'), z.literal('Skipped')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(50)
@@ -29844,7 +29362,8 @@ export const MJTaskSchema = z.object({
     *   * Failed
     *   * In Progress
     *   * Pending
-        * * Description: Current status of the task (Pending, In Progress, Complete, Cancelled, Failed, Blocked, Deferred)`),
+    *   * Skipped
+        * * Description: Lifecycle state. Pending awaits prerequisites; In Progress is claimed and running; Complete succeeded; Failed did not; Blocked can never run because a prerequisite is unsatisfiable; Cancelled was stopped deliberately; Deferred is waiting on a schedule. Skipped is a branch that was NOT TAKEN at an exclusive fan-out — a normal outcome, not a failure: it satisfies dependents (so a join downstream of a fork still runs) and is invisible to failure precedence when the parent rolls up.`),
     PercentComplete: z.number().nullable().describe(`
         * * Field Name: PercentComplete
         * * Display Name: Percent Complete
@@ -29853,7 +29372,7 @@ export const MJTaskSchema = z.object({
         * * Description: Completion percentage for tracking progress (0-100)`),
     DueAt: z.date().nullable().describe(`
         * * Field Name: DueAt
-        * * Display Name: Due At
+        * * Display Name: Due Date
         * * SQL Data Type: datetimeoffset
         * * Description: Due date and time for task completion`),
     StartedAt: z.date().nullable().describe(`
@@ -29876,37 +29395,111 @@ export const MJTaskSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    InputPayload: z.string().nullable().describe(`
+        * * Field Name: InputPayload
+        * * Display Name: Input Payload
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Structured input for this task, stored as JSON. Replaces the legacy __TASK_METADATA__ marker that was embedded in Description.`),
+    OutputPayload: z.string().nullable().describe(`
+        * * Field Name: OutputPayload
+        * * Display Name: Output Payload
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Structured output produced by this task, stored as JSON. Downstream tasks read their dependencies' outputs from here. Replaces the legacy __TASK_OUTPUT__ marker that was embedded in Description.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Failure detail when Status is Failed. Null for tasks that have not failed.`),
+    AgentRunID: z.string().nullable().describe(`
+        * * Field Name: AgentRunID
+        * * Display Name: Agent Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: The specific AI Agent Run that executed this task. Distinct from the conversation-level link: sibling tasks in one graph each get their own run, so this is what run-history and Gantt views should follow.`),
+    ClaimedBy: z.string().nullable().describe(`
+        * * Field Name: ClaimedBy
+        * * Display Name: Claimed By
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Identifier of the dispatcher instance currently executing this task. Part of the compare-and-swap claim protocol; set only by the dispatcher, never by user-facing writes. Null when unclaimed. Human-assigned tasks never carry a claim.`),
+    ClaimExpiresAt: z.date().nullable().describe(`
+        * * Field Name: ClaimExpiresAt
+        * * Display Name: Claim Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the current dispatcher claim lapses. Long-running tasks extend it by heartbeat; reconciliation treats an expired claim as an orphaned task and returns it to Pending.`),
+    ActionID: z.string().nullable().describe(`
+        * * Field Name: ActionID
+        * * Display Name: Action ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
+        * * Description: The Action this task executes, when the node is action-assigned rather than agent-assigned or awaiting a person. Mutually exclusive with UserID and AgentID (CK_Task_Assignment). Set by durable entity-action dispatch, where a single-node graph carries one action to run with restart recovery.`),
+    StepType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('External'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('While')]).nullable().describe(`
+        * * Field Name: StepType
+        * * Display Name: Step Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Action
+    *   * Agent
+    *   * External
+    *   * ForEach
+    *   * Human
+    *   * Prompt
+    *   * While
+        * * Description: Which kind of workflow step this task represents. NULL for a task that is not part of a workflow, such as a hand-authored to-do. Determines which of AgentID/ActionID/PromptID/UserID is meaningful and how Configuration is read. This is the executable vocabulary and is deliberately not the same value list as AIAgentStep.StepType, which describes a step at design time.`),
+    PromptID: z.string().nullable().describe(`
+        * * Field Name: PromptID
+        * * Display Name: Prompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)`),
+    Configuration: z.any().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJTaskEntity_ITaskStepConfiguration
+        * * Description: Everything about this step that has no column of its own, as JSON: the loop definition for a ForEach or While step, an agent step's message and template parameters, the mappings that move data between this step and the workflow payload, and the execution policy (timeout, retries, what to do on failure). Typed by ITaskStepConfiguration.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Name
+        * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type Name
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(255)`),
     Environment: z.string().describe(`
         * * Field Name: Environment
-        * * Display Name: Environment Name
+        * * Display Name: Environment
         * * SQL Data Type: nvarchar(255)`),
     Project: z.string().nullable().describe(`
         * * Field Name: Project
-        * * Display Name: Project Name
+        * * Display Name: Project
         * * SQL Data Type: nvarchar(255)`),
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail Name
+        * * Display Name: Conversation Detail
         * * SQL Data Type: nvarchar(100)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User Name
+        * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent Name
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    AgentRun: z.string().nullable().describe(`
+        * * Field Name: AgentRun
+        * * Display Name: Agent Run
+        * * SQL Data Type: nvarchar(255)`),
+    Action: z.string().nullable().describe(`
+        * * Field Name: Action
+        * * Display Name: Action
+        * * SQL Data Type: nvarchar(425)`),
+    Prompt: z.string().nullable().describe(`
+        * * Field Name: Prompt
+        * * Display Name: Prompt
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent
+        * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -33165,180 +32758,6 @@ export const MJViewTypeSchema = z.object({
 export type MJViewTypeEntityType = z.infer<typeof MJViewTypeSchema>;
 
 /**
- * zod schema definition for the entity MJ: Workflow Engines
- */
-export const MJWorkflowEngineSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    Name: z.string().describe(`
-        * * Field Name: Name
-        * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullable().describe(`
-        * * Field Name: Description
-        * * SQL Data Type: nvarchar(MAX)`),
-    DriverPath: z.string().describe(`
-        * * Field Name: DriverPath
-        * * Display Name: Driver Path
-        * * SQL Data Type: nvarchar(500)
-        * * Description: Import path for the workflow engine driver.`),
-    DriverClass: z.string().describe(`
-        * * Field Name: DriverClass
-        * * Display Name: Driver Class
-        * * SQL Data Type: nvarchar(100)
-        * * Description: Class name implementing the workflow engine interface.`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-});
-
-export type MJWorkflowEngineEntityType = z.infer<typeof MJWorkflowEngineSchema>;
-
-/**
- * zod schema definition for the entity MJ: Workflow Runs
- */
-export const MJWorkflowRunSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    WorkflowID: z.string().describe(`
-        * * Field Name: WorkflowID
-        * * Display Name: Workflow ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Workflows (vwWorkflows.ID)`),
-    ExternalSystemRecordID: z.string().describe(`
-        * * Field Name: ExternalSystemRecordID
-        * * Display Name: External System Record ID
-        * * SQL Data Type: nvarchar(500)
-        * * Description: Field ExternalSystemRecordID for entity Workflow Runs.`),
-    StartedAt: z.date().describe(`
-        * * Field Name: StartedAt
-        * * Display Name: Started At
-        * * SQL Data Type: datetimeoffset`),
-    EndedAt: z.date().nullable().describe(`
-        * * Field Name: EndedAt
-        * * Display Name: Ended At
-        * * SQL Data Type: datetimeoffset`),
-    Status: z.union([z.literal('Complete'), z.literal('Failed'), z.literal('In Progress'), z.literal('Pending')]).describe(`
-        * * Field Name: Status
-        * * Display Name: Status
-        * * SQL Data Type: nchar(10)
-        * * Default Value: Pending
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Complete
-    *   * Failed
-    *   * In Progress
-    *   * Pending`),
-    Results: z.string().nullable().describe(`
-        * * Field Name: Results
-        * * Display Name: Results
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON-formatted detailed results from the workflow execution, including outputs from each step and any error information.`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    Workflow: z.string().describe(`
-        * * Field Name: Workflow
-        * * Display Name: Workflow Name
-        * * SQL Data Type: nvarchar(100)`),
-    WorkflowEngineName: z.string().describe(`
-        * * Field Name: WorkflowEngineName
-        * * Display Name: Workflow Engine
-        * * SQL Data Type: nvarchar(100)`),
-});
-
-export type MJWorkflowRunEntityType = z.infer<typeof MJWorkflowRunSchema>;
-
-/**
- * zod schema definition for the entity MJ: Workflows
- */
-export const MJWorkflowSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    Name: z.string().describe(`
-        * * Field Name: Name
-        * * SQL Data Type: nvarchar(100)`),
-    Description: z.string().nullable().describe(`
-        * * Field Name: Description
-        * * SQL Data Type: nvarchar(MAX)`),
-    WorkflowEngineID: z.string().describe(`
-        * * Field Name: WorkflowEngineID
-        * * Display Name: Workflow Engine ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Workflow Engines (vwWorkflowEngines.ID)`),
-    ExternalSystemRecordID: z.string().describe(`
-        * * Field Name: ExternalSystemRecordID
-        * * Display Name: External System Record
-        * * SQL Data Type: nvarchar(100)
-        * * Description: The unique identifier of this workflow in an external system, used for synchronization with external workflow engines.`),
-    AutoRunEnabled: z.boolean().describe(`
-        * * Field Name: AutoRunEnabled
-        * * Display Name: Auto Run Enabled
-        * * SQL Data Type: bit
-        * * Default Value: 0
-        * * Description: If set to 1, the workflow will be run automatically on the interval specified by the AutoRunIntervalType and AutoRunInterval fields`),
-    AutoRunIntervalUnits: z.union([z.literal('Days'), z.literal('Hours'), z.literal('Minutes'), z.literal('Months'), z.literal('Weeks'), z.literal('Years')]).nullable().describe(`
-        * * Field Name: AutoRunIntervalUnits
-        * * Display Name: Auto Run Interval Units
-        * * SQL Data Type: nvarchar(20)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Days
-    *   * Hours
-    *   * Minutes
-    *   * Months
-    *   * Weeks
-    *   * Years
-        * * Description: Minutes, Hours, Days, Weeks, Months, Years`),
-    AutoRunInterval: z.number().nullable().describe(`
-        * * Field Name: AutoRunInterval
-        * * Display Name: Auto Run Interval
-        * * SQL Data Type: int
-        * * Description: The interval, denominated in the units specified in the AutoRunIntervalUnits column, between auto runs of this workflow.`),
-    SubclassName: z.string().nullable().describe(`
-        * * Field Name: SubclassName
-        * * Display Name: Subclass Name
-        * * SQL Data Type: nvarchar(200)
-        * * Description: If specified, this subclass key, via the ClassFactory, will be instantiated, to execute this workflow. If not specified the WorkflowBase class will be used by default.`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    AutoRunIntervalMinutes: z.number().nullable().describe(`
-        * * Field Name: AutoRunIntervalMinutes
-        * * Display Name: Auto Run Interval Minutes
-        * * SQL Data Type: int`),
-});
-
-export type MJWorkflowEntityType = z.infer<typeof MJWorkflowSchema>;
-
-/**
  * zod schema definition for the entity MJ: Workspace Items
  */
 export const MJWorkspaceItemSchema = z.object({
@@ -34251,7 +33670,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: Params
-    * * Display Name: Params
+    * * Display Name: Input Parameters
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON-formatted input parameters AS THE ACTION WAS CALLED, captured once when execution starts and never overwritten. Custom and Generated actions mutate their parameter array in place, so this is the only durable record of the values actually passed in; the final state lives in ResultParams. Parameter values may be redacted per ActionParam.LogValue / EntityActionParam.LogValue, and whole-record value types are never written - see the parameter's own documentation.
     */
@@ -34290,7 +33709,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: RetentionPeriod
-    * * Display Name: Retention Period
+    * * Display Name: Retention Period (Days)
     * * SQL Data Type: int
     * * Description: Number of days to retain the log; NULL for indefinite retention.
     */
@@ -34350,7 +33769,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: EntityActionInvocationTypeID
-    * * Display Name: Entity Action Invocation Type ID
+    * * Display Name: Invocation Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Action Invocation Types (vwEntityActionInvocationTypes.ID)
     * * Description: Optional. Which lifecycle event fired the binding - AfterUpdate, Validate, List and so on. Recorded separately from EntityActionID because one binding may be attached to several invocation types, and telling a Validate refusal apart from an AfterUpdate side effect is the first question anyone asks of this log.
@@ -34391,7 +33810,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: ResultParams
-    * * Display Name: Result Params
+    * * Display Name: Result Parameters
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON-formatted FINAL parameter set captured when the action finished - the inputs as the action left them, plus any output parameters it produced. Written on FAILURE exactly as on success, under the same redaction rules: a failed run's partially-mutated inputs are usually the most diagnostic thing available, and an audit trail that records only successes is not an audit trail. Distinct from Params, which holds the values the action was called with and is never overwritten. NULL means one thing only - the run never finished (process died, host killed) - so it is a signal rather than an absence, and must not be backfilled.
     */
@@ -34404,7 +33823,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: Action
-    * * Display Name: Action
+    * * Display Name: Action Name
     * * SQL Data Type: nvarchar(425)
     */
     get Action(): string {
@@ -34413,7 +33832,7 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -34421,17 +33840,8 @@ export class MJActionExecutionLogEntity extends BaseEntity<MJActionExecutionLogE
     }
 
     /**
-    * * Field Name: EntityAction
-    * * Display Name: Entity Action
-    * * SQL Data Type: nvarchar(425)
-    */
-    get EntityAction(): string | null {
-        return this.Get('EntityAction');
-    }
-
-    /**
     * * Field Name: EntityActionInvocationType
-    * * Display Name: Entity Action Invocation Type
+    * * Display Name: Invocation Type
     * * SQL Data Type: nvarchar(255)
     */
     get EntityActionInvocationType(): string | null {
@@ -35203,6 +34613,86 @@ export interface MJActionEntity_IRuntimeLibraryReference {
  */
 @RegisterClass(BaseEntity, 'MJ: Actions')
 export class MJActionEntity extends BaseEntity<MJActionEntityType> {
+
+  /**
+  * Related records: MJ: Action Params
+  *
+  * Loads, validates and persists as one unit with this MJ: Actions record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Actions → MJ: Action Params' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: Action Params', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: Action Params', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Params = this.DeclareRelatedRecords<MJActionParamEntity>({
+      Name: 'Params',
+        RelatedEntity: 'MJ: Action Params',
+        RelatedEntityJoinField: 'ActionID',
+        OrderBy: 'Name ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
+
+  /**
+  * Related records: MJ: Action Libraries
+  *
+  * Loads, validates and persists as one unit with this MJ: Actions record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Actions → MJ: Action Libraries' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: Action Libraries', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: Action Libraries', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Libraries = this.DeclareRelatedRecords<MJActionLibraryEntity>({
+      Name: 'Libraries',
+        RelatedEntity: 'MJ: Action Libraries',
+        RelatedEntityJoinField: 'ActionID',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
+
+  /**
+  * Related records: MJ: Action Result Codes
+  *
+  * Loads, validates and persists as one unit with this MJ: Actions record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Actions → MJ: Action Result Codes' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: Action Result Codes', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: Action Result Codes', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly ResultCodes = this.DeclareRelatedRecords<MJActionResultCodeEntity>({
+      Name: 'ResultCodes',
+        RelatedEntity: 'MJ: Action Result Codes',
+        RelatedEntityJoinField: 'ActionID',
+        OrderBy: 'ResultCode ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
     /**
     * Loads the MJ: Actions record from the database
     * @param ID: string - primary key value to load the MJ: Actions record.
@@ -38470,9 +37960,23 @@ export interface MJAIAgentHarnessEntity_IHarnessCapabilitySettings {
 
     // ── Sandbox governance ──────────────────────────────────────────────────────
     /**
+     * The adapter translates MJ's `HarnessPermissionPolicy` into flags the harness actually honours,
+     * so a configured posture and allow/deny list take effect. When false the policy is **inert** —
+     * the harness runs on its own defaults regardless of what the agent's metadata says.
+     *
+     * This is deliberately separate from {@link PermissionHooks}: a harness can enforce a *static*
+     * policy at launch (Claude Code's `--allowedTools`, Pi's `--tools`) while having no *interactive*
+     * hook to pause on. Conflating the two is what let four adapters silently ignore a `strict`
+     * posture while the runtime warned about the wrong thing.
+     *
+     * The runtime warns when a policy is configured and this is false, because an unenforced policy
+     * is worse than no policy: the operator believes something is gated.
+     */
+    PermissionPolicy?: boolean;
+    /**
      * The harness exposes permission hooks the adapter can intercept, so a mutating in-sandbox
-     * operation can be paused and surfaced as an `MJ: AI Agent Requests` HITL prompt. Required for
-     * the `strict` posture to be enforced adapter-side rather than only by the sandbox provider.
+     * operation can be paused and surfaced as an `MJ: AI Agent Requests` HITL prompt. This is about
+     * *interactive* approval mid-turn; see {@link PermissionPolicy} for static policy enforcement.
      */
     PermissionHooks?: boolean;
     /**
@@ -40907,7 +40411,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: Request
-    * * Display Name: Request
+    * * Display Name: Request Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Details of what the AI Agent is requesting.
     */
@@ -40933,7 +40437,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: ResponseByUserID
-    * * Display Name: Response By User
+    * * Display Name: Responded By User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: Populated when a user responds indicating which user responded to the request.
@@ -41119,6 +40623,20 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
     }
 
     /**
+    * * Field Name: OriginatingTaskID
+    * * Display Name: Originating Task
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
+    * * Description: The workflow step (MJ: Tasks row) waiting on this request, when it came from a task graph rather than from a running agent. Distinct from OriginatingAgentRunStepID: a task graph outlives the agent run that submitted it, so the task — not the run — is what resumes when a person answers. NULL for requests raised by a run directly.
+    */
+    get OriginatingTaskID(): string | null {
+        return this.Get('OriginatingTaskID');
+    }
+    set OriginatingTaskID(value: string | null) {
+        this.Set('OriginatingTaskID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)
@@ -41129,7 +40647,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: RequestForUser
-    * * Display Name: Request For User Name
+    * * Display Name: Target User
     * * SQL Data Type: nvarchar(100)
     */
     get RequestForUser(): string | null {
@@ -41138,7 +40656,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: ResponseByUser
-    * * Display Name: Response By User Name
+    * * Display Name: Responded By
     * * SQL Data Type: nvarchar(100)
     */
     get ResponseByUser(): string | null {
@@ -41179,6 +40697,15 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
     */
     get ResumingAgentRun(): string | null {
         return this.Get('ResumingAgentRun');
+    }
+
+    /**
+    * * Field Name: OriginatingTask
+    * * Display Name: Originating Task Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get OriginatingTask(): string | null {
+        return this.Get('OriginatingTask');
     }
 }
 
@@ -41694,15 +41221,16 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     *   * Prompt
     *   * Skill
     *   * Sub-Agent
+    *   * TaskGraph
     *   * Tool
     *   * Validation
     *   * While
     * * Description: Type of execution step: Prompt, Actions, Sub-Agent, Decision, Chat, Validation, ForEach, While, Tool
     */
-    get StepType(): 'Actions' | 'Chat' | 'Compaction' | 'Decision' | 'ForEach' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'Tool' | 'Validation' | 'While' {
+    get StepType(): 'Actions' | 'Chat' | 'Compaction' | 'Decision' | 'ForEach' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'TaskGraph' | 'Tool' | 'Validation' | 'While' {
         return this.Get('StepType');
     }
-    set StepType(value: 'Actions' | 'Chat' | 'Compaction' | 'Decision' | 'ForEach' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'Tool' | 'Validation' | 'While') {
+    set StepType(value: 'Actions' | 'Chat' | 'Compaction' | 'Decision' | 'ForEach' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'TaskGraph' | 'Tool' | 'Validation' | 'While') {
         this.Set('StepType', value);
     }
 
@@ -42124,6 +41652,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * Validate() method override for MJ: AI Agent Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * ContinuationDepth: The continuation depth must be a non-negative number (0 or greater) to ensure valid execution tracking.
     * * EffortLevel: This rule ensures that the effort level, if specified, must be a number between 1 and 100, inclusive.
     * * FinalStep: The FinalStep field can be left empty, but if a value is provided it must be one of the approved step names – While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This ensures only valid workflow steps are recorded.
     * @public
@@ -42132,11 +41661,29 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateContinuationDepthGreaterThanOrEqualToZero(result);
         this.ValidateEffortLevelBetween1And100(result);
         this.ValidateFinalStepAllowedValues(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
+    }
+
+    /**
+    * The continuation depth must be a non-negative number (0 or greater) to ensure valid execution tracking.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateContinuationDepthGreaterThanOrEqualToZero(result: ValidationResult) {
+    	if (this.ContinuationDepth != null && this.ContinuationDepth < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ContinuationDepth",
+    			"Continuation depth must be greater than or equal to 0.",
+    			this.ContinuationDepth,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -42347,7 +41894,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalTokensUsed
-    * * Display Name: Total Tokens
+    * * Display Name: Total Tokens Used
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: Total number of tokens consumed by all LLM calls during this agent run
@@ -42487,7 +42034,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: ConversationDetailSequence
-    * * Display Name: Sequence
+    * * Display Name: Detail Sequence
     * * SQL Data Type: int
     * * Description: If a conversation detail spawned multiple agent runs, tracks the order of their spawn/execution
     */
@@ -42594,7 +42141,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalPromptIterations
-    * * Display Name: Total Prompt Iterations
+    * * Display Name: Prompt Iterations
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: Total number of prompt iterations executed during this agent run. Incremented
@@ -42623,7 +42170,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideModelID
-    * * Display Name: Model Override
+    * * Display Name: Override Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     * * Description: Runtime model override that was used for this execution. When set, this model took precedence over all other model selection methods.
@@ -42637,7 +42184,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideVendorID
-    * * Display Name: Vendor Override
+    * * Display Name: Override Vendor
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
     * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.
@@ -42651,7 +42198,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Data
-    * * Display Name: Input Data
+    * * Display Name: Execution Data
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.
     */
@@ -42745,7 +42292,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: PrimaryScopeEntityID
-    * * Display Name: Scope Entity
+    * * Display Name: Primary Scope Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     * * Description: Foreign key to Entity table identifying which entity type is used for primary scoping (e.g., Organizations, Tenants)
@@ -42759,7 +42306,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: PrimaryScopeRecordID
-    * * Display Name: Scope Record ID
+    * * Display Name: Primary Scope Record
     * * SQL Data Type: nvarchar(100)
     * * Description: The record ID within the primary scope entity (e.g., the specific OrganizationID). Indexed for fast multi-tenant filtering.
     */
@@ -42807,7 +42354,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ExternalReferenceID
-    * * Display Name: External Reference ID
+    * * Display Name: External Reference
     * * SQL Data Type: nvarchar(200)
     * * Description: Optional reference ID from an external system that initiated this agent run. Enables correlation between the caller's agent run and this execution. For example, when Skip SaaS is called via SkipProxyAgent, this stores the MJ-side Agent Run ID.
     */
@@ -42900,7 +42447,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ExternalSessionID
-    * * Display Name: External Session ID
+    * * Display Name: External Session
     * * SQL Data Type: nvarchar(255)
     * * Description: Session identifier reported by the external harness backing this run. Kept for two reasons that outlive the run: resuming the session across turns, and correlating this run with the vendor's own session logs when diagnosing behaviour INSIDE the sandbox, where MJ's audit trail necessarily stops at the turn boundary. NULL for every run not backed by a harness.
     */
@@ -42912,8 +42459,22 @@ each time the agent processes a prompt step.
     }
 
     /**
+    * * Field Name: ContinuationDepth
+    * * Display Name: Continuation Depth
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: How many task-graph continuations led to this run. 0 (the default, and the value every ordinary run carries) means the run was not started by a finished graph. A run started because a graph declared continuation='reinvoke' records its source graph's depth plus one, and any graph that run subsequently submits inherits that value — which is what allows MAX_REINVOKE_DEPTH to bound a chain of graph-reinvokes-agent-emits-graph. Without a durable value here the cap could never fire, because a reinvoked agent has no other way to learn it was a continuation. Distinct from ParentRunID, which tracks sub-agent lineage within a single turn; a continuation is a NEW top-level turn caused by work that already completed.
+    */
+    get ContinuationDepth(): number {
+        return this.Get('ContinuationDepth');
+    }
+    set ContinuationDepth(value: number) {
+        this.Set('ContinuationDepth', value);
+    }
+
+    /**
     * * Field Name: Agent
-    * * Display Name: Agent Detail
+    * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -42922,7 +42483,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ParentRun
-    * * Display Name: Parent Run Detail
+    * * Display Name: Parent Run Info
     * * SQL Data Type: nvarchar(255)
     */
     get ParentRun(): string | null {
@@ -42931,7 +42492,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Conversation
-    * * Display Name: Conversation Detail
+    * * Display Name: Conversation Info
     * * SQL Data Type: nvarchar(255)
     */
     get Conversation(): string | null {
@@ -42940,7 +42501,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: User
-    * * Display Name: User Detail
+    * * Display Name: User Info
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -42949,7 +42510,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail Record
+    * * Display Name: Conversation Detail Info
     * * SQL Data Type: nvarchar(100)
     */
     get ConversationDetail(): string | null {
@@ -42958,7 +42519,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: LastRun
-    * * Display Name: Last Run Detail
+    * * Display Name: Last Run Info
     * * SQL Data Type: nvarchar(255)
     */
     get LastRun(): string | null {
@@ -42967,7 +42528,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Configuration
-    * * Display Name: Configuration Detail
+    * * Display Name: Configuration Info
     * * SQL Data Type: nvarchar(100)
     */
     get Configuration(): string | null {
@@ -42976,7 +42537,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideModel
-    * * Display Name: Model Override Detail
+    * * Display Name: Override Model Info
     * * SQL Data Type: nvarchar(50)
     */
     get OverrideModel(): string | null {
@@ -42985,7 +42546,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideVendor
-    * * Display Name: Vendor Override Detail
+    * * Display Name: Override Vendor Info
     * * SQL Data Type: nvarchar(50)
     */
     get OverrideVendor(): string | null {
@@ -42994,7 +42555,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ScheduledJobRun
-    * * Display Name: Scheduled Job Run Detail
+    * * Display Name: Scheduled Job Run Info
     * * SQL Data Type: nvarchar(200)
     */
     get ScheduledJobRun(): string | null {
@@ -43003,7 +42564,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run Detail
+    * * Display Name: Test Run Info
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -43012,7 +42573,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: PrimaryScopeEntity
-    * * Display Name: Scope Entity Detail
+    * * Display Name: Primary Scope Entity Info
     * * SQL Data Type: nvarchar(255)
     */
     get PrimaryScopeEntity(): string | null {
@@ -44823,15 +44384,16 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * * Possible Values 
     *   * Action
     *   * ForEach
+    *   * Human
     *   * Prompt
     *   * Sub-Agent
     *   * While
     * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)
     */
-    get StepType(): 'Action' | 'ForEach' | 'Prompt' | 'Sub-Agent' | 'While' {
+    get StepType(): 'Action' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While' {
         return this.Get('StepType');
     }
-    set StepType(value: 'Action' | 'ForEach' | 'Prompt' | 'Sub-Agent' | 'While') {
+    set StepType(value: 'Action' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'While') {
         this.Set('StepType', value);
     }
 
@@ -45605,6 +45167,80 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agents')
 export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
+
+  /**
+  * Related records: MJ: AI Agent Actions
+  *
+  * Loads, validates and persists as one unit with this MJ: AI Agents record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: AI Agents → MJ: AI Agent Actions' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: AI Agent Actions', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: AI Agent Actions', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Actions = this.DeclareRelatedRecords<MJAIAgentActionEntity>({
+      Name: 'Actions',
+        RelatedEntity: 'MJ: AI Agent Actions',
+        RelatedEntityJoinField: 'AgentID',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
+
+  /**
+  * Related records: MJ: AI Agent Prompts
+  *
+  * Loads, validates and persists as one unit with this MJ: AI Agents record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: AI Agents → MJ: AI Agent Prompts' relationship; edit that row, not this file.
+  *
+  */
+  public readonly Prompts = this.DeclareRelatedRecords<MJAIAgentPromptEntity>({
+      Name: 'Prompts',
+        RelatedEntity: 'MJ: AI Agent Prompts',
+        RelatedEntityJoinField: 'AgentID',
+        OrderBy: 'ExecutionOrder ASC',
+        Load: 'explicit',
+        OnRemove: 'delete',
+        Source: 'database',
+        ReadOnly: false,
+        Sequence: { Field: 'ExecutionOrder', From: 0 },
+  });
+
+
+  /**
+  * Related records: MJ: AI Agents
+  *
+  * Loads, validates and persists as one unit with this MJ: AI Agents record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: AI Agents → MJ: AI Agents' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: AI Agents', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: AI Agents', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly SubAgents = this.DeclareRelatedRecords<MJAIAgentEntity>({
+      Name: 'SubAgents',
+        RelatedEntity: 'MJ: AI Agents',
+        RelatedEntityJoinField: 'ParentID',
+        OrderBy: 'ExecutionOrder ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
     /**
     * Loads the MJ: AI Agents record from the database
     * @param ID: string - primary key value to load the MJ: AI Agents record.
@@ -50138,6 +49774,76 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
 
 
 /**
+ * The per-modality model-configuration bag, stored as JSON in the `ModelConfiguration` column of
+ * THREE catalog entities — the same type at every level, forming an inherit-with-override cascade
+ * resolved base-first (deep-merged per key by `ResolveEffectiveModelConfiguration` in
+ * `@memberjunction/ai`):
+ *
+ * ```
+ * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
+ *   < MJ: AI Models . ModelConfiguration      (per-model)
+ *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ * ```
+ *
+ * CodeGen emits a strongly-typed `ModelConfigurationObject` accessor on all three generated
+ * entities from this definition.
+ *
+ * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
+ * `AIModelConfiguration` in `@memberjunction/ai` (`packages/AI/Core/src/generic/modelConfiguration.ts`),
+ * which runtime code compiles against. Keep the two in step when adding a section or property —
+ * the same pact `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ *
+ * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN
+ * (`PowerRank`, `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag);
+ * anything a driver consumes at session/call time belongs HERE. New capability knobs go in this
+ * bag — do not add a new capability column per knob.
+ */
+export interface MJAIModelTypeEntity_IAIModelConfiguration {
+    /**
+     * Text-generation knobs. Reserved — no consumers yet. Candidate contents: per-model
+     * effort-level defaults, response-format quirks, tool-calling behavior flags. Existing
+     * capability COLUMNS (`SupportsEffortLevel`, `SupportsStreaming`, …) are NOT migrating here —
+     * new knobs only.
+     */
+    LLM?: Record<string, unknown> | null;
+
+    /** Realtime (speech-to-speech) knobs — the first live section. */
+    Realtime?: {
+        /**
+         * Catalog-level turn-detection default for this model. Folded into the realtime session
+         * Config bag as the `turnDetection` key BELOW the agent/app config cascade
+         * (`realtime.session.turnDetection`) and the runtime override — the catalog supplies the
+         * default, agents/apps/callers refine it. Provider profiles translate the normalized
+         * vocabulary to their native wire block; an unsupported Mode is diag-logged and falls back
+         * to the profile default (never rejects a session).
+         */
+        TurnDetection?: {
+            /**
+             * - 'default' — let the provider profile decide (today's behavior).
+             * - 'serverVad' — classic silence-based server VAD.
+             * - 'semanticVad' — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+             * - 'native' — this model's smartest documented turn/duplex mode, whatever the profile
+             *   maps it to; the forward slot for full-duplex reasoning voice models (e.g. the
+             *   Grok Voice Think Fast family).
+             */
+            Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+            /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+            Eagerness?: 'low' | 'auto' | 'high' | null;
+            /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+            Threshold?: number | null;
+            /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+            SilenceDurationMs?: number | null;
+        } | null;
+    } | null;
+
+    /** Vision knobs. Reserved. */
+    Vision?: Record<string, unknown> | null;
+
+    /** Audio (TTS/STT) knobs. Reserved. */
+    Audio?: Record<string, unknown> | null;
+}
+
+/**
  * MJ: AI Model Types - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIModelType
@@ -50280,6 +49986,41 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
     }
 
     /**
+    * * Field Name: ModelConfiguration
+    * * Display Name: Model Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIModelTypeEntity_IAIModelConfiguration
+    * * Description: Type-wide default of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape: LLM / Realtime / Vision / Audio sections). Base layer of the ModelConfiguration cascade — AIModel and AIModelVendor rows inherit from it per key and may override. NULL = contributes nothing.
+    */
+    get ModelConfiguration(): string | null {
+        return this.Get('ModelConfiguration');
+    }
+    set ModelConfiguration(value: string | null) {
+        this.Set('ModelConfiguration', value);
+    }
+
+    private _ModelConfigurationObject_cached: MJAIModelTypeEntity_IAIModelConfiguration | null | undefined = undefined;
+    private _ModelConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for ModelConfiguration — returns parsed JSON as MJAIModelTypeEntity_IAIModelConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ModelConfigurationObject(): MJAIModelTypeEntity_IAIModelConfiguration | null {
+        const raw = this.ModelConfiguration;
+        if (raw !== this._ModelConfigurationObject_lastRaw) {
+            this._ModelConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ModelConfigurationObject_lastRaw = raw;
+        }
+        return this._ModelConfigurationObject_cached!;
+    }
+    set ModelConfigurationObject(value: MJAIModelTypeEntity_IAIModelConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.ModelConfiguration = raw;
+        this._ModelConfigurationObject_cached = value;
+        this._ModelConfigurationObject_lastRaw = raw;
+    }
+
+    /**
     * * Field Name: DefaultInputModality
     * * Display Name: Default Input Modality Name
     * * SQL Data Type: nvarchar(50)
@@ -50298,6 +50039,76 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
     }
 }
 
+
+/**
+ * The per-modality model-configuration bag, stored as JSON in the `ModelConfiguration` column of
+ * THREE catalog entities — the same type at every level, forming an inherit-with-override cascade
+ * resolved base-first (deep-merged per key by `ResolveEffectiveModelConfiguration` in
+ * `@memberjunction/ai`):
+ *
+ * ```
+ * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
+ *   < MJ: AI Models . ModelConfiguration      (per-model)
+ *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ * ```
+ *
+ * CodeGen emits a strongly-typed `ModelConfigurationObject` accessor on all three generated
+ * entities from this definition.
+ *
+ * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
+ * `AIModelConfiguration` in `@memberjunction/ai` (`packages/AI/Core/src/generic/modelConfiguration.ts`),
+ * which runtime code compiles against. Keep the two in step when adding a section or property —
+ * the same pact `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ *
+ * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN
+ * (`PowerRank`, `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag);
+ * anything a driver consumes at session/call time belongs HERE. New capability knobs go in this
+ * bag — do not add a new capability column per knob.
+ */
+export interface MJAIModelVendorEntity_IAIModelConfiguration {
+    /**
+     * Text-generation knobs. Reserved — no consumers yet. Candidate contents: per-model
+     * effort-level defaults, response-format quirks, tool-calling behavior flags. Existing
+     * capability COLUMNS (`SupportsEffortLevel`, `SupportsStreaming`, …) are NOT migrating here —
+     * new knobs only.
+     */
+    LLM?: Record<string, unknown> | null;
+
+    /** Realtime (speech-to-speech) knobs — the first live section. */
+    Realtime?: {
+        /**
+         * Catalog-level turn-detection default for this model. Folded into the realtime session
+         * Config bag as the `turnDetection` key BELOW the agent/app config cascade
+         * (`realtime.session.turnDetection`) and the runtime override — the catalog supplies the
+         * default, agents/apps/callers refine it. Provider profiles translate the normalized
+         * vocabulary to their native wire block; an unsupported Mode is diag-logged and falls back
+         * to the profile default (never rejects a session).
+         */
+        TurnDetection?: {
+            /**
+             * - 'default' — let the provider profile decide (today's behavior).
+             * - 'serverVad' — classic silence-based server VAD.
+             * - 'semanticVad' — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+             * - 'native' — this model's smartest documented turn/duplex mode, whatever the profile
+             *   maps it to; the forward slot for full-duplex reasoning voice models (e.g. the
+             *   Grok Voice Think Fast family).
+             */
+            Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+            /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+            Eagerness?: 'low' | 'auto' | 'high' | null;
+            /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+            Threshold?: number | null;
+            /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+            SilenceDurationMs?: number | null;
+        } | null;
+    } | null;
+
+    /** Vision knobs. Reserved. */
+    Vision?: Record<string, unknown> | null;
+
+    /** Audio (TTS/STT) knobs. Reserved. */
+    Audio?: Record<string, unknown> | null;
+}
 
 /**
  * MJ: AI Model Vendors - strongly typed entity sub-class
@@ -50586,7 +50397,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type
+    * * Display Name: Vendor Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)
     * * Description: References the type/role of the vendor for this model (e.g., model developer, inference provider)
@@ -50625,6 +50436,41 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
     }
 
     /**
+    * * Field Name: ModelConfiguration
+    * * Display Name: Model Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIModelVendorEntity_IAIModelConfiguration
+    * * Description: Most-specific layer of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape) — configuration for THIS model on THIS provider. Deep-merges per key over the model and type layers. NULL = inherit the merged model/type configuration unchanged.
+    */
+    get ModelConfiguration(): string | null {
+        return this.Get('ModelConfiguration');
+    }
+    set ModelConfiguration(value: string | null) {
+        this.Set('ModelConfiguration', value);
+    }
+
+    private _ModelConfigurationObject_cached: MJAIModelVendorEntity_IAIModelConfiguration | null | undefined = undefined;
+    private _ModelConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for ModelConfiguration — returns parsed JSON as MJAIModelVendorEntity_IAIModelConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ModelConfigurationObject(): MJAIModelVendorEntity_IAIModelConfiguration | null {
+        const raw = this.ModelConfiguration;
+        if (raw !== this._ModelConfigurationObject_lastRaw) {
+            this._ModelConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ModelConfigurationObject_lastRaw = raw;
+        }
+        return this._ModelConfigurationObject_cached!;
+    }
+    set ModelConfigurationObject(value: MJAIModelVendorEntity_IAIModelConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.ModelConfiguration = raw;
+        this._ModelConfigurationObject_cached = value;
+        this._ModelConfigurationObject_lastRaw = raw;
+    }
+
+    /**
     * * Field Name: Model
     * * Display Name: Model Name
     * * SQL Data Type: nvarchar(50)
@@ -50644,7 +50490,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
 
     /**
     * * Field Name: Type
-    * * Display Name: Type Name
+    * * Display Name: Type
     * * SQL Data Type: nvarchar(50)
     */
     get Type(): string {
@@ -50652,6 +50498,76 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
     }
 }
 
+
+/**
+ * The per-modality model-configuration bag, stored as JSON in the `ModelConfiguration` column of
+ * THREE catalog entities — the same type at every level, forming an inherit-with-override cascade
+ * resolved base-first (deep-merged per key by `ResolveEffectiveModelConfiguration` in
+ * `@memberjunction/ai`):
+ *
+ * ```
+ * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
+ *   < MJ: AI Models . ModelConfiguration      (per-model)
+ *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ * ```
+ *
+ * CodeGen emits a strongly-typed `ModelConfigurationObject` accessor on all three generated
+ * entities from this definition.
+ *
+ * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
+ * `AIModelConfiguration` in `@memberjunction/ai` (`packages/AI/Core/src/generic/modelConfiguration.ts`),
+ * which runtime code compiles against. Keep the two in step when adding a section or property —
+ * the same pact `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ *
+ * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN
+ * (`PowerRank`, `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag);
+ * anything a driver consumes at session/call time belongs HERE. New capability knobs go in this
+ * bag — do not add a new capability column per knob.
+ */
+export interface MJAIModelEntity_IAIModelConfiguration {
+    /**
+     * Text-generation knobs. Reserved — no consumers yet. Candidate contents: per-model
+     * effort-level defaults, response-format quirks, tool-calling behavior flags. Existing
+     * capability COLUMNS (`SupportsEffortLevel`, `SupportsStreaming`, …) are NOT migrating here —
+     * new knobs only.
+     */
+    LLM?: Record<string, unknown> | null;
+
+    /** Realtime (speech-to-speech) knobs — the first live section. */
+    Realtime?: {
+        /**
+         * Catalog-level turn-detection default for this model. Folded into the realtime session
+         * Config bag as the `turnDetection` key BELOW the agent/app config cascade
+         * (`realtime.session.turnDetection`) and the runtime override — the catalog supplies the
+         * default, agents/apps/callers refine it. Provider profiles translate the normalized
+         * vocabulary to their native wire block; an unsupported Mode is diag-logged and falls back
+         * to the profile default (never rejects a session).
+         */
+        TurnDetection?: {
+            /**
+             * - 'default' — let the provider profile decide (today's behavior).
+             * - 'serverVad' — classic silence-based server VAD.
+             * - 'semanticVad' — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+             * - 'native' — this model's smartest documented turn/duplex mode, whatever the profile
+             *   maps it to; the forward slot for full-duplex reasoning voice models (e.g. the
+             *   Grok Voice Think Fast family).
+             */
+            Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+            /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+            Eagerness?: 'low' | 'auto' | 'high' | null;
+            /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+            Threshold?: number | null;
+            /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+            SilenceDurationMs?: number | null;
+        } | null;
+    } | null;
+
+    /** Vision knobs. Reserved. */
+    Vision?: Record<string, unknown> | null;
+
+    /** Audio (TTS/STT) knobs. Reserved. */
+    Audio?: Record<string, unknown> | null;
+}
 
 /**
  * MJ: AI Models - strongly typed entity sub-class
@@ -50777,7 +50693,7 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
 
     /**
     * * Field Name: AIModelTypeID
-    * * Display Name: AI Model Type
+    * * Display Name: AI Model Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Model Types (vwAIModelTypes.ID)
     */
@@ -50804,7 +50720,7 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Active
+    * * Display Name: Is Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Controls whether this AI model is available for use in the system.
@@ -50932,8 +50848,43 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
     }
 
     /**
+    * * Field Name: ModelConfiguration
+    * * Display Name: Model Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIModelEntity_IAIModelConfiguration
+    * * Description: Per-model layer of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape). Deep-merges per key over the AIModelType default; AIModelVendor rows may override per key on top. NULL = inherit the type default unchanged.
+    */
+    get ModelConfiguration(): string | null {
+        return this.Get('ModelConfiguration');
+    }
+    set ModelConfiguration(value: string | null) {
+        this.Set('ModelConfiguration', value);
+    }
+
+    private _ModelConfigurationObject_cached: MJAIModelEntity_IAIModelConfiguration | null | undefined = undefined;
+    private _ModelConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for ModelConfiguration — returns parsed JSON as MJAIModelEntity_IAIModelConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ModelConfigurationObject(): MJAIModelEntity_IAIModelConfiguration | null {
+        const raw = this.ModelConfiguration;
+        if (raw !== this._ModelConfigurationObject_lastRaw) {
+            this._ModelConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ModelConfigurationObject_lastRaw = raw;
+        }
+        return this._ModelConfigurationObject_cached!;
+    }
+    set ModelConfigurationObject(value: MJAIModelEntity_IAIModelConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.ModelConfiguration = raw;
+        this._ModelConfigurationObject_cached = value;
+        this._ModelConfigurationObject_lastRaw = raw;
+    }
+
+    /**
     * * Field Name: AIModelType
-    * * Display Name: Model Type Name
+    * * Display Name: AI Model Type
     * * SQL Data Type: nvarchar(50)
     */
     get AIModelType(): string {
@@ -53304,6 +53255,33 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Prompts')
 export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
+
+  /**
+  * Related records: MJ: AI Prompt Models
+  *
+  * Loads, validates and persists as one unit with this MJ: AI Prompts record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: AI Prompts → MJ: AI Prompt Models' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: AI Prompt Models', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: AI Prompt Models', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Models = this.DeclareRelatedRecords<MJAIPromptModelEntity>({
+      Name: 'Models',
+        RelatedEntity: 'MJ: AI Prompt Models',
+        RelatedEntityJoinField: 'PromptID',
+        OrderBy: 'Priority ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
     /**
     * Loads the MJ: AI Prompts record from the database
     * @param ID: string - primary key value to load the MJ: AI Prompts record.
@@ -57007,6 +56985,33 @@ export class MJAPIKeyUsageLogEntity extends BaseEntity<MJAPIKeyUsageLogEntityTyp
  */
 @RegisterClass(BaseEntity, 'MJ: API Keys')
 export class MJAPIKeyEntity extends BaseEntity<MJAPIKeyEntityType> {
+
+  /**
+  * Related records: MJ: API Key Scopes
+  *
+  * Loads, validates and persists as one unit with this MJ: API Keys record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: API Keys → MJ: API Key Scopes' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: API Key Scopes', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: API Key Scopes', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Scopes = this.DeclareRelatedRecords<MJAPIKeyScopeEntity>({
+      Name: 'Scopes',
+        RelatedEntity: 'MJ: API Key Scopes',
+        RelatedEntityJoinField: 'APIKeyID',
+        OrderBy: 'Priority ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
     /**
     * Loads the MJ: API Keys record from the database
     * @param ID: string - primary key value to load the MJ: API Keys record.
@@ -68995,7 +69000,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity
+    * * Display Name: Source Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     * * Description: For Entity-type content sources, the MJ Entity to pull records from. NULL for non-entity sources (files, RSS, websites, etc.).
@@ -69009,7 +69014,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: EntityDocumentID
-    * * Display Name: Entity Document
+    * * Display Name: Entity Document Template
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Documents (vwEntityDocuments.ID)
     * * Description: For Entity-type content sources, the Entity Document template used to render entity records into text for autotagging. The template defines which fields to include, how to format them, and related record inclusion. NULL for non-entity sources.
@@ -69019,20 +69024,6 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
     set EntityDocumentID(value: string | null) {
         this.Set('EntityDocumentID', value);
-    }
-
-    /**
-    * * Field Name: ScheduledActionID
-    * * Display Name: Scheduled Action
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Scheduled Actions (vwScheduledActions.ID)
-    * * Description: Optional link to a MJ Scheduled Action that automatically runs the classification pipeline for this source on a cron schedule.
-    */
-    get ScheduledActionID(): string | null {
-        return this.Get('ScheduledActionID');
-    }
-    set ScheduledActionID(value: string | null) {
-        this.Set('ScheduledActionID', value);
     }
 
     /**
@@ -69059,6 +69050,20 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
     set CleanerKey(value: string | null) {
         this.Set('CleanerKey', value);
+    }
+
+    /**
+    * * Field Name: ScheduledJobID
+    * * Display Name: Scheduled Job
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Scheduled Jobs (vwScheduledJobs.ID)
+    * * Description: Optional link to the Scheduled Job that runs this content source on a recurring basis. Replaces the retired ScheduledActionID link; the job is of type Action and carries its action + parameters in ScheduledJob.Configuration.
+    */
+    get ScheduledJobID(): string | null {
+        return this.Get('ScheduledJobID');
+    }
+    set ScheduledJobID(value: string | null) {
+        this.Set('ScheduledJobID', value);
     }
 
     /**
@@ -69125,12 +69130,12 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
 
     /**
-    * * Field Name: ScheduledAction
-    * * Display Name: Scheduled Action Name
-    * * SQL Data Type: nvarchar(255)
+    * * Field Name: ScheduledJob
+    * * Display Name: Scheduled Job Name
+    * * SQL Data Type: nvarchar(200)
     */
-    get ScheduledAction(): string | null {
-        return this.Get('ScheduledAction');
+    get ScheduledJob(): string | null {
+        return this.Get('ScheduledJob');
     }
 }
 
@@ -78607,15 +78612,6 @@ export class MJEntityActionFilterEntity extends BaseEntity<MJEntityActionFilterE
     }
 
     /**
-    * * Field Name: EntityAction
-    * * Display Name: Entity Action Name
-    * * SQL Data Type: nvarchar(425)
-    */
-    get EntityAction(): string {
-        return this.Get('EntityAction');
-    }
-
-    /**
     * * Field Name: ActionFilter
     * * Display Name: Action Filter Name
     * * SQL Data Type: nvarchar(MAX)
@@ -78853,15 +78849,6 @@ export class MJEntityActionInvocationEntity extends BaseEntity<MJEntityActionInv
     }
 
     /**
-    * * Field Name: EntityAction
-    * * Display Name: Entity Action Name
-    * * SQL Data Type: nvarchar(425)
-    */
-    get EntityAction(): string {
-        return this.Get('EntityAction');
-    }
-
-    /**
     * * Field Name: InvocationType
     * * Display Name: Invocation Type Name
     * * SQL Data Type: nvarchar(255)
@@ -78917,7 +78904,7 @@ export class MJEntityActionParamEntity extends BaseEntity<MJEntityActionParamEnt
 
     /**
     * * Field Name: EntityActionID
-    * * Display Name: Entity Action ID
+    * * Display Name: Entity Action
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Actions (vwEntityActions.ID)
     */
@@ -78930,7 +78917,7 @@ export class MJEntityActionParamEntity extends BaseEntity<MJEntityActionParamEnt
 
     /**
     * * Field Name: ActionParamID
-    * * Display Name: Action Parameter ID
+    * * Display Name: Action Parameter
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Action Params (vwActionParams.ID)
     */
@@ -79021,17 +79008,8 @@ export class MJEntityActionParamEntity extends BaseEntity<MJEntityActionParamEnt
     }
 
     /**
-    * * Field Name: EntityAction
-    * * Display Name: Entity Action
-    * * SQL Data Type: nvarchar(425)
-    */
-    get EntityAction(): string {
-        return this.Get('EntityAction');
-    }
-
-    /**
     * * Field Name: ActionParam
-    * * Display Name: Action Parameter
+    * * Display Name: Action Parameter Name
     * * SQL Data Type: nvarchar(255)
     */
     get ActionParam(): string {
@@ -79104,7 +79082,7 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -79117,7 +79095,7 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
 
     /**
     * * Field Name: ActionID
-    * * Display Name: Action ID
+    * * Display Name: Action
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
     */
@@ -79149,7 +79127,7 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -79159,7 +79137,7 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -79241,8 +79219,26 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
     }
 
     /**
+    * * Field Name: RunMode
+    * * Display Name: Run Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Inline
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Durable
+    *   * Inline
+    * * Description: How an After* dispatch of this binding executes. Inline (the default) runs it fire-and-forget in the saving process, which is fast but lost if that process dies. Durable submits a single-node task graph instead, so the work survives a restart and is reclaimed by the dispatcher — at the cost of a Task row, a dispatcher hop of latency, and the action's parameters being persisted (redacted) at rest. Ignored for Validate and Before* invocations, which run inside the save and cannot be deferred without changing whether the save succeeds.
+    */
+    get RunMode(): 'Durable' | 'Inline' {
+        return this.Get('RunMode');
+    }
+    set RunMode(value: 'Durable' | 'Inline') {
+        this.Set('RunMode', value);
+    }
+
+    /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -79251,7 +79247,7 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
 
     /**
     * * Field Name: Action
-    * * Display Name: Action
+    * * Display Name: Action Name
     * * SQL Data Type: nvarchar(425)
     */
     get Action(): string {
@@ -79260,7 +79256,7 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
 
     /**
     * * Field Name: ScopeEntity
-    * * Display Name: Scope Entity
+    * * Display Name: Scope Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get ScopeEntity(): string | null {
@@ -83134,6 +83130,143 @@ export class MJEntityRelationshipDisplayComponentEntity extends BaseEntity<MJEnt
 
 
 /**
+ * Declares an `EntityRelationship` as a first-class **related-record collection** — a set of child
+ * rows that load, validate and persist as one unit with their parent.
+ *
+ * Stored in the `RelatedRecordCollection` column of the `MJ: Entity Relationships` entity. When
+ * non-null, CodeGen emits a typed declaration onto the generated entity subclass:
+ *
+ * ```typescript
+ * public readonly Lines = this.DeclareRelatedRecords<OrderLineEntity>({
+ *     Name: 'Lines',
+ *     RelatedEntity: 'MJ_BizApps_Orders: Order Lines',   // from EntityRelationship.RelatedEntity
+ *     RelatedEntityJoinField: 'OrderHeaderID',           // from EntityRelationship.RelatedEntityJoinField
+ *     OrderBy: 'LineNumber ASC',
+ *     Load: 'explicit',
+ *     OnRemove: 'delete',
+ *     Sequence: { Field: 'LineNumber', From: 1 },
+ * });
+ * ```
+ *
+ * **`RelatedEntity` and `RelatedEntityJoinField` are deliberately absent from this interface.** They
+ * already exist as columns on the same `EntityRelationship` row, and duplicating them here would
+ * create two sources of truth that can disagree — with the JSON copy winning silently. CodeGen reads
+ * them from the row's own columns.
+ *
+ * NULL means the relationship is not a declared collection. That is the default and reproduces
+ * pre-6.2 behavior exactly: nothing is generated and nothing loads eagerly.
+ *
+ * @see guides/TRANSACTIONS_AND_BATCHING_GUIDE.md
+ */
+export interface MJEntityRelationshipEntity_IRelatedRecordCollectionConfig {
+    /**
+     * The property name generated on the entity subclass, and the companion's stable wire key —
+     * e.g. `'Lines'` produces `order.Lines`.
+     *
+     * **This is a published contract.** It appears in serialized composite payloads, so renaming it
+     * breaks in-flight requests and any persisted snapshot that captured one. Must be unique among
+     * the collections declared on a single entity.
+     */
+    Name: string;
+
+    /**
+     * Where the collection's records come from. Defaults to `'database'`.
+     *
+     * - `'database'` — a `RunView` against the related entity, filtered by the join field. Always
+     *   correct, always fresh, costs a query. The right choice for transactional data (order lines,
+     *   journal entry lines) where staleness is unacceptable.
+     * - `'cache'` — the records are taken from whichever loaded `BaseEngine` already holds that
+     *   entity, discovered generically through `BaseEngineRegistry.FindCachedEntity()`. Costs **zero
+     *   queries**. The right choice for metadata-shaped data that an engine preloads anyway —
+     *   action params, prompt models, API key scopes. Falls back to `'database'` when no loaded
+     *   engine offers the entity, so a cache miss degrades instead of failing.
+     *
+     * Not called `'query'` deliberately: in MemberJunction a *Query* is a stored, named artifact
+     * (`MJ: Queries`, `RunQuery`), so `Source: 'query'` would read as "this comes from a stored
+     * Query" — a different thing entirely.
+     */
+    Source?: 'database' | 'cache';
+
+    /**
+     * Whether the collection refuses mutation. Defaults to `false`, **except when
+     * {@link Source} is `'cache'`, where it defaults to `true`.**
+     *
+     * When `true`: `Add`, `Create`, `Remove` and `Clear` throw, the collection contributes nothing
+     * to a save plan, and `Dirty` stays `false`. That last part is not
+     * cosmetic — a cache-sourced collection holds the *engine's own entity instances*, so a record
+     * dirtied by some unrelated code path would otherwise make every parent holding it report dirty
+     * and try to save.
+     *
+     * **What this cannot enforce:** once you hold a `BaseEntity` you can set fields on it and call
+     * `Save()`. Read-only constrains the *collection*, not the records inside it. Which is why the
+     * source matters:
+     *
+     * - `'cache'` + read-only → you get the engine's shared instances. Zero allocation, and the
+     *   contract is "do not mutate these".
+     * - `'cache'` + writable → the records are **copied** into fresh entity objects on load, so the
+     *   engine's cache is never mutated in place. Saving a copy fires the ordinary `BaseEntity`
+     *   save event, which the engines already subscribe to, so their caches refresh themselves.
+     * - `'database'` → always fresh objects; none of this applies.
+     */
+    ReadOnly?: boolean;
+
+    /**
+     * When the collection populates itself. Defaults to `'explicit'`.
+     *
+     * - `'explicit'` — nothing loads until the caller awaits `Load()` or
+     *   `BaseEntity.LoadRelatedRecords()`. **The right default for `'database'`**: an
+     *   automatically-populated collection on a commonly-listed entity is a performance trap.
+     * - `'immediate'` — populated automatically by `Load()`. Never by `LoadFromData()`, which is the
+     *   per-row materialization path for `RunView(ResultType:'entity_object')` — loading related
+     *   records there turns one view into N+1 queries. Use `RunView.IncludeRelatedRecords` for
+     *   result sets, which costs 1+K instead.
+     * - `'lazy'` — populated on first access to `Items`. **Requires `Source: 'cache'`**, and CodeGen
+     *   refuses the combination with `'database'`: a property getter cannot await, so a lazy
+     *   database load could only ever silently fail to fill. A cache lookup is synchronous, so lazy
+     *   works there — and reproduces exactly the hand-written memoized getters this replaces.
+     * - `'never'` — a write-only staging buffer; `Load()` is a no-op.
+     *
+     * Note that `'lazy'` makes reading `Items` a side-effecting operation: it populates the
+     * collection and flips `IsLoaded`. That is deliberate and matches the getters it supersedes.
+     */
+    Load?: 'explicit' | 'immediate' | 'lazy' | 'never';
+
+    /**
+     * What removing a record from the collection means. Defaults to `'delete'`.
+     *
+     * - `'delete'` — the row is deleted when the parent saves. Correct for true composition, where
+     *   the related record has no meaning without its parent (order lines, journal entry lines).
+     * - `'orphan'` — the row is left in place, foreign key untouched. Correct for aggregation.
+     * - `'refuse'` — removal throws. For collections where detaching is always a bug.
+     */
+    OnRemove?: 'delete' | 'orphan' | 'refuse';
+
+    /**
+     * `OrderBy` clause applied when loading, e.g. `'LineNumber ASC'`. Strongly recommended whenever
+     * {@link Sequence} is set — a sequenced collection loaded in arbitrary order will be renumbered
+     * into that arbitrary order on the next mutation.
+     */
+    OrderBy?: string;
+
+    /** Automatic, gap-free sequence numbering maintained across adds and removals. */
+    Sequence?: {
+        /** The related entity's sequence field, e.g. `'LineNumber'`. */
+        Field: string;
+        /** Value assigned to the first record. Defaults to 1. */
+        From?: number;
+    };
+
+    /**
+     * Whether the collection empties itself after a successful save. Defaults to `false`.
+     *
+     * `true` models a staging buffer for pending inserts rather than a live view of persisted rows —
+     * the shape order-line entry uses today. `false` keeps saved records in memory with their
+     * server-assigned keys, which is what most callers expect.
+     */
+    ClearAfterSave?: boolean;
+}
+
+/**
  * MJ: Entity Relationships - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: EntityRelationship
@@ -83165,6 +83298,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -83177,7 +83311,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -83204,7 +83338,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: RelatedEntityID
-    * * Display Name: Related Entity ID
+    * * Display Name: Related Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -83231,7 +83365,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: IncludeInParentAllQuery
-    * * Display Name: Include In Parent All Query
+    * * Display Name: Include In Parent Query
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether to include this relationship when querying all fields of the parent entity.
@@ -83245,6 +83379,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: Type
+    * * Display Name: Relationship Type
     * * SQL Data Type: nchar(20)
     * * Default Value: One To Many
     * * Value List Type: List
@@ -83404,7 +83539,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: DisplayUserViewID
-    * * Display Name: Display User View ID
+    * * Display Name: Display User View
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: User Views (vwUserViews.ID)
     */
@@ -83414,7 +83549,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: DisplayComponentID
-    * * Display Name: Display Component ID
+    * * Display Name: Display Component
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Relationship Display Components (vwEntityRelationshipDisplayComponents.ID)
     */
@@ -83427,7 +83562,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: DisplayComponentConfiguration
-    * * Display Name: Display Component Configuration
+    * * Display Name: Display Component Config
     * * SQL Data Type: nvarchar(MAX)
     * * Description: If DisplayComponentID is specified, this field can optionally be used to track component-specific and relationship-specific configuration details that will be used by CodeGen to provide to the display component selected.
     */
@@ -83440,7 +83575,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -83450,7 +83585,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -83460,7 +83595,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: AutoUpdateFromSchema
-    * * Display Name: Auto Update From Schema
+    * * Display Name: Auto-Update From Schema
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates whether this relationship should be automatically updated by CodeGen. When set to 0, the record will not be modified by CodeGen. Defaults to 1.
@@ -83474,7 +83609,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: AdditionalFieldsToInclude
-    * * Display Name: Additional Fields To Include
+    * * Display Name: Additional Fields
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array of additional field names to include when joining through this relationship (for junction tables, e.g., ["RoleName", "UserEmail"])
     */
@@ -83487,7 +83622,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: AutoUpdateAdditionalFieldsToInclude
-    * * Display Name: Auto Update Additional Fields To Include
+    * * Display Name: Auto-Update Additional Fields
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When 1, allows system/LLM to auto-update AdditionalFieldsToInclude; when 0, user has locked this field
@@ -83500,7 +83635,43 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
     }
 
     /**
+    * * Field Name: RelatedRecordCollection
+    * * Display Name: Related Record Collection Policy
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJEntityRelationshipEntity_IRelatedRecordCollectionConfig
+    * * Description: Optional JSON policy object that declares this relationship as a first-class related-record collection, so CodeGen can emit a typed DeclareRelatedRecords(...) declaration on the entity subclass. Shape is IRelatedRecordCollectionConfig: Name (the generated property name, e.g. "Lines"), Load ('explicit' | 'immediate' | 'lazy' | 'never'), Source ('database' | 'cache'), ReadOnly, OnRemove ('delete' | 'orphan' | 'refuse'), OrderBy, Sequence ({ Field, From }), and ClearAfterSave. Source 'cache' reads the related records from whichever loaded BaseEngine already holds that entity, costing no query, and defaults ReadOnly to true because those are the engine's own instances; 'lazy' fills on first access and requires both. RelatedEntity and RelatedEntityJoinField are NOT repeated here — they are read from this row's own columns. NULL means the relationship is not a declared collection, which is the default and reproduces pre-6.2 behaviour exactly.
+    */
+    get RelatedRecordCollection(): string | null {
+        return this.Get('RelatedRecordCollection');
+    }
+    set RelatedRecordCollection(value: string | null) {
+        this.Set('RelatedRecordCollection', value);
+    }
+
+    private _RelatedRecordCollectionObject_cached: MJEntityRelationshipEntity_IRelatedRecordCollectionConfig | null | undefined = undefined;
+    private _RelatedRecordCollectionObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for RelatedRecordCollection — returns parsed JSON as MJEntityRelationshipEntity_IRelatedRecordCollectionConfig.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get RelatedRecordCollectionObject(): MJEntityRelationshipEntity_IRelatedRecordCollectionConfig | null {
+        const raw = this.RelatedRecordCollection;
+        if (raw !== this._RelatedRecordCollectionObject_lastRaw) {
+            this._RelatedRecordCollectionObject_cached = raw ? JSON.parse(raw) : null;
+            this._RelatedRecordCollectionObject_lastRaw = raw;
+        }
+        return this._RelatedRecordCollectionObject_cached!;
+    }
+    set RelatedRecordCollectionObject(value: MJEntityRelationshipEntity_IRelatedRecordCollectionConfig | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.RelatedRecordCollection = raw;
+        this._RelatedRecordCollectionObject_cached = value;
+        this._RelatedRecordCollectionObject_lastRaw = raw;
+    }
+
+    /**
     * * Field Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -83527,7 +83698,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: RelatedEntity
-    * * Display Name: Related Entity
+    * * Display Name: Related Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntity(): string {
@@ -95763,96 +95934,6 @@ export class MJOutputFormatTypeEntity extends BaseEntity<MJOutputFormatTypeEntit
 
 
 /**
- * MJ: Output Trigger Types - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: OutputTriggerType
- * * Base View: vwOutputTriggerTypes
- * * @description Defines events that can trigger output generation such as schedules, data changes, or manual requests.
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
- */
-@RegisterClass(BaseEntity, 'MJ: Output Trigger Types')
-export class MJOutputTriggerTypeEntity extends BaseEntity<MJOutputTriggerTypeEntityType> {
-    /**
-    * Loads the MJ: Output Trigger Types record from the database
-    * @param ID: string - primary key value to load the MJ: Output Trigger Types record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJOutputTriggerTypeEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: Name
-    * * Display Name: Name
-    * * SQL Data Type: nvarchar(255)
-    */
-    get Name(): string {
-        return this.Get('Name');
-    }
-    set Name(value: string) {
-        this.Set('Name', value);
-    }
-
-    /**
-    * * Field Name: Description
-    * * Display Name: Description
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get Description(): string | null {
-        return this.Get('Description');
-    }
-    set Description(value: string | null) {
-        this.Set('Description', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-}
-
-
-/**
  * MJ: Permission Domains - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: PermissionDomain
@@ -102673,988 +102754,6 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
 
 /**
- * MJ: Report Categories - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: ReportCategory
- * * Base View: vwReportCategories
- * * @description Organizes reports into logical groupings for navigation, access control, and discovery within the reporting system.
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ: Report Categories')
-export class MJReportCategoryEntity extends BaseEntity<MJReportCategoryEntityType> {
-    /**
-    * Loads the MJ: Report Categories record from the database
-    * @param ID: string - primary key value to load the MJ: Report Categories record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJReportCategoryEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: Name
-    * * Display Name: Name
-    * * SQL Data Type: nvarchar(100)
-    */
-    get Name(): string {
-        return this.Get('Name');
-    }
-    set Name(value: string) {
-        this.Set('Name', value);
-    }
-
-    /**
-    * * Field Name: Description
-    * * Display Name: Description
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get Description(): string | null {
-        return this.Get('Description');
-    }
-    set Description(value: string | null) {
-        this.Set('Description', value);
-    }
-
-    /**
-    * * Field Name: ParentID
-    * * Display Name: Parent ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Report Categories (vwReportCategories.ID)
-    */
-    get ParentID(): string | null {
-        return this.Get('ParentID');
-    }
-    set ParentID(value: string | null) {
-        this.Set('ParentID', value);
-    }
-
-    /**
-    * * Field Name: UserID
-    * * Display Name: User ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
-    */
-    get UserID(): string {
-        return this.Get('UserID');
-    }
-    set UserID(value: string) {
-        this.Set('UserID', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Parent
-    * * Display Name: Parent
-    * * SQL Data Type: nvarchar(100)
-    */
-    get Parent(): string | null {
-        return this.Get('Parent');
-    }
-
-    /**
-    * * Field Name: User
-    * * Display Name: User
-    * * SQL Data Type: nvarchar(100)
-    */
-    get User(): string {
-        return this.Get('User');
-    }
-
-    /**
-    * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
-    * * SQL Data Type: uniqueidentifier
-    */
-    get RootParentID(): string | null {
-        return this.Get('RootParentID');
-    }
-}
-
-
-/**
- * MJ: Report Snapshots - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: ReportSnapshot
- * * Base View: vwReportSnapshots
- * * @description Stores point-in-time captures of report outputs, preserving historical data and enabling comparison over time.
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ: Report Snapshots')
-export class MJReportSnapshotEntity extends BaseEntity<MJReportSnapshotEntityType> {
-    /**
-    * Loads the MJ: Report Snapshots record from the database
-    * @param ID: string - primary key value to load the MJ: Report Snapshots record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJReportSnapshotEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: ReportID
-    * * Display Name: Report ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Reports (vwReports.ID)
-    */
-    get ReportID(): string {
-        return this.Get('ReportID');
-    }
-    set ReportID(value: string) {
-        this.Set('ReportID', value);
-    }
-
-    /**
-    * * Field Name: ResultSet
-    * * Display Name: Result Set
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Field ResultSet for entity Report Snapshots.
-    */
-    get ResultSet(): string {
-        return this.Get('ResultSet');
-    }
-    set ResultSet(value: string) {
-        this.Set('ResultSet', value);
-    }
-
-    /**
-    * * Field Name: UserID
-    * * Display Name: User ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
-    */
-    get UserID(): string {
-        return this.Get('UserID');
-    }
-    set UserID(value: string) {
-        this.Set('UserID', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Report
-    * * Display Name: Report
-    * * SQL Data Type: nvarchar(255)
-    */
-    get Report(): string {
-        return this.Get('Report');
-    }
-
-    /**
-    * * Field Name: User
-    * * Display Name: User
-    * * SQL Data Type: nvarchar(100)
-    */
-    get User(): string {
-        return this.Get('User');
-    }
-}
-
-
-/**
- * MJ: Report User States - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: ReportUserState
- * * Base View: vwReportUserStates
- * * @description Tracks individual user state within interactive reports
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ: Report User States')
-export class MJReportUserStateEntity extends BaseEntity<MJReportUserStateEntityType> {
-    /**
-    * Loads the MJ: Report User States record from the database
-    * @param ID: string - primary key value to load the MJ: Report User States record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJReportUserStateEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: ReportID
-    * * Display Name: Report ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Reports (vwReports.ID)
-    */
-    get ReportID(): string {
-        return this.Get('ReportID');
-    }
-    set ReportID(value: string) {
-        this.Set('ReportID', value);
-    }
-
-    /**
-    * * Field Name: UserID
-    * * Display Name: User ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
-    */
-    get UserID(): string {
-        return this.Get('UserID');
-    }
-    set UserID(value: string) {
-        this.Set('UserID', value);
-    }
-
-    /**
-    * * Field Name: ReportState
-    * * Display Name: Report State
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON serialized state of user interaction with the report
-    */
-    get ReportState(): string | null {
-        return this.Get('ReportState');
-    }
-    set ReportState(value: string | null) {
-        this.Set('ReportState', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Report
-    * * Display Name: Report
-    * * SQL Data Type: nvarchar(255)
-    */
-    get Report(): string {
-        return this.Get('Report');
-    }
-
-    /**
-    * * Field Name: User
-    * * Display Name: User
-    * * SQL Data Type: nvarchar(100)
-    */
-    get User(): string {
-        return this.Get('User');
-    }
-}
-
-
-/**
- * MJ: Report Versions - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: ReportVersion
- * * Base View: vwReportVersions
- * * @description Stores iterations of report logic, structure, and layout changes
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ: Report Versions')
-export class MJReportVersionEntity extends BaseEntity<MJReportVersionEntityType> {
-    /**
-    * Loads the MJ: Report Versions record from the database
-    * @param ID: string - primary key value to load the MJ: Report Versions record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJReportVersionEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * Validate() method override for MJ: Report Versions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * VersionNumber: This rule ensures that the Version Number must be greater than zero.
-    * @public
-    * @method
-    * @override
-    */
-    public override Validate(): ValidationResult {
-        const result = super.Validate();
-        this.ValidateVersionNumberGreaterThanZero(result);
-        result.Success = result.Success && (result.Errors.length === 0);
-
-        return result;
-    }
-
-    /**
-    * This rule ensures that the Version Number must be greater than zero.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateVersionNumberGreaterThanZero(result: ValidationResult) {
-    	if (this.VersionNumber <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("VersionNumber", "Version Number must be greater than zero.", this.VersionNumber, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: ReportID
-    * * Display Name: Report ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Reports (vwReports.ID)
-    */
-    get ReportID(): string {
-        return this.Get('ReportID');
-    }
-    set ReportID(value: string) {
-        this.Set('ReportID', value);
-    }
-
-    /**
-    * * Field Name: VersionNumber
-    * * Display Name: Version Number
-    * * SQL Data Type: int
-    * * Description: Report version number, sequential per report starting at 1
-    */
-    get VersionNumber(): number {
-        return this.Get('VersionNumber');
-    }
-    set VersionNumber(value: number) {
-        this.Set('VersionNumber', value);
-    }
-
-    /**
-    * * Field Name: Name
-    * * Display Name: Name
-    * * SQL Data Type: nvarchar(255)
-    * * Description: Name of this report version
-    */
-    get Name(): string {
-        return this.Get('Name');
-    }
-    set Name(value: string) {
-        this.Set('Name', value);
-    }
-
-    /**
-    * * Field Name: Description
-    * * Display Name: Description
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Description of this report version
-    */
-    get Description(): string | null {
-        return this.Get('Description');
-    }
-    set Description(value: string | null) {
-        this.Set('Description', value);
-    }
-
-    /**
-    * * Field Name: Configuration
-    * * Display Name: Configuration
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON configuration of report structure, layout and logic
-    */
-    get Configuration(): string | null {
-        return this.Get('Configuration');
-    }
-    set Configuration(value: string | null) {
-        this.Set('Configuration', value);
-    }
-
-    /**
-    * * Field Name: DataContextUpdated
-    * * Display Name: Data Context Updated
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: Indicates if the data context was updated in this version
-    */
-    get DataContextUpdated(): boolean {
-        return this.Get('DataContextUpdated');
-    }
-    set DataContextUpdated(value: boolean) {
-        this.Set('DataContextUpdated', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Report
-    * * Display Name: Report
-    * * SQL Data Type: nvarchar(255)
-    */
-    get Report(): string {
-        return this.Get('Report');
-    }
-}
-
-
-/**
- * MJ: Reports - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: Report
- * * Base View: vwReports
- * * @description Defines report configurations including data sources, layouts, filters, and scheduling for automated report generation.
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ: Reports')
-export class MJReportEntity extends BaseEntity<MJReportEntityType> {
-    /**
-    * Loads the MJ: Reports record from the database
-    * @param ID: string - primary key value to load the MJ: Reports record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJReportEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * MJ: Reports - Delete method override to wrap in transaction since CascadeDeletes is true.
-    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
-    * @public
-    * @method
-    * @override
-    * @memberof MJReportEntity
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    */
-    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
-            // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
-            
-            try {
-                await provider.BeginTransaction();
-                const result = await super.Delete(options);
-                
-                if (result) {
-                    await provider.CommitTransaction();
-                    return true;
-                } else {
-                    await provider.RollbackTransaction();
-                    return false;
-                }
-            } catch (error) {
-                await provider.RollbackTransaction();
-                throw error;
-            }
-        } else {
-            // For network providers, cascading deletes are handled server-side
-            return super.Delete(options);
-        }
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: Name
-    * * Display Name: Name
-    * * SQL Data Type: nvarchar(255)
-    */
-    get Name(): string {
-        return this.Get('Name');
-    }
-    set Name(value: string) {
-        this.Set('Name', value);
-    }
-
-    /**
-    * * Field Name: Description
-    * * Display Name: Description
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get Description(): string | null {
-        return this.Get('Description');
-    }
-    set Description(value: string | null) {
-        this.Set('Description', value);
-    }
-
-    /**
-    * * Field Name: CategoryID
-    * * Display Name: Category
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Report Categories (vwReportCategories.ID)
-    */
-    get CategoryID(): string | null {
-        return this.Get('CategoryID');
-    }
-    set CategoryID(value: string | null) {
-        this.Set('CategoryID', value);
-    }
-
-    /**
-    * * Field Name: UserID
-    * * Display Name: User
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
-    */
-    get UserID(): string {
-        return this.Get('UserID');
-    }
-    set UserID(value: string) {
-        this.Set('UserID', value);
-    }
-
-    /**
-    * * Field Name: SharingScope
-    * * Display Name: Sharing Scope
-    * * SQL Data Type: nvarchar(20)
-    * * Default Value: Personal
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Everyone
-    *   * None
-    *   * Specific
-    * * Description: Field SharingScope for entity Reports.
-    */
-    get SharingScope(): 'Everyone' | 'None' | 'Specific' {
-        return this.Get('SharingScope');
-    }
-    set SharingScope(value: 'Everyone' | 'None' | 'Specific') {
-        this.Set('SharingScope', value);
-    }
-
-    /**
-    * * Field Name: ConversationID
-    * * Display Name: Conversation
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
-    */
-    get ConversationID(): string | null {
-        return this.Get('ConversationID');
-    }
-    set ConversationID(value: string | null) {
-        this.Set('ConversationID', value);
-    }
-
-    /**
-    * * Field Name: ConversationDetailID
-    * * Display Name: Conversation Detail
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
-    */
-    get ConversationDetailID(): string | null {
-        return this.Get('ConversationDetailID');
-    }
-    set ConversationDetailID(value: string | null) {
-        this.Set('ConversationDetailID', value);
-    }
-
-    /**
-    * * Field Name: DataContextID
-    * * Display Name: Data Context
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Data Contexts (vwDataContexts.ID)
-    */
-    get DataContextID(): string | null {
-        return this.Get('DataContextID');
-    }
-    set DataContextID(value: string | null) {
-        this.Set('DataContextID', value);
-    }
-
-    /**
-    * * Field Name: Configuration
-    * * Display Name: Configuration
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Field Configuration for entity Reports.
-    */
-    get Configuration(): string | null {
-        return this.Get('Configuration');
-    }
-    set Configuration(value: string | null) {
-        this.Set('Configuration', value);
-    }
-
-    /**
-    * * Field Name: OutputTriggerTypeID
-    * * Display Name: Output Trigger Type
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Output Trigger Types (vwOutputTriggerTypes.ID)
-    */
-    get OutputTriggerTypeID(): string | null {
-        return this.Get('OutputTriggerTypeID');
-    }
-    set OutputTriggerTypeID(value: string | null) {
-        this.Set('OutputTriggerTypeID', value);
-    }
-
-    /**
-    * * Field Name: OutputFormatTypeID
-    * * Display Name: Output Format Type
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Output Format Types (vwOutputFormatTypes.ID)
-    */
-    get OutputFormatTypeID(): string | null {
-        return this.Get('OutputFormatTypeID');
-    }
-    set OutputFormatTypeID(value: string | null) {
-        this.Set('OutputFormatTypeID', value);
-    }
-
-    /**
-    * * Field Name: OutputDeliveryTypeID
-    * * Display Name: Output Delivery Type
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Output Delivery Types (vwOutputDeliveryTypes.ID)
-    */
-    get OutputDeliveryTypeID(): string | null {
-        return this.Get('OutputDeliveryTypeID');
-    }
-    set OutputDeliveryTypeID(value: string | null) {
-        this.Set('OutputDeliveryTypeID', value);
-    }
-
-    /**
-    * * Field Name: OutputFrequency
-    * * Display Name: Output Frequency
-    * * SQL Data Type: nvarchar(50)
-    * * Description: For scheduled reports, the frequency of generation (Daily, Weekly, Monthly, etc.).
-    */
-    get OutputFrequency(): string | null {
-        return this.Get('OutputFrequency');
-    }
-    set OutputFrequency(value: string | null) {
-        this.Set('OutputFrequency', value);
-    }
-
-    /**
-    * * Field Name: OutputTargetEmail
-    * * Display Name: Output Target Email
-    * * SQL Data Type: nvarchar(255)
-    * * Description: Email address(es) to send the report to when using email delivery.
-    */
-    get OutputTargetEmail(): string | null {
-        return this.Get('OutputTargetEmail');
-    }
-    set OutputTargetEmail(value: string | null) {
-        this.Set('OutputTargetEmail', value);
-    }
-
-    /**
-    * * Field Name: OutputWorkflowID
-    * * Display Name: Output Workflow
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Workflows (vwWorkflows.ID)
-    */
-    get OutputWorkflowID(): string | null {
-        return this.Get('OutputWorkflowID');
-    }
-    set OutputWorkflowID(value: string | null) {
-        this.Set('OutputWorkflowID', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Thumbnail
-    * * Display Name: Thumbnail
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Thumbnail image for the report that can be displayed in gallery views. Can contain either a URL to an image file or a Base64-encoded image string.
-    */
-    get Thumbnail(): string | null {
-        return this.Get('Thumbnail');
-    }
-    set Thumbnail(value: string | null) {
-        this.Set('Thumbnail', value);
-    }
-
-    /**
-    * * Field Name: EnvironmentID
-    * * Display Name: Environment
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
-    * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
-    */
-    get EnvironmentID(): string {
-        return this.Get('EnvironmentID');
-    }
-    set EnvironmentID(value: string) {
-        this.Set('EnvironmentID', value);
-    }
-
-    /**
-    * * Field Name: Category
-    * * Display Name: Category Name
-    * * SQL Data Type: nvarchar(100)
-    */
-    get Category(): string | null {
-        return this.Get('Category');
-    }
-
-    /**
-    * * Field Name: User
-    * * Display Name: User Name
-    * * SQL Data Type: nvarchar(100)
-    */
-    get User(): string {
-        return this.Get('User');
-    }
-
-    /**
-    * * Field Name: Conversation
-    * * Display Name: Conversation Name
-    * * SQL Data Type: nvarchar(255)
-    */
-    get Conversation(): string | null {
-        return this.Get('Conversation');
-    }
-
-    /**
-    * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail Name
-    * * SQL Data Type: nvarchar(100)
-    */
-    get ConversationDetail(): string | null {
-        return this.Get('ConversationDetail');
-    }
-
-    /**
-    * * Field Name: DataContext
-    * * Display Name: Data Context Name
-    * * SQL Data Type: nvarchar(255)
-    */
-    get DataContext(): string | null {
-        return this.Get('DataContext');
-    }
-
-    /**
-    * * Field Name: OutputTriggerType
-    * * Display Name: Output Trigger Type Name
-    * * SQL Data Type: nvarchar(255)
-    */
-    get OutputTriggerType(): string | null {
-        return this.Get('OutputTriggerType');
-    }
-
-    /**
-    * * Field Name: OutputFormatType
-    * * Display Name: Output Format Type Name
-    * * SQL Data Type: nvarchar(255)
-    */
-    get OutputFormatType(): string | null {
-        return this.Get('OutputFormatType');
-    }
-
-    /**
-    * * Field Name: OutputDeliveryType
-    * * Display Name: Output Delivery Type Name
-    * * SQL Data Type: nvarchar(255)
-    */
-    get OutputDeliveryType(): string | null {
-        return this.Get('OutputDeliveryType');
-    }
-
-    /**
-    * * Field Name: OutputWorkflow
-    * * Display Name: Output Workflow Name
-    * * SQL Data Type: nvarchar(100)
-    */
-    get OutputWorkflow(): string | null {
-        return this.Get('OutputWorkflow');
-    }
-
-    /**
-    * * Field Name: Environment
-    * * Display Name: Environment Name
-    * * SQL Data Type: nvarchar(255)
-    */
-    get Environment(): string {
-        return this.Get('Environment');
-    }
-}
-
-
-/**
  * MJ: Resource Links - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ResourceLink
@@ -104470,421 +103569,6 @@ export class MJRowLevelSecurityFilterEntity extends BaseEntity<MJRowLevelSecurit
 
 
 /**
- * MJ: Scheduled Action Params - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: ScheduledActionParam
- * * Base View: vwScheduledActionParams
- * * @description Stores parameter values for scheduled action executions, configuring inputs for automated action runs.
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ: Scheduled Action Params')
-export class MJScheduledActionParamEntity extends BaseEntity<MJScheduledActionParamEntityType> {
-    /**
-    * Loads the MJ: Scheduled Action Params record from the database
-    * @param ID: string - primary key value to load the MJ: Scheduled Action Params record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJScheduledActionParamEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: ScheduledActionID
-    * * Display Name: Scheduled Action ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Scheduled Actions (vwScheduledActions.ID)
-    */
-    get ScheduledActionID(): string {
-        return this.Get('ScheduledActionID');
-    }
-    set ScheduledActionID(value: string) {
-        this.Set('ScheduledActionID', value);
-    }
-
-    /**
-    * * Field Name: ActionParamID
-    * * Display Name: Action Param ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Action Params (vwActionParams.ID)
-    */
-    get ActionParamID(): string {
-        return this.Get('ActionParamID');
-    }
-    set ActionParamID(value: string) {
-        this.Set('ActionParamID', value);
-    }
-
-    /**
-    * * Field Name: ValueType
-    * * Display Name: Value Type
-    * * SQL Data Type: nvarchar(20)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * SQL Statement
-    *   * Static
-    * * Description: Field ValueType for entity Scheduled Action Params.
-    */
-    get ValueType(): 'SQL Statement' | 'Static' {
-        return this.Get('ValueType');
-    }
-    set ValueType(value: 'SQL Statement' | 'Static') {
-        this.Set('ValueType', value);
-    }
-
-    /**
-    * * Field Name: Value
-    * * Display Name: Value
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: Field Value for entity Scheduled Action Params.
-    */
-    get Value(): string | null {
-        return this.Get('Value');
-    }
-    set Value(value: string | null) {
-        this.Set('Value', value);
-    }
-
-    /**
-    * * Field Name: Comments
-    * * Display Name: Comments
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get Comments(): string | null {
-        return this.Get('Comments');
-    }
-    set Comments(value: string | null) {
-        this.Set('Comments', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: ScheduledAction
-    * * Display Name: Scheduled Action
-    * * SQL Data Type: nvarchar(255)
-    */
-    get ScheduledAction(): string {
-        return this.Get('ScheduledAction');
-    }
-
-    /**
-    * * Field Name: ActionParam
-    * * Display Name: Action Param
-    * * SQL Data Type: nvarchar(255)
-    */
-    get ActionParam(): string {
-        return this.Get('ActionParam');
-    }
-}
-
-
-/**
- * MJ: Scheduled Actions - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: ScheduledAction
- * * Base View: vwScheduledActions
- * * @description Track scheduled actions and their details
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ: Scheduled Actions')
-export class MJScheduledActionEntity extends BaseEntity<MJScheduledActionEntityType> {
-    /**
-    * Loads the MJ: Scheduled Actions record from the database
-    * @param ID: string - primary key value to load the MJ: Scheduled Actions record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJScheduledActionEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: Name
-    * * Display Name: Name
-    * * SQL Data Type: nvarchar(255)
-    */
-    get Name(): string {
-        return this.Get('Name');
-    }
-    set Name(value: string) {
-        this.Set('Name', value);
-    }
-
-    /**
-    * * Field Name: Description
-    * * Display Name: Description
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get Description(): string | null {
-        return this.Get('Description');
-    }
-    set Description(value: string | null) {
-        this.Set('Description', value);
-    }
-
-    /**
-    * * Field Name: CreatedByUserID
-    * * Display Name: Created By User ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
-    */
-    get CreatedByUserID(): string {
-        return this.Get('CreatedByUserID');
-    }
-    set CreatedByUserID(value: string) {
-        this.Set('CreatedByUserID', value);
-    }
-
-    /**
-    * * Field Name: ActionID
-    * * Display Name: Action ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
-    */
-    get ActionID(): string {
-        return this.Get('ActionID');
-    }
-    set ActionID(value: string) {
-        this.Set('ActionID', value);
-    }
-
-    /**
-    * * Field Name: Type
-    * * Display Name: Type
-    * * SQL Data Type: nvarchar(20)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Custom
-    *   * Daily
-    *   * Monthly
-    *   * Weekly
-    *   * Yearly
-    * * Description: Type of the scheduled action (Daily, Weekly, Monthly, Yearly, Custom)
-    */
-    get Type(): 'Custom' | 'Daily' | 'Monthly' | 'Weekly' | 'Yearly' {
-        return this.Get('Type');
-    }
-    set Type(value: 'Custom' | 'Daily' | 'Monthly' | 'Weekly' | 'Yearly') {
-        this.Set('Type', value);
-    }
-
-    /**
-    * * Field Name: CronExpression
-    * * Display Name: Cron Expression
-    * * SQL Data Type: nvarchar(100)
-    * * Description: Cron expression defining the schedule, automatically maintained by the system unless Type is Custom, in which case the user directly sets this
-    */
-    get CronExpression(): string | null {
-        return this.Get('CronExpression');
-    }
-    set CronExpression(value: string | null) {
-        this.Set('CronExpression', value);
-    }
-
-    /**
-    * * Field Name: Timezone
-    * * Display Name: Timezone
-    * * SQL Data Type: nvarchar(100)
-    * * Description: Timezone for the scheduled action, if not specified defaults to UTC/Z
-    */
-    get Timezone(): string {
-        return this.Get('Timezone');
-    }
-    set Timezone(value: string) {
-        this.Set('Timezone', value);
-    }
-
-    /**
-    * * Field Name: Status
-    * * Display Name: Status
-    * * SQL Data Type: nvarchar(20)
-    * * Default Value: Pending
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Active
-    *   * Disabled
-    *   * Expired
-    *   * Pending
-    * * Description: Status of the scheduled action (Pending, Active, Disabled, Expired)
-    */
-    get Status(): 'Active' | 'Disabled' | 'Expired' | 'Pending' {
-        return this.Get('Status');
-    }
-    set Status(value: 'Active' | 'Disabled' | 'Expired' | 'Pending') {
-        this.Set('Status', value);
-    }
-
-    /**
-    * * Field Name: IntervalDays
-    * * Display Name: Interval Days
-    * * SQL Data Type: int
-    * * Description: Interval in days for the scheduled action
-    */
-    get IntervalDays(): number | null {
-        return this.Get('IntervalDays');
-    }
-    set IntervalDays(value: number | null) {
-        this.Set('IntervalDays', value);
-    }
-
-    /**
-    * * Field Name: DayOfWeek
-    * * Display Name: Day Of Week
-    * * SQL Data Type: nvarchar(20)
-    * * Description: Day of the week for the scheduled action
-    */
-    get DayOfWeek(): string | null {
-        return this.Get('DayOfWeek');
-    }
-    set DayOfWeek(value: string | null) {
-        this.Set('DayOfWeek', value);
-    }
-
-    /**
-    * * Field Name: DayOfMonth
-    * * Display Name: Day Of Month
-    * * SQL Data Type: int
-    * * Description: Day of the month for the scheduled action
-    */
-    get DayOfMonth(): number | null {
-        return this.Get('DayOfMonth');
-    }
-    set DayOfMonth(value: number | null) {
-        this.Set('DayOfMonth', value);
-    }
-
-    /**
-    * * Field Name: Month
-    * * Display Name: Month
-    * * SQL Data Type: nvarchar(20)
-    * * Description: Month for the scheduled action
-    */
-    get Month(): string | null {
-        return this.Get('Month');
-    }
-    set Month(value: string | null) {
-        this.Set('Month', value);
-    }
-
-    /**
-    * * Field Name: CustomCronExpression
-    * * Display Name: Custom Cron Expression
-    * * SQL Data Type: nvarchar(255)
-    * * Description: Field CustomCronExpression for entity Scheduled Actions.
-    */
-    get CustomCronExpression(): string | null {
-        return this.Get('CustomCronExpression');
-    }
-    set CustomCronExpression(value: string | null) {
-        this.Set('CustomCronExpression', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: CreatedByUser
-    * * Display Name: Created By User
-    * * SQL Data Type: nvarchar(100)
-    */
-    get CreatedByUser(): string {
-        return this.Get('CreatedByUser');
-    }
-
-    /**
-    * * Field Name: Action
-    * * Display Name: Action
-    * * SQL Data Type: nvarchar(425)
-    */
-    get Action(): string {
-        return this.Get('Action');
-    }
-}
-
-
-/**
  * MJ: Scheduled Job Runs - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ScheduledJobRun
@@ -105345,7 +104029,7 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
 
     /**
     * * Field Name: JobTypeID
-    * * Display Name: Job Type
+    * * Display Name: Job Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Scheduled Job Types (vwScheduledJobTypes.ID)
     */
@@ -105471,7 +104155,7 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
 
     /**
     * * Field Name: OwnerUserID
-    * * Display Name: Owner
+    * * Display Name: Owner User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: User who owns this schedule. Used as the execution context if no specific user is configured in the job-specific configuration.
@@ -105581,7 +104265,7 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
 
     /**
     * * Field Name: NotifyUserID
-    * * Display Name: Notify User
+    * * Display Name: Notify User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: User to notify about job execution results. If NULL and notifications are enabled, falls back to OwnerUserID.
@@ -105728,7 +104412,7 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
 
     /**
     * * Field Name: MaxRuntimeMinutes
-    * * Display Name: Max Runtime (Minutes)
+    * * Display Name: Max Runtime Minutes
     * * SQL Data Type: int
     * * Description: Optional per-job override for the acquire-time lock lease length, in minutes. When set and positive, the engine uses max(default lease, MaxRuntimeMinutes) as the initial ExpectedCompletionAt — so it only ever EXTENDS the default lease, never shrinks it. Intended for jobs whose work is a single long-running call that cannot heartbeat mid-flight (e.g. one slow synchronous action). Jobs that heartbeat via the plugin opt-in pattern do not need this. NULL = use the engine default lease (LeaseTimeoutMinutes). See plans/scheduled-job-engine-heartbeat-lease.md (GH #2749).
     */
@@ -105740,8 +104424,27 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
     }
 
     /**
+    * * Field Name: MissedRunPolicy
+    * * Display Name: Missed Run Policy
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: RunOnce
+    * * Value List Type: List
+    * * Possible Values 
+    *   * RunAll
+    *   * RunOnce
+    *   * Skip
+    * * Description: What this job does about fire times that passed while the scheduler was not running (a deploy, a crash, a sleeping machine). RunOnce (the default) performs a single catch-up run and then resumes the normal schedule — correct for digests, syncs and anything where only the latest state matters, and identical to the behavior every job had before this column existed. RunAll replays each missed occurrence, one per poll tick so a long outage drains gradually rather than dispatching at once — correct for per-period work such as billing or metric snapshots, where skipping a period loses data nothing else recreates. Skip performs no catch-up at all and simply advances to the next future occurrence — correct for work whose value expires, such as a cache warm. A run is only treated as missed when a LATER occurrence has also come due, so a job that merely became due seconds ago is never misclassified; this is evaluated cron-relatively rather than against a fixed grace window, which would misjudge both a per-minute job after a short pause and a monthly job that is a week late.
+    */
+    get MissedRunPolicy(): 'RunAll' | 'RunOnce' | 'Skip' {
+        return this.Get('MissedRunPolicy');
+    }
+    set MissedRunPolicy(value: 'RunAll' | 'RunOnce' | 'Skip') {
+        this.Set('MissedRunPolicy', value);
+    }
+
+    /**
     * * Field Name: JobType
-    * * Display Name: Job Type Name
+    * * Display Name: Job Type
     * * SQL Data Type: nvarchar(100)
     */
     get JobType(): string {
@@ -105750,7 +104453,7 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
 
     /**
     * * Field Name: OwnerUser
-    * * Display Name: Owner User Name
+    * * Display Name: Owner User
     * * SQL Data Type: nvarchar(100)
     */
     get OwnerUser(): string | null {
@@ -105759,7 +104462,7 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
 
     /**
     * * Field Name: NotifyUser
-    * * Display Name: Notify User Name
+    * * Display Name: Notify User
     * * SQL Data Type: nvarchar(100)
     */
     get NotifyUser(): string | null {
@@ -111515,7 +110218,7 @@ export class MJTaskDependencyEntity extends BaseEntity<MJTaskDependencyEntityTyp
 
     /**
     * * Field Name: TaskID
-    * * Display Name: Task ID
+    * * Display Name: Task
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
     */
@@ -111579,8 +110282,62 @@ export class MJTaskDependencyEntity extends BaseEntity<MJTaskDependencyEntityTyp
     }
 
     /**
+    * * Field Name: Condition
+    * * Display Name: Condition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional boolean expression gating this dependency edge. NULL (the default, and the value every pre-existing row carries) means the edge is unconditional, so adding this column changes the meaning of no existing graph. When present it is evaluated by the shared GraphTraversalEngine against the same context a design-time AIAgentStepPath.Condition sees, which is what lets a runtime task graph and a flow-editor graph be the same graph. A condition that evaluates false skips the edge; one that fails to evaluate ALSO skips it, but is reported distinctly so a graph stalled by a malformed expression cannot be mistaken for one that finished normally.
+    */
+    get Condition(): string | null {
+        return this.Get('Condition');
+    }
+    set Condition(value: string | null) {
+        this.Set('Condition', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Ordering within an exclusive group — higher wins. Mirrors AIAgentStepPath.Priority so a compiled workflow chooses the same branch the flow editor shows. Ignored for edges that are not part of an ExclusiveGroup.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Deterministic tiebreak when two edges in an ExclusiveGroup share a Priority, applied ascending. Load-bearing rather than cosmetic: compiled dependencies get fresh UUIDs and Priority defaults to 0, so without a stored ordinal a tie would resolve by row order and the same workflow could take a different branch on a different machine.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: ExclusiveGroup
+    * * Display Name: Exclusive Group
+    * * SQL Data Type: nvarchar(255)
+    * * Description: XOR group key: sibling edges leaving the same origin that share a non-null ExclusiveGroup are an exclusive fan-out. The highest-Priority satisfied edge wins, ties broken by ascending Sequence; the rest are Skipped. NULL (the default) means an ordinary dependency, so existing graphs are unaffected. An unevaluable condition anywhere in the group holds the whole group rather than firing every branch.
+    */
+    get ExclusiveGroup(): string | null {
+        return this.Get('ExclusiveGroup');
+    }
+    set ExclusiveGroup(value: string | null) {
+        this.Set('ExclusiveGroup', value);
+    }
+
+    /**
     * * Field Name: Task
-    * * Display Name: Task
+    * * Display Name: Task Name
     * * SQL Data Type: nvarchar(255)
     */
     get Task(): string {
@@ -111589,7 +110346,7 @@ export class MJTaskDependencyEntity extends BaseEntity<MJTaskDependencyEntityTyp
 
     /**
     * * Field Name: DependsOnTask
-    * * Display Name: Depends On Task
+    * * Display Name: Depends On Task Name
     * * SQL Data Type: nvarchar(255)
     */
     get DependsOnTask(): string {
@@ -111690,6 +110447,397 @@ export class MJTaskTypeEntity extends BaseEntity<MJTaskTypeEntityType> {
 
 
 /**
+ * Everything a workflow step needs that has no column of its own — stored on Task.Configuration.
+ *
+ * A workflow compiles to a task graph and runs on the dispatcher, so each Task row IS a workflow
+ * step. Three parts of a step have their own columns because SQL needs them: `StepType` (the
+ * discriminator the claiming query routes on) and the `AgentID` / `ActionID` / `PromptID` / `UserID`
+ * foreign keys. Everything else lives here.
+ *
+ * **Why a JSON bag rather than more columns.** None of the fields below is ever a SQL predicate —
+ * the dispatcher loads the row and reads them in TypeScript. Made into columns they would be eight
+ * more migrations' worth of surface for no query benefit, and every new step kind or policy knob
+ * would need another one. As a typed bag, growth is a change to this file plus CodeGen.
+ *
+ * **Which member is populated follows `Task.StepType`.** TypeScript cannot discriminate on a sibling
+ * column, so the kind-specific members are individually optional rather than a discriminated union.
+ * Read them through the `StepType` you already have; do not infer the kind by probing for whichever
+ * member happens to be present, which is the exact mistake that used to turn every unrecognized
+ * step into a person's approval task.
+ */
+export interface MJTaskEntity_ITaskStepConfiguration {
+    /** Settings for an Agent step. The agent itself is `Task.AgentID`. */
+    agent?: MJTaskEntity_ITaskAgentConfiguration;
+
+    /** Settings for a Prompt step. The prompt itself is `Task.PromptID`. */
+    prompt?: MJTaskEntity_ITaskPromptConfiguration;
+
+    /** The loop definition for a ForEach step. Mirrors ForEachOperation in @memberjunction/ai-core-plus. */
+    forEach?: MJTaskEntity_ITaskForEachConfiguration;
+
+    /** The loop definition for a While step. Mirrors WhileOperation in @memberjunction/ai-core-plus. */
+    while?: MJTaskEntity_ITaskWhileConfiguration;
+
+    /** Settings for a step a person completes. The assignee is `Task.UserID`. */
+    human?: MJTaskEntity_ITaskHumanConfiguration;
+
+    /** Settings for a step completed by a system outside MemberJunction. */
+    external?: MJTaskEntity_ITaskExternalConfiguration;
+
+    /**
+     * How this step's inputs are built from the workflow payload, as a JSON object mapping the
+     * step's parameter names to payload paths.
+     *
+     * Evaluated when the step is dispatched, never when the workflow is submitted: a step's input
+     * routinely depends on what an earlier step produced, which does not exist yet at submission.
+     */
+    inputMapping?: string;
+
+    /**
+     * How this step's results are written back into the workflow payload, as a JSON object mapping
+     * result field names to payload paths.
+     *
+     * This is the only way a later step — or a branch condition — can see what this step produced.
+     * A workflow that branches on `payload.stockPrice` gets that value because some earlier step
+     * mapped it there.
+     */
+    outputMapping?: string;
+
+    /** Timeout, retries, and what failure means for the rest of the workflow. */
+    policy?: MJTaskEntity_ITaskExecutionPolicy;
+
+    /**
+     * Where this step sat on the canvas when a person drew it.
+     *
+     * **Only ever the author's own arrangement — never a computed one.** A graph produced by an
+     * agent or a remote caller has no geometry, and its positions are derived at render time from
+     * the graph's shape. Persisting a derived layout would freeze one rendering of a graph that can
+     * still change, and the stored coordinates would quietly go stale.
+     *
+     * So the rule for anything drawing a run is: use this when it is present, compute a layout when
+     * it is not. That is what makes a workflow someone laid out by hand run — and appear in history —
+     * in the shape they drew, while a machine-authored graph still renders legibly.
+     */
+    layout?: MJTaskEntity_ITaskStepLayout;
+
+    /**
+     * What actually happened when this step ran — written by the dispatcher, never by an author.
+     *
+     * Everything else in this bag is a step's *definition*; this is its *history*. It lives here
+     * rather than in columns of its own for the same reason as the rest: nothing in it is ever a SQL
+     * predicate, and a column per runtime artefact would be a migration every time a new step kind
+     * produced one.
+     */
+    runtime?: MJTaskEntity_ITaskStepRuntime;
+
+    /**
+     * Where this step sits in the graph's own order — its rank in a topological sort of the
+     * dependency edges, assigned once at submission.
+     *
+     * **Why a stored rank rather than an ordering rule.** `Task` has no sequence column, and every
+     * consumer that lists a graph's steps was therefore falling back to `__mj_CreatedAt` — which is
+     * the COMPILER's walk order, related to neither the order someone drew the steps in nor the
+     * order they run in. A graph that had not started yet listed its steps essentially at random:
+     * step 2(b), step 3, step 1, step 2(a), with step 3 above the steps it depends on.
+     *
+     * A graph's edges already define a partial order, and that order is knowable before anything
+     * runs — which is exactly when it is needed, since there are no timestamps to sort by yet.
+     * Steps that share a rank are genuinely concurrent, and consumers break that tie with the real
+     * start time, so the rule reads "drawn order, then what actually happened".
+     *
+     * Assigned at submission and never rewritten: it describes the graph's shape, which does not
+     * change once compiled.
+     */
+    sequence?: number;
+}
+
+/**
+ * The runtime artefacts a completed step points at.
+ *
+ * **This exists because cost was unreachable for prompt steps.** A workflow's spend is aggregated by
+ * walking the run tree: an Agent step reaches its cost through `Task.AgentRunID` → the run's own
+ * totals. A Prompt step has no agent run — the dispatcher executes the prompt directly — so its
+ * `AIPromptRun`, and with it every token and dollar it spent, had no path back from the Task at all.
+ * The runner returned the id and the dispatcher dropped it on the floor.
+ */
+export interface MJTaskEntity_ITaskStepRuntime {
+    /**
+     * The `MJ: AI Prompt Runs` row this step produced, when it was a Prompt step.
+     *
+     * Set on the step's LAST execution. A retried step overwrites it rather than accumulating: the
+     * prompt runs themselves are the durable history, and this is the pointer to the one whose
+     * output the payload actually carries.
+     */
+    promptRunID?: string;
+
+    /**
+     * The `MJ: Action Execution Logs` row this step produced, when it was an Action step.
+     *
+     * The action equivalent of {@link promptRunID}, and it exists for the same reason: the Task row
+     * records that an action ran, and nothing recorded WHICH execution. So a workflow's action step
+     * had no way to offer "view the execution log" — the one thing a person wants when an action
+     * misbehaves — while an ordinary agent run step has offered exactly that all along through its
+     * `TargetLogID`.
+     *
+     * Set on the step's LAST execution, matching promptRunID: the logs themselves are the durable
+     * history, and this points at the one whose output the payload actually carries.
+     */
+    actionLogID?: string;
+
+    /**
+     * One entry per pass of a loop step, in iteration order.
+     *
+     * **Without this a loop's work does not exist anywhere the platform can see it.** The run tree
+     * reaches nested work through exactly six links — a run's steps, a task-graph step's graph, a
+     * graph's tasks, a Sub-Agent step's run, and a task's own `AgentRunID` — and a loop iteration is
+     * none of them. `AIAgentRun.ParentRunID` does not help either: it records parentage but is not a
+     * link the tree traverses. So a `While` that spent real money across three passes reported one
+     * childless node with no cost, the settlement rollup under-counted every loop-bearing workflow,
+     * and the timeline offered nothing to expand — the work had happened and was unreachable.
+     *
+     * Recorded by the dispatcher as each pass completes, so a loop that is still running already has
+     * its finished iterations here.
+     */
+    iterations?: MJTaskEntity_ITaskLoopIteration[];
+
+    /**
+     * The payload as it stood when this step BEGAN — its dependencies' outputs merged with whatever
+     * authored input it carried.
+     *
+     * **Why this is not `Task.InputPayload`.** That column holds the *authored* input from the spec
+     * and round-trips back out through `TaskGraphSpecToAgentSpec`; overwriting it at completion would
+     * make a run's resolved values indistinguishable from what its author declared. So the resolved
+     * value lives here, and the authored one stays where it was written.
+     *
+     * **Why it is stored at all**, when `OutputPayload` already holds the payload as it stood after.
+     * Without a before, the run view has nothing to diff against and reports every step as having
+     * created the entire payload from nothing — a step that added one key showed as `root Added
+     * Object{5 keys}`. It is the same before/after pair an `AIAgentRunStep` has always recorded, for
+     * the same reason. It duplicates the upstream task's output by design: recomputing it would mean
+     * re-implementing the dependency merge in every consumer.
+     */
+    payloadAtStart?: Record<string, unknown>;
+}
+
+/**
+ * What one pass of a loop produced.
+ *
+ * Deliberately just pointers plus outcome: the `AIPromptRun` / `AIAgentRun` rows are the durable
+ * record of what happened, and copying their cost here would create a second number to disagree with
+ * the first — the exact failure this whole area has been fixing.
+ */
+export interface MJTaskEntity_ITaskLoopIteration {
+    /** Zero-based pass number, so iterations render in the order they ran. */
+    index: number;
+    /** The `MJ: AI Prompt Runs` row this pass produced, when the loop body is a prompt. */
+    promptRunID?: string;
+    /** The `MJ: AI Agent Runs` row this pass started, when the loop body is a sub-agent. */
+    agentRunID?: string;
+    /**
+     * The `MJ: Action Execution Logs` row this pass produced, when the loop body is an ACTION.
+     *
+     * Without it an action-bodied pass recorded no pointer at all, so it had no cost, no timing and
+     * nothing to open — and the tree, having neither a prompt run nor an agent run to go on, fell to
+     * its last branch and labelled the pass a **Sub-Agent**. A loop over a web search then presented
+     * five sub-agent runs that never happened.
+     */
+    actionLogID?: string;
+    /** Whether the pass succeeded. A loop with `continueOnError` can have failed passes and still finish. */
+    success?: boolean;
+    /** Why the pass failed, when it did. */
+    errorMessage?: string;
+
+    /**
+     * What THIS pass was handed — the body's resolved input, not the loop's running payload.
+     *
+     * A pass is the ONLY unit of work in a graph with no row of its own, so there is nowhere else
+     * for its input and output to live. Without them every pass presented `null` on both sides and
+     * the run view could say nothing about any individual iteration — which for a loop is the only
+     * interesting question, since the step's own payload shows just the final accumulated state.
+     *
+     * **Deliberately the pass's own input rather than "the running payload before this pass".** The
+     * latter is the obvious reading of a before/after pair and is quadratic: every pass would carry a
+     * full copy of everything the earlier passes accumulated. A five-iteration demo produced a 121KB
+     * configuration that way, and the same loop over fifty items would produce megabytes — in a
+     * column that the run tree, the timeline, the canvas and the run list all load.
+     *
+     * May instead hold `{ __omitted, __bytes, __limit }` when a size budget was exceeded. Stated
+     * rather than left empty, because a pass showing nothing is otherwise indistinguishable from a
+     * pass that produced nothing.
+     */
+    payloadAtStart?: Record<string, unknown>;
+
+    /**
+     * What this pass gave back — the body's own output, on the same basis as {@link payloadAtStart},
+     * and subject to the same budget marker.
+     */
+    payloadAtEnd?: Record<string, unknown>;
+}
+
+/** A step's position and size on the canvas, in canvas units. */
+export interface MJTaskEntity_ITaskStepLayout {
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+}
+
+/** Settings for an Agent step, beyond which agent to run. */
+export interface MJTaskEntity_ITaskAgentConfiguration {
+    /** What to tell the agent. Omitted means the agent works from the payload alone. */
+    message?: string;
+    /** Values bound into the agent's prompt template. */
+    templateParameters?: Record<string, string>;
+}
+
+/** Settings for a Prompt step, beyond which prompt to run. */
+export interface MJTaskEntity_ITaskPromptConfiguration {
+    /** Values bound into the prompt template. */
+    templateParameters?: Record<string, string>;
+}
+
+/**
+ * A ForEach step: run the body once per item in a collection.
+ *
+ * **This mirrors `ForEachOperation` in @memberjunction/ai-core-plus field for field, on purpose.**
+ * That interface is already the universal loop shape every agent type uses — flow agents convert
+ * their stored step configuration into it, loop agents receive it from the model. Defining a second,
+ * near-identical shape here is how the two would drift: a field added to one and not the other makes
+ * the compile silently lossy, and the loss shows up as a loop that ignores a setting its author set.
+ * Keep them identical; if `ForEachOperation` gains a field, add it here in the same edit.
+ */
+export interface MJTaskEntity_ITaskForEachConfiguration {
+    /** Path in the payload to the array to iterate over. */
+    collectionPath: string;
+    /** Variable name for the current item (default: "item"). */
+    itemVariable?: string;
+    /** Variable name for the loop index (default: "index"). */
+    indexVariable?: string;
+    /** Maximum iterations (undefined = 1000, 0 = unlimited, >0 = limit). */
+    maxIterations?: number;
+    /** Keep going if an iteration fails (default: false). */
+    continueOnError?: boolean;
+    /** Delay between iterations, in milliseconds (default: 0). */
+    delayBetweenIterationsMs?: number;
+    /** One at a time, or several at once (default: 'sequential'). */
+    executionMode?: 'sequential' | 'parallel';
+    /** Ceiling on concurrent iterations when executionMode is 'parallel' (default: 10). */
+    maxConcurrency?: number;
+    /** Run this action once per iteration. */
+    action?: MJTaskEntity_ITaskLoopActionBody;
+    /** Run this sub-agent once per iteration. */
+    subAgent?: MJTaskEntity_ITaskLoopSubAgentBody;
+    /** A prompt run once per loop iteration. */
+    prompt?: MJTaskEntity_ITaskLoopPromptBody;
+}
+
+/**
+ * A While step: run the body until a condition stops being true.
+ *
+ * Mirrors `WhileOperation` in @memberjunction/ai-core-plus field for field — see the note on
+ * {@link MJTaskEntity_ITaskForEachConfiguration} for why that matters.
+ */
+export interface MJTaskEntity_ITaskWhileConfiguration {
+    /** Boolean expression evaluated before each iteration. */
+    condition: string;
+    /** Variable name for the attempt context (default: "attempt"). */
+    itemVariable?: string;
+    /** Maximum iterations (undefined = 100, 0 = unlimited, >0 = limit). */
+    maxIterations?: number;
+    /** Keep going if an iteration fails (default: false). */
+    continueOnError?: boolean;
+    /** Delay between iterations, in milliseconds (default: 0). */
+    delayBetweenIterationsMs?: number;
+    /** Run this action once per iteration. */
+    action?: MJTaskEntity_ITaskLoopActionBody;
+    /** Run this sub-agent once per iteration. */
+    subAgent?: MJTaskEntity_ITaskLoopSubAgentBody;
+    /** A prompt run once per loop iteration. */
+    prompt?: MJTaskEntity_ITaskLoopPromptBody;
+}
+
+/**
+ * A prompt run once per loop iteration.
+ *
+ * The cheapest loop body there is — one model call per item, with no agent wrapper, no reasoning
+ * loop and no run record. Right when an iteration is a single transformation (classify this,
+ * describe this column); wrong the moment an iteration has to decide what to do next.
+ */
+export interface MJTaskEntity_ITaskLoopPromptBody {
+    /** Prompt name. Resolved to `Task.PromptID` at submission, so it is a real foreign key. */
+    name: string;
+    /** Values bound into the template, alongside the loop's own item and index bindings. */
+    templateParameters?: Record<string, string>;
+    /** JSON mapping from the prompt's response into the payload, applied per iteration. */
+    outputMapping?: string;
+}
+
+/** An action run once per loop iteration. */
+export interface MJTaskEntity_ITaskLoopActionBody {
+    /** Action name. */
+    name: string;
+    /** Parameters passed to the action. */
+    params: Record<string, unknown>;
+    /** JSON mapping from the action's outputs back into the payload. */
+    outputMapping?: string;
+}
+
+/** A sub-agent run once per loop iteration. */
+export interface MJTaskEntity_ITaskLoopSubAgentBody {
+    /** Sub-agent name. */
+    name: string;
+    /** What to tell the sub-agent. */
+    message: string;
+    /** Values bound into the sub-agent's prompt template. */
+    templateParameters?: Record<string, string>;
+    /** Runtime context propagated to the sub-agent — API keys, environment settings, and the like. */
+    context?: unknown;
+}
+
+/** A step a person completes. */
+export interface MJTaskEntity_ITaskHumanConfiguration {
+    /** What the person is being asked to do. */
+    instructions?: string;
+
+    /**
+     * How long the person has to answer before the step gives up, in hours.
+     *
+     * **Without this the deadline machinery is unreachable.** `AIAgentRequest.ExpiresAt` exists, and
+     * the dispatcher already expires overdue requests and fails the step so a give-up edge can route
+     * around it — but nothing ever set the column, so that path had never run outside a test. A
+     * workflow waiting on someone who left the company waited forever.
+     *
+     * Omitted means no deadline, which stays the default: a step that silently expired on a timeout
+     * its author never chose would be worse than one that waits.
+     */
+    expiresInHours?: number;
+}
+
+/** A step completed by a system outside MemberJunction, which reports back when it is done. */
+export interface MJTaskEntity_ITaskExternalConfiguration {
+    /** Which external system owns this step. */
+    domain: string;
+    /** That system's own identifier for the work, for correlation. */
+    ref?: string;
+}
+
+/** What the dispatcher does about time and failure for a single step. */
+export interface MJTaskEntity_ITaskExecutionPolicy {
+    /** How long the step may run before the dispatcher abandons it, in seconds. */
+    timeoutSeconds?: number;
+    /** How many times to retry before the failure is final. */
+    retryCount?: number;
+    /**
+     * What a failure means for the rest of the workflow.
+     *
+     * `fail` stops dependents; `continue` records the failure and releases them anyway, which is
+     * what lets a workflow draw a recovery path instead of stopping dead; `retry` re-runs up to
+     * `retryCount` before deciding.
+     */
+    onError?: 'continue' | 'fail' | 'retry';
+}
+
+/**
  * MJ: Tasks - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Task
@@ -111722,7 +110870,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     /**
     * Validate() method override for MJ: Tasks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * PercentComplete: This rule ensures that if a percent complete value is provided, it must be between 0 and 100 inclusive.
-    * * Table-Level: This rule ensures that for each record, either UserID or AgentID can be set, or both can be left empty, but not both can be filled in at the same time.
+    * * Table-Level: A record can be associated with at most one context: either a User, an Agent, an Action, or a Prompt. Specifying more than one of these references is not allowed.
     * @public
     * @method
     * @override
@@ -111730,7 +110878,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidatePercentCompleteWithinZeroAndOneHundred(result);
-        this.ValidateUserIDAndAgentIDMutualExclusivity(result);
+        this.ValidateAtMostOneContextField(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -111749,14 +110897,33 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     }
 
     /**
-    * This rule ensures that for each record, either UserID or AgentID can be set, or both can be left empty, but not both can be filled in at the same time.
+    * A record can be associated with at most one context: either a User, an Agent, an Action, or a Prompt. Specifying more than one of these references is not allowed.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateUserIDAndAgentIDMutualExclusivity(result: ValidationResult) {
-    	if (this.UserID != null && this.AgentID != null) {
-    		result.Errors.push(new ValidationErrorInfo("UserID", "UserID and AgentID cannot both have values at the same time. Only one or neither may be set.", this.UserID, ValidationErrorType.Failure));
+    public ValidateAtMostOneContextField(result: ValidationResult) {
+    	let count = 0;
+    	if (this.UserID != null) {
+    		count++;
+    	}
+    	if (this.AgentID != null) {
+    		count++;
+    	}
+    	if (this.ActionID != null) {
+    		count++;
+    	}
+    	if (this.PromptID != null) {
+    		count++;
+    	}
+    
+    	if (count > 1) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UserID",
+    			"Only one of UserID, AgentID, ActionID, or PromptID can be specified for a single record.",
+    			this.UserID,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -111775,7 +110942,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent
+    * * Display Name: Parent Task
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Tasks (vwTasks.ID)
     */
@@ -111788,7 +110955,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Name
-    * * Display Name: Name
+    * * Display Name: Task Name
     * * SQL Data Type: nvarchar(255)
     * * Description: Display name for the task
     */
@@ -111814,7 +110981,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type
+    * * Display Name: Task Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Task Types (vwTaskTypes.ID)
     */
@@ -111867,7 +111034,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: Assigned User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -111880,7 +111047,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: AgentID
-    * * Display Name: Agent
+    * * Display Name: Assigned Agent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
     */
@@ -111905,12 +111072,13 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     *   * Failed
     *   * In Progress
     *   * Pending
-    * * Description: Current status of the task (Pending, In Progress, Complete, Cancelled, Failed, Blocked, Deferred)
+    *   * Skipped
+    * * Description: Lifecycle state. Pending awaits prerequisites; In Progress is claimed and running; Complete succeeded; Failed did not; Blocked can never run because a prerequisite is unsatisfiable; Cancelled was stopped deliberately; Deferred is waiting on a schedule. Skipped is a branch that was NOT TAKEN at an exclusive fan-out — a normal outcome, not a failure: it satisfies dependents (so a join downstream of a fork still runs) and is invisible to failure precedence when the parent rolls up.
     */
-    get Status(): 'Blocked' | 'Cancelled' | 'Complete' | 'Deferred' | 'Failed' | 'In Progress' | 'Pending' {
+    get Status(): 'Blocked' | 'Cancelled' | 'Complete' | 'Deferred' | 'Failed' | 'In Progress' | 'Pending' | 'Skipped' {
         return this.Get('Status');
     }
-    set Status(value: 'Blocked' | 'Cancelled' | 'Complete' | 'Deferred' | 'Failed' | 'In Progress' | 'Pending') {
+    set Status(value: 'Blocked' | 'Cancelled' | 'Complete' | 'Deferred' | 'Failed' | 'In Progress' | 'Pending' | 'Skipped') {
         this.Set('Status', value);
     }
 
@@ -111930,7 +111098,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: DueAt
-    * * Display Name: Due At
+    * * Display Name: Due Date
     * * SQL Data Type: datetimeoffset
     * * Description: Due date and time for task completion
     */
@@ -111988,8 +111156,171 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     }
 
     /**
+    * * Field Name: InputPayload
+    * * Display Name: Input Payload
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Structured input for this task, stored as JSON. Replaces the legacy __TASK_METADATA__ marker that was embedded in Description.
+    */
+    get InputPayload(): string | null {
+        return this.Get('InputPayload');
+    }
+    set InputPayload(value: string | null) {
+        this.Set('InputPayload', value);
+    }
+
+    /**
+    * * Field Name: OutputPayload
+    * * Display Name: Output Payload
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Structured output produced by this task, stored as JSON. Downstream tasks read their dependencies' outputs from here. Replaces the legacy __TASK_OUTPUT__ marker that was embedded in Description.
+    */
+    get OutputPayload(): string | null {
+        return this.Get('OutputPayload');
+    }
+    set OutputPayload(value: string | null) {
+        this.Set('OutputPayload', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Failure detail when Status is Failed. Null for tasks that have not failed.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: AgentRunID
+    * * Display Name: Agent Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: The specific AI Agent Run that executed this task. Distinct from the conversation-level link: sibling tasks in one graph each get their own run, so this is what run-history and Gantt views should follow.
+    */
+    get AgentRunID(): string | null {
+        return this.Get('AgentRunID');
+    }
+    set AgentRunID(value: string | null) {
+        this.Set('AgentRunID', value);
+    }
+
+    /**
+    * * Field Name: ClaimedBy
+    * * Display Name: Claimed By
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Identifier of the dispatcher instance currently executing this task. Part of the compare-and-swap claim protocol; set only by the dispatcher, never by user-facing writes. Null when unclaimed. Human-assigned tasks never carry a claim.
+    */
+    get ClaimedBy(): string | null {
+        return this.Get('ClaimedBy');
+    }
+    set ClaimedBy(value: string | null) {
+        this.Set('ClaimedBy', value);
+    }
+
+    /**
+    * * Field Name: ClaimExpiresAt
+    * * Display Name: Claim Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the current dispatcher claim lapses. Long-running tasks extend it by heartbeat; reconciliation treats an expired claim as an orphaned task and returns it to Pending.
+    */
+    get ClaimExpiresAt(): Date | null {
+        return this.Get('ClaimExpiresAt');
+    }
+    set ClaimExpiresAt(value: Date | null) {
+        this.Set('ClaimExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: ActionID
+    * * Display Name: Action ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
+    * * Description: The Action this task executes, when the node is action-assigned rather than agent-assigned or awaiting a person. Mutually exclusive with UserID and AgentID (CK_Task_Assignment). Set by durable entity-action dispatch, where a single-node graph carries one action to run with restart recovery.
+    */
+    get ActionID(): string | null {
+        return this.Get('ActionID');
+    }
+    set ActionID(value: string | null) {
+        this.Set('ActionID', value);
+    }
+
+    /**
+    * * Field Name: StepType
+    * * Display Name: Step Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Action
+    *   * Agent
+    *   * External
+    *   * ForEach
+    *   * Human
+    *   * Prompt
+    *   * While
+    * * Description: Which kind of workflow step this task represents. NULL for a task that is not part of a workflow, such as a hand-authored to-do. Determines which of AgentID/ActionID/PromptID/UserID is meaningful and how Configuration is read. This is the executable vocabulary and is deliberately not the same value list as AIAgentStep.StepType, which describes a step at design time.
+    */
+    get StepType(): 'Action' | 'Agent' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'While' | null {
+        return this.Get('StepType');
+    }
+    set StepType(value: 'Action' | 'Agent' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'While' | null) {
+        this.Set('StepType', value);
+    }
+
+    /**
+    * * Field Name: PromptID
+    * * Display Name: Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+    */
+    get PromptID(): string | null {
+        return this.Get('PromptID');
+    }
+    set PromptID(value: string | null) {
+        this.Set('PromptID', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTaskEntity_ITaskStepConfiguration
+    * * Description: Everything about this step that has no column of its own, as JSON: the loop definition for a ForEach or While step, an agent step's message and template parameters, the mappings that move data between this step and the workflow payload, and the execution policy (timeout, retries, what to do on failure). Typed by ITaskStepConfiguration.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    private _ConfigurationObject_cached: MJTaskEntity_ITaskStepConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Configuration — returns parsed JSON as MJTaskEntity_ITaskStepConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ConfigurationObject(): MJTaskEntity_ITaskStepConfiguration | null {
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
+    }
+    set ConfigurationObject(value: MJTaskEntity_ITaskStepConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
+    }
+
+    /**
     * * Field Name: Parent
-    * * Display Name: Parent Name
+    * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -111998,7 +111329,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Type Name
+    * * Display Name: Type
     * * SQL Data Type: nvarchar(255)
     */
     get Type(): string {
@@ -112007,7 +111338,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Environment
-    * * Display Name: Environment Name
+    * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
     */
     get Environment(): string {
@@ -112016,7 +111347,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Project
-    * * Display Name: Project Name
+    * * Display Name: Project
     * * SQL Data Type: nvarchar(255)
     */
     get Project(): string | null {
@@ -112025,7 +111356,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail Name
+    * * Display Name: Conversation Detail
     * * SQL Data Type: nvarchar(100)
     */
     get ConversationDetail(): string | null {
@@ -112034,7 +111365,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: User
-    * * Display Name: User Name
+    * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -112043,7 +111374,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent Name
+    * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -112051,8 +111382,35 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     }
 
     /**
+    * * Field Name: AgentRun
+    * * Display Name: Agent Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AgentRun(): string | null {
+        return this.Get('AgentRun');
+    }
+
+    /**
+    * * Field Name: Action
+    * * Display Name: Action
+    * * SQL Data Type: nvarchar(425)
+    */
+    get Action(): string | null {
+        return this.Get('Action');
+    }
+
+    /**
+    * * Field Name: Prompt
+    * * Display Name: Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Prompt(): string | null {
+        return this.Get('Prompt');
+    }
+
+    /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent
+    * * Display Name: Root Parent ID
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -120903,468 +120261,6 @@ export class MJViewTypeEntity extends BaseEntity<MJViewTypeEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
-    }
-}
-
-
-/**
- * MJ: Workflow Engines - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: WorkflowEngine
- * * Base View: vwWorkflowEngines
- * * @description Registers available workflow execution engines with their capabilities, configuration, and supported workflow types.
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
- */
-@RegisterClass(BaseEntity, 'MJ: Workflow Engines')
-export class MJWorkflowEngineEntity extends BaseEntity<MJWorkflowEngineEntityType> {
-    /**
-    * Loads the MJ: Workflow Engines record from the database
-    * @param ID: string - primary key value to load the MJ: Workflow Engines record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJWorkflowEngineEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: Name
-    * * SQL Data Type: nvarchar(100)
-    */
-    get Name(): string {
-        return this.Get('Name');
-    }
-    set Name(value: string) {
-        this.Set('Name', value);
-    }
-
-    /**
-    * * Field Name: Description
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get Description(): string | null {
-        return this.Get('Description');
-    }
-    set Description(value: string | null) {
-        this.Set('Description', value);
-    }
-
-    /**
-    * * Field Name: DriverPath
-    * * Display Name: Driver Path
-    * * SQL Data Type: nvarchar(500)
-    * * Description: Import path for the workflow engine driver.
-    */
-    get DriverPath(): string {
-        return this.Get('DriverPath');
-    }
-    set DriverPath(value: string) {
-        this.Set('DriverPath', value);
-    }
-
-    /**
-    * * Field Name: DriverClass
-    * * Display Name: Driver Class
-    * * SQL Data Type: nvarchar(100)
-    * * Description: Class name implementing the workflow engine interface.
-    */
-    get DriverClass(): string {
-        return this.Get('DriverClass');
-    }
-    set DriverClass(value: string) {
-        this.Set('DriverClass', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-}
-
-
-/**
- * MJ: Workflow Runs - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: WorkflowRun
- * * Base View: vwWorkflowRuns
- * * @description Tracks execution instances of workflows including status, timing, context data, and detailed step-by-step results.
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
- */
-@RegisterClass(BaseEntity, 'MJ: Workflow Runs')
-export class MJWorkflowRunEntity extends BaseEntity<MJWorkflowRunEntityType> {
-    /**
-    * Loads the MJ: Workflow Runs record from the database
-    * @param ID: string - primary key value to load the MJ: Workflow Runs record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJWorkflowRunEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: WorkflowID
-    * * Display Name: Workflow ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Workflows (vwWorkflows.ID)
-    */
-    get WorkflowID(): string {
-        return this.Get('WorkflowID');
-    }
-    set WorkflowID(value: string) {
-        this.Set('WorkflowID', value);
-    }
-
-    /**
-    * * Field Name: ExternalSystemRecordID
-    * * Display Name: External System Record ID
-    * * SQL Data Type: nvarchar(500)
-    * * Description: Field ExternalSystemRecordID for entity Workflow Runs.
-    */
-    get ExternalSystemRecordID(): string {
-        return this.Get('ExternalSystemRecordID');
-    }
-    set ExternalSystemRecordID(value: string) {
-        this.Set('ExternalSystemRecordID', value);
-    }
-
-    /**
-    * * Field Name: StartedAt
-    * * Display Name: Started At
-    * * SQL Data Type: datetimeoffset
-    */
-    get StartedAt(): Date {
-        return this.Get('StartedAt');
-    }
-    set StartedAt(value: Date) {
-        this.Set('StartedAt', value);
-    }
-
-    /**
-    * * Field Name: EndedAt
-    * * Display Name: Ended At
-    * * SQL Data Type: datetimeoffset
-    */
-    get EndedAt(): Date | null {
-        return this.Get('EndedAt');
-    }
-    set EndedAt(value: Date | null) {
-        this.Set('EndedAt', value);
-    }
-
-    /**
-    * * Field Name: Status
-    * * Display Name: Status
-    * * SQL Data Type: nchar(10)
-    * * Default Value: Pending
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Complete
-    *   * Failed
-    *   * In Progress
-    *   * Pending
-    */
-    get Status(): 'Complete' | 'Failed' | 'In Progress' | 'Pending' {
-        return this.Get('Status');
-    }
-    set Status(value: 'Complete' | 'Failed' | 'In Progress' | 'Pending') {
-        this.Set('Status', value);
-    }
-
-    /**
-    * * Field Name: Results
-    * * Display Name: Results
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON-formatted detailed results from the workflow execution, including outputs from each step and any error information.
-    */
-    get Results(): string | null {
-        return this.Get('Results');
-    }
-    set Results(value: string | null) {
-        this.Set('Results', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: Workflow
-    * * Display Name: Workflow Name
-    * * SQL Data Type: nvarchar(100)
-    */
-    get Workflow(): string {
-        return this.Get('Workflow');
-    }
-
-    /**
-    * * Field Name: WorkflowEngineName
-    * * Display Name: Workflow Engine
-    * * SQL Data Type: nvarchar(100)
-    */
-    get WorkflowEngineName(): string {
-        return this.Get('WorkflowEngineName');
-    }
-}
-
-
-/**
- * MJ: Workflows - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: Workflow
- * * Base View: vwWorkflows
- * * @description Defines automated workflows with steps, conditions, and actions for orchestrating complex business processes.
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
- */
-@RegisterClass(BaseEntity, 'MJ: Workflows')
-export class MJWorkflowEntity extends BaseEntity<MJWorkflowEntityType> {
-    /**
-    * Loads the MJ: Workflows record from the database
-    * @param ID: string - primary key value to load the MJ: Workflows record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJWorkflowEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: Name
-    * * SQL Data Type: nvarchar(100)
-    */
-    get Name(): string {
-        return this.Get('Name');
-    }
-    set Name(value: string) {
-        this.Set('Name', value);
-    }
-
-    /**
-    * * Field Name: Description
-    * * SQL Data Type: nvarchar(MAX)
-    */
-    get Description(): string | null {
-        return this.Get('Description');
-    }
-    set Description(value: string | null) {
-        this.Set('Description', value);
-    }
-
-    /**
-    * * Field Name: WorkflowEngineID
-    * * Display Name: Workflow Engine ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Workflow Engines (vwWorkflowEngines.ID)
-    */
-    get WorkflowEngineID(): string {
-        return this.Get('WorkflowEngineID');
-    }
-    set WorkflowEngineID(value: string) {
-        this.Set('WorkflowEngineID', value);
-    }
-
-    /**
-    * * Field Name: ExternalSystemRecordID
-    * * Display Name: External System Record
-    * * SQL Data Type: nvarchar(100)
-    * * Description: The unique identifier of this workflow in an external system, used for synchronization with external workflow engines.
-    */
-    get ExternalSystemRecordID(): string {
-        return this.Get('ExternalSystemRecordID');
-    }
-    set ExternalSystemRecordID(value: string) {
-        this.Set('ExternalSystemRecordID', value);
-    }
-
-    /**
-    * * Field Name: AutoRunEnabled
-    * * Display Name: Auto Run Enabled
-    * * SQL Data Type: bit
-    * * Default Value: 0
-    * * Description: If set to 1, the workflow will be run automatically on the interval specified by the AutoRunIntervalType and AutoRunInterval fields
-    */
-    get AutoRunEnabled(): boolean {
-        return this.Get('AutoRunEnabled');
-    }
-    set AutoRunEnabled(value: boolean) {
-        this.Set('AutoRunEnabled', value);
-    }
-
-    /**
-    * * Field Name: AutoRunIntervalUnits
-    * * Display Name: Auto Run Interval Units
-    * * SQL Data Type: nvarchar(20)
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Days
-    *   * Hours
-    *   * Minutes
-    *   * Months
-    *   * Weeks
-    *   * Years
-    * * Description: Minutes, Hours, Days, Weeks, Months, Years
-    */
-    get AutoRunIntervalUnits(): 'Days' | 'Hours' | 'Minutes' | 'Months' | 'Weeks' | 'Years' | null {
-        return this.Get('AutoRunIntervalUnits');
-    }
-    set AutoRunIntervalUnits(value: 'Days' | 'Hours' | 'Minutes' | 'Months' | 'Weeks' | 'Years' | null) {
-        this.Set('AutoRunIntervalUnits', value);
-    }
-
-    /**
-    * * Field Name: AutoRunInterval
-    * * Display Name: Auto Run Interval
-    * * SQL Data Type: int
-    * * Description: The interval, denominated in the units specified in the AutoRunIntervalUnits column, between auto runs of this workflow.
-    */
-    get AutoRunInterval(): number | null {
-        return this.Get('AutoRunInterval');
-    }
-    set AutoRunInterval(value: number | null) {
-        this.Set('AutoRunInterval', value);
-    }
-
-    /**
-    * * Field Name: SubclassName
-    * * Display Name: Subclass Name
-    * * SQL Data Type: nvarchar(200)
-    * * Description: If specified, this subclass key, via the ClassFactory, will be instantiated, to execute this workflow. If not specified the WorkflowBase class will be used by default.
-    */
-    get SubclassName(): string | null {
-        return this.Get('SubclassName');
-    }
-    set SubclassName(value: string | null) {
-        this.Set('SubclassName', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: AutoRunIntervalMinutes
-    * * Display Name: Auto Run Interval Minutes
-    * * SQL Data Type: int
-    */
-    get AutoRunIntervalMinutes(): number | null {
-        return this.Get('AutoRunIntervalMinutes');
     }
 }
 
