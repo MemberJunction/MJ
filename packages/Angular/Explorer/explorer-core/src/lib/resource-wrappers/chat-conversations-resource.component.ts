@@ -3,7 +3,7 @@ import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
-import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService } from '@memberjunction/ng-conversations';
+import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult } from '@memberjunction/ng-conversations';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
 import { ActionableCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
@@ -39,6 +39,20 @@ import { Subject, takeUntil } from 'rxjs';
             [class.no-transition]="!sidebarTransitionsEnabled"
             [style.width.px]="isSidebarCollapsed ? 0 : sidebarWidth">
             @if (currentUser) {
+              <!-- Cross-entity search entry point. Explorer composes the chat UI from
+                   resource wrappers rather than mounting ConversationWorkspaceComponent,
+                   so the workspace's own nav search button never renders here — without
+                   this the search panel has no trigger at all. Ctrl+K is not usable as
+                   the shortcut: Explorer's global command palette owns it. -->
+              <div class="chat-search-bar">
+                <button
+                  class="chat-search-trigger"
+                  (click)="openSearch()"
+                  title="Search conversations, messages, artifacts, collections and tasks">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                  <span>Search everything in Chat</span>
+                </button>
+              </div>
               <mj-conversation-list
                 #conversationList
                 [environmentId]="environmentId"
@@ -108,6 +122,17 @@ import { Subject, takeUntil } from 'rxjs';
       </div>
     }
     
+    <!-- Cross-entity search panel (conversations / messages / artifacts / collections / tasks) -->
+    @if (currentUser) {
+      <mj-search-panel
+        [isOpen]="isSearchPanelOpen"
+        [environmentId]="environmentId"
+        [currentUser]="currentUser"
+        (close)="closeSearch()"
+        (resultSelected)="onSearchResultSelected($event)">
+      </mj-search-panel>
+    }
+
     <!-- Toast notifications container -->
     <mj-toast></mj-toast>
     `,
@@ -147,6 +172,31 @@ import { Subject, takeUntil } from 'rxjs';
 
     .conversation-sidebar mj-conversation-routines-section {
       flex-shrink: 0;
+    }
+
+    .chat-search-bar {
+      flex-shrink: 0;
+      padding: 8px 8px 0;
+    }
+
+    .chat-search-trigger {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-secondary);
+      font-size: 13px;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .chat-search-trigger:hover {
+      background: var(--mj-bg-surface-hover);
+      color: var(--mj-text-primary);
     }
 
     /* Disable transitions during initial load to prevent jarring animation */
@@ -1107,6 +1157,69 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+  }
+
+  // ========================================
+  // CROSS-ENTITY SEARCH PANEL
+  // ========================================
+
+  /** Whether the cross-entity search panel is open. */
+  public isSearchPanelOpen = false;
+
+  /** Open the cross-entity search panel. */
+  openSearch(): void {
+    this.isSearchPanelOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  /** Close the cross-entity search panel. */
+  closeSearch(): void {
+    this.isSearchPanelOpen = false;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Route a search result to the right Explorer surface.
+   *
+   * ConversationWorkspaceComponent handles this by flipping its own `activeTab`, which
+   * does not exist here — Explorer renders each chat surface as a separate resource, so
+   * cross-surface results have to go through NavigationService instead. Conversations and
+   * messages both resolve to a conversation, which this component already owns, so they
+   * are selected in place rather than round-tripping through navigation.
+   */
+  onSearchResultSelected(result: SearchResult): void {
+    this.closeSearch();
+
+    switch (result.type) {
+      case 'conversation':
+        this.onConversationSelected(result.id);
+        break;
+
+      case 'message':
+        // A message is only actionable via its parent conversation.
+        if (result.conversationId) {
+          this.onConversationSelected(result.conversationId);
+        }
+        break;
+
+      case 'artifact':
+        // Artifacts live under either a collection or a conversation; reuse the same
+        // link routing the artifact viewer already uses so the destination opens it.
+        if (result.collectionId) {
+          this.onArtifactLinkClicked({ type: 'collection', id: result.collectionId, artifactId: result.id });
+        } else if (result.conversationId) {
+          this.onArtifactLinkClicked({ type: 'conversation', id: result.conversationId, artifactId: result.id });
+        }
+        break;
+
+      case 'collection':
+        this.navigationService.OpenNavItemByName('Collections', { collectionId: result.id });
+        break;
+
+      case 'task':
+        this.navigationService.OpenNavItemByName('Tasks', { taskId: result.id });
+        break;
+    }
   }
 
   /**
