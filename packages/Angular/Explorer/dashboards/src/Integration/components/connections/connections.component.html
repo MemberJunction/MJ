@@ -619,7 +619,16 @@
           <!-- Table body -->
           <div class="detail-table-body">
             @for (em of DetailFilteredMaps; track em.ID) {
-              <div class="detail-map-row" [class.sync-disabled]="!em.SyncEnabled" (click)="OnEntityMapClick(em)">
+              <!-- The row is the only way to open the field-mapping editor, so it needs a
+                   role and a keyboard path. TODO: the row also contains a checkbox and a
+                   button, which makes role="button" an ARIA structural violation — the real
+                   fix is a dedicated open button (the .map-edit-hint chevron). -->
+              <div class="detail-map-row" [class.sync-disabled]="!em.SyncEnabled"
+                   role="button"
+                   tabindex="0"
+                   [attr.aria-label]="'Open field mapping for ' + em.Entity"
+                   (click)="OnEntityMapClick(em)"
+                   (keydown)="OnEntityMapRowKeydown($event, em)">
                 <span class="dt-col-toggle" (click)="$event.stopPropagation()">
                   <label class="toggle-switch" [title]="em.SyncEnabled ? 'Sync enabled' : 'Sync disabled'">
                     <input type="checkbox"
