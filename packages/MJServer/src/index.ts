@@ -1413,8 +1413,20 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // submitted graph — submission would be durable and inert, which is strictly worse than the old
   // client-driven path it replaced. Gated on SQL Server because the provider factory mints
   // SQLServerDataProvider; the PG branch lands with PG parity. Self-registers with ShutdownRegistry.
+  //
+  // `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1` suppresses it, for the one case where a second dispatcher
+  // is actively harmful: the integration suite's task-graph bundle drives its OWN dispatcher against
+  // a stub runner and asserts exactly-once execution. A dispatcher claims from the whole table, not
+  // from "its own" graphs, so a server sharing that database races the suite for every claim and
+  // executes the suite's tasks with the real agent runner. The bundle then reports tasks that never
+  // ran and graphs that settled to the wrong status — symptoms that read as engine defects and cost
+  // a release cycle to trace back to here. The suite still needs MJAPI up for its client-transport
+  // members, so "stop the server" is not the remedy; this is.
   const taskGraphPool = dataSources[0]?.dataSource;
-  if (resumeUser && taskGraphPool instanceof sql.ConnectionPool) {
+  const taskGraphDispatcherDisabled = process.env.MJ_DISABLE_TASK_GRAPH_DISPATCHER === '1';
+  if (taskGraphDispatcherDisabled) {
+    LogStatus('[TaskGraphDispatcher] Disabled by MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 — submitted graphs will not be executed by this process.');
+  } else if (resumeUser && taskGraphPool instanceof sql.ConnectionPool) {
     StartTaskGraphDispatcher(taskGraphPool, resumeUser)
       .catch(err => console.warn(`[TaskGraphDispatcher] Startup failed: ${err}`));
   }

@@ -1,5 +1,213 @@
 # @memberjunction/testing-integration
 
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- 8288711: Fix process-wide server cache corruption, and make the cache structurally unable to be
+  corrupted by consumers.
+
+  **Take this bump urgently if you run MJAPI.** `ResolverBase` mapped GraphQL transport field
+  names onto the data provider's own result rows, which the server cache holds _by reference_.
+  Preparing one GraphQL response therefore rewrote `__mj_CreatedAt` to the wire alias
+  `_mj__CreatedAt` **inside the live cache**, and every later read served the corrupted shape —
+  failing in `BaseEntity.SetMany` with `Field _mj__CreatedAt does not exist on <Entity>`. The
+  cache is process-wide, so a single response poisoned every subsequent request across all
+  workers. Fixed by mapping onto copies.
+
+  Fixing it at the reader alone left the whole class of bug open — nothing in the type system or
+  the API surface said "this array is shared, do not mutate," and the exposure runs in both
+  directions (a cache _hit_ returns the stored array; a cache _miss_ stores the array it is about
+  to return). So the cache now defends itself:
+  - **`ILocalStorageProvider` gains an optional `readonly SharesReferences?: boolean`**, declaring
+    whether a provider hands back live references (the in-memory providers) or serialized copies
+    (IndexedDB, localStorage, Redis, MMKV). **Fully backward compatible**: existing implementations
+    keep compiling, and omitting the property is not an opt-out — `LocalCacheManager` measures any
+    provider that does not declare one (store a sentinel, read it back, compare identity), so a
+    provider written before this contract still gets the correct protection instead of silently
+    losing it to a falsy default.
+  - **`LocalCacheManager` deep-freezes row data at write time** — rows, their nested values, and
+    the array itself — but only when the provider shares references. Mutations then throw a
+    `TypeError` at the offending line instead of silently corrupting shared state, and cache
+    **hits cost nothing extra** (the freeze is a one-time per-write cost). Applied at both write
+    funnels: `SetRunViewResult` / `SetRunQueryResult` and `storeCachedResults`, the in-place
+    slot-maintenance path that bypasses the first. The freeze lands immediately after the only
+    gate that can decline a write (the synchronous oversized-entry check) and **before** the
+    awaited eviction steps — callers do not always await these methods, so any yield point
+    before the freeze is a window in which shared rows are handed out still mutable. Browser
+    clients are untouched (IndexedDB / localStorage serialize), but **Node-side clients — the
+    CLI, MetadataSync, and anything else on an in-memory provider — do get the freeze**, so
+    "client behavior is unchanged" holds only for the browser. The freeze decision also follows
+    the provider across `SetStorageProvider`: MJAPI initializes on the in-memory provider during
+    engine loading and swaps to Redis afterward, two providers with opposite semantics in one
+    process. The deep-freeze skips **binary payloads**
+    (`Buffer`/TypedArray/`ArrayBuffer`, e.g. `varbinary` columns — `Object.freeze` throws on
+    non-empty views by spec), freezes parent-first so cycles terminate, and a freeze failure of
+    any kind degrades to a logged, unfrozen store — it can never fail a `RunView`/`RunQuery`.
+  - **Dataset cache slots get their own key namespace.** `GetDatasetByName` keyed its
+    write-through cache with the same fingerprint builder ordinary reads use, passing only
+    `{ EntityName, ExtraFilter }` — and every shipped dataset item has a NULL `WhereClause`, so a
+    dataset item and a plain unfiltered `RunView` of the same entity produced an IDENTICAL key and
+    silently shared one slot. That leaked the `MJ_Metadata` scaffolding exemption below to ordinary
+    callers of `MJ: Entities` / `MJ: Entity Fields` (the most-read entities in the process, served
+    unfrozen), and in the other direction let an ordinary read repopulate an evicted slot FROZEN so
+    the next metadata refresh threw. `GenerateRunViewFingerprint` now takes an optional dataset
+    segment, appended only when supplied — ordinary reads keep their exact pre-existing key, so no
+    existing cache entry is invalidated.
+  - **`CacheWriteOptions.ProviderInternalScaffolding`** exempts slots whose only consumer is the
+    provider that wrote them — scoped to the **`MJ_Metadata` dataset only** at its single write
+    site. Metadata bootstrap needs this: the provider's own assembly (`PostProcessEntityMetadata`,
+    plus `GetAllMetadata`'s Applications assembly) hydrates its object graph by mutating those
+    rows in place. Every **other** dataset's cached rows are frozen shared state like any RunView
+    result, because `GetDatasetByName` serves them to arbitrary consumers (`BaseEngine.Load` hands
+    the live arrays to every engine subclass). The flag is persisted and carried forward through
+    slot maintenance so a later save cannot re-freeze the slot.
+
+  Pre-existing consumer bugs surfaced by the freeze and fixed:
+  - **`BaseEntity.Get()` wrote to its own source row.** The raw-mode fast path keeps the caller's
+    row by reference and `Get()` wrote back into it to memoize a converted `Date` or an rtrimmed
+    fixed-width string — so on a cache-served row, _reading_ a `datetime` or `CHAR(n)` field threw.
+    This broke AI cost calculation on `MJ: AI Model Costs.Currency`. `Get()` now memoizes into a
+    per-instance side table and never writes to the row at all. Gating the write on a once-sampled
+    `Object.isFrozen` was not sufficient: the freeze is asynchronous relative to the consumer (cache
+    writes are not always awaited), so the sample could be stale by the first read and the write
+    still threw. Keeping the memo off the row makes freeze timing irrelevant AND restores the
+    optimization for frozen rows, which the isFrozen-guard version had given up.
+  - **`ResolverBase.MapFieldNamesToCodeNames` renamed fields on its argument.** Callers pass rows
+    straight from `findBy`/`RunView` — the cache's own objects — so with the freeze in place
+    `UserByEmail`, `UserByID`, `UserByEmployeeID` and every CodeGen-generated single-record resolver
+    over a cached entity threw `Cannot add property _mj__CreatedAt, object is not extensible`
+    (reproduced live against a running MJAPI). Before the freeze it did something quieter and worse:
+    it rewrote the cached row's keys. It now returns a copy, which fixes every call site at once;
+    `ArrayMapFieldNamesToCodeNames` likewise returns a new array of new objects.
+  - **`GenericDatabaseProvider.serveFromServerCache` and the smart-cache legs** duplicated
+    `CachedRunViewResult` as four inline structural types, which had already caused one silent
+    field drop; they now share the canonical type.
+  - **The singular server RunView path silently dropped a `PostRunView` hook's returned
+    replacement result** (`PostRunView` reassigned a local; `RunView` returned the pre-hook
+    reference), while the client and batch paths honored it. The freeze un-masked this: with
+    in-place row mutation now throwing, no signature-conformant result-modifying hook worked on
+    that path at all. `PostRunView` now copies a hook-supplied replacement onto the result object
+    it was handed, so the change reaches the caller — its `Promise<void>` signature is unchanged,
+    so external subclasses that override it keep compiling. Hook docs (`PostRunViewHook`,
+    `BaseServerMiddleware.PostRunView`) now state that rows may be frozen shared cache state:
+    modify by mapping onto copies (`results.Results = results.Results.map(r => ({ ...r, ... }))`)
+    or return a new result — never mutate rows in place.
+  - **Cache-served reads skipped the `PostRunView` hook chain entirely.** `PostRunView` is the
+    OUTPUT half of the data-hook enforcement seam (masking / audit) and hooks receive
+    `contextUser`, so masking is per-user while a cache slot is shared — there is no correct way
+    to apply it once at write time for a reader who has not arrived yet. Three of the four server
+    paths already ran the chain (miss, mixed batch, client smart-cache); the singular cache hit and
+    the all-cached batch returned early, so masking depended on whether a _sibling_ view in the same
+    batch happened to miss. This looked correct before only by accident: the cache write precedes
+    the hooks, so an in-place masking hook wrote through into the cached rows — which both made
+    later hits appear masked and baked one user's masking decision into a shared slot. Both hit
+    paths now run the chain against the per-hit result wrapper, so a hook's replacement reaches the
+    caller and can never write back into the cache. The zero-hook path (the default — no shipped
+    middleware overrides `PostRunView`) costs ~80ns, down from ~2.4µs: `GetDataHooks` now memoizes
+    the resolved global object store, whose `GetGlobalObjectStore()` probe throws and catches a
+    `ReferenceError` on every call under Node (~1.4µs), and the hit paths check for registered hooks
+    before awaiting the chain.
+
+  The cache result types stay ordinary mutable arrays, documented as shared-and-frozen: the runtime
+  freeze is the enforcement, and a `readonly` marker would have broken existing downstream readers
+  without adding protection. **This release contains no breaking changes** — every public signature
+  it touches is additive or unchanged.
+
+  Consumer-facing contract, documented in `guides/CACHING_AND_PUBSUB_GUIDE.md`: **treat rows from
+  `RunView`/`RunViews`/`RunQuery` as read-only** unless you produced them. Copy before mutating —
+  `rows.map(r => ({ ...r }))`, `[...rows].sort(...)`. Narrow-`Fields` requests and
+  `ResultType: 'entity_object'` results are unaffected (both get per-caller objects).
+
+- d8adda1: **BREAKING — `UserCache` moved packages. Update the import, not just the call.**
+
+  `UserCache` now lives in `@memberjunction/generic-database-provider`. It is no longer exported
+  from `@memberjunction/sqlserver-dataprovider`, and there is deliberately **no re-export shim**,
+  so every import of the symbol must be repointed or it will fail to resolve:
+
+  ```diff
+  - import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+  + import { UserCache } from '@memberjunction/generic-database-provider';
+  ```
+
+  `Refresh` is now dialect-neutral and takes the configured provider rather than an
+  `mssql.ConnectionPool`:
+
+  ```diff
+  - await UserCache.Instance.Refresh(pool, intervalMs);
+  + await UserCache.Instance.Refresh(provider, intervalMs);
+  ```
+
+  **These are two separate breaks, and the first is much wider than the second.** The import path
+  affects _every_ consumer of the symbol — reads included. The signature affects only the handful
+  of callers of `Refresh`. Anything that imports `UserCache` merely to call `Users`,
+  `GetSystemUser()` or `UserByName()` still has to change its import, so a consumer who reads only
+  "the signature changed" will treat this as a no-op and fail to build. In this repo the split was
+  56 files versus 9 call sites.
+
+  Packages that import `UserCache` must also declare `@memberjunction/generic-database-provider`
+  as a dependency — pnpm resolves strictly, so an undeclared import fails rather than falling
+  through to a hoisted copy.
+
+  **Check for dynamic imports too**, not just static ones. `await import('@memberjunction/sqlserver-dataprovider')`
+  destructuring `UserCache` breaks the same way, and a grep for `import { … } from` will not find it.
+
+  **Unchanged:** the read surface (`Users`, `GetSystemUser`, `UserByName`, `SYSTEM_USER_ID`), and
+  the class name. The name is load-bearing — `BaseSingleton` keys its global store on the
+  constructor name, so keeping it `UserCache` preserves singleton identity across the move.
+
+  **Also fixed:** `_users` now initializes to `[]`. It previously stayed `undefined` after a
+  `Refresh` that never ran or that failed (failures are swallowed into `LogError`), so
+  `GetSystemUser()` threw a `TypeError` off `.find()` instead of returning `undefined` as its
+  callers already assume.
+
+  **Why:** the cache was dialect-neutral except for that one `mssql` type, which left PostgreSQL
+  with no user cache at all and produced four separate hand-rolled "read `vwUsers` + `vwUserRoles`,
+  build `UserInfo[]`" implementations — one of which reached into the singleton's private field
+  through a cast from another package. Those are all removed, and a PostgreSQL process that never
+  goes through the server bootstrap now has a system user.
+
+- ca4feb4: Workflow cost becomes a projection of the run tree, and a graph now runs in the order it was drawn.
+
+  **Cost is the tree, not arithmetic beside it.** `AIAgentRun`'s four `…Rollup` columns are now written from `SumAgentRunTreeCost(LoadAgentRunTree(runID))` at settlement — one basis (per-node own spend), prompt-aware through `Configuration.runtime.promptRunID`, and structurally incapable of disagreeing with what the run viewer shows. The previous per-child loop filtered on `AgentRunID`, so every Prompt step's spend was absent, and mixed a descendant-inclusive number with an own-spend one. The tree now also carries the prompt/completion token split so all four columns share a basis. Writing the sum back makes the column an _output_ of the tree, which is non-circular only because the query reads own cost and never a rollup — stated in the query header and pinned by a test that plants an absurd rollup on a real run. When the tree cannot be summed (load failure, depth cap, graph not reachable), the columns are **cleared** rather than left holding a stale total from an earlier settlement.
+
+  **A loop's passes exist.** The run tree reaches nested work through six relationships and a loop iteration was none of them, so a `While` that spent real money across three passes reported one childless node with no cost. The dispatcher now records one entry per pass (`ITaskStepRuntime.iterations`) and the tree expands them into nodes. On a real workflow this moved `TotalCostRollup` from `0.00049725` to `0.00555375` — the loop had been spent and not counted.
+
+  **A graph is dispatched only once its edges exist.** Children and dependencies are now written in one transaction. Previously a poll could land between the two writes, see tasks with no prerequisites, and claim the whole graph at once — observed running a closing branch before the draft it was meant to judge existed, then reporting Complete.
+
+  **Steps see their payload.** A step with no input mapping fell back to the raw input instead of the merged payload, so a Prompt step — which declares no mapping by design — rendered `{{ _CURRENT_PAYLOAD }}` as `{}` and wrote from an empty brief. Separately, a step with no output mapping _replaced_ the payload with its own output rather than merging; for a loop, whose output is a summary, that discarded everything the iterations had established and made a downstream `payload.x === true` edge unreachable.
+
+  **An output mapping that names a parameter the step never returns now says so** (`unmapped`), naming what the step did return, instead of skipping in silence.
+
+  **Human steps**: a cancelled request re-raises instead of stalling forever; cancelling a graph withdraws its open requests instead of leaving them in someone's inbox; cross-user `assignToUserID` is refused at submission rather than silently reassigned to the submitter; and a step can declare `expiresInHours`, which finally makes the existing expiry machinery reachable.
+
+  **Web Search** captured each result with a non-greedy match that stopped at the first nested `</div>`, cutting the snippet out of every result — ten well-formed hits carrying no content. Results are now sliced between block starts, and an all-snippets-empty parse is reported rather than returned silently.
+
+  **Testing**: a bundle whose every check is gated out now records an explicit skip naming the flag that would run it, instead of reporting PASS with zero checks executed.
+
+- Updated dependencies [255d506]
+- Updated dependencies [59def38]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [e26c866]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [d8adda1]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/generic-database-provider@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.2
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.2
+  - @memberjunction/testing-engine@6.1.0-edge.2
+  - @memberjunction/testing-engine-base@6.1.0-edge.2
+
 ## 6.1.0-edge.1
 
 ### Patch Changes
