@@ -941,12 +941,6 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Processes IS-A relationship configurations from the additionalSchemaInfo config.
-    * For each configured relationship, looks up both entities by name (or by table name
-    * within the given schema) and sets Entity.ParentID on the child entity.
-    * Must run AFTER entities are created but BEFORE manageParentEntityFields().
-    */
-   /**
     * Builds the entity lookup behind {@link processISARelationshipConfig}: match on Name first, else
     * on BaseTable, optionally constrained to a schema.
     *
@@ -982,6 +976,12 @@ export class ManageMetadataBase {
       return { sql, params: schemaName ? { 'ISASchemaName': schemaName } : {} };
    }
 
+   /**
+    * Processes IS-A relationship configurations from the additionalSchemaInfo config.
+    * For each configured relationship, looks up both entities by name (or by table name
+    * within the given schema) and sets Entity.ParentID on the child entity.
+    * Must run AFTER entities are created but BEFORE manageParentEntityFields().
+    */
    protected async processISARelationshipConfig(pool: CodeGenConnection): Promise<{ success: boolean; updatedCount: number }> {
       const config = ManageMetadataBase.getSoftPKFKConfig();
       if (!config) return { success: true, updatedCount: 0 };
