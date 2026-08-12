@@ -41,7 +41,7 @@
 -- 1. Merge any duplicate names onto their oldest row, so the index below can be created.
 -- ---------------------------------------------------------------------------------------------
 IF EXISTS (
-    SELECT 1 FROM [__mj].[TaskType] GROUP BY [Name] HAVING COUNT(*) > 1
+    SELECT 1 FROM [${flyway:defaultSchema}].[TaskType] GROUP BY [Name] HAVING COUNT(*) > 1
 )
 BEGIN
     PRINT 'TaskType has duplicate Names; merging each onto its oldest row before adding the unique index.';
@@ -53,33 +53,33 @@ BEGIN
             [Name],
             [ID] = (
                 SELECT TOP 1 inner_tt.[ID]
-                FROM [__mj].[TaskType] AS inner_tt
+                FROM [${flyway:defaultSchema}].[TaskType] AS inner_tt
                 WHERE inner_tt.[Name] = outer_tt.[Name]
                 ORDER BY inner_tt.[__mj_CreatedAt] ASC, inner_tt.[ID] ASC
             )
-        FROM [__mj].[TaskType] AS outer_tt
+        FROM [${flyway:defaultSchema}].[TaskType] AS outer_tt
         GROUP BY outer_tt.[Name]
     )
     SELECT s.[Name], s.[ID] AS SurvivorID, d.[ID] AS DuplicateID
     INTO #TaskTypeMerge
     FROM Survivors AS s
-    INNER JOIN [__mj].[TaskType] AS d ON d.[Name] = s.[Name] AND d.[ID] <> s.[ID];
+    INNER JOIN [${flyway:defaultSchema}].[TaskType] AS d ON d.[Name] = s.[Name] AND d.[ID] <> s.[ID];
 
     -- Repoint everything that references a duplicate. Tasks first: these are the rows whose
     -- invisibility to the sweep is the whole reason this migration exists.
     UPDATE t
     SET t.[TypeID] = m.[SurvivorID]
-    FROM [__mj].[Task] AS t
+    FROM [${flyway:defaultSchema}].[Task] AS t
     INNER JOIN #TaskTypeMerge AS m ON m.[DuplicateID] = t.[TypeID];
 
     -- Self-reference: a duplicate may be some other type's parent.
     UPDATE tt
     SET tt.[ParentID] = m.[SurvivorID]
-    FROM [__mj].[TaskType] AS tt
+    FROM [${flyway:defaultSchema}].[TaskType] AS tt
     INNER JOIN #TaskTypeMerge AS m ON m.[DuplicateID] = tt.[ParentID];
 
     DELETE tt
-    FROM [__mj].[TaskType] AS tt
+    FROM [${flyway:defaultSchema}].[TaskType] AS tt
     INNER JOIN #TaskTypeMerge AS m ON m.[DuplicateID] = tt.[ID];
 
     DROP TABLE #TaskTypeMerge;
@@ -91,17 +91,17 @@ GO
 -- ---------------------------------------------------------------------------------------------
 IF NOT EXISTS (
     SELECT 1 FROM sys.indexes
-    WHERE [name] = 'UQ_TaskType_Name' AND [object_id] = OBJECT_ID('[__mj].[TaskType]')
+    WHERE [name] = 'UQ_TaskType_Name' AND [object_id] = OBJECT_ID('${flyway:defaultSchema}.TaskType')
 )
 BEGIN
-    CREATE UNIQUE INDEX [UQ_TaskType_Name] ON [__mj].[TaskType] ([Name]);
+    CREATE UNIQUE INDEX [UQ_TaskType_Name] ON [${flyway:defaultSchema}].[TaskType] ([Name]);
 END
 GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'A task type is identified by its Name: the dispatcher resolves ''AI Workflow'' by name to scope every sweep arm and both payload-writing guards, so two rows sharing a name let different processes bind different IDs — and a graph stamped with the other one is invisible to the sweep, never settles, and leaves its submitting run Paused forever, with no error anywhere.',
-    @level0type = N'SCHEMA', @level0name = N'__mj',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'TaskType',
     @level2type = N'INDEX',  @level2name = N'UQ_TaskType_Name';
 GO
