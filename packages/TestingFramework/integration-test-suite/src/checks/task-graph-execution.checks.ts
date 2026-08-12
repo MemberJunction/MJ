@@ -188,13 +188,23 @@ async function resolveEnvironmentID(ctx: IntegrationCheckContext): Promise<strin
 }
 
 /** Submits a graph and registers it for teardown. */
-async function submitGraph(ctx: IntegrationCheckContext, spec: TaskGraphSpec): Promise<string> {
+async function submitGraph(
+    ctx: IntegrationCheckContext,
+    spec: TaskGraphSpec,
+    agentRunID?: string,
+): Promise<string> {
     await resolveTaskTypeID(ctx);
     const result = await new TaskGraphService().Submit(spec, {
         EnvironmentID: await resolveEnvironmentID(ctx),
         ConversationDetailID: null,
         ContextUser: ctx.User,
         Provider: ctx.Provider,
+        // Stamped at PERSIST time, never afterwards. A graph is claimable the instant `Submit`
+        // returns, so attaching the submitting run in a later write leaves a window in which the
+        // graph legitimately has nobody waiting — and a dispatcher polling inside it settles and
+        // claims delivery correctly, which would make a check about deferral fail for a reason that
+        // is not the behaviour under test.
+        AgentRunID: agentRunID ?? null,
     });
     Assert(result.Success, `submission failed: ${result.ErrorMessage}`);
     Assert(!!result.ParentTaskID, 'submission returned no parent task');
@@ -421,6 +431,27 @@ async function assertStubRan(
 /** Statuses that mean a task was RUN by somebody, for the foreign-runner inference above. */
 const TERMINAL_FOR_FOREIGN_CHECK: ReadonlySet<string> = new Set(['Complete', 'Failed']);
 
+/**
+ * Asserts the delivery marker is still unclaimed, and blames the right party when it is not.
+ *
+ * The claim is a single row-level fact that ANY dispatcher on the database can set, so a check that
+ * merely reports "expected undefined, got a timestamp" cannot distinguish the behaviour under test
+ * from a competitor winning the row. The caller passes what it has already PROVEN about its own
+ * instances — normally "my deliverer was never called" — so the failure can say which of the two it
+ * is instead of leaving the reader to guess.
+ */
+function assertMarkerUnclaimed(marker: { At: string | undefined }, provenLocallyUndelivered: boolean, what: string): void {
+    if (!marker.At) return;
+    Assert(
+        !provenLocallyUndelivered,
+        `${what} — but this bundle's own instances provably delivered nothing, so the marker at ` +
+        `${marker.At} was claimed by a dispatcher outside this bundle. IT74 requires exclusive use of ` +
+        `the database (an MJAPI pointed at it, or another agent's session, will race every check ` +
+        `here). Stop the other dispatcher and re-run.`,
+    );
+    AssertEqual(marker.At, undefined, what);
+}
+
 /** Instance name for TX11, shared between the dispatcher and the claims assertion. */
 const INSTANCE_TX11 = 'it-tx11';
 
@@ -513,20 +544,6 @@ const promptTask = (tempId: string, name: string, promptName: string, dependsOn:
 /** The submitting agent run recorded in a graph's durable metadata, if any. */
 async function submittingRunID(ctx: IntegrationCheckContext, parentID: string): Promise<string | null> {
     return ParseTaskGraphParentMetadata((await loadTask(ctx, parentID)).InputPayload).submittedByAgentRunID;
-}
-
-/** Stamps a graph's parent with a submitting run, so the settle path has a run to settle. */
-async function attachSubmittingRun(
-    ctx: IntegrationCheckContext,
-    parentID: string,
-    runID: string,
-): Promise<void> {
-    const parent = await loadTask(ctx, parentID);
-    const meta = ParseTaskGraphParentMetadata(parent.InputPayload) as Record<string, unknown>;
-    meta.submittedByAgentRunID = runID;
-    parent.InputPayload = JSON.stringify(meta);
-    parent.AgentRunID = runID;
-    Assert(await parent.Save(), `could not attach a submitting run: ${parent.LatestResult?.CompleteMessage ?? 'unknown'}`);
 }
 
 /** Creates an agent run in a chosen state, for the settle-path checks. */
@@ -1153,24 +1170,31 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             // full-row save. Claiming the marker then makes that pass the LAST one ever to look at
             // the graph, and the run stays Paused forever.
             const agentName = await resolveAgentName(ctx);
+            // The run exists BEFORE the graph, and the graph is stamped with it at persist time —
+            // which is also how production orders these: `BaseAgent` has a run long before it
+            // submits, and only parks it afterwards.
+            const run = await createRun(ctx, 'Running');
             const parentID = await submitGraph(ctx, {
                 workflowName: 'mj-it-exec-early-settle (safe to delete)',
                 tasks: [agentTask('a', 'ES One', agentName)],
-            });
-
-            const run = await createRun(ctx, 'Running');
-            await attachSubmittingRun(ctx, parentID, run.ID);
+            }, run.ID);
+            AssertEqual(await submittingRunID(ctx, parentID), run.ID, 'the graph must record its submitting run from the start');
 
             const deliverer = new CountingDeliverer();
             const settled = await runUntilSettled(
                 ctx, buildDispatcher(ctx, RUNNER, 'it-tx13', undefined, deliverer), parentID);
             AssertEqual(settled.Status, 'Complete', 'the graph itself must still settle');
 
-            // The whole point: the graph is terminal and NOTHING has been delivered, because the
-            // pass could not do the submitting run's half.
-            AssertEqual((await deliveryMarker(ctx, parentID)).At, undefined,
-                'the marker was claimed while the submitting run was still Running — the run would stay Paused forever');
-            AssertEqual(deliverer.CountFor(parentID), 0, 'nothing should have been delivered yet');
+            // THE INSTANCE-OWNED PROPERTY FIRST. Whether this dispatcher delivered is a fact about
+            // this dispatcher; whether the marker row is set is a fact any dispatcher on the database
+            // can change. Asserting the second as though it were the first is how a competitor's
+            // write reads as a regression here.
+            AssertEqual(deliverer.CountFor(parentID), 0,
+                'this instance delivered while the submitting run was still Running — the run would stay Paused forever');
+            assertMarkerUnclaimed(
+                await deliveryMarker(ctx, parentID), true,
+                'the marker was claimed while the submitting run was still Running',
+            );
 
             // Now the submitter parks, exactly as finalize would have done moments later.
             run.Status = 'Paused';
@@ -1255,8 +1279,12 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             await blind.Start();
             try {
                 await settle(1500);
-                AssertEqual((await deliveryMarker(ctx, parentID)).At, undefined,
-                    'the deliverer-less instance claimed delivery and discarded the announcement');
+                // The blind instance has no deliverer at all, so nothing local can have delivered —
+                // which is exactly the premise `assertMarkerUnclaimed` needs to assign blame.
+                assertMarkerUnclaimed(
+                    await deliveryMarker(ctx, parentID), true,
+                    'the deliverer-less instance claimed delivery and discarded the announcement',
+                );
 
                 const capable = buildDispatcher(ctx, RUNNER, 'it-tx16-capable', undefined, deliverer);
                 await runUntilDelivered(ctx, [capable], parentID);
@@ -1287,18 +1315,18 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
                 workflowName: 'mj-it-exec-cancel-parent (safe to delete)',
                 tasks: [agentTask('a', 'CN Outer', agentName)],
             });
+            // Wire the nested graph to the outer graph's step exactly as a real sub-graph is: the
+            // step records the run, and the sub-graph's root records the same run — stamped at
+            // persist time, as `Submit` does it.
+            const run = await createRun(ctx, 'Running');
             const nestedID = await submitGraph(ctx, {
                 workflowName: 'mj-it-exec-cancel-nested (safe to delete)',
                 tasks: [agentTask('a', 'CN Inner', agentName)],
-            });
+            }, run.ID);
 
-            // Wire the nested graph to the outer graph's step exactly as a real sub-graph is: the
-            // step records the run, and the sub-graph's root records the same run.
-            const run = await createRun(ctx, 'Running');
             const outerChild = (await loadChildren(ctx, parentID)).get('CN Outer')!;
             outerChild.AgentRunID = run.ID;
             Assert(await outerChild.Save(), `could not link the outer step to its run: ${outerChild.LatestResult?.CompleteMessage ?? 'unknown'}`);
-            await attachSubmittingRun(ctx, nestedID, run.ID);
 
             const result = await new TaskGraphService().Cancel(parentID, {
                 EnvironmentID: await resolveEnvironmentID(ctx),
