@@ -10,6 +10,15 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FindAgentRunTreeNodes, type AgentRunTreeNode } from '@memberjunction/ai-core-plus';
 import { NormalizeStatus, ProjectRunTreeToTimeline } from './run-tree-timeline-projection';
 import { ActionEngineBase } from '@memberjunction/actions-base';
+
+/**
+ * Node kinds whose row is a LOOP, not the work inside it.
+ *
+ * A ForEach carries the ActionID of the action it repeats, so resolving an icon from it would draw
+ * "a Google search" on a row that is a loop over five of them — losing the one distinction the row
+ * exists to make.
+ */
+const LOOP_KINDS: ReadonlySet<string> = new Set(['ForEach', 'While']);
 export interface TimelineItem {
   id: string;
   /**
@@ -94,6 +103,14 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
   private destroy$ = new Subject<void>();
   /** Resolved once the action cache is warm, so a first paint without icons can be re-rendered with them. */
   private actionsReady = false;
+  /**
+   * Execution-log id → action id, for the RUN-STEP path only.
+   *
+   * The tree path needs none of this — it carries `ActionID` outright. A run step of type `Actions`
+   * still names only its log, so this map stays for that case, built from logs the data service has
+   * already fetched by id.
+   */
+  private actionIDByLogID = new Map<string, string>();
   
   // Public observables from data helper
   steps$!: Observable<MJAIAgentRunStepEntity[]>;
@@ -250,30 +267,37 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
   }
   
   /**
-   * Font Awesome class for an action node, or null to keep the row-kind default.
+   * Font Awesome class for a node that runs a known action or agent, or null to keep the default.
    *
-   * **Why the row kind is the wrong answer here.** The same action reaches the timeline through two
-   * different arms of the tree query — as a graph Task and as a loop pass — and each arm had its own
-   * generic glyph, so one Google Custom Search drew a lightning bolt and the next drew a paper
-   * plane. What the step IS does not change with where it ran.
+   * **Why the row kind is the wrong answer.** The same action reaches this timeline through two
+   * arms of the run-tree query — as a graph Task and as a loop pass — and each arm had its own
+   * generic glyph, so one Google Custom Search drew a lightning bolt and the next a paper plane.
+   * What the step IS does not change with where it ran.
    *
-   * **Two hops, both already paid for.** The node points at its `MJ: Action Execution Logs` row,
-   * which the data service has already fetched by id for this run, and that row names the action,
-   * whose `IconClass` is in `ActionEngineBase`'s cache. No query is issued here.
+   * **No hop.** The tree carries `ActionID` and `AgentID` directly (a task holds them as columns;
+   * a pass takes them from the log it expanded from), so this is one cache read. The first version
+   * of this went through the execution log and silently resolved NOTHING for graph steps, because
+   * the logs it consulted are only loaded for run steps of type `Actions` — of which a dispatched
+   * workflow has none.
    *
-   * Null for a step that never RAN — a skipped branch has no execution log, so it keeps the generic
-   * icon, which is the honest rendering of "this did not happen".
+   * **Loops keep their own icon.** A ForEach carries the ActionID of the action it repeats, and
+   * drawing that action's mark on the loop row would say "this is a Google search" about a row that
+   * is a loop over five of them. The distinction the loop icon carries is worth more.
    */
   private resolveActionIcon(node: AgentRunTreeNode): string | null {
-    if (node.SourceEntity !== 'MJ: Action Execution Logs' || !node.SourceID) return null;
-    const actionID = this.actionIDByLogID.get(node.SourceID.toLowerCase());
-    if (!actionID) return null;
-    const action = ActionEngineBase.Instance.Actions?.find((a) => UUIDsEqual(a.ID, actionID));
-    return action?.IconClass || null;
+    if (LOOP_KINDS.has(node.SourceKind ?? '')) return null;
+
+    if (node.ActionID) {
+      const action = ActionEngineBase.Instance.Actions?.find((a) => UUIDsEqual(a.ID, node.ActionID!));
+      if (action?.IconClass) return action.IconClass;
+    }
+    if (node.AgentID) {
+      const agent = AIEngineBase.Instance.Agents?.find((a) => UUIDsEqual(a.ID, node.AgentID!));
+      if (agent?.IconClass) return agent.IconClass;
+    }
+    return null;
   }
 
-  /** Execution-log id → action id, from the logs this run already loaded. Lowercased keys: the tree returns strings, and casing between sources is not guaranteed. */
-  private actionIDByLogID = new Map<string, string>();
 
 
   /**

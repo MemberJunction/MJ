@@ -1,5 +1,5 @@
 ---
-'@memberjunction/ai-core-plus': patch
+'@memberjunction/ai-core-plus': minor
 '@memberjunction/task-graph': patch
 '@memberjunction/ng-core-entity-forms': minor
 ---
@@ -11,3 +11,5 @@ Two defects a dispatched workflow hit end to end — one that killed the run, on
 **Three agents referenced Font Awesome Pro glyphs** (`fa-chart-diagram`, `fa-shield-check`, `fa-chart-mixed`), which render as nothing in the free 6.5.2 build Explorer loads — an empty icon square rather than a missing-icon indicator, since an absent glyph is silently invisible. Swapped for free equivalents in `metadata/agents`. Betty and Skip keep their `mj-icon-*` classes, which are intentional custom styling.
 
 **A dispatched workflow reported itself finished while it was still running.** The run-tree query joins the submit step to the graph it produced, so one workflow arrives as two rows whose statuses disagree: the step's describes the *submission* (`Completed` in ~300ms, correctly), while its title names the *graph*, which is still going. The result was "Task Graph: X — Completed" sitting above steps that had not run, contradicting the page header's own "PAUSED / Workflow still running". The timeline now renders the pair as one row that keeps the step's identity — so selection and deep links still resolve — and takes its status and timing from the graph, with submit latency preserved in the subtitle. A failed or in-flight submission keeps its own row, since there is then no graph to inherit from and the submission is the whole story; an unrecognized shape declines to collapse rather than guessing.
+
+**Action and agent icons, resolved without a hop.** `get-agent-run-tree.sql` now returns `ActionID` and `AgentID` for the nodes that have them — read by joining back to the task (and, for a loop's passes, to the execution log they expanded from), the same way `LoopMode` already is, so none of the CTE's six members change. That removes the join a consumer would otherwise make and fixes the real defect: the same action rendered as two different generic glyphs depending on which arm of the query produced its row, because a graph step and a loop pass arrive by different paths. A task carries its `ActionID` whether or not it ran, so a **skipped** branch can now show which action it would have run — something the execution log can never say, since no log exists for work that did not happen. A `ForEach` keeps its loop icon rather than the icon of the action it repeats.

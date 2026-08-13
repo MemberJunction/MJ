@@ -28,6 +28,8 @@ function node(partial: Partial<AgentRunTreeNode> & { NodeID: string }): AgentRun
         SourceEntity: partial.SourceEntity ?? 'MJ: AI Agent Run Steps',
         SourceKind: partial.SourceKind ?? null,
         SourceID: partial.SourceID ?? partial.NodeID,
+        ActionID: partial.ActionID ?? null,
+        AgentID: partial.AgentID ?? null,
         Children: partial.Children ?? [],
     } as AgentRunTreeNode;
 }
@@ -500,23 +502,31 @@ describe('what the work IS beats what kind of row it is', () => {
         Children: [
             node({
                 NodeID: 'task-web', NodeType: 'Task', SourceKind: 'Action', Name: 'Step 2(b): Web Search',
-                SourceEntity: 'MJ: Action Execution Logs', SourceID: 'log-web',
+                ActionID: 'action-web',
             }),
             node({
                 NodeID: 'task-skipped', NodeType: 'Task', SourceKind: 'Action', Name: 'Step 2(a): Get Weather',
-                Status: 'Skipped' as AgentRunTreeStatus, SourceEntity: 'MJ: Tasks', SourceID: 'task-skipped',
+                Status: 'Skipped' as AgentRunTreeStatus, ActionID: 'action-weather',
             }),
             node({
                 NodeID: 'pass-1', NodeType: 'Step', SourceKind: 'Actions', Name: '1: Google Custom Search',
-                SourceEntity: 'MJ: Action Execution Logs', SourceID: 'log-google',
+                ActionID: 'action-google',
+            }),
+            node({
+                NodeID: 'loop', NodeType: 'Task', SourceKind: 'ForEach', Name: 'Step 3: ForEach Loop Demo',
+                ActionID: 'action-google',
             }),
         ],
     });
 
+    // Stands in for the host's cache read: the projection is handed an icon, never a lookup.
+    const ICONS: Record<string, string> = {
+        'action-google': 'fa-brands fa-google',
+        'action-web': 'fa-solid fa-magnifying-glass',
+        'action-weather': 'fa-solid fa-cloud-sun',
+    };
     const resolver = (n: AgentRunTreeNode) =>
-        n.SourceID === 'log-google' ? 'fa-brands fa-google'
-        : n.SourceID === 'log-web' ? 'fa-solid fa-magnifying-glass'
-        : null;
+        n.SourceKind === 'ForEach' || n.SourceKind === 'While' ? null : (ICONS[n.ActionID ?? ''] ?? null);
 
     it('draws each executed action with its own icon, wherever it ran', () => {
         const byId = new Map(flatten(ProjectRunTreeToTimeline(actionRun(), 0, false, resolver)).map((i) => [i.id, i]));
@@ -525,13 +535,24 @@ describe('what the work IS beats what kind of row it is', () => {
         expect(byId.get('pass-1')?.icon).toBe('fa-brands fa-google');
     });
 
-    it('leaves a step that never ran on the generic icon', () => {
-        // A skipped branch has no execution log, so there is no action to draw. Inventing one would
-        // claim work happened that did not.
+    it('draws a SKIPPED step with its own action too', () => {
+        // This assertion used to say the opposite, and it was encoding a limitation as if it were a
+        // decision: the first implementation resolved icons through the execution log, and a branch
+        // that never ran has none. A task carries its ActionID regardless, so the row can say which
+        // action it WOULD have run — which is more useful than a generic glyph, and the strikethrough
+        // and Skipped status already say it did not happen.
         const byId = new Map(flatten(ProjectRunTreeToTimeline(actionRun(), 0, false, resolver)).map((i) => [i.id, i]));
 
-        expect(byId.get('task-skipped')?.icon).not.toBe('fa-brands fa-google');
-        expect(byId.get('task-skipped')?.icon).toBeTruthy();
+        expect(byId.get('task-skipped')?.icon).toBe('fa-solid fa-cloud-sun');
+    });
+
+    it('leaves a LOOP row on the loop icon, not the action it repeats', () => {
+        // A ForEach carries the ActionID of the action it runs N times. Drawing that action's mark
+        // here would say "this is a Google search" about a row that is a loop over five of them.
+        const byId = new Map(flatten(ProjectRunTreeToTimeline(actionRun(), 0, false, resolver)).map((i) => [i.id, i]));
+
+        expect(byId.get('loop')?.icon).not.toBe('fa-brands fa-google');
+        expect(byId.get('loop')?.icon).toContain('fa-');
     });
 
     it('falls back to the row kind when no resolver is supplied', () => {
