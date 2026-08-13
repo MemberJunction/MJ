@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import type { EntityInfo } from '@memberjunction/core';
 import { MaterializationRefresher, MATERIALIZATION_SURROGATE_COLUMN, FULL_REBUILD_EVERY_N_INCREMENTAL_REFRESHES, WATERMARK_SAFETY_OVERLAP_MS } from '../MaterializationRefresher';
 
 /**
@@ -776,9 +777,10 @@ describe('MaterializationRefresher.applyWatermarkSafetyOverlap (commit-skew safe
  * RLS the same way CodeGenLib does — any permission with a non-empty, non-whitespace ReadRLSFilterID.
  */
 describe('MaterializationRefresher.entityHasReadRLS (Leak-1 runtime gate detector)', () => {
-    // Structural stub of the only EntityInfo surface the detector reads.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ent = (perms: Array<{ ReadRLSFilterID?: string | null }>): any => ({ Name: 'Ext', Permissions: perms });
+    // Structural stub of the only EntityInfo surface the detector reads (it touches nothing but .Permissions);
+    // the sanctioned double-cast keeps the test typed against the real signature without a full EntityInfo.
+    const ent = (perms: Array<{ ReadRLSFilterID?: string | null }>): EntityInfo =>
+        ({ Name: 'Ext', Permissions: perms }) as unknown as EntityInfo;
 
     it('is TRUE when any permission carries a non-empty ReadRLSFilterID', () => {
         expect(MaterializationRefresher.entityHasReadRLS(ent([{}, { ReadRLSFilterID: 'rls-1' }]))).toBe(true);
