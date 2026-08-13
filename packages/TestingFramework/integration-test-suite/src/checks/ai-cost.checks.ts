@@ -143,6 +143,22 @@ export const AiCostChecks: NamedCheck[] = [
                     }
                     continue;
                 }
+                // The COLUMN must agree with the CLASS. The drivers now read UnitsPerBillingUnit off
+                // the row when one is supplied, so a seeded value that disagrees with the class's
+                // compiled-in literal silently re-prices every run through that unit type — and the
+                // field is editable in the generated Explorer form. Skip `Linear`, which has no
+                // literal to agree with: the column IS its scale.
+                if (unitType.DriverClass !== 'Linear') {
+                    const declared = KNOWN_DRIVER_DIVISORS[unitType.DriverClass];
+                    if (declared !== undefined && Number(unitType.UnitsPerBillingUnit) !== declared) {
+                        badMath.push(
+                            `${unitType.Name} (${unitType.DriverClass}): UnitsPerBillingUnit column is ` +
+                            `${unitType.UnitsPerBillingUnit} but the driver class declares ${declared} — the column ` +
+                            `wins at runtime, so every run priced by this unit type is scaled by the column`
+                        );
+                    }
+                }
+
                 const divisor = KNOWN_DRIVER_DIVISORS[unitType.DriverClass];
                 if (divisor !== undefined) {
                     // Exactly one divisor's worth of input AND output tokens must cost exactly

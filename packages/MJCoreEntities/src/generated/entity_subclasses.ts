@@ -49738,6 +49738,7 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
     * Validate() method override for MJ: AI Model Price Unit Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * DriverClass: This rule ensures that the DriverClass field contains at least one non-whitespace character and is not left blank.
     * * Name: This rule ensures that the Name field is not empty or made up only of spaces. It must contain at least one non-space character.
+    * * UnitsPerBillingUnit: The units per billing unit must be greater than zero to ensure valid billing calculations.
     * @public
     * @method
     * @override
@@ -49746,6 +49747,7 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
         const result = super.Validate();
         this.ValidateDriverClassNotBlank(result);
         this.ValidateNameHasNonWhitespaceCharacters(result);
+        this.ValidateUnitsPerBillingUnitGreaterThanZero(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -49772,6 +49774,23 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
     public ValidateNameHasNonWhitespaceCharacters(result: ValidationResult) {
     	if (this.Name != null && this.Name.trim().length === 0) {
     		result.Errors.push(new ValidationErrorInfo("Name", "Name cannot be empty or consist only of spaces.", this.Name, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * The units per billing unit must be greater than zero to ensure valid billing calculations.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUnitsPerBillingUnitGreaterThanZero(result: ValidationResult) {
+    	if (this.UnitsPerBillingUnit != null && this.UnitsPerBillingUnit <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UnitsPerBillingUnit",
+    			"Units per billing unit must be greater than zero.",
+    			this.UnitsPerBillingUnit,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -51916,6 +51935,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     /**
     * Validate() method override for MJ: AI Prompt Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * EffortLevel: This rule ensures that if an effort level is provided, it must be between 1 and 100, inclusive.
+    * * InputUnitsUsed: Input units used must be greater than or equal to 0 to ensure usage metrics are not negative.
     * * Table-Level: This rule ensures that if the 'CompletedAt' date is provided, it must be the same as or later than the 'RunAt' date. If 'CompletedAt' is not specified, there is no restriction.
     * * Table-Level: This rule ensures that if either the number of prompt tokens or completion tokens is missing, or the total tokens used is missing, the check passes automatically. However, if all three are provided, then the total tokens used must exactly equal the sum of prompt tokens and completion tokens.
     * @public
@@ -51925,6 +51945,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateEffortLevelIsBetween1And100(result);
+        this.ValidateInputUnitsUsedGreaterThanOrEqualToZero(result);
         this.ValidateCompletedAtNotBeforeRunAt(result);
         this.ValidateTokensUsedEqualsPromptPlusCompletion(result);
         result.Success = result.Success && (result.Errors.length === 0);
@@ -51943,6 +51964,23 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort level must be between 1 and 100 if provided.", this.EffortLevel, ValidationErrorType.Failure));
     	}
     }
+
+    /**
+    * Input units used must be greater than or equal to 0 to ensure usage metrics are not negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    	public ValidateInputUnitsUsedGreaterThanOrEqualToZero(result: ValidationResult) {
+    		if (this.InputUnitsUsed != null && this.InputUnitsUsed < 0) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"InputUnitsUsed",
+    				"Input units used must be greater than or equal to 0.",
+    				this.InputUnitsUsed,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
 
     /**
     * This rule ensures that if the 'CompletedAt' date is provided, it must be the same as or later than the 'RunAt' date. If 'CompletedAt' is not specified, there is no restriction.

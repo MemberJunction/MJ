@@ -60,10 +60,11 @@ export function normalizeRecordedUsage(
     recorded: RecordedRunUsage,
     driverUnitKind: ModelUsageUnitKind
 ): NormalizeUsageResult {
-    // Units without a measure name nothing: nothing says what they are counted in, so there is no
-    // driver they can honestly be handed to. Falling through would treat them as Tokens and price
-    // the run's (zero) token counts — writing Cost = 0 for work that was actually billed. Refusing
-    // surfaces the producer that forgot to set UsageTypeID instead of reporting paid work as free.
+    // Units whose measure could not be RESOLVED name nothing: nothing says what they are counted in,
+    // so there is no driver they can honestly be handed to. Since UsageTypeID went NOT NULL this is
+    // no longer "the producer forgot to set it" — the column always holds something — it is an id
+    // absent from the loaded catalog: a deleted row or a stale cache. Falling through would treat
+    // them as Tokens and price the run's (zero) token counts, writing Cost = 0 for billed work.
     if (recorded.unitsKind == null && (recorded.inputUnits > 0 || recorded.outputUnits > 0)) {
         return {
             ok: false,
@@ -73,6 +74,29 @@ export function normalizeRecordedUsage(
     }
 
     const recordedKind: ModelUsageUnitKind = recorded.unitsKind ?? 'Tokens';
+
+    // The state the NOT NULL column introduced, and the one the guard above USED to cover.
+    //
+    // `UsageTypeID` defaults to Tokens, so "the producer never said what these units are" and "the
+    // producer said they are tokens" are now the same row. Units counted in anything are not token
+    // counts — `TokensPrompt`/`TokensCompletion` carry those — so populated units against the Tokens
+    // measure is a contradiction, not a quantity to price.
+    //
+    // Why it is reachable at all, given the measure-filtered row selection: for a model whose only
+    // active row is media-priced, selection finds no Tokens-priced row and the run is refused with a
+    // logged reason — safe. But a model carrying an active token row ALONGSIDE a media one selects
+    // the token row, matches measures (both say Tokens), normalizes the token buckets to
+    // {0, 0, 0, 0}, and persists Cost = 0 against a run that recorded thousands of units of billed
+    // work. No shipped model+vendor pair carries two measures today, so it cannot occur on current
+    // data — and the deferred image-generation work is exactly where multi-measure models arrive.
+    if (recordedKind === 'Tokens' && (recorded.inputUnits > 0 || recorded.outputUnits > 0)) {
+        return {
+            ok: false,
+            reason: `run recorded ${recorded.inputUnits} input / ${recorded.outputUnits} output units against the ` +
+                `Tokens measure, which counts tokens rather than units; set UsageTypeID to the measure they were ` +
+                `actually counted in`
+        };
+    }
 
     // The mirror of the check above, and the same defect through the other side: a kind with no
     // quantity. `hasRecordedUsage` is satisfied by token counts alone, so a run naming `Seconds`

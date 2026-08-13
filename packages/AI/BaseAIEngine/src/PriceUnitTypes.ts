@@ -54,10 +54,10 @@ export abstract class BasePriceUnitType {
      * The `MJ: AI Model Price Unit Types` row this driver was resolved for, when the caller supplied
      * it — {@link AIEngineBase.GetPriceCalculator} always does.
      *
-     * Optional, and read by no built-in driver except {@link LinearPriceUnitType}: the hardcoded
-     * drivers know their own measure and scale, and any subclass outside this repo predates the
-     * parameter entirely and keeps working because extra constructor arguments are inert in JS.
-     * It exists so a driver CAN be configured by data instead of by code.
+     * Optional so any subclass outside this repo — which predates the parameter entirely — keeps
+     * working: extra constructor arguments are inert in JS. When present it is authoritative for
+     * {@link UnitsPerBillingUnit}, which is what makes that column mean something rather than
+     * decorate a form.
      */
     protected readonly PriceUnitType?: MJAIModelPriceUnitTypeEntity;
 
@@ -77,20 +77,35 @@ export abstract class BasePriceUnitType {
     }
 
     /**
-     * How many quantities in this driver's {@link UnitKind} make up ONE billed unit — 1,000,000 for
-     * a per-million-tokens rate, 3,600 for a per-hour rate, 1 for a per-image rate.
-     *
-     * This is the divisor the pricing math applies, exposed as a property so it exists in exactly
-     * ONE place per driver. Consumers that need the scale of a cost row without doing the math
-     * (the Explorer cost dashboards) read it from here rather than restating the table; a restated
-     * copy is a second source of truth for the arithmetic that prices every run.
+     * The scale this driver compiles in, used ONLY when no catalog row was supplied.
      *
      * Defaults to 1 — "the quantity IS the number of billed units" — which is both the correct
      * answer for a per-image rate and a safe default for any subclass outside this repo that
      * predates this property.
      */
-    public get UnitsPerBillingUnit(): number {
+    protected get DeclaredUnitsPerBillingUnit(): number {
         return 1;
+    }
+
+    /**
+     * How many quantities in this driver's {@link UnitKind} make up ONE billed unit — 1,000,000 for
+     * a per-million-tokens rate, 3,600 for a per-hour rate, 1 for a per-image rate.
+     *
+     * **The catalog row wins when one was supplied**, and `GetPriceCalculator` always supplies it.
+     * The compiled-in literal is the fallback for a driver instantiated directly (tests, and any
+     * consumer that wants a scale without loading the engine).
+     *
+     * Reading the column rather than the literal is what makes `UnitsPerBillingUnit` mean something.
+     * With the literal authoritative, the column was decoration: an admin could edit `Per Hour` to
+     * 7200 through the generated form, save successfully, and change nothing about how anything
+     * priced — the mirror image of B60, where the data was present and the code ignored it. A
+     * non-positive or non-finite column value falls through to the literal rather than poisoning a
+     * cost with `Infinity`/`NaN`; the database's `CK_AIModelPriceUnitType_UnitsPerBillingUnit
+     * CHECK (> 0)` is the real guard, and reaching this fallback means something bypassed it.
+     */
+    public get UnitsPerBillingUnit(): number {
+        const fromRow = Number(this.PriceUnitType?.UnitsPerBillingUnit);
+        return Number.isFinite(fromRow) && fromRow > 0 ? fromRow : this.DeclaredUnitsPerBillingUnit;
     }
 
     /**
@@ -200,7 +215,7 @@ export abstract class BasePriceUnitType {
 
 @RegisterClass(BasePriceUnitType,'PerMillionTokens')
 export class PerMillionTokensPriceUnitType extends BasePriceUnitType {
-    public override get UnitsPerBillingUnit(): number {
+    protected override get DeclaredUnitsPerBillingUnit(): number {
         return 1_000_000;
     }
 
@@ -235,7 +250,7 @@ export class PerMillionTokensPriceUnitType extends BasePriceUnitType {
 
 @RegisterClass(BasePriceUnitType,'PerThousandTokens')
 export class PerThousandTokensPriceUnitType extends BasePriceUnitType {
-    public override get UnitsPerBillingUnit(): number {
+    protected override get DeclaredUnitsPerBillingUnit(): number {
         return 1_000;
     }
 
@@ -269,7 +284,7 @@ export class PerThousandTokensPriceUnitType extends BasePriceUnitType {
 
 @RegisterClass(BasePriceUnitType,'PerHundredThousandTokens')
 export class PerHundredThousandTokensPriceUnitType extends BasePriceUnitType {
-    public override get UnitsPerBillingUnit(): number {
+    protected override get DeclaredUnitsPerBillingUnit(): number {
         return 100_000;
     }
 
@@ -321,12 +336,12 @@ export abstract class BaseTimePriceUnitType extends BasePriceUnitType {
     /**
      * Seconds per unit of the price row's period — 60 for a per-minute rate, 3600 for per-hour.
      *
-     * Declared through the inherited {@link BasePriceUnitType.UnitsPerBillingUnit} rather than a
-     * separate `SecondsPerUnit` hook, so a time driver's divisor is readable by the same generic
-     * accessor as every other driver's. Two names for one number is what let the exported divisor
-     * table drift from the drivers in the first place.
+     * Declared through the inherited {@link BasePriceUnitType.DeclaredUnitsPerBillingUnit} rather
+     * than a separate `SecondsPerUnit` hook, so a time driver's divisor is readable by the same
+     * generic accessor as every other driver's. Two names for one number is what let the exported
+     * divisor table drift from the drivers in the first place.
      */
-    public abstract override get UnitsPerBillingUnit(): number;
+    protected abstract override get DeclaredUnitsPerBillingUnit(): number;
 
     /**
      * @param activeCost The active cost configuration
@@ -344,14 +359,14 @@ export abstract class BaseTimePriceUnitType extends BasePriceUnitType {
 
 @RegisterClass(BasePriceUnitType,'TimePerMinute')
 export class TimePerMinutePriceUnitType extends BaseTimePriceUnitType {
-    public override get UnitsPerBillingUnit(): number {
+    protected override get DeclaredUnitsPerBillingUnit(): number {
         return 60;
     }
 }
 
 @RegisterClass(BasePriceUnitType,'TimePerHour')
 export class TimePerHourPriceUnitType extends BaseTimePriceUnitType {
-    public override get UnitsPerBillingUnit(): number {
+    protected override get DeclaredUnitsPerBillingUnit(): number {
         return 3_600;
     }
 }
@@ -424,16 +439,9 @@ export class LinearPriceUnitType extends BasePriceUnitType {
         return (name as ModelUsageUnitKind | undefined) ?? 'Tokens';
     }
 
-    /**
-     * The row's divisor. A non-positive or non-finite value would turn cost into Infinity or NaN, so
-     * it falls back to 1 — the identity — rather than propagating a poisoned number into a persisted
-     * cost. The database also carries `CK_AIModelPriceUnitType_UnitsPerBillingUnit CHECK (> 0)`, so
-     * reaching this fallback means something bypassed the constraint.
-     */
-    public override get UnitsPerBillingUnit(): number {
-        const raw = Number(this.PriceUnitType?.UnitsPerBillingUnit);
-        return Number.isFinite(raw) && raw > 0 ? raw : 1;
-    }
+    // UnitsPerBillingUnit needs no override: the base reads the row and falls back to the inherited
+    // declared value of 1. That is the same accessor every built-in driver now uses, which is the
+    // point — `Linear` is not a special case, it is the driver with nothing compiled in.
 
     CalculateNormalizedCost(
         activeCost: MJAIModelCostEntity,

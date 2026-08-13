@@ -204,14 +204,15 @@ GO
 --    migrations/CLAUDE.md: invisible on a dev database that already has the rows, fatal on a clean
 --    install.
 --
--- 2. It is also the cheaper backfill. The alternative — ADD NULL, batch-UPDATE every historical row
---    to Tokens, then ALTER COLUMN ... NOT NULL — reads and writes the whole table and then takes a
---    schema-modification lock to re-validate it. `ADD ... NOT NULL CONSTRAINT DF DEFAULT` is a
---    metadata-only operation on supported editions: SQL Server records the default and materialises
---    it on read, touching no existing row. AIPromptRun is among the largest tables in a mature
---    install, so this is the difference between an instant ALTER and a long blocking one. Note the
---    two are not independent choices — the default has to exist from the start for reason 1, and
---    once it does, adding the column nullable buys nothing.
+-- 2. It is usually also the cheaper backfill, with an EDITION CAVEAT worth stating rather than
+--    implying. Online, metadata-only addition of a NOT NULL column with a runtime-constant default
+--    is an Enterprise / Azure SQL capability: there, SQL Server records the default and materialises
+--    it on read, touching no existing row, so this is instant on a table as large as AIPromptRun
+--    becomes in a mature install. On Standard Edition it is a size-of-data rebuild holding a
+--    schema-modification lock — so for an on-prem Standard deployment with a large AIPromptRun this
+--    is NOT strictly cheaper than ADD NULL, batched UPDATE, then ALTER COLUMN ... NOT NULL.
+--    It is still the right default here, because reason 1 is not optional: the column needs its
+--    DEFAULT present from the ADD regardless, and once it does, adding it nullable buys nothing.
 --
 -- Tokens is the correct value for every historical row, not a placeholder: before this migration the
 -- schema had no way to express any other measure, which is the defect being fixed.
@@ -6455,3 +6456,51 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
       END;
 
+/* ---------------------------------------------------------------------------------------------
+   Validator functions CodeGen generated for the CHECK constraints this migration adds.
+
+   Appended from a SECOND CodeGen pass: the first ran against a clean-room database whose prompt
+   metadata had not been pushed yet, so advanced generation errored out ("Prompt 'CodeGen: Smart
+   Field Identification' not found") and produced none of these. They are here rather than left to
+   a future CodeGen run because a clean install applies migrations and never runs CodeGen — without
+   these rows the GeneratedCode table and the committed entity classes would disagree.
+
+   Reviewed rather than trusted, since the bodies are LLM-authored:
+     - ValidateUnitsPerBillingUnitGreaterThanZero  -> errors when `!= null && <= 0`.  Matches
+       CK_AIModelPriceUnitType_UnitsPerBillingUnit CHECK (UnitsPerBillingUnit > 0).
+     - ValidateInputUnitsUsedGreaterThanOrEqualToZero -> errors when `!= null && < 0`.  Matches
+       CK_AIPromptRun_InputUnitsUsed_NonNegative CHECK (InputUnitsUsed >= 0).
+
+   NOTE the asymmetry: no validator was generated for OutputUnitsUsed, whose CHECK is identical in
+   shape to InputUnitsUsed'. The database constraint enforces it either way, so this is a gap in
+   generation coverage rather than a hole in enforcement; left as generated rather than hand-written,
+   because hand-authoring a row CodeGen owns is what puts the two permanently out of step.
+   --------------------------------------------------------------------------------------------- */
+
+/* Generated Validation Functions for MJ: AI Model Price Unit Types */
+-- CHECK constraint for MJ: AI Model Price Unit Types: Field: UnitsPerBillingUnit was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
+INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
+                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([UnitsPerBillingUnit]>(0))', 'public ValidateUnitsPerBillingUnitGreaterThanZero(result: ValidationResult) {
+	if (this.UnitsPerBillingUnit != null && this.UnitsPerBillingUnit <= 0) {
+		result.Errors.push(new ValidationErrorInfo(
+			"UnitsPerBillingUnit",
+			"Units per billing unit must be greater than zero.",
+			this.UnitsPerBillingUnit,
+			ValidationErrorType.Failure
+		));
+	}
+}', 'The units per billing unit must be greater than zero to ensure valid billing calculations.', 'ValidateUnitsPerBillingUnitGreaterThanZero', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', '8D7DD9DC-DF8B-4EA6-B726-31751FB01653');
+
+/* Generated Validation Functions for MJ: AI Prompt Runs */
+-- CHECK constraint for MJ: AI Prompt Runs: Field: InputUnitsUsed was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
+INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
+                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([InputUnitsUsed]>=(0))', '	public ValidateInputUnitsUsedGreaterThanOrEqualToZero(result: ValidationResult) {
+		if (this.InputUnitsUsed != null && this.InputUnitsUsed < 0) {
+			result.Errors.push(new ValidationErrorInfo(
+				"InputUnitsUsed",
+				"Input units used must be greater than or equal to 0.",
+				this.InputUnitsUsed,
+				ValidationErrorType.Failure
+			));
+		}
+	}', 'Input units used must be greater than or equal to 0 to ensure usage metrics are not negative.', 'ValidateInputUnitsUsedGreaterThanOrEqualToZero', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', 'C5FC09BE-A79A-4B16-8AAB-FA9A2B5C3BB4');

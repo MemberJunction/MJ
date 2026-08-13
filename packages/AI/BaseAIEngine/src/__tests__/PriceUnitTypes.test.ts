@@ -423,6 +423,41 @@ describe('LinearPriceUnitType — priced entirely from its own catalog row', () 
             expect(Number.isFinite(driver.CalculateNormalizedCost(cost as never, 3, 0))).toBe(true);
         }
     });
+});
+
+describe('The catalog row is authoritative for every driver, not just Linear', () => {
+    const row = (usageType: string, unitsPerBillingUnit: number) =>
+        ({ UsageType: usageType, UnitsPerBillingUnit: unitsPerBillingUnit } as never);
+
+    it('a hardcoded driver prices by its ROW divisor when one is supplied', () => {
+        // Before this, UnitsPerBillingUnit was decoration: an admin could edit Per Hour to 7200
+        // through the generated form, save, and change nothing about how anything priced — the mirror
+        // image of B60, where the data was present and the code ignored it.
+        const cost = createMockCost(3.6, 0);
+        const perHour = new TimePerHourPriceUnitType(row('Seconds', 7200));
+        expect(perHour.UnitsPerBillingUnit).toBe(7200);
+        // 7200 seconds at $3.60 per billing unit = exactly $3.60, not the $7.20 a 3600 divisor gives.
+        expect(perHour.CalculateNormalizedCost(cost as never, 7200, 0)).toBeCloseTo(3.6, 10);
+    });
+
+    it('falls back to the compiled-in literal when no row was supplied', () => {
+        // Direct instantiation — tests, and any consumer wanting a scale without loading the engine.
+        expect(new TimePerHourPriceUnitType().UnitsPerBillingUnit).toBe(3_600);
+        expect(new TimePerMinutePriceUnitType().UnitsPerBillingUnit).toBe(60);
+        expect(new PerMillionTokensPriceUnitType().UnitsPerBillingUnit).toBe(1_000_000);
+        expect(new PerImagePriceUnitType().UnitsPerBillingUnit).toBe(1);
+    });
+
+    it('ignores a non-positive row value and uses the literal, so cost stays finite', () => {
+        expect(new TimePerHourPriceUnitType(row('Seconds', 0)).UnitsPerBillingUnit).toBe(3_600);
+        expect(new TimePerHourPriceUnitType(row('Seconds', Number.NaN)).UnitsPerBillingUnit).toBe(3_600);
+    });
+
+    it('keeps the exported token divisor map on the literals, since it is built without rows', () => {
+        // The map is derived from instances constructed with no row, so it reports the compiled-in
+        // scales — which is what the dashboards want: the shipped shape, not one deployment's edits.
+        expect(TOKEN_PRICE_UNIT_TYPE_DIVISORS['PerMillionTokens']).toBe(1_000_000);
+    });
 
     it('defaults to Tokens and 1 when constructed with no row at all', () => {
         const driver = new LinearPriceUnitType();

@@ -661,6 +661,21 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
         const usageKind = usage.unitKind ?? 'Tokens';
 
+        // Units declared against the Tokens measure are a contradiction: token counts live in the
+        // token fields, so units here mean the caller measured something else and mislabelled it.
+        // Pricing would select a token row, match measures, and cost the (zero) token buckets — a
+        // confident $0 against billed work. Less reachable than the prompt-run path, which gets
+        // 'Tokens' from a column default rather than from a hand-built ModelUsage, but the same
+        // defect, so it refuses in the same way.
+        if (usageKind === 'Tokens' && ((usage.inputUnits ?? 0) > 0 || (usage.outputUnits ?? 0) > 0)) {
+            LogError(
+                `Model ${modelID} / Vendor ${vendorID} reported ${usage.inputUnits ?? 0} input / ` +
+                `${usage.outputUnits ?? 0} output units against the Tokens measure, which counts tokens; refusing ` +
+                `to price it. Build usage with ModelUsage.ForMedia(kind, ...) so the measure matches the quantity.`
+            );
+            return null;
+        }
+
         // The mirror of the check above, and the same defect through the other side: a kind with
         // no quantity. `ShouldCalculateCost` is satisfied by token counts alone, so a run that
         // names `Seconds` but reports zero seconds passes every check above, normalizes to
