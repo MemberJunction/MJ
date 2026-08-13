@@ -96,8 +96,8 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJScopedPromptParts', sectionName: 'Scoped Prompt Parts', isExpanded: false },
             { sectionKey: 'mJScopedPromptConfigs', sectionName: 'Scoped Prompt Configs', isExpanded: false },
             { sectionKey: 'mJActionExecutionLogs', sectionName: 'Action Execution Logs', isExpanded: false },
-            { sectionKey: 'mJMaterializedResultsSourceEntityID', sectionName: 'Materialized Results (Source Entity ID)', isExpanded: false },
             { sectionKey: 'mJEntityActionsScopeEntityID', sectionName: 'Entity Actions (Scope Entity ID)', isExpanded: false },
+            { sectionKey: 'mJMaterializedResultsSourceEntityID', sectionName: 'Materialized Results (Source Entity ID)', isExpanded: false },
             { sectionKey: 'mJMaterializedResultsGeneratedEntityID', sectionName: 'Materialized Results (Generated Entity ID)', isExpanded: false }
         ]);
     }

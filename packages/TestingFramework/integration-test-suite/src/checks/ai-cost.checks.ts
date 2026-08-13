@@ -1,5 +1,5 @@
 /**
- * ai-cost.checks.ts — the 'ai-cost' bundle (AC1–AC6): cost/pricing metadata integrity for the
+ * ai-cost.checks.ts — the 'ai-cost' bundle (AC1–AC7): cost/pricing metadata integrity for the
  * AI stack, per packages/TestingFramework/integration-test-suite/docs/test-catalog.md Domain 4 (the deterministic,
  * read-only siblings of the mutation-tier AI1 rollup check).
  *
@@ -43,7 +43,10 @@ const STRANGER_ID = '00000000-0000-4000-8000-0000000000CC';
 const KNOWN_DRIVER_DIVISORS: Readonly<Record<string, number>> = {
     PerMillionTokens: 1_000_000,
     PerHundredThousandTokens: 100_000,
-    PerThousandTokens: 1_000
+    PerThousandTokens: 1_000,
+    TimePerHour: 3_600,
+    TimePerMinute: 60,
+    PerImage: 1
 };
 
 /** Loud, uniform skip-as-pass note. */
@@ -75,12 +78,21 @@ async function makeUnsavedCost(
     return cost;
 }
 
-/** Resolve a price-unit-type driver the way production does; null when unresolvable/hollow. */
+/**
+ * Resolve a price-unit-type driver the way production does; null when unresolvable.
+ *
+ * `TryCreateInstance`, matching `AIEngineBase.GetPriceCalculator`. The duck-type check that used to
+ * guard this call is retained as a second line: `BasePriceUnitType` is now marked
+ * `@RequiresSubclass()` so the factory refuses to hand back a hollow base instance, but this check
+ * is what would catch that marker being removed — and this bundle exists to detect exactly that
+ * class of silent regression.
+ */
 function resolvePriceCalculator(driverClass: string): BasePriceUnitType | null {
     try {
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BasePriceUnitType>(BasePriceUnitType, driverClass);
-        if (!instance || typeof instance.CalculateNormalizedCost !== 'function') {
-            return null; // hollow/abstract instance — cannot price anything
+        const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<BasePriceUnitType>(BasePriceUnitType, driverClass);
+        const instance = resolution.Instance;
+        if (!resolution.Resolved || !instance || typeof instance.CalculateNormalizedCost !== 'function') {
+            return null; // unregistered driver, or a hollow/abstract instance — cannot price anything
         }
         return instance;
     } catch {
@@ -106,15 +118,47 @@ export const AiCostChecks: NamedCheck[] = [
             const unitTypes = engine.ModelPriceUnitTypes;
             Assert(unitTypes.length > 0, 'no MJ: AI Model Price Unit Types rows loaded — the pricing catalog is empty');
 
+            // Unit types an ACTIVE cost row actually points at are the ones whose missing driver
+            // silently uncosts real runs — those are asserted. A unit type no active row references
+            // can be a deployment's own custom row awaiting its driver; reddening the whole tier for
+            // it would punish a state that costs nothing today, so it is reported instead.
+            const referencedByActiveCost = new Set(
+                engine.ModelCosts
+                    .filter(c => c.Status === 'Active')
+                    .map(c => c.UnitTypeID.toLowerCase())
+            );
+
             const unresolved: string[] = [];
+            const unresolvedUnreferenced: string[] = [];
             const badMath: string[] = [];
             const probe = await makeUnsavedCost(ctx, { input: 2.5, output: 10 });
             for (const unitType of unitTypes) {
                 const calculator = resolvePriceCalculator(unitType.DriverClass);
                 if (!calculator) {
-                    unresolved.push(`${unitType.Name} → ${unitType.DriverClass}`);
+                    const label = `${unitType.Name} → ${unitType.DriverClass}`;
+                    if (referencedByActiveCost.has(unitType.ID.toLowerCase())) {
+                        unresolved.push(label);
+                    } else {
+                        unresolvedUnreferenced.push(label);
+                    }
                     continue;
                 }
+                // The COLUMN must agree with the CLASS. The drivers now read UnitsPerBillingUnit off
+                // the row when one is supplied, so a seeded value that disagrees with the class's
+                // compiled-in literal silently re-prices every run through that unit type — and the
+                // field is editable in the generated Explorer form. Skip `Linear`, which has no
+                // literal to agree with: the column IS its scale.
+                if (unitType.DriverClass !== 'Linear') {
+                    const declared = KNOWN_DRIVER_DIVISORS[unitType.DriverClass];
+                    if (declared !== undefined && Number(unitType.UnitsPerBillingUnit) !== declared) {
+                        badMath.push(
+                            `${unitType.Name} (${unitType.DriverClass}): UnitsPerBillingUnit column is ` +
+                            `${unitType.UnitsPerBillingUnit} but the driver class declares ${declared} — the column ` +
+                            `wins at runtime, so every run priced by this unit type is scaled by the column`
+                        );
+                    }
+                }
+
                 const divisor = KNOWN_DRIVER_DIVISORS[unitType.DriverClass];
                 if (divisor !== undefined) {
                     // Exactly one divisor's worth of input AND output tokens must cost exactly
@@ -125,16 +169,28 @@ export const AiCostChecks: NamedCheck[] = [
                     }
                 }
             }
-            // KNOWN PRODUCT GAP (bug register B60): three SHIPPED price-unit types
-            // (PerImage/TimePerMinute/TimePerHour) have no registered calculator, so runs priced
-            // by them are silently uncosted. This is logged for the product owner — pin it as a
-            // loud WARNING here rather than reddening the deterministic gate on a tracked issue.
-            // The real invariant AC1 guards is the built-in divisor math, asserted next.
-            if (unresolved.length > 0) {
-                console.warn(`  ⚠ ai-cost.AC1 (B60): price-unit driver(s) with NO calculator — runs priced by them are silently uncosted: ${unresolved.join('; ')}`);
+            if (unresolvedUnreferenced.length > 0) {
+                console.warn(
+                    `      ⚠ ${unresolvedUnreferenced.length} price unit type(s) have NO registered calculator but are ` +
+                    `referenced by no Active cost row, so nothing is mispriced today — they WILL uncost every run the ` +
+                    `moment a cost row points at them: ${unresolvedUnreferenced.join('; ')}`
+                );
             }
+            // Hard assert since the B60 driver gap closed: PerImage/TimePerMinute/TimePerHour now
+            // have registered calculators, so every SHIPPED unit type resolves. Any future unit
+            // type added without one makes runs priced by it silently uncosted (CalculateAndSetCost
+            // logs and returns), which is exactly the drift this gate exists to catch — a warning
+            // would let it ship.
+            Assert(
+                unresolved.length === 0,
+                `Active-cost-referenced price-unit driver(s) with NO calculator — runs priced by them would be ` +
+                `silently uncosted: ${unresolved.join('; ')}`
+            );
             Assert(badMath.length === 0, `built-in unit-type divisor drift: ${badMath.join('; ')}`);
-            console.log(`      → ${unitTypes.length} unit type(s) resolved; built-in divisors verified`);
+            console.log(
+                `      → ${unitTypes.length} unit type(s) checked (${referencedByActiveCost.size} referenced by Active ` +
+                `cost rows); built-in divisors verified`
+            );
         }
     },
     {
@@ -384,6 +440,104 @@ export const AiCostChecks: NamedCheck[] = [
             }
             Assert(problems.length === 0, `prompt-run cost-identity violations: ${problems.join('; ')}`);
             console.log(`      → ${rows.length} costed prompt run(s) satisfy TotalCost = Cost + DescendantCost with non-negative costs`);
+        }
+    },
+    {
+        Id: 'ai-cost.AC7',
+        Name: 'AC7: completed runs that did measurable work are not silently uncosted — hard-fails when a price EXISTS and was not applied',
+        Fn: async (ctx): Promise<void> => {
+            // The monitoring counterpart to this domain's whole design. Everything else here converts
+            // a wrong number into a NULL, which is right — but a null plus a LogError in a server log
+            // is invisible. B60 (three shipped price unit types with no driver, six ACTIVE image cost
+            // rows dormant since 2026-02-06) survived months precisely because nothing asked this
+            // question. It is the query that would have caught it.
+            //
+            // The two populations are NOT the same defect and are graded differently:
+            //   - no active cost row in the run's measure → a pricing-coverage GAP. A deployment
+            //     choice (AC5 already reports unpriced models), so reported, not failed.
+            //   - an active cost row in the run's measure EXISTS and the run is still uncosted → the
+            //     cost pipeline was handed everything it needed and produced nothing. That is a bug
+            //     with B60's exact signature, and it is asserted.
+            const engine = await configuredAIEngine(ctx);
+            const rv = new RunView();
+            const result = await rv.RunView<{
+                ID: string;
+                ModelID: string | null;
+                VendorID: string | null;
+                UsageTypeID: string;
+                TokensUsed: number | null;
+                InputUnitsUsed: number | null;
+                OutputUnitsUsed: number | null;
+            }>({
+                EntityName: 'MJ: AI Prompt Runs',
+                // Completed, no cost, and it measurably did something. A run with no usage at all is
+                // correctly uncosted — ShouldCalculateCost declines it — so it must not be counted.
+                ExtraFilter:
+                    'CompletedAt IS NOT NULL AND Cost IS NULL AND (' +
+                    'ISNULL(TokensUsed, 0) > 0 OR ISNULL(InputUnitsUsed, 0) > 0 OR ISNULL(OutputUnitsUsed, 0) > 0)',
+                Fields: ['ID', 'ModelID', 'VendorID', 'UsageTypeID', 'TokensUsed', 'InputUnitsUsed', 'OutputUnitsUsed'],
+                OrderBy: '__mj_CreatedAt DESC',
+                MaxRows: 500,
+                ResultType: 'simple'
+            }, ctx.User);
+            Assert(result.Success, `uncosted prompt-run query failed: ${result.ErrorMessage}`);
+
+            const uncosted = result.Results;
+            if (uncosted.length === 0) {
+                console.log('      → no completed prompt run did measurable work without a cost');
+                return;
+            }
+
+            // A price existed and was not applied — grouped so the report names the configuration to
+            // look at rather than listing hundreds of run ids.
+            const priceExisted = new Map<string, number>();
+            let noPriceConfigured = 0;
+            let unresolvableMeasure = 0;
+            for (const row of uncosted) {
+                if (!row.ModelID || !row.VendorID) {
+                    // Cost calculation requires both; without them the run is correctly skipped.
+                    noPriceConfigured++;
+                    continue;
+                }
+                // UsageTypeID is NOT NULL with a default of Tokens, so an unresolvable value is a real
+                // fault rather than an unset column — counted separately instead of defaulted to
+                // Tokens, which would attribute it to a pricing gap it has nothing to do with.
+                const measure = engine.UsageTypeName(row.UsageTypeID);
+                if (measure === null) {
+                    unresolvableMeasure++;
+                    continue;
+                }
+                const cost = engine.GetActiveModelCost(row.ModelID, row.VendorID, 'Realtime', measure as never);
+                if (!cost) {
+                    noPriceConfigured++;
+                    continue;
+                }
+                const key = `${row.ModelID} @ ${row.VendorID} in ${measure}`;
+                priceExisted.set(key, (priceExisted.get(key) ?? 0) + 1);
+            }
+
+            if (noPriceConfigured > 0) {
+                console.warn(
+                    `      ⚠ ${noPriceConfigured}/${uncosted.length} uncosted run(s) have NO active cost row in the ` +
+                    `measure they recorded — a pricing-coverage gap, not a pipeline failure (see AC5)`
+                );
+            }
+            if (unresolvableMeasure > 0) {
+                console.warn(
+                    `      ⚠ ${unresolvableMeasure}/${uncosted.length} uncosted run(s) name a UsageTypeID absent from ` +
+                    `the MJ: AI Usage Types catalog — a deleted row or a stale cache, not a pricing gap`
+                );
+            }
+            const offenders = [...priceExisted.entries()].map(([key, n]) => `${key}: ${n} run(s)`);
+            Assert(
+                offenders.length === 0,
+                `completed run(s) did measurable work, an Active cost row in their measure EXISTS, and Cost is still ` +
+                `NULL — the cost pipeline had everything it needed: ${offenders.join('; ')}`
+            );
+            console.log(
+                `      → ${uncosted.length} uncosted run(s) examined; all explained by absent pricing, none by a ` +
+                `failure to apply pricing that exists`
+            );
         }
     }
 ];
