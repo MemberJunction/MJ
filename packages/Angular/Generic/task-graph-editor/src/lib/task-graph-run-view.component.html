@@ -15,45 +15,86 @@
       @if (SkippedCount > 0) {
         <span class="run-view-skipped">{{ SkippedCount }} not taken</span>
       }
+      @if (IsSettled) {
+        <span class="run-view-done">Finished</span>
+      } @else if (GraphPaused) {
+        <span class="run-view-waiting">
+          @if (PausedAtTaskID) { Waiting on {{ WaitingStepName }} }
+          @else { Waiting to start — Continue or Step }
+        </span>
+      } @else if (RunningCount > 0) {
+        <span class="run-view-running">{{ RunningCount }} running</span>
+      }
       @if (AllowBreakpointEditing && SelectedTaskID) {
         <button
           type="button"
-          class="run-view-break"
-          [class.run-view-break-on]="HasSelectedBreakpoint"
+          class="run-view-bp"
+          [class.run-view-bp-on]="HasSelectedBreakpoint"
           (click)="OnToggleSelectedBreakpoint()"
-          [attr.title]="HasSelectedBreakpoint ? 'Remove breakpoint' : 'Break before this step'">
-          <i class="fa-solid fa-circle" aria-hidden="true"></i>
-          {{ HasSelectedBreakpoint ? 'Armed on' : 'Break on' }} {{ SelectedTaskName }}
+          [attr.aria-pressed]="HasSelectedBreakpoint"
+          [attr.aria-label]="HasSelectedBreakpoint ? 'Remove breakpoint from ' + SelectedTaskName : 'Add breakpoint on ' + SelectedTaskName"
+          [title]="HasSelectedBreakpoint ? 'Remove breakpoint' : 'Break before this step'">
+          <i class="fa-circle" [class.fa-solid]="HasSelectedBreakpoint" [class.fa-regular]="!HasSelectedBreakpoint" aria-hidden="true"></i>
         </button>
+        <span class="run-view-bp-name">{{ SelectedTaskName }}</span>
       }
     </div>
 
-    @if (ShowDebugLegend) {
-      <div class="run-view-legend" aria-label="Debug key">
-        <span><i class="fa-solid fa-circle run-view-key-break" aria-hidden="true"></i> breakpoint</span>
-        <span><i class="fa-solid fa-pause run-view-key-paused" aria-hidden="true"></i> paused here</span>
-        <span><i class="fa-solid fa-hand run-view-key-forced" aria-hidden="true"></i> operator-forced path</span>
-        <span class="run-view-key-if">if condition</span>
-      </div>
-    }
-
-    <div class="run-view-canvas">
-      <mj-task-graph-editor
-        [Spec]="Spec"
-        [RuntimeStatus]="RuntimeStatus"
-        [NodePositions]="Positions"
-        [DebugOverlay]="Overlay"
-        [ReadOnly]="true"
-        [ShowToolbar]="ShowToolbar"
-        [ShowPalette]="false"
-        [ShowProperties]="false"
-        [ShowMinimap]="false"
-        [ShowStatusBar]="false"
-        [ShowLegend]="ShowLegend"
-        (SelectionChanged)="OnSelectionChanged($event)"
-        (ConnectionSelected)="OnConnectionSelected($event)"
-        (LegendToggled)="LegendToggled.emit($event)">
-      </mj-task-graph-editor>
+    <div class="run-view-body">
+      @if (ShowVariables && !Prefs.InvocationOpen) {
+        <button type="button" class="run-view-vars-rail"
+                (click)="OnToggleInvocation()"
+                title="Show invocation and output"
+                aria-label="Show invocation and output">
+          <i class="fa-solid fa-code" aria-hidden="true"></i>
+          <span>Data</span>
+        </button>
+      }
+      <as-split class="run-view-split" direction="horizontal" unit="percent"
+                [gutterSize]="8" (dragEnd)="OnInvocationSplitDragEnd($event.sizes)">
+        <as-split-area [size]="InvocationPaneSize" [minSize]="14" [visible]="InvocationPaneOpen">
+          <div class="run-view-vars">
+            <div class="run-view-vars-bar">
+              <span>Data</span>
+              <button type="button" class="run-view-vars-min"
+                      (click)="OnToggleInvocation()"
+                      title="Minimize"
+                      aria-label="Minimize invocation and output">
+                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+              </button>
+            </div>
+            <mj-task-graph-variables
+              [InputPayload]="SelectedTask?.InputPayload"
+              [OutputPayload]="SelectedTask?.OutputPayload"
+              [Invocation]="Invocation">
+            </mj-task-graph-variables>
+          </div>
+        </as-split-area>
+        <as-split-area [size]="CanvasPaneSize" [minSize]="40">
+          <div class="run-view-canvas">
+            <mj-task-graph-editor
+              [Spec]="Spec"
+              [RuntimeStatus]="RuntimeStatus"
+              [NodePositions]="Positions"
+              [DebugOverlay]="Overlay"
+              [ReadOnly]="true"
+              [ShowToolbar]="ShowToolbar"
+              [ToolbarVisibility]="ToolbarVisibility"
+              [ToolbarAlign]="ToolbarAlign"
+              [ShowPalette]="false"
+              [ShowProperties]="false"
+              [ShowMinimap]="false"
+              [ShowStatusBar]="false"
+              [ShowLegend]="ShowLegend"
+              (SelectionChanged)="OnSelectionChanged($event)"
+              (ConnectionSelected)="OnConnectionSelected($event)"
+              (LegendToggled)="LegendToggled.emit($event)"
+              (BeforeContextMenu)="OnBeforeContextMenu($event)"
+              (AfterContextMenuAction)="OnAfterContextMenuAction($event)">
+            </mj-task-graph-editor>
+          </div>
+        </as-split-area>
+      </as-split>
     </div>
   </div>
 }

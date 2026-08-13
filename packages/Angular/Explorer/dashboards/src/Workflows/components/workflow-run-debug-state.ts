@@ -5,8 +5,6 @@
  * surface is a widgets/surface host. The shape matches `TaskGraphDebugState` / the invocation
  * envelope on the parent `InputPayload`. Unparseable input is "not being debugged", never a throw.
  */
-import { UUIDsEqual } from '@memberjunction/global';
-
 export type WorkflowRunDebugState = {
     paused: boolean;
     pausedReason: 'user' | 'breakpoint' | null;
@@ -62,16 +60,6 @@ export function ParseWorkflowRunParentBag(raw: string | null | undefined): Workf
     } catch {
         return empty;
     }
-}
-
-export function ComposeBreakpointSet(
-    current: readonly string[],
-    taskID: string,
-    enabled: boolean,
-): string[] {
-    const has = current.some((id) => UUIDsEqual(id, taskID));
-    if (enabled) return has ? [...current] : [...current, taskID];
-    return current.filter((id) => !UUIDsEqual(id, taskID));
 }
 
 export function TryParseJsonObject(text: string): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {

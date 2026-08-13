@@ -38,6 +38,7 @@ export class DurableTaskGraphSubmitter extends TaskGraphSubmitter {
             // reason as the depth above: the graph outlives this call, so anything a condition may
             // reference has to travel with it (R3-3).
             Invocation: request.Invocation,
+            Debug: request.Debug,
         });
         return {
             Success: result.Success,

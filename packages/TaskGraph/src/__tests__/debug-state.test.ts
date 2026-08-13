@@ -48,6 +48,11 @@ describe('ParseTaskGraphDebugState', () => {
         expect(ParseTaskGraphDebugState(payload({ step: 'everything' })).step).toBeUndefined();
     });
 
+    it('reads skipBreakpointTaskID so Continue-from-breakpoint survives a process bounce', () => {
+        expect(ParseTaskGraphDebugState(payload({ skipBreakpointTaskID: A })).skipBreakpointTaskID).toBe(A);
+        expect(ParseTaskGraphDebugState(payload({})).skipBreakpointTaskID).toBeUndefined();
+    });
+
     it('keeps only true/false edge overrides keyed by UUID', () => {
         const state = ParseTaskGraphDebugState(payload({
             edgeOverrides: { [EDGE]: 'false', 'not-a-uuid': 'false', [A]: 'maybe' },
@@ -92,5 +97,21 @@ describe('DecideClaimGate', () => {
 
     it('a breakpoint on a task that is not yet eligible gates nothing', () => {
         expect(DecideClaimGate({ breakpoints: [C] }, [A, B])).toEqual({ mode: 'open' });
+    });
+
+    it('Continue from a breakpoint skips that breakpoint once so the stopped task can run', () => {
+        expect(DecideClaimGate({ breakpoints: [A], skipBreakpointTaskID: A }, [A])).toEqual({ mode: 'open' });
+    });
+
+    it('Continue from A still stops at a different eligible breakpoint', () => {
+        expect(DecideClaimGate({ breakpoints: [A, B], skipBreakpointTaskID: A }, [A, B])).toEqual({
+            mode: 'breakpoint',
+            taskID: B,
+        });
+    });
+
+    it('matches breakpoints and named steps case-insensitively', () => {
+        expect(DecideClaimGate({ breakpoints: [A.toUpperCase()] }, [A])).toEqual({ mode: 'breakpoint', taskID: A });
+        expect(DecideClaimGate({ paused: true, step: A.toUpperCase() }, [A])).toEqual({ mode: 'step', taskIDs: [A] });
     });
 });
