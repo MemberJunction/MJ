@@ -19,7 +19,7 @@ import { EmitStats } from './Misc/emit-stats';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
 import { CodeGenReporter } from './Misc/codegen-reporter';
 import * as MJ from '@memberjunction/core';
-import { RunCommandsBase, CommandExecutionResult } from './Misc/runCommand';
+import { RunCommandsBase, CommandExecutionResult, formatCommandFailureDetail } from './Misc/runCommand';
 import { DBSchemaGeneratorBase } from './Database/dbSchema';
 import { AngularClientGeneratorBase } from './Angular/angular-codegen';
 import { CreateNewUserBase } from './Misc/createNewUser';
@@ -65,7 +65,7 @@ export class RunCodeGenBase {
       if (!r.success) {
         const cmd = cmds[i];
         const cmdText = cmd ? [cmd.command, ...(cmd.args ?? [])].join(' ').trim() : `command #${i + 1}`;
-        const detail = (r.error || r.output || '').trim();
+        const detail = formatCommandFailureDetail(r);
         this.commandFailures.push({
           context: `${phase} command`,
           message: detail ? `\`${cmdText}\` failed: ${detail}` : `\`${cmdText}\` failed`,
@@ -235,6 +235,11 @@ export class RunCodeGenBase {
           if (results.some((r) => !r.success)) {
             logError('ERROR running one or more BEFORE commands');
             this.recordCommandFailures('BEFORE', beforeCommands, results);
+            pipelineSuccess = false;
+            for (const failure of this.commandFailures) {
+              logError(failure.message);
+              reporter.note(failure.message);
+            }
           }
         }
 
@@ -430,6 +435,11 @@ export class RunCodeGenBase {
         if (results.some((r) => !r.success)) {
           failSpinner('ERROR running one or more AFTER commands');
           this.recordCommandFailures('AFTER', afterCommands, results);
+          pipelineSuccess = false;
+          for (const failure of this.commandFailures) {
+            logError(failure.message);
+            reporter.note(failure.message);
+          }
         }
         else succeedSpinner('AFTER commands completed');
       }
@@ -449,7 +459,8 @@ export class RunCodeGenBase {
       logStatus('MJ CodeGen Complete! ' + md.Entities.length + ' entities processed in ' + totalSeconds + 's @ ' + endTime.toLocaleString());
       // A BEFORE/AFTER command failure fails the run (success=false, exit 1) so it
       // isn't silently swallowed — details flow into the structured result below.
-      return this.commandFailures.length === 0;
+      pipelineSuccess = pipelineSuccess && this.commandFailures.length === 0;
+      return pipelineSuccess;
      } catch (err) {
        pipelineSuccess = false;
        throw err;

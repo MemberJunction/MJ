@@ -94,6 +94,7 @@ export class GraphQLServerGeneratorBase {
           schemaEntities,
           generatedEntitiesImportLibrary,
           excludeRelatedEntitiesExternalToSchema,
+          true,
         );
         this.emitFile(
           path.join(schemasDir, `${sanitizeSchemaFileName(schemaName)}.ts`),
@@ -132,13 +133,14 @@ export class GraphQLServerGeneratorBase {
     entities: EntityInfo[],
     generatedEntitiesImportLibrary: string,
     excludeRelatedEntitiesExternalToSchema: boolean,
+    fromSchemaSubdir: boolean = false,
   ): string {
     const isInternal = generatedEntitiesImportLibrary.trim().toLowerCase().startsWith('@memberjunction/');
     const availability: GeneratedTypeAvailability = {
       generatedEntityNames: new Set(entities.map((e) => e.Name.trim().toLowerCase())),
       isInternal,
     };
-    let sRet = this.generateAllEntitiesServerFileHeader(entities, generatedEntitiesImportLibrary, isInternal);
+    let sRet = this.generateAllEntitiesServerFileHeader(entities, generatedEntitiesImportLibrary, isInternal, fromSchemaSubdir);
     for (const entity of entities) {
       sRet += this.generateServerEntityString(
         entity,
@@ -315,7 +317,7 @@ export class GraphQLServerGeneratorBase {
     }
   }
 
-  public generateAllEntitiesServerFileHeader(entities: EntityInfo[], importLibrary: string, isInternal: boolean): string {
+  public generateAllEntitiesServerFileHeader(entities: EntityInfo[], importLibrary: string, isInternal: boolean, fromSchemaSubdir: boolean = false): string {
     let sRet: string = `/********************************************************************************
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
@@ -334,7 +336,7 @@ import { Metadata, EntityPermissionType, CompositeKey, UserInfo } from '@memberj
 import { MaxLength } from 'class-validator';
 ${
   isInternal
-    ? `import { mj_core_schema } from '../config.js';\n`
+    ? `import { mj_core_schema } from '${fromSchemaSubdir ? '../../config.js' : '../config.js'}';\n`
     : `import * as mj_core_schema_server_object_types from '@memberjunction/server'`
 }
 

@@ -102,4 +102,24 @@ describe('GraphQL per-schema emit', () => {
     expect(String(barrel![1])).toContain("export * from './graphql-schemas/crm.js'");
     expect(String(barrel![1])).toContain("export * from './graphql-schemas/billing.js'");
   });
+
+  it('imports mj_core_schema two levels up from graphql-schemas/', () => {
+    const generator = new GraphQLServerGeneratorBase();
+    const header = generator.generateAllEntitiesServerFileHeader(
+      [entity('Users', '__mj') as never],
+      '@memberjunction/core-entities',
+      true,
+      true,
+    );
+    expect(header).toContain("from '../../config.js'");
+    expect(header).not.toContain("from '../config.js'");
+
+    const monolithHeader = generator.generateAllEntitiesServerFileHeader(
+      [entity('Users', '__mj') as never],
+      '@memberjunction/core-entities',
+      true,
+      false,
+    );
+    expect(monolithHeader).toContain("from '../config.js'");
+  });
 });

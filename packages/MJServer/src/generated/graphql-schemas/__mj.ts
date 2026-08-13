@@ -14,7 +14,7 @@ import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver
 import { Metadata, EntityPermissionType, CompositeKey, UserInfo } from '@memberjunction/core'
 
 import { MaxLength } from 'class-validator';
-import { mj_core_schema } from '../config.js';
+import { mj_core_schema } from '../../config.js';
 
 
 

@@ -215,37 +215,37 @@ module.exports = {
   commands: [
     {
       workingDirectory: './packages/MJCoreEntities',
-      command: 'npm',
+      command: 'pnpm',
       args: ['run', 'build'],
       when: 'after',
     },
     {
       workingDirectory: './packages/Angular/Explorer/core-entity-forms',
-      command: 'npm',
+      command: 'pnpm',
       args: ['run', 'build'],
       when: 'after',
     },
     {
       workingDirectory: './packages/Actions/CoreActions',
-      command: 'npm',
+      command: 'pnpm',
       args: ['run', 'build'],
       when: 'after',
     },
     {
       workingDirectory: './packages/GeneratedEntities',
-      command: 'npm',
+      command: 'pnpm',
       args: ['run', 'build'],
       when: 'after',
     },
     {
       workingDirectory: './packages/GeneratedActions',
-      command: 'npm',
+      command: 'pnpm',
       args: ['run', 'build'],
       when: 'after',
     },
     {
       workingDirectory: './packages/MJServer',
-      command: 'npm',
+      command: 'pnpm',
       args: ['run', 'build'],
       when: 'after',
     },

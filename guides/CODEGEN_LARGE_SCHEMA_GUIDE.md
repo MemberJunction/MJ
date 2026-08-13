@@ -54,6 +54,8 @@ generated/
 
 Public import paths do not change. `@memberjunction/core-entities` still does `export * from './generated/entity_subclasses.js'`. MJServer still does `export * from './generated/generated.js'`. The barrel is the stable surface; the per-schema files are the incremental ones.
 
+Core GraphQL files live one directory deeper (`generated/graphql-schemas/__mj.ts`) than the old monolith (`generated/generated.ts`). Their `mj_core_schema` import is therefore `../../config.js`, not `../config.js`. A wrong relative path compiles the barrel and then fails `tsc` in `@memberjunction/server` with `Cannot find module '../config.js'`.
+
 Cross-schema GraphQL child-array fields are omitted on purpose. A bare ObjectType name only compiles when that class is declared in the same file (`GeneratedTypeAvailability`). A `bsd_billing` invoice that points at a `bsd_crm` customer still has the FK field; it does not get a `Customers: Customer_[]` resolver in the billing file. Use `RunView` for that, the same way the unused `*Array` FieldResolvers were retired.
 
 Legacy single-file emit is still available: `fileEmit.perSchema: false`.
@@ -230,6 +232,10 @@ npx mj codegen --report
 ```
 
 Compare `~/.mj/codegen-state/run-*.json` phase timings: `generateEntitySubclasses`, `generateGraphQL`, `manageSQLScriptsAndExecution`. A second run with no DDL change should show the file-emit phases collapsing to near-zero.
+
+AFTER commands in this repo are `pnpm run build` in the packages CodeGen just wrote. `runCommand` treats **exit code only** as success — `tsc` / `pnpm` print the word `error` to stderr on successful builds, and that must not fail the run. A real non-zero exit keeps the captured stdout/stderr in the reporter notes so you can see the diagnostic. On a fresh worktree the AFTER packages must already have their workspace dependencies built (`pnpm exec turbo run build --filter=@memberjunction/ng-core-entity-forms --filter=@memberjunction/server`) or those two commands will fail for missing `dist/`, not because CodeGen is wrong.
+
+For a 2,880-entity first discovery, set `advancedGeneration.enableAdvancedGeneration: false` for that run only. The LLM pass is per-new-entity and is not what this guide is measuring.
 
 ---
 
