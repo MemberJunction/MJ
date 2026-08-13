@@ -504,7 +504,13 @@ that shifted each poll would be unusable.
 
 ## Debugging a run
 
-The Run Console on **Workflows → Runs** is the debugger. Breakpoints, edge overrides, force-complete and edit-input are wired there. See the **[Workflow Debugger Guide](WORKFLOW_DEBUGGER_GUIDE.md)** for the walkthrough, the visual vocabulary (a forced path must never look like a real verdict), and the verb gates.
+**Agent form → Run → Debug** starts the graph paused (`$.debug.paused` on the parent row at Submit) so the first step cannot be claimed before you arrive. **Workflows → Runs** is the same chrome on a graph that is already going or already finished — you cannot re-run a Flow agent from there.
+
+Both surfaces embed `<mj-task-graph-debugger>` (a drop-in in `@memberjunction/ng-task-graph-editor`). The wrap owns frames and every `TaskGraph.*` Remote Operation; hosts pass a parent task id.
+
+Continue from a breakpoint stamps `skipBreakpointTaskID` so the stopped step is claimed instead of immediately re-hitting the same Pending breakpoint. `ForEach` is one task row — one Continue runs the whole loop. Submit kicks every running dispatcher so the first claim is immediate, not one poll interval later.
+
+See the **[Workflow Debugger Guide](WORKFLOW_DEBUGGER_GUIDE.md)** for the walkthrough, the visual vocabulary (queued / running / waiting-on-you; a forced path must never look like a real verdict; conditionals stay dashed until the dest actually starts), and the verb gates.
 
 ---
 
@@ -530,7 +536,7 @@ An `OutputPayload` of `{}` on the step *before* the fork is the tell.
 | A `Human` task `Pending` | waiting on a person | it is working as drawn |
 | Tasks neither running nor skipped | **held** — a condition in an exclusive group could not be evaluated | fix the expression |
 | `Blocked` dependents | an upstream step failed under `failureSemantics: 'block'` | fix the step, or draw a recovery path with `onError: continue` |
-| Everything `Pending`, nothing claimed | no dispatcher on any host, or claims expired | check that MJAPI started `TaskGraphDispatcher` |
+| Everything `Pending`, nothing claimed | no dispatcher on any host, claims expired, or the worker is only waiting on its poll timer | check that MJAPI started `TaskGraphDispatcher`. Submit calls `KickTaskGraphDispatchers()` so the first pass is immediate; a multi-second sit on "Next — waiting for the engine" after Debug usually means no dispatcher registered a kick |
 
 ### The workflow refused to start
 
@@ -570,7 +576,10 @@ The type system makes most of this a compile error rather than a runtime surpris
 - [`packages/AI/Agents/README.md`](../packages/AI/Agents/README.md) — the agent framework, agent
   types, and where `FlowAgentType` fits
 - [`packages/TaskGraph/README.md`](../packages/TaskGraph/README.md) — the durable execution package:
-  dispatcher, claim protocol, runners
+  dispatcher, claim protocol, kick, runners
+- [Workflow Debugger Guide](WORKFLOW_DEBUGGER_GUIDE.md) — step a live graph; drop-in wrap
+- [`@memberjunction/ng-task-graph-editor`](../packages/Angular/Generic/task-graph-editor/README.md) —
+  canvas, run view, `<mj-task-graph-debugger>`
 - [Record Set Processing Guide](RECORD_SET_PROCESSING_GUIDE.md) — for "do X to many records", which
   is a different problem
 - [`packages/Actions/CLAUDE.md`](../packages/Actions/CLAUDE.md) — Actions are boundaries; when to

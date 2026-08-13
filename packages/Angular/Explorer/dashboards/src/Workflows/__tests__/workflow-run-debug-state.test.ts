@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-    ComposeBreakpointSet,
     EmptyDebugState,
     ParseWorkflowRunParentBag,
     TryParseJsonObject,
@@ -34,14 +33,6 @@ describe('ParseWorkflowRunParentBag', () => {
         expect(bag.debug.breakpoints).toEqual([A, B]);
         expect(bag.debug.edgeOverrides).toEqual({ [A]: 'true' });
         expect(bag.invocation).toEqual({ data: { approved: true }, context: { env: 'dev' } });
-    });
-});
-
-describe('ComposeBreakpointSet', () => {
-    it('unions when enabling and differences when disabling, case-insensitively', () => {
-        expect(ComposeBreakpointSet([], A, true)).toEqual([A]);
-        expect(ComposeBreakpointSet([A], A.toUpperCase(), true)).toEqual([A]);
-        expect(ComposeBreakpointSet([A, B], A.toUpperCase(), false)).toEqual([B]);
     });
 });
 

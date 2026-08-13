@@ -74,6 +74,7 @@ import {
     type TaskGraphDebugState,
 } from './debug-state';
 import { RunForEachLoop, RunWhileLoop, type LoopBodyInvoker } from './TaskLoopExecutor';
+import { RegisterTaskGraphKick } from './task-graph-kick';
 import { NotificationEngine } from '@memberjunction/notifications';
 
 /** Metadata-seeded notification type for human tasks (metadata/notifications/.task-assignment-type.json). */
@@ -402,6 +403,7 @@ export class TaskGraphDispatcher implements IShutdownable {
     private running = false;
     private pollTimer: ReturnType<typeof setInterval> | null = null;
     private reconcileTimer: ReturnType<typeof setInterval> | null = null;
+    private unregisterKick: (() => void) | null = null;
     /** Tasks this instance is currently executing — bounds concurrency and drives heartbeats. */
     private readonly inFlight = new Set<string>();
     /** Guards against a slow poll overlapping the next tick. */
@@ -712,6 +714,9 @@ export class TaskGraphDispatcher implements IShutdownable {
         }
 
         this.pollTimer = setInterval(() => { void this.pollOnce(); }, this.config.PollIntervalSeconds * 1000);
+        this.unregisterKick = RegisterTaskGraphKick(() => { this.Kick(); });
+        // Do not wait a full interval for work that already exists (or is about to be submitted).
+        this.Kick();
         this.reconcileTimer = setInterval(
             // Guarded HERE rather than inside `Reconcile` (R3-4). The defect is a stopped
             // instance's TIMER executing `ReleaseExpiredClaims` — a real UPDATE — forever; the
@@ -752,6 +757,8 @@ export class TaskGraphDispatcher implements IShutdownable {
      */
     public async Stop(): Promise<void> {
         this.running = false;
+        this.unregisterKick?.();
+        this.unregisterKick = null;
         if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
         if (this.reconcileTimer) { clearInterval(this.reconcileTimer); this.reconcileTimer = null; }
 
@@ -865,6 +872,16 @@ export class TaskGraphDispatcher implements IShutdownable {
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Reconciliation failed: ${e instanceof Error ? e.message : String(e)}`);
         }
+    }
+
+    /**
+     * Run a pass now instead of waiting for the next poll tick.
+     *
+     * Submit calls this (via {@link KickTaskGraphDispatchers}) so a just-written graph is claimed
+     * in milliseconds rather than up to {@link TaskGraphDispatcherConfig.PollIntervalSeconds}.
+     */
+    public Kick(): void {
+        void this.pollOnce();
     }
 
     /**
@@ -2286,8 +2303,29 @@ export class TaskGraphDispatcher implements IShutdownable {
                 claimable.push(entity);
                 if (claimable.length >= limit) break;
             }
+
+            if (debug.skipBreakpointTaskID) {
+                const skip = debug.skipBreakpointTaskID;
+                const claimedThisPass = claimable.some((t) => UUIDsEqual(t.ID, skip));
+                const stillEligible = eligible.some((n) => UUIDsEqual(n.id, skip));
+                if (claimedThisPass || !stillEligible) {
+                    await this.clearSkipBreakpoint(provider, parentID);
+                }
+            }
         }
         return { tasks: claimable, stats };
+    }
+
+    private async clearSkipBreakpoint(provider: IMetadataProvider, parentTaskID: string): Promise<void> {
+        const typeID = await this.workflowTaskTypeID(provider);
+        if (!typeID) return;
+        await this.claims.TryWriteDebugFields(
+            provider,
+            parentTaskID,
+            [TaskClaimStore.DebugField('$.debug.skipBreakpointTaskID', { Kind: 'null' })],
+            typeID,
+            this.contextUser,
+        );
     }
 
     /**
