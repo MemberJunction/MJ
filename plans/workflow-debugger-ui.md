@@ -246,6 +246,73 @@ The half that makes it a *debugger* rather than a control panel. All L1.
 
 ---
 
+## 8. Implementer notes (written after verifying the plan against the code)
+
+The product brief above is right. These are the transport and wiring facts a builder will hit on
+day one — do not invent around them.
+
+### Interaction primitives that do not exist
+
+- **There is no gutter click.** `FlowNode.Badges` render as inert `<span>`s. A click is a node
+  click. Breakpoint **toggle lives in the L3 inspector and a selected-step control on the run
+  view**; the canvas only *paints* the armed set. Do not add a `flow-editor` click handler for this.
+- **Dashed already means "conditional."** `SpecToConnections` draws conditionals dashed with an
+  `if` label. An override uses **`dotted` + a distinct `LabelIcon` (`fa-hand`) + `Color` from a
+  design token** (`--mj-status-warning`). Never a second dashed stroke.
+- **Run mode drops skipped edges.** A `'false'` override that cascades skips will erase the edge
+  unless the adapter **keeps overridden edges visible**. Distinct CSS on an undrawn edge is not a
+  test. This is a projection-rule change in the adapter, not a canvas change.
+
+### Identity and data loading
+
+- **Canvas connection `ID` is `${from}->${to}`.** `OverrideEdge` wants the `MJ: Task Dependencies`
+  row UUID. Carry that id through `TaskRunEdge.ID` → `TaskGraphDependency.id` →
+  `FlowConnection.Data.EdgeID`. `ProjectTaskRowsToSpec` currently drops it.
+- **L3 is not already reading `$.debug`.** On select it loads children and deps; the list query
+  throws the parent entity away in `toRow()`. Pause is inferred from frames. Load the parent with
+  `BypassCache` (debug writes are raw SQL) and parse with a local bag reader — do **not** import
+  `@memberjunction/task-graph` into Angular.
+- **Returned field is `debug`, not `debugState`.** `ForceComplete` / `UpdateTaskInput` / `Skip` do
+  not return it (they do not write `$.debug`).
+- **`executeControl` currently discards the payload.** Widen it and re-read the parent after every
+  verb.
+
+### Verb gates (do not conflate)
+
+| Verb | When | Payload |
+|---|---|---|
+| `UpdateTaskInput` | **Pending only** | `payload` required — the new **input** |
+| `RetryTask` | **Failed only** | optional `inputPayload` — edited input, then re-queue |
+| `ForceCompleteTask` | Pending / Failed / Blocked (not a live claim; not a human step) | `payload` is **output** |
+| `OverrideEdge` | Conditional edges only | `verdict: 'true' \| 'false' \| null` (`null` clears). Unconditional: refuse; skip the step instead. |
+
+There is **no** `TaskGraph.CompleteTask` remote operation. Do not offer Force Complete on a human
+step (`UserID` set).
+
+### Wiring the appendix missed
+
+- `task-graph-editor.component.ts/.html` — the only caller of the adapter; it currently swallows
+  `ConnectionSelected`. Thread debug overlay inputs through here.
+- `task-rows-to-spec.ts` — keep the dependency row id.
+- `workflow-run-debug-state.ts` (new, L3, pure) — parse the parent bag; compose the breakpoint set.
+
+### Auth and races
+
+- Debug verbs authorize **owner or Owner-type user**. Surface that reason, not a generic error.
+- `SetBreakpoints` **replaces** the set and rejects ids that are not children of the graph.
+  Re-read `$.debug` immediately before composing; compare the returned set to the one sent.
+
+### Phase 4, tightened
+
+- Invocation `data`/`context` live on the **parent** bag, not per-node. Show them in the **L3**
+  inspector.
+- The editor legend is hardcoded agent-flow vocabulary inside `flow-editor`. Do not reuse it.
+  The run view grows its **own compact debug key** (breakpoint, paused here, forced path).
+- Conditions on the canvas: show the truncated expression as the connection label in run mode
+  (the adapter already has the text in `LabelDetail`).
+
+---
+
 ## Appendix — file map for whoever builds this
 
 | File | Layer | Change |

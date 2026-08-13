@@ -8,6 +8,15 @@ import { ParseJSONOptions, ParseJSONRecursive, RegisterClass, UUIDsEqual } from 
 import { BaseDashboard, BaseResourceComponent } from '@memberjunction/ng-shared';
 import { SortWorkflowRuns, type WorkflowRunSortColumn } from './workflow-run-sorting';
 import { WorkflowRunLayout } from './workflow-run-layout';
+import {
+    ComposeBreakpointSet,
+    EmptyDebugState,
+    ParseWorkflowRunParentBag,
+    TryParseJsonObject,
+    type WorkflowRunDebugState,
+    type WorkflowRunInvocation,
+    type WorkflowStall,
+} from './workflow-run-debug-state';
 
 /** Below this the detail pane cannot hold a canvas AND a JSON pane side by side. */
 const STACK_INNER_BELOW_PX = 1100;
@@ -302,12 +311,20 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
         this.SelectedStepID = null;
         this.SelectedSteps = [];
         this.SelectedDeps = [];
+        this.SelectedEdgeID = null;
+        this.InspectorMode = 'step';
+        this.resetEditors();
         this.detachFrames();
         this.ReplayPercent = null;
+        this.DebugState = EmptyDebugState();
+        this.Invocation = {};
         if (!closing && this.isLiveStatus(run.Status)) this.attachFrames(run.ID);
         this.publishAgentContext();
         this.cdr.markForCheck();
-        if (!closing) void this.loadSteps(run.ID);
+        if (!closing) {
+            void this.loadSteps(run.ID);
+            void this.loadDebugState(run.ID);
+        }
     }
 
     // ─── live console: frames ────────────────────────────────────────────────
@@ -327,6 +344,24 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     public DebugPaused = false;
     /** A one-line diagnosis when the engine reports trouble — a lost worker, a held path. */
     public StallNotice: string | null = null;
+    /** Structured stall so a held edge can be answered, not just named. */
+    public Stall: WorkflowStall | null = null;
+    /** Durable debug state from the parent row — frames are advisory, this is the truth. */
+    public DebugState: WorkflowRunDebugState = EmptyDebugState();
+    /** Invocation `data`/`context` roots from the same parent bag (R3-3). */
+    public Invocation: WorkflowRunInvocation = {};
+    /** Selected path, when the person clicked an edge rather than a step. */
+    public SelectedEdgeID: string | null = null;
+    public InspectorMode: 'step' | 'edge' = 'step';
+    /** Force-complete confirmation + output editor. */
+    public ForceCompleteOpen = false;
+    public ForceCompleteJson = '{}';
+    public ForceCompleteName = '';
+    public ForceCompleteError: string | null = null;
+    /** Edit-input editor (Pending → UpdateTaskInput, Failed → RetryTask). */
+    public EditInputOpen = false;
+    public EditInputJson = '';
+    public EditInputError: string | null = null;
     /** True while a control verb round-trips, so the toolbar cannot double-fire. */
     public ControlBusy = false;
     /** Replay position for a settled run: 0–100 along its wall-clock span, or null for "now". */
@@ -354,6 +389,7 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
         this.FrameLog = [];
         this.EngineTicks = [];
         this.StallNotice = null;
+        this.Stall = null;
         this.frameSub = provider.TaskGraphFrames(parentTaskID).subscribe({
             next: (frame) => this.onFrame(frame),
             // A dropped stream is not an error state for the console — the run view's poll is the
@@ -369,6 +405,7 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
         this.LatestFrame = null;
         this.DebugPaused = false;
         this.StallNotice = null;
+        this.Stall = null;
     }
 
     private onFrame(frame: TaskGraphFrameEvent): void {
@@ -382,31 +419,51 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
             case 'GraphPaused':
             case 'BreakpointHit':
                 this.DebugPaused = true;
+                if (this.SelectedRunID) void this.loadDebugState(this.SelectedRunID);
                 break;
             case 'GraphResumed':
                 this.DebugPaused = false;
+                if (this.SelectedRunID) void this.loadDebugState(this.SelectedRunID);
                 break;
             case 'ClaimChanged':
                 if (frame.claimEvent === 'heartbeat-lost') {
-                    this.StallNotice = `"${frame.taskName ?? 'A step'}" lost its worker — the engine will requeue it.`;
+                    this.setStall({
+                        kind: 'worker-lost',
+                        message: `"${frame.taskName ?? 'A step'}" lost its worker — the engine will requeue it.`,
+                        taskName: frame.taskName,
+                        taskID: frame.taskId,
+                    });
                 } else if (frame.claimEvent === 'reclaimed') {
-                    this.StallNotice = null; // the engine recovered it
+                    this.clearStall();
                 }
                 break;
             case 'GateDecision':
                 if (frame.verdict === 'held') {
-                    this.StallNotice = `"${frame.taskName ?? 'A step'}" is waiting on a path that can't be answered${frame.reason ? ` — ${frame.reason}` : ''}.`;
+                    this.setStall({
+                        kind: 'held',
+                        message: `"${frame.taskName ?? 'A step'}" is waiting on a path that can't be answered.`,
+                        taskName: frame.taskName,
+                        taskID: frame.taskId,
+                        edgeID: frame.edgeId,
+                        conditionText: frame.conditionText,
+                        reason: frame.reason,
+                    });
                 }
                 break;
             case 'StepRefused':
-                // The step press could not release anything yet. Said out loud rather than left as
-                // a button that appeared to do nothing — the allowance is still armed.
-                this.StallNotice = frame.reason ?? 'The step could not start yet; it stays queued.';
+                this.setStall({
+                    kind: 'step-refused',
+                    message: frame.reason ?? 'The step could not start yet; it stays queued.',
+                    reason: frame.reason,
+                });
                 break;
             case 'GraphSettled':
-                this.StallNotice = null;
+                this.clearStall();
                 void this.loadData(); // the list row's status/duration just changed
-                if (this.SelectedRunID) void this.loadSteps(this.SelectedRunID);
+                if (this.SelectedRunID) {
+                    void this.loadSteps(this.SelectedRunID);
+                    void this.loadDebugState(this.SelectedRunID);
+                }
                 break;
             case 'TaskCompleted':
             case 'TaskFailed':
@@ -425,23 +482,41 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     // Action would make. Pause/step are durable claim-gating state, so the effect lands within one
     // dispatcher poll (~5s), announced back to us by `GraphPaused`/`GraphResumed` frames.
 
-    private async executeControl(operationKey: string, input: Record<string, unknown>): Promise<void> {
+    private async executeControl(
+        operationKey: string,
+        input: Record<string, unknown>,
+    ): Promise<{ success: boolean; debug?: WorkflowRunDebugState }> {
         const provider = this.ProviderToUse as unknown as Partial<IRemoteOperationProvider>;
         if (typeof provider.RouteOperation !== 'function') {
-            this.StallNotice = 'This connection cannot send workflow controls.';
+            this.setStall({ kind: 'control-error', message: 'This connection cannot send workflow controls.' });
             this.cdr.markForCheck();
-            return;
+            return { success: false };
         }
         this.ControlBusy = true;
         this.cdr.markForCheck();
         try {
             const result = await provider.RouteOperation(operationKey, input, {});
-            const output = result?.Output as { success?: boolean; errorMessage?: string } | undefined;
+            const output = result?.Output as {
+                success?: boolean;
+                errorMessage?: string;
+                debug?: Partial<WorkflowRunDebugState> & { breakpoints?: string[]; edgeOverrides?: Record<string, 'true' | 'false'> };
+            } | undefined;
             if (!result?.Success || output?.success === false) {
-                this.StallNotice = output?.errorMessage ?? result?.ErrorMessage ?? 'The control could not be applied.';
+                this.setStall({
+                    kind: 'control-error',
+                    message: output?.errorMessage ?? result?.ErrorMessage ?? 'The control could not be applied.',
+                });
+                return { success: false };
             }
+            if (output?.debug) this.applyReturnedDebug(output.debug);
+            if (this.SelectedRunID) void this.loadDebugState(this.SelectedRunID);
+            return { success: true };
         } catch (e) {
-            this.StallNotice = e instanceof Error ? e.message : String(e);
+            this.setStall({
+                kind: 'control-error',
+                message: e instanceof Error ? e.message : String(e),
+            });
+            return { success: false };
         } finally {
             this.ControlBusy = false;
             this.cdr.markForCheck();
@@ -481,6 +556,173 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     public async OnRetryStep(step: WorkflowRunStep): Promise<void> {
         await this.executeControl('TaskGraph.RetryTask', { taskID: step.ID });
         if (this.SelectedRunID) void this.loadSteps(this.SelectedRunID);
+    }
+
+    public async OnBreakpointToggled(event: { TaskID: string; Enabled: boolean }): Promise<void> {
+        if (!this.SelectedRunID) return;
+        await this.loadDebugState(this.SelectedRunID);
+        const next = ComposeBreakpointSet(this.DebugState.breakpoints, event.TaskID, event.Enabled);
+        await this.executeControl('TaskGraph.SetBreakpoints', {
+            parentTaskID: this.SelectedRunID,
+            taskIDs: next,
+        });
+    }
+
+    public async OnRemoveBreakpoint(taskID: string): Promise<void> {
+        await this.OnBreakpointToggled({ TaskID: taskID, Enabled: false });
+    }
+
+    public OnSelectBreakpoint(taskID: string): void {
+        const step = this.SelectedSteps.find((s) => UUIDsEqual(s.ID, taskID));
+        if (step) this.OnSelectStep(step);
+        else {
+            this.SelectedStepID = taskID;
+            this.InspectorMode = 'step';
+            if (!this.Layout.StepPanelOpen) this.ToggleStepPanel();
+            this.cdr.markForCheck();
+        }
+    }
+
+    public async OnOverrideEdge(edgeID: string, verdict: 'true' | 'false' | null): Promise<void> {
+        if (!this.SelectedRunID) return;
+        await this.executeControl('TaskGraph.OverrideEdge', {
+            parentTaskID: this.SelectedRunID,
+            edgeID,
+            verdict,
+        });
+        if (verdict != null) this.clearStall();
+    }
+
+    public OnGraphConnectionSelected(event: { EdgeID: string | null; FromTaskID: string; ToTaskID: string }): void {
+        if (!event.EdgeID) return;
+        this.SelectedEdgeID = event.EdgeID;
+        this.InspectorMode = 'edge';
+        if (!this.Layout.StepPanelOpen) this.ToggleStepPanel();
+        this.cdr.markForCheck();
+    }
+
+    public get SelectedEdge(): MJTaskDependencyEntity | null {
+        if (!this.SelectedEdgeID) return null;
+        return this.SelectedDeps.find((d) => UUIDsEqual(d.ID, this.SelectedEdgeID!)) ?? null;
+    }
+
+    public get SelectedEdgeIsConditional(): boolean {
+        return !!this.SelectedEdge?.Condition?.trim();
+    }
+
+    public get SelectedEdgeOverride(): 'true' | 'false' | null {
+        if (!this.SelectedEdgeID) return null;
+        for (const [id, verdict] of Object.entries(this.DebugState.edgeOverrides)) {
+            if (UUIDsEqual(id, this.SelectedEdgeID)) return verdict;
+        }
+        return null;
+    }
+
+    public get SelectedEdgeFromName(): string {
+        const edge = this.SelectedEdge;
+        if (!edge) return '';
+        return this.SelectedSteps.find((s) => UUIDsEqual(s.ID, edge.DependsOnTaskID))?.Name ?? 'upstream';
+    }
+
+    public get SelectedEdgeToName(): string {
+        const edge = this.SelectedEdge;
+        if (!edge) return '';
+        return this.SelectedSteps.find((s) => UUIDsEqual(s.ID, edge.TaskID))?.Name ?? 'downstream';
+    }
+
+    public StepName(taskID: string): string {
+        return this.SelectedSteps.find((s) => UUIDsEqual(s.ID, taskID))?.Name ?? 'a step';
+    }
+
+    public HasBreakpoint(taskID: string): boolean {
+        return this.DebugState.breakpoints.some((id) => UUIDsEqual(id, taskID));
+    }
+
+    public OnBreakpointCheckbox(step: WorkflowRunStep, event: Event): void {
+        const target = event.target;
+        const enabled = target instanceof HTMLInputElement && target.checked;
+        void this.OnBreakpointToggled({ TaskID: step.ID, Enabled: enabled });
+    }
+
+    public CanForceComplete(step: WorkflowRunStep): boolean {
+        if (this.isHumanStep(step)) return false;
+        return step.Status === 'Pending' || step.Status === 'Failed' || step.Status === 'Blocked';
+    }
+
+    public CanEditInput(step: WorkflowRunStep): boolean {
+        return step.Status === 'Pending' || step.Status === 'Failed';
+    }
+
+    public OpenForceComplete(step: WorkflowRunStep): void {
+        this.ForceCompleteOpen = true;
+        this.ForceCompleteJson = this.prettyJson(step.Record['OutputPayload']) || '{}';
+        this.ForceCompleteName = '';
+        this.ForceCompleteError = null;
+        this.EditInputOpen = false;
+        this.cdr.markForCheck();
+    }
+
+    public OpenEditInput(step: WorkflowRunStep): void {
+        this.EditInputOpen = true;
+        this.EditInputJson = this.prettyJson(step.Record['InputPayload']) || '{}';
+        this.EditInputError = null;
+        this.ForceCompleteOpen = false;
+        this.cdr.markForCheck();
+    }
+
+    public async SubmitForceComplete(step: WorkflowRunStep): Promise<void> {
+        if (this.ForceCompleteName.trim() !== step.Name) {
+            this.ForceCompleteError = 'Type the step name exactly to confirm.';
+            this.cdr.markForCheck();
+            return;
+        }
+        const parsed = TryParseJsonObject(this.ForceCompleteJson);
+        if (!parsed.ok) {
+            this.ForceCompleteError = parsed.error;
+            this.cdr.markForCheck();
+            return;
+        }
+        this.ForceCompleteError = null;
+        const result = await this.executeControl('TaskGraph.ForceCompleteTask', {
+            taskID: step.ID,
+            payload: parsed.value,
+        });
+        if (result.success) {
+            this.ForceCompleteOpen = false;
+            if (this.SelectedRunID) void this.loadSteps(this.SelectedRunID);
+        }
+    }
+
+    public async SubmitEditInput(step: WorkflowRunStep): Promise<void> {
+        const parsed = TryParseJsonObject(this.EditInputJson);
+        if (!parsed.ok) {
+            this.EditInputError = parsed.error;
+            this.cdr.markForCheck();
+            return;
+        }
+        this.EditInputError = null;
+        const result = step.Status === 'Failed'
+            ? await this.executeControl('TaskGraph.RetryTask', { taskID: step.ID, inputPayload: parsed.value })
+            : await this.executeControl('TaskGraph.UpdateTaskInput', { taskID: step.ID, payload: parsed.value });
+        if (result.success) {
+            this.EditInputOpen = false;
+            if (this.SelectedRunID) void this.loadSteps(this.SelectedRunID);
+        }
+    }
+
+    public get InvocationJson(): string {
+        return JSON.stringify(
+            ParseJSONRecursive(
+                { data: this.Invocation.data ?? null, context: this.Invocation.context ?? null },
+                JSON_PARSE_OPTIONS,
+            ),
+            null,
+            2,
+        );
+    }
+
+    public get HasInvocation(): boolean {
+        return this.Invocation.data != null || this.Invocation.context != null;
     }
 
     // ─── live console: inspector data ───────────────────────────────────────
@@ -611,6 +853,7 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     /** A node was clicked on the canvas — show that step's JSON. */
     public OnGraphNodeSelected(event: { TaskID: string }): void {
         this.SelectedStepID = event.TaskID;
+        this.InspectorMode = 'step';
         // Asking to see a step is asking for the panel. Leaving it closed would make the click look
         // like it did nothing.
         if (!this.Layout.StepPanelOpen) this.ToggleStepPanel();
@@ -619,6 +862,8 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
 
     public OnSelectStep(step: WorkflowRunStep): void {
         this.SelectedStepID = UUIDsEqual(this.SelectedStepID ?? '', step.ID) ? null : step.ID;
+        this.InspectorMode = 'step';
+        this.resetEditors();
         this.cdr.markForCheck();
     }
 
@@ -684,6 +929,85 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     public OnOpenAgentRun(run: WorkflowRunRow): void {
         if (!run.AgentRunID) return;
         this.navigationService.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(run.AgentRunID));
+    }
+
+    private async loadDebugState(parentTaskID: string): Promise<void> {
+        try {
+            const result = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJTaskEntity>({
+                EntityName: 'MJ: Tasks',
+                ExtraFilter: `ID='${parentTaskID}'`,
+                ResultType: 'entity_object',
+                BypassCache: true,
+            });
+            if (!UUIDsEqual(this.SelectedRunID ?? '', parentTaskID)) return;
+            const parent = result.Success ? result.Results?.[0] : undefined;
+            const bag = ParseWorkflowRunParentBag(parent?.InputPayload);
+            this.DebugState = bag.debug;
+            this.Invocation = bag.invocation;
+            this.DebugPaused = bag.debug.paused;
+        } catch {
+            // A failed parent read leaves the last known debug state; frames remain the safety net.
+        }
+        this.cdr.markForCheck();
+    }
+
+    private applyReturnedDebug(debug: Partial<WorkflowRunDebugState> & {
+        breakpoints?: string[];
+        edgeOverrides?: Record<string, 'true' | 'false'>;
+    }): void {
+        this.DebugState = {
+            paused: debug.paused !== undefined ? debug.paused === true : this.DebugState.paused,
+            pausedReason: debug.pausedReason === 'user' || debug.pausedReason === 'breakpoint'
+                ? debug.pausedReason
+                : this.DebugState.pausedReason,
+            pausedAtTaskID: debug.pausedAtTaskID !== undefined ? debug.pausedAtTaskID : this.DebugState.pausedAtTaskID,
+            breakpoints: debug.breakpoints ?? this.DebugState.breakpoints,
+            edgeOverrides: debug.edgeOverrides ?? this.DebugState.edgeOverrides,
+        };
+        this.DebugPaused = this.DebugState.paused;
+    }
+
+    private setStall(stall: WorkflowStall): void {
+        this.Stall = stall;
+        this.StallNotice = stall.message;
+    }
+
+    private clearStall(): void {
+        this.Stall = null;
+        this.StallNotice = null;
+    }
+
+    public OnDismissStall(): void {
+        this.clearStall();
+        this.cdr.markForCheck();
+    }
+
+    private resetEditors(): void {
+        this.ForceCompleteOpen = false;
+        this.ForceCompleteError = null;
+        this.EditInputOpen = false;
+        this.EditInputError = null;
+    }
+
+    private isHumanStep(step: WorkflowRunStep): boolean {
+        const userID = step.Record['UserID'];
+        return typeof userID === 'string' && userID.trim().length > 0;
+    }
+
+    private prettyJson(value: unknown): string {
+        if (value == null || value === '') return '';
+        if (typeof value === 'string') {
+            try {
+                return JSON.stringify(JSON.parse(value), null, 2);
+            } catch {
+                return value;
+            }
+        }
+        try {
+            return JSON.stringify(value, null, 2);
+        } catch {
+            return '';
+        }
     }
 
     /**

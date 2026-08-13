@@ -34,6 +34,11 @@ export type TaskGraphDependency = {
     /** The `tempId` this node waits for. */
     tempId: string;
     /**
+     * The persisted `MJ: Task Dependencies` row ID, when this edge was projected from a run.
+     * Presentation and debug only — `Submit` ignores it and writes a new row.
+     */
+    id?: string;
+    /**
      * Boolean expression gating the edge. Omitted means unconditional.
      *
      * A condition that fails to evaluate does NOT open the gate — a malformed expression must never

@@ -37,14 +37,24 @@ import {
     type TaskGraphSpec,
 } from '@memberjunction/ai-core-plus';
 import { BuildRuntimeStatus, NormalizeRuntimeState } from './task-graph-runtime-source';
-import type { TaskGraphRuntimeStatus } from './task-graph-canvas-adapter';
+import type { TaskGraphDebugOverlay, TaskGraphRuntimeStatus } from './task-graph-canvas-adapter';
 import type { TaskGraphSelectionChangedEventArgs } from './task-graph-editor-events';
+import type { FlowConnection } from '@memberjunction/ng-flow-editor';
 
 /** What the host learns when someone clicks a step. */
 export type TaskGraphRunNodeSelectedEvent = {
     /** The `MJ: Tasks` row id. */
     TaskID: string;
     Task: MJTaskEntity | null;
+};
+
+/** What the host learns when someone clicks a path. */
+export type TaskGraphRunConnectionSelectedEvent = {
+    /** The `MJ: Task Dependencies` row id, when the projection carried one. */
+    EdgeID: string | null;
+    FromTaskID: string;
+    ToTaskID: string;
+    Condition?: string;
 };
 
 /**
@@ -159,14 +169,65 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
         return this.replayAt;
     }
 
+    /**
+     * Armed breakpoint task IDs, from the parent row's `$.debug.breakpoints`. Empty by default so
+     * embeds (agent-run timeline, test harness) never grow debugger chrome they did not ask for.
+     */
+    @Input()
+    public set Breakpoints(value: readonly string[]) {
+        this.breakpoints = value ?? [];
+        this.rebuildOverlay();
+    }
+    public get Breakpoints(): readonly string[] {
+        return this.breakpoints;
+    }
+    /** The step a breakpoint actually stopped on. */
+    @Input()
+    public set PausedAtTaskID(value: string | null) {
+        this.pausedAtTaskID = value;
+        this.rebuildOverlay();
+    }
+    public get PausedAtTaskID(): string | null {
+        return this.pausedAtTaskID;
+    }
+    /** Operator-forced edge verdicts, keyed by `MJ: Task Dependencies` row ID. */
+    @Input()
+    public set EdgeOverrides(value: Readonly<Record<string, 'true' | 'false'>>) {
+        this.edgeOverrides = value ?? {};
+        this.rebuildOverlay();
+    }
+    public get EdgeOverrides(): Readonly<Record<string, 'true' | 'false'>> {
+        return this.edgeOverrides;
+    }
+    /**
+     * Whether this host may arm/disarm breakpoints from the selected-step control.
+     * Off by default — the run view also renders where those controls would be wrong.
+     */
+    @Input() public AllowBreakpointEditing: boolean = false;
+    /** Compact debug key under the summary line. Off unless the host is a debugger. */
+    @Input() public ShowDebugLegend: boolean = false;
+
     @Output() public NodeSelected = new EventEmitter<TaskGraphRunNodeSelectedEvent>();
     /** The legend was toggled from the toolbar, so a host can remember the choice. */
     @Output() public LegendToggled = new EventEmitter<boolean>();
     /** Emitted once, when every step has reached a terminal status. */
     @Output() public Settled = new EventEmitter<void>();
+    /** A connection was clicked. `EdgeID` is the dependency row id when the projection carried one. */
+    @Output() public ConnectionSelected = new EventEmitter<TaskGraphRunConnectionSelectedEvent>();
+    /** Intent only — the host owns `SetBreakpoints`. */
+    @Output() public BreakpointToggled = new EventEmitter<{ TaskID: string; Enabled: boolean }>();
 
     /** What each running step says it is doing, from `NodeProgress` frames. Keyed by task row id. */
     public LiveActivity = new Map<string, { Message: string; Percent?: number }>();
+
+    /** The last step the person selected, so the breakpoint control has a target. */
+    public SelectedTaskID: string | null = null;
+    /** Stable overlay object — rebuilt only when debug inputs change, so the editor does not re-project every CD cycle. */
+    public Overlay: TaskGraphDebugOverlay = { showConditions: true };
+
+    private breakpoints: readonly string[] = [];
+    private pausedAtTaskID: string | null = null;
+    private edgeOverrides: Readonly<Record<string, 'true' | 'false'>> = {};
 
     public Spec: TaskGraphSpec | null = null;
     public RuntimeStatus: TaskGraphRuntimeStatus | null = null;
@@ -218,7 +279,51 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     public OnSelectionChanged(args: TaskGraphSelectionChangedEventArgs): void {
         const tempId = args?.Task?.tempId;
         if (!tempId) return;
+        this.SelectedTaskID = tempId;
         this.NodeSelected.emit({ TaskID: tempId, Task: this.taskByID.get(tempId) ?? null });
+    }
+
+    public OnConnectionSelected(connection: FlowConnection | null): void {
+        if (!connection) {
+            this.ConnectionSelected.emit({ EdgeID: null, FromTaskID: '', ToTaskID: '' });
+            return;
+        }
+        const data = connection.Data ?? {};
+        const edgeID = typeof data['EdgeID'] === 'string' ? data['EdgeID'] : null;
+        const from = typeof data['FromTempId'] === 'string' ? data['FromTempId'] : connection.SourceNodeID;
+        const to = typeof data['ToTempId'] === 'string' ? data['ToTempId'] : connection.TargetNodeID;
+        this.ConnectionSelected.emit({
+            EdgeID: edgeID,
+            FromTaskID: from,
+            ToTaskID: to,
+            Condition: connection.Condition,
+        });
+    }
+
+    public get HasSelectedBreakpoint(): boolean {
+        return !!this.SelectedTaskID && this.breakpoints.includes(this.SelectedTaskID);
+    }
+
+    public get SelectedTaskName(): string {
+        if (!this.SelectedTaskID) return '';
+        return this.taskByID.get(this.SelectedTaskID)?.Name ?? 'this step';
+    }
+
+    public OnToggleSelectedBreakpoint(): void {
+        if (!this.AllowBreakpointEditing || !this.SelectedTaskID) return;
+        this.BreakpointToggled.emit({
+            TaskID: this.SelectedTaskID,
+            Enabled: !this.HasSelectedBreakpoint,
+        });
+    }
+
+    private rebuildOverlay(): void {
+        this.Overlay = {
+            breakpoints: this.breakpoints,
+            pausedAtTaskID: this.pausedAtTaskID,
+            edgeOverrides: this.edgeOverrides,
+            showConditions: true,
+        };
     }
 
     /**
