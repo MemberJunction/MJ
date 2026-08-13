@@ -31,7 +31,9 @@ import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-int
 const TARGET_ENTITY = 'MJ: Task Types';
 
 interface EntityReadFixtures {
-    MaterializedResult: MJMaterializedResultEntity;
+    /** Filled in after the MaterializedResult saves; the handle is published earlier so teardown can always drop
+     *  the physical snapshot table even if Save fails. */
+    MaterializedResult?: MJMaterializedResultEntity;
     Schema: string;
     MatObject: string;
     Sentinel: string;
@@ -63,6 +65,10 @@ export async function createEntityReadFixtures(ctx: IntegrationCheckContext): Pr
     const matObject = `materialized_vwITEntityRead_${stamp}`;
     const sentinel = `__IT_MATENT_SENTINEL_${stamp}__`;
     const sentinelID = randomUUID();
+    // Publish the fixture handle BEFORE creating any physical object, so teardown can always drop the snapshot
+    // table even if a later step (GetEntityObject / mr.Save) throws — matching the driver's up-front-handle
+    // contract and the sibling materialized-read bundle. MaterializedResult is filled in after it saves.
+    fixtures = { Schema: schema, MatObject: matObject, Sentinel: sentinel, SentinelID: sentinelID };
 
     // Fabricate the snapshot for the entity's base view: only the columns the checks read (ID + Name), plus the
     // sentinel row (a Name absent from the live view). resolveEffectiveBaseView redirects the read here.
@@ -81,7 +87,7 @@ export async function createEntityReadFixtures(ctx: IntegrationCheckContext): Pr
     mr.RefreshStrategy = 'FullRebuild';
     mr.Status = 'Active';
     if (!await mr.Save()) throw new Error(`Fixture MaterializedResult save failed: ${mr.LatestResult?.CompleteMessage}`);
-    fixtures = { MaterializedResult: mr, Schema: schema, MatObject: matObject, Sentinel: sentinel, SentinelID: sentinelID };
+    fixtures.MaterializedResult = mr;
 }
 
 export async function teardownEntityReadFixtures(ctx: IntegrationCheckContext): Promise<void> {

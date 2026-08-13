@@ -44,8 +44,7 @@ export interface ISQLExecutor {
      * as `@p0,@p1,…` on SQL Server (`request.input('p'+i)`) and `$1,$2,…` on PostgreSQL (node-pg values) —
      * both MJ data providers accept this shape. Omit it for plain (DDL / no-value) statements.
      */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ExecuteSQL<T = any>(sql: string, parameters?: unknown): Promise<T[]>;
+    ExecuteSQL<T = unknown>(sql: string, parameters?: unknown): Promise<T[]>;
     /** Database platform of the executing provider ('sqlserver' | 'postgresql'); absent => treated as SQL Server. */
     PlatformKey?: string;
 }
