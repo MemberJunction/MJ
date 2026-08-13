@@ -541,7 +541,22 @@ export type ExclusiveGroupResolution = {
  * cannot disagree about what "beats" means.
  */
 export function CompareEdgePrecedence(a: EvaluatedEdge, b: EvaluatedEdge): number {
-    return (b.priority - a.priority) || (a.sequence - b.sequence) || a.id.localeCompare(b.id);
+    // ORDINAL, NOT COLLATED (R3-7). `localeCompare` with no arguments sorts under the host's ICU
+    // locale, and the sign genuinely flips: `'aa070000'` vs `'ab070000'` compares one way under
+    // `en` and the other under `da`, where the `aa` digraph collates as `å`. Dependency IDs are
+    // UUIDs, so `aa` sequences are routine.
+    //
+    // Two instances with different `LANG` would then resolve the same `(priority=0, sequence=0)`
+    // tie — the persisted default for hand- and LLM-authored specs — DIFFERENTLY, and since this
+    // same comparator decides the unevaluable-dominance test, hold-versus-resolve diverges with it.
+    // The worst interleaving is R2-5's own catastrophe across instances rather than across polls:
+    // both XOR branches Skipped, graph settles Complete having executed neither.
+    //
+    // R2-5's shipped test runs both input orders in ONE process and cannot see this; Round 2's plan
+    // prescribed `localeCompare`, so this corrects the prescription rather than a slip.
+    if (b.priority !== a.priority) return b.priority - a.priority;
+    if (a.sequence !== b.sequence) return a.sequence - b.sequence;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
 export function ResolveExclusiveGroups(

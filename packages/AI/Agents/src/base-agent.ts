@@ -11965,6 +11965,11 @@ The context is now within limits. Please retry your request with the recovered c
             // MAX_REINVOKE_DEPTH never fires — a graph reinvoking an agent that emits a graph would
             // run forever.
             ReinvokeDepth: this._agentRun?.ContinuationDepth ?? 0,
+            // The invocation's own parameters, for the flow dialect's `data`/`context` condition
+            // roots (R3-3). The walker read these straight off `ExecuteAgentParams`; the compiled
+            // path carried neither, so every documented `data.x` condition evaluated against the
+            // origin step's output, found nothing, and silently took the other branch.
+            Invocation: { Data: params.data, Context: params.context },
             ContextUser: params.contextUser,
             Provider: this.ProviderToUse
         });
