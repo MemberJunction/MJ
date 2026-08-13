@@ -123,11 +123,11 @@ describe('GraphQL codegen: externally-owned schemas (MJ#3279)', () => {
         configState.entityPackageName = 'mj_generatedentities';
     });
 
-    it('single-package config: a cross-schema relationship still emits (no external schemas declared)', () => {
-        // Baseline — with no schema→package map nothing is withheld, so nothing may be skipped.
+    it('single-package config: child-array relationship members are not emitted', () => {
         const out = generate(HOST);
-        expect(out).toContain('AppMembers_');
-        expect(out).not.toContain('its GraphQL type is not declared in this file');
+        expect(out).not.toMatch(/AppMembers_\w*Array/);
+        expect(out).not.toContain('@FieldResolver');
+        expect(out).toContain('export class hostHostWidgets_');
     });
 
     it('multi-package config: the relationship to an externally-owned entity is skipped, not dangling', () => {
@@ -135,21 +135,22 @@ describe('GraphQL codegen: externally-owned schemas (MJ#3279)', () => {
 
         const out = generate(HOST);
 
-        // The withheld entity's ObjectType is never declared in this file, so no emitted line may
-        // name it — a dangling `@Field(() => [AppMembers_])` is a TS2304 at build time.
-        expect(out).not.toContain('AppMembers_');
-        expect(out).toContain('Relationship to App Members not generated');
+        // Child-array members are no longer emitted at all, so an externally-owned
+        // related type cannot appear as a dangling `@Field(() => [AppMembers_])`.
+        expect(out).not.toMatch(/AppMembers_\w*Array/);
+        expect(out).not.toContain('@FieldResolver');
         // The local entity itself is unaffected (type names are schema-prefixed — see
         // getGraphQLTypeNameBase — so "host" + "HostWidgets").
         expect(out).toContain('export class hostHostWidgets_');
     });
 
-    it('MJ-core related entities are exempt — they resolve via the core namespace import', () => {
+    it('MJ-core related entities also get no child-array member (load via RunView)', () => {
         configState.entityPackageName = { appschema: '@acme/app-entities' };
 
         const out = generate(HOST_TO_CORE);
 
-        expect(out).toContain('mj_core_schema_server_object_types.MJUsers_');
-        expect(out).not.toContain('Relationship to Users not generated');
+        expect(out).not.toContain('mj_core_schema_server_object_types.MJUsers_');
+        expect(out).not.toMatch(/Users_\w*Array/);
+        expect(out).not.toContain('@FieldResolver');
     });
 });

@@ -111,7 +111,7 @@ describe('GraphQLServerGeneratorBase — external-data-source gating (H4)', () =
       expect(out).not.toContain('SELECT * FROM');
     });
 
-    it('skips a relationship whose RELATED entity is external (comment, no SELECT *)', () => {
+    it('does not emit a child-array FieldResolver for an external related entity', () => {
       metadataEntities.push({ Name: 'Ext Line Items', IncludeInAPI: true, ExternalDataSourceID: 'ds-1', SchemaName: 'ext' });
       const out = gen.resolver(
         makeEntity({
@@ -121,8 +121,8 @@ describe('GraphQLServerGeneratorBase — external-data-source gating (H4)', () =
         }),
         'DemoOrders_',
       );
-      expect(out).toContain('Relationship to Ext Line Items not generated: related entity is external');
-      expect(out).not.toContain('SELECT * FROM');
+      expect(out).not.toContain('@FieldResolver');
+      expect(out).not.toMatch(/\w+Array\(/);
     });
   });
 
@@ -134,7 +134,7 @@ describe('GraphQLServerGeneratorBase — external-data-source gating (H4)', () =
       expect(out).not.toContain('intentionally not generated');
     });
 
-    it('still generates a relationship resolver to a non-external related entity', () => {
+    it('does not emit a child-array FieldResolver for a local related entity either', () => {
       metadataEntities.push({
         Name: 'Line Items', IncludeInAPI: true, ExternalDataSourceID: null, SchemaName: 'ext',
         CodeName: 'LineItems', ClassName: 'LineItems', BaseView: 'vwLineItems', BaseTableCodeName: 'LineItems',
@@ -148,7 +148,8 @@ describe('GraphQLServerGeneratorBase — external-data-source gating (H4)', () =
         }),
         'DemoOrders_',
       );
-      expect(out).not.toContain('not generated: related entity is external');
+      expect(out).not.toContain('@FieldResolver');
+      expect(out).not.toMatch(/\w+Array\(/);
     });
   });
 });

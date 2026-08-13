@@ -1,16 +1,12 @@
 /**
- * Reverse-relationship emission is gated on TYPE AVAILABILITY, not on schema/package heuristics.
+ * Reverse-relationship (child-array) GraphQL members are no longer emitted.
  *
- * A reverse-relationship (child-array) `@Field`/`@FieldResolver` references the related entity's
- * GraphQL type by BARE class name, so it only compiles when that class is declared in the file being
- * generated. `GeneratedTypeAvailability` carries the exact set of entities handed to the generator for
- * the file, which is ground truth for that question.
- *
- * Why the set and not a heuristic: `runCodeGen` narrows the generated entity list by BOTH the
- * `entityPackageName` schema→package map AND the `excludeSchemas`/inclusion filters. A predicate that
- * models only the package map still emits uncompilable references for anything dropped by the other
- * filter — which is exactly the linked-Open-App break (a base app generated alongside a dependent app
- * that foreign-keys into it emits fields typed with the dependent's classes → TS2304).
+ * Historically a `@Field`/`@FieldResolver` pair named `Related_JoinFieldArray` was
+ * generated for every EntityRelationship. Those resolvers issued a per-parent
+ * `SELECT *` with no DataLoader, were unused in-tree, and have been replaced by
+ * RunView / DeclareRelatedRecords (and hand-written result types for mutations
+ * that already hold the graph). These tests lock that policy: the generator must
+ * not emit child-array members regardless of type availability.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -88,22 +84,18 @@ function oneToMany(relatedName: string) {
     };
 }
 
-// A base Open App entity with a child in a DEPENDENT app's schema. Neither schema is in the package
-// map — the dependent is simply not part of this generation run.
 const COMMON_PERSON = entity({
     name: 'MJ_BizApps_Common: Person',
     schema: '__mj_BizAppsCommon',
     related: [oneToMany('MJ_BizApps_Tasks: Task Comment')],
 });
 const TASKS_COMMENT = entity({ name: 'MJ_BizApps_Tasks: Task Comment', schema: '__mj_BizAppsTasks' });
-// A local entity whose child lives in the MJ core schema.
 const COMMON_NOTE = entity({
     name: 'MJ_BizApps_Common: Note',
     schema: '__mj_BizAppsCommon',
     related: [oneToMany('Users')],
 });
 const CORE_USER = entity({ name: 'Users', schema: '__mj' });
-// Monolith: two app schemas emitted into one file, with a cross-schema relationship.
 const SALES_ORDER = entity({ name: 'Sales: Order', schema: 'sales', related: [oneToMany('CRM: Contact')] });
 const CRM_CONTACT = entity({ name: 'CRM: Contact', schema: 'crm' });
 
@@ -126,7 +118,13 @@ function generate(e: object, avail?: GeneratedTypeAvailability): string {
     );
 }
 
-describe('GraphQL codegen: reverse-relationship type-availability gate', () => {
+function expectNoChildArray(out: string): void {
+    expect(out).not.toMatch(/\w+Array\s*[:(]/);
+    expect(out).not.toContain('@FieldResolver');
+    expect(out).not.toContain('_OwnerIDArray');
+}
+
+describe('GraphQL codegen: reverse-relationship members are not emitted', () => {
     beforeEach(() => {
         vi.spyOn(Metadata.prototype, 'Entities', 'get').mockReturnValue(ALL as never);
         vi.spyOn(Metadata.prototype, 'EntityByName').mockImplementation(
@@ -135,49 +133,36 @@ describe('GraphQL codegen: reverse-relationship type-availability gate', () => {
         configState.entityPackageName = 'mj_generatedentities';
     });
 
-    it('EMITS a reverse relationship whose related type is generated in this file', () => {
+    it('does not emit a child-array field even when the related type is in this file', () => {
         const out = generate(COMMON_PERSON, availability(['MJ_BizApps_Common: Person', 'MJ_BizApps_Tasks: Task Comment']));
-        expect(out).toContain('MJ_BizApps_TasksTaskComment_OwnerIDArray');
-        expect(out).not.toContain('not generated: its GraphQL type is not declared in this file');
+        expectNoChildArray(out);
+        expect(out).toContain('export class');
     });
 
-    it('DROPS a reverse relationship into a schema NOT generated in this file (the linked-Open-App fix)', () => {
-        // The dependent app is absent from this run but is NOT in the entityPackageName map, so the
-        // legacy package heuristic would wrongly emit here. Availability catches it.
+    it('does not emit a child-array field when the related type is out of scope either', () => {
         const out = generate(COMMON_PERSON, availability(['MJ_BizApps_Common: Person']));
-        expect(out).not.toContain('MJ_BizApps_TasksTaskComment_OwnerIDArray');
-        // Both the @Field member and its @FieldResolver must be dropped together.
-        expect(out).toContain('Relationship field to MJ_BizApps_Tasks: Task Comment not generated');
-        expect(out).toContain('Relationship to MJ_BizApps_Tasks: Task Comment not generated');
+        expectNoChildArray(out);
     });
 
-    it('LEGACY (no availability): the package-map heuristic is preserved for existing callers', () => {
-        // Same input, no availability supplied → falls back to the schema→package heuristic, which with
-        // no map declared emits the relationship. This is what pre-existing subclasses/callers get.
+    it('does not emit a child-array field on the legacy (no availability) path', () => {
         const out = generate(COMMON_PERSON);
-        expect(out).toContain('MJ_BizApps_TasksTaskComment_OwnerIDArray');
+        expectNoChildArray(out);
     });
 
-    it('EMITS a CORE related type in a NON-core file even when absent from the set (namespace import)', () => {
+    it('does not emit a core-related child-array in a non-core file', () => {
         const out = generate(COMMON_NOTE, availability(['MJ_BizApps_Common: Note']));
-        expect(out).toContain('mj_core_schema_server_object_types.MJUsers_');
+        expectNoChildArray(out);
+        expect(out).not.toContain('mj_core_schema_server_object_types.MJUsers_');
     });
 
-    it('DROPS a CORE related type in the CORE file itself when absent from the set (no namespace import there)', () => {
-        // The core file IS the mj_core_schema_server_object_types module, so there is nothing to
-        // namespace-import from; a core child must satisfy set membership like anything else.
+    it('does not emit a core-related child-array in the core file', () => {
         const out = generate(COMMON_NOTE, availability(['MJ_BizApps_Common: Note'], /* isInternal */ true));
-        expect(out).toContain('Relationship field to Users not generated');
+        expectNoChildArray(out);
     });
 
-    it('MONOLITH: cross-schema relationships survive because every class is in the one generated set', () => {
+    it('does not emit child-array fields in a monolith cross-schema file', () => {
         const out = generate(SALES_ORDER, availability(['Sales: Order', 'CRM: Contact']));
-        expect(out).toContain('CRMContact_OwnerIDArray');
-        expect(out).not.toContain('not generated: its GraphQL type is not declared in this file');
-    });
-
-    it('matches set membership case-insensitively and trims', () => {
-        const out = generate(SALES_ORDER, availability(['  sales: ORDER ', '  crm: contact  ']));
-        expect(out).toContain('CRMContact_OwnerIDArray');
+        expectNoChildArray(out);
+        expect(out).not.toContain('CRMContact_OwnerIDArray');
     });
 });
