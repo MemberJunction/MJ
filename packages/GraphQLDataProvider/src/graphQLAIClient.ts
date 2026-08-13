@@ -361,7 +361,8 @@ export class GraphQLAIClient {
                 $sourceArtifactVersionId: String,
                 $fireAndForget: Boolean,
                 $planMode: Boolean,
-                $requestedSkillIDs: [String!]
+                $requestedSkillIDs: [String!],
+                $taskGraphDebug: String
             ) {
                 RunAIAgent(
                     agentId: $agentId,
@@ -380,7 +381,8 @@ export class GraphQLAIClient {
                     sourceArtifactVersionId: $sourceArtifactVersionId,
                     fireAndForget: $fireAndForget,
                     planMode: $planMode,
-                    requestedSkillIDs: $requestedSkillIDs
+                    requestedSkillIDs: $requestedSkillIDs,
+                    taskGraphDebug: $taskGraphDebug
                 ) {
                     success
                     errorMessage
@@ -435,6 +437,9 @@ export class GraphQLAIClient {
         // Per-request Plan Mode + user-requested skills (symmetric with the conversation-detail path).
         if (params.planMode !== undefined) variables.planMode = params.planMode;
         if (params.requestedSkillIDs !== undefined) variables.requestedSkillIDs = params.requestedSkillIDs;
+        if (params.taskGraphDebug !== undefined) {
+            variables.taskGraphDebug = JSON.stringify(params.taskGraphDebug);
+        }
 
         return variables;
     }
