@@ -6,6 +6,7 @@ import {
   mapLimit,
   resolveDirtySchemasForEmit,
   sanitizeSchemaFileName,
+  schemaKey,
   schemaNameMatches,
   schemasToEmit,
 } from '../Misc/schema-emit';
@@ -15,6 +16,12 @@ describe('schema-emit', () => {
     it('matches exact names case-insensitively', () => {
       expect(schemaNameMatches('bsd_crm', 'BSD_CRM')).toBe(true);
       expect(schemaNameMatches('bsd_crm', 'bsd_billing')).toBe(false);
+    });
+
+    it('does not throw when the schema name is null or empty', () => {
+      expect(schemaNameMatches('bsd_%', null as unknown as string)).toBe(false);
+      expect(schemaNameMatches('bsd_%', undefined)).toBe(false);
+      expect(sanitizeSchemaFileName(null)).toBe('schema');
     });
 
     it('treats % as the only wildcard and leaves underscores literal', () => {
@@ -63,6 +70,14 @@ describe('schema-emit', () => {
 
     it('returns an empty set when nothing is dirty', () => {
       expect(collectDirtySchemas([{ Name: 'Customers', SchemaName: 'crm' }], []).size).toBe(0);
+    });
+
+    it('ignores null or empty dirty names instead of throwing', () => {
+      const schemas = collectDirtySchemas(
+        [{ Name: 'Customers', SchemaName: 'crm' }],
+        [null as unknown as string, '', 'Customers'],
+      );
+      expect([...schemas]).toEqual(['crm']);
     });
   });
 

@@ -22,10 +22,11 @@ describe('BigSchemaDemo generate.mjs', () => {
       expect(manifest.foreignKeysApprox).toBeGreaterThan(36);
       expect(manifest.domains).toEqual(['bsd_crm', 'bsd_billing', 'bsd_inventory']);
       const tables = readFileSync(path.join(out, '02_tables.sql'), 'utf8');
-      expect(tables).toContain('CREATE TABLE [bsd_crm].[Hub]');
-      expect(tables).toContain('CREATE TABLE [bsd_billing].[Bridge]');
+      expect(tables).toContain('CREATE TABLE [bsd_crm].[CrmHub]');
+      expect(tables).toContain('CREATE TABLE [bsd_billing].[BillingBridge]');
       const fks = readFileSync(path.join(out, '03_fks.sql'), 'utf8');
-      expect(fks).toContain('FK_bsd_billing_Bridge_RemoteHub');
+      expect(fks).toContain('FK_bsd_billing_BillingBridge_RemoteHub');
+      expect(fks).toContain('[bsd_crm].[CrmHub]');
       const seed = readFileSync(path.join(out, '04_seed.sql'), 'utf8');
       expect(seed).toMatch(/B5D00000-0000-4000-80/i);
     } finally {

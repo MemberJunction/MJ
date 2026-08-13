@@ -40,9 +40,14 @@ export interface SchemaNamed {
  * Case-insensitive schema match. `%` is the only wildcard (SQL `_` is a
  * literal — schema names like `bsd_crm` are common and must not glob).
  */
-export function schemaNameMatches(pattern: string, schemaName: string): boolean {
-  const p = pattern.trim().toLowerCase();
-  const s = schemaName.trim().toLowerCase();
+/** Case-insensitive schema/entity key. Null/undefined become ''. */
+export function schemaKey(name: string | null | undefined): string {
+  return (name ?? '').trim().toLowerCase();
+}
+
+export function schemaNameMatches(pattern: string, schemaName: string | null | undefined): boolean {
+  const p = schemaKey(pattern);
+  const s = schemaKey(schemaName);
   if (!p.includes('%')) {
     return p === s;
   }
@@ -54,9 +59,9 @@ export function schemaNameMatches(pattern: string, schemaName: string): boolean 
  * Turn a SQL schema name into a safe TypeScript file stem.
  * `__mj` stays `__mj`; `bsd_crm` stays `bsd_crm`; `Sales.Analytics` becomes `Sales_Analytics`.
  */
-export function sanitizeSchemaFileName(schemaName: string): string {
+export function sanitizeSchemaFileName(schemaName: string | null | undefined): string {
   // Keep leading underscores — `__mj` is a real schema name and a valid file stem.
-  const cleaned = schemaName.trim().replace(/[^A-Za-z0-9_]+/g, '_').replace(/_+$/g, '');
+  const cleaned = (schemaName ?? '').trim().replace(/[^A-Za-z0-9_]+/g, '_').replace(/_+$/g, '');
   return cleaned.length > 0 ? cleaned : 'schema';
 }
 
@@ -106,15 +111,21 @@ export function collectDirtySchemas(
 ): Set<string> {
   const dirty = new Set<string>();
   for (const name of dirtyEntityNames) {
-    dirty.add(name.trim().toLowerCase());
+    const key = schemaKey(name);
+    if (key.length > 0) {
+      dirty.add(key);
+    }
   }
   const schemas = new Set<string>();
   if (dirty.size === 0) {
     return schemas;
   }
   for (const entity of entities) {
-    if (dirty.has(entity.Name.trim().toLowerCase())) {
-      schemas.add(entity.SchemaName.trim());
+    if (dirty.has(schemaKey(entity.Name))) {
+      const schema = (entity.SchemaName ?? '').trim();
+      if (schema.length > 0) {
+        schemas.add(schema);
+      }
     }
   }
   return schemas;

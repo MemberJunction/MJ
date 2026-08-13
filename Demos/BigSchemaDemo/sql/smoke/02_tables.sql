@@ -6,485 +6,485 @@
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 
-IF OBJECT_ID(N'bsd_crm.Hub', N'U') IS NULL
-CREATE TABLE [bsd_crm].[Hub] (
+IF OBJECT_ID(N'bsd_crm.CrmHub', N'U') IS NULL
+CREATE TABLE [bsd_crm].[CrmHub] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_Hub_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_CrmHub_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
-    ,CONSTRAINT [PK_bsd_crm_Hub] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_crm_CrmHub] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_crm.Lookup_01', N'U') IS NULL
-CREATE TABLE [bsd_crm].[Lookup_01] (
+IF OBJECT_ID(N'bsd_crm.CrmLookup_01', N'U') IS NULL
+CREATE TABLE [bsd_crm].[CrmLookup_01] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_Lookup_01_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_CrmLookup_01_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
-    ,CONSTRAINT [PK_bsd_crm_Lookup_01] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_crm_CrmLookup_01] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_crm.Lookup_02', N'U') IS NULL
-CREATE TABLE [bsd_crm].[Lookup_02] (
+IF OBJECT_ID(N'bsd_crm.CrmLookup_02', N'U') IS NULL
+CREATE TABLE [bsd_crm].[CrmLookup_02] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_Lookup_02_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_CrmLookup_02_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
-    ,CONSTRAINT [PK_bsd_crm_Lookup_02] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_crm_CrmLookup_02] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_crm.Child_001', N'U') IS NULL
-CREATE TABLE [bsd_crm].[Child_001] (
+IF OBJECT_ID(N'bsd_crm.CrmChild_001', N'U') IS NULL
+CREATE TABLE [bsd_crm].[CrmChild_001] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_Child_001_Amount] DEFAULT (0)
-    ,Notes NVARCHAR(400) NULL
-    ,HubID UNIQUEIDENTIFIER NOT NULL
-    ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_crm_Child_001] PRIMARY KEY CLUSTERED (ID)
-);
-GO
-
-IF OBJECT_ID(N'bsd_crm.Child_002', N'U') IS NULL
-CREATE TABLE [bsd_crm].[Child_002] (
-    ID UNIQUEIDENTIFIER NOT NULL
-    ,Name NVARCHAR(200) NOT NULL
-    ,Code NVARCHAR(40) NOT NULL
-    ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_Child_002_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_CrmChild_001_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_crm_Child_002] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_crm_CrmChild_001] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_crm.Child_003', N'U') IS NULL
-CREATE TABLE [bsd_crm].[Child_003] (
+IF OBJECT_ID(N'bsd_crm.CrmChild_002', N'U') IS NULL
+CREATE TABLE [bsd_crm].[CrmChild_002] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_Child_003_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_CrmChild_002_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_crm_Child_003] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_crm_CrmChild_002] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_crm.Child_004', N'U') IS NULL
-CREATE TABLE [bsd_crm].[Child_004] (
+IF OBJECT_ID(N'bsd_crm.CrmChild_003', N'U') IS NULL
+CREATE TABLE [bsd_crm].[CrmChild_003] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_Child_004_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_CrmChild_003_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_crm_Child_004] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_crm_CrmChild_003] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_crm.Child_005', N'U') IS NULL
-CREATE TABLE [bsd_crm].[Child_005] (
+IF OBJECT_ID(N'bsd_crm.CrmChild_004', N'U') IS NULL
+CREATE TABLE [bsd_crm].[CrmChild_004] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_Child_005_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_CrmChild_004_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_crm_Child_005] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_crm_CrmChild_004] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_crm.Child_006', N'U') IS NULL
-CREATE TABLE [bsd_crm].[Child_006] (
+IF OBJECT_ID(N'bsd_crm.CrmChild_005', N'U') IS NULL
+CREATE TABLE [bsd_crm].[CrmChild_005] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_Child_006_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_CrmChild_005_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_crm_Child_006] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_crm_CrmChild_005] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_crm.Grandchild_001', N'U') IS NULL
-CREATE TABLE [bsd_crm].[Grandchild_001] (
+IF OBJECT_ID(N'bsd_crm.CrmChild_006', N'U') IS NULL
+CREATE TABLE [bsd_crm].[CrmChild_006] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_Grandchild_001_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_CrmChild_006_Amount] DEFAULT (0)
+    ,Notes NVARCHAR(400) NULL
+    ,HubID UNIQUEIDENTIFIER NOT NULL
+    ,LookupID UNIQUEIDENTIFIER NULL
+    ,CONSTRAINT [PK_bsd_crm_CrmChild_006] PRIMARY KEY CLUSTERED (ID)
+);
+GO
+
+IF OBJECT_ID(N'bsd_crm.CrmGrandchild_001', N'U') IS NULL
+CREATE TABLE [bsd_crm].[CrmGrandchild_001] (
+    ID UNIQUEIDENTIFIER NOT NULL
+    ,Name NVARCHAR(200) NOT NULL
+    ,Code NVARCHAR(40) NOT NULL
+    ,Status NVARCHAR(40) NOT NULL
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_CrmGrandchild_001_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,ChildID UNIQUEIDENTIFIER NOT NULL
-    ,CONSTRAINT [PK_bsd_crm_Grandchild_001] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_crm_CrmGrandchild_001] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_crm.XRef_01', N'U') IS NULL
-CREATE TABLE [bsd_crm].[XRef_01] (
+IF OBJECT_ID(N'bsd_crm.CrmXRef_01', N'U') IS NULL
+CREATE TABLE [bsd_crm].[CrmXRef_01] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_XRef_01_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_CrmXRef_01_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_crm_XRef_01] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_crm_CrmXRef_01] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_crm.XRef_02', N'U') IS NULL
-CREATE TABLE [bsd_crm].[XRef_02] (
+IF OBJECT_ID(N'bsd_crm.CrmXRef_02', N'U') IS NULL
+CREATE TABLE [bsd_crm].[CrmXRef_02] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_XRef_02_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_crm_CrmXRef_02_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_crm_XRef_02] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_crm_CrmXRef_02] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_billing.Hub', N'U') IS NULL
-CREATE TABLE [bsd_billing].[Hub] (
+IF OBJECT_ID(N'bsd_billing.BillingHub', N'U') IS NULL
+CREATE TABLE [bsd_billing].[BillingHub] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_Hub_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_BillingHub_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
-    ,CONSTRAINT [PK_bsd_billing_Hub] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_billing_BillingHub] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_billing.Lookup_01', N'U') IS NULL
-CREATE TABLE [bsd_billing].[Lookup_01] (
+IF OBJECT_ID(N'bsd_billing.BillingLookup_01', N'U') IS NULL
+CREATE TABLE [bsd_billing].[BillingLookup_01] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_Lookup_01_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_BillingLookup_01_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
-    ,CONSTRAINT [PK_bsd_billing_Lookup_01] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_billing_BillingLookup_01] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_billing.Lookup_02', N'U') IS NULL
-CREATE TABLE [bsd_billing].[Lookup_02] (
+IF OBJECT_ID(N'bsd_billing.BillingLookup_02', N'U') IS NULL
+CREATE TABLE [bsd_billing].[BillingLookup_02] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_Lookup_02_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_BillingLookup_02_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
-    ,CONSTRAINT [PK_bsd_billing_Lookup_02] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_billing_BillingLookup_02] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_billing.Child_001', N'U') IS NULL
-CREATE TABLE [bsd_billing].[Child_001] (
+IF OBJECT_ID(N'bsd_billing.BillingChild_001', N'U') IS NULL
+CREATE TABLE [bsd_billing].[BillingChild_001] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_Child_001_Amount] DEFAULT (0)
-    ,Notes NVARCHAR(400) NULL
-    ,HubID UNIQUEIDENTIFIER NOT NULL
-    ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_billing_Child_001] PRIMARY KEY CLUSTERED (ID)
-);
-GO
-
-IF OBJECT_ID(N'bsd_billing.Child_002', N'U') IS NULL
-CREATE TABLE [bsd_billing].[Child_002] (
-    ID UNIQUEIDENTIFIER NOT NULL
-    ,Name NVARCHAR(200) NOT NULL
-    ,Code NVARCHAR(40) NOT NULL
-    ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_Child_002_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_BillingChild_001_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_billing_Child_002] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_billing_BillingChild_001] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_billing.Child_003', N'U') IS NULL
-CREATE TABLE [bsd_billing].[Child_003] (
+IF OBJECT_ID(N'bsd_billing.BillingChild_002', N'U') IS NULL
+CREATE TABLE [bsd_billing].[BillingChild_002] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_Child_003_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_BillingChild_002_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_billing_Child_003] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_billing_BillingChild_002] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_billing.Child_004', N'U') IS NULL
-CREATE TABLE [bsd_billing].[Child_004] (
+IF OBJECT_ID(N'bsd_billing.BillingChild_003', N'U') IS NULL
+CREATE TABLE [bsd_billing].[BillingChild_003] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_Child_004_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_BillingChild_003_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_billing_Child_004] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_billing_BillingChild_003] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_billing.Child_005', N'U') IS NULL
-CREATE TABLE [bsd_billing].[Child_005] (
+IF OBJECT_ID(N'bsd_billing.BillingChild_004', N'U') IS NULL
+CREATE TABLE [bsd_billing].[BillingChild_004] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_Child_005_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_BillingChild_004_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_billing_Child_005] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_billing_BillingChild_004] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_billing.Grandchild_001', N'U') IS NULL
-CREATE TABLE [bsd_billing].[Grandchild_001] (
+IF OBJECT_ID(N'bsd_billing.BillingChild_005', N'U') IS NULL
+CREATE TABLE [bsd_billing].[BillingChild_005] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_Grandchild_001_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_BillingChild_005_Amount] DEFAULT (0)
+    ,Notes NVARCHAR(400) NULL
+    ,HubID UNIQUEIDENTIFIER NOT NULL
+    ,LookupID UNIQUEIDENTIFIER NULL
+    ,CONSTRAINT [PK_bsd_billing_BillingChild_005] PRIMARY KEY CLUSTERED (ID)
+);
+GO
+
+IF OBJECT_ID(N'bsd_billing.BillingGrandchild_001', N'U') IS NULL
+CREATE TABLE [bsd_billing].[BillingGrandchild_001] (
+    ID UNIQUEIDENTIFIER NOT NULL
+    ,Name NVARCHAR(200) NOT NULL
+    ,Code NVARCHAR(40) NOT NULL
+    ,Status NVARCHAR(40) NOT NULL
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_BillingGrandchild_001_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,ChildID UNIQUEIDENTIFIER NOT NULL
-    ,CONSTRAINT [PK_bsd_billing_Grandchild_001] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_billing_BillingGrandchild_001] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_billing.XRef_01', N'U') IS NULL
-CREATE TABLE [bsd_billing].[XRef_01] (
+IF OBJECT_ID(N'bsd_billing.BillingXRef_01', N'U') IS NULL
+CREATE TABLE [bsd_billing].[BillingXRef_01] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_XRef_01_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_BillingXRef_01_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_billing_XRef_01] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_billing_BillingXRef_01] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_billing.XRef_02', N'U') IS NULL
-CREATE TABLE [bsd_billing].[XRef_02] (
+IF OBJECT_ID(N'bsd_billing.BillingXRef_02', N'U') IS NULL
+CREATE TABLE [bsd_billing].[BillingXRef_02] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_XRef_02_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_BillingXRef_02_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_billing_XRef_02] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_billing_BillingXRef_02] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_billing.Bridge', N'U') IS NULL
-CREATE TABLE [bsd_billing].[Bridge] (
+IF OBJECT_ID(N'bsd_billing.BillingBridge', N'U') IS NULL
+CREATE TABLE [bsd_billing].[BillingBridge] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_Bridge_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_billing_BillingBridge_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,LocalHubID UNIQUEIDENTIFIER NOT NULL
     ,RemoteHubID UNIQUEIDENTIFIER NOT NULL
-    ,CONSTRAINT [PK_bsd_billing_Bridge] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_billing_BillingBridge] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_inventory.Hub', N'U') IS NULL
-CREATE TABLE [bsd_inventory].[Hub] (
+IF OBJECT_ID(N'bsd_inventory.InventoryHub', N'U') IS NULL
+CREATE TABLE [bsd_inventory].[InventoryHub] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_Hub_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_InventoryHub_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
-    ,CONSTRAINT [PK_bsd_inventory_Hub] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_inventory_InventoryHub] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_inventory.Lookup_01', N'U') IS NULL
-CREATE TABLE [bsd_inventory].[Lookup_01] (
+IF OBJECT_ID(N'bsd_inventory.InventoryLookup_01', N'U') IS NULL
+CREATE TABLE [bsd_inventory].[InventoryLookup_01] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_Lookup_01_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_InventoryLookup_01_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
-    ,CONSTRAINT [PK_bsd_inventory_Lookup_01] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_inventory_InventoryLookup_01] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_inventory.Lookup_02', N'U') IS NULL
-CREATE TABLE [bsd_inventory].[Lookup_02] (
+IF OBJECT_ID(N'bsd_inventory.InventoryLookup_02', N'U') IS NULL
+CREATE TABLE [bsd_inventory].[InventoryLookup_02] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_Lookup_02_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_InventoryLookup_02_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
-    ,CONSTRAINT [PK_bsd_inventory_Lookup_02] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_inventory_InventoryLookup_02] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_inventory.Child_001', N'U') IS NULL
-CREATE TABLE [bsd_inventory].[Child_001] (
+IF OBJECT_ID(N'bsd_inventory.InventoryChild_001', N'U') IS NULL
+CREATE TABLE [bsd_inventory].[InventoryChild_001] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_Child_001_Amount] DEFAULT (0)
-    ,Notes NVARCHAR(400) NULL
-    ,HubID UNIQUEIDENTIFIER NOT NULL
-    ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_inventory_Child_001] PRIMARY KEY CLUSTERED (ID)
-);
-GO
-
-IF OBJECT_ID(N'bsd_inventory.Child_002', N'U') IS NULL
-CREATE TABLE [bsd_inventory].[Child_002] (
-    ID UNIQUEIDENTIFIER NOT NULL
-    ,Name NVARCHAR(200) NOT NULL
-    ,Code NVARCHAR(40) NOT NULL
-    ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_Child_002_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_InventoryChild_001_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_inventory_Child_002] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_inventory_InventoryChild_001] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_inventory.Child_003', N'U') IS NULL
-CREATE TABLE [bsd_inventory].[Child_003] (
+IF OBJECT_ID(N'bsd_inventory.InventoryChild_002', N'U') IS NULL
+CREATE TABLE [bsd_inventory].[InventoryChild_002] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_Child_003_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_InventoryChild_002_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_inventory_Child_003] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_inventory_InventoryChild_002] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_inventory.Child_004', N'U') IS NULL
-CREATE TABLE [bsd_inventory].[Child_004] (
+IF OBJECT_ID(N'bsd_inventory.InventoryChild_003', N'U') IS NULL
+CREATE TABLE [bsd_inventory].[InventoryChild_003] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_Child_004_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_InventoryChild_003_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_inventory_Child_004] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_inventory_InventoryChild_003] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_inventory.Child_005', N'U') IS NULL
-CREATE TABLE [bsd_inventory].[Child_005] (
+IF OBJECT_ID(N'bsd_inventory.InventoryChild_004', N'U') IS NULL
+CREATE TABLE [bsd_inventory].[InventoryChild_004] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_Child_005_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_InventoryChild_004_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_inventory_Child_005] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_inventory_InventoryChild_004] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_inventory.Grandchild_001', N'U') IS NULL
-CREATE TABLE [bsd_inventory].[Grandchild_001] (
+IF OBJECT_ID(N'bsd_inventory.InventoryChild_005', N'U') IS NULL
+CREATE TABLE [bsd_inventory].[InventoryChild_005] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_Grandchild_001_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_InventoryChild_005_Amount] DEFAULT (0)
+    ,Notes NVARCHAR(400) NULL
+    ,HubID UNIQUEIDENTIFIER NOT NULL
+    ,LookupID UNIQUEIDENTIFIER NULL
+    ,CONSTRAINT [PK_bsd_inventory_InventoryChild_005] PRIMARY KEY CLUSTERED (ID)
+);
+GO
+
+IF OBJECT_ID(N'bsd_inventory.InventoryGrandchild_001', N'U') IS NULL
+CREATE TABLE [bsd_inventory].[InventoryGrandchild_001] (
+    ID UNIQUEIDENTIFIER NOT NULL
+    ,Name NVARCHAR(200) NOT NULL
+    ,Code NVARCHAR(40) NOT NULL
+    ,Status NVARCHAR(40) NOT NULL
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_InventoryGrandchild_001_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,ChildID UNIQUEIDENTIFIER NOT NULL
-    ,CONSTRAINT [PK_bsd_inventory_Grandchild_001] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_inventory_InventoryGrandchild_001] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_inventory.XRef_01', N'U') IS NULL
-CREATE TABLE [bsd_inventory].[XRef_01] (
+IF OBJECT_ID(N'bsd_inventory.InventoryXRef_01', N'U') IS NULL
+CREATE TABLE [bsd_inventory].[InventoryXRef_01] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_XRef_01_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_InventoryXRef_01_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_inventory_XRef_01] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_inventory_InventoryXRef_01] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_inventory.XRef_02', N'U') IS NULL
-CREATE TABLE [bsd_inventory].[XRef_02] (
+IF OBJECT_ID(N'bsd_inventory.InventoryXRef_02', N'U') IS NULL
+CREATE TABLE [bsd_inventory].[InventoryXRef_02] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_XRef_02_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_InventoryXRef_02_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,HubID UNIQUEIDENTIFIER NOT NULL
     ,LookupID UNIQUEIDENTIFIER NULL
-    ,CONSTRAINT [PK_bsd_inventory_XRef_02] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_inventory_InventoryXRef_02] PRIMARY KEY CLUSTERED (ID)
 );
 GO
 
-IF OBJECT_ID(N'bsd_inventory.Bridge', N'U') IS NULL
-CREATE TABLE [bsd_inventory].[Bridge] (
+IF OBJECT_ID(N'bsd_inventory.InventoryBridge', N'U') IS NULL
+CREATE TABLE [bsd_inventory].[InventoryBridge] (
     ID UNIQUEIDENTIFIER NOT NULL
     ,Name NVARCHAR(200) NOT NULL
     ,Code NVARCHAR(40) NOT NULL
     ,Status NVARCHAR(40) NOT NULL
-    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_Bridge_Amount] DEFAULT (0)
+    ,Amount DECIMAL(18, 2) NOT NULL CONSTRAINT [DF_bsd_inventory_InventoryBridge_Amount] DEFAULT (0)
     ,Notes NVARCHAR(400) NULL
     ,LocalHubID UNIQUEIDENTIFIER NOT NULL
     ,RemoteHubID UNIQUEIDENTIFIER NOT NULL
-    ,CONSTRAINT [PK_bsd_inventory_Bridge] PRIMARY KEY CLUSTERED (ID)
+    ,CONSTRAINT [PK_bsd_inventory_InventoryBridge] PRIMARY KEY CLUSTERED (ID)
 );
 GO

@@ -113,25 +113,29 @@ function buildCatalog(profile) {
       tableIndex += 1;
     };
 
-    push({ kind: 'hub', name: 'Hub' });
+    const prefix = domain.charAt(0).toUpperCase() + domain.slice(1);
+    push({ kind: 'hub', name: `${prefix}Hub` });
     for (let i = 1; i <= mix.lookups; i += 1) {
-      push({ kind: 'lookup', name: `Lookup_${String(i).padStart(2, '0')}` });
+      push({ kind: 'lookup', name: `${prefix}Lookup_${String(i).padStart(2, '0')}` });
     }
     for (let i = 1; i <= mix.children; i += 1) {
-      push({ kind: 'child', name: `Child_${String(i).padStart(3, '0')}` });
+      push({ kind: 'child', name: `${prefix}Child_${String(i).padStart(3, '0')}` });
     }
     for (let i = 1; i <= mix.grand; i += 1) {
-      push({ kind: 'grandchild', name: `Grandchild_${String(i).padStart(3, '0')}` });
+      push({ kind: 'grandchild', name: `${prefix}Grandchild_${String(i).padStart(3, '0')}` });
     }
     for (let i = 1; i <= mix.xref; i += 1) {
-      push({ kind: 'xref', name: `XRef_${String(i).padStart(2, '0')}` });
+      push({ kind: 'xref', name: `${prefix}XRef_${String(i).padStart(2, '0')}` });
     }
     if (mix.bridge === 1) {
+      const remoteDomain = domains[schemaIndex - 1];
+      const remotePrefix = remoteDomain.charAt(0).toUpperCase() + remoteDomain.slice(1);
       push({
         kind: 'bridge',
-        name: 'Bridge',
-        remoteSchema: schemaName(domains[schemaIndex - 1]),
-        remoteDomain: domains[schemaIndex - 1],
+        name: `${prefix}Bridge`,
+        remoteSchema: schemaName(remoteDomain),
+        remoteDomain,
+        remoteHubName: `${remotePrefix}Hub`,
       });
     }
 
@@ -170,6 +174,12 @@ function emitDrop(catalog) {
     lines.push(`    FROM sys.foreign_keys`);
     lines.push(`    WHERE OBJECT_SCHEMA_NAME(parent_object_id) = N'${entry.schema}'`);
     lines.push(`       OR OBJECT_SCHEMA_NAME(referenced_object_id) = N'${entry.schema}';`);
+    lines.push(`    SELECT @sql_${entry.schemaIndex} = @sql_${entry.schemaIndex} + N'DROP PROCEDURE ' + QUOTENAME(s.name) + N'.' + QUOTENAME(p.name) + N';'`);
+    lines.push(`    FROM sys.procedures p INNER JOIN sys.schemas s ON s.schema_id = p.schema_id WHERE s.name = N'${entry.schema}';`);
+    lines.push(`    SELECT @sql_${entry.schemaIndex} = @sql_${entry.schemaIndex} + N'DROP VIEW ' + QUOTENAME(s.name) + N'.' + QUOTENAME(v.name) + N';'`);
+    lines.push(`    FROM sys.views v INNER JOIN sys.schemas s ON s.schema_id = v.schema_id WHERE s.name = N'${entry.schema}';`);
+    lines.push(`    SELECT @sql_${entry.schemaIndex} = @sql_${entry.schemaIndex} + N'DROP FUNCTION ' + QUOTENAME(s.name) + N'.' + QUOTENAME(o.name) + N';'`);
+    lines.push(`    FROM sys.objects o INNER JOIN sys.schemas s ON s.schema_id = o.schema_id WHERE s.name = N'${entry.schema}' AND o.type IN ('FN','IF','TF');`);
     lines.push(`    IF LEN(@sql_${entry.schemaIndex}) > 0 EXEC sys.sp_executesql @sql_${entry.schemaIndex};`);
     lines.push(`    DECLARE @tbl_${entry.schemaIndex} NVARCHAR(MAX) = N'';`);
     lines.push(`    SELECT @tbl_${entry.schemaIndex} = @tbl_${entry.schemaIndex} + N'DROP TABLE ' + QUOTENAME(s.name) + N'.' + QUOTENAME(t.name) + N';'`);
@@ -264,7 +274,7 @@ function emitForeignKeys(catalog) {
         lines.push(`    FOREIGN KEY (LocalHubID) REFERENCES ${qn(entry.schema, hub.name)} (ID);`);
         lines.push('GO');
         lines.push(`ALTER TABLE ${qn(entry.schema, table.name)} ADD CONSTRAINT ${bracket(`FK_${entry.schema}_${table.name}_RemoteHub`)}`);
-        lines.push(`    FOREIGN KEY (RemoteHubID) REFERENCES ${qn(table.remoteSchema, 'Hub')} (ID);`);
+        lines.push(`    FOREIGN KEY (RemoteHubID) REFERENCES ${qn(table.remoteSchema, table.remoteHubName)} (ID);`);
         lines.push('GO');
       }
     }

@@ -14,7 +14,7 @@ import { ManageMetadataBase } from './Database/manage-metadata';
 import { applyIncludeSchemaScope } from './Database/schema-scope';
 import { partitionEntitiesByOutputDirectory } from './Config/schema-output';
 import { outputDir, commands, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig, CommandInfo } from './Config/config';
-import { resolveDirtySchemasForEmit, SchemaEmitOptions } from './Misc/schema-emit';
+import { resolveDirtySchemasForEmit, schemaKey, SchemaEmitOptions } from './Misc/schema-emit';
 import { EmitStats } from './Misc/emit-stats';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
 import { CodeGenReporter } from './Misc/codegen-reporter';
@@ -170,8 +170,9 @@ export class RunCodeGenBase {
         errors,
       };
     } catch (e) {
+      const message = e instanceof Error ? (e.stack ?? e.message) : String(e);
       failSpinner('CodeGen failed: ' + e);
-      logError(e as string);
+      logError(message);
       return {
         success: false,
         command: 'codegen',
@@ -505,17 +506,17 @@ export class RunCodeGenBase {
       const reporter = CodeGenReporter.Instance;
       EmitStats.Reset();
       const apiEntities = md.Entities.filter((e) => e.IncludeInAPI);
-      const excludedSchemaNames = configInfo.excludeSchemas.map(s => s.toLowerCase());
+      const excludedSchemaNames = configInfo.excludeSchemas.map(s => schemaKey(s));
       const includedEntities = apiEntities.filter(
-        (e) => !excludedSchemaNames.includes(e.SchemaName.trim().toLowerCase())
+        (e) => !excludedSchemaNames.includes(schemaKey(e.SchemaName))
       );
 
       const excludedCount = apiEntities.length - includedEntities.length;
       if (excludedCount > 0) {
         const excludedBySchema = apiEntities
-          .filter((e) => excludedSchemaNames.includes(e.SchemaName.trim().toLowerCase()))
+          .filter((e) => excludedSchemaNames.includes(schemaKey(e.SchemaName)))
           .reduce((acc, e) => {
-            const schema = e.SchemaName.trim();
+            const schema = (e.SchemaName ?? '').trim() || '(none)';
             acc[schema] = (acc[schema] || 0) + 1;
             return acc;
           }, {} as Record<string, number>);
@@ -526,10 +527,10 @@ export class RunCodeGenBase {
       }
 
       const coreEntities = includedEntities.filter(
-        (e) => e.SchemaName.trim().toLowerCase() === mjCoreSchema.trim().toLowerCase()
+        (e) => schemaKey(e.SchemaName) === schemaKey(mjCoreSchema)
       );
       const nonCoreEntities = includedEntities.filter(
-        (e) => e.SchemaName.trim().toLowerCase() !== mjCoreSchema.trim().toLowerCase()
+        (e) => schemaKey(e.SchemaName) !== schemaKey(mjCoreSchema)
       );
 
       // Entities whose schemas are owned by OTHER packages (see entityPackageName map). They must be
@@ -539,7 +540,7 @@ export class RunCodeGenBase {
       // crash-loops.
       const externalSchemas = getExternalEntitySchemas().map(s => s.toLowerCase());
       const localNonCoreEntities = externalSchemas.length > 0
-        ? nonCoreEntities.filter(e => !externalSchemas.includes(e.SchemaName.toLowerCase()))
+        ? nonCoreEntities.filter(e => !externalSchemas.includes(schemaKey(e.SchemaName)))
         : nonCoreEntities;
 
       const isVerbose = configInfo?.verboseOutput ?? false;
@@ -665,9 +666,21 @@ export class RunCodeGenBase {
       if (angularOutputDir) {
         if (isVerbose) startSpinner('Generating Angular Code...');
         const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase)!;
-        const ok = await reporter.phase('generateAngular', () =>
-          angularGenerator.generateAngularCode(localNonCoreEntities, angularOutputDir, '', currentUser),
+        const angularGroups = partitionEntitiesByOutputDirectory(
+          localNonCoreEntities,
+          'Angular',
+          angularOutputDir,
+          configInfo.schemaOutput,
         );
+        const ok = await reporter.phase('generateAngular', async () => {
+          for (const [dir, group] of angularGroups) {
+            const groupOk = angularGenerator.generateAngularCode(group, dir, '', currentUser);
+            if (!groupOk) {
+              return false;
+            }
+          }
+          return true;
+        });
         if (!ok) {
           failSpinner('Error generating Angular code');
           return false;

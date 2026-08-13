@@ -6,158 +6,158 @@
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 
-ALTER TABLE [bsd_crm].[Child_001] ADD CONSTRAINT [FK_bsd_crm_Child_001_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_crm].[Hub] (ID);
+ALTER TABLE [bsd_crm].[CrmChild_001] ADD CONSTRAINT [FK_bsd_crm_CrmChild_001_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_crm].[CrmHub] (ID);
 GO
-ALTER TABLE [bsd_crm].[Child_001] ADD CONSTRAINT [FK_bsd_crm_Child_001_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_crm].[Lookup_01] (ID);
+ALTER TABLE [bsd_crm].[CrmChild_001] ADD CONSTRAINT [FK_bsd_crm_CrmChild_001_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_crm].[CrmLookup_01] (ID);
 GO
-ALTER TABLE [bsd_crm].[Child_002] ADD CONSTRAINT [FK_bsd_crm_Child_002_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_crm].[Hub] (ID);
+ALTER TABLE [bsd_crm].[CrmChild_002] ADD CONSTRAINT [FK_bsd_crm_CrmChild_002_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_crm].[CrmHub] (ID);
 GO
-ALTER TABLE [bsd_crm].[Child_002] ADD CONSTRAINT [FK_bsd_crm_Child_002_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_crm].[Lookup_01] (ID);
+ALTER TABLE [bsd_crm].[CrmChild_002] ADD CONSTRAINT [FK_bsd_crm_CrmChild_002_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_crm].[CrmLookup_01] (ID);
 GO
-ALTER TABLE [bsd_crm].[Child_003] ADD CONSTRAINT [FK_bsd_crm_Child_003_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_crm].[Hub] (ID);
+ALTER TABLE [bsd_crm].[CrmChild_003] ADD CONSTRAINT [FK_bsd_crm_CrmChild_003_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_crm].[CrmHub] (ID);
 GO
-ALTER TABLE [bsd_crm].[Child_003] ADD CONSTRAINT [FK_bsd_crm_Child_003_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_crm].[Lookup_01] (ID);
+ALTER TABLE [bsd_crm].[CrmChild_003] ADD CONSTRAINT [FK_bsd_crm_CrmChild_003_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_crm].[CrmLookup_01] (ID);
 GO
-ALTER TABLE [bsd_crm].[Child_004] ADD CONSTRAINT [FK_bsd_crm_Child_004_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_crm].[Hub] (ID);
+ALTER TABLE [bsd_crm].[CrmChild_004] ADD CONSTRAINT [FK_bsd_crm_CrmChild_004_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_crm].[CrmHub] (ID);
 GO
-ALTER TABLE [bsd_crm].[Child_004] ADD CONSTRAINT [FK_bsd_crm_Child_004_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_crm].[Lookup_01] (ID);
+ALTER TABLE [bsd_crm].[CrmChild_004] ADD CONSTRAINT [FK_bsd_crm_CrmChild_004_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_crm].[CrmLookup_01] (ID);
 GO
-ALTER TABLE [bsd_crm].[Child_005] ADD CONSTRAINT [FK_bsd_crm_Child_005_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_crm].[Hub] (ID);
+ALTER TABLE [bsd_crm].[CrmChild_005] ADD CONSTRAINT [FK_bsd_crm_CrmChild_005_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_crm].[CrmHub] (ID);
 GO
-ALTER TABLE [bsd_crm].[Child_005] ADD CONSTRAINT [FK_bsd_crm_Child_005_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_crm].[Lookup_01] (ID);
+ALTER TABLE [bsd_crm].[CrmChild_005] ADD CONSTRAINT [FK_bsd_crm_CrmChild_005_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_crm].[CrmLookup_01] (ID);
 GO
-ALTER TABLE [bsd_crm].[Child_006] ADD CONSTRAINT [FK_bsd_crm_Child_006_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_crm].[Hub] (ID);
+ALTER TABLE [bsd_crm].[CrmChild_006] ADD CONSTRAINT [FK_bsd_crm_CrmChild_006_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_crm].[CrmHub] (ID);
 GO
-ALTER TABLE [bsd_crm].[Child_006] ADD CONSTRAINT [FK_bsd_crm_Child_006_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_crm].[Lookup_01] (ID);
+ALTER TABLE [bsd_crm].[CrmChild_006] ADD CONSTRAINT [FK_bsd_crm_CrmChild_006_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_crm].[CrmLookup_01] (ID);
 GO
-ALTER TABLE [bsd_crm].[Grandchild_001] ADD CONSTRAINT [FK_bsd_crm_Grandchild_001_Child]
-    FOREIGN KEY (ChildID) REFERENCES [bsd_crm].[Child_001] (ID);
+ALTER TABLE [bsd_crm].[CrmGrandchild_001] ADD CONSTRAINT [FK_bsd_crm_CrmGrandchild_001_Child]
+    FOREIGN KEY (ChildID) REFERENCES [bsd_crm].[CrmChild_001] (ID);
 GO
-ALTER TABLE [bsd_crm].[XRef_01] ADD CONSTRAINT [FK_bsd_crm_XRef_01_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_crm].[Hub] (ID);
+ALTER TABLE [bsd_crm].[CrmXRef_01] ADD CONSTRAINT [FK_bsd_crm_CrmXRef_01_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_crm].[CrmHub] (ID);
 GO
-ALTER TABLE [bsd_crm].[XRef_01] ADD CONSTRAINT [FK_bsd_crm_XRef_01_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_crm].[Lookup_01] (ID);
+ALTER TABLE [bsd_crm].[CrmXRef_01] ADD CONSTRAINT [FK_bsd_crm_CrmXRef_01_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_crm].[CrmLookup_01] (ID);
 GO
-ALTER TABLE [bsd_crm].[XRef_02] ADD CONSTRAINT [FK_bsd_crm_XRef_02_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_crm].[Hub] (ID);
+ALTER TABLE [bsd_crm].[CrmXRef_02] ADD CONSTRAINT [FK_bsd_crm_CrmXRef_02_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_crm].[CrmHub] (ID);
 GO
-ALTER TABLE [bsd_crm].[XRef_02] ADD CONSTRAINT [FK_bsd_crm_XRef_02_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_crm].[Lookup_01] (ID);
-GO
-
-ALTER TABLE [bsd_billing].[Child_001] ADD CONSTRAINT [FK_bsd_billing_Child_001_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_billing].[Hub] (ID);
-GO
-ALTER TABLE [bsd_billing].[Child_001] ADD CONSTRAINT [FK_bsd_billing_Child_001_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_billing].[Lookup_01] (ID);
-GO
-ALTER TABLE [bsd_billing].[Child_002] ADD CONSTRAINT [FK_bsd_billing_Child_002_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_billing].[Hub] (ID);
-GO
-ALTER TABLE [bsd_billing].[Child_002] ADD CONSTRAINT [FK_bsd_billing_Child_002_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_billing].[Lookup_01] (ID);
-GO
-ALTER TABLE [bsd_billing].[Child_003] ADD CONSTRAINT [FK_bsd_billing_Child_003_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_billing].[Hub] (ID);
-GO
-ALTER TABLE [bsd_billing].[Child_003] ADD CONSTRAINT [FK_bsd_billing_Child_003_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_billing].[Lookup_01] (ID);
-GO
-ALTER TABLE [bsd_billing].[Child_004] ADD CONSTRAINT [FK_bsd_billing_Child_004_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_billing].[Hub] (ID);
-GO
-ALTER TABLE [bsd_billing].[Child_004] ADD CONSTRAINT [FK_bsd_billing_Child_004_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_billing].[Lookup_01] (ID);
-GO
-ALTER TABLE [bsd_billing].[Child_005] ADD CONSTRAINT [FK_bsd_billing_Child_005_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_billing].[Hub] (ID);
-GO
-ALTER TABLE [bsd_billing].[Child_005] ADD CONSTRAINT [FK_bsd_billing_Child_005_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_billing].[Lookup_01] (ID);
-GO
-ALTER TABLE [bsd_billing].[Grandchild_001] ADD CONSTRAINT [FK_bsd_billing_Grandchild_001_Child]
-    FOREIGN KEY (ChildID) REFERENCES [bsd_billing].[Child_001] (ID);
-GO
-ALTER TABLE [bsd_billing].[XRef_01] ADD CONSTRAINT [FK_bsd_billing_XRef_01_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_billing].[Hub] (ID);
-GO
-ALTER TABLE [bsd_billing].[XRef_01] ADD CONSTRAINT [FK_bsd_billing_XRef_01_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_billing].[Lookup_01] (ID);
-GO
-ALTER TABLE [bsd_billing].[XRef_02] ADD CONSTRAINT [FK_bsd_billing_XRef_02_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_billing].[Hub] (ID);
-GO
-ALTER TABLE [bsd_billing].[XRef_02] ADD CONSTRAINT [FK_bsd_billing_XRef_02_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_billing].[Lookup_01] (ID);
-GO
-ALTER TABLE [bsd_billing].[Bridge] ADD CONSTRAINT [FK_bsd_billing_Bridge_LocalHub]
-    FOREIGN KEY (LocalHubID) REFERENCES [bsd_billing].[Hub] (ID);
-GO
-ALTER TABLE [bsd_billing].[Bridge] ADD CONSTRAINT [FK_bsd_billing_Bridge_RemoteHub]
-    FOREIGN KEY (RemoteHubID) REFERENCES [bsd_crm].[Hub] (ID);
+ALTER TABLE [bsd_crm].[CrmXRef_02] ADD CONSTRAINT [FK_bsd_crm_CrmXRef_02_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_crm].[CrmLookup_01] (ID);
 GO
 
-ALTER TABLE [bsd_inventory].[Child_001] ADD CONSTRAINT [FK_bsd_inventory_Child_001_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_inventory].[Hub] (ID);
+ALTER TABLE [bsd_billing].[BillingChild_001] ADD CONSTRAINT [FK_bsd_billing_BillingChild_001_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_billing].[BillingHub] (ID);
 GO
-ALTER TABLE [bsd_inventory].[Child_001] ADD CONSTRAINT [FK_bsd_inventory_Child_001_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_inventory].[Lookup_01] (ID);
+ALTER TABLE [bsd_billing].[BillingChild_001] ADD CONSTRAINT [FK_bsd_billing_BillingChild_001_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_billing].[BillingLookup_01] (ID);
 GO
-ALTER TABLE [bsd_inventory].[Child_002] ADD CONSTRAINT [FK_bsd_inventory_Child_002_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_inventory].[Hub] (ID);
+ALTER TABLE [bsd_billing].[BillingChild_002] ADD CONSTRAINT [FK_bsd_billing_BillingChild_002_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_billing].[BillingHub] (ID);
 GO
-ALTER TABLE [bsd_inventory].[Child_002] ADD CONSTRAINT [FK_bsd_inventory_Child_002_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_inventory].[Lookup_01] (ID);
+ALTER TABLE [bsd_billing].[BillingChild_002] ADD CONSTRAINT [FK_bsd_billing_BillingChild_002_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_billing].[BillingLookup_01] (ID);
 GO
-ALTER TABLE [bsd_inventory].[Child_003] ADD CONSTRAINT [FK_bsd_inventory_Child_003_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_inventory].[Hub] (ID);
+ALTER TABLE [bsd_billing].[BillingChild_003] ADD CONSTRAINT [FK_bsd_billing_BillingChild_003_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_billing].[BillingHub] (ID);
 GO
-ALTER TABLE [bsd_inventory].[Child_003] ADD CONSTRAINT [FK_bsd_inventory_Child_003_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_inventory].[Lookup_01] (ID);
+ALTER TABLE [bsd_billing].[BillingChild_003] ADD CONSTRAINT [FK_bsd_billing_BillingChild_003_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_billing].[BillingLookup_01] (ID);
 GO
-ALTER TABLE [bsd_inventory].[Child_004] ADD CONSTRAINT [FK_bsd_inventory_Child_004_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_inventory].[Hub] (ID);
+ALTER TABLE [bsd_billing].[BillingChild_004] ADD CONSTRAINT [FK_bsd_billing_BillingChild_004_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_billing].[BillingHub] (ID);
 GO
-ALTER TABLE [bsd_inventory].[Child_004] ADD CONSTRAINT [FK_bsd_inventory_Child_004_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_inventory].[Lookup_01] (ID);
+ALTER TABLE [bsd_billing].[BillingChild_004] ADD CONSTRAINT [FK_bsd_billing_BillingChild_004_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_billing].[BillingLookup_01] (ID);
 GO
-ALTER TABLE [bsd_inventory].[Child_005] ADD CONSTRAINT [FK_bsd_inventory_Child_005_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_inventory].[Hub] (ID);
+ALTER TABLE [bsd_billing].[BillingChild_005] ADD CONSTRAINT [FK_bsd_billing_BillingChild_005_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_billing].[BillingHub] (ID);
 GO
-ALTER TABLE [bsd_inventory].[Child_005] ADD CONSTRAINT [FK_bsd_inventory_Child_005_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_inventory].[Lookup_01] (ID);
+ALTER TABLE [bsd_billing].[BillingChild_005] ADD CONSTRAINT [FK_bsd_billing_BillingChild_005_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_billing].[BillingLookup_01] (ID);
 GO
-ALTER TABLE [bsd_inventory].[Grandchild_001] ADD CONSTRAINT [FK_bsd_inventory_Grandchild_001_Child]
-    FOREIGN KEY (ChildID) REFERENCES [bsd_inventory].[Child_001] (ID);
+ALTER TABLE [bsd_billing].[BillingGrandchild_001] ADD CONSTRAINT [FK_bsd_billing_BillingGrandchild_001_Child]
+    FOREIGN KEY (ChildID) REFERENCES [bsd_billing].[BillingChild_001] (ID);
 GO
-ALTER TABLE [bsd_inventory].[XRef_01] ADD CONSTRAINT [FK_bsd_inventory_XRef_01_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_inventory].[Hub] (ID);
+ALTER TABLE [bsd_billing].[BillingXRef_01] ADD CONSTRAINT [FK_bsd_billing_BillingXRef_01_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_billing].[BillingHub] (ID);
 GO
-ALTER TABLE [bsd_inventory].[XRef_01] ADD CONSTRAINT [FK_bsd_inventory_XRef_01_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_inventory].[Lookup_01] (ID);
+ALTER TABLE [bsd_billing].[BillingXRef_01] ADD CONSTRAINT [FK_bsd_billing_BillingXRef_01_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_billing].[BillingLookup_01] (ID);
 GO
-ALTER TABLE [bsd_inventory].[XRef_02] ADD CONSTRAINT [FK_bsd_inventory_XRef_02_Hub]
-    FOREIGN KEY (HubID) REFERENCES [bsd_inventory].[Hub] (ID);
+ALTER TABLE [bsd_billing].[BillingXRef_02] ADD CONSTRAINT [FK_bsd_billing_BillingXRef_02_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_billing].[BillingHub] (ID);
 GO
-ALTER TABLE [bsd_inventory].[XRef_02] ADD CONSTRAINT [FK_bsd_inventory_XRef_02_Lookup]
-    FOREIGN KEY (LookupID) REFERENCES [bsd_inventory].[Lookup_01] (ID);
+ALTER TABLE [bsd_billing].[BillingXRef_02] ADD CONSTRAINT [FK_bsd_billing_BillingXRef_02_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_billing].[BillingLookup_01] (ID);
 GO
-ALTER TABLE [bsd_inventory].[Bridge] ADD CONSTRAINT [FK_bsd_inventory_Bridge_LocalHub]
-    FOREIGN KEY (LocalHubID) REFERENCES [bsd_inventory].[Hub] (ID);
+ALTER TABLE [bsd_billing].[BillingBridge] ADD CONSTRAINT [FK_bsd_billing_BillingBridge_LocalHub]
+    FOREIGN KEY (LocalHubID) REFERENCES [bsd_billing].[BillingHub] (ID);
 GO
-ALTER TABLE [bsd_inventory].[Bridge] ADD CONSTRAINT [FK_bsd_inventory_Bridge_RemoteHub]
-    FOREIGN KEY (RemoteHubID) REFERENCES [bsd_billing].[Hub] (ID);
+ALTER TABLE [bsd_billing].[BillingBridge] ADD CONSTRAINT [FK_bsd_billing_BillingBridge_RemoteHub]
+    FOREIGN KEY (RemoteHubID) REFERENCES [bsd_crm].[CrmHub] (ID);
+GO
+
+ALTER TABLE [bsd_inventory].[InventoryChild_001] ADD CONSTRAINT [FK_bsd_inventory_InventoryChild_001_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_inventory].[InventoryHub] (ID);
+GO
+ALTER TABLE [bsd_inventory].[InventoryChild_001] ADD CONSTRAINT [FK_bsd_inventory_InventoryChild_001_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_inventory].[InventoryLookup_01] (ID);
+GO
+ALTER TABLE [bsd_inventory].[InventoryChild_002] ADD CONSTRAINT [FK_bsd_inventory_InventoryChild_002_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_inventory].[InventoryHub] (ID);
+GO
+ALTER TABLE [bsd_inventory].[InventoryChild_002] ADD CONSTRAINT [FK_bsd_inventory_InventoryChild_002_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_inventory].[InventoryLookup_01] (ID);
+GO
+ALTER TABLE [bsd_inventory].[InventoryChild_003] ADD CONSTRAINT [FK_bsd_inventory_InventoryChild_003_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_inventory].[InventoryHub] (ID);
+GO
+ALTER TABLE [bsd_inventory].[InventoryChild_003] ADD CONSTRAINT [FK_bsd_inventory_InventoryChild_003_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_inventory].[InventoryLookup_01] (ID);
+GO
+ALTER TABLE [bsd_inventory].[InventoryChild_004] ADD CONSTRAINT [FK_bsd_inventory_InventoryChild_004_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_inventory].[InventoryHub] (ID);
+GO
+ALTER TABLE [bsd_inventory].[InventoryChild_004] ADD CONSTRAINT [FK_bsd_inventory_InventoryChild_004_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_inventory].[InventoryLookup_01] (ID);
+GO
+ALTER TABLE [bsd_inventory].[InventoryChild_005] ADD CONSTRAINT [FK_bsd_inventory_InventoryChild_005_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_inventory].[InventoryHub] (ID);
+GO
+ALTER TABLE [bsd_inventory].[InventoryChild_005] ADD CONSTRAINT [FK_bsd_inventory_InventoryChild_005_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_inventory].[InventoryLookup_01] (ID);
+GO
+ALTER TABLE [bsd_inventory].[InventoryGrandchild_001] ADD CONSTRAINT [FK_bsd_inventory_InventoryGrandchild_001_Child]
+    FOREIGN KEY (ChildID) REFERENCES [bsd_inventory].[InventoryChild_001] (ID);
+GO
+ALTER TABLE [bsd_inventory].[InventoryXRef_01] ADD CONSTRAINT [FK_bsd_inventory_InventoryXRef_01_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_inventory].[InventoryHub] (ID);
+GO
+ALTER TABLE [bsd_inventory].[InventoryXRef_01] ADD CONSTRAINT [FK_bsd_inventory_InventoryXRef_01_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_inventory].[InventoryLookup_01] (ID);
+GO
+ALTER TABLE [bsd_inventory].[InventoryXRef_02] ADD CONSTRAINT [FK_bsd_inventory_InventoryXRef_02_Hub]
+    FOREIGN KEY (HubID) REFERENCES [bsd_inventory].[InventoryHub] (ID);
+GO
+ALTER TABLE [bsd_inventory].[InventoryXRef_02] ADD CONSTRAINT [FK_bsd_inventory_InventoryXRef_02_Lookup]
+    FOREIGN KEY (LookupID) REFERENCES [bsd_inventory].[InventoryLookup_01] (ID);
+GO
+ALTER TABLE [bsd_inventory].[InventoryBridge] ADD CONSTRAINT [FK_bsd_inventory_InventoryBridge_LocalHub]
+    FOREIGN KEY (LocalHubID) REFERENCES [bsd_inventory].[InventoryHub] (ID);
+GO
+ALTER TABLE [bsd_inventory].[InventoryBridge] ADD CONSTRAINT [FK_bsd_inventory_InventoryBridge_RemoteHub]
+    FOREIGN KEY (RemoteHubID) REFERENCES [bsd_billing].[BillingHub] (ID);
 GO

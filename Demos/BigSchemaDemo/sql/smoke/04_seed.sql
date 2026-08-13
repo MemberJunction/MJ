@@ -6,375 +6,375 @@
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 
-INSERT INTO [bsd_crm].[Hub] ([ID], [Name], [Code], [Status], [Amount], [Notes])
+INSERT INTO [bsd_crm].[CrmHub] ([ID], [Name], [Code], [Status], [Amount], [Notes])
 VALUES
-    ('B5D00000-0000-4000-8000-000000000001', N'crm Hub 1', N'CRM-Hub-1', N'Active', 10, N'hub row 1 in bsd_crm'),
-    ('B5D00000-0000-4000-8000-000000000002', N'crm Hub 2', N'CRM-Hub-2', N'Pending', 20, N'hub row 2 in bsd_crm'),
-    ('B5D00000-0000-4000-8000-000000000003', N'crm Hub 3', N'CRM-Hub-3', N'Closed', 30, N'hub row 3 in bsd_crm'),
-    ('B5D00000-0000-4000-8000-000000000004', N'crm Hub 4', N'CRM-Hub-4', N'Hold', 40, N'hub row 4 in bsd_crm'),
-    ('B5D00000-0000-4000-8000-000000000005', N'crm Hub 5', N'CRM-Hub-5', N'Active', 50, N'hub row 5 in bsd_crm');
+    ('B5D00000-0000-4000-8000-000000000001', N'crm CrmHub 1', N'CRM-CrmHub-1', N'Active', 10, N'hub row 1 in bsd_crm'),
+    ('B5D00000-0000-4000-8000-000000000002', N'crm CrmHub 2', N'CRM-CrmHub-2', N'Pending', 20, N'hub row 2 in bsd_crm'),
+    ('B5D00000-0000-4000-8000-000000000003', N'crm CrmHub 3', N'CRM-CrmHub-3', N'Closed', 30, N'hub row 3 in bsd_crm'),
+    ('B5D00000-0000-4000-8000-000000000004', N'crm CrmHub 4', N'CRM-CrmHub-4', N'Hold', 40, N'hub row 4 in bsd_crm'),
+    ('B5D00000-0000-4000-8000-000000000005', N'crm CrmHub 5', N'CRM-CrmHub-5', N'Active', 50, N'hub row 5 in bsd_crm');
 GO
 
-INSERT INTO [bsd_crm].[Lookup_01] ([ID], [Name], [Code], [Status], [Amount], [Notes])
+INSERT INTO [bsd_crm].[CrmLookup_01] ([ID], [Name], [Code], [Status], [Amount], [Notes])
 VALUES
-    ('B5D00000-0000-4000-8000-000000010001', N'crm Lookup_01 1', N'CRM-Lookup_01-1', N'Active', 11, N'lookup row 1 in bsd_crm'),
-    ('B5D00000-0000-4000-8000-000000010002', N'crm Lookup_01 2', N'CRM-Lookup_01-2', N'Pending', 21, N'lookup row 2 in bsd_crm'),
-    ('B5D00000-0000-4000-8000-000000010003', N'crm Lookup_01 3', N'CRM-Lookup_01-3', N'Closed', 31, N'lookup row 3 in bsd_crm'),
-    ('B5D00000-0000-4000-8000-000000010004', N'crm Lookup_01 4', N'CRM-Lookup_01-4', N'Hold', 41, N'lookup row 4 in bsd_crm');
+    ('B5D00000-0000-4000-8000-000000010001', N'crm CrmLookup_01 1', N'CRM-CrmLookup_01-1', N'Active', 11, N'lookup row 1 in bsd_crm'),
+    ('B5D00000-0000-4000-8000-000000010002', N'crm CrmLookup_01 2', N'CRM-CrmLookup_01-2', N'Pending', 21, N'lookup row 2 in bsd_crm'),
+    ('B5D00000-0000-4000-8000-000000010003', N'crm CrmLookup_01 3', N'CRM-CrmLookup_01-3', N'Closed', 31, N'lookup row 3 in bsd_crm'),
+    ('B5D00000-0000-4000-8000-000000010004', N'crm CrmLookup_01 4', N'CRM-CrmLookup_01-4', N'Hold', 41, N'lookup row 4 in bsd_crm');
 GO
 
-INSERT INTO [bsd_crm].[Lookup_02] ([ID], [Name], [Code], [Status], [Amount], [Notes])
+INSERT INTO [bsd_crm].[CrmLookup_02] ([ID], [Name], [Code], [Status], [Amount], [Notes])
 VALUES
-    ('B5D00000-0000-4000-8000-000000020001', N'crm Lookup_02 1', N'CRM-Lookup_02-1', N'Active', 12, N'lookup row 1 in bsd_crm'),
-    ('B5D00000-0000-4000-8000-000000020002', N'crm Lookup_02 2', N'CRM-Lookup_02-2', N'Pending', 22, N'lookup row 2 in bsd_crm'),
-    ('B5D00000-0000-4000-8000-000000020003', N'crm Lookup_02 3', N'CRM-Lookup_02-3', N'Closed', 32, N'lookup row 3 in bsd_crm'),
-    ('B5D00000-0000-4000-8000-000000020004', N'crm Lookup_02 4', N'CRM-Lookup_02-4', N'Hold', 42, N'lookup row 4 in bsd_crm');
+    ('B5D00000-0000-4000-8000-000000020001', N'crm CrmLookup_02 1', N'CRM-CrmLookup_02-1', N'Active', 12, N'lookup row 1 in bsd_crm'),
+    ('B5D00000-0000-4000-8000-000000020002', N'crm CrmLookup_02 2', N'CRM-CrmLookup_02-2', N'Pending', 22, N'lookup row 2 in bsd_crm'),
+    ('B5D00000-0000-4000-8000-000000020003', N'crm CrmLookup_02 3', N'CRM-CrmLookup_02-3', N'Closed', 32, N'lookup row 3 in bsd_crm'),
+    ('B5D00000-0000-4000-8000-000000020004', N'crm CrmLookup_02 4', N'CRM-CrmLookup_02-4', N'Hold', 42, N'lookup row 4 in bsd_crm');
 GO
 
-INSERT INTO [bsd_crm].[Child_001] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_crm].[CrmChild_001] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8000-000000030001', N'crm Child_001 1', N'CRM-Child_001-1', N'Active', 13, N'child row 1 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010001'),
-    ('B5D00000-0000-4000-8000-000000030002', N'crm Child_001 2', N'CRM-Child_001-2', N'Pending', 23, N'child row 2 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010002'),
-    ('B5D00000-0000-4000-8000-000000030003', N'crm Child_001 3', N'CRM-Child_001-3', N'Closed', 33, N'child row 3 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010003'),
-    ('B5D00000-0000-4000-8000-000000030004', N'crm Child_001 4', N'CRM-Child_001-4', N'Hold', 43, N'child row 4 in bsd_crm', 'B5D00000-0000-4000-8000-000000000004', 'B5D00000-0000-4000-8000-000000010004'),
-    ('B5D00000-0000-4000-8000-000000030005', N'crm Child_001 5', N'CRM-Child_001-5', N'Active', 53, N'child row 5 in bsd_crm', 'B5D00000-0000-4000-8000-000000000005', 'B5D00000-0000-4000-8000-000000010001'),
-    ('B5D00000-0000-4000-8000-000000030006', N'crm Child_001 6', N'CRM-Child_001-6', N'Pending', 63, N'child row 6 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010002'),
-    ('B5D00000-0000-4000-8000-000000030007', N'crm Child_001 7', N'CRM-Child_001-7', N'Closed', 73, N'child row 7 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010003'),
-    ('B5D00000-0000-4000-8000-000000030008', N'crm Child_001 8', N'CRM-Child_001-8', N'Hold', 83, N'child row 8 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010004');
+    ('B5D00000-0000-4000-8000-000000030001', N'crm CrmChild_001 1', N'CRM-CrmChild_001-1', N'Active', 13, N'child row 1 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010001'),
+    ('B5D00000-0000-4000-8000-000000030002', N'crm CrmChild_001 2', N'CRM-CrmChild_001-2', N'Pending', 23, N'child row 2 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010002'),
+    ('B5D00000-0000-4000-8000-000000030003', N'crm CrmChild_001 3', N'CRM-CrmChild_001-3', N'Closed', 33, N'child row 3 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010003'),
+    ('B5D00000-0000-4000-8000-000000030004', N'crm CrmChild_001 4', N'CRM-CrmChild_001-4', N'Hold', 43, N'child row 4 in bsd_crm', 'B5D00000-0000-4000-8000-000000000004', 'B5D00000-0000-4000-8000-000000010004'),
+    ('B5D00000-0000-4000-8000-000000030005', N'crm CrmChild_001 5', N'CRM-CrmChild_001-5', N'Active', 53, N'child row 5 in bsd_crm', 'B5D00000-0000-4000-8000-000000000005', 'B5D00000-0000-4000-8000-000000010001'),
+    ('B5D00000-0000-4000-8000-000000030006', N'crm CrmChild_001 6', N'CRM-CrmChild_001-6', N'Pending', 63, N'child row 6 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010002'),
+    ('B5D00000-0000-4000-8000-000000030007', N'crm CrmChild_001 7', N'CRM-CrmChild_001-7', N'Closed', 73, N'child row 7 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010003'),
+    ('B5D00000-0000-4000-8000-000000030008', N'crm CrmChild_001 8', N'CRM-CrmChild_001-8', N'Hold', 83, N'child row 8 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010004');
 GO
 
-INSERT INTO [bsd_crm].[Child_002] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_crm].[CrmChild_002] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8000-000000040001', N'crm Child_002 1', N'CRM-Child_002-1', N'Active', 14, N'child row 1 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010001'),
-    ('B5D00000-0000-4000-8000-000000040002', N'crm Child_002 2', N'CRM-Child_002-2', N'Pending', 24, N'child row 2 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010002'),
-    ('B5D00000-0000-4000-8000-000000040003', N'crm Child_002 3', N'CRM-Child_002-3', N'Closed', 34, N'child row 3 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010003'),
-    ('B5D00000-0000-4000-8000-000000040004', N'crm Child_002 4', N'CRM-Child_002-4', N'Hold', 44, N'child row 4 in bsd_crm', 'B5D00000-0000-4000-8000-000000000004', 'B5D00000-0000-4000-8000-000000010004'),
-    ('B5D00000-0000-4000-8000-000000040005', N'crm Child_002 5', N'CRM-Child_002-5', N'Active', 54, N'child row 5 in bsd_crm', 'B5D00000-0000-4000-8000-000000000005', 'B5D00000-0000-4000-8000-000000010001'),
-    ('B5D00000-0000-4000-8000-000000040006', N'crm Child_002 6', N'CRM-Child_002-6', N'Pending', 64, N'child row 6 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010002'),
-    ('B5D00000-0000-4000-8000-000000040007', N'crm Child_002 7', N'CRM-Child_002-7', N'Closed', 74, N'child row 7 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010003'),
-    ('B5D00000-0000-4000-8000-000000040008', N'crm Child_002 8', N'CRM-Child_002-8', N'Hold', 84, N'child row 8 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010004');
+    ('B5D00000-0000-4000-8000-000000040001', N'crm CrmChild_002 1', N'CRM-CrmChild_002-1', N'Active', 14, N'child row 1 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010001'),
+    ('B5D00000-0000-4000-8000-000000040002', N'crm CrmChild_002 2', N'CRM-CrmChild_002-2', N'Pending', 24, N'child row 2 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010002'),
+    ('B5D00000-0000-4000-8000-000000040003', N'crm CrmChild_002 3', N'CRM-CrmChild_002-3', N'Closed', 34, N'child row 3 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010003'),
+    ('B5D00000-0000-4000-8000-000000040004', N'crm CrmChild_002 4', N'CRM-CrmChild_002-4', N'Hold', 44, N'child row 4 in bsd_crm', 'B5D00000-0000-4000-8000-000000000004', 'B5D00000-0000-4000-8000-000000010004'),
+    ('B5D00000-0000-4000-8000-000000040005', N'crm CrmChild_002 5', N'CRM-CrmChild_002-5', N'Active', 54, N'child row 5 in bsd_crm', 'B5D00000-0000-4000-8000-000000000005', 'B5D00000-0000-4000-8000-000000010001'),
+    ('B5D00000-0000-4000-8000-000000040006', N'crm CrmChild_002 6', N'CRM-CrmChild_002-6', N'Pending', 64, N'child row 6 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010002'),
+    ('B5D00000-0000-4000-8000-000000040007', N'crm CrmChild_002 7', N'CRM-CrmChild_002-7', N'Closed', 74, N'child row 7 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010003'),
+    ('B5D00000-0000-4000-8000-000000040008', N'crm CrmChild_002 8', N'CRM-CrmChild_002-8', N'Hold', 84, N'child row 8 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010004');
 GO
 
-INSERT INTO [bsd_crm].[Child_003] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_crm].[CrmChild_003] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8000-000000050001', N'crm Child_003 1', N'CRM-Child_003-1', N'Active', 15, N'child row 1 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010001'),
-    ('B5D00000-0000-4000-8000-000000050002', N'crm Child_003 2', N'CRM-Child_003-2', N'Pending', 25, N'child row 2 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010002'),
-    ('B5D00000-0000-4000-8000-000000050003', N'crm Child_003 3', N'CRM-Child_003-3', N'Closed', 35, N'child row 3 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010003'),
-    ('B5D00000-0000-4000-8000-000000050004', N'crm Child_003 4', N'CRM-Child_003-4', N'Hold', 45, N'child row 4 in bsd_crm', 'B5D00000-0000-4000-8000-000000000004', 'B5D00000-0000-4000-8000-000000010004'),
-    ('B5D00000-0000-4000-8000-000000050005', N'crm Child_003 5', N'CRM-Child_003-5', N'Active', 55, N'child row 5 in bsd_crm', 'B5D00000-0000-4000-8000-000000000005', 'B5D00000-0000-4000-8000-000000010001'),
-    ('B5D00000-0000-4000-8000-000000050006', N'crm Child_003 6', N'CRM-Child_003-6', N'Pending', 65, N'child row 6 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010002'),
-    ('B5D00000-0000-4000-8000-000000050007', N'crm Child_003 7', N'CRM-Child_003-7', N'Closed', 75, N'child row 7 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010003'),
-    ('B5D00000-0000-4000-8000-000000050008', N'crm Child_003 8', N'CRM-Child_003-8', N'Hold', 85, N'child row 8 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010004');
+    ('B5D00000-0000-4000-8000-000000050001', N'crm CrmChild_003 1', N'CRM-CrmChild_003-1', N'Active', 15, N'child row 1 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010001'),
+    ('B5D00000-0000-4000-8000-000000050002', N'crm CrmChild_003 2', N'CRM-CrmChild_003-2', N'Pending', 25, N'child row 2 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010002'),
+    ('B5D00000-0000-4000-8000-000000050003', N'crm CrmChild_003 3', N'CRM-CrmChild_003-3', N'Closed', 35, N'child row 3 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010003'),
+    ('B5D00000-0000-4000-8000-000000050004', N'crm CrmChild_003 4', N'CRM-CrmChild_003-4', N'Hold', 45, N'child row 4 in bsd_crm', 'B5D00000-0000-4000-8000-000000000004', 'B5D00000-0000-4000-8000-000000010004'),
+    ('B5D00000-0000-4000-8000-000000050005', N'crm CrmChild_003 5', N'CRM-CrmChild_003-5', N'Active', 55, N'child row 5 in bsd_crm', 'B5D00000-0000-4000-8000-000000000005', 'B5D00000-0000-4000-8000-000000010001'),
+    ('B5D00000-0000-4000-8000-000000050006', N'crm CrmChild_003 6', N'CRM-CrmChild_003-6', N'Pending', 65, N'child row 6 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010002'),
+    ('B5D00000-0000-4000-8000-000000050007', N'crm CrmChild_003 7', N'CRM-CrmChild_003-7', N'Closed', 75, N'child row 7 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010003'),
+    ('B5D00000-0000-4000-8000-000000050008', N'crm CrmChild_003 8', N'CRM-CrmChild_003-8', N'Hold', 85, N'child row 8 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010004');
 GO
 
-INSERT INTO [bsd_crm].[Child_004] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_crm].[CrmChild_004] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8000-000000060001', N'crm Child_004 1', N'CRM-Child_004-1', N'Active', 16, N'child row 1 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010001'),
-    ('B5D00000-0000-4000-8000-000000060002', N'crm Child_004 2', N'CRM-Child_004-2', N'Pending', 26, N'child row 2 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010002'),
-    ('B5D00000-0000-4000-8000-000000060003', N'crm Child_004 3', N'CRM-Child_004-3', N'Closed', 36, N'child row 3 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010003'),
-    ('B5D00000-0000-4000-8000-000000060004', N'crm Child_004 4', N'CRM-Child_004-4', N'Hold', 46, N'child row 4 in bsd_crm', 'B5D00000-0000-4000-8000-000000000004', 'B5D00000-0000-4000-8000-000000010004'),
-    ('B5D00000-0000-4000-8000-000000060005', N'crm Child_004 5', N'CRM-Child_004-5', N'Active', 56, N'child row 5 in bsd_crm', 'B5D00000-0000-4000-8000-000000000005', 'B5D00000-0000-4000-8000-000000010001'),
-    ('B5D00000-0000-4000-8000-000000060006', N'crm Child_004 6', N'CRM-Child_004-6', N'Pending', 66, N'child row 6 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010002'),
-    ('B5D00000-0000-4000-8000-000000060007', N'crm Child_004 7', N'CRM-Child_004-7', N'Closed', 76, N'child row 7 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010003'),
-    ('B5D00000-0000-4000-8000-000000060008', N'crm Child_004 8', N'CRM-Child_004-8', N'Hold', 86, N'child row 8 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010004');
+    ('B5D00000-0000-4000-8000-000000060001', N'crm CrmChild_004 1', N'CRM-CrmChild_004-1', N'Active', 16, N'child row 1 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010001'),
+    ('B5D00000-0000-4000-8000-000000060002', N'crm CrmChild_004 2', N'CRM-CrmChild_004-2', N'Pending', 26, N'child row 2 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010002'),
+    ('B5D00000-0000-4000-8000-000000060003', N'crm CrmChild_004 3', N'CRM-CrmChild_004-3', N'Closed', 36, N'child row 3 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010003'),
+    ('B5D00000-0000-4000-8000-000000060004', N'crm CrmChild_004 4', N'CRM-CrmChild_004-4', N'Hold', 46, N'child row 4 in bsd_crm', 'B5D00000-0000-4000-8000-000000000004', 'B5D00000-0000-4000-8000-000000010004'),
+    ('B5D00000-0000-4000-8000-000000060005', N'crm CrmChild_004 5', N'CRM-CrmChild_004-5', N'Active', 56, N'child row 5 in bsd_crm', 'B5D00000-0000-4000-8000-000000000005', 'B5D00000-0000-4000-8000-000000010001'),
+    ('B5D00000-0000-4000-8000-000000060006', N'crm CrmChild_004 6', N'CRM-CrmChild_004-6', N'Pending', 66, N'child row 6 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010002'),
+    ('B5D00000-0000-4000-8000-000000060007', N'crm CrmChild_004 7', N'CRM-CrmChild_004-7', N'Closed', 76, N'child row 7 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010003'),
+    ('B5D00000-0000-4000-8000-000000060008', N'crm CrmChild_004 8', N'CRM-CrmChild_004-8', N'Hold', 86, N'child row 8 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010004');
 GO
 
-INSERT INTO [bsd_crm].[Child_005] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_crm].[CrmChild_005] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8000-000000070001', N'crm Child_005 1', N'CRM-Child_005-1', N'Active', 10, N'child row 1 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010001'),
-    ('B5D00000-0000-4000-8000-000000070002', N'crm Child_005 2', N'CRM-Child_005-2', N'Pending', 20, N'child row 2 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010002'),
-    ('B5D00000-0000-4000-8000-000000070003', N'crm Child_005 3', N'CRM-Child_005-3', N'Closed', 30, N'child row 3 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010003'),
-    ('B5D00000-0000-4000-8000-000000070004', N'crm Child_005 4', N'CRM-Child_005-4', N'Hold', 40, N'child row 4 in bsd_crm', 'B5D00000-0000-4000-8000-000000000004', 'B5D00000-0000-4000-8000-000000010004'),
-    ('B5D00000-0000-4000-8000-000000070005', N'crm Child_005 5', N'CRM-Child_005-5', N'Active', 50, N'child row 5 in bsd_crm', 'B5D00000-0000-4000-8000-000000000005', 'B5D00000-0000-4000-8000-000000010001'),
-    ('B5D00000-0000-4000-8000-000000070006', N'crm Child_005 6', N'CRM-Child_005-6', N'Pending', 60, N'child row 6 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010002'),
-    ('B5D00000-0000-4000-8000-000000070007', N'crm Child_005 7', N'CRM-Child_005-7', N'Closed', 70, N'child row 7 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010003'),
-    ('B5D00000-0000-4000-8000-000000070008', N'crm Child_005 8', N'CRM-Child_005-8', N'Hold', 80, N'child row 8 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010004');
+    ('B5D00000-0000-4000-8000-000000070001', N'crm CrmChild_005 1', N'CRM-CrmChild_005-1', N'Active', 10, N'child row 1 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010001'),
+    ('B5D00000-0000-4000-8000-000000070002', N'crm CrmChild_005 2', N'CRM-CrmChild_005-2', N'Pending', 20, N'child row 2 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010002'),
+    ('B5D00000-0000-4000-8000-000000070003', N'crm CrmChild_005 3', N'CRM-CrmChild_005-3', N'Closed', 30, N'child row 3 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010003'),
+    ('B5D00000-0000-4000-8000-000000070004', N'crm CrmChild_005 4', N'CRM-CrmChild_005-4', N'Hold', 40, N'child row 4 in bsd_crm', 'B5D00000-0000-4000-8000-000000000004', 'B5D00000-0000-4000-8000-000000010004'),
+    ('B5D00000-0000-4000-8000-000000070005', N'crm CrmChild_005 5', N'CRM-CrmChild_005-5', N'Active', 50, N'child row 5 in bsd_crm', 'B5D00000-0000-4000-8000-000000000005', 'B5D00000-0000-4000-8000-000000010001'),
+    ('B5D00000-0000-4000-8000-000000070006', N'crm CrmChild_005 6', N'CRM-CrmChild_005-6', N'Pending', 60, N'child row 6 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010002'),
+    ('B5D00000-0000-4000-8000-000000070007', N'crm CrmChild_005 7', N'CRM-CrmChild_005-7', N'Closed', 70, N'child row 7 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010003'),
+    ('B5D00000-0000-4000-8000-000000070008', N'crm CrmChild_005 8', N'CRM-CrmChild_005-8', N'Hold', 80, N'child row 8 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010004');
 GO
 
-INSERT INTO [bsd_crm].[Child_006] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_crm].[CrmChild_006] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8000-000000080001', N'crm Child_006 1', N'CRM-Child_006-1', N'Active', 11, N'child row 1 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010001'),
-    ('B5D00000-0000-4000-8000-000000080002', N'crm Child_006 2', N'CRM-Child_006-2', N'Pending', 21, N'child row 2 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010002'),
-    ('B5D00000-0000-4000-8000-000000080003', N'crm Child_006 3', N'CRM-Child_006-3', N'Closed', 31, N'child row 3 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010003'),
-    ('B5D00000-0000-4000-8000-000000080004', N'crm Child_006 4', N'CRM-Child_006-4', N'Hold', 41, N'child row 4 in bsd_crm', 'B5D00000-0000-4000-8000-000000000004', 'B5D00000-0000-4000-8000-000000010004'),
-    ('B5D00000-0000-4000-8000-000000080005', N'crm Child_006 5', N'CRM-Child_006-5', N'Active', 51, N'child row 5 in bsd_crm', 'B5D00000-0000-4000-8000-000000000005', 'B5D00000-0000-4000-8000-000000010001'),
-    ('B5D00000-0000-4000-8000-000000080006', N'crm Child_006 6', N'CRM-Child_006-6', N'Pending', 61, N'child row 6 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010002'),
-    ('B5D00000-0000-4000-8000-000000080007', N'crm Child_006 7', N'CRM-Child_006-7', N'Closed', 71, N'child row 7 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010003'),
-    ('B5D00000-0000-4000-8000-000000080008', N'crm Child_006 8', N'CRM-Child_006-8', N'Hold', 81, N'child row 8 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010004');
+    ('B5D00000-0000-4000-8000-000000080001', N'crm CrmChild_006 1', N'CRM-CrmChild_006-1', N'Active', 11, N'child row 1 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010001'),
+    ('B5D00000-0000-4000-8000-000000080002', N'crm CrmChild_006 2', N'CRM-CrmChild_006-2', N'Pending', 21, N'child row 2 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010002'),
+    ('B5D00000-0000-4000-8000-000000080003', N'crm CrmChild_006 3', N'CRM-CrmChild_006-3', N'Closed', 31, N'child row 3 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010003'),
+    ('B5D00000-0000-4000-8000-000000080004', N'crm CrmChild_006 4', N'CRM-CrmChild_006-4', N'Hold', 41, N'child row 4 in bsd_crm', 'B5D00000-0000-4000-8000-000000000004', 'B5D00000-0000-4000-8000-000000010004'),
+    ('B5D00000-0000-4000-8000-000000080005', N'crm CrmChild_006 5', N'CRM-CrmChild_006-5', N'Active', 51, N'child row 5 in bsd_crm', 'B5D00000-0000-4000-8000-000000000005', 'B5D00000-0000-4000-8000-000000010001'),
+    ('B5D00000-0000-4000-8000-000000080006', N'crm CrmChild_006 6', N'CRM-CrmChild_006-6', N'Pending', 61, N'child row 6 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010002'),
+    ('B5D00000-0000-4000-8000-000000080007', N'crm CrmChild_006 7', N'CRM-CrmChild_006-7', N'Closed', 71, N'child row 7 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010003'),
+    ('B5D00000-0000-4000-8000-000000080008', N'crm CrmChild_006 8', N'CRM-CrmChild_006-8', N'Hold', 81, N'child row 8 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010004');
 GO
 
-INSERT INTO [bsd_crm].[Grandchild_001] ([ID], [Name], [Code], [Status], [Amount], [Notes], [ChildID])
+INSERT INTO [bsd_crm].[CrmGrandchild_001] ([ID], [Name], [Code], [Status], [Amount], [Notes], [ChildID])
 VALUES
-    ('B5D00000-0000-4000-8000-000000090001', N'crm Grandchild_001 1', N'CRM-Grandchild_001-1', N'Active', 12, N'grandchild row 1 in bsd_crm', 'B5D00000-0000-4000-8000-000000030001'),
-    ('B5D00000-0000-4000-8000-000000090002', N'crm Grandchild_001 2', N'CRM-Grandchild_001-2', N'Pending', 22, N'grandchild row 2 in bsd_crm', 'B5D00000-0000-4000-8000-000000030002'),
-    ('B5D00000-0000-4000-8000-000000090003', N'crm Grandchild_001 3', N'CRM-Grandchild_001-3', N'Closed', 32, N'grandchild row 3 in bsd_crm', 'B5D00000-0000-4000-8000-000000030003'),
-    ('B5D00000-0000-4000-8000-000000090004', N'crm Grandchild_001 4', N'CRM-Grandchild_001-4', N'Hold', 42, N'grandchild row 4 in bsd_crm', 'B5D00000-0000-4000-8000-000000030004'),
-    ('B5D00000-0000-4000-8000-000000090005', N'crm Grandchild_001 5', N'CRM-Grandchild_001-5', N'Active', 52, N'grandchild row 5 in bsd_crm', 'B5D00000-0000-4000-8000-000000030005'),
-    ('B5D00000-0000-4000-8000-000000090006', N'crm Grandchild_001 6', N'CRM-Grandchild_001-6', N'Pending', 62, N'grandchild row 6 in bsd_crm', 'B5D00000-0000-4000-8000-000000030006');
+    ('B5D00000-0000-4000-8000-000000090001', N'crm CrmGrandchild_001 1', N'CRM-CrmGrandchild_001-1', N'Active', 12, N'grandchild row 1 in bsd_crm', 'B5D00000-0000-4000-8000-000000030001'),
+    ('B5D00000-0000-4000-8000-000000090002', N'crm CrmGrandchild_001 2', N'CRM-CrmGrandchild_001-2', N'Pending', 22, N'grandchild row 2 in bsd_crm', 'B5D00000-0000-4000-8000-000000030002'),
+    ('B5D00000-0000-4000-8000-000000090003', N'crm CrmGrandchild_001 3', N'CRM-CrmGrandchild_001-3', N'Closed', 32, N'grandchild row 3 in bsd_crm', 'B5D00000-0000-4000-8000-000000030003'),
+    ('B5D00000-0000-4000-8000-000000090004', N'crm CrmGrandchild_001 4', N'CRM-CrmGrandchild_001-4', N'Hold', 42, N'grandchild row 4 in bsd_crm', 'B5D00000-0000-4000-8000-000000030004'),
+    ('B5D00000-0000-4000-8000-000000090005', N'crm CrmGrandchild_001 5', N'CRM-CrmGrandchild_001-5', N'Active', 52, N'grandchild row 5 in bsd_crm', 'B5D00000-0000-4000-8000-000000030005'),
+    ('B5D00000-0000-4000-8000-000000090006', N'crm CrmGrandchild_001 6', N'CRM-CrmGrandchild_001-6', N'Pending', 62, N'grandchild row 6 in bsd_crm', 'B5D00000-0000-4000-8000-000000030006');
 GO
 
-INSERT INTO [bsd_crm].[XRef_01] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_crm].[CrmXRef_01] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8000-0000000A0001', N'crm XRef_01 1', N'CRM-XRef_01-1', N'Active', 13, N'xref row 1 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010001'),
-    ('B5D00000-0000-4000-8000-0000000A0002', N'crm XRef_01 2', N'CRM-XRef_01-2', N'Pending', 23, N'xref row 2 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010002'),
-    ('B5D00000-0000-4000-8000-0000000A0003', N'crm XRef_01 3', N'CRM-XRef_01-3', N'Closed', 33, N'xref row 3 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010003'),
-    ('B5D00000-0000-4000-8000-0000000A0004', N'crm XRef_01 4', N'CRM-XRef_01-4', N'Hold', 43, N'xref row 4 in bsd_crm', 'B5D00000-0000-4000-8000-000000000004', 'B5D00000-0000-4000-8000-000000010004'),
-    ('B5D00000-0000-4000-8000-0000000A0005', N'crm XRef_01 5', N'CRM-XRef_01-5', N'Active', 53, N'xref row 5 in bsd_crm', 'B5D00000-0000-4000-8000-000000000005', 'B5D00000-0000-4000-8000-000000010001'),
-    ('B5D00000-0000-4000-8000-0000000A0006', N'crm XRef_01 6', N'CRM-XRef_01-6', N'Pending', 63, N'xref row 6 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010002');
+    ('B5D00000-0000-4000-8000-0000000A0001', N'crm CrmXRef_01 1', N'CRM-CrmXRef_01-1', N'Active', 13, N'xref row 1 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010001'),
+    ('B5D00000-0000-4000-8000-0000000A0002', N'crm CrmXRef_01 2', N'CRM-CrmXRef_01-2', N'Pending', 23, N'xref row 2 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010002'),
+    ('B5D00000-0000-4000-8000-0000000A0003', N'crm CrmXRef_01 3', N'CRM-CrmXRef_01-3', N'Closed', 33, N'xref row 3 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010003'),
+    ('B5D00000-0000-4000-8000-0000000A0004', N'crm CrmXRef_01 4', N'CRM-CrmXRef_01-4', N'Hold', 43, N'xref row 4 in bsd_crm', 'B5D00000-0000-4000-8000-000000000004', 'B5D00000-0000-4000-8000-000000010004'),
+    ('B5D00000-0000-4000-8000-0000000A0005', N'crm CrmXRef_01 5', N'CRM-CrmXRef_01-5', N'Active', 53, N'xref row 5 in bsd_crm', 'B5D00000-0000-4000-8000-000000000005', 'B5D00000-0000-4000-8000-000000010001'),
+    ('B5D00000-0000-4000-8000-0000000A0006', N'crm CrmXRef_01 6', N'CRM-CrmXRef_01-6', N'Pending', 63, N'xref row 6 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010002');
 GO
 
-INSERT INTO [bsd_crm].[XRef_02] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_crm].[CrmXRef_02] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8000-0000000B0001', N'crm XRef_02 1', N'CRM-XRef_02-1', N'Active', 14, N'xref row 1 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010001'),
-    ('B5D00000-0000-4000-8000-0000000B0002', N'crm XRef_02 2', N'CRM-XRef_02-2', N'Pending', 24, N'xref row 2 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010002'),
-    ('B5D00000-0000-4000-8000-0000000B0003', N'crm XRef_02 3', N'CRM-XRef_02-3', N'Closed', 34, N'xref row 3 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010003'),
-    ('B5D00000-0000-4000-8000-0000000B0004', N'crm XRef_02 4', N'CRM-XRef_02-4', N'Hold', 44, N'xref row 4 in bsd_crm', 'B5D00000-0000-4000-8000-000000000004', 'B5D00000-0000-4000-8000-000000010004'),
-    ('B5D00000-0000-4000-8000-0000000B0005', N'crm XRef_02 5', N'CRM-XRef_02-5', N'Active', 54, N'xref row 5 in bsd_crm', 'B5D00000-0000-4000-8000-000000000005', 'B5D00000-0000-4000-8000-000000010001'),
-    ('B5D00000-0000-4000-8000-0000000B0006', N'crm XRef_02 6', N'CRM-XRef_02-6', N'Pending', 64, N'xref row 6 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010002');
+    ('B5D00000-0000-4000-8000-0000000B0001', N'crm CrmXRef_02 1', N'CRM-CrmXRef_02-1', N'Active', 14, N'xref row 1 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010001'),
+    ('B5D00000-0000-4000-8000-0000000B0002', N'crm CrmXRef_02 2', N'CRM-CrmXRef_02-2', N'Pending', 24, N'xref row 2 in bsd_crm', 'B5D00000-0000-4000-8000-000000000002', 'B5D00000-0000-4000-8000-000000010002'),
+    ('B5D00000-0000-4000-8000-0000000B0003', N'crm CrmXRef_02 3', N'CRM-CrmXRef_02-3', N'Closed', 34, N'xref row 3 in bsd_crm', 'B5D00000-0000-4000-8000-000000000003', 'B5D00000-0000-4000-8000-000000010003'),
+    ('B5D00000-0000-4000-8000-0000000B0004', N'crm CrmXRef_02 4', N'CRM-CrmXRef_02-4', N'Hold', 44, N'xref row 4 in bsd_crm', 'B5D00000-0000-4000-8000-000000000004', 'B5D00000-0000-4000-8000-000000010004'),
+    ('B5D00000-0000-4000-8000-0000000B0005', N'crm CrmXRef_02 5', N'CRM-CrmXRef_02-5', N'Active', 54, N'xref row 5 in bsd_crm', 'B5D00000-0000-4000-8000-000000000005', 'B5D00000-0000-4000-8000-000000010001'),
+    ('B5D00000-0000-4000-8000-0000000B0006', N'crm CrmXRef_02 6', N'CRM-CrmXRef_02-6', N'Pending', 64, N'xref row 6 in bsd_crm', 'B5D00000-0000-4000-8000-000000000001', 'B5D00000-0000-4000-8000-000000010002');
 GO
 
-INSERT INTO [bsd_billing].[Hub] ([ID], [Name], [Code], [Status], [Amount], [Notes])
+INSERT INTO [bsd_billing].[BillingHub] ([ID], [Name], [Code], [Status], [Amount], [Notes])
 VALUES
-    ('B5D00000-0000-4000-8001-000000000001', N'billing Hub 1', N'BIL-Hub-1', N'Active', 10, N'hub row 1 in bsd_billing'),
-    ('B5D00000-0000-4000-8001-000000000002', N'billing Hub 2', N'BIL-Hub-2', N'Pending', 20, N'hub row 2 in bsd_billing'),
-    ('B5D00000-0000-4000-8001-000000000003', N'billing Hub 3', N'BIL-Hub-3', N'Closed', 30, N'hub row 3 in bsd_billing'),
-    ('B5D00000-0000-4000-8001-000000000004', N'billing Hub 4', N'BIL-Hub-4', N'Hold', 40, N'hub row 4 in bsd_billing'),
-    ('B5D00000-0000-4000-8001-000000000005', N'billing Hub 5', N'BIL-Hub-5', N'Active', 50, N'hub row 5 in bsd_billing');
+    ('B5D00000-0000-4000-8001-000000000001', N'billing BillingHub 1', N'BIL-BillingHub-1', N'Active', 10, N'hub row 1 in bsd_billing'),
+    ('B5D00000-0000-4000-8001-000000000002', N'billing BillingHub 2', N'BIL-BillingHub-2', N'Pending', 20, N'hub row 2 in bsd_billing'),
+    ('B5D00000-0000-4000-8001-000000000003', N'billing BillingHub 3', N'BIL-BillingHub-3', N'Closed', 30, N'hub row 3 in bsd_billing'),
+    ('B5D00000-0000-4000-8001-000000000004', N'billing BillingHub 4', N'BIL-BillingHub-4', N'Hold', 40, N'hub row 4 in bsd_billing'),
+    ('B5D00000-0000-4000-8001-000000000005', N'billing BillingHub 5', N'BIL-BillingHub-5', N'Active', 50, N'hub row 5 in bsd_billing');
 GO
 
-INSERT INTO [bsd_billing].[Lookup_01] ([ID], [Name], [Code], [Status], [Amount], [Notes])
+INSERT INTO [bsd_billing].[BillingLookup_01] ([ID], [Name], [Code], [Status], [Amount], [Notes])
 VALUES
-    ('B5D00000-0000-4000-8001-000000010001', N'billing Lookup_01 1', N'BIL-Lookup_01-1', N'Active', 11, N'lookup row 1 in bsd_billing'),
-    ('B5D00000-0000-4000-8001-000000010002', N'billing Lookup_01 2', N'BIL-Lookup_01-2', N'Pending', 21, N'lookup row 2 in bsd_billing'),
-    ('B5D00000-0000-4000-8001-000000010003', N'billing Lookup_01 3', N'BIL-Lookup_01-3', N'Closed', 31, N'lookup row 3 in bsd_billing'),
-    ('B5D00000-0000-4000-8001-000000010004', N'billing Lookup_01 4', N'BIL-Lookup_01-4', N'Hold', 41, N'lookup row 4 in bsd_billing');
+    ('B5D00000-0000-4000-8001-000000010001', N'billing BillingLookup_01 1', N'BIL-BillingLookup_01-1', N'Active', 11, N'lookup row 1 in bsd_billing'),
+    ('B5D00000-0000-4000-8001-000000010002', N'billing BillingLookup_01 2', N'BIL-BillingLookup_01-2', N'Pending', 21, N'lookup row 2 in bsd_billing'),
+    ('B5D00000-0000-4000-8001-000000010003', N'billing BillingLookup_01 3', N'BIL-BillingLookup_01-3', N'Closed', 31, N'lookup row 3 in bsd_billing'),
+    ('B5D00000-0000-4000-8001-000000010004', N'billing BillingLookup_01 4', N'BIL-BillingLookup_01-4', N'Hold', 41, N'lookup row 4 in bsd_billing');
 GO
 
-INSERT INTO [bsd_billing].[Lookup_02] ([ID], [Name], [Code], [Status], [Amount], [Notes])
+INSERT INTO [bsd_billing].[BillingLookup_02] ([ID], [Name], [Code], [Status], [Amount], [Notes])
 VALUES
-    ('B5D00000-0000-4000-8001-000000020001', N'billing Lookup_02 1', N'BIL-Lookup_02-1', N'Active', 12, N'lookup row 1 in bsd_billing'),
-    ('B5D00000-0000-4000-8001-000000020002', N'billing Lookup_02 2', N'BIL-Lookup_02-2', N'Pending', 22, N'lookup row 2 in bsd_billing'),
-    ('B5D00000-0000-4000-8001-000000020003', N'billing Lookup_02 3', N'BIL-Lookup_02-3', N'Closed', 32, N'lookup row 3 in bsd_billing'),
-    ('B5D00000-0000-4000-8001-000000020004', N'billing Lookup_02 4', N'BIL-Lookup_02-4', N'Hold', 42, N'lookup row 4 in bsd_billing');
+    ('B5D00000-0000-4000-8001-000000020001', N'billing BillingLookup_02 1', N'BIL-BillingLookup_02-1', N'Active', 12, N'lookup row 1 in bsd_billing'),
+    ('B5D00000-0000-4000-8001-000000020002', N'billing BillingLookup_02 2', N'BIL-BillingLookup_02-2', N'Pending', 22, N'lookup row 2 in bsd_billing'),
+    ('B5D00000-0000-4000-8001-000000020003', N'billing BillingLookup_02 3', N'BIL-BillingLookup_02-3', N'Closed', 32, N'lookup row 3 in bsd_billing'),
+    ('B5D00000-0000-4000-8001-000000020004', N'billing BillingLookup_02 4', N'BIL-BillingLookup_02-4', N'Hold', 42, N'lookup row 4 in bsd_billing');
 GO
 
-INSERT INTO [bsd_billing].[Child_001] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_billing].[BillingChild_001] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8001-000000030001', N'billing Child_001 1', N'BIL-Child_001-1', N'Active', 13, N'child row 1 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010001'),
-    ('B5D00000-0000-4000-8001-000000030002', N'billing Child_001 2', N'BIL-Child_001-2', N'Pending', 23, N'child row 2 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010002'),
-    ('B5D00000-0000-4000-8001-000000030003', N'billing Child_001 3', N'BIL-Child_001-3', N'Closed', 33, N'child row 3 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010003'),
-    ('B5D00000-0000-4000-8001-000000030004', N'billing Child_001 4', N'BIL-Child_001-4', N'Hold', 43, N'child row 4 in bsd_billing', 'B5D00000-0000-4000-8001-000000000004', 'B5D00000-0000-4000-8001-000000010004'),
-    ('B5D00000-0000-4000-8001-000000030005', N'billing Child_001 5', N'BIL-Child_001-5', N'Active', 53, N'child row 5 in bsd_billing', 'B5D00000-0000-4000-8001-000000000005', 'B5D00000-0000-4000-8001-000000010001'),
-    ('B5D00000-0000-4000-8001-000000030006', N'billing Child_001 6', N'BIL-Child_001-6', N'Pending', 63, N'child row 6 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010002'),
-    ('B5D00000-0000-4000-8001-000000030007', N'billing Child_001 7', N'BIL-Child_001-7', N'Closed', 73, N'child row 7 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010003'),
-    ('B5D00000-0000-4000-8001-000000030008', N'billing Child_001 8', N'BIL-Child_001-8', N'Hold', 83, N'child row 8 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010004');
+    ('B5D00000-0000-4000-8001-000000030001', N'billing BillingChild_001 1', N'BIL-BillingChild_001-1', N'Active', 13, N'child row 1 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010001'),
+    ('B5D00000-0000-4000-8001-000000030002', N'billing BillingChild_001 2', N'BIL-BillingChild_001-2', N'Pending', 23, N'child row 2 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010002'),
+    ('B5D00000-0000-4000-8001-000000030003', N'billing BillingChild_001 3', N'BIL-BillingChild_001-3', N'Closed', 33, N'child row 3 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010003'),
+    ('B5D00000-0000-4000-8001-000000030004', N'billing BillingChild_001 4', N'BIL-BillingChild_001-4', N'Hold', 43, N'child row 4 in bsd_billing', 'B5D00000-0000-4000-8001-000000000004', 'B5D00000-0000-4000-8001-000000010004'),
+    ('B5D00000-0000-4000-8001-000000030005', N'billing BillingChild_001 5', N'BIL-BillingChild_001-5', N'Active', 53, N'child row 5 in bsd_billing', 'B5D00000-0000-4000-8001-000000000005', 'B5D00000-0000-4000-8001-000000010001'),
+    ('B5D00000-0000-4000-8001-000000030006', N'billing BillingChild_001 6', N'BIL-BillingChild_001-6', N'Pending', 63, N'child row 6 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010002'),
+    ('B5D00000-0000-4000-8001-000000030007', N'billing BillingChild_001 7', N'BIL-BillingChild_001-7', N'Closed', 73, N'child row 7 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010003'),
+    ('B5D00000-0000-4000-8001-000000030008', N'billing BillingChild_001 8', N'BIL-BillingChild_001-8', N'Hold', 83, N'child row 8 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010004');
 GO
 
-INSERT INTO [bsd_billing].[Child_002] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_billing].[BillingChild_002] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8001-000000040001', N'billing Child_002 1', N'BIL-Child_002-1', N'Active', 14, N'child row 1 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010001'),
-    ('B5D00000-0000-4000-8001-000000040002', N'billing Child_002 2', N'BIL-Child_002-2', N'Pending', 24, N'child row 2 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010002'),
-    ('B5D00000-0000-4000-8001-000000040003', N'billing Child_002 3', N'BIL-Child_002-3', N'Closed', 34, N'child row 3 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010003'),
-    ('B5D00000-0000-4000-8001-000000040004', N'billing Child_002 4', N'BIL-Child_002-4', N'Hold', 44, N'child row 4 in bsd_billing', 'B5D00000-0000-4000-8001-000000000004', 'B5D00000-0000-4000-8001-000000010004'),
-    ('B5D00000-0000-4000-8001-000000040005', N'billing Child_002 5', N'BIL-Child_002-5', N'Active', 54, N'child row 5 in bsd_billing', 'B5D00000-0000-4000-8001-000000000005', 'B5D00000-0000-4000-8001-000000010001'),
-    ('B5D00000-0000-4000-8001-000000040006', N'billing Child_002 6', N'BIL-Child_002-6', N'Pending', 64, N'child row 6 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010002'),
-    ('B5D00000-0000-4000-8001-000000040007', N'billing Child_002 7', N'BIL-Child_002-7', N'Closed', 74, N'child row 7 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010003'),
-    ('B5D00000-0000-4000-8001-000000040008', N'billing Child_002 8', N'BIL-Child_002-8', N'Hold', 84, N'child row 8 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010004');
+    ('B5D00000-0000-4000-8001-000000040001', N'billing BillingChild_002 1', N'BIL-BillingChild_002-1', N'Active', 14, N'child row 1 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010001'),
+    ('B5D00000-0000-4000-8001-000000040002', N'billing BillingChild_002 2', N'BIL-BillingChild_002-2', N'Pending', 24, N'child row 2 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010002'),
+    ('B5D00000-0000-4000-8001-000000040003', N'billing BillingChild_002 3', N'BIL-BillingChild_002-3', N'Closed', 34, N'child row 3 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010003'),
+    ('B5D00000-0000-4000-8001-000000040004', N'billing BillingChild_002 4', N'BIL-BillingChild_002-4', N'Hold', 44, N'child row 4 in bsd_billing', 'B5D00000-0000-4000-8001-000000000004', 'B5D00000-0000-4000-8001-000000010004'),
+    ('B5D00000-0000-4000-8001-000000040005', N'billing BillingChild_002 5', N'BIL-BillingChild_002-5', N'Active', 54, N'child row 5 in bsd_billing', 'B5D00000-0000-4000-8001-000000000005', 'B5D00000-0000-4000-8001-000000010001'),
+    ('B5D00000-0000-4000-8001-000000040006', N'billing BillingChild_002 6', N'BIL-BillingChild_002-6', N'Pending', 64, N'child row 6 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010002'),
+    ('B5D00000-0000-4000-8001-000000040007', N'billing BillingChild_002 7', N'BIL-BillingChild_002-7', N'Closed', 74, N'child row 7 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010003'),
+    ('B5D00000-0000-4000-8001-000000040008', N'billing BillingChild_002 8', N'BIL-BillingChild_002-8', N'Hold', 84, N'child row 8 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010004');
 GO
 
-INSERT INTO [bsd_billing].[Child_003] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_billing].[BillingChild_003] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8001-000000050001', N'billing Child_003 1', N'BIL-Child_003-1', N'Active', 15, N'child row 1 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010001'),
-    ('B5D00000-0000-4000-8001-000000050002', N'billing Child_003 2', N'BIL-Child_003-2', N'Pending', 25, N'child row 2 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010002'),
-    ('B5D00000-0000-4000-8001-000000050003', N'billing Child_003 3', N'BIL-Child_003-3', N'Closed', 35, N'child row 3 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010003'),
-    ('B5D00000-0000-4000-8001-000000050004', N'billing Child_003 4', N'BIL-Child_003-4', N'Hold', 45, N'child row 4 in bsd_billing', 'B5D00000-0000-4000-8001-000000000004', 'B5D00000-0000-4000-8001-000000010004'),
-    ('B5D00000-0000-4000-8001-000000050005', N'billing Child_003 5', N'BIL-Child_003-5', N'Active', 55, N'child row 5 in bsd_billing', 'B5D00000-0000-4000-8001-000000000005', 'B5D00000-0000-4000-8001-000000010001'),
-    ('B5D00000-0000-4000-8001-000000050006', N'billing Child_003 6', N'BIL-Child_003-6', N'Pending', 65, N'child row 6 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010002'),
-    ('B5D00000-0000-4000-8001-000000050007', N'billing Child_003 7', N'BIL-Child_003-7', N'Closed', 75, N'child row 7 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010003'),
-    ('B5D00000-0000-4000-8001-000000050008', N'billing Child_003 8', N'BIL-Child_003-8', N'Hold', 85, N'child row 8 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010004');
+    ('B5D00000-0000-4000-8001-000000050001', N'billing BillingChild_003 1', N'BIL-BillingChild_003-1', N'Active', 15, N'child row 1 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010001'),
+    ('B5D00000-0000-4000-8001-000000050002', N'billing BillingChild_003 2', N'BIL-BillingChild_003-2', N'Pending', 25, N'child row 2 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010002'),
+    ('B5D00000-0000-4000-8001-000000050003', N'billing BillingChild_003 3', N'BIL-BillingChild_003-3', N'Closed', 35, N'child row 3 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010003'),
+    ('B5D00000-0000-4000-8001-000000050004', N'billing BillingChild_003 4', N'BIL-BillingChild_003-4', N'Hold', 45, N'child row 4 in bsd_billing', 'B5D00000-0000-4000-8001-000000000004', 'B5D00000-0000-4000-8001-000000010004'),
+    ('B5D00000-0000-4000-8001-000000050005', N'billing BillingChild_003 5', N'BIL-BillingChild_003-5', N'Active', 55, N'child row 5 in bsd_billing', 'B5D00000-0000-4000-8001-000000000005', 'B5D00000-0000-4000-8001-000000010001'),
+    ('B5D00000-0000-4000-8001-000000050006', N'billing BillingChild_003 6', N'BIL-BillingChild_003-6', N'Pending', 65, N'child row 6 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010002'),
+    ('B5D00000-0000-4000-8001-000000050007', N'billing BillingChild_003 7', N'BIL-BillingChild_003-7', N'Closed', 75, N'child row 7 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010003'),
+    ('B5D00000-0000-4000-8001-000000050008', N'billing BillingChild_003 8', N'BIL-BillingChild_003-8', N'Hold', 85, N'child row 8 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010004');
 GO
 
-INSERT INTO [bsd_billing].[Child_004] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_billing].[BillingChild_004] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8001-000000060001', N'billing Child_004 1', N'BIL-Child_004-1', N'Active', 16, N'child row 1 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010001'),
-    ('B5D00000-0000-4000-8001-000000060002', N'billing Child_004 2', N'BIL-Child_004-2', N'Pending', 26, N'child row 2 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010002'),
-    ('B5D00000-0000-4000-8001-000000060003', N'billing Child_004 3', N'BIL-Child_004-3', N'Closed', 36, N'child row 3 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010003'),
-    ('B5D00000-0000-4000-8001-000000060004', N'billing Child_004 4', N'BIL-Child_004-4', N'Hold', 46, N'child row 4 in bsd_billing', 'B5D00000-0000-4000-8001-000000000004', 'B5D00000-0000-4000-8001-000000010004'),
-    ('B5D00000-0000-4000-8001-000000060005', N'billing Child_004 5', N'BIL-Child_004-5', N'Active', 56, N'child row 5 in bsd_billing', 'B5D00000-0000-4000-8001-000000000005', 'B5D00000-0000-4000-8001-000000010001'),
-    ('B5D00000-0000-4000-8001-000000060006', N'billing Child_004 6', N'BIL-Child_004-6', N'Pending', 66, N'child row 6 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010002'),
-    ('B5D00000-0000-4000-8001-000000060007', N'billing Child_004 7', N'BIL-Child_004-7', N'Closed', 76, N'child row 7 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010003'),
-    ('B5D00000-0000-4000-8001-000000060008', N'billing Child_004 8', N'BIL-Child_004-8', N'Hold', 86, N'child row 8 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010004');
+    ('B5D00000-0000-4000-8001-000000060001', N'billing BillingChild_004 1', N'BIL-BillingChild_004-1', N'Active', 16, N'child row 1 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010001'),
+    ('B5D00000-0000-4000-8001-000000060002', N'billing BillingChild_004 2', N'BIL-BillingChild_004-2', N'Pending', 26, N'child row 2 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010002'),
+    ('B5D00000-0000-4000-8001-000000060003', N'billing BillingChild_004 3', N'BIL-BillingChild_004-3', N'Closed', 36, N'child row 3 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010003'),
+    ('B5D00000-0000-4000-8001-000000060004', N'billing BillingChild_004 4', N'BIL-BillingChild_004-4', N'Hold', 46, N'child row 4 in bsd_billing', 'B5D00000-0000-4000-8001-000000000004', 'B5D00000-0000-4000-8001-000000010004'),
+    ('B5D00000-0000-4000-8001-000000060005', N'billing BillingChild_004 5', N'BIL-BillingChild_004-5', N'Active', 56, N'child row 5 in bsd_billing', 'B5D00000-0000-4000-8001-000000000005', 'B5D00000-0000-4000-8001-000000010001'),
+    ('B5D00000-0000-4000-8001-000000060006', N'billing BillingChild_004 6', N'BIL-BillingChild_004-6', N'Pending', 66, N'child row 6 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010002'),
+    ('B5D00000-0000-4000-8001-000000060007', N'billing BillingChild_004 7', N'BIL-BillingChild_004-7', N'Closed', 76, N'child row 7 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010003'),
+    ('B5D00000-0000-4000-8001-000000060008', N'billing BillingChild_004 8', N'BIL-BillingChild_004-8', N'Hold', 86, N'child row 8 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010004');
 GO
 
-INSERT INTO [bsd_billing].[Child_005] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_billing].[BillingChild_005] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8001-000000070001', N'billing Child_005 1', N'BIL-Child_005-1', N'Active', 10, N'child row 1 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010001'),
-    ('B5D00000-0000-4000-8001-000000070002', N'billing Child_005 2', N'BIL-Child_005-2', N'Pending', 20, N'child row 2 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010002'),
-    ('B5D00000-0000-4000-8001-000000070003', N'billing Child_005 3', N'BIL-Child_005-3', N'Closed', 30, N'child row 3 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010003'),
-    ('B5D00000-0000-4000-8001-000000070004', N'billing Child_005 4', N'BIL-Child_005-4', N'Hold', 40, N'child row 4 in bsd_billing', 'B5D00000-0000-4000-8001-000000000004', 'B5D00000-0000-4000-8001-000000010004'),
-    ('B5D00000-0000-4000-8001-000000070005', N'billing Child_005 5', N'BIL-Child_005-5', N'Active', 50, N'child row 5 in bsd_billing', 'B5D00000-0000-4000-8001-000000000005', 'B5D00000-0000-4000-8001-000000010001'),
-    ('B5D00000-0000-4000-8001-000000070006', N'billing Child_005 6', N'BIL-Child_005-6', N'Pending', 60, N'child row 6 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010002'),
-    ('B5D00000-0000-4000-8001-000000070007', N'billing Child_005 7', N'BIL-Child_005-7', N'Closed', 70, N'child row 7 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010003'),
-    ('B5D00000-0000-4000-8001-000000070008', N'billing Child_005 8', N'BIL-Child_005-8', N'Hold', 80, N'child row 8 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010004');
+    ('B5D00000-0000-4000-8001-000000070001', N'billing BillingChild_005 1', N'BIL-BillingChild_005-1', N'Active', 10, N'child row 1 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010001'),
+    ('B5D00000-0000-4000-8001-000000070002', N'billing BillingChild_005 2', N'BIL-BillingChild_005-2', N'Pending', 20, N'child row 2 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010002'),
+    ('B5D00000-0000-4000-8001-000000070003', N'billing BillingChild_005 3', N'BIL-BillingChild_005-3', N'Closed', 30, N'child row 3 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010003'),
+    ('B5D00000-0000-4000-8001-000000070004', N'billing BillingChild_005 4', N'BIL-BillingChild_005-4', N'Hold', 40, N'child row 4 in bsd_billing', 'B5D00000-0000-4000-8001-000000000004', 'B5D00000-0000-4000-8001-000000010004'),
+    ('B5D00000-0000-4000-8001-000000070005', N'billing BillingChild_005 5', N'BIL-BillingChild_005-5', N'Active', 50, N'child row 5 in bsd_billing', 'B5D00000-0000-4000-8001-000000000005', 'B5D00000-0000-4000-8001-000000010001'),
+    ('B5D00000-0000-4000-8001-000000070006', N'billing BillingChild_005 6', N'BIL-BillingChild_005-6', N'Pending', 60, N'child row 6 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010002'),
+    ('B5D00000-0000-4000-8001-000000070007', N'billing BillingChild_005 7', N'BIL-BillingChild_005-7', N'Closed', 70, N'child row 7 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010003'),
+    ('B5D00000-0000-4000-8001-000000070008', N'billing BillingChild_005 8', N'BIL-BillingChild_005-8', N'Hold', 80, N'child row 8 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010004');
 GO
 
-INSERT INTO [bsd_billing].[Grandchild_001] ([ID], [Name], [Code], [Status], [Amount], [Notes], [ChildID])
+INSERT INTO [bsd_billing].[BillingGrandchild_001] ([ID], [Name], [Code], [Status], [Amount], [Notes], [ChildID])
 VALUES
-    ('B5D00000-0000-4000-8001-000000080001', N'billing Grandchild_001 1', N'BIL-Grandchild_001-1', N'Active', 11, N'grandchild row 1 in bsd_billing', 'B5D00000-0000-4000-8001-000000030001'),
-    ('B5D00000-0000-4000-8001-000000080002', N'billing Grandchild_001 2', N'BIL-Grandchild_001-2', N'Pending', 21, N'grandchild row 2 in bsd_billing', 'B5D00000-0000-4000-8001-000000030002'),
-    ('B5D00000-0000-4000-8001-000000080003', N'billing Grandchild_001 3', N'BIL-Grandchild_001-3', N'Closed', 31, N'grandchild row 3 in bsd_billing', 'B5D00000-0000-4000-8001-000000030003'),
-    ('B5D00000-0000-4000-8001-000000080004', N'billing Grandchild_001 4', N'BIL-Grandchild_001-4', N'Hold', 41, N'grandchild row 4 in bsd_billing', 'B5D00000-0000-4000-8001-000000030004'),
-    ('B5D00000-0000-4000-8001-000000080005', N'billing Grandchild_001 5', N'BIL-Grandchild_001-5', N'Active', 51, N'grandchild row 5 in bsd_billing', 'B5D00000-0000-4000-8001-000000030005'),
-    ('B5D00000-0000-4000-8001-000000080006', N'billing Grandchild_001 6', N'BIL-Grandchild_001-6', N'Pending', 61, N'grandchild row 6 in bsd_billing', 'B5D00000-0000-4000-8001-000000030006');
+    ('B5D00000-0000-4000-8001-000000080001', N'billing BillingGrandchild_001 1', N'BIL-BillingGrandchild_001-1', N'Active', 11, N'grandchild row 1 in bsd_billing', 'B5D00000-0000-4000-8001-000000030001'),
+    ('B5D00000-0000-4000-8001-000000080002', N'billing BillingGrandchild_001 2', N'BIL-BillingGrandchild_001-2', N'Pending', 21, N'grandchild row 2 in bsd_billing', 'B5D00000-0000-4000-8001-000000030002'),
+    ('B5D00000-0000-4000-8001-000000080003', N'billing BillingGrandchild_001 3', N'BIL-BillingGrandchild_001-3', N'Closed', 31, N'grandchild row 3 in bsd_billing', 'B5D00000-0000-4000-8001-000000030003'),
+    ('B5D00000-0000-4000-8001-000000080004', N'billing BillingGrandchild_001 4', N'BIL-BillingGrandchild_001-4', N'Hold', 41, N'grandchild row 4 in bsd_billing', 'B5D00000-0000-4000-8001-000000030004'),
+    ('B5D00000-0000-4000-8001-000000080005', N'billing BillingGrandchild_001 5', N'BIL-BillingGrandchild_001-5', N'Active', 51, N'grandchild row 5 in bsd_billing', 'B5D00000-0000-4000-8001-000000030005'),
+    ('B5D00000-0000-4000-8001-000000080006', N'billing BillingGrandchild_001 6', N'BIL-BillingGrandchild_001-6', N'Pending', 61, N'grandchild row 6 in bsd_billing', 'B5D00000-0000-4000-8001-000000030006');
 GO
 
-INSERT INTO [bsd_billing].[XRef_01] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_billing].[BillingXRef_01] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8001-000000090001', N'billing XRef_01 1', N'BIL-XRef_01-1', N'Active', 12, N'xref row 1 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010001'),
-    ('B5D00000-0000-4000-8001-000000090002', N'billing XRef_01 2', N'BIL-XRef_01-2', N'Pending', 22, N'xref row 2 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010002'),
-    ('B5D00000-0000-4000-8001-000000090003', N'billing XRef_01 3', N'BIL-XRef_01-3', N'Closed', 32, N'xref row 3 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010003'),
-    ('B5D00000-0000-4000-8001-000000090004', N'billing XRef_01 4', N'BIL-XRef_01-4', N'Hold', 42, N'xref row 4 in bsd_billing', 'B5D00000-0000-4000-8001-000000000004', 'B5D00000-0000-4000-8001-000000010004'),
-    ('B5D00000-0000-4000-8001-000000090005', N'billing XRef_01 5', N'BIL-XRef_01-5', N'Active', 52, N'xref row 5 in bsd_billing', 'B5D00000-0000-4000-8001-000000000005', 'B5D00000-0000-4000-8001-000000010001'),
-    ('B5D00000-0000-4000-8001-000000090006', N'billing XRef_01 6', N'BIL-XRef_01-6', N'Pending', 62, N'xref row 6 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010002');
+    ('B5D00000-0000-4000-8001-000000090001', N'billing BillingXRef_01 1', N'BIL-BillingXRef_01-1', N'Active', 12, N'xref row 1 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010001'),
+    ('B5D00000-0000-4000-8001-000000090002', N'billing BillingXRef_01 2', N'BIL-BillingXRef_01-2', N'Pending', 22, N'xref row 2 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010002'),
+    ('B5D00000-0000-4000-8001-000000090003', N'billing BillingXRef_01 3', N'BIL-BillingXRef_01-3', N'Closed', 32, N'xref row 3 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010003'),
+    ('B5D00000-0000-4000-8001-000000090004', N'billing BillingXRef_01 4', N'BIL-BillingXRef_01-4', N'Hold', 42, N'xref row 4 in bsd_billing', 'B5D00000-0000-4000-8001-000000000004', 'B5D00000-0000-4000-8001-000000010004'),
+    ('B5D00000-0000-4000-8001-000000090005', N'billing BillingXRef_01 5', N'BIL-BillingXRef_01-5', N'Active', 52, N'xref row 5 in bsd_billing', 'B5D00000-0000-4000-8001-000000000005', 'B5D00000-0000-4000-8001-000000010001'),
+    ('B5D00000-0000-4000-8001-000000090006', N'billing BillingXRef_01 6', N'BIL-BillingXRef_01-6', N'Pending', 62, N'xref row 6 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010002');
 GO
 
-INSERT INTO [bsd_billing].[XRef_02] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_billing].[BillingXRef_02] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8001-0000000A0001', N'billing XRef_02 1', N'BIL-XRef_02-1', N'Active', 13, N'xref row 1 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010001'),
-    ('B5D00000-0000-4000-8001-0000000A0002', N'billing XRef_02 2', N'BIL-XRef_02-2', N'Pending', 23, N'xref row 2 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010002'),
-    ('B5D00000-0000-4000-8001-0000000A0003', N'billing XRef_02 3', N'BIL-XRef_02-3', N'Closed', 33, N'xref row 3 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010003'),
-    ('B5D00000-0000-4000-8001-0000000A0004', N'billing XRef_02 4', N'BIL-XRef_02-4', N'Hold', 43, N'xref row 4 in bsd_billing', 'B5D00000-0000-4000-8001-000000000004', 'B5D00000-0000-4000-8001-000000010004'),
-    ('B5D00000-0000-4000-8001-0000000A0005', N'billing XRef_02 5', N'BIL-XRef_02-5', N'Active', 53, N'xref row 5 in bsd_billing', 'B5D00000-0000-4000-8001-000000000005', 'B5D00000-0000-4000-8001-000000010001'),
-    ('B5D00000-0000-4000-8001-0000000A0006', N'billing XRef_02 6', N'BIL-XRef_02-6', N'Pending', 63, N'xref row 6 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010002');
+    ('B5D00000-0000-4000-8001-0000000A0001', N'billing BillingXRef_02 1', N'BIL-BillingXRef_02-1', N'Active', 13, N'xref row 1 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010001'),
+    ('B5D00000-0000-4000-8001-0000000A0002', N'billing BillingXRef_02 2', N'BIL-BillingXRef_02-2', N'Pending', 23, N'xref row 2 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8001-000000010002'),
+    ('B5D00000-0000-4000-8001-0000000A0003', N'billing BillingXRef_02 3', N'BIL-BillingXRef_02-3', N'Closed', 33, N'xref row 3 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8001-000000010003'),
+    ('B5D00000-0000-4000-8001-0000000A0004', N'billing BillingXRef_02 4', N'BIL-BillingXRef_02-4', N'Hold', 43, N'xref row 4 in bsd_billing', 'B5D00000-0000-4000-8001-000000000004', 'B5D00000-0000-4000-8001-000000010004'),
+    ('B5D00000-0000-4000-8001-0000000A0005', N'billing BillingXRef_02 5', N'BIL-BillingXRef_02-5', N'Active', 53, N'xref row 5 in bsd_billing', 'B5D00000-0000-4000-8001-000000000005', 'B5D00000-0000-4000-8001-000000010001'),
+    ('B5D00000-0000-4000-8001-0000000A0006', N'billing BillingXRef_02 6', N'BIL-BillingXRef_02-6', N'Pending', 63, N'xref row 6 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8001-000000010002');
 GO
 
-INSERT INTO [bsd_billing].[Bridge] ([ID], [Name], [Code], [Status], [Amount], [Notes], [LocalHubID], [RemoteHubID])
+INSERT INTO [bsd_billing].[BillingBridge] ([ID], [Name], [Code], [Status], [Amount], [Notes], [LocalHubID], [RemoteHubID])
 VALUES
-    ('B5D00000-0000-4000-8001-0000000B0001', N'billing Bridge 1', N'BIL-Bridge-1', N'Active', 14, N'bridge row 1 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8000-000000000002'),
-    ('B5D00000-0000-4000-8001-0000000B0002', N'billing Bridge 2', N'BIL-Bridge-2', N'Pending', 24, N'bridge row 2 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8000-000000000003'),
-    ('B5D00000-0000-4000-8001-0000000B0003', N'billing Bridge 3', N'BIL-Bridge-3', N'Closed', 34, N'bridge row 3 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8000-000000000004'),
-    ('B5D00000-0000-4000-8001-0000000B0004', N'billing Bridge 4', N'BIL-Bridge-4', N'Hold', 44, N'bridge row 4 in bsd_billing', 'B5D00000-0000-4000-8001-000000000004', 'B5D00000-0000-4000-8000-000000000005');
+    ('B5D00000-0000-4000-8001-0000000B0001', N'billing BillingBridge 1', N'BIL-BillingBridge-1', N'Active', 14, N'bridge row 1 in bsd_billing', 'B5D00000-0000-4000-8001-000000000001', 'B5D00000-0000-4000-8000-000000000002'),
+    ('B5D00000-0000-4000-8001-0000000B0002', N'billing BillingBridge 2', N'BIL-BillingBridge-2', N'Pending', 24, N'bridge row 2 in bsd_billing', 'B5D00000-0000-4000-8001-000000000002', 'B5D00000-0000-4000-8000-000000000003'),
+    ('B5D00000-0000-4000-8001-0000000B0003', N'billing BillingBridge 3', N'BIL-BillingBridge-3', N'Closed', 34, N'bridge row 3 in bsd_billing', 'B5D00000-0000-4000-8001-000000000003', 'B5D00000-0000-4000-8000-000000000004'),
+    ('B5D00000-0000-4000-8001-0000000B0004', N'billing BillingBridge 4', N'BIL-BillingBridge-4', N'Hold', 44, N'bridge row 4 in bsd_billing', 'B5D00000-0000-4000-8001-000000000004', 'B5D00000-0000-4000-8000-000000000005');
 GO
 
-INSERT INTO [bsd_inventory].[Hub] ([ID], [Name], [Code], [Status], [Amount], [Notes])
+INSERT INTO [bsd_inventory].[InventoryHub] ([ID], [Name], [Code], [Status], [Amount], [Notes])
 VALUES
-    ('B5D00000-0000-4000-8002-000000000001', N'inventory Hub 1', N'INV-Hub-1', N'Active', 10, N'hub row 1 in bsd_inventory'),
-    ('B5D00000-0000-4000-8002-000000000002', N'inventory Hub 2', N'INV-Hub-2', N'Pending', 20, N'hub row 2 in bsd_inventory'),
-    ('B5D00000-0000-4000-8002-000000000003', N'inventory Hub 3', N'INV-Hub-3', N'Closed', 30, N'hub row 3 in bsd_inventory'),
-    ('B5D00000-0000-4000-8002-000000000004', N'inventory Hub 4', N'INV-Hub-4', N'Hold', 40, N'hub row 4 in bsd_inventory'),
-    ('B5D00000-0000-4000-8002-000000000005', N'inventory Hub 5', N'INV-Hub-5', N'Active', 50, N'hub row 5 in bsd_inventory');
+    ('B5D00000-0000-4000-8002-000000000001', N'inventory InventoryHub 1', N'INV-InventoryHub-1', N'Active', 10, N'hub row 1 in bsd_inventory'),
+    ('B5D00000-0000-4000-8002-000000000002', N'inventory InventoryHub 2', N'INV-InventoryHub-2', N'Pending', 20, N'hub row 2 in bsd_inventory'),
+    ('B5D00000-0000-4000-8002-000000000003', N'inventory InventoryHub 3', N'INV-InventoryHub-3', N'Closed', 30, N'hub row 3 in bsd_inventory'),
+    ('B5D00000-0000-4000-8002-000000000004', N'inventory InventoryHub 4', N'INV-InventoryHub-4', N'Hold', 40, N'hub row 4 in bsd_inventory'),
+    ('B5D00000-0000-4000-8002-000000000005', N'inventory InventoryHub 5', N'INV-InventoryHub-5', N'Active', 50, N'hub row 5 in bsd_inventory');
 GO
 
-INSERT INTO [bsd_inventory].[Lookup_01] ([ID], [Name], [Code], [Status], [Amount], [Notes])
+INSERT INTO [bsd_inventory].[InventoryLookup_01] ([ID], [Name], [Code], [Status], [Amount], [Notes])
 VALUES
-    ('B5D00000-0000-4000-8002-000000010001', N'inventory Lookup_01 1', N'INV-Lookup_01-1', N'Active', 11, N'lookup row 1 in bsd_inventory'),
-    ('B5D00000-0000-4000-8002-000000010002', N'inventory Lookup_01 2', N'INV-Lookup_01-2', N'Pending', 21, N'lookup row 2 in bsd_inventory'),
-    ('B5D00000-0000-4000-8002-000000010003', N'inventory Lookup_01 3', N'INV-Lookup_01-3', N'Closed', 31, N'lookup row 3 in bsd_inventory'),
-    ('B5D00000-0000-4000-8002-000000010004', N'inventory Lookup_01 4', N'INV-Lookup_01-4', N'Hold', 41, N'lookup row 4 in bsd_inventory');
+    ('B5D00000-0000-4000-8002-000000010001', N'inventory InventoryLookup_01 1', N'INV-InventoryLookup_01-1', N'Active', 11, N'lookup row 1 in bsd_inventory'),
+    ('B5D00000-0000-4000-8002-000000010002', N'inventory InventoryLookup_01 2', N'INV-InventoryLookup_01-2', N'Pending', 21, N'lookup row 2 in bsd_inventory'),
+    ('B5D00000-0000-4000-8002-000000010003', N'inventory InventoryLookup_01 3', N'INV-InventoryLookup_01-3', N'Closed', 31, N'lookup row 3 in bsd_inventory'),
+    ('B5D00000-0000-4000-8002-000000010004', N'inventory InventoryLookup_01 4', N'INV-InventoryLookup_01-4', N'Hold', 41, N'lookup row 4 in bsd_inventory');
 GO
 
-INSERT INTO [bsd_inventory].[Lookup_02] ([ID], [Name], [Code], [Status], [Amount], [Notes])
+INSERT INTO [bsd_inventory].[InventoryLookup_02] ([ID], [Name], [Code], [Status], [Amount], [Notes])
 VALUES
-    ('B5D00000-0000-4000-8002-000000020001', N'inventory Lookup_02 1', N'INV-Lookup_02-1', N'Active', 12, N'lookup row 1 in bsd_inventory'),
-    ('B5D00000-0000-4000-8002-000000020002', N'inventory Lookup_02 2', N'INV-Lookup_02-2', N'Pending', 22, N'lookup row 2 in bsd_inventory'),
-    ('B5D00000-0000-4000-8002-000000020003', N'inventory Lookup_02 3', N'INV-Lookup_02-3', N'Closed', 32, N'lookup row 3 in bsd_inventory'),
-    ('B5D00000-0000-4000-8002-000000020004', N'inventory Lookup_02 4', N'INV-Lookup_02-4', N'Hold', 42, N'lookup row 4 in bsd_inventory');
+    ('B5D00000-0000-4000-8002-000000020001', N'inventory InventoryLookup_02 1', N'INV-InventoryLookup_02-1', N'Active', 12, N'lookup row 1 in bsd_inventory'),
+    ('B5D00000-0000-4000-8002-000000020002', N'inventory InventoryLookup_02 2', N'INV-InventoryLookup_02-2', N'Pending', 22, N'lookup row 2 in bsd_inventory'),
+    ('B5D00000-0000-4000-8002-000000020003', N'inventory InventoryLookup_02 3', N'INV-InventoryLookup_02-3', N'Closed', 32, N'lookup row 3 in bsd_inventory'),
+    ('B5D00000-0000-4000-8002-000000020004', N'inventory InventoryLookup_02 4', N'INV-InventoryLookup_02-4', N'Hold', 42, N'lookup row 4 in bsd_inventory');
 GO
 
-INSERT INTO [bsd_inventory].[Child_001] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_inventory].[InventoryChild_001] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8002-000000030001', N'inventory Child_001 1', N'INV-Child_001-1', N'Active', 13, N'child row 1 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010001'),
-    ('B5D00000-0000-4000-8002-000000030002', N'inventory Child_001 2', N'INV-Child_001-2', N'Pending', 23, N'child row 2 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010002'),
-    ('B5D00000-0000-4000-8002-000000030003', N'inventory Child_001 3', N'INV-Child_001-3', N'Closed', 33, N'child row 3 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010003'),
-    ('B5D00000-0000-4000-8002-000000030004', N'inventory Child_001 4', N'INV-Child_001-4', N'Hold', 43, N'child row 4 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000004', 'B5D00000-0000-4000-8002-000000010004'),
-    ('B5D00000-0000-4000-8002-000000030005', N'inventory Child_001 5', N'INV-Child_001-5', N'Active', 53, N'child row 5 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000005', 'B5D00000-0000-4000-8002-000000010001'),
-    ('B5D00000-0000-4000-8002-000000030006', N'inventory Child_001 6', N'INV-Child_001-6', N'Pending', 63, N'child row 6 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010002'),
-    ('B5D00000-0000-4000-8002-000000030007', N'inventory Child_001 7', N'INV-Child_001-7', N'Closed', 73, N'child row 7 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010003'),
-    ('B5D00000-0000-4000-8002-000000030008', N'inventory Child_001 8', N'INV-Child_001-8', N'Hold', 83, N'child row 8 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010004');
+    ('B5D00000-0000-4000-8002-000000030001', N'inventory InventoryChild_001 1', N'INV-InventoryChild_001-1', N'Active', 13, N'child row 1 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010001'),
+    ('B5D00000-0000-4000-8002-000000030002', N'inventory InventoryChild_001 2', N'INV-InventoryChild_001-2', N'Pending', 23, N'child row 2 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010002'),
+    ('B5D00000-0000-4000-8002-000000030003', N'inventory InventoryChild_001 3', N'INV-InventoryChild_001-3', N'Closed', 33, N'child row 3 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010003'),
+    ('B5D00000-0000-4000-8002-000000030004', N'inventory InventoryChild_001 4', N'INV-InventoryChild_001-4', N'Hold', 43, N'child row 4 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000004', 'B5D00000-0000-4000-8002-000000010004'),
+    ('B5D00000-0000-4000-8002-000000030005', N'inventory InventoryChild_001 5', N'INV-InventoryChild_001-5', N'Active', 53, N'child row 5 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000005', 'B5D00000-0000-4000-8002-000000010001'),
+    ('B5D00000-0000-4000-8002-000000030006', N'inventory InventoryChild_001 6', N'INV-InventoryChild_001-6', N'Pending', 63, N'child row 6 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010002'),
+    ('B5D00000-0000-4000-8002-000000030007', N'inventory InventoryChild_001 7', N'INV-InventoryChild_001-7', N'Closed', 73, N'child row 7 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010003'),
+    ('B5D00000-0000-4000-8002-000000030008', N'inventory InventoryChild_001 8', N'INV-InventoryChild_001-8', N'Hold', 83, N'child row 8 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010004');
 GO
 
-INSERT INTO [bsd_inventory].[Child_002] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_inventory].[InventoryChild_002] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8002-000000040001', N'inventory Child_002 1', N'INV-Child_002-1', N'Active', 14, N'child row 1 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010001'),
-    ('B5D00000-0000-4000-8002-000000040002', N'inventory Child_002 2', N'INV-Child_002-2', N'Pending', 24, N'child row 2 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010002'),
-    ('B5D00000-0000-4000-8002-000000040003', N'inventory Child_002 3', N'INV-Child_002-3', N'Closed', 34, N'child row 3 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010003'),
-    ('B5D00000-0000-4000-8002-000000040004', N'inventory Child_002 4', N'INV-Child_002-4', N'Hold', 44, N'child row 4 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000004', 'B5D00000-0000-4000-8002-000000010004'),
-    ('B5D00000-0000-4000-8002-000000040005', N'inventory Child_002 5', N'INV-Child_002-5', N'Active', 54, N'child row 5 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000005', 'B5D00000-0000-4000-8002-000000010001'),
-    ('B5D00000-0000-4000-8002-000000040006', N'inventory Child_002 6', N'INV-Child_002-6', N'Pending', 64, N'child row 6 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010002'),
-    ('B5D00000-0000-4000-8002-000000040007', N'inventory Child_002 7', N'INV-Child_002-7', N'Closed', 74, N'child row 7 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010003'),
-    ('B5D00000-0000-4000-8002-000000040008', N'inventory Child_002 8', N'INV-Child_002-8', N'Hold', 84, N'child row 8 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010004');
+    ('B5D00000-0000-4000-8002-000000040001', N'inventory InventoryChild_002 1', N'INV-InventoryChild_002-1', N'Active', 14, N'child row 1 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010001'),
+    ('B5D00000-0000-4000-8002-000000040002', N'inventory InventoryChild_002 2', N'INV-InventoryChild_002-2', N'Pending', 24, N'child row 2 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010002'),
+    ('B5D00000-0000-4000-8002-000000040003', N'inventory InventoryChild_002 3', N'INV-InventoryChild_002-3', N'Closed', 34, N'child row 3 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010003'),
+    ('B5D00000-0000-4000-8002-000000040004', N'inventory InventoryChild_002 4', N'INV-InventoryChild_002-4', N'Hold', 44, N'child row 4 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000004', 'B5D00000-0000-4000-8002-000000010004'),
+    ('B5D00000-0000-4000-8002-000000040005', N'inventory InventoryChild_002 5', N'INV-InventoryChild_002-5', N'Active', 54, N'child row 5 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000005', 'B5D00000-0000-4000-8002-000000010001'),
+    ('B5D00000-0000-4000-8002-000000040006', N'inventory InventoryChild_002 6', N'INV-InventoryChild_002-6', N'Pending', 64, N'child row 6 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010002'),
+    ('B5D00000-0000-4000-8002-000000040007', N'inventory InventoryChild_002 7', N'INV-InventoryChild_002-7', N'Closed', 74, N'child row 7 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010003'),
+    ('B5D00000-0000-4000-8002-000000040008', N'inventory InventoryChild_002 8', N'INV-InventoryChild_002-8', N'Hold', 84, N'child row 8 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010004');
 GO
 
-INSERT INTO [bsd_inventory].[Child_003] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_inventory].[InventoryChild_003] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8002-000000050001', N'inventory Child_003 1', N'INV-Child_003-1', N'Active', 15, N'child row 1 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010001'),
-    ('B5D00000-0000-4000-8002-000000050002', N'inventory Child_003 2', N'INV-Child_003-2', N'Pending', 25, N'child row 2 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010002'),
-    ('B5D00000-0000-4000-8002-000000050003', N'inventory Child_003 3', N'INV-Child_003-3', N'Closed', 35, N'child row 3 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010003'),
-    ('B5D00000-0000-4000-8002-000000050004', N'inventory Child_003 4', N'INV-Child_003-4', N'Hold', 45, N'child row 4 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000004', 'B5D00000-0000-4000-8002-000000010004'),
-    ('B5D00000-0000-4000-8002-000000050005', N'inventory Child_003 5', N'INV-Child_003-5', N'Active', 55, N'child row 5 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000005', 'B5D00000-0000-4000-8002-000000010001'),
-    ('B5D00000-0000-4000-8002-000000050006', N'inventory Child_003 6', N'INV-Child_003-6', N'Pending', 65, N'child row 6 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010002'),
-    ('B5D00000-0000-4000-8002-000000050007', N'inventory Child_003 7', N'INV-Child_003-7', N'Closed', 75, N'child row 7 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010003'),
-    ('B5D00000-0000-4000-8002-000000050008', N'inventory Child_003 8', N'INV-Child_003-8', N'Hold', 85, N'child row 8 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010004');
+    ('B5D00000-0000-4000-8002-000000050001', N'inventory InventoryChild_003 1', N'INV-InventoryChild_003-1', N'Active', 15, N'child row 1 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010001'),
+    ('B5D00000-0000-4000-8002-000000050002', N'inventory InventoryChild_003 2', N'INV-InventoryChild_003-2', N'Pending', 25, N'child row 2 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010002'),
+    ('B5D00000-0000-4000-8002-000000050003', N'inventory InventoryChild_003 3', N'INV-InventoryChild_003-3', N'Closed', 35, N'child row 3 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010003'),
+    ('B5D00000-0000-4000-8002-000000050004', N'inventory InventoryChild_003 4', N'INV-InventoryChild_003-4', N'Hold', 45, N'child row 4 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000004', 'B5D00000-0000-4000-8002-000000010004'),
+    ('B5D00000-0000-4000-8002-000000050005', N'inventory InventoryChild_003 5', N'INV-InventoryChild_003-5', N'Active', 55, N'child row 5 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000005', 'B5D00000-0000-4000-8002-000000010001'),
+    ('B5D00000-0000-4000-8002-000000050006', N'inventory InventoryChild_003 6', N'INV-InventoryChild_003-6', N'Pending', 65, N'child row 6 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010002'),
+    ('B5D00000-0000-4000-8002-000000050007', N'inventory InventoryChild_003 7', N'INV-InventoryChild_003-7', N'Closed', 75, N'child row 7 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010003'),
+    ('B5D00000-0000-4000-8002-000000050008', N'inventory InventoryChild_003 8', N'INV-InventoryChild_003-8', N'Hold', 85, N'child row 8 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010004');
 GO
 
-INSERT INTO [bsd_inventory].[Child_004] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_inventory].[InventoryChild_004] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8002-000000060001', N'inventory Child_004 1', N'INV-Child_004-1', N'Active', 16, N'child row 1 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010001'),
-    ('B5D00000-0000-4000-8002-000000060002', N'inventory Child_004 2', N'INV-Child_004-2', N'Pending', 26, N'child row 2 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010002'),
-    ('B5D00000-0000-4000-8002-000000060003', N'inventory Child_004 3', N'INV-Child_004-3', N'Closed', 36, N'child row 3 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010003'),
-    ('B5D00000-0000-4000-8002-000000060004', N'inventory Child_004 4', N'INV-Child_004-4', N'Hold', 46, N'child row 4 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000004', 'B5D00000-0000-4000-8002-000000010004'),
-    ('B5D00000-0000-4000-8002-000000060005', N'inventory Child_004 5', N'INV-Child_004-5', N'Active', 56, N'child row 5 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000005', 'B5D00000-0000-4000-8002-000000010001'),
-    ('B5D00000-0000-4000-8002-000000060006', N'inventory Child_004 6', N'INV-Child_004-6', N'Pending', 66, N'child row 6 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010002'),
-    ('B5D00000-0000-4000-8002-000000060007', N'inventory Child_004 7', N'INV-Child_004-7', N'Closed', 76, N'child row 7 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010003'),
-    ('B5D00000-0000-4000-8002-000000060008', N'inventory Child_004 8', N'INV-Child_004-8', N'Hold', 86, N'child row 8 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010004');
+    ('B5D00000-0000-4000-8002-000000060001', N'inventory InventoryChild_004 1', N'INV-InventoryChild_004-1', N'Active', 16, N'child row 1 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010001'),
+    ('B5D00000-0000-4000-8002-000000060002', N'inventory InventoryChild_004 2', N'INV-InventoryChild_004-2', N'Pending', 26, N'child row 2 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010002'),
+    ('B5D00000-0000-4000-8002-000000060003', N'inventory InventoryChild_004 3', N'INV-InventoryChild_004-3', N'Closed', 36, N'child row 3 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010003'),
+    ('B5D00000-0000-4000-8002-000000060004', N'inventory InventoryChild_004 4', N'INV-InventoryChild_004-4', N'Hold', 46, N'child row 4 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000004', 'B5D00000-0000-4000-8002-000000010004'),
+    ('B5D00000-0000-4000-8002-000000060005', N'inventory InventoryChild_004 5', N'INV-InventoryChild_004-5', N'Active', 56, N'child row 5 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000005', 'B5D00000-0000-4000-8002-000000010001'),
+    ('B5D00000-0000-4000-8002-000000060006', N'inventory InventoryChild_004 6', N'INV-InventoryChild_004-6', N'Pending', 66, N'child row 6 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010002'),
+    ('B5D00000-0000-4000-8002-000000060007', N'inventory InventoryChild_004 7', N'INV-InventoryChild_004-7', N'Closed', 76, N'child row 7 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010003'),
+    ('B5D00000-0000-4000-8002-000000060008', N'inventory InventoryChild_004 8', N'INV-InventoryChild_004-8', N'Hold', 86, N'child row 8 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010004');
 GO
 
-INSERT INTO [bsd_inventory].[Child_005] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_inventory].[InventoryChild_005] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8002-000000070001', N'inventory Child_005 1', N'INV-Child_005-1', N'Active', 10, N'child row 1 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010001'),
-    ('B5D00000-0000-4000-8002-000000070002', N'inventory Child_005 2', N'INV-Child_005-2', N'Pending', 20, N'child row 2 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010002'),
-    ('B5D00000-0000-4000-8002-000000070003', N'inventory Child_005 3', N'INV-Child_005-3', N'Closed', 30, N'child row 3 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010003'),
-    ('B5D00000-0000-4000-8002-000000070004', N'inventory Child_005 4', N'INV-Child_005-4', N'Hold', 40, N'child row 4 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000004', 'B5D00000-0000-4000-8002-000000010004'),
-    ('B5D00000-0000-4000-8002-000000070005', N'inventory Child_005 5', N'INV-Child_005-5', N'Active', 50, N'child row 5 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000005', 'B5D00000-0000-4000-8002-000000010001'),
-    ('B5D00000-0000-4000-8002-000000070006', N'inventory Child_005 6', N'INV-Child_005-6', N'Pending', 60, N'child row 6 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010002'),
-    ('B5D00000-0000-4000-8002-000000070007', N'inventory Child_005 7', N'INV-Child_005-7', N'Closed', 70, N'child row 7 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010003'),
-    ('B5D00000-0000-4000-8002-000000070008', N'inventory Child_005 8', N'INV-Child_005-8', N'Hold', 80, N'child row 8 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010004');
+    ('B5D00000-0000-4000-8002-000000070001', N'inventory InventoryChild_005 1', N'INV-InventoryChild_005-1', N'Active', 10, N'child row 1 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010001'),
+    ('B5D00000-0000-4000-8002-000000070002', N'inventory InventoryChild_005 2', N'INV-InventoryChild_005-2', N'Pending', 20, N'child row 2 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010002'),
+    ('B5D00000-0000-4000-8002-000000070003', N'inventory InventoryChild_005 3', N'INV-InventoryChild_005-3', N'Closed', 30, N'child row 3 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010003'),
+    ('B5D00000-0000-4000-8002-000000070004', N'inventory InventoryChild_005 4', N'INV-InventoryChild_005-4', N'Hold', 40, N'child row 4 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000004', 'B5D00000-0000-4000-8002-000000010004'),
+    ('B5D00000-0000-4000-8002-000000070005', N'inventory InventoryChild_005 5', N'INV-InventoryChild_005-5', N'Active', 50, N'child row 5 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000005', 'B5D00000-0000-4000-8002-000000010001'),
+    ('B5D00000-0000-4000-8002-000000070006', N'inventory InventoryChild_005 6', N'INV-InventoryChild_005-6', N'Pending', 60, N'child row 6 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010002'),
+    ('B5D00000-0000-4000-8002-000000070007', N'inventory InventoryChild_005 7', N'INV-InventoryChild_005-7', N'Closed', 70, N'child row 7 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010003'),
+    ('B5D00000-0000-4000-8002-000000070008', N'inventory InventoryChild_005 8', N'INV-InventoryChild_005-8', N'Hold', 80, N'child row 8 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010004');
 GO
 
-INSERT INTO [bsd_inventory].[Grandchild_001] ([ID], [Name], [Code], [Status], [Amount], [Notes], [ChildID])
+INSERT INTO [bsd_inventory].[InventoryGrandchild_001] ([ID], [Name], [Code], [Status], [Amount], [Notes], [ChildID])
 VALUES
-    ('B5D00000-0000-4000-8002-000000080001', N'inventory Grandchild_001 1', N'INV-Grandchild_001-1', N'Active', 11, N'grandchild row 1 in bsd_inventory', 'B5D00000-0000-4000-8002-000000030001'),
-    ('B5D00000-0000-4000-8002-000000080002', N'inventory Grandchild_001 2', N'INV-Grandchild_001-2', N'Pending', 21, N'grandchild row 2 in bsd_inventory', 'B5D00000-0000-4000-8002-000000030002'),
-    ('B5D00000-0000-4000-8002-000000080003', N'inventory Grandchild_001 3', N'INV-Grandchild_001-3', N'Closed', 31, N'grandchild row 3 in bsd_inventory', 'B5D00000-0000-4000-8002-000000030003'),
-    ('B5D00000-0000-4000-8002-000000080004', N'inventory Grandchild_001 4', N'INV-Grandchild_001-4', N'Hold', 41, N'grandchild row 4 in bsd_inventory', 'B5D00000-0000-4000-8002-000000030004'),
-    ('B5D00000-0000-4000-8002-000000080005', N'inventory Grandchild_001 5', N'INV-Grandchild_001-5', N'Active', 51, N'grandchild row 5 in bsd_inventory', 'B5D00000-0000-4000-8002-000000030005'),
-    ('B5D00000-0000-4000-8002-000000080006', N'inventory Grandchild_001 6', N'INV-Grandchild_001-6', N'Pending', 61, N'grandchild row 6 in bsd_inventory', 'B5D00000-0000-4000-8002-000000030006');
+    ('B5D00000-0000-4000-8002-000000080001', N'inventory InventoryGrandchild_001 1', N'INV-InventoryGrandchild_001-1', N'Active', 11, N'grandchild row 1 in bsd_inventory', 'B5D00000-0000-4000-8002-000000030001'),
+    ('B5D00000-0000-4000-8002-000000080002', N'inventory InventoryGrandchild_001 2', N'INV-InventoryGrandchild_001-2', N'Pending', 21, N'grandchild row 2 in bsd_inventory', 'B5D00000-0000-4000-8002-000000030002'),
+    ('B5D00000-0000-4000-8002-000000080003', N'inventory InventoryGrandchild_001 3', N'INV-InventoryGrandchild_001-3', N'Closed', 31, N'grandchild row 3 in bsd_inventory', 'B5D00000-0000-4000-8002-000000030003'),
+    ('B5D00000-0000-4000-8002-000000080004', N'inventory InventoryGrandchild_001 4', N'INV-InventoryGrandchild_001-4', N'Hold', 41, N'grandchild row 4 in bsd_inventory', 'B5D00000-0000-4000-8002-000000030004'),
+    ('B5D00000-0000-4000-8002-000000080005', N'inventory InventoryGrandchild_001 5', N'INV-InventoryGrandchild_001-5', N'Active', 51, N'grandchild row 5 in bsd_inventory', 'B5D00000-0000-4000-8002-000000030005'),
+    ('B5D00000-0000-4000-8002-000000080006', N'inventory InventoryGrandchild_001 6', N'INV-InventoryGrandchild_001-6', N'Pending', 61, N'grandchild row 6 in bsd_inventory', 'B5D00000-0000-4000-8002-000000030006');
 GO
 
-INSERT INTO [bsd_inventory].[XRef_01] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_inventory].[InventoryXRef_01] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8002-000000090001', N'inventory XRef_01 1', N'INV-XRef_01-1', N'Active', 12, N'xref row 1 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010001'),
-    ('B5D00000-0000-4000-8002-000000090002', N'inventory XRef_01 2', N'INV-XRef_01-2', N'Pending', 22, N'xref row 2 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010002'),
-    ('B5D00000-0000-4000-8002-000000090003', N'inventory XRef_01 3', N'INV-XRef_01-3', N'Closed', 32, N'xref row 3 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010003'),
-    ('B5D00000-0000-4000-8002-000000090004', N'inventory XRef_01 4', N'INV-XRef_01-4', N'Hold', 42, N'xref row 4 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000004', 'B5D00000-0000-4000-8002-000000010004'),
-    ('B5D00000-0000-4000-8002-000000090005', N'inventory XRef_01 5', N'INV-XRef_01-5', N'Active', 52, N'xref row 5 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000005', 'B5D00000-0000-4000-8002-000000010001'),
-    ('B5D00000-0000-4000-8002-000000090006', N'inventory XRef_01 6', N'INV-XRef_01-6', N'Pending', 62, N'xref row 6 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010002');
+    ('B5D00000-0000-4000-8002-000000090001', N'inventory InventoryXRef_01 1', N'INV-InventoryXRef_01-1', N'Active', 12, N'xref row 1 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010001'),
+    ('B5D00000-0000-4000-8002-000000090002', N'inventory InventoryXRef_01 2', N'INV-InventoryXRef_01-2', N'Pending', 22, N'xref row 2 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010002'),
+    ('B5D00000-0000-4000-8002-000000090003', N'inventory InventoryXRef_01 3', N'INV-InventoryXRef_01-3', N'Closed', 32, N'xref row 3 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010003'),
+    ('B5D00000-0000-4000-8002-000000090004', N'inventory InventoryXRef_01 4', N'INV-InventoryXRef_01-4', N'Hold', 42, N'xref row 4 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000004', 'B5D00000-0000-4000-8002-000000010004'),
+    ('B5D00000-0000-4000-8002-000000090005', N'inventory InventoryXRef_01 5', N'INV-InventoryXRef_01-5', N'Active', 52, N'xref row 5 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000005', 'B5D00000-0000-4000-8002-000000010001'),
+    ('B5D00000-0000-4000-8002-000000090006', N'inventory InventoryXRef_01 6', N'INV-InventoryXRef_01-6', N'Pending', 62, N'xref row 6 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010002');
 GO
 
-INSERT INTO [bsd_inventory].[XRef_02] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
+INSERT INTO [bsd_inventory].[InventoryXRef_02] ([ID], [Name], [Code], [Status], [Amount], [Notes], [HubID], [LookupID])
 VALUES
-    ('B5D00000-0000-4000-8002-0000000A0001', N'inventory XRef_02 1', N'INV-XRef_02-1', N'Active', 13, N'xref row 1 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010001'),
-    ('B5D00000-0000-4000-8002-0000000A0002', N'inventory XRef_02 2', N'INV-XRef_02-2', N'Pending', 23, N'xref row 2 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010002'),
-    ('B5D00000-0000-4000-8002-0000000A0003', N'inventory XRef_02 3', N'INV-XRef_02-3', N'Closed', 33, N'xref row 3 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010003'),
-    ('B5D00000-0000-4000-8002-0000000A0004', N'inventory XRef_02 4', N'INV-XRef_02-4', N'Hold', 43, N'xref row 4 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000004', 'B5D00000-0000-4000-8002-000000010004'),
-    ('B5D00000-0000-4000-8002-0000000A0005', N'inventory XRef_02 5', N'INV-XRef_02-5', N'Active', 53, N'xref row 5 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000005', 'B5D00000-0000-4000-8002-000000010001'),
-    ('B5D00000-0000-4000-8002-0000000A0006', N'inventory XRef_02 6', N'INV-XRef_02-6', N'Pending', 63, N'xref row 6 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010002');
+    ('B5D00000-0000-4000-8002-0000000A0001', N'inventory InventoryXRef_02 1', N'INV-InventoryXRef_02-1', N'Active', 13, N'xref row 1 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010001'),
+    ('B5D00000-0000-4000-8002-0000000A0002', N'inventory InventoryXRef_02 2', N'INV-InventoryXRef_02-2', N'Pending', 23, N'xref row 2 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8002-000000010002'),
+    ('B5D00000-0000-4000-8002-0000000A0003', N'inventory InventoryXRef_02 3', N'INV-InventoryXRef_02-3', N'Closed', 33, N'xref row 3 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8002-000000010003'),
+    ('B5D00000-0000-4000-8002-0000000A0004', N'inventory InventoryXRef_02 4', N'INV-InventoryXRef_02-4', N'Hold', 43, N'xref row 4 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000004', 'B5D00000-0000-4000-8002-000000010004'),
+    ('B5D00000-0000-4000-8002-0000000A0005', N'inventory InventoryXRef_02 5', N'INV-InventoryXRef_02-5', N'Active', 53, N'xref row 5 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000005', 'B5D00000-0000-4000-8002-000000010001'),
+    ('B5D00000-0000-4000-8002-0000000A0006', N'inventory InventoryXRef_02 6', N'INV-InventoryXRef_02-6', N'Pending', 63, N'xref row 6 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8002-000000010002');
 GO
 
-INSERT INTO [bsd_inventory].[Bridge] ([ID], [Name], [Code], [Status], [Amount], [Notes], [LocalHubID], [RemoteHubID])
+INSERT INTO [bsd_inventory].[InventoryBridge] ([ID], [Name], [Code], [Status], [Amount], [Notes], [LocalHubID], [RemoteHubID])
 VALUES
-    ('B5D00000-0000-4000-8002-0000000B0001', N'inventory Bridge 1', N'INV-Bridge-1', N'Active', 14, N'bridge row 1 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8001-000000000002'),
-    ('B5D00000-0000-4000-8002-0000000B0002', N'inventory Bridge 2', N'INV-Bridge-2', N'Pending', 24, N'bridge row 2 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8001-000000000003'),
-    ('B5D00000-0000-4000-8002-0000000B0003', N'inventory Bridge 3', N'INV-Bridge-3', N'Closed', 34, N'bridge row 3 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8001-000000000004'),
-    ('B5D00000-0000-4000-8002-0000000B0004', N'inventory Bridge 4', N'INV-Bridge-4', N'Hold', 44, N'bridge row 4 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000004', 'B5D00000-0000-4000-8001-000000000005');
+    ('B5D00000-0000-4000-8002-0000000B0001', N'inventory InventoryBridge 1', N'INV-InventoryBridge-1', N'Active', 14, N'bridge row 1 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000001', 'B5D00000-0000-4000-8001-000000000002'),
+    ('B5D00000-0000-4000-8002-0000000B0002', N'inventory InventoryBridge 2', N'INV-InventoryBridge-2', N'Pending', 24, N'bridge row 2 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000002', 'B5D00000-0000-4000-8001-000000000003'),
+    ('B5D00000-0000-4000-8002-0000000B0003', N'inventory InventoryBridge 3', N'INV-InventoryBridge-3', N'Closed', 34, N'bridge row 3 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000003', 'B5D00000-0000-4000-8001-000000000004'),
+    ('B5D00000-0000-4000-8002-0000000B0004', N'inventory InventoryBridge 4', N'INV-InventoryBridge-4', N'Hold', 44, N'bridge row 4 in bsd_inventory', 'B5D00000-0000-4000-8002-000000000004', 'B5D00000-0000-4000-8001-000000000005');
 GO

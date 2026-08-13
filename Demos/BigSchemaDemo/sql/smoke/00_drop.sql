@@ -15,6 +15,12 @@ BEGIN
     FROM sys.foreign_keys
     WHERE OBJECT_SCHEMA_NAME(parent_object_id) = N'bsd_inventory'
        OR OBJECT_SCHEMA_NAME(referenced_object_id) = N'bsd_inventory';
+    SELECT @sql_2 = @sql_2 + N'DROP PROCEDURE ' + QUOTENAME(s.name) + N'.' + QUOTENAME(p.name) + N';'
+    FROM sys.procedures p INNER JOIN sys.schemas s ON s.schema_id = p.schema_id WHERE s.name = N'bsd_inventory';
+    SELECT @sql_2 = @sql_2 + N'DROP VIEW ' + QUOTENAME(s.name) + N'.' + QUOTENAME(v.name) + N';'
+    FROM sys.views v INNER JOIN sys.schemas s ON s.schema_id = v.schema_id WHERE s.name = N'bsd_inventory';
+    SELECT @sql_2 = @sql_2 + N'DROP FUNCTION ' + QUOTENAME(s.name) + N'.' + QUOTENAME(o.name) + N';'
+    FROM sys.objects o INNER JOIN sys.schemas s ON s.schema_id = o.schema_id WHERE s.name = N'bsd_inventory' AND o.type IN ('FN','IF','TF');
     IF LEN(@sql_2) > 0 EXEC sys.sp_executesql @sql_2;
     DECLARE @tbl_2 NVARCHAR(MAX) = N'';
     SELECT @tbl_2 = @tbl_2 + N'DROP TABLE ' + QUOTENAME(s.name) + N'.' + QUOTENAME(t.name) + N';'
@@ -34,6 +40,12 @@ BEGIN
     FROM sys.foreign_keys
     WHERE OBJECT_SCHEMA_NAME(parent_object_id) = N'bsd_billing'
        OR OBJECT_SCHEMA_NAME(referenced_object_id) = N'bsd_billing';
+    SELECT @sql_1 = @sql_1 + N'DROP PROCEDURE ' + QUOTENAME(s.name) + N'.' + QUOTENAME(p.name) + N';'
+    FROM sys.procedures p INNER JOIN sys.schemas s ON s.schema_id = p.schema_id WHERE s.name = N'bsd_billing';
+    SELECT @sql_1 = @sql_1 + N'DROP VIEW ' + QUOTENAME(s.name) + N'.' + QUOTENAME(v.name) + N';'
+    FROM sys.views v INNER JOIN sys.schemas s ON s.schema_id = v.schema_id WHERE s.name = N'bsd_billing';
+    SELECT @sql_1 = @sql_1 + N'DROP FUNCTION ' + QUOTENAME(s.name) + N'.' + QUOTENAME(o.name) + N';'
+    FROM sys.objects o INNER JOIN sys.schemas s ON s.schema_id = o.schema_id WHERE s.name = N'bsd_billing' AND o.type IN ('FN','IF','TF');
     IF LEN(@sql_1) > 0 EXEC sys.sp_executesql @sql_1;
     DECLARE @tbl_1 NVARCHAR(MAX) = N'';
     SELECT @tbl_1 = @tbl_1 + N'DROP TABLE ' + QUOTENAME(s.name) + N'.' + QUOTENAME(t.name) + N';'
@@ -53,6 +65,12 @@ BEGIN
     FROM sys.foreign_keys
     WHERE OBJECT_SCHEMA_NAME(parent_object_id) = N'bsd_crm'
        OR OBJECT_SCHEMA_NAME(referenced_object_id) = N'bsd_crm';
+    SELECT @sql_0 = @sql_0 + N'DROP PROCEDURE ' + QUOTENAME(s.name) + N'.' + QUOTENAME(p.name) + N';'
+    FROM sys.procedures p INNER JOIN sys.schemas s ON s.schema_id = p.schema_id WHERE s.name = N'bsd_crm';
+    SELECT @sql_0 = @sql_0 + N'DROP VIEW ' + QUOTENAME(s.name) + N'.' + QUOTENAME(v.name) + N';'
+    FROM sys.views v INNER JOIN sys.schemas s ON s.schema_id = v.schema_id WHERE s.name = N'bsd_crm';
+    SELECT @sql_0 = @sql_0 + N'DROP FUNCTION ' + QUOTENAME(s.name) + N'.' + QUOTENAME(o.name) + N';'
+    FROM sys.objects o INNER JOIN sys.schemas s ON s.schema_id = o.schema_id WHERE s.name = N'bsd_crm' AND o.type IN ('FN','IF','TF');
     IF LEN(@sql_0) > 0 EXEC sys.sp_executesql @sql_0;
     DECLARE @tbl_0 NVARCHAR(MAX) = N'';
     SELECT @tbl_0 = @tbl_0 + N'DROP TABLE ' + QUOTENAME(s.name) + N'.' + QUOTENAME(t.name) + N';'
