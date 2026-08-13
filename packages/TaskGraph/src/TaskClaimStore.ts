@@ -159,18 +159,22 @@ export class TaskClaimStore {
      */
     public async TryClaim(provider: IMetadataProvider, taskID: string, contextUser: UserInfo): Promise<boolean> {
         const db = this.sql(provider);
-        const expires = new Date(Date.now() + this.claimTTLSeconds * 1000);
+        // The lease is written AND compared on the database's clock (SYSUTCDATETIME), never this
+        // process's. The claim protocol is multi-instance: a lease written from one host's clock and
+        // judged expired against another's turns ordinary NTP skew into premature reclamation — the
+        // task runs twice — or into a lease that outlives its worker. One clock, the only shared one.
+        const ttlSeconds = Math.max(0, Math.round(this.claimTTLSeconds));
         const sql = `
             UPDATE ${this.taskTable(provider)}
             SET ${db.QuoteIdentifier('Status')} = 'In Progress',
                 ${db.QuoteIdentifier('ClaimedBy')} = '${this.escape(this.instanceID)}',
-                ${db.QuoteIdentifier('ClaimExpiresAt')} = '${expires.toISOString()}',
-                ${db.QuoteIdentifier('StartedAt')} = '${new Date().toISOString()}'
+                ${db.QuoteIdentifier('ClaimExpiresAt')} = DATEADD(SECOND, ${ttlSeconds}, SYSUTCDATETIME()),
+                ${db.QuoteIdentifier('StartedAt')} = SYSUTCDATETIME()
             WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
               AND ${db.QuoteIdentifier('Status')} = 'Pending'
               AND (${db.QuoteIdentifier('ClaimedBy')} IS NULL
                    OR ${db.QuoteIdentifier('ClaimExpiresAt')} IS NULL
-                   OR ${db.QuoteIdentifier('ClaimExpiresAt')} < '${new Date().toISOString()}')`;
+                   OR ${db.QuoteIdentifier('ClaimExpiresAt')} < SYSUTCDATETIME())`;
         return (await this.affectedRows(db, sql, contextUser)) === 1;
     }
 
@@ -185,10 +189,11 @@ export class TaskClaimStore {
      */
     public async Heartbeat(provider: IMetadataProvider, taskID: string, contextUser: UserInfo): Promise<boolean> {
         const db = this.sql(provider);
-        const expires = new Date(Date.now() + this.claimTTLSeconds * 1000);
+        // Same single-clock rule as TryClaim: the renewal is computed on the database's clock.
+        const ttlSeconds = Math.max(0, Math.round(this.claimTTLSeconds));
         const sql = `
             UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('ClaimExpiresAt')} = '${expires.toISOString()}'
+            SET ${db.QuoteIdentifier('ClaimExpiresAt')} = DATEADD(SECOND, ${ttlSeconds}, SYSUTCDATETIME())
             WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
               AND ${db.QuoteIdentifier('ClaimedBy')} = '${this.escape(this.instanceID)}'
               AND ${db.QuoteIdentifier('Status')} = 'In Progress'`;
@@ -229,7 +234,7 @@ export class TaskClaimStore {
         const db = this.sql(provider);
         const sets: string[] = [
             `${db.QuoteIdentifier('Status')} = '${outcome.Status}'`,
-            `${db.QuoteIdentifier('CompletedAt')} = '${new Date().toISOString()}'`,
+            `${db.QuoteIdentifier('CompletedAt')} = SYSUTCDATETIME()`,
             `${db.QuoteIdentifier('PercentComplete')} = ${outcome.Status === 'Complete' ? 100 : 0}`,
             // Release the claim as part of the same atomic write — a separate release could be
             // interrupted, leaving a terminal task holding a claim that the sweep would then flag.
@@ -273,7 +278,6 @@ export class TaskClaimStore {
      */
     public async ReleaseExpiredClaims(provider: IMetadataProvider, contextUser: UserInfo): Promise<ReconciliationEvent[]> {
         const db = this.sql(provider);
-        const now = new Date().toISOString();
 
         // Capture what will be reclaimed BEFORE reclaiming, so the log names the tasks. The
         // subsequent UPDATE re-states the same predicate, so a task whose claim was refreshed in
@@ -285,7 +289,7 @@ export class TaskClaimStore {
                AND ${MachineTaskSQL(db.QuoteIdentifier.bind(db))}
                AND ${db.QuoteIdentifier('ClaimedBy')} IS NOT NULL
                AND ${db.QuoteIdentifier('ClaimExpiresAt')} IS NOT NULL
-               AND ${db.QuoteIdentifier('ClaimExpiresAt')} < '${now}'`,
+               AND ${db.QuoteIdentifier('ClaimExpiresAt')} < SYSUTCDATETIME()`,
             undefined, undefined, contextUser,
         );
 
@@ -300,7 +304,7 @@ export class TaskClaimStore {
               AND ${MachineTaskSQL(db.QuoteIdentifier.bind(db))}
               AND ${db.QuoteIdentifier('ClaimedBy')} IS NOT NULL
               AND ${db.QuoteIdentifier('ClaimExpiresAt')} IS NOT NULL
-              AND ${db.QuoteIdentifier('ClaimExpiresAt')} < '${now}'`;
+              AND ${db.QuoteIdentifier('ClaimExpiresAt')} < SYSUTCDATETIME()`;
         const released = await this.affectedRows(db, sql, contextUser);
 
         const events: ReconciliationEvent[] = candidates.slice(0, released).map((c) => ({
@@ -374,7 +378,7 @@ export class TaskClaimStore {
             UPDATE ${this.taskTable(provider)}
             SET ${db.QuoteIdentifier('Status')} = '${this.escape(status)}',
                 ${db.QuoteIdentifier('PercentComplete')} = ${Number.isFinite(percentComplete) ? Math.round(percentComplete) : 0},
-                ${db.QuoteIdentifier('CompletedAt')} = '${new Date().toISOString()}'
+                ${db.QuoteIdentifier('CompletedAt')} = SYSUTCDATETIME()
             WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
               AND ${db.QuoteIdentifier('Status')} NOT IN (${TERMINAL_PARENT_STATUS_SQL})`;
         return (await this.affectedRows(db, sql, contextUser)) === 1;

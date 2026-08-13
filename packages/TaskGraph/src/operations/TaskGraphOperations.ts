@@ -33,7 +33,7 @@ import {
     type TaskGraphRetryInput,
     type TaskGraphStatusOutput,
 } from '@memberjunction/core-entities';
-import { ComputeParentRollup, type TaskGraphNodeStatus, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
+import { ComputeParentRollup, type TaskGraphInvocationEnvelope, type TaskGraphNodeStatus, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import { TaskGraphService, TaskGraphSubmitContext } from '../TaskGraphService';
 import { LoadWorkflowDraftOperation } from './WorkflowDraftOperation';
 
@@ -103,7 +103,17 @@ function submitContext(
 @RegisterClass(BaseRemotableOperation, 'TaskGraph.Submit')
 export class TaskGraphSubmitServerOperation extends TaskGraphSubmitOperation {
     protected async InternalExecute(
-        input: TaskGraphSubmitInput,
+        // Widened locally until CodeGen re-emits the base from the updated metadata row, the
+        // RetryTask precedent. Two of the three fields the in-process path carries now ride the
+        // remote one too: `reinvokeDepth`, because the runaway-loop cap is a safety bound that
+        // must count remote hops the same as local ones, and `invocation`, because a flow graph's
+        // documented `data.*`/`context.*` conditions (R3-3) are dead on arrival without it.
+        // `AgentRunID` stays deliberately absent — whether a remote caller's graph should BIND to
+        // an agent run is the D1 execution-identity design question, not a dropped field.
+        input: TaskGraphSubmitInput & {
+            reinvokeDepth?: number;
+            invocation?: { data?: unknown; context?: unknown };
+        },
         provider: IMetadataProvider,
         user: UserInfo,
     ): Promise<TaskGraphSubmitOutput> {
@@ -111,9 +121,17 @@ export class TaskGraphSubmitServerOperation extends TaskGraphSubmitOperation {
         if (!input?.environmentID) throw new Error('environmentID is required');
 
         const spec: TaskGraphSpec = input.spec;
+        const invocation: TaskGraphInvocationEnvelope | undefined =
+            input.invocation && (input.invocation.data !== undefined || input.invocation.context !== undefined)
+                ? { Data: input.invocation.data, Context: input.invocation.context }
+                : undefined;
         const result = await new TaskGraphService().Submit(
             spec,
-            submitContext(provider, user, input.environmentID, input.conversationDetailID),
+            {
+                ...submitContext(provider, user, input.environmentID, input.conversationDetailID),
+                ReinvokeDepth: Number.isFinite(input.reinvokeDepth) ? Number(input.reinvokeDepth) : undefined,
+                Invocation: invocation,
+            },
         );
         return {
             success: result.Success,

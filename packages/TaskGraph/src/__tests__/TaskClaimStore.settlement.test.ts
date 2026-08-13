@@ -355,3 +355,40 @@ describe('TryClaimContinuation — a real compare-and-swap', () => {
         expect(ParseTaskGraphParentMetadata('not json').continuationDeliveredAt).toBeUndefined();
     });
 });
+
+describe('the lease lives on the database clock, never this process\'s (claim-clock unification)', () => {
+    // The claim protocol is multi-instance: a lease written from one host's clock and judged
+    // expired against another's turns ordinary NTP skew into premature reclamation — the task runs
+    // twice — or into a lease that outlives its worker. The database's clock is the only one every
+    // instance shares, so the expiry is WRITTEN there (DATEADD over SYSUTCDATETIME) and COMPARED
+    // there, and no ISO timestamp minted in Node may appear in any lease expression.
+    const ISO_LITERAL = /'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+    let store: TaskClaimStore;
+    beforeEach(() => { store = new TaskClaimStore('instance-1', 300); });
+
+    it('TryClaim writes and compares ClaimExpiresAt in SQL time', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.TryClaim(provider, PARENT, USER);
+        expect(statements[0]).toContain('DATEADD(SECOND, 300, SYSUTCDATETIME())');
+        expect(statements[0]).toContain('[ClaimExpiresAt] < SYSUTCDATETIME()');
+        expect(statements[0]).not.toMatch(ISO_LITERAL);
+    });
+
+    it('Heartbeat renews on the same clock the claim was written with', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.Heartbeat(provider, PARENT, USER);
+        expect(statements[0]).toContain('DATEADD(SECOND, 300, SYSUTCDATETIME())');
+        expect(statements[0]).not.toMatch(ISO_LITERAL);
+    });
+
+    it('ReleaseExpiredClaims judges expiry on the clock that wrote the lease', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.ReleaseExpiredClaims(provider, USER);
+        // Both statements — the SELECT naming what will be reclaimed and the UPDATE reclaiming it.
+        expect(statements.length).toBeGreaterThanOrEqual(2);
+        for (const sql of statements) {
+            expect(sql).toContain('[ClaimExpiresAt] < SYSUTCDATETIME()');
+            expect(sql).not.toMatch(ISO_LITERAL);
+        }
+    });
+});
