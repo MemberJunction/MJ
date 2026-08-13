@@ -90,6 +90,10 @@ export class MaterializationRefresher {
     /** A plain, unquoted SQL identifier: leading letter/underscore, then letters/digits/underscores. */
     private static readonly SAFE_SQL_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
+    /** Cached API-key row-filter targets for this refresher; `null` = not yet enumerated (see
+     *  {@link loadAPIKeyRowFilterTargets}). `'unknown'` is a LOADED state meaning "assume restricted". */
+    private _apiKeyRowFilterTargets: ReadonlySet<string> | 'unknown' | null = null;
+
     /**
      * Guards the schema/table/view identifiers that get interpolated into materialization DDL/DML — names
      * read from the *writable* `MJ: Materialized Results` metadata row. A materialization's names are always
@@ -354,8 +358,12 @@ export class MaterializationRefresher {
                 // The CodeGen mint/drift gates also cover this, but they run only per codegen pass; this runtime
                 // refusal closes the window between an entity gaining RLS and the next codegen run, during which
                 // the scheduled sweep would otherwise keep refilling the mirror with the now-protected rows.
-                if (MaterializationRefresher.entityHasReadRLS(externalEntity)) {
-                    return await this.failRefresh(matResult, provider, options, `Refusing to refresh base-view materialization of external RLS-protected entity "${externalEntity.Name}": a local mirror would expose rows the live path refuses under RLS.`);
+                // Both fence layers, not just role RLS: an entity fenced ONLY by an API-key row filter is just
+                // as unsafe to mirror, and checking only the role layer would leave this window open for it —
+                // the very window this gate exists to close. Symmetric with CodeGen's mint/drift gates.
+                const apiKeyTargets = await this.loadAPIKeyRowFilterTargets(provider, contextUser);
+                if (MaterializationRefresher.entityHasRowLevelRestriction(externalEntity, apiKeyTargets)) {
+                    return await this.failRefresh(matResult, provider, options, `Refusing to refresh base-view materialization of external row-restricted entity "${externalEntity.Name}" (role RLS and/or an API-key row filter): a local mirror would expose rows the live path refuses.`);
                 }
                 const ext = await this.rebuildFromExternalEntity(matResult, externalEntity, exec, isPostgres, contextUser, provider, runShadowName);
                 if (!ext.Success) return await this.failRefresh(matResult, provider, options, ext.ErrorMessage ?? `External entity rebuild failed for materialization ${matResult.ID}`);
@@ -823,6 +831,62 @@ export class MaterializationRefresher {
      */
     public static entityHasReadRLS(entity: EntityInfo): boolean {
         return entity.Permissions.some((p) => !!p.ReadRLSFilterID && p.ReadRLSFilterID.trim().length > 0);
+    }
+
+    /**
+     * The composite row-restriction test the Leak-1 gate uses: role RLS **or** an API-key row filter.
+     *
+     * {@link entityHasReadRLS} covers only the ROLE layer. `EntityInfo`'s equivalent role-only accessor is
+     * deprecated precisely because it omits API-key row filters, so a gate built on it alone judges an
+     * entity fenced only by a key filter to be unrestricted. CodeGen's mint and drift gates compose both
+     * layers; this is the runtime half, kept deliberately symmetric with them.
+     *
+     * @param apiKeyRowFilterTargets lowercased entity names carrying an API-key row filter, or `'unknown'`
+     *        when that layer could not be enumerated — in which case every entity is treated as restricted,
+     *        because refusing to refresh is recoverable and mirroring restricted rows is not.
+     */
+    public static entityHasRowLevelRestriction(entity: EntityInfo, apiKeyRowFilterTargets: ReadonlySet<string> | 'unknown'): boolean {
+        if (MaterializationRefresher.entityHasReadRLS(entity)) return true;
+        if (apiKeyRowFilterTargets === 'unknown') return true;
+        return apiKeyRowFilterTargets.has((entity.Name ?? '').trim().toLowerCase());
+    }
+
+    /**
+     * Enumerates the entities carrying an API-key row filter, cached for this refresher's lifetime (the gate
+     * runs per materialization; the fence changes far more slowly than a sweep).
+     *
+     * Mirrors CodeGen's enumeration contract exactly: entity NAMES, trimmed and lowercased, taken from the
+     * `ResourcePattern` of scope rows that carry a `RowFilterID`. A pattern that cannot be resolved to one
+     * exact entity — blank, or wildcard/list (`*`, `%`, `,`) — collapses the WHOLE set to `'unknown'`, since
+     * a rule we cannot map may well name the entity we are about to mirror. Any read failure does the same.
+     */
+    private async loadAPIKeyRowFilterTargets(provider: IMetadataProvider, contextUser: UserInfo): Promise<ReadonlySet<string> | 'unknown'> {
+        if (this._apiKeyRowFilterTargets !== null) return this._apiKeyRowFilterTargets;
+        try {
+            const targets = new Set<string>();
+            const rv = RunView.FromMetadataProvider(provider);
+            for (const entityName of ['MJ: API Key Scopes', 'MJ: API Application Scopes']) {
+                const res = await rv.RunView<{ ResourcePattern: string | null }>(
+                    { EntityName: entityName, Fields: ['ResourcePattern'], ExtraFilter: 'RowFilterID IS NOT NULL', ResultType: 'simple' },
+                    contextUser,
+                );
+                if (!res.Success) throw new Error(`${entityName}: ${res.ErrorMessage}`);
+                for (const row of res.Results ?? []) {
+                    const pattern = (row.ResourcePattern ?? '').trim();
+                    if (pattern.length === 0 || /[*%,]/.test(pattern)) {
+                        LogError(`MaterializationRefresher: an API-key scope rule with a row filter has an unmappable ResourcePattern ("${pattern}") — it cannot be resolved to one entity, so EVERY entity is treated as row-restricted for refresh (fail closed). Fix the rule to name one exact entity.`);
+                        this._apiKeyRowFilterTargets = 'unknown';
+                        return this._apiKeyRowFilterTargets;
+                    }
+                    targets.add(pattern.toLowerCase());
+                }
+            }
+            this._apiKeyRowFilterTargets = targets;
+        } catch (err) {
+            LogError(`MaterializationRefresher: API-key row-filter enumeration FAILED — every entity is treated as row-restricted for refresh (fail closed): ${err instanceof Error ? err.message : String(err)}`);
+            this._apiKeyRowFilterTargets = 'unknown';
+        }
+        return this._apiKeyRowFilterTargets;
     }
 
     /**

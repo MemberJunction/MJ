@@ -879,3 +879,42 @@ describe('MaterializationRefresher.resolvePlatformQuerySQL (snapshot the stateme
         expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, '  ', false)).toBeNull();
     });
 });
+
+/**
+ * Review finding (fail-open RLS gate), runtime half. The Leak-1 gate exists specifically to close the window
+ * between an entity gaining a row restriction and the next CodeGen run, during which the sweep would keep
+ * refilling the mirror. Checking only the ROLE layer left that window open for an entity fenced solely by an
+ * API-key row filter — so the gate now composes both layers, symmetric with CodeGen's mint/drift gates.
+ */
+describe('MaterializationRefresher.entityHasRowLevelRestriction (both fence layers)', () => {
+    const ent = (name: string, perms: Array<{ ReadRLSFilterID?: string | null }> = []): EntityInfo =>
+        ({ Name: name, Permissions: perms }) as unknown as EntityInfo;
+
+    it('is TRUE on role RLS alone, regardless of the key layer', () => {
+        const e = ent('Orders', [{ ReadRLSFilterID: 'rls-1' }]);
+        expect(MaterializationRefresher.entityHasRowLevelRestriction(e, new Set())).toBe(true);
+    });
+
+    it('is TRUE on an API-key row filter alone — the case the role-only check missed', () => {
+        // No ReadRLSFilterID anywhere: the old gate judged this unrestricted and kept refilling the mirror.
+        const e = ent('Orders');
+        expect(MaterializationRefresher.entityHasReadRLS(e)).toBe(false);
+        expect(MaterializationRefresher.entityHasRowLevelRestriction(e, new Set(['orders']))).toBe(true);
+    });
+
+    it('matches the key layer case- and whitespace-insensitively (targets are normalized names)', () => {
+        expect(MaterializationRefresher.entityHasRowLevelRestriction(ent('  OrDeRs '), new Set(['orders']))).toBe(true);
+    });
+
+    it('FAILS CLOSED when the key layer could not be enumerated', () => {
+        // 'unknown' means we cannot prove the fence is empty. Refusing to refresh is recoverable and loud;
+        // mirroring restricted rows is neither.
+        expect(MaterializationRefresher.entityHasRowLevelRestriction(ent('Anything'), 'unknown')).toBe(true);
+    });
+
+    it('is FALSE only when BOTH layers are proven empty for this entity', () => {
+        const e = ent('Orders', [{ ReadRLSFilterID: null }, {}]);
+        expect(MaterializationRefresher.entityHasRowLevelRestriction(e, new Set(['customers']))).toBe(false);
+        expect(MaterializationRefresher.entityHasRowLevelRestriction(e, new Set())).toBe(false);
+    });
+});
