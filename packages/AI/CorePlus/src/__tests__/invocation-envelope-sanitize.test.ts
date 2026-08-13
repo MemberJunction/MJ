@@ -73,10 +73,16 @@ describe('SanitizeInvocationEnvelope — what may be written down (R3-3 follow-u
         expect(sanitized.DroppedPaths).toContain('context.session');
     });
 
-    it('honours toJSON, because that is the object saying what it is worth persisting', () => {
+    it('refuses a class instance even when it offers a toJSON', () => {
+        // The second place the hole was encoded. `toJSON` used to be consulted BEFORE the prototype
+        // check, so a class could unwrap itself — and the review's repro was a context object whose
+        // `toJSON() { return {...this} }` published its own credentials. Deference now stops at
+        // `Date`; everything else is refused and reported, here as on the agent-run path.
         class Money { constructor(private readonly cents: number) {} toJSON() { return this.cents / 100; } }
-        const sanitized = SanitizeInvocationEnvelope({ Data: { price: new Money(1250) } });
-        expect((sanitized.Envelope?.Data as Record<string, unknown>).price).toBe(12.5);
+        const sanitized = SanitizeInvocationEnvelope({ Data: { price: new Money(1250), tier: 'gold' } });
+
+        expect(sanitized.Envelope?.Data).toEqual({ tier: 'gold' });
+        expect(sanitized.DroppedPaths).toContain('data.price');
     });
 
     it('an envelope with nothing persistable left is NO envelope, not an empty one', () => {
