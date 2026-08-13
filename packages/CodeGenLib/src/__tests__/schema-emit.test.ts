@@ -4,6 +4,7 @@ import {
   collectDirtySchemas,
   groupEntitiesBySchema,
   mapLimit,
+  resolveDirtySchemasForEmit,
   sanitizeSchemaFileName,
   schemaNameMatches,
   schemasToEmit,
@@ -87,6 +88,33 @@ describe('schema-emit', () => {
       expect(barrel).toContain("export * from './entities/billing.js';");
       expect(barrel).toContain("export * from './entities/crm.js';");
       expect(barrel.indexOf('billing')).toBeLessThan(barrel.indexOf('crm'));
+    });
+  });
+
+  describe('resolveDirtySchemasForEmit', () => {
+    const entities = [
+      { Name: 'Customers', SchemaName: 'crm' },
+      { Name: 'Invoices', SchemaName: 'billing' },
+    ];
+
+    it('rebuilds every schema on --skipdb', () => {
+      expect(resolveDirtySchemasForEmit(entities, ['Customers'], true, true)).toBe('all');
+    });
+
+    it('rebuilds every schema when dirtySchemaOnly is off', () => {
+      expect(resolveDirtySchemasForEmit(entities, [], false, false)).toBe('all');
+    });
+
+    it('returns only schemas that contain a new/modified entity', () => {
+      const dirty = resolveDirtySchemasForEmit(entities, ['Invoices'], false, true);
+      expect(dirty).toBeInstanceOf(Set);
+      expect([...(dirty as Set<string>)]).toEqual(['billing']);
+    });
+
+    it('returns an empty set when nothing is dirty on a full run', () => {
+      const dirty = resolveDirtySchemasForEmit(entities, [], false, true);
+      expect(dirty).toBeInstanceOf(Set);
+      expect((dirty as Set<string>).size).toBe(0);
     });
   });
 

@@ -9,6 +9,7 @@ import { configInfo, mj_core_schema } from '../Config/config';
 import { SQLLogging } from './sql_logging';
 import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
 import { writeFileIfChanged } from './file-write';
+import { EmitStats } from './emit-stats';
 import {
   SchemaEmitOptions,
   buildSchemaBarrel,
@@ -202,14 +203,20 @@ export class EntitySubClassGeneratorBase {
       const toEmit = schemasToEmit(schemas, emit.dirtySchemas, (schemaName) =>
         fs.existsSync(path.join(schemasDir, `${sanitizeSchemaFileName(schemaName)}.ts`)),
       );
+      const emitSet = new Set(toEmit);
+      for (const schemaName of schemas) {
+        EmitStats.RecordSchemaEmit(emitSet.has(schemaName));
+      }
 
       const concurrency = emit.parallel ? emit.concurrency : 1;
+      const assembleStarted = Date.now();
       await mapLimit(toEmit, concurrency, async (schemaName) => {
         const schemaEntities = grouped.get(schemaName) ?? [];
         const content = await this.assembleEntitySubclassFile(pool, schemaEntities, skipDBUpdate, false);
         const filePath = path.join(schemasDir, `${sanitizeSchemaFileName(schemaName)}.ts`);
         this.emitFile(filePath, content, emit.writeIfChanged);
       });
+      EmitStats.AddAssembleMs(Date.now() - assembleStarted);
 
       const barrel = buildSchemaBarrel(
         schemas,

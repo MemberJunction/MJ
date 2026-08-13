@@ -34,4 +34,13 @@ describe('parseExcludeTableEntry', () => {
   it('rejects an empty string', () => {
     expect(() => parseExcludeTableEntry('   ')).toThrow(/empty/);
   });
+
+  it('keeps LIKE wildcards on both sides of a dotted pair', () => {
+    expect(parseExcludeTableEntry('aptify.%Log')).toEqual({ schema: 'aptify', table: '%Log' });
+    expect(parseExcludeTableEntry('%.sysdiagrams')).toEqual({ schema: '%', table: 'sysdiagrams' });
+  });
+
+  it('does not treat a trailing dot as a split', () => {
+    expect(parseExcludeTableEntry('orphan.')).toEqual({ schema: '%', table: 'orphan.' });
+  });
 });

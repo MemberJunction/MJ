@@ -31,10 +31,13 @@ const ALL_DOMAINS = [
 const STATUSES = ['Active', 'Pending', 'Closed', 'Hold'];
 
 function parseArgs(argv) {
-  const args = { profile: 'standard' };
+  const args = { profile: 'standard', out: null };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--profile' && argv[i + 1]) {
       args.profile = argv[i + 1];
+      i += 1;
+    } else if (argv[i] === '--out' && argv[i + 1]) {
+      args.out = argv[i + 1];
       i += 1;
     }
   }
@@ -361,9 +364,11 @@ function emitSeed(catalog, profile) {
   return lines.join('\n');
 }
 
-function writeProfile(profile) {
+function writeProfile(profile, outOverride) {
   const catalog = buildCatalog(profile);
-  const outDir = path.join(HERE, 'sql', profile.name);
+  const outDir = outOverride
+    ? path.resolve(outOverride)
+    : path.join(HERE, 'sql', profile.name);
   fs.mkdirSync(outDir, { recursive: true });
   const files = {
     '00_drop.sql': emitDrop(catalog),
@@ -387,11 +392,11 @@ function writeProfile(profile) {
     domains: catalog.map((e) => e.schema),
   };
   fs.writeFileSync(path.join(outDir, 'manifest.json'), `${JSON.stringify(summary, null, 2)}\n`);
-  return summary;
+  return { summary, outDir };
 }
 
 const args = parseArgs(process.argv.slice(2));
 const profile = loadProfile(args.profile);
-const summary = writeProfile(profile);
+const { summary, outDir } = writeProfile(profile, args.out);
 console.log(`BigSchemaDemo generated profile=${summary.profile} schemas=${summary.schemas} tables=${summary.tables} fks~=${summary.foreignKeysApprox}`);
-console.log(`  output: ${path.join(HERE, 'sql', profile.name)}`);
+console.log(`  output: ${outDir}`);

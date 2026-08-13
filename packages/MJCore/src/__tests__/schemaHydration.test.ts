@@ -58,4 +58,16 @@ describe('schemaHydration', () => {
     expect(capped).toHaveLength(1);
     expect(capped[0].Fields).toBeUndefined();
   });
+
+  it('returns an empty projection for unknown schemas or an empty include list', () => {
+    expect(entitiesInSchemas(catalog, ['does-not-exist'])).toEqual([]);
+    expect(entitiesInSchemas(catalog, [])).toEqual([]);
+    expect(summarizeEntitiesForContext(catalog, { schemas: ['nope'] })).toEqual([]);
+  });
+
+  it('does not mutate the input catalog when grouping', () => {
+    const copy = [...catalog];
+    groupEntitiesBySchema(catalog);
+    expect(catalog).toEqual(copy);
+  });
 });

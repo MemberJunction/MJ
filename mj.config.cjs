@@ -166,6 +166,25 @@ module.exports = {
   // Soft PK/FK configuration for tables without database constraints
   additionalSchemaInfo: './metadata/integrations/additionalSchemaInfo.json',
 
+  // Schema-scale emit. Defaults live in CodeGenLib; listed here so a brownfield
+  // / BigSchemaDemo run is explicit. `bsd_%` never lands in published packages.
+  fileEmit: {
+    perSchema: true,
+    writeIfChanged: true,
+    parallel: true,
+    concurrency: 8,
+    dirtySchemaOnly: true,
+    sqlEntityBatchSize: 8,
+  },
+  schemaOutput: [
+    {
+      schema: 'bsd_%',
+      EntitySubClasses: './Demos/BigSchemaDemo/generated/entities',
+      GraphQLServer: './Demos/BigSchemaDemo/generated/graphql',
+      skip: ['Angular'],
+    },
+  ],
+
   // Output directories specific to monorepo structure
   output: [
     { type: 'SQL', directory: './SQL Scripts/generated', appendOutputCode: true },

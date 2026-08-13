@@ -14,6 +14,7 @@ import { logError } from './status_logging';
 import { configInfo, getExternalEntitySchemas, mjCoreSchema, resolveEntityPackageName } from '../Config/config';
 import { makeDir, sortBySequenceAndCreatedAt, sortRelatedEntities } from './util';
 import { writeFileIfChanged } from './file-write';
+import { EmitStats } from './emit-stats';
 import {
   SchemaEmitOptions,
   buildSchemaBarrel,
@@ -81,7 +82,12 @@ export class GraphQLServerGeneratorBase {
       const toEmit = schemasToEmit(schemas, emit.dirtySchemas, (schemaName) =>
         fs.existsSync(path.join(schemasDir, `${sanitizeSchemaFileName(schemaName)}.ts`)),
       );
+      const emitSet = new Set(toEmit);
+      for (const schemaName of schemas) {
+        EmitStats.RecordSchemaEmit(emitSet.has(schemaName));
+      }
 
+      const assembleStarted = Date.now();
       for (const schemaName of toEmit) {
         const schemaEntities = grouped.get(schemaName) ?? [];
         const content = this.assembleGraphQLServerFile(
@@ -95,6 +101,7 @@ export class GraphQLServerGeneratorBase {
           emit.writeIfChanged,
         );
       }
+      EmitStats.AddAssembleMs(Date.now() - assembleStarted);
 
       const barrel = buildSchemaBarrel(
         schemas,

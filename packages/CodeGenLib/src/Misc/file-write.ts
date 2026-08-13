@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { EmitStats } from './emit-stats';
 
 /**
  * Write `newContent` to `filePath` only when the file is missing or the bytes differ.
@@ -22,9 +23,11 @@ export function writeFileIfChanged(filePath: string, newContent: string): boolea
   if (fs.existsSync(filePath)) {
     const existing = fs.readFileSync(filePath, 'utf-8');
     if (existing === newContent) {
+      EmitStats.RecordFileWrite(false);
       return false;
     }
   }
   fs.writeFileSync(filePath, newContent);
+  EmitStats.RecordFileWrite(true);
   return true;
 }

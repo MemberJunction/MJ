@@ -38,4 +38,13 @@ describe('schema-output', () => {
     expect(groups.get('/demo/entities')?.map((e) => e.Name)).toEqual(['Customers']);
     expect(groups.get('/default')?.map((e) => e.Name)).toEqual(['Orders']);
   });
+
+  it('first matching override wins when two patterns overlap', () => {
+    const overlapping = [
+      { schema: 'bsd_crm', EntitySubClasses: '/exact' },
+      { schema: 'bsd_%', EntitySubClasses: '/wildcard' },
+    ];
+    expect(resolveSchemaOutputDirectory('bsd_crm', 'EntitySubClasses', overlapping)).toBe('/exact');
+    expect(resolveSchemaOutputDirectory('bsd_billing', 'EntitySubClasses', overlapping)).toBe('/wildcard');
+  });
 });

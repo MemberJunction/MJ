@@ -82,6 +82,24 @@ export function groupEntitiesBySchema<T extends { SchemaName: string }>(entities
  * Map dirty entity names (from `newEntityList` ∪ `modifiedEntityList`) back to
  * the schemas those entities live in. Comparison is case-insensitive.
  */
+/**
+ * Resolve which schemas a file-emit pass should rebuild.
+ * `--skipdb` and `dirtySchemaOnly === false` rebuild every schema (write-if-changed
+ * still keeps mtimes stable). Otherwise only schemas that contain a new/modified
+ * entity are dirty — missing files are added later by {@link schemasToEmit}.
+ */
+export function resolveDirtySchemasForEmit(
+  entities: readonly SchemaNamed[],
+  dirtyEntityNames: Iterable<string>,
+  skipDB: boolean,
+  dirtySchemaOnly: boolean,
+): DirtySchemaSet {
+  if (skipDB || !dirtySchemaOnly) {
+    return 'all';
+  }
+  return collectDirtySchemas(entities, dirtyEntityNames);
+}
+
 export function collectDirtySchemas(
   entities: readonly SchemaNamed[],
   dirtyEntityNames: Iterable<string>,

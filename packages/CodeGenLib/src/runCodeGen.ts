@@ -14,7 +14,8 @@ import { ManageMetadataBase } from './Database/manage-metadata';
 import { applyIncludeSchemaScope } from './Database/schema-scope';
 import { partitionEntitiesByOutputDirectory } from './Config/schema-output';
 import { outputDir, commands, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig, CommandInfo } from './Config/config';
-import { collectDirtySchemas, SchemaEmitOptions } from './Misc/schema-emit';
+import { resolveDirtySchemasForEmit, SchemaEmitOptions } from './Misc/schema-emit';
+import { EmitStats } from './Misc/emit-stats';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
 import { CodeGenReporter } from './Misc/codegen-reporter';
 import * as MJ from '@memberjunction/core';
@@ -476,14 +477,13 @@ export class RunCodeGenBase {
    */
   protected buildSchemaEmitOptions(entities: MJ.EntityInfo[], skipDB: boolean): SchemaEmitOptions {
     const fileEmit = configInfo.fileEmit;
-    if (skipDB || fileEmit?.dirtySchemaOnly === false) {
-      return { dirtySchemas: 'all' };
-    }
     return {
-      dirtySchemas: collectDirtySchemas(entities, [
-        ...ManageMetadataBase.newEntityList,
-        ...ManageMetadataBase.modifiedEntityList,
-      ]),
+      dirtySchemas: resolveDirtySchemasForEmit(
+        entities,
+        [...ManageMetadataBase.newEntityList, ...ManageMetadataBase.modifiedEntityList],
+        skipDB,
+        fileEmit?.dirtySchemaOnly !== false,
+      ),
     };
   }
 
@@ -503,6 +503,7 @@ export class RunCodeGenBase {
     skipDB: boolean,
   ): Promise<boolean> {
       const reporter = CodeGenReporter.Instance;
+      EmitStats.Reset();
       const apiEntities = md.Entities.filter((e) => e.IncludeInAPI);
       const excludedSchemaNames = configInfo.excludeSchemas.map(s => s.toLowerCase());
       const includedEntities = apiEntities.filter(
@@ -742,6 +743,18 @@ export class RunCodeGenBase {
           } else if (isVerbose) succeedSpinner(`${target.label} typed bases generated`);
         }
       } else if (isVerbose) warnSpinner('Remote Operations output directory NOT found in config file, skipping...');
+
+      const emit = EmitStats.Snapshot();
+      reporter.counter('filesWritten', emit.filesWritten);
+      reporter.counter('filesSkipped', emit.filesSkipped);
+      reporter.counter('schemasEmitted', emit.schemasEmitted);
+      reporter.counter('schemasSkipped', emit.schemasSkipped);
+      reporter.mark('emitStats', emit);
+      logStatus(
+        `File emit: wrote ${emit.filesWritten}, skipped ${emit.filesSkipped}, ` +
+        `schemas emitted ${emit.schemasEmitted} / skipped ${emit.schemasSkipped} ` +
+        `(assemble ${emit.assembleMs}ms)`,
+      );
 
       SQLLogging.finishSQLLogging();
       if (!isVerbose) succeedSpinner('TypeScript code generation completed');
