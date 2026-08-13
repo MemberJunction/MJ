@@ -8,6 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
+    CompareEdgePrecedence,
     ComputeEligibleTasks,
     ComputeParentRollup,
     ComputeSkipCascade,
@@ -607,5 +608,48 @@ describe('P2: IsGraphStalled sees holds', () => {
     it('is not fooled into stalling while other work is genuinely eligible', () => {
         const wider = [...nodes, n('Other')];
         expect(IsGraphStalled(wider, edges, new Set(['Guarded']))).toBe(false);
+    });
+});
+
+describe('R3-7: the tiebreak is ordinal, not locale-collated', () => {
+    // `localeCompare` with no arguments sorts under the host's ICU locale, and the sign genuinely
+    // flips: `'aa070000'` vs `'ab070000'` compares one way under `en` and the other under `da`,
+    // where the `aa` digraph collates as `å`. Dependency IDs are UUIDs, so `aa` sequences are
+    // routine — and two instances with different `LANG` would resolve the same (0,0) tie
+    // differently, which is R2-5's dual-skip catastrophe moved from across-polls to across-hosts.
+    const edge = (id: string): EvaluatedEdge => ({
+        id, taskId: `t-${id}`, dependsOnTaskId: 'A', exclusiveGroup: 'g',
+        originStatus: 'Complete', priority: 0, sequence: 0, conditionOutcome: 'satisfied',
+    });
+
+    it('orders the digraph pair by codepoint, which is what every locale must agree on', () => {
+        // The exact pair that flips under Danish collation. `'aa…' < 'ab…'` by codepoint, always.
+        expect(CompareEdgePrecedence(edge('aa070000'), edge('ab070000'))).toBeLessThan(0);
+        expect(CompareEdgePrecedence(edge('ab070000'), edge('aa070000'))).toBeGreaterThan(0);
+    });
+
+    it('does not consult Intl at all', () => {
+        // Stronger than comparing outputs: if the comparator ever calls back into collation, this
+        // sees it. A locale-dependent sort cannot be caught by a same-process order-flip test,
+        // which is why R2-5's shipped test missed this.
+        const original = String.prototype.localeCompare;
+        let consulted = false;
+        // eslint-disable-next-line no-extend-native
+        String.prototype.localeCompare = function (this: string, ...args: Parameters<typeof original>) {
+            consulted = true;
+            return original.apply(this, args);
+        };
+        try {
+            CompareEdgePrecedence(edge('aa070000'), edge('ab070000'));
+        } finally {
+            // eslint-disable-next-line no-extend-native
+            String.prototype.localeCompare = original;
+        }
+        expect(consulted).toBe(false);
+    });
+
+    it('still honours priority and sequence ahead of the id', () => {
+        const high = { ...edge('zz'), priority: 10 };
+        expect(CompareEdgePrecedence(high, edge('aa'))).toBeLessThan(0);
     });
 });

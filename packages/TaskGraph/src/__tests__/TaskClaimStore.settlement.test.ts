@@ -68,6 +68,133 @@ describe('reclamation covers every task a dispatcher can execute (R2-1)', () => 
     });
 });
 
+describe('TrySkipPending — a skip must not overwrite work that started (R3-1)', () => {
+    // R2-10 moved the early-finish skips after `CompleteClaimed`, on the premise that "the siblings
+    // are Pending and unclaimed until the skip lands". They are not: `executeClaimed` is not
+    // awaited, so this instance's own poll tick runs concurrently with the skip loop, and a sibling
+    // can be claimed and STARTED between the snapshot and its write. A full-row save then reverted
+    // `In Progress` to `Skipped` mid-execution — the agent's side effects had fired, its completion
+    // was refused by the claim guard, and its output was discarded, with the graph settling
+    // `Complete` and nothing recording that the step ran.
+    let store: TaskClaimStore;
+    beforeEach(() => { store = new TaskClaimStore('instance-1', 300); });
+
+    it('refuses a task that is no longer Pending — the status IS the claim test', () => {
+        const { provider, statements } = recordingProvider();
+        return store.TrySkipPending(provider, PARENT, USER).then(() => {
+            expect(statements[0]).toContain(`[Status] = 'Pending'`);
+        });
+    });
+
+    it('writes Status and nothing else', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.TrySkipPending(provider, PARENT, USER);
+        const setClause = statements[0].split('WHERE')[0];
+        expect(setClause).toContain(`[Status] = 'Skipped'`);
+        expect(setClause).not.toContain('[ClaimedBy]');
+        expect(setClause).not.toContain('[OutputPayload]');
+        expect(setClause).not.toContain('[AgentRunID]');
+    });
+
+    it('does NOT test ClaimedBy — a notified human task carries a marker and must stay skippable', async () => {
+        // `TryClaim` moves a task to `In Progress` in the same statement that stamps `ClaimedBy`, so
+        // an executor's task is never `Pending` and the status covers it. Adding `ClaimedBy IS NULL`
+        // would look like defence in depth and would instead refuse to skip a notified human step,
+        // which is a case the early-finish path exists to handle.
+        const { provider, statements } = recordingProvider();
+        await store.TrySkipPending(provider, PARENT, USER);
+        expect(statements[0]).not.toContain('[ClaimedBy] IS NULL');
+    });
+
+    it('reports the loss when something claimed it first — the rowcount is the verdict', async () => {
+        const { provider } = recordingProvider(0);
+        expect(await store.TrySkipPending(provider, PARENT, USER)).toBe(false);
+    });
+});
+
+describe('TryMarkHumanNotified — once-only, and it cannot revert a status (R3-5)', () => {
+    it('guards on the marker being unset and on the task still being Pending', async () => {
+        const { provider, statements } = recordingProvider();
+        await new TaskClaimStore('i', 300).TryMarkHumanNotified(provider, PARENT, '__human-notified__', USER);
+        expect(statements[0]).toContain(`[Status] = 'Pending'`);
+        expect(statements[0]).toContain('[ClaimedBy] IS NULL');
+    });
+
+    it('writes the marker column alone', async () => {
+        const { provider, statements } = recordingProvider();
+        await new TaskClaimStore('i', 300).TryMarkHumanNotified(provider, PARENT, '__human-notified__', USER);
+        const setClause = statements[0].split('WHERE')[0];
+        expect(setClause).toContain('[ClaimedBy]');
+        expect(setClause).not.toContain('[Status]');
+        expect(setClause).not.toContain('[OutputPayload]');
+    });
+});
+
+describe('TryCancelTask — a cancel must not overwrite an outcome that landed first (R3-9)', () => {
+    // `Cancel` tested the terminal set against an in-memory snapshot and wrote with a full-row
+    // `Save()` — every updateable column, PK-only predicate. A child whose guarded `CompleteClaimed`
+    // landed between that load and its save had its whole outcome overwritten: Complete back to
+    // Cancelled, OutputPayload to NULL, AgentRunID and CompletedAt reverted, stale claim columns
+    // re-instated on a terminal row. The moment users cancel is exactly when tasks are running.
+    let store: TaskClaimStore;
+    beforeEach(() => { store = new TaskClaimStore('svc', 0); });
+
+    it('refuses a child that has already settled — the check is IN the statement', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.TryCancelTask(provider, PARENT, USER);
+        expect(statements[0]).toContain(`NOT IN ('Complete','Failed','Cancelled','Skipped','Blocked')`);
+    });
+
+    it('writes Status and nothing else — the columns the full-row save was destroying', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.TryCancelTask(provider, PARENT, USER);
+        const setClause = statements[0].split('WHERE')[0];
+        expect(setClause).toContain(`[Status] = 'Cancelled'`);
+        for (const column of ['[OutputPayload]', '[AgentRunID]', '[CompletedAt]', '[Configuration]', '[ClaimedBy]']) {
+            expect(setClause).not.toContain(column);
+        }
+    });
+
+    it('reports the loss so the verdict can stay honest', async () => {
+        const { provider } = recordingProvider(0);
+        expect(await store.TryCancelTask(provider, PARENT, USER)).toBe(false);
+    });
+});
+
+describe('TryDeclareEarlyFinish — the decision has to outlive one instance\'s memory (R3-1)', () => {
+    let store: TaskClaimStore;
+    beforeEach(() => { store = new TaskClaimStore('instance-1', 300); });
+
+    it('stamps the parent once, refusing a second declaration', async () => {
+        // Two tasks can end the same flow; the first declaration is the one that counts, exactly as
+        // with the continuation marker.
+        const { provider, statements } = recordingProvider();
+        await store.TryDeclareEarlyFinish(provider, PARENT, WORKFLOW_TYPE, USER);
+        expect(statements[0]).toContain(`JSON_VALUE([InputPayload], '$.earlyFinishedAt') IS NULL`);
+    });
+
+    it('is type-scoped like every other statement here that writes a payload', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.TryDeclareEarlyFinish(provider, PARENT, WORKFLOW_TYPE, USER);
+        expect(statements[0]).toContain(`[TypeID] = '${WORKFLOW_TYPE}'`);
+        expect(statements[0]).toContain('ISJSON([InputPayload]) = 1');
+    });
+
+    it('writes a timestamp the TS reader can parse', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.TryDeclareEarlyFinish(provider, PARENT, WORKFLOW_TYPE, USER);
+        const written = /\$\.earlyFinishedAt', '([^']+)'/.exec(statements[0])?.[1];
+        expect(written).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+        expect(ParseTaskGraphParentMetadata(JSON.stringify({ earlyFinishedAt: written })).earlyFinishedAt)
+            .toBe(written);
+    });
+
+    it('a graph with no declaration parses as not-early-finished', () => {
+        expect(ParseTaskGraphParentMetadata('{"continuation":"message"}').earlyFinishedAt).toBeUndefined();
+        expect(ParseTaskGraphParentMetadata(null).earlyFinishedAt).toBeUndefined();
+    });
+});
+
 describe('TrySettleParent — the terminal write is column-scoped and guarded', () => {
     let store: TaskClaimStore;
     beforeEach(() => { store = new TaskClaimStore('instance-1', 300); });
@@ -226,5 +353,42 @@ describe('TryClaimContinuation — a real compare-and-swap', () => {
             .toBeUndefined();
         expect(ParseTaskGraphParentMetadata(null).continuationDeliveredAt).toBeUndefined();
         expect(ParseTaskGraphParentMetadata('not json').continuationDeliveredAt).toBeUndefined();
+    });
+});
+
+describe('the lease lives on the database clock, never this process\'s (claim-clock unification)', () => {
+    // The claim protocol is multi-instance: a lease written from one host's clock and judged
+    // expired against another's turns ordinary NTP skew into premature reclamation — the task runs
+    // twice — or into a lease that outlives its worker. The database's clock is the only one every
+    // instance shares, so the expiry is WRITTEN there (DATEADD over SYSUTCDATETIME) and COMPARED
+    // there, and no ISO timestamp minted in Node may appear in any lease expression.
+    const ISO_LITERAL = /'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+    let store: TaskClaimStore;
+    beforeEach(() => { store = new TaskClaimStore('instance-1', 300); });
+
+    it('TryClaim writes and compares ClaimExpiresAt in SQL time', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.TryClaim(provider, PARENT, USER);
+        expect(statements[0]).toContain('DATEADD(SECOND, 300, SYSUTCDATETIME())');
+        expect(statements[0]).toContain('[ClaimExpiresAt] < SYSUTCDATETIME()');
+        expect(statements[0]).not.toMatch(ISO_LITERAL);
+    });
+
+    it('Heartbeat renews on the same clock the claim was written with', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.Heartbeat(provider, PARENT, USER);
+        expect(statements[0]).toContain('DATEADD(SECOND, 300, SYSUTCDATETIME())');
+        expect(statements[0]).not.toMatch(ISO_LITERAL);
+    });
+
+    it('ReleaseExpiredClaims judges expiry on the clock that wrote the lease', async () => {
+        const { provider, statements } = recordingProvider();
+        await store.ReleaseExpiredClaims(provider, USER);
+        // Both statements — the SELECT naming what will be reclaimed and the UPDATE reclaiming it.
+        expect(statements.length).toBeGreaterThanOrEqual(2);
+        for (const sql of statements) {
+            expect(sql).toContain('[ClaimExpiresAt] < SYSUTCDATETIME()');
+            expect(sql).not.toMatch(ISO_LITERAL);
+        }
     });
 });
