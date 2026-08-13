@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { IMetadataProvider, UserInfo, LogError, LogStatus, EntityInfo, ExternalDataSourceReadRouter, RunView } from '@memberjunction/core';
 import { MJMaterializedResultEntity, MJQueryEntity } from '@memberjunction/core-entities';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { SQLParser } from '@memberjunction/sql-parser';
-import { GetDialect } from '@memberjunction/sql-dialect';
+import { GetDialect, DatabasePlatform } from '@memberjunction/sql-dialect';
 
 /**
  * Synthetic surrogate key column name for query-materialized tables. MUST match CodeGenLib's
@@ -103,10 +103,42 @@ export class MaterializationRefresher {
      */
     private static assertSafeObjectNames(schema: string, tableName: string, viewName: string): void {
         for (const [role, value] of [['schema', schema], ['table', tableName], ['view', viewName]] as const) {
-            if (typeof value !== 'string' || !MaterializationRefresher.SAFE_SQL_IDENTIFIER.test(value)) {
+            if (!MaterializationRefresher.isSafeObjectName(value)) {
                 throw new Error(`Unsafe materialization ${role} identifier ${JSON.stringify(value)} — expected a plain SQL identifier (^[A-Za-z_][A-Za-z0-9_]*$); refusing to build DDL.`);
             }
         }
+    }
+
+    /**
+     * Non-throwing form of the identifier check. Needed by callers on the FAILURE path, which is precisely
+     * where {@link assertSafeObjectNames} may have just thrown — those callers must be able to re-check and
+     * decline quietly rather than re-enter (or bypass) the assertion that already rejected the value.
+     * @internal exposed for unit testing; not part of the supported surface.
+     */
+    public static isSafeObjectName(value: string): boolean {
+        return typeof value === 'string' && MaterializationRefresher.SAFE_SQL_IDENTIFIER.test(value);
+    }
+
+    /**
+     * Resolves the SQL that the READ path would execute for `queryId` on the engine we are refreshing against,
+     * so the snapshot is built from the same statement live serves. Mirrors the read path's
+     * `QueryInfo.GetPlatformSQL(PlatformKey)`, whose precedence is: `MJ: Query SQLs` child row for the platform
+     * → legacy PlatformVariants → base SQL.
+     *
+     * `GetPlatformSQL` lives on the metadata `QueryInfo`, not on the generated `MJQueryEntity`, so the variant
+     * is resolved through the provider's query metadata. Falls back to the entity's own SQL when the query
+     * isn't present in that metadata (e.g. a provider whose cache hasn't loaded it), which reproduces exactly
+     * the previous behavior rather than failing the refresh.
+     *
+     * @returns the platform-resolved SQL, or null when neither source yields a non-empty statement.
+     * @internal exposed for unit testing; not part of the supported surface.
+     */
+    public static resolvePlatformQuerySQL(provider: IMetadataProvider, queryId: string, entitySql: string | null, isPostgres: boolean): string | null {
+        const platform: DatabasePlatform = isPostgres ? 'postgresql' : 'sqlserver';
+        const info = provider.Queries?.find((q) => UUIDsEqual(q.ID, queryId));
+        const resolved = info ? info.GetPlatformSQL(platform) : null;
+        const chosen = resolved && resolved.trim().length > 0 ? resolved : entitySql;
+        return chosen && chosen.trim().length > 0 ? chosen : null;
     }
 
     /**
@@ -434,6 +466,15 @@ export class MaterializationRefresher {
      * created or was already renamed into the canonical table on success.
      */
     private async dropShadowTableBestEffort(provider: IMetadataProvider, schema: string, shadowName: string): Promise<void> {
+        // Fail CLOSED. This runs from the RefreshOne catch block — which is exactly where
+        // assertSafeObjectNames may have just REJECTED these very names. Interpolating them here would let the
+        // guard's own rejection be the thing that routes a tampered SchemaName into privileged DDL, inverting
+        // the guarantee the guard exists to provide. Re-check and decline instead; declining drops nothing
+        // real, because the assertion fires before any shadow table could have been created.
+        if (!MaterializationRefresher.isSafeObjectName(schema) || !MaterializationRefresher.isSafeObjectName(shadowName)) {
+            LogError(`MaterializationRefresher: refusing best-effort shadow cleanup — unsafe identifier(s) schema=${JSON.stringify(schema)} shadow=${JSON.stringify(shadowName)}. No shadow table can exist under these names.`);
+            return;
+        }
         try {
             const exec = provider as unknown as ISQLExecutor;
             const isPostgres = exec.PlatformKey === 'postgresql';
@@ -792,7 +833,14 @@ export class MaterializationRefresher {
                 query = await provider.GetEntityObject<MJQueryEntity>('MJ: Queries', contextUser);
                 await query.Load(sourceQueryId);
             }
-            rawSql = query.SQL && query.SQL.trim().length > 0 ? query.SQL : null;
+            // Snapshot the SAME statement the READ path executes. Reads resolve SQL via
+            // QueryInfo.GetPlatformSQL(PlatformKey) (GenericDatabaseProvider's ORDER BY gate and its query
+            // execution both do), which prefers a per-platform `MJ: Query SQLs` variant over the base SQL.
+            // Snapshotting the base `SQL` instead means a query carrying a variant for THIS engine is
+            // materialized from a different statement than the one live serves — either a hard refresh
+            // failure every cycle, or (worse) a snapshot whose contents silently disagree with live, which
+            // is precisely the invariant materialization exists to preserve.
+            rawSql = MaterializationRefresher.resolvePlatformQuerySQL(provider, sourceQueryId, query.SQL, isPostgres);
         }
         // Strip a top-level ORDER BY before this SELECT is wrapped in a derived table by the rebuild
         // (SELECT … INTO shadow FROM (<sql>) AS src): SQL Server rejects ORDER BY inside a derived table /
@@ -1025,6 +1073,16 @@ export class MaterializationRefresher {
         // feeding PG-native names in would double-convert everything down to `text` (broken sorts/joins).
         const surrogate = MATERIALIZATION_SURROGATE_COLUMN;
         const dataColNames = [...new Set(rawRows.flatMap((r) => Object.keys(r)))];
+        // A zero-row result carries NO column information, so the rebuild below would emit a shadow table
+        // holding only the surrogate, then DROP the canonical table and rename that one-column shell into its
+        // place — permanently breaking every read of the minted entity ("Invalid column name") while reporting
+        // Success. Refuse instead: the existing snapshot is left intact and serving (at worst slightly stale),
+        // and failRefresh advances NextRefreshAt so this backs off to its cadence and stays visible in the log.
+        // The alternative (truncate-in-place to preserve the shape) is the nicer semantic for a legitimately
+        // empty source, but it cannot be done safely without first proving the canonical table's shape here.
+        if (rawRows.length === 0) {
+            return { Success: false, ErrorMessage: `External query '${query.Name}' returned zero rows, so the snapshot's column shape cannot be determined. Refusing to rebuild — the existing snapshot is preserved rather than replaced with an empty, unreadable table.` };
+        }
         // Refuse if the external result already has a column named like the surrogate — prepending ours
         // would emit a duplicate column and the CREATE TABLE / INSERT would fail on every refresh. (Parity
         // with the local path's analyzeQueryForMaterialization shadow-check; here it's a runtime guard.)

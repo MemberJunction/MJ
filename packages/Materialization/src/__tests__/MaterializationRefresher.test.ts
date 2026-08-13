@@ -798,3 +798,79 @@ describe('MaterializationRefresher.entityHasReadRLS (Leak-1 runtime gate detecto
         expect(MaterializationRefresher.entityHasReadRLS(ent([]))).toBe(false);
     });
 });
+
+/**
+ * Review finding (fail-open DDL guard): assertSafeObjectNames throws on a tampered SchemaName, but the
+ * RefreshOne catch block then handed that SAME rejected name to the best-effort shadow cleanup, which
+ * interpolated it raw into DROP TABLE / OBJECT_ID. The guard's own rejection was the thing that routed the
+ * payload into privileged DDL. isSafeObjectName is the non-throwing re-check that makes the cleanup path
+ * decline instead.
+ */
+describe('MaterializationRefresher.isSafeObjectName (fail-closed re-check for the failure path)', () => {
+    it('accepts the plain identifiers a legitimate materialization always uses', () => {
+        for (const ok of ['__mj', 'materialized_Demo', 'materialized_vwDemo', '_x', 'A1_b2']) {
+            expect(MaterializationRefresher.isSafeObjectName(ok)).toBe(true);
+        }
+    });
+
+    it('REFUSES the injection payload from the finding, and every quoting escape it relies on', () => {
+        // The exact payload: a tampered SchemaName that closes the bracket and appends its own statement.
+        expect(MaterializationRefresher.isSafeObjectName(`x']; DROP TABLE __mj.Entity--`)).toBe(false);
+        // The individual characters that would break out of [..] / ".." / '..' quoting.
+        for (const bad of [`a]b`, `a"b`, `a'b`, `a;b`, `a b`, `a-b`, `a.b`, `1abc`, '']) {
+            expect(MaterializationRefresher.isSafeObjectName(bad)).toBe(false);
+        }
+    });
+
+    it('REFUSES non-string input rather than coercing it', () => {
+        // Values arrive from a writable metadata row, so a null/undefined column must not pass the check.
+        expect(MaterializationRefresher.isSafeObjectName(null as unknown as string)).toBe(false);
+        expect(MaterializationRefresher.isSafeObjectName(undefined as unknown as string)).toBe(false);
+    });
+});
+
+/**
+ * Review finding (snapshot/live divergence): the refresher snapshotted `query.SQL` while every read path
+ * executes `QueryInfo.GetPlatformSQL(PlatformKey)`. A query carrying a per-platform variant was therefore
+ * materialized from a different statement than the one live serves.
+ */
+describe('MaterializationRefresher.resolvePlatformQuerySQL (snapshot the statement the read path runs)', () => {
+    const QID = 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890';
+    /** Minimal provider stub: only `.Queries` is read, and only `.ID` / `.GetPlatformSQL` off each entry. */
+    const providerWith = (queries: Array<{ ID: string; GetPlatformSQL: (p: string) => string }>) =>
+        ({ Queries: queries }) as unknown as Parameters<typeof MaterializationRefresher.resolvePlatformQuerySQL>[0];
+
+    const variantQuery = (id: string) => ({
+        ID: id,
+        GetPlatformSQL: (p: string) => (p === 'postgresql' ? 'SELECT pg_variant' : 'SELECT ss_variant'),
+    });
+
+    it('prefers the platform variant over the base SQL, per engine', () => {
+        const p = providerWith([variantQuery(QID)]);
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, 'SELECT base', true)).toBe('SELECT pg_variant');
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, 'SELECT base', false)).toBe('SELECT ss_variant');
+    });
+
+    it('matches the query through UUIDsEqual, so platform resolution survives cross-platform ID casing', () => {
+        // SQL Server returns UUIDs uppercase and PostgreSQL lowercase; a `===` match would silently miss here
+        // and fall back to the base SQL — reintroducing the very divergence this resolves.
+        const p = providerWith([variantQuery(QID.toLowerCase())]);
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID.toUpperCase(), 'SELECT base', false)).toBe('SELECT ss_variant');
+    });
+
+    it('falls back to the entity SQL when the query is absent from provider metadata (previous behavior)', () => {
+        const p = providerWith([]);
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, 'SELECT base', false)).toBe('SELECT base');
+    });
+
+    it('falls back to the entity SQL when the resolved variant is empty/whitespace', () => {
+        const p = providerWith([{ ID: QID, GetPlatformSQL: () => '   ' }]);
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, 'SELECT base', false)).toBe('SELECT base');
+    });
+
+    it('returns null when neither source yields a usable statement', () => {
+        const p = providerWith([{ ID: QID, GetPlatformSQL: () => '' }]);
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, null, false)).toBeNull();
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, '  ', false)).toBeNull();
+    });
+});
