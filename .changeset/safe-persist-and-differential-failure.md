@@ -1,0 +1,12 @@
+---
+'@memberjunction/ai-core-plus': patch
+'@memberjunction/ai-agents': patch
+---
+
+Three writes take an object the CALLER built and stringify it straight into a database row — an agent run's `Data` and `StartingPayload`, and a task graph's invocation envelope — and all three take it from `ExecuteAgentParams`, whose own documentation says the value may be a class instance holding "external service credentials or connection information". One of the three was guarded, after it killed agent runs at submit time with `Converting circular structure to JSON`. The other two were not.
+
+That combination fails two ways, and the second is worse: it **throws** on anything holding a socket, a pool or a provider, and it **leaks** when serialization happens to succeed, writing whatever the object held into a row that outlives the run. The first is loud and gets fixed; the second is silent and does not.
+
+`SanitizeForPersistence` / `StringifyForPersistence` now carry the rules in one place, and all three writes use them. JSON data survives (primitives, arrays, plain objects, `Date` as ISO, anything with `toJSON`); class instances, functions, sockets and cycles are refused whole rather than unwrapped — walking a socket's own properties would "work" and would persist its internals, which is the leak. Every drop is reported by path and logged, because a value that silently vanished is the failure one layer down: a reader hunting a field the writer discarded, or a condition reading absent-data and taking a branch nobody can explain.
+
+Also: the flow differential suite gains its first **failure oracle**. It could not express `'edges'` semantics — the dialect where a flow routes around its own failure — because the simulator treated "which origin statuses may decide an exclusive group" as a constant where the dispatcher treats it as the graph's dialect. With that modelled, a fixture whose step fails and whose recovery path runs is now compared walker-against-compiled, and the comment states why `'block'` has no oracle by construction: the walker routes on failure, so there is nothing to compare a compiled `'block'` graph against (IT74's TX19 pins that side instead). And the all-`Optional` node's wave-1 behaviour — the consequence the spec doc calls out as surprising and nothing asserted — is now pinned, so an OR-join implemented later reads as a deliberate semantic change rather than a bug fix.
