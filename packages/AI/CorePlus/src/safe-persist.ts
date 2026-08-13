@@ -46,8 +46,18 @@ export type SanitizedValue = {
 /** How deep the walk goes before it stops trusting the shape. */
 const MAX_DEPTH = 8;
 
-/** How many values one payload may contribute, so a row cannot become a memory dump. */
+/** How many CONTAINERS one payload may contribute — objects and arrays, not scalars. */
 const MAX_NODES = 2_000;
+
+/**
+ * How many characters of string content one payload may contribute.
+ *
+ * The node cap alone did not stop a row becoming a memory dump, which is what it claimed to do: it
+ * counts containers, so 100k flat scalar properties (1.3 MB) or a single 10 MB string sailed
+ * through untouched. Strings are where the bytes actually are, so they are where the budget has to
+ * be. Generous enough that ordinary payloads never notice, small enough that a row stays a row.
+ */
+const MAX_STRING_BUDGET = 256_000;
 
 /**
  * Reduces a caller-supplied value to what is safe to persist.
@@ -58,6 +68,7 @@ const MAX_NODES = 2_000;
 export function SanitizeForPersistence(value: unknown, rootPath = 'value'): SanitizedValue {
     const dropped: string[] = [];
     let nodes = 0;
+    let stringBudget = MAX_STRING_BUDGET;
 
     // Identity-based, and scoped to the CURRENT PATH rather than the whole walk: an object
     // legitimately referenced twice by siblings is not a cycle, and treating it as one drops real
@@ -66,7 +77,15 @@ export function SanitizeForPersistence(value: unknown, rootPath = 'value'): Sani
         if (current === null) return null;
         const kind = typeof current;
 
-        if (kind === 'string' || kind === 'boolean') return current;
+        if (kind === 'boolean') return current;
+        if (kind === 'string') {
+            // Dropped whole rather than truncated: half a value is a value nobody can trust, and a
+            // silently shortened payload is worse to debug than an absent one the log names.
+            const text = current as string;
+            if (text.length > stringBudget) { dropped.push(path); return undefined; }
+            stringBudget -= text.length;
+            return text;
+        }
         if (kind === 'number') {
             // NaN and Infinity serialize to null, which reads as a present, empty value — a
             // confident wrong answer rather than a missing one.
@@ -83,10 +102,26 @@ export function SanitizeForPersistence(value: unknown, rootPath = 'value'): Sani
         if (ancestors.has(object)) { dropped.push(path); return undefined; }
         if (object instanceof Date) return object.toISOString();
 
-        const toJSON = (object as { toJSON?: unknown }).toJSON;
-        if (typeof toJSON === 'function') {
-            // The object saying what it is worth persisting. Same courtesy JSON.stringify extends.
-            return walk((toJSON as () => unknown).call(object), path, depth + 1, ancestors);
+        // THE PROTOTYPE CHECK COMES FIRST, and the order is the guarantee.
+        //
+        // It used to sit below `toJSON`, which meant a class was refused only if it did not define
+        // one — and `toJSON() { return {...this} }` is a common convenience. So the class most
+        // likely to hold credentials was unwrapped BY ITS OWN METHOD, silently, with nothing in
+        // DroppedPaths to say so:
+        //
+        //     class SkipCtx { constructor() { this.apiKey = 'sk-SECRET' } toJSON() { return {...this} } }
+        //     -> {"apiKey":"sk-SECRET"}, dropped: []
+        //
+        // That inverted the whole point. This module exists because the CALLER built the object and
+        // may not have thought about persistence; deferring to a method on that object hands the
+        // decision back to the party being guarded against. `Date` is handled above, which covers
+        // the legitimate case that actually shows up; anything else with a `toJSON` — a value
+        // object, a Buffer, a Decimal — is refused and REPORTED, so a caller who wants it persisted
+        // converts it to plain data and can see exactly which path to fix.
+        const prototype = Object.getPrototypeOf(object);
+        if (prototype !== Object.prototype && prototype !== null && !Array.isArray(object)) {
+            dropped.push(path);     // a class instance, a Map, a Set, a Socket — see above
+            return undefined;
         }
 
         const nextAncestors = new Set(ancestors).add(object);
@@ -99,15 +134,39 @@ export function SanitizeForPersistence(value: unknown, rootPath = 'value'): Sani
             });
         }
 
-        const prototype = Object.getPrototypeOf(object);
-        if (prototype !== Object.prototype && prototype !== null) {
-            dropped.push(path);     // a class instance, a Map, a Set, a Socket — refused, see header
+        // ENUMERATION CAN THROW, and reading a property can too — `Object.entries` invokes getters,
+        // and a getter over a closed connection is exactly the shape this module is aimed at. An
+        // unguarded read here reintroduces the crash the module exists to prevent, on all three of
+        // its callers instead of the one that broke originally.
+        //
+        // Worth knowing and not obvious: sanitizing INVOKES getters, once per property. A context
+        // holding lazily-opened resources can therefore open one by being written down. Refusing
+        // class instances above removes most of that surface, since their getters are never reached.
+        // `Object.keys`, deliberately, NOT `Object.entries`. Entries READS every value, so one
+        // throwing getter takes the whole object down with it before any per-property guard can
+        // run — the sibling that was perfectly serializable goes too, and the reported path names
+        // the parent rather than the field that actually failed. Keys are inert; each value is then
+        // read inside its own guard.
+        let keys: string[];
+        try {
+            keys = Object.keys(object);
+        } catch {
+            dropped.push(path);     // an exotic proxy can refuse even this
             return undefined;
         }
 
         const result: Record<string, unknown> = {};
-        for (const [key, entry] of Object.entries(object)) {
-            const kept = walk(entry, path ? `${path}.${key}` : key, depth + 1, nextAncestors);
+        for (const key of keys) {
+            const childPath = path ? `${path}.${key}` : key;
+            let kept: unknown;
+            try {
+                // The read itself is inside the guard: this is where a getter over a closed
+                // connection throws, and it drops its own property rather than the object around it.
+                kept = walk((object as Record<string, unknown>)[key], childPath, depth + 1, nextAncestors);
+            } catch {
+                dropped.push(childPath);
+                continue;
+            }
             if (kept !== undefined) result[key] = kept;
         }
         return result;

@@ -53,9 +53,67 @@ describe('SanitizeForPersistence', () => {
         expect(DroppedPaths).toEqual(expect.arrayContaining(['data.db', 'data.fn']));
     });
 
-    it('honours toJSON, because that is the object saying what it is worth', () => {
+    it('refuses a class instance EVEN IF it defines toJSON — the review case', () => {
+        // This assertion used to be the opposite, and the test was the bug's accomplice: it asserted
+        // `toJSON` deference using the one shape where deference is harmless (a value object
+        // returning a scalar), which locked the hole in as "tested". The `{...this}` idiom is the
+        // common one, and it unwrapped the exact class the module names as its motivating example.
+        class SkipCtx {
+            public readonly apiKey = 'sk-SECRET';
+            public readonly endpoint = 'https://internal';
+            toJSON() { return { ...this }; }
+        }
+        const { Value, DroppedPaths } = SanitizeForPersistence({ context: new SkipCtx(), tier: 'gold' }, 'data');
+
+        expect(JSON.stringify(Value)).not.toContain('sk-SECRET');
+        expect(Value).toEqual({ tier: 'gold' });          // the plain sibling still survives
+        expect(DroppedPaths).toContain('data.context');   // and the refusal is REPORTED, not silent
+    });
+
+    it('still converts Date, the one deference that survives', () => {
+        // Handled above the prototype check on purpose: it is the legitimate `toJSON` that actually
+        // shows up, and dropping every timestamp would make the module useless for ordinary data.
+        expect(SanitizeForPersistence({ when: new Date('2026-08-13T12:00:00Z') }).Value)
+            .toEqual({ when: '2026-08-13T12:00:00.000Z' });
+    });
+
+    it('a value object with toJSON is dropped LOUDLY rather than silently unwrapped', () => {
+        // The cost of the decision, stated: a legitimate Money no longer persists as 12.5. The path
+        // is reported so a caller who wants it converts it to plain data and can see where.
         class Money { constructor(private readonly cents: number) {} toJSON() { return this.cents / 100; } }
-        expect(SanitizeForPersistence({ price: new Money(1250) }).Value).toEqual({ price: 12.5 });
+        const { Value, DroppedPaths } = SanitizeForPersistence({ price: new Money(1250) }, 'data');
+
+        expect(Value).toEqual({});
+        expect(DroppedPaths).toEqual(['data.price']);
+    });
+
+    it('never throws when toJSON or a getter does — the crash it exists to prevent', () => {
+        // A sanitizer that throws is the bug, not the fix, and this one is reachable from all three
+        // write paths. A getter over a closed connection is exactly the shape being guarded against.
+        expect(() => SanitizeForPersistence({ ctx: { toJSON() { throw new Error('live handle'); } } })).not.toThrow();
+        expect(() => SanitizeForPersistence({ ctx: { get creds(): string { throw new Error('closed'); } } })).not.toThrow();
+    });
+
+    it('a throwing getter loses its own property, not the object around it', () => {
+        // `Object.entries` READS every value, so one throwing getter took the whole object down and
+        // reported the parent's path — losing a sibling that serialized perfectly well. Keys are
+        // inert; each value is read inside its own guard.
+        const { Value, DroppedPaths } = SanitizeForPersistence(
+            { ctx: { get creds(): string { throw new Error('closed'); }, ok: 1 } }, 'data',
+        );
+
+        expect(Value).toEqual({ ctx: { ok: 1 } });
+        expect(DroppedPaths).toEqual(['data.ctx.creds']);
+    });
+
+    it('bounds what actually lands in the row, not just how nested it is', () => {
+        // The node cap counts CONTAINERS, so a single huge string sailed through — 9.54 MB in a row
+        // that claimed it could not become a memory dump. Dropped whole rather than truncated: half
+        // a value is one nobody can trust.
+        const { Value, DroppedPaths } = SanitizeForPersistence({ blob: 'x'.repeat(10_000_000), keep: 'yes' }, 'data');
+
+        expect(Value).toEqual({ keep: 'yes' });
+        expect(DroppedPaths).toEqual(['data.blob']);
     });
 
     it('treats a value referenced twice by siblings as data, not a cycle', () => {
