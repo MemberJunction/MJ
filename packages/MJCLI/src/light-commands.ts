@@ -50,6 +50,11 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   'ai audit',
   'test',
   'dbdoc',
+  'dev',
+
+  // Dev workspace generator - node stdlib + chalk only, no bootstrap
+  'dev workspace',
+  'dev workspace status',
 
   // SQL conversion commands - use @memberjunction/sql-converter + sqlglot-ts only
   'sql-convert',

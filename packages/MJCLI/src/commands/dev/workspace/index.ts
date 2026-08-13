@@ -1,0 +1,145 @@
+import { Command, Flags } from '@oclif/core';
+import chalk from 'chalk';
+import path from 'node:path';
+import {
+  BuildHoistEntries,
+  BuildNpmrc,
+  BuildRootPackageJson,
+  BuildWorkspaceYaml,
+  PickTurboJson,
+} from '../../../lib/dev-workspace/build.js';
+import { DetectCandidates, LoadRepo } from '../../../lib/dev-workspace/detect.js';
+import { RunPnpmInstall } from '../../../lib/dev-workspace/pnpm.js';
+import { AssertParentDirSafe, WriteWorkspaceFiles } from '../../../lib/dev-workspace/write.js';
+import type { CandidateRepo, GeneratedFile } from '../../../lib/dev-workspace/types.js';
+
+/**
+ * CLI command: `mj dev workspace`.
+ *
+ * Generates the four ephemeral files that join sibling repo checkouts into a
+ * single pnpm workspace at their common parent directory (pnpm-workspace.yaml,
+ * .npmrc, package.json, turbo.json), then runs `pnpm install` there.
+ *
+ * Automates the hand-driven recipe in plans/openapp-hackathon-quickstart.md.
+ * Linking only — app REGISTRATION into a running host is deliberately phase 2.
+ */
+export default class DevWorkspace extends Command {
+  static description = 'Generate the cross-repo pnpm workspace files at the repos\' common parent directory and install';
+
+  static examples = [
+    '<%= config.bin %> dev workspace --dir ~/code/bluecypress',
+    '<%= config.bin %> dev workspace --dir ~/code/bluecypress --exclude bizapps-sonar',
+    '<%= config.bin %> dev workspace --dir ~/code/bluecypress --include bizapps-common --include bizapps-tasks',
+    '<%= config.bin %> dev workspace --dir ~/code/bluecypress --no-install --force',
+    '<%= config.bin %> dev workspace --dir ~/code/bluecypress --hoist-block',
+  ];
+
+  static flags = {
+    dir: Flags.string({
+      description: 'Parent directory holding the sibling repo clones (must NOT itself be a git repo)',
+      default: '.',
+    }),
+    include: Flags.string({
+      multiple: true,
+      description: 'Repo directory name to include as a member (repeatable; adds to the detected set)',
+    }),
+    exclude: Flags.string({
+      multiple: true,
+      description: 'Repo directory name to exclude from the members (repeatable)',
+    }),
+    install: Flags.boolean({
+      description: 'Run `pnpm install` at the parent after generating (disable with --no-install)',
+      default: true,
+      allowNo: true,
+    }),
+    force: Flags.boolean({
+      description: 'Overwrite existing workspace files at the parent (a .bak copy of each is kept)',
+      default: false,
+    }),
+    'hoist-block': Flags.boolean({
+      description: 'Include the enumerated Angular dev-server hoist block in .npmrc (only needed when serving an app shell from INSIDE the workspace)',
+      default: false,
+    }),
+    verbose: Flags.boolean({ char: 'v', description: 'Show detailed output' }),
+  };
+
+  async run(): Promise<void> {
+    const { flags } = await this.parse(DevWorkspace);
+    const parentDir = path.resolve(flags.dir);
+
+    try {
+      AssertParentDirSafe(parentDir);
+      const members = this.selectMembers(parentDir, flags.include ?? [], flags.exclude ?? []);
+      const files = this.buildFiles(parentDir, members, flags['hoist-block']);
+      const result = WriteWorkspaceFiles(parentDir, files, flags.force);
+      for (const backup of result.BackedUp) {
+        this.log(chalk.yellow(`Backed up existing file to ${backup}`));
+      }
+      this.log(chalk.green(`Wrote ${result.Written.join(', ')} at ${parentDir}`));
+
+      if (flags.install) {
+        this.log(chalk.bold('\nRunning pnpm install...'));
+        await RunPnpmInstall(parentDir);
+        this.log(chalk.green('pnpm install completed'));
+      } else {
+        this.log(chalk.dim('Skipped pnpm install (--no-install); run `pnpm install` at the parent when ready.'));
+      }
+      this.log(chalk.dim(`\nCheck the result any time with: ${this.config.bin} dev workspace status --dir ${parentDir}`));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.error(message);
+    }
+  }
+
+  /** Resolves the member set: detected candidates plus --include, minus --exclude. */
+  private selectMembers(parentDir: string, include: string[], exclude: string[]): CandidateRepo[] {
+    const members = new Map<string, CandidateRepo>();
+    for (const candidate of DetectCandidates(parentDir)) {
+      members.set(candidate.Name, candidate);
+    }
+    for (const name of include) {
+      if (members.has(name)) continue;
+      const repo = LoadRepo(parentDir, name);
+      if (repo === null) {
+        throw new Error(`--include ${name}: ${path.join(parentDir, name)} has no package.json — not a repo checkout`);
+      }
+      this.warn(`${name} was not detected as a candidate — including it anyway (--include)`);
+      members.set(name, repo);
+    }
+    for (const name of exclude) {
+      if (!members.delete(name)) this.warn(`--exclude ${name}: not in the member set, ignoring`);
+    }
+    if (members.size === 0) {
+      throw new Error(`No member repos at ${parentDir}. Candidates are sibling dirs with an mj-app.json, @mj-biz-apps packages, or the MJ monorepo; use --include to add others.`);
+    }
+    const selected = [...members.values()].sort((a, b) => a.Name.localeCompare(b.Name));
+    for (const member of selected) {
+      const why = member.Reasons.length > 0 ? member.Reasons.join(', ') : 'included via --include';
+      this.log(`${chalk.green('member')} ${member.Name} ${chalk.dim(`(${why})`)}`);
+    }
+    return selected;
+  }
+
+  /** Builds the four file contents (pure builders) and logs every resolution decision. */
+  private buildFiles(parentDir: string, members: CandidateRepo[], hoistBlock: boolean): GeneratedFile[] {
+    const memberNames = members.map((m) => m.Name);
+    const rootPkg = BuildRootPackageJson(path.basename(parentDir), members);
+    for (const conflict of rootPkg.Conflicts) {
+      const losers = conflict.Losers.map((l) => `${l.Version} (${l.Repo})`).join(', ');
+      this.warn(`devDependency conflict on ${conflict.Package}: kept ${conflict.Winner.Version} (${conflict.Winner.Repo}), dropped ${losers}`);
+    }
+    this.log(chalk.dim(`packageManager pin ${rootPkg.Pin} from ${rootPkg.PinSource}`));
+    const turbo = PickTurboJson(members);
+    this.log(chalk.dim(`turbo.json copied from ${turbo.Source}`));
+    const hoistEntries = hoistBlock ? BuildHoistEntries(members) : null;
+    if (hoistEntries !== null) {
+      this.log(chalk.dim(`.npmrc hoist block: ${hoistEntries.length} enumerated entries`));
+    }
+    return [
+      { Name: 'pnpm-workspace.yaml', Content: BuildWorkspaceYaml(memberNames) },
+      { Name: '.npmrc', Content: BuildNpmrc(hoistEntries) },
+      { Name: 'package.json', Content: rootPkg.Content },
+      { Name: 'turbo.json', Content: turbo.Content },
+    ];
+  }
+}

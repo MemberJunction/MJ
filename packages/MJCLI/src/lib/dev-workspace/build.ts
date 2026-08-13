@@ -1,0 +1,394 @@
+/**
+ * Pure content builders for the four generated workspace files.
+ *
+ * NO SIDE EFFECTS in this module: every function maps member metadata (already
+ * loaded by `detect.ts`) to file content strings. Writing is `write.ts`'s job.
+ *
+ * Content rules are transcribed from the hand-proven recipe in
+ * `plans/openapp-hackathon-quickstart.md` (the quickstart wins over any other doc):
+ *  - pnpm-workspace.yaml: `linkWorkspacePackages: true`, the 16-name build-scripts
+ *    allowlist, and per member ONLY the repo root + `packages/*` globs (producer
+ *    packages only — `apps/*` globs collide because every repo names its apps
+ *    `mj_api`/`mj_explorer`).
+ *  - .npmrc: exactly three settings lines; the Angular dev-server hoist block is
+ *    opt-in (only needed when an app shell is served from INSIDE the workspace)
+ *    and always enumerated, never wildcarded.
+ *  - package.json: private root manifest, pnpm `packageManager` pin, the
+ *    devDependency union of member roots (highest version wins, every conflict
+ *    reported), and the proven peerDependencyRules bridge block.
+ *  - turbo.json: copied verbatim from a member, with a minimal fallback.
+ *
+ * @module lib/dev-workspace/build
+ */
+import type {
+  CandidateRepo,
+  DevDepConflict,
+  RootPackageJsonResult,
+  TurboJsonResult,
+} from './types.js';
+
+/** Build-scripts allowlist proven on the core-monorepo spike (quickstart §2). */
+export const ONLY_BUILT_DEPENDENCIES: readonly string[] = [
+  '@apollo/protobufjs',
+  '@google/genai',
+  '@parcel/watcher',
+  '@zoom/rtms',
+  'browser-tabs-lock',
+  'core-js',
+  'core-js-pure',
+  'esbuild',
+  'isolated-vm',
+  'lmdb',
+  'msgpackr-extract',
+  'oracledb',
+  'protobufjs',
+  'rete',
+  'sharp',
+  'tesseract.js',
+];
+
+/** The three .npmrc settings lines (quickstart §2 — strict peers is the standard since Aug 7). */
+export const NPMRC_BASE_LINES: readonly string[] = [
+  'package-manager-strict=false',
+  'strict-peer-dependencies=true',
+  'auto-install-peers=true',
+];
+
+/**
+ * The proven Angular dev-server hoist set (quickstart appendix, verbatim order).
+ * First 9 entries are the auth family + diff; the rest is the mechanically
+ * enumerated MJ-closure externalization set. Transitional debt with a named
+ * sunset — never widen to a wildcard.
+ */
+export const PROVEN_HOIST_SET: readonly string[] = [
+  'diff',
+  '@auth0/auth0-angular',
+  '@auth0/auth0-spa-js',
+  '@azure/msal-angular',
+  '@azure/msal-browser',
+  '@azure/msal-common',
+  '@okta/okta-auth-js',
+  '@workos-inc/authkit-js',
+  'aws-amplify',
+  '@angular/service-worker',
+  '@babel/standalone',
+  '@codemirror/autocomplete',
+  '@codemirror/commands',
+  '@codemirror/lang-javascript',
+  '@codemirror/lang-json',
+  '@codemirror/lang-python',
+  '@codemirror/lang-sql',
+  '@codemirror/language',
+  '@codemirror/language-data',
+  '@codemirror/merge',
+  '@codemirror/state',
+  '@codemirror/view',
+  '@foblex/2d',
+  '@foblex/flow',
+  '@foblex/mediator',
+  '@foblex/platform',
+  '@foblex/utils',
+  '@google/genai',
+  '@lezer/highlight',
+  '@livekit/krisp-noise-filter',
+  '@livekit/track-processors',
+  '@tempfix/idb',
+  '@types/d3',
+  '@types/leaflet',
+  '@types/react',
+  '@types/react-dom',
+  'ajv',
+  'ajv-formats',
+  'angular-split',
+  'codemirror',
+  'd3',
+  'date-fns',
+  'date-fns-tz',
+  'debug',
+  'dompurify',
+  'dotenv',
+  'exceljs',
+  'graphql',
+  'graphql-request',
+  'graphql-ws',
+  'html-to-image',
+  'isolated-vm',
+  'leaflet',
+  'livekit-client',
+  'lodash',
+  'mammoth',
+  'marked',
+  'marked-alert',
+  'marked-gfm-heading-id',
+  'marked-highlight',
+  'marked-smartypants',
+  'mathjs',
+  'mermaid',
+  'papaparse',
+  'pdfjs-dist',
+  'primeng',
+  'prismjs',
+  'react',
+  'react-dom',
+  'rete',
+  'rete-area-plugin',
+  'rete-connection-plugin',
+  'rete-render-utils',
+  'umap-js',
+  'uuid',
+  'validator',
+  'xlsx',
+  'zod',
+];
+
+/** Peer bridge block for older published MJ copies still in the tree (quickstart §2). */
+export const PEER_DEPENDENCY_RULES = {
+  allowedVersions: {
+    'nunjucks>chokidar': '5',
+    '@modelcontextprotocol/sdk>zod': '^3.24',
+    'zod-to-json-schema>zod': '^3.24',
+    'openai>zod': '^3.24',
+    '@anthropic-ai/sdk>zod': '^3.24',
+  },
+  ignoreMissing: ['axios'],
+} as const;
+
+/** Used only when no member pins pnpm — the quickstart's proven pin (== MJ repo's pin today). */
+export const FALLBACK_PNPM_PIN = 'pnpm@10.33.0';
+
+/** Quickstart's proven root-manifest starting point; fills gaps the union leaves. */
+export const BASELINE_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
+  turbo: '^2.5.0',
+  'tsc-alias': '^1.8.16',
+};
+
+/** Minimal parent turbo.json used only when no member carries one. */
+const FALLBACK_TURBO_JSON = `${JSON.stringify(
+  {
+    $schema: 'https://turbo.build/schema.json',
+    tasks: { build: { dependsOn: ['^build'], outputs: ['dist/**', 'build/**'] } },
+  },
+  null,
+  2
+)}\n`;
+
+const GENERATED_HEADER = 'Generated by `mj dev workspace` — never commit to any repo; teardown = delete.';
+
+/** Quotes a YAML list entry the way the quickstart does (scoped names quoted, bare names not). */
+function yamlListEntry(name: string): string {
+  return name.startsWith('@') ? `  - '${name}'` : `  - ${name}`;
+}
+
+/**
+ * Builds `pnpm-workspace.yaml`: member repo roots plus their `packages/*` globs only.
+ * Producer packages only — never `apps/*` (app-shell names collide across repos).
+ */
+export function BuildWorkspaceYaml(memberNames: readonly string[]): string {
+  if (memberNames.length === 0) {
+    throw new Error('BuildWorkspaceYaml requires at least one member repo');
+  }
+  const lines: string[] = [`# ${GENERATED_HEADER}`, 'linkWorkspacePackages: true', ''];
+  lines.push('onlyBuiltDependencies:');
+  for (const dep of ONLY_BUILT_DEPENDENCIES) {
+    lines.push(yamlListEntry(dep));
+  }
+  lines.push('', 'packages:');
+  for (const name of [...memberNames].sort()) {
+    lines.push(`  - '${name}'`);
+    lines.push(`  - '${name}/packages/*'`);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+/** True for dependency names the hoist block must not enumerate (workspace-internal scopes). */
+function isHoistExcluded(name: string, workspacePackageNames: ReadonlySet<string>): boolean {
+  if (name.startsWith('@memberjunction/')) return true; // covered by the proven MJ-closure set
+  if (name.startsWith('@mj-biz-apps/')) return true; // workspace members / app-level deps
+  return workspacePackageNames.has(name);
+}
+
+/**
+ * Enumerates the Angular dev-server hoist entries: the proven MJ-closure set plus
+ * the direct third-party runtime deps (dependencies + peerDependencies) of every
+ * member library package. Always concrete names — never a wildcard pattern.
+ *
+ * Faithfulness note: the proven set was produced by a full transitive closure walk
+ * of the MJ registry packages; that closure cannot be recomputed locally (the MJ
+ * host packages come from the registry), so it is carried as the quickstart's
+ * literal list. The member walk covers the locally walkable half at direct-dep
+ * depth.
+ */
+export function BuildHoistEntries(members: readonly CandidateRepo[]): string[] {
+  const workspacePackageNames = new Set<string>();
+  for (const member of members) {
+    for (const pkg of member.Packages) {
+      if (pkg.PackageJson.name) workspacePackageNames.add(pkg.PackageJson.name);
+    }
+  }
+  const walked = new Set<string>();
+  for (const member of members) {
+    for (const pkg of member.Packages) {
+      const deps = { ...pkg.PackageJson.dependencies, ...pkg.PackageJson.peerDependencies };
+      for (const name of Object.keys(deps)) {
+        if (!isHoistExcluded(name, workspacePackageNames)) walked.add(name);
+      }
+    }
+  }
+  const proven = new Set(PROVEN_HOIST_SET);
+  const additions = [...walked].filter((name) => !proven.has(name)).sort();
+  return [...PROVEN_HOIST_SET, ...additions];
+}
+
+/**
+ * Builds `.npmrc`: the three proven settings lines, plus (opt-in) the enumerated
+ * Angular dev-server hoist block — needed only when an app shell is served from
+ * inside the workspace.
+ */
+export function BuildNpmrc(hoistEntries: readonly string[] | null): string {
+  const lines: string[] = [`# ${GENERATED_HEADER}`, ...NPMRC_BASE_LINES];
+  if (hoistEntries !== null) {
+    if (hoistEntries.length === 0) {
+      throw new Error('BuildNpmrc: hoist block requested but no entries were enumerated');
+    }
+    lines.push('# --- Angular dev-server hoist block (transitional; enumerated, never wildcarded) ---');
+    for (const entry of hoistEntries) {
+      lines.push(`public-hoist-pattern[]=${entry}`);
+    }
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+/** Parses the leading numeric triple out of a version/range string, or null. */
+function parseVersionTriple(version: string): [number, number, number] | null {
+  const match = /^[\^~>=<\s v]*(\d+)\.(\d+)\.(\d+)/.exec(version.trim());
+  if (!match) return null;
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+/**
+ * Compares two version/range strings by their base numeric triple.
+ * Returns >0 when `a` is higher, <0 when `b` is higher, 0 on a tie or when
+ * either side has no parseable triple (caller keeps the incumbent and reports).
+ */
+export function CompareVersionStrings(a: string, b: string): number {
+  const ta = parseVersionTriple(a);
+  const tb = parseVersionTriple(b);
+  if (ta === null || tb === null) return 0;
+  for (let i = 0; i < 3; i++) {
+    if (ta[i] !== tb[i]) return ta[i] - tb[i];
+  }
+  return 0;
+}
+
+/**
+ * Unions every member repo's root devDependencies. Conflict rule: highest base
+ * version wins; ties keep the first seen. EVERY conflict is returned so the
+ * command can log it — the resolver never picks silently.
+ */
+export function ResolveDevDependencyUnion(members: readonly CandidateRepo[]): {
+  DevDependencies: Record<string, string>;
+  Conflicts: DevDepConflict[];
+} {
+  const chosen = new Map<string, { Repo: string; Version: string }>();
+  const conflicts = new Map<string, DevDepConflict>();
+  for (const member of [...members].sort((a, b) => a.Name.localeCompare(b.Name))) {
+    const devDeps = member.RootPackageJson.devDependencies ?? {};
+    for (const [name, version] of Object.entries(devDeps)) {
+      recordDevDep(chosen, conflicts, name, { Repo: member.Name, Version: version });
+    }
+  }
+  for (const [name, version] of Object.entries(BASELINE_DEV_DEPENDENCIES)) {
+    if (!chosen.has(name)) chosen.set(name, { Repo: 'generator baseline', Version: version });
+  }
+  const union: Record<string, string> = {};
+  for (const name of [...chosen.keys()].sort()) {
+    union[name] = chosen.get(name)!.Version;
+  }
+  return { DevDependencies: union, Conflicts: [...conflicts.values()] };
+}
+
+/** Applies one member's devDep declaration to the union, recording any conflict. */
+function recordDevDep(
+  chosen: Map<string, { Repo: string; Version: string }>,
+  conflicts: Map<string, DevDepConflict>,
+  name: string,
+  candidate: { Repo: string; Version: string }
+): void {
+  const incumbent = chosen.get(name);
+  if (!incumbent) {
+    chosen.set(name, candidate);
+    return;
+  }
+  if (incumbent.Version === candidate.Version) return;
+  const winner = CompareVersionStrings(candidate.Version, incumbent.Version) > 0 ? candidate : incumbent;
+  const loser = winner === candidate ? incumbent : candidate;
+  chosen.set(name, winner);
+  const existing = conflicts.get(name);
+  if (existing) {
+    existing.Winner = winner;
+    existing.Losers.push(loser);
+  } else {
+    conflicts.set(name, { Package: name, Winner: winner, Losers: [loser] });
+  }
+}
+
+/**
+ * Resolves the pnpm `packageManager` pin for the parent manifest: the highest
+ * pnpm pin any member carries (the MJ monorepo pins pnpm, so with MJ as a member
+ * this matches the MJ repo's pin); otherwise the quickstart's proven fallback.
+ */
+export function ResolvePnpmPin(members: readonly CandidateRepo[]): { Pin: string; Source: string } {
+  let best: { Pin: string; Source: string } | null = null;
+  for (const member of [...members].sort((a, b) => a.Name.localeCompare(b.Name))) {
+    const pin = member.RootPackageJson.packageManager;
+    if (!pin || !pin.startsWith('pnpm@')) continue;
+    if (best === null || CompareVersionStrings(pin.slice('pnpm@'.length), best.Pin.slice('pnpm@'.length)) > 0) {
+      best = { Pin: pin, Source: member.Name };
+    }
+  }
+  return best ?? { Pin: FALLBACK_PNPM_PIN, Source: 'generator fallback (quickstart-proven pin)' };
+}
+
+/** npm-safe workspace name derived from the parent directory basename. */
+function workspaceName(parentDirName: string): string {
+  const cleaned = parentDirName.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+  return `${cleaned.length > 0 ? cleaned : 'mj'}-dev-workspace`;
+}
+
+/**
+ * Builds the private parent `package.json`: pnpm pin, member devDependency union,
+ * and the proven peerDependencyRules bridge block.
+ */
+export function BuildRootPackageJson(parentDirName: string, members: readonly CandidateRepo[]): RootPackageJsonResult {
+  if (members.length === 0) {
+    throw new Error('BuildRootPackageJson requires at least one member repo');
+  }
+  const { DevDependencies, Conflicts } = ResolveDevDependencyUnion(members);
+  const { Pin, Source } = ResolvePnpmPin(members);
+  const manifest = {
+    name: workspaceName(parentDirName),
+    private: true,
+    packageManager: Pin,
+    devDependencies: DevDependencies,
+    pnpm: { peerDependencyRules: PEER_DEPENDENCY_RULES },
+  };
+  return {
+    Content: `${JSON.stringify(manifest, null, 2)}\n`,
+    Conflicts,
+    PinSource: Source,
+    Pin,
+  };
+}
+
+/**
+ * Picks the parent `turbo.json`: copied verbatim from the first member (sorted by
+ * name) that carries one; a minimal proven config otherwise.
+ */
+export function PickTurboJson(members: readonly CandidateRepo[]): TurboJsonResult {
+  for (const member of [...members].sort((a, b) => a.Name.localeCompare(b.Name))) {
+    if (member.TurboJson !== null) {
+      return { Content: member.TurboJson, Source: member.Name };
+    }
+  }
+  return { Content: FALLBACK_TURBO_JSON, Source: 'generator fallback' };
+}
