@@ -77,6 +77,16 @@ describe('TaskGraphRunViewComponent (DOM)', () => {
 
     const host = (f: ComponentFixture<TaskGraphRunViewComponent>) => f.nativeElement as HTMLElement;
 
+    it('keeps the debug legend off until the host asks for it', async () => {
+        const { provider } = graphProvider();
+        const fixture = render(provider, 'parent-1');
+        await settle(fixture);
+        expect(host(fixture).querySelector('.run-view-legend')).toBeNull();
+        fixture.componentRef.setInput('ShowDebugLegend', true);
+        fixture.detectChanges();
+        expect(host(fixture).querySelector('.run-view-legend')?.textContent).toContain('breakpoint');
+    });
+
     it('shows the empty state and asks the database NOTHING when there is no parent task', () => {
         const { provider, queried } = graphProvider();
         const f = render(provider, null);

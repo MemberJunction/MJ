@@ -5,7 +5,8 @@ that turn a node into work.
 
 > **New to workflows?** Start with the [Workflows and Task Graphs
 > Guide](../../guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md), which covers what a workflow is, when to
-> use one, and every rule that decides what happens next. This README is the package tour.
+> use one, and every rule that decides what happens next. To **step a live run**, see the
+> [Workflow Debugger Guide](../../guides/WORKFLOW_DEBUGGER_GUIDE.md). This README is the package tour.
 
 ---
 

@@ -22,6 +22,16 @@ export type ProviderFactory = {
 };
 
 /**
+ * How a runner reports progress inside one task body.
+ *
+ * A plain callback rather than an observer object because a runner should not need to know frames
+ * exist: it says what it is doing, and the dispatcher decides whether anyone is listening, how often
+ * to announce it, and in what shape. MUST NOT throw or block — the dispatcher wraps it, but a
+ * runner's own use should treat it as commentary, never a step of the work.
+ */
+export type TaskRunProgressCallback = (message: string, percent?: number) => void;
+
+/**
  * Runs one agent for one task node.
  *
  * Abstracted rather than taking `AgentRunner` directly so the dispatcher can be unit-tested without
@@ -42,6 +52,8 @@ export type TaskActionRunParams = {
     DependencyOutputs: Map<string, unknown>;
     Provider: IMetadataProvider;
     ContextUser: UserInfo;
+    /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
+    OnProgress?: TaskRunProgressCallback;
 };
 
 /** The outcome of one action node. */
@@ -88,6 +100,8 @@ export type TaskPromptRunParams = {
     TemplateParameters?: Record<string, string>;
     Provider: IMetadataProvider;
     ContextUser: UserInfo;
+    /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
+    OnProgress?: TaskRunProgressCallback;
 };
 
 /** The outcome of one prompt node. */
@@ -145,7 +159,56 @@ export type TaskGraphFrameKind =
     /** A human task became actionable and is waiting on its assignee. */
     | 'TaskAwaitingHuman'
     /** Every node has reached a terminal state; `Status` is the graph's rolled-up outcome. */
-    | 'GraphSettled';
+    | 'GraphSettled'
+    /**
+     * A gating edge's verdict changed — satisfied, not taken, or held.
+     *
+     * Emitted on CHANGE, not on every poll (the dispatcher re-resolves edges each pass, and an
+     * unqualified emission would repeat every few seconds for as long as the graph is live, exactly
+     * the flood `logUnevaluableConditionOnce` exists to prevent in the log). This frame is what lets
+     * a viewer answer "why did this branch run?" — and what makes a permanent hold visible the
+     * moment it happens instead of after a forensic query.
+     */
+    | 'GateDecision'
+    /**
+     * A task's claim changed hands or state — claimed, heartbeat lost, reclaimed.
+     *
+     * The R2-1 defect class ("a crashed worker's task wedges the graph forever with zero
+     * diagnostics") becomes a red badge instead of an invisible fact precisely because this frame
+     * exists.
+     */
+    | 'ClaimChanged'
+    /**
+     * One dispatch pass finished for this graph — the engine's heartbeat.
+     *
+     * Carries the pass's counts (eligible / held / claimed / in flight). A run that is stuck is a
+     * strip of these ticking with nothing moving, which is the honest visual of a stall.
+     */
+    | 'PassCompleted'
+    /** The graph was paused — by a person or by a breakpoint. Nothing new will be claimed. */
+    | 'GraphPaused'
+    /** The graph was resumed; claiming continues normally. */
+    | 'GraphResumed'
+    /**
+     * An eligible task carried a breakpoint, so the graph paused BEFORE the task was claimed.
+     * `TaskID` names the task the run is now parked in front of.
+     */
+    | 'BreakpointHit'
+    /**
+     * A step allowance could not release anything on this pass — the named work is already running,
+     * or this host has no runner for it. The allowance is NOT spent, and `Reason` says so.
+     *
+     * Exists because the alternative is the worst shape a control can have: the button reports
+     * nothing, the allowance is gone, and the run does not move.
+     */
+    | 'StepRefused'
+    /**
+     * A runner reported progress inside one task — message and optional percentage.
+     *
+     * The bridge from node-level execution (an agent run's own progress stream) up to graph-level
+     * observers, rate-limited by the dispatcher so a chatty runner cannot flood the topic.
+     */
+    | 'NodeProgress';
 
 /**
  * One thing that happened, addressed by the graph it happened in.
@@ -184,6 +247,52 @@ export type TaskGraphFrame = {
     /** How many nodes have reached a terminal state, and out of how many. */
     CompletedCount?: number;
     TotalCount?: number;
+
+    // ── GateDecision ────────────────────────────────────────────────────────
+    /** The `MJ: Task Dependencies` row the verdict is about. */
+    EdgeID?: string;
+    /** The edge's origin task. `TaskID` above is the edge's target. */
+    DependsOnTaskID?: string;
+    /** What the gate decided: the edge is open, the branch was not taken, or it cannot be answered yet. */
+    Verdict?: 'satisfied' | 'notTaken' | 'held';
+    /** The condition text, so a viewer can show WHY without loading the row. */
+    ConditionText?: string;
+    /** Human-readable detail: the hold reason, the override applied, or who paused the graph. */
+    Reason?: string;
+
+    // ── ClaimChanged ────────────────────────────────────────────────────────
+    /** What happened to the claim. */
+    ClaimEvent?: 'claimed' | 'heartbeat-lost' | 'reclaimed';
+    /** The dispatcher instance holding (or losing) the claim. */
+    ClaimedBy?: string;
+    /** When the claim lapses unless extended, ISO 8601. */
+    ClaimExpiresAt?: string;
+
+    // ── PassCompleted ───────────────────────────────────────────────────────
+    /** Monotonic per-instance pass counter, so a viewer can order and gap-detect ticks. */
+    PassNumber?: number;
+    /** Tasks whose prerequisites were satisfied this pass. */
+    EligibleCount?: number;
+    /** Tasks held by an unanswerable condition or undecided fork. */
+    HeldCount?: number;
+    /** Tasks this instance claimed on this pass, for THIS graph. */
+    ClaimedCount?: number;
+    /**
+     * Tasks this INSTANCE is executing right now, across every graph it is working — not this
+     * graph's in-flight count.
+     *
+     * Named for what it measures because the two readings differ and a viewer cannot tell them
+     * apart: it is the dispatcher's own load against `MaxConcurrentTasks`, which is what explains a
+     * graph whose steps are ready but not starting. A per-graph count would answer a different
+     * question (and is visible anyway as the steps rendered running on the canvas).
+     */
+    InstanceInFlightCount?: number;
+
+    // ── NodeProgress ────────────────────────────────────────────────────────
+    /** What the runner says it is doing. */
+    ProgressMessage?: string;
+    /** 0–100 when the runner can quantify it. */
+    ProgressPercent?: number;
 };
 
 /**
@@ -235,6 +344,8 @@ export type TaskAgentRunParams = {
     Provider: IMetadataProvider;
     /** User the work runs as. */
     ContextUser: UserInfo;
+    /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
+    OnProgress?: TaskRunProgressCallback;
 };
 
 /** Outcome of running one task node. */
