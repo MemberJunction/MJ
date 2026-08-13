@@ -10,12 +10,13 @@
  * `MJ: Materialized Results` row with `SourceType='EntityBaseView' AND SourceEntityID=<entity.ID>`; when its
  * `Status='Active'` the read is redirected to the row's `ViewName`, else it falls back to the live base view.
  *
- * We fabricate that snapshot for a real entity (`Roles`) carrying a SENTINEL row absent from the live view, then:
+ * We fabricate that snapshot for a real entity (`MJ: Task Types`) carrying a SENTINEL row absent from the live
+ * view, then:
  *   • EMR1 (positive): `RunView(DataSource:'Materialized')` filtered to the sentinel returns it (read hit the snapshot).
  *   • EMR2 (negative control): the SAME RunView read `Live` returns the sentinel nowhere (proving EMR1 came from the snapshot).
  *
  * The materialization only affects reads that explicitly pass `DataSource:'Materialized'` (default Live reads of
- * `Roles` are untouched), and the fixture is short-lived + self-cleaning, so it does not perturb other tests.
+ * `MJ: Task Types` are untouched), and the fixture is short-lived + self-cleaning, so it does not perturb other tests.
  * SQL-Server only (raw fabrication via `ctx.Pool`); skips (skip-as-pass) when no mssql pool is present.
  */
 import { randomUUID } from 'node:crypto';
@@ -106,7 +107,7 @@ async function readSentinel(ctx: IntegrationCheckContext, dataSource: 'Materiali
         Fields: ['ID', 'Name'],
         ResultType: 'simple',
         DataSource: dataSource,
-    } as never, ctx.User);
+    }, ctx.User);
 }
 
 export const MaterializedEntityReadChecks: NamedCheck[] = [

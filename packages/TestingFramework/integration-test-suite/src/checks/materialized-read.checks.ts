@@ -204,9 +204,9 @@ export const MaterializedReadChecks: NamedCheck[] = [
             if (!fixtures) { console.warn('  ⚠ materialized-read.MR1 SKIPPED — no fixtures (no mssql pool on this run path).'); return; }
             const { Query, Sentinel, SentinelID } = requireFixtures();
             const rq = new RunQuery();
-            const result = await rq.RunQuery({ QueryID: Query.ID, DataSource: 'Materialized', Parameters: { marker: Sentinel } } as never, ctx.User);
+            const result = await rq.RunQuery({ QueryID: Query.ID, DataSource: 'Materialized', Parameters: { marker: Sentinel } }, ctx.User);
             Assert(result.Success, `materialized read must succeed: ${result.ErrorMessage}`);
-            const rendered = String((result as { RenderedSQL?: string }).RenderedSQL ?? '');
+            const rendered = String(result.RenderedSQL ?? '');
             Assert(/materialized_/i.test(rendered), `MR1: read must be served from the snapshot — RenderedSQL should reference materialized_<…>, got: ${rendered.slice(0, 160)}`);
             Assert(/__mj_MaterializedRowID/i.test(rendered), 'MR1: the materialized read orders by the stable surrogate row-id (deterministic paging)');
             Assert(containsSentinel(result.Results ?? [], SentinelID), 'MR1: the snapshot-only sentinel row MUST be returned — proof the rows came from the snapshot, not the live source');
@@ -219,9 +219,9 @@ export const MaterializedReadChecks: NamedCheck[] = [
             if (!fixtures) { console.warn('  ⚠ materialized-read.MR2 SKIPPED — no fixtures (no mssql pool on this run path).'); return; }
             const { Query, Sentinel, SentinelID } = requireFixtures();
             const rq = new RunQuery();
-            const result = await rq.RunQuery({ QueryID: Query.ID, DataSource: 'Live', Parameters: { marker: Sentinel } } as never, ctx.User);
+            const result = await rq.RunQuery({ QueryID: Query.ID, DataSource: 'Live', Parameters: { marker: Sentinel } }, ctx.User);
             Assert(result.Success, `live read must succeed: ${result.ErrorMessage}`);
-            const rendered = String((result as { RenderedSQL?: string }).RenderedSQL ?? '');
+            const rendered = String(result.RenderedSQL ?? '');
             Assert(!/materialized_/i.test(rendered), `MR2: the Live read must NOT touch the snapshot — RenderedSQL should reference the source, got: ${rendered.slice(0, 160)}`);
             Assert(!containsSentinel(result.Results ?? [], SentinelID), 'MR2: the sentinel exists ONLY in the snapshot, so a Live read must not return it — this attributes MR1 to the snapshot, not to correct rows generally');
             AssertEqual(result.Results?.length ?? -1, 0, 'MR2: no live Entity is named the sentinel, so the Live read returns zero rows');

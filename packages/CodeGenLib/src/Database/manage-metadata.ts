@@ -1387,6 +1387,17 @@ export class ManageMetadataBase {
             continue;
          }
 
+         // Schema-name symmetry with the refresh path: MaterializationRefresher validates schema/table/view names
+         // as plain SQL identifiers (^[A-Za-z_][A-Za-z0-9_]*$) before building any DDL. The mint quotes at the
+         // dialect level and would otherwise accept a schema name (e.g. "Sales Data", "crm-prod") the refresh then
+         // permanently rejects — the entity would provision cleanly and never refresh (a silent nightly failure).
+         // Refuse up front, symmetrically, with a clear message. (TableName/ViewName are CodeName-derived and
+         // always identifier-safe, so only the source entity's schema can be non-conforming here.)
+         if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(entity.SchemaName ?? '')) {
+            logError(`    > REFUSING base-view materialization of entity "${entity.Name}": its schema "${entity.SchemaName}" is not a plain SQL identifier — the refresh path requires one, so materialization is only supported for entities in identifier-named schemas. Skipping.`);
+            continue;
+         }
+
          // 2) Derive the snapshot column shape from the entity's base-view fields.
          // For EXTERNAL entities, virtual fields are MJ-computed and absent from the remote source, so the
          // refresh mirror (rebuildFromExternalEntity) only materializes non-virtual columns — the mint column
