@@ -52,6 +52,11 @@ export class FlowNodeComponent {
     return this.Node?.Status != null && this.Node.Status !== 'default';
   }
 
+  /** Debugger chrome: this step is waiting for Continue / Step, not executing. */
+  get isAwaitingUser(): boolean {
+    return this.Node?.Data?.['AwaitingUser'] === true;
+  }
+
   get inputPort(): { ID: string; Side: string; Multiple: boolean; Disabled: boolean } | null {
     const port = this.Node?.Ports?.find(p => p.Direction === 'input');
     if (!port) return null;

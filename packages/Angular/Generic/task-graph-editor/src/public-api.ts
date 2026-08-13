@@ -13,3 +13,8 @@ export * from './lib/task-graph-canvas-adapter';
 export * from './lib/task-graph-properties-panel.component';
 export * from './lib/task-graph-run-view.component';
 export * from './lib/task-graph-runtime-source';
+export * from './lib/task-graph-debug-toolbar.component';
+export * from './lib/task-graph-variables.component';
+export * from './lib/workflow-debug-host';
+export * from './lib/debug-variables';
+export * from './lib/pane-split';

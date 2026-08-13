@@ -6,10 +6,10 @@ import { ComputeTasksToBlock, type TaskGraphNode, type TaskGraphEdge } from '@me
 import { GraphQLDataProvider, type TaskGraphFrameEvent } from '@memberjunction/graphql-dataprovider';
 import { ParseJSONOptions, ParseJSONRecursive, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseDashboard, BaseResourceComponent } from '@memberjunction/ng-shared';
+import { ComposeBreakpointSet } from '@memberjunction/ng-task-graph-editor';
 import { SortWorkflowRuns, type WorkflowRunSortColumn } from './workflow-run-sorting';
 import { WorkflowRunLayout } from './workflow-run-layout';
 import {
-    ComposeBreakpointSet,
     EmptyDebugState,
     ParseWorkflowRunParentBag,
     TryParseJsonObject,
@@ -316,6 +316,7 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
         this.resetEditors();
         this.detachFrames();
         this.ReplayPercent = null;
+        this.GraphSettled = false;
         this.DebugState = EmptyDebugState();
         this.Invocation = {};
         if (!closing && this.isLiveStatus(run.Status)) this.attachFrames(run.ID);
@@ -342,6 +343,8 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
     public FrameLog: TaskGraphFrameEvent[] = [];
     /** Whether the selected run is paused (from `GraphPaused`/`GraphResumed` frames + verbs). */
     public DebugPaused = false;
+    /** Children are all terminal — the durable bag can still say paused after the last continue. */
+    public GraphSettled = false;
     /** A one-line diagnosis when the engine reports trouble — a lost worker, a held path. */
     public StallNotice: string | null = null;
     /** Structured stall so a held edge can be answered, not just named. */
@@ -418,6 +421,7 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
                 break;
             case 'GraphPaused':
             case 'BreakpointHit':
+                if (this.GraphSettled) break; // bag can still say paused after the last step
                 this.DebugPaused = true;
                 if (this.SelectedRunID) void this.loadDebugState(this.SelectedRunID);
                 break;
@@ -458,6 +462,7 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
                 });
                 break;
             case 'GraphSettled':
+                this.markGraphSettled();
                 this.clearStall();
                 void this.loadData(); // the list row's status/duration just changed
                 if (this.SelectedRunID) {
@@ -636,6 +641,37 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
 
     public HasBreakpoint(taskID: string): boolean {
         return this.DebugState.breakpoints.some((id) => UUIDsEqual(id, taskID));
+    }
+
+    /** Live or paused — the VS Code bar is how you drive it, including a start-paused debug. */
+    public CanDriveRun(run: { Status: string }): boolean {
+        if (this.IsRunSettled(run)) return false;
+        return run.Status === 'In Progress' || run.Status === 'Running' || run.Status === 'Pending' || this.DebugPaused;
+    }
+
+    public IsRunSettled(run: { Status: string }): boolean {
+        return this.GraphSettled
+            || run.Status === 'Complete'
+            || run.Status === 'Failed'
+            || run.Status === 'Cancelled';
+    }
+
+    public OnCanvasSettled(): void {
+        this.markGraphSettled();
+        this.cdr.markForCheck();
+    }
+
+    private markGraphSettled(): void {
+        this.GraphSettled = true;
+        this.DebugPaused = false;
+        this.DebugState = { ...this.DebugState, paused: false, pausedAtTaskID: null };
+    }
+
+    public StepPayload(step: WorkflowRunStep, field: 'InputPayload' | 'OutputPayload'): string | null {
+        const value = step.Record[field];
+        if (typeof value === 'string') return value;
+        if (value == null) return null;
+        return JSON.stringify(value);
     }
 
     public OnBreakpointCheckbox(step: WorkflowRunStep, event: Event): void {
@@ -942,9 +978,16 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
             if (!UUIDsEqual(this.SelectedRunID ?? '', parentTaskID)) return;
             const parent = result.Success ? result.Results?.[0] : undefined;
             const bag = ParseWorkflowRunParentBag(parent?.InputPayload);
-            this.DebugState = bag.debug;
             this.Invocation = bag.invocation;
-            this.DebugPaused = bag.debug.paused;
+            // Settled trumps the durable bag: $.debug.paused can still be true after the last
+            // continue, and painting that as "paused here" hides that the run is over.
+            if (this.GraphSettled) {
+                this.DebugState = { ...bag.debug, paused: false, pausedAtTaskID: null };
+                this.DebugPaused = false;
+            } else {
+                this.DebugState = bag.debug;
+                this.DebugPaused = bag.debug.paused;
+            }
         } catch {
             // A failed parent read leaves the last known debug state; frames remain the safety net.
         }

@@ -1,0 +1,78 @@
+:host { display: block; min-height: 0; }
+
+.vars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 100%;
+  overflow: auto;
+  font-family: var(--mj-font-mono, ui-monospace, monospace);
+  font-size: var(--mj-font-size-xs);
+  background: var(--mj-bg-surface-sunken);
+  border-top: 1px solid var(--mj-border-default);
+}
+
+.vars-empty {
+  padding: var(--mj-space-3);
+  color: var(--mj-text-muted);
+  font-family: var(--mj-font-sans, inherit);
+}
+
+.vars-scope-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  color: var(--mj-text-secondary);
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+}
+.vars-scope-head:hover { background: var(--mj-bg-surface-hover); }
+.vars-scope-head i { font-size: 8px; width: 10px; }
+
+.vars-list { list-style: none; margin: 0; padding: 0; }
+
+.vars-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: var(--mj-space-2);
+  align-items: baseline;
+  padding: 1px 8px 1px calc(8px + (var(--vars-depth, 0) * 12px));
+}
+.vars-row:hover { background: var(--mj-bg-surface-hover); }
+
+.vars-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--mj-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.vars-name:disabled { cursor: default; }
+.vars-name i { font-size: 8px; width: 10px; color: var(--mj-text-muted); }
+.vars-leaf { display: inline-block; width: 10px; }
+.vars-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.vars-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--mj-text-muted);
+}
+.vars-preview[data-kind='string'] { color: var(--mj-status-success); }
+.vars-preview[data-kind='number'] { color: var(--mj-brand-primary); }
+.vars-preview[data-kind='boolean'] { color: var(--mj-status-warning); }
+.vars-preview[data-kind='null'] { color: var(--mj-text-disabled); font-style: italic; }

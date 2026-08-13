@@ -66,6 +66,37 @@ mj-flow-node {
   animation: mj-flow-node-pulse 1.5s ease-in-out infinite;
 }
 
+/* Debugger: this step is next and nothing starts until the operator continues. */
+.mj-flow-node-body--awaiting {
+  opacity: 1;
+  border: 2px solid var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--mj-brand-primary) 28%, transparent),
+              var(--mj-shadow-md);
+  animation: mj-flow-node-awaiting 1.6s ease-in-out infinite;
+}
+.f-selected .mj-flow-node-body--awaiting {
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent),
+              var(--mj-shadow-md);
+}
+
+.mj-flow-node-awaiting-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 8px 6px;
+  padding: 5px 8px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 16%, var(--mj-bg-surface));
+  border: 1px solid var(--mj-brand-primary);
+  border-radius: var(--mj-radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--mj-brand-primary);
+  line-height: 1.3;
+}
+.mj-flow-node-awaiting-banner i { font-size: 10px; flex-shrink: 0; }
+
 .mj-flow-node-body--warning {
   border: 2px solid var(--mj-status-warning);
   background: color-mix(in srgb, var(--mj-status-warning) 5%, var(--mj-bg-surface));
@@ -256,6 +287,11 @@ mj-flow-node {
   border-style: solid;
   border-image: none;
   background: color-mix(in srgb, var(--mj-status-warning) 5%, var(--mj-bg-surface));
+}
+
+.mj-flow-node-body--loop.mj-flow-node-body--awaiting {
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
 
 .mj-flow-node-body--loop:hover {
@@ -468,6 +504,17 @@ mj-flow-node {
   }
   50% {
     box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+@keyframes mj-flow-node-awaiting {
+  0%, 100% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--mj-brand-primary) 28%, transparent),
+                var(--mj-shadow-md);
+  }
+  50% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--mj-brand-primary) 8%, transparent),
+                var(--mj-shadow-md);
   }
 }
 

@@ -70,10 +70,13 @@
       @if (showSidebar) {
         <as-split
           direction="horizontal"
-          style="height: 100%; width: 100%;">
+          style="height: 100%; width: 100%;"
+          [gutterSize]="8"
+          (dragEnd)="OnHarnessSplitDragEnd($event.sizes)">
           <!-- Chat Area (Left Pane) -->
           <as-split-area
-            [size]="70">
+            [size]="HarnessSplitSizes[0]"
+            [minSize]="25">
             <div class="chat-area">
               @if (EffectiveMode === 'workflow') {
                 <!-- You do not talk to a workflow. Its first step is compiled from its own graph, so
@@ -88,23 +91,50 @@
                       id="workflowPayload"
                       class="mj-textarea workflow-payload"
                       [(ngModel)]="WorkflowStartingPayload"
-                      [rows]="4"
+                      [rows]="WorkflowParentTaskID ? 2 : 4"
                       spellcheck="false"
                       placeholder='{ "ticker": "NVDA" }'
-                      [disabled]="isExecuting"></textarea>
+                      [disabled]="isExecuting && !WorkflowParentTaskID"></textarea>
                     @if (WorkflowPayloadError) {
                       <mj-alert Variant="error" [Message]="WorkflowPayloadError"></mj-alert>
                     }
                   </div>
 
                   <div class="workflow-actions">
-                    <button mjButton variant="primary" (click)="RunWorkflow()" [disabled]="isExecuting">
-                      @if (isExecuting) {
-                        <i class="fa-solid fa-spinner fa-spin"></i> Starting&hellip;
-                      } @else {
-                        <i class="fa-solid fa-play"></i> Run workflow
-                      }
-                    </button>
+                    @if (!WorkflowDebuggerActive || WorkflowSettled) {
+                      <button mjButton variant="primary" (click)="RunWorkflow()"
+                              [disabled]="isExecuting && !WorkflowParentTaskID">
+                        @if (isExecuting && !WorkflowDebuggerActive && !WorkflowParentTaskID) {
+                          <i class="fa-solid fa-spinner fa-spin"></i> Starting&hellip;
+                        } @else {
+                          <i class="fa-solid fa-play"></i> Run workflow
+                        }
+                      </button>
+                      <button mjButton variant="secondary" (click)="DebugWorkflow()"
+                              [disabled]="isExecuting && !WorkflowParentTaskID"
+                              title="Start paused — nothing is claimed until you continue or step">
+                        <i class="fa-solid fa-bug"></i> Debug
+                      </button>
+                    }
+                    @if (WorkflowDebuggerActive && !WorkflowParentTaskID) {
+                      <span class="workflow-starting">
+                        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                        Starting debugger&hellip;
+                      </span>
+                    }
+                    @if (WorkflowDebuggerActive && WorkflowParentTaskID) {
+                      <mj-task-graph-debug-toolbar
+                        [Paused]="WorkflowDebugPaused"
+                        [Busy]="WorkflowControlBusy"
+                        [Settled]="WorkflowSettled"
+                        [Enabled]="true"
+                        (Pause)="OnWorkflowPause()"
+                        (Resume)="OnWorkflowResume()"
+                        (Step)="OnWorkflowStep('one')"
+                        (StepWave)="OnWorkflowStep('wave')"
+                        (Cancel)="OnWorkflowCancel()">
+                      </mj-task-graph-debug-toolbar>
+                    }
                     <span class="workflow-hint">
                       Runs on the dispatcher &mdash; you can close this and it keeps running.
                     </span>
@@ -112,14 +142,29 @@
 
                   @if (WorkflowParentTaskID) {
                     <div class="workflow-section workflow-graph">
-                      <label class="workflow-label">Last run</label>
+                      @if (WorkflowControlError) {
+                        <mj-alert Variant="error" [Message]="WorkflowControlError"></mj-alert>
+                      }
                       <mj-task-graph-run-view
                         [ParentTaskID]="WorkflowParentTaskID"
                         [WorkflowName]="entity?.Name || 'Workflow'"
                         [LiveUpdates]="true"
-                        Height="320px">
+                        [LiveFrame]="WorkflowLatestFrame"
+                        [Breakpoints]="WorkflowDebugBreakpoints"
+                        [PausedAtTaskID]="WorkflowPausedAtTaskID"
+                        [GraphPaused]="WorkflowDebugPaused"
+                        [EdgeOverrides]="WorkflowEdgeOverrides"
+                        [Invocation]="WorkflowInvocation"
+                        [AllowBreakpointEditing]="WorkflowDebuggerActive"
+                        [ShowVariables]="true"
+                        Height="100%"
+                        (BreakpointToggled)="OnWorkflowBreakpointToggled($event)"
+                        (EdgeOverrideRequested)="OnWorkflowEdgeOverride($event)"
+                        (Settled)="OnWorkflowCanvasSettled()">
                       </mj-task-graph-run-view>
                     </div>
+                  } @else if (isExecuting) {
+                    <mj-loading text="Submitting the graph…"></mj-loading>
                   } @else {
                     <mj-empty-state
                       Icon="fa-solid fa-diagram-project"
@@ -277,7 +322,8 @@
           </as-split-area>
           <!-- Sidebar (Right Pane) -->
           <as-split-area
-            [size]="30">
+            [size]="HarnessSplitSizes[1]"
+            [minSize]="20">
             <div class="sidebar">
               <!-- Tab Navigation -->
               <div class="sidebar-tabs">

@@ -56,8 +56,20 @@ export type TaskGraphSubmitRequest = {
      * process that accepted the graph.
      */
     Invocation?: TaskGraphInvocationEnvelope;
+    /**
+     * Seed `$.debug` on the parent row at insert. `paused: true` is start-paused — the dispatcher
+     * must not claim until Resume/Step. Written with the row because Pause-after-submit races the
+     * first poll.
+     */
+    Debug?: TaskGraphStartDebug;
     ContextUser: UserInfo;
     Provider: IMetadataProvider;
+};
+
+/** What a Debug-workflow start may seed on the graph. Breakpoints need task IDs, which do not exist
+ *  until children persist — so Submit honors `paused` only. */
+export type TaskGraphStartDebug = {
+    paused?: boolean;
 };
 
 /**

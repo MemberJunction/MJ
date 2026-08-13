@@ -87,6 +87,8 @@ export type TaskGraphSubmitContext = {
      * process that accepted the graph.
      */
     Invocation?: TaskGraphInvocationEnvelope;
+    /** Seed `$.debug` on the parent at insert. See `TaskGraphStartDebug`. */
+    Debug?: { paused?: boolean };
 };
 
 /**
@@ -213,6 +215,41 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
     } catch {
         return { ...DEFAULT_PARENT_METADATA };
     }
+}
+
+/**
+ * The JSON bag `persistParent` writes. Exported so start-paused is testable without a database —
+ * Pause-after-submit races the first dispatcher poll, so this bag is the only place `paused: true`
+ * is guaranteed to land before anyone claims.
+ */
+export function BuildTaskGraphParentInputPayload(args: {
+    continuation: TaskGraphParentMetadata['continuation'];
+    reinvokeDepth: number;
+    failureSemantics: NonNullable<TaskGraphParentMetadata['failureSemantics']>;
+    submittedByAgentRunID: string | null;
+    submittedByUserID: string | null;
+    invocation?: { data?: unknown; context?: unknown } | null;
+    startPaused?: boolean;
+}): Record<string, unknown> {
+    return {
+        continuation: args.continuation,
+        reinvokeDepth: args.reinvokeDepth,
+        failureSemantics: args.failureSemantics,
+        submittedByAgentRunID: args.submittedByAgentRunID,
+        submittedByUserID: args.submittedByUserID,
+        ...(args.invocation
+            ? { invocation: { data: args.invocation.data, context: args.invocation.context } }
+            : {}),
+        ...(args.startPaused
+            ? {
+                debug: {
+                    paused: true,
+                    pausedReason: 'user' as const,
+                    pausedBy: args.submittedByUserID,
+                },
+            }
+            : {}),
+    };
 }
 
 /**
@@ -1377,22 +1414,23 @@ export class TaskGraphService {
                 `absent data. Pass plain JSON values for anything a condition needs.`,
             );
         }
-        parent.InputPayload = JSON.stringify({
+        // Only written when the caller supplied one, so a graph with no invocation envelope
+        // carries no key at all rather than a misleading empty object. SANITIZED first: the
+        // agent's `context` is documented as possibly a class instance holding connections and
+        // credentials, and carrying it verbatim threw `Converting circular structure to JSON`
+        // on any context with a socket in it — killing the run at submit time — while a context
+        // that happened to serialize would have written its credentials to this row.
+        parent.InputPayload = JSON.stringify(BuildTaskGraphParentInputPayload({
             continuation: spec.continuation ?? 'message',
             reinvokeDepth: context.ReinvokeDepth ?? 0,
             failureSemantics: spec.failureSemantics ?? 'block',
             submittedByAgentRunID: context.AgentRunID ?? null,
-            // Only written when the caller supplied one, so a graph with no invocation envelope
-            // carries no key at all rather than a misleading empty object. SANITIZED first: the
-            // agent's `context` is documented as possibly a class instance holding connections and
-            // credentials, and carrying it verbatim threw `Converting circular structure to JSON`
-            // on any context with a socket in it — killing the run at submit time — while a context
-            // that happened to serialize would have written its credentials to this row.
-            ...(sanitized.Envelope
-                ? { invocation: { data: sanitized.Envelope.Data, context: sanitized.Envelope.Context } }
-                : {}),
             submittedByUserID: context.ContextUser?.ID ?? null,
-        } satisfies TaskGraphParentMetadata);
+            invocation: sanitized.Envelope
+                ? { data: sanitized.Envelope.Data, context: sanitized.Envelope.Context }
+                : null,
+            startPaused: context.Debug?.paused === true,
+        }));
         if (!(await parent.Save())) {
             throw new Error(`Could not create parent task: ${parent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }

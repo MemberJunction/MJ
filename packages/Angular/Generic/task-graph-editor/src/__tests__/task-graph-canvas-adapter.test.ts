@@ -240,17 +240,46 @@ describe('SpecToConnections', () => {
 });
 
 describe('SpecToNodes — debug badges', () => {
-    it('emits a breakpoint badge and a distinct paused-here badge', () => {
+    it('emits a breakpoint badge and a distinct waiting-here badge', () => {
         const nodes = SpecToNodes(spec(), undefined, undefined, {
             breakpoints: ['a'],
             pausedAtTaskID: 'a',
         });
         const badges = nodes.find((n) => n.ID === 'a')?.Badges ?? [];
-        expect(badges.map((b) => b.Value)).toEqual(['paused', 'break']);
+        expect(badges.map((b) => b.Value)).toEqual(['Waiting here', 'break']);
+        expect(nodes.find((n) => n.ID === 'a')?.Data?.['AwaitingUser']).toBe(true);
+    });
+
+    it('marks the entry node as waiting when the graph is start-paused with no step yet', () => {
+        const nodes = SpecToNodes(spec(), undefined, undefined, { paused: true });
+        expect(nodes.find((n) => n.ID === 'a')?.Data?.['AwaitingUser']).toBe(true);
+        expect(nodes.find((n) => n.ID === 'b')?.Data?.['AwaitingUser']).toBe(false);
+    });
+
+    it('does not paint paused-here on a step that has already finished', () => {
+        const nodes = SpecToNodes(spec(), { a: 'Complete' }, undefined, {
+            breakpoints: ['a'],
+            pausedAtTaskID: 'a',
+        });
+        const badges = nodes.find((n) => n.ID === 'a')?.Badges ?? [];
+        expect(badges.map((b) => b.Value)).toEqual(['break']);
+        expect(nodes.find((n) => n.ID === 'a')?.Status).not.toBe('running');
     });
 
     it('emits no badges when the overlay is empty', () => {
         expect(SpecToNodes(spec())[0].Badges).toBeUndefined();
+    });
+
+    it('paints a flowing edge animated when the origin is complete and the target is in progress', () => {
+        const s = spec({
+            tasks: [
+                task({ tempId: 'a' }),
+                task({ tempId: 'b', dependsOn: [{ tempId: 'a' }] }),
+            ],
+        });
+        const conn = SpecToConnections(s, { a: 'Complete', b: 'In Progress' })[0];
+        expect(conn.Animated).toBe(true);
+        expect(conn.Color).toBe('var(--mj-brand-primary)');
     });
 });
 

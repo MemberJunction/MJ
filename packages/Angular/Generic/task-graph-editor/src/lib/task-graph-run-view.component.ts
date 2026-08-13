@@ -21,13 +21,15 @@ import {
     ChangeDetectorRef,
     Component,
     EventEmitter,
+    HostListener,
     Input,
     OnDestroy,
     Output,
 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { LogError, RunView } from '@memberjunction/core';
-import { MJTaskEntity, MJTaskDependencyEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity, MJTaskDependencyEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ReadPaneSizePair, ToPaneSizePair, type PaneSizePair } from './pane-split';
 import {
     GraphLayoutBounds,
     LayoutGraphNodes,
@@ -36,10 +38,16 @@ import {
     type GraphNodePosition,
     type TaskGraphSpec,
 } from '@memberjunction/ai-core-plus';
-import { BuildRuntimeStatus, NormalizeRuntimeState } from './task-graph-runtime-source';
+import { BuildRuntimeStatus, IsRuntimeSettled, NormalizeRuntimeState } from './task-graph-runtime-source';
 import type { TaskGraphDebugOverlay, TaskGraphRuntimeStatus } from './task-graph-canvas-adapter';
 import type { TaskGraphSelectionChangedEventArgs } from './task-graph-editor-events';
-import type { FlowConnection } from '@memberjunction/ng-flow-editor';
+import type {
+    FlowAfterContextMenuActionEventArgs,
+    FlowBeforeContextMenuEventArgs,
+    FlowConnection,
+    FlowToolbarAlign,
+    FlowToolbarVisibility,
+} from '@memberjunction/ng-flow-editor';
 
 /** What the host learns when someone clicks a step. */
 export type TaskGraphRunNodeSelectedEvent = {
@@ -94,6 +102,7 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     public set ParentTaskID(value: string | null) {
         if (value === this.parentTaskID) return;
         this.parentTaskID = value;
+        this.settledEmitted = false;
         void this.load();
     }
     public get ParentTaskID(): string | null {
@@ -128,14 +137,14 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     @Input() public ShowLegend: boolean = false;
 
     /**
-     * Whether the canvas toolbar rides above the graph. **On**, unlike the legend.
+     * Whether the canvas toolbar rides above the graph.
      *
-     * The two were switched off together, and they are not the same kind of thing. The legend
-     * explains authoring vocabulary, which a run does not need. The toolbar is how a person
-     * navigates the picture — zoom, fit, pan versus select — and a graph you cannot pan is a graph
-     * you can only read if it happens to fit.
+     * Debug and other run hosts leave this on and set `ToolbarVisibility` to `minimized` so the
+     * graph is the picture, not a floating tool strip. The chip in the corner restores the bar.
      */
     @Input() public ShowToolbar: boolean = true;
+    @Input() public ToolbarVisibility: FlowToolbarVisibility = 'minimized';
+    @Input() public ToolbarAlign: FlowToolbarAlign = 'left';
 
     /**
      * The latest live dispatcher frame, handed in by the host.
@@ -185,10 +194,23 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     @Input()
     public set PausedAtTaskID(value: string | null) {
         this.pausedAtTaskID = value;
+        if (value) this.SelectedTaskID = value;
         this.rebuildOverlay();
     }
     public get PausedAtTaskID(): string | null {
         return this.pausedAtTaskID;
+    }
+    /**
+     * The graph is claim-gated. Combined with `PausedAtTaskID` so start-paused (no specific
+     * step yet) can still light the entry node as waiting.
+     */
+    @Input()
+    public set GraphPaused(value: boolean) {
+        this.graphPaused = value;
+        this.rebuildOverlay();
+    }
+    public get GraphPaused(): boolean {
+        return this.graphPaused;
     }
     /** Operator-forced edge verdicts, keyed by `MJ: Task Dependencies` row ID. */
     @Input()
@@ -206,6 +228,10 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     @Input() public AllowBreakpointEditing: boolean = false;
     /** Compact debug key under the summary line. Off unless the host is a debugger. */
     @Input() public ShowDebugLegend: boolean = false;
+    /** VS Code VARIABLES pane under the canvas. Off unless the host is debugging. */
+    @Input() public ShowVariables: boolean = false;
+    /** The parent bag's `data` / `context` roots, for the Invocation scope. */
+    @Input() public Invocation: { data?: unknown; context?: unknown } | null = null;
 
     @Output() public NodeSelected = new EventEmitter<TaskGraphRunNodeSelectedEvent>();
     /** The legend was toggled from the toolbar, so a host can remember the choice. */
@@ -216,6 +242,11 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     @Output() public ConnectionSelected = new EventEmitter<TaskGraphRunConnectionSelectedEvent>();
     /** Intent only — the host owns `SetBreakpoints`. */
     @Output() public BreakpointToggled = new EventEmitter<{ TaskID: string; Enabled: boolean }>();
+    /** Intent only — the host owns `OverrideEdge`. */
+    @Output() public EdgeOverrideRequested = new EventEmitter<{
+        EdgeID: string;
+        Verdict: 'true' | 'false' | null;
+    }>();
 
     /** What each running step says it is doing, from `NodeProgress` frames. Keyed by task row id. */
     public LiveActivity = new Map<string, { Message: string; Percent?: number }>();
@@ -227,7 +258,14 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
 
     private breakpoints: readonly string[] = [];
     private pausedAtTaskID: string | null = null;
+    private graphPaused = false;
     private edgeOverrides: Readonly<Record<string, 'true' | 'false'>> = {};
+    /** `Settled` is once-per-parent — a finished poll must not re-fire the host. */
+    private settledEmitted = false;
+
+    /** [canvas, variables] percentages. Restored from `MJ: User Settings`. */
+    public VarsSplitSizes: PaneSizePair = [72, 28];
+    private static readonly VARS_SPLIT_KEY = 'mj.taskGraphRun.varsSplit.v1';
 
     public Spec: TaskGraphSpec | null = null;
     public RuntimeStatus: TaskGraphRuntimeStatus | null = null;
@@ -245,6 +283,22 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
 
     constructor(private cdr: ChangeDetectorRef) {
         super();
+        try {
+            const saved = ReadPaneSizePair(UserInfoEngine.Instance.GetSetting(TaskGraphRunViewComponent.VARS_SPLIT_KEY));
+            if (saved) this.VarsSplitSizes = saved;
+        } catch {
+            // Engine not configured yet (unit tests, pre-bootstrap) — keep the default.
+        }
+    }
+
+    public OnVarsSplitDragEnd(sizes: readonly (number | '*')[]): void {
+        const pair = ToPaneSizePair(sizes);
+        if (!pair) return;
+        this.VarsSplitSizes = pair;
+        UserInfoEngine.Instance.SetSettingDebounced(
+            TaskGraphRunViewComponent.VARS_SPLIT_KEY,
+            JSON.stringify(pair),
+        );
     }
 
     public ngOnDestroy(): void {
@@ -256,17 +310,26 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
         }
     }
 
-    /** Steps in a terminal state, for the host's summary line. */
+    /** Steps in a terminal state, for the host's summary line. Uses the same map the canvas paints. */
     public get CompletedCount(): number {
-        return [...this.taskByID.values()].filter((t) => t.Status === 'Complete').length;
+        return this.countRuntime('Complete');
     }
 
     public get TotalCount(): number {
-        return this.taskByID.size;
+        return this.Spec?.tasks.length ?? this.taskByID.size;
     }
 
     public get SkippedCount(): number {
-        return [...this.taskByID.values()].filter((t) => t.Status === 'Skipped').length;
+        return this.countRuntime('Skipped');
+    }
+
+    public get RunningCount(): number {
+        return this.countRuntime('In Progress');
+    }
+
+    public get IsSettled(): boolean {
+        if (!this.Spec || this.Spec.tasks.length === 0) return false;
+        return IsRuntimeSettled(this.RuntimeStatus ?? {}, this.Spec.tasks.map((t) => t.tempId));
     }
 
     /**
@@ -281,6 +344,7 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
         if (!tempId) return;
         this.SelectedTaskID = tempId;
         this.NodeSelected.emit({ TaskID: tempId, Task: this.taskByID.get(tempId) ?? null });
+        this.cdr.markForCheck();
     }
 
     public OnConnectionSelected(connection: FlowConnection | null): void {
@@ -300,6 +364,13 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
         });
     }
 
+    private countRuntime(state: TaskGraphRuntimeStatus[string]): number {
+        if (!this.RuntimeStatus) {
+            return [...this.taskByID.values()].filter((t) => NormalizeRuntimeState(t.Status) === state).length;
+        }
+        return Object.values(this.RuntimeStatus).filter((s) => s === state).length;
+    }
+
     public get HasSelectedBreakpoint(): boolean {
         return !!this.SelectedTaskID && this.breakpoints.includes(this.SelectedTaskID);
     }
@@ -307,6 +378,20 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     public get SelectedTaskName(): string {
         if (!this.SelectedTaskID) return '';
         return this.taskByID.get(this.SelectedTaskID)?.Name ?? 'this step';
+    }
+
+    public get WaitingStepName(): string {
+        if (this.pausedAtTaskID) {
+            return this.taskByID.get(this.pausedAtTaskID)?.Name
+                ?? this.Spec?.tasks.find((t) => t.tempId === this.pausedAtTaskID)?.name
+                ?? 'this step';
+        }
+        const entry = this.Spec?.tasks.find((t) => (t.dependsOn?.length ?? 0) === 0);
+        return entry?.name ?? 'the first step';
+    }
+
+    public get SelectedTask(): MJTaskEntity | null {
+        return this.SelectedTaskID ? this.taskByID.get(this.SelectedTaskID) ?? null : null;
     }
 
     public OnToggleSelectedBreakpoint(): void {
@@ -317,13 +402,83 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
         });
     }
 
+    /** Debug attaches here: replace Edit/Remove with breakpoint / path-override items. */
+    public OnBeforeContextMenu(event: FlowBeforeContextMenuEventArgs): void {
+        if (!this.AllowBreakpointEditing) {
+            event.Cancel = true;
+            return;
+        }
+        if (event.Target === 'node' && event.Node) {
+            const on = this.breakpoints.includes(event.Node.ID);
+            event.Items = [{
+                ID: 'toggle-breakpoint',
+                Label: on ? 'Remove Breakpoint' : 'Add Breakpoint',
+                Icon: 'fa-circle',
+                Shortcut: 'F9',
+            }];
+            return;
+        }
+        if (event.Target === 'connection' && event.Connection?.Condition?.trim()) {
+            const edgeID = typeof event.Connection.Data?.['EdgeID'] === 'string'
+                ? event.Connection.Data['EdgeID']
+                : null;
+            if (!edgeID) {
+                event.Cancel = true;
+                return;
+            }
+            event.Items = [
+                { ID: 'force-true', Label: 'Take this path', Icon: 'fa-check' },
+                { ID: 'force-false', Label: 'Skip this path', Icon: 'fa-xmark' },
+                { ID: 'force-clear', Label: 'Clear override', Icon: 'fa-rotate-left' },
+            ];
+            return;
+        }
+        event.Cancel = true;
+    }
+
+    public OnAfterContextMenuAction(event: FlowAfterContextMenuActionEventArgs): void {
+        if (event.ActionID === 'toggle-breakpoint' && event.Node) {
+            this.BreakpointToggled.emit({
+                TaskID: event.Node.ID,
+                Enabled: !this.breakpoints.includes(event.Node.ID),
+            });
+            return;
+        }
+        const edgeID = typeof event.Connection?.Data?.['EdgeID'] === 'string'
+            ? event.Connection.Data['EdgeID']
+            : null;
+        if (!edgeID) return;
+        if (event.ActionID === 'force-true') this.EdgeOverrideRequested.emit({ EdgeID: edgeID, Verdict: 'true' });
+        if (event.ActionID === 'force-false') this.EdgeOverrideRequested.emit({ EdgeID: edgeID, Verdict: 'false' });
+        if (event.ActionID === 'force-clear') this.EdgeOverrideRequested.emit({ EdgeID: edgeID, Verdict: null });
+    }
+
+    @HostListener('document:keydown', ['$event'])
+    public OnDebugHotkey(event: KeyboardEvent): void {
+        if (!this.AllowBreakpointEditing) return;
+        if (isTypingTarget(event.target)) return;
+        if (event.key === 'F9') {
+            event.preventDefault();
+            this.OnToggleSelectedBreakpoint();
+        }
+    }
+
     private rebuildOverlay(): void {
         this.Overlay = {
             breakpoints: this.breakpoints,
-            pausedAtTaskID: this.pausedAtTaskID,
+            // A finished graph is not "paused here" — the durable bag can still name the last
+            // breakpoint after every step is terminal.
+            pausedAtTaskID: this.IsSettled ? null : this.pausedAtTaskID,
+            paused: !this.IsSettled && this.graphPaused,
             edgeOverrides: this.edgeOverrides,
             showConditions: true,
         };
+    }
+
+    private emitSettledOnce(): void {
+        if (this.settledEmitted || !this.IsSettled) return;
+        this.settledEmitted = true;
+        this.Settled.emit();
     }
 
     /**
@@ -380,9 +535,10 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
             const taskRows = (tasks.Results ?? []) as MJTaskEntity[];
             const depRows = (deps.Success ? (deps.Results ?? []) : []) as MJTaskDependencyEntity[];
             this.project(taskRows, depRows);
+            this.rebuildOverlay();
+            this.emitSettledOnce();
 
             if (this.LiveUpdates && !this.isSettled(taskRows)) this.schedulePoll();
-            else if (taskRows.length > 0) this.Settled.emit();
         } catch (e) {
             this.fail(e instanceof Error ? e.message : String(e));
         } finally {
@@ -480,6 +636,8 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
                     if (row) row.Status = frame.status as MJTaskEntity['Status'];
                     this.RuntimeStatus = { ...this.RuntimeStatus, [frame.taskId]: NormalizeRuntimeState(frame.status) };
                     if (frame.kind !== 'TaskStarted') this.LiveActivity.delete(frame.taskId);
+                    this.rebuildOverlay();
+                    this.emitSettledOnce();
                     this.cdr.markForCheck();
                 }
                 break;
@@ -489,10 +647,17 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
                     this.cdr.markForCheck();
                 }
                 break;
+            case 'GraphSettled':
+                this.scheduleFrameReload();
+                // The engine said the graph is done — do not wait for the row reload to tell the host.
+                if (!this.settledEmitted) {
+                    this.settledEmitted = true;
+                    this.Settled.emit();
+                }
+                break;
             case 'TaskSkipped':
             case 'TaskBlocked':
             case 'TaskAwaitingHuman':
-            case 'GraphSettled':
             case 'GraphResumed':
                 this.scheduleFrameReload();
                 break;
@@ -534,4 +699,10 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
         const box = GraphLayoutBounds(this.Positions);
         return { Width: box.Width, Height: box.Height };
     }
+}
+
+function isTypingTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    const tag = target.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
 }

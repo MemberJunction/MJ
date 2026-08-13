@@ -311,9 +311,13 @@ function edgeId(fromTempId: string, toTempId: string): string {
 export type TaskGraphDebugOverlay = {
     breakpoints?: readonly string[];
     pausedAtTaskID?: string | null;
+    /** Graph is claim-gated. With no paused-at step, the entry node is what is waiting. */
+    paused?: boolean;
     edgeOverrides?: Readonly<Record<string, 'true' | 'false'>>;
     /** Show the condition expression on the connection label, not just the word "if". */
     showConditions?: boolean;
+    /** Edge IDs (or from→to) currently flowing — painted animated + brand. */
+    activeEdgeIDs?: readonly string[];
 };
 
 export function SpecToNodes(
@@ -328,22 +332,26 @@ export function SpecToNodes(
     return (spec.tasks ?? []).map((task) => {
         const type = GetTaskNodeType(task);
         const known = positions?.get(task.tempId);
+        const awaiting = isAwaitingUser(task.tempId, entryIds, runtime, debug);
         return {
             ID: task.tempId,
             Type: type,
             Label: task.name,
             Subtitle: TaskSubtitle(task, type),
             Icon: GetNodeTypeConfig(type)?.Icon ?? 'fa-circle-nodes',
+            IconColor: awaiting ? 'var(--mj-brand-primary)' : undefined,
+            // Keep the real runtime status. Mapping "paused here" to `running` drew a spinner
+            // on a step that is waiting for the operator — it read as "this is executing".
             Status: RuntimeStateToNodeStatus(runtime?.[task.tempId]),
             StatusMessage: task.description,
             IsStartNode: entryIds.has(task.tempId),
-            Badges: NodeDebugBadges(task.tempId, breakpoints, debug?.pausedAtTaskID),
+            Badges: NodeDebugBadges(task.tempId, breakpoints, debug, runtime, entryIds),
             Position: known ? { ...known } : { X: 0, Y: 0 },
             Ports: [
                 { ID: InputPortID(task.tempId), Direction: 'input', Side: 'top', Multiple: true },
                 { ID: OutputPortID(task.tempId), Direction: 'output', Side: 'bottom', Multiple: true },
             ],
-            Data: { TempId: task.tempId },
+            Data: { TempId: task.tempId, AwaitingUser: awaiting },
         };
     });
 }
@@ -352,13 +360,15 @@ export function SpecToNodes(
 export function NodeDebugBadges(
     taskID: string,
     breakpoints: ReadonlySet<string>,
-    pausedAtTaskID?: string | null,
+    debug?: TaskGraphDebugOverlay,
+    runtime?: TaskGraphRuntimeStatus,
+    entryIds?: ReadonlySet<string>,
 ): FlowNode['Badges'] {
     const badges: NonNullable<FlowNode['Badges']> = [];
-    if (pausedAtTaskID === taskID) {
+    if (isAwaitingUser(taskID, entryIds ?? new Set(), runtime, debug)) {
         badges.push({
-            Label: 'Paused here',
-            Value: 'paused',
+            Label: 'Waiting on you — Continue or Step to run this step',
+            Value: 'Waiting here',
             Icon: 'fa-pause',
             Color: 'var(--mj-brand-primary)',
         });
@@ -435,7 +445,13 @@ export function SpecToConnections(
             // visible or the history lies about why a branch ran (or did not).
             if (eitherSkipped && !override) continue;
 
-            connections.push(ProjectConnection(dep, task.tempId, override, debug?.showConditions === true));
+            connections.push(ProjectConnection(
+                dep,
+                task.tempId,
+                override,
+                debug?.showConditions === true,
+                isFlowingEdge(dep.tempId, task.tempId, runtime, debug),
+            ));
         }
     }
     return connections;
@@ -447,6 +463,7 @@ export function ProjectConnection(
     toTempId: string,
     override?: 'true' | 'false',
     showConditions: boolean = false,
+    flowing: boolean = false,
 ): FlowConnection {
     const conditional = !!dep.condition?.trim();
     const forced = override === 'true' || override === 'false';
@@ -471,9 +488,53 @@ export function ProjectConnection(
         Condition: dep.condition ?? undefined,
         // Dotted is the override; dashed is already "this edge is conditional".
         Style: forced ? 'dotted' : (conditional ? 'dashed' : 'solid'),
-        Color: forced ? 'var(--mj-status-warning)' : undefined,
+        Color: flowing
+            ? 'var(--mj-brand-primary)'
+            : (forced ? 'var(--mj-status-warning)' : undefined),
+        Animated: flowing,
         Data: { FromTempId: dep.tempId, ToTempId: toTempId, EdgeID: dep.id },
     };
+}
+
+const TERMINAL_RUNTIME = new Set<TaskGraphRuntimeState>(['Complete', 'Failed', 'Cancelled', 'Skipped']);
+
+function isPausedHere(
+    taskID: string,
+    runtime?: TaskGraphRuntimeStatus,
+    debug?: Pick<TaskGraphDebugOverlay, 'pausedAtTaskID'>,
+): boolean {
+    if (debug?.pausedAtTaskID !== taskID) return false;
+    const state = runtime?.[taskID];
+    return !state || !TERMINAL_RUNTIME.has(state);
+}
+
+/**
+ * The step the operator has to act on: the breakpoint we stopped at, or — at start-paused
+ * before any claim — the entry node.
+ */
+function isAwaitingUser(
+    taskID: string,
+    entryIds: ReadonlySet<string>,
+    runtime?: TaskGraphRuntimeStatus,
+    debug?: TaskGraphDebugOverlay,
+): boolean {
+    if (isPausedHere(taskID, runtime, debug)) return true;
+    if (!debug?.paused || debug.pausedAtTaskID) return false;
+    if (!entryIds.has(taskID)) return false;
+    const state = runtime?.[taskID];
+    return !state || !TERMINAL_RUNTIME.has(state);
+}
+
+function isFlowingEdge(
+    fromTempId: string,
+    toTempId: string,
+    runtime?: TaskGraphRuntimeStatus,
+    debug?: TaskGraphDebugOverlay,
+): boolean {
+    if (isPausedHere(toTempId, runtime, debug)) return true;
+    if (debug?.activeEdgeIDs?.includes(edgeId(fromTempId, toTempId))) return true;
+    if (!runtime) return false;
+    return runtime[fromTempId] === 'Complete' && runtime[toTempId] === 'In Progress';
 }
 
 function TruncateCondition(text: string, max: number = 28): string {

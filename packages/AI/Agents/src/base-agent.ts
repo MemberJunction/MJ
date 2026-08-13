@@ -11970,6 +11970,7 @@ The context is now within limits. Please retry your request with the recovered c
             // path carried neither, so every documented `data.x` condition evaluated against the
             // origin step's output, found nothing, and silently took the other branch.
             Invocation: { Data: params.data, Context: params.context },
+            Debug: params.taskGraphDebug?.paused ? { paused: true } : undefined,
             ContextUser: params.contextUser,
             Provider: this.ProviderToUse
         });

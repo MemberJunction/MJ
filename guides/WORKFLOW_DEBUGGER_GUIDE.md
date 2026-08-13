@@ -2,7 +2,7 @@
 
 **Read this when a run is stuck, took the wrong branch, or you need to step through a live graph.** Companion to the [Workflows and Task Graphs Guide](WORKFLOW_AND_TASK_GRAPH_GUIDE.md) (what a workflow *is*) and [`packages/TaskGraph/README.md`](../packages/TaskGraph/README.md) (how the engine runs it).
 
-The debugger lives on the **Workflows → Runs** surface. It is the same canvas the author drew on, with live status, and the four control verbs #3770 shipped but never wired: breakpoints, edge overrides, force-complete, and edit-input.
+The typical path is **Agent form → Run → Debug**. That starts the Flow agent *paused* — `$.debug.paused` is written on the parent row at Submit, so the dispatcher cannot claim the first step before you arrive. Workflows → Runs is the review console for a graph that is already going (or already finished). You cannot re-run a Flow agent from Runs; open the agent and Debug again.
 
 ![Run console with debug chrome](images/workflow-debugger/console.png)
 
@@ -15,20 +15,31 @@ A parent `MJ: Tasks` row **is** a run. Open it and the right pane is the console
 | Piece | What it is |
 |---|---|
 | Canvas | The graph, live. Conditional edges show their expression. An operator-forced path is **dotted** with a hand icon — never dashed. Dashed still means "this edge is conditional." |
-| Debug key | breakpoint · paused here · operator-forced path · `if` condition |
-| Runner controls | Pause / Resume / Step / Step wave / Cancel — these gate **claiming**, not running. In-flight work finishes. |
-| Breakpoint chips | The armed set, including off-screen nodes. Click a chip to select; × removes it. |
+| Runner controls | Continue (F5) / Step Over (F10) / Step Into (F11) / Stop (Shift+F5). These gate **claiming**, not running. In-flight work finishes. When every step is done the bar shows **Finished**, not Paused. |
+| Canvas tools | Minimized by default (wrench chip, top left). Expand for zoom / pan / fit. Hide leaves a recover tab. |
+| Breakpoint | Red circle on the selected step (hollow = off, filled = on). Same badge on the node. |
 | Stall card | A held path names the condition and offers **Answer true / Answer false / Leave held**. |
 | Inspector | The selected step or edge. Break-before-this-step, skip, edit input, retry, force complete. Invocation `data`/`context` sit at the top — that is what conditions evaluate against. |
 
-The run view also embeds in the agent-run timeline and the test harness. Debugger chrome is **off** there on purpose.
+The run view also embeds in the agent-run timeline (chrome off — that surface is a recording) and in the test harness (chrome **on** when you clicked Debug).
 
 ---
 
-## How to debug a live run
+## How to debug from the Agent form
+
+1. Open the Flow agent. Click **Run**.
+2. Click **Debug**, not Run workflow. The live graph appears under the buttons as soon as Submit lands — do not wait for the agent run to finish (it is parked until you continue).
+3. Run workflow / Debug hide once the debugger is live — the VCR is the session. Continue (F5) / Step Over (F10) / Step Into (F11) / Stop (Shift+F5). The waiting step pulses with **Waiting on you**. Right-click a step to add or remove a breakpoint (F9). Right-click a conditional edge to force the path. The canvas tool strip starts minimized (wrench, top left). VARIABLES under the canvas is Input / Output / Invocation.
+4. Close the dialog if you want — the dispatcher still owns the graph. Re-open Runs to find it later. The same chrome is on Workflows → Runs.
+
+Start-paused cannot be a Pause clicked after submit. The first dispatcher poll would claim work first.
+
+---
+
+## How to debug a live run already in flight
 
 1. Open **Workflows → Runs** and select a running (or just-submitted) graph.
-2. **Pause**, or arm a breakpoint on the interesting step (inspector toggle, or the "Break on …" control after selecting the node) and **Resume**.
+2. **Pause**, or arm a breakpoint on the interesting step (red circle after selecting the node) and **Continue**.
 3. When the graph stops, the paused-here badge and chip name the step. Inspect its input. Edit it if the brief is wrong, then **Step**.
 4. If the stall card says a path can't be answered, that is a held exclusive group. Answer the condition or fix the invocation roots and resume.
 5. **Resume** to run freely to the next breakpoint, or **Step** / **Step wave** to walk.
