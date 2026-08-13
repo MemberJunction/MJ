@@ -735,6 +735,12 @@ describe('GenericDatabaseProvider', () => {
             IsVirtual?: boolean;
             NeedsQuotes?: boolean;
             SQLFullType?: string;
+            /** BASE type + SYSTEM (byte) length — what `sys.columns` reports and the code maps from. */
+            Type?: string;
+            Length?: number;
+            Precision?: number;
+            Scale?: number;
+            MaxLength?: number;
             Value?: unknown;
         }
 
@@ -753,6 +759,16 @@ describe('GenericDatabaseProvider', () => {
                 IsVirtual: f.IsVirtual ?? false,
                 NeedsQuotes: f.NeedsQuotes ?? true,
                 SQLFullType: f.SQLFullType,
+                Type: f.Type,
+                Length: f.Length ?? 0,
+                Precision: f.Precision ?? 0,
+                Scale: f.Scale ?? 0,
+                // Mirrors EntityFieldInfo.MaxLength: the n-types halve the byte length.
+                MaxLength: f.MaxLength ?? (
+                    ['nvarchar', 'nchar', 'ntext'].includes((f.Type ?? '').toLowerCase())
+                        ? ((f.Length ?? 0) > 0 ? (f.Length ?? 0) / 2 : 0)
+                        : ((f.Length ?? 0) > 0 ? (f.Length ?? 0) : 0)
+                ),
             }));
             const entityInfo = {
                 Name: 'TestEntity',
@@ -905,15 +921,53 @@ describe('GenericDatabaseProvider', () => {
         });
 
         describe('BuildRLSSyntheticRowProjections', () => {
-            it('includeNulls=true emits a typed CAST(NULL AS <SQLFullType>) for null fields', () => {
+            it('includeNulls=true emits a typed CAST(NULL AS <type>) for null fields', () => {
+                // No dialect on this test provider (`getDialect()` returns null), so the code takes
+                // its documented fallback and emits `SQLFullType` verbatim — the exact string it
+                // emitted before dialect mapping existed.
                 const { entity, entityInfo } = MakeRLSEntity({
                     rlsClause: '',
-                    fields: [{ Name: 'Notes', NeedsQuotes: true, SQLFullType: 'nvarchar(100)', Value: null }],
+                    fields: [{ Name: 'Notes', NeedsQuotes: true, Type: 'nvarchar', Length: 200, SQLFullType: 'nvarchar(100)', Value: null }],
                 });
 
                 const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true);
 
                 expect(projections).toBe('CAST(NULL AS nvarchar(100)) AS "Notes"');
+            });
+
+            it('maps the type through the dialect, in CHARACTERS not bytes', () => {
+                // `Length` is the system (byte) length; `MapDataTypeToString` takes a character
+                // count. Passing bytes doubles every n-type — and SQL Server caps NVARCHAR at 4000,
+                // so a stock 8000-byte column becomes an ILLEGAL cast and the RLS post-image gate
+                // throws on the primary platform. The widest shipped case is pinned here.
+                for (const [dialect, expected] of [
+                    [new SQLServerDialect(), 'CAST(NULL AS NVARCHAR(4000)) AS "FileName"'],
+                    [new PostgreSQLDialect(), 'CAST(NULL AS VARCHAR(4000)) AS "FileName"'],
+                ] as const) {
+                    const { entity, entityInfo } = MakeRLSEntity({
+                        rlsClause: '',
+                        fields: [{ Name: 'FileName', NeedsQuotes: true, Type: 'nvarchar', Length: 8000, SQLFullType: 'nvarchar(4000)', Value: null }],
+                    });
+                    const provider = RLS();
+                    (provider as unknown as { getDialect(): unknown }).getDialect = () => dialect;
+
+                    expect(
+                        provider.BuildRLSSyntheticRowProjections(entity, entityInfo, true),
+                        `${dialect.constructor.name}: byte length must be halved to characters`,
+                    ).toBe(expected);
+                }
+            });
+
+            it('preserves the MAX sentinel rather than flattening it to 0', () => {
+                const { entity, entityInfo } = MakeRLSEntity({
+                    rlsClause: '',
+                    fields: [{ Name: 'Body', NeedsQuotes: true, Type: 'nvarchar', Length: -1, SQLFullType: 'nvarchar(MAX)', Value: null }],
+                });
+                const provider = RLS();
+                (provider as unknown as { getDialect(): unknown }).getDialect = () => new SQLServerDialect();
+
+                expect(provider.BuildRLSSyntheticRowProjections(entity, entityInfo, true))
+                    .toBe('CAST(NULL AS NVARCHAR(MAX)) AS "Body"');
             });
 
             it('includeNulls=true throws for a null field with no resolvable SQLFullType', () => {

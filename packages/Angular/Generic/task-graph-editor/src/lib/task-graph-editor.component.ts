@@ -35,6 +35,8 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { FlowEditorComponent } from '@memberjunction/ng-flow-editor';
 import type {
+    FlowAfterContextMenuActionEventArgs,
+    FlowBeforeContextMenuEventArgs,
     FlowConnection,
     FlowConnectionCreatedEvent,
     FlowLayoutDirection,
@@ -43,6 +45,8 @@ import type {
     FlowNodeMovedEvent,
     FlowNodeTypeConfig,
     FlowPosition,
+    FlowToolbarAlign,
+    FlowToolbarVisibility,
 } from '@memberjunction/ng-flow-editor';
 import {
     AddDependency,
@@ -59,6 +63,7 @@ import {
     TASK_GRAPH_NODE_TYPES,
     UpdateTask,
     WouldCreateCycle,
+    type TaskGraphDebugOverlay,
     type TaskGraphRuntimeStatus,
 } from './task-graph-canvas-adapter';
 import type {
@@ -138,17 +143,27 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
     @Input()
     public set NodePositions(value: ReadonlyMap<string, FlowPosition> | null) {
         if (!value || value.size === 0) return;
+        const key = [...value.keys()].sort().join(',');
+        const firstForThisGraph = this.fittedGeometryKey !== key;
         for (const [id, position] of value) this.knownPositions.set(id, { ...position });
         // Real geometry means the one-time Dagre pass has nothing to rescue.
         this.hasLaidOut = true;
         this.project();
-        this.zoomToFitSoon();
+        // Fit once per graph. Live status / poll re-supplies the same positions as a new Map,
+        // and fitting on every write snaps the viewport back while the person is zooming.
+        if (firstForThisGraph) {
+            this.fittedGeometryKey = key;
+            this.zoomToFitSoon();
+        }
     }
 
     /** Read-only mode. The same component is the viewer — there is no second, weaker renderer. */
     @Input() public ReadOnly: boolean = false;
 
     @Input() public ShowToolbar: boolean = true;
+    /** Full bar / chip / recover tab. Run views default this to minimized. */
+    @Input() public ToolbarVisibility: FlowToolbarVisibility = 'shown';
+    @Input() public ToolbarAlign: FlowToolbarAlign = 'center';
     @Input() public ShowPalette: boolean = true;
     @Input() public ShowMinimap: boolean = true;
     /**
@@ -185,6 +200,20 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
     /** Shown when there is nothing to draw yet. */
     @Input() public EmptyStateMessage: string = 'No steps yet. Add one to start building this workflow.';
 
+    /**
+     * Debug overlay for a run. Empty by default so an embed (agent-run timeline, test harness)
+     * never grows breakpoint badges or override styling it did not ask for.
+     */
+    @Input()
+    public set DebugOverlay(value: TaskGraphDebugOverlay | null) {
+        if (this.debugOverlay === value) return;
+        this.debugOverlay = value;
+        this.project();
+    }
+    public get DebugOverlay(): TaskGraphDebugOverlay | null {
+        return this.debugOverlay;
+    }
+
     // ── Outputs ──────────────────────────────────────────────────────────────
 
     @Output() public BeforeTaskAdded = new EventEmitter<BeforeTaskAddedEventArgs>();
@@ -216,6 +245,10 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
     /** Intent-only — the host navigates; this widget has no Router and must not acquire one. */
     @Output() public AgentOpenRequested = new EventEmitter<AgentOpenRequestedEventArgs>();
     @Output() public RecordOpenRequested = new EventEmitter<RecordOpenRequestedEventArgs>();
+    /** A connection was clicked. Payload is the canvas connection, or null when cleared. */
+    @Output() public ConnectionSelected = new EventEmitter<FlowConnection | null>();
+    @Output() public BeforeContextMenu = new EventEmitter<FlowBeforeContextMenuEventArgs>();
+    @Output() public AfterContextMenuAction = new EventEmitter<FlowAfterContextMenuActionEventArgs>();
 
     // ── Rendered state ───────────────────────────────────────────────────────
 
@@ -230,6 +263,7 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
 
     private currentSpec: TaskGraphSpec | null = null;
     private currentRuntime: TaskGraphRuntimeStatus | null = null;
+    private debugOverlay: TaskGraphDebugOverlay | null = null;
 
     public get IsEmpty(): boolean {
         return (this.currentSpec?.tasks?.length ?? 0) === 0;
@@ -471,11 +505,21 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
             this.ValidationErrors = [];
             this.IsValid = true;
             this.hasLaidOut = false;
+            this.fittedGeometryKey = null;
             this.knownPositions.clear();
             return;
         }
-        this.Nodes = SpecToNodes(this.currentSpec, this.currentRuntime ?? undefined, this.knownPositions);
-        this.Connections = SpecToConnections(this.currentSpec, this.currentRuntime ?? undefined);
+        this.Nodes = SpecToNodes(
+            this.currentSpec,
+            this.currentRuntime ?? undefined,
+            this.knownPositions,
+            this.debugOverlay ?? undefined,
+        );
+        this.Connections = SpecToConnections(
+            this.currentSpec,
+            this.currentRuntime ?? undefined,
+            this.debugOverlay ?? undefined,
+        );
         this.Validate();
         this.arrangeIfNeverLaidOut();
     }
@@ -546,6 +590,10 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
         this.LegendToggled.emit(show);
     }
 
+    public OnConnectionSelected(connection: FlowConnection | null): void {
+        this.ConnectionSelected.emit(connection);
+    }
+
     /** A single node was dragged. Same authority, narrower event. */
     public OnNodeMoved(event: FlowNodeMovedEvent): void {
         this.knownPositions.set(event.NodeID, { ...event.NewPosition });
@@ -571,5 +619,7 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
 
     /** Whether the one-time Dagre pass has run (or been made unnecessary by a hand-placed node). */
     private hasLaidOut: boolean = false;
+    /** Task-id set we last fitted. Same ids + a new Map must not re-fit. */
+    private fittedGeometryKey: string | null = null;
     private pendingLayout: ReturnType<typeof setTimeout> | null = null;
 }

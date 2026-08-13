@@ -3143,7 +3143,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     const row = rows[0];
                     results.set(index, {
                         success: true,
-                        rowCount: Number(row['RowCount']),
+                        // Both spellings accepted. The shipped `CacheValidationSQL` field description tells authors
+                        // to return `TotalRows`, while this has only ever read `RowCount` — so a query written
+                        // from the documentation yields `Number(undefined)` = NaN, `NaN !== NaN` makes the slot
+                        // never validate, and NaN is then written back into the client's cache entry where `??`
+                        // cannot clear it. Silent, permanent degradation to always-refetch, with no error.
+                        rowCount: Number(row['RowCount'] ?? row['TotalRows']),
                         maxUpdatedAt: row['MaxUpdatedAt'] ? new Date(String(row['MaxUpdatedAt'])).toISOString() : undefined,
                     });
                 } else {
@@ -4123,13 +4128,42 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     private renderRLSProjectionValue(field: EntityFieldInfo, val: unknown): string {
         if (val == null) {
-            const sqlType = field.SQLFullType;
-            if (!sqlType || sqlType.trim().length === 0) {
+            // Metadata records field types in SQL Server's vocabulary, so interpolating one raw
+            // emits `CAST(NULL AS uniqueidentifier)` on PostgreSQL, where that type does not exist.
+            // The statement throws — and because this is the RLS post-image gate, the caller gets a
+            // type error in place of the row-scope rejection it was testing for: an authorization
+            // decision surfacing as a SQL fault. Translate through the dialect, the same mapping
+            // CodeGen and the converter use.
+            //
+            // Map from `field.Type` (the BASE type), NOT `field.SQLFullType`, which already has the
+            // length formatted in as `nvarchar(50)`. `MapDataTypeToString` looks the base type up
+            // and returns anything unrecognized UNCHANGED, so a full type string maps to itself and
+            // the translation silently no-ops. `uniqueidentifier` carries no length and so maps
+            // correctly either way — which is precisely how a half-fixed version of this passes a
+            // spot check and still emits `CAST(NULL AS nvarchar(50))` on the very next field.
+            const baseType = field.Type;
+            if (!baseType || baseType.trim().length === 0) {
                 throw new Error(
                     `Cannot build RLS post-image projection: field ${field.Name} has no resolvable SQL type for a typed NULL`
                 );
             }
-            return `CAST(NULL AS ${sqlType})`;
+            // `field.Length` is the SYSTEM (byte) length from `sys.columns`, but
+            // `MapDataTypeToString` takes a CHARACTER count — `RuntimeSchemaManager` calls it as
+            // `('NVARCHAR', 200)` meaning 200 characters. `SQLFullType` knows the difference and
+            // halves it for the n-types; passing the raw byte length instead DOUBLES every
+            // `nvarchar`/`nchar` width. That is not cosmetic: SQL Server caps `NVARCHAR` at 4000,
+            // and 119 fields in a stock database — including the shipped
+            // `MJ: Conversation Detail Attachments.FileName` at 8000 — exceed it once doubled, so
+            // the CAST becomes illegal and the RLS post-image gate throws on SQL SERVER: the exact
+            // failure this change set out to remove from PostgreSQL, relocated to the primary
+            // platform. `MaxLength` does the halving, but flattens the `-1` MAX sentinel to 0, so
+            // the sentinel is passed through explicitly.
+            const charLength = field.Length === -1 ? -1 : field.MaxLength;
+            // `getDialect()` is nullable on this base. Falling back to `SQLFullType` — the exact
+            // string this used to emit — keeps SQL Server, whose vocabulary that already is,
+            // byte-identical to its previous behaviour.
+            const mapped = this.getDialect()?.MapDataTypeToString(baseType, charLength, field.Precision, field.Scale);
+            return `CAST(NULL AS ${mapped ?? field.SQLFullType})`;
         }
         if (typeof val === 'boolean') {
             return val ? '1' : '0';
