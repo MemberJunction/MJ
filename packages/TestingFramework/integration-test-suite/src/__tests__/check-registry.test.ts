@@ -132,7 +132,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
-        ['content-vectorization', ContentVectorizationChecks, 6], // CV1-CV6 content vectorization pipeline (IT67)
+        ['content-vectorization', ContentVectorizationChecks, 8], // CV1-CV8 content vectorization pipeline (IT67)
         ['scoped-anon-elevation', ScopedAnonElevationChecks, 5], // SA1-SA5 scoped-anonymous elevation permission contract (IT68)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
