@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 /**
  * Unit tests for PriceUnitTypes
  *
@@ -37,10 +39,9 @@ import {
     TimePerMinutePriceUnitType,
     TimePerHourPriceUnitType,
     PerImagePriceUnitType,
-    PRICE_UNIT_TYPE_DIVISORS,
     TOKEN_PRICE_UNIT_TYPE_DIVISORS,
 } from '../PriceUnitTypes';
-import type { ModelUsageUnitKind } from '@memberjunction/ai';
+import { MODEL_USAGE_UNIT_KINDS, type ModelUsageUnitKind } from '@memberjunction/ai';
 
 type MockCost = {
     InputPricePerUnit: number;
@@ -379,21 +380,11 @@ describe('CalculateCost — the quantity-based entry point', () => {
     });
 });
 
-describe('PRICE_UNIT_TYPE_DIVISORS', () => {
-    it('covers every shipped driver class, so consumers never have to guess a scale', () => {
-        expect(PRICE_UNIT_TYPE_DIVISORS).toEqual({
-            PerMillionTokens: 1_000_000,
-            PerHundredThousandTokens: 100_000,
-            PerThousandTokens: 1_000,
-            TimePerHour: 3_600,
-            TimePerMinute: 60,
-            PerImage: 1
-        });
-    });
-
-    it('carries exactly the token drivers in the token-only subset', () => {
-        // Consumers doing token-rate math (the Explorer cost dashboards) key off this one, so a
+describe('TOKEN_PRICE_UNIT_TYPE_DIVISORS', () => {
+    it('carries exactly the token drivers, and nothing measured in another unit', () => {
+        // Consumers doing token-rate math (the Explorer cost dashboards) key off this map, so a
         // continuous-media driver leaking in would put an hourly rate through a per-token divisor.
+        // A missing key is the signal to SKIP the row — which is why there is no all-drivers map.
         expect(TOKEN_PRICE_UNIT_TYPE_DIVISORS).toEqual({
             PerMillionTokens: 1_000_000,
             PerHundredThousandTokens: 100_000,
@@ -401,53 +392,86 @@ describe('PRICE_UNIT_TYPE_DIVISORS', () => {
         });
     });
 
-    it('keeps the token subset in lockstep with the full table', () => {
-        for (const [driverClass, divisor] of Object.entries(TOKEN_PRICE_UNIT_TYPE_DIVISORS)) {
-            expect(PRICE_UNIT_TYPE_DIVISORS[driverClass]).toBe(divisor);
+    it('has no entry for the continuous-media drivers, so token math cannot silently consume them', () => {
+        expect(TOKEN_PRICE_UNIT_TYPE_DIVISORS['TimePerHour']).toBeUndefined();
+        expect(TOKEN_PRICE_UNIT_TYPE_DIVISORS['TimePerMinute']).toBeUndefined();
+        expect(TOKEN_PRICE_UNIT_TYPE_DIVISORS['PerImage']).toBeUndefined();
+    });
+
+    it('is derived from the drivers, so the map and the pricing math cannot disagree', () => {
+        // Not a drift DETECTOR any more — the map is built from these very instances, so this
+        // asserts the derivation is wired to the driver each key claims to describe.
+        const byDriverClass: ReadonlyArray<[string, BasePriceUnitType]> = [
+            ['PerMillionTokens', new PerMillionTokensPriceUnitType()],
+            ['PerHundredThousandTokens', new PerHundredThousandTokensPriceUnitType()],
+            ['PerThousandTokens', new PerThousandTokensPriceUnitType()]
+        ];
+        const cost = createMockCost(1, 0);
+        for (const [driverClass, driver] of byDriverClass) {
+            const divisor = TOKEN_PRICE_UNIT_TYPE_DIVISORS[driverClass];
+            expect(divisor).toBe(driver.UnitsPerBillingUnit);
+            // One divisor's worth of input priced at $1/unit is exactly $1.
+            expect(driver.CalculateNormalizedCost(cost as never, divisor, 0)).toBeCloseTo(1, 10);
         }
     });
 
-    it('agrees with each token driver about its own scale', () => {
-        // The divisor table and the drivers must not drift: one divisor's worth of input priced at
-        // $1/unit is exactly $1.
-        const drivers: ReadonlyArray<[string, new () => BasePriceUnitType]> = [
-            ['PerMillionTokens', PerMillionTokensPriceUnitType],
-            ['PerHundredThousandTokens', PerHundredThousandTokensPriceUnitType],
-            ['PerThousandTokens', PerThousandTokensPriceUnitType]
-        ];
-        const cost = createMockCost(1, 0);
-        for (const [driverClass, Ctor] of drivers) {
-            const divisor = TOKEN_PRICE_UNIT_TYPE_DIVISORS[driverClass];
-            expect(new Ctor().CalculateNormalizedCost(cost as never, divisor, 0)).toBeCloseTo(1, 10);
-        }
+    it('reports UnitsPerBillingUnit for the continuous-media drivers too, even though they are not in the map', () => {
+        // The property is the single home of every divisor; the map is only the token-safe subset.
+        expect(new TimePerMinutePriceUnitType().UnitsPerBillingUnit).toBe(60);
+        expect(new TimePerHourPriceUnitType().UnitsPerBillingUnit).toBe(3_600);
+        expect(new PerImagePriceUnitType().UnitsPerBillingUnit).toBe(1);
     });
 });
 
-describe('ModelUsageUnitKind vs. the AIPromptRun.UnitsKind column', () => {
+describe('ModelUsageUnitKind vs. the AIUsageType catalog', () => {
     /**
-     * These two types are one type expressed in two places, and the DATABASE side is the source.
-     * `AIPromptRun.UnitsKind`'s TypeScript union is generated by CodeGen from its CHECK
-     * constraint, and `MJAIPromptRunEntityServer.normalizeRecordedUsage` assigns the generated
-     * value straight into `ModelUsageUnitKind`:
+     * These two are one concept expressed in two places, and the DATABASE side is the source.
+     * `MJAIPromptRunEntityServer` resolves a run's `UsageTypeID` to the catalog row's `Name` and
+     * assigns that string into `ModelUsageUnitKind`:
      *
-     *     const recordedKind: ModelUsageUnitKind = recorded.unitsKind ?? 'Tokens';
+     *     unitsKind: usageTypeName as ModelUsageUnitKind | null
      *
-     * So narrowing the hand-written union without narrowing the CHECK and re-running CodeGen is a
-     * BUILD BREAK, not a tightening. Removing `'Characters'` from the union — on the reasoning
-     * that the CHECK admitting a superset was harmless — is exactly that mistake: the CHECK is
-     * what produces the generated union, so a superset there guarantees divergence here.
+     * Nothing about that is checked by the compiler — the name arrives as a plain `string` from a
+     * database row — so a usage type seeded with a name this union does not carry produces no build
+     * error at all. It produces a RUNTIME hole instead: every run recorded in that measure reaches
+     * the driver lookup, matches nothing, and is refused as unpriceable. Silent, and only on the
+     * rows that use the new measure.
      *
-     * The assignment below is the guard, and it is a compile-time one on purpose. Vitest does not
-     * typecheck by default, which is why nothing caught the break the first time.
+     * That is why this test reads the migration rather than restating its contents. A hand-copied
+     * list here would drift the moment someone adds a row, which is precisely the event it exists
+     * to catch.
      */
-    it('accepts every value the generated UnitsKind union can hold', () => {
-        // Mirrors the CHECK constraint in
-        // migrations/v6/V202608092321__v6.1.x__AIPromptRun_Continuous_Units.sql, plus the null
-        // case that `?? 'Tokens'` resolves. If the CHECK changes, CodeGen changes the generated
-        // union, and this line stops compiling until the two are reconciled.
-        const fromColumn: ReadonlyArray<'Seconds' | 'Characters' | 'Images'> = ['Seconds', 'Characters', 'Images'];
-        const asUsageKinds: ReadonlyArray<ModelUsageUnitKind> = fromColumn;
-        expect(asUsageKinds).toHaveLength(3);
+    const MIGRATION = resolve(__dirname, '../../../../../migrations/v6/V202608092321__v6.1.x__AIPromptRun_Continuous_Units.sql');
+
+    /** The names the migration actually seeds into AIUsageType. */
+    function seededUsageTypeNames(): string[] {
+        const sql = readFileSync(MIGRATION, 'utf-8');
+        const insert = sql.indexOf('INSERT INTO ${flyway:defaultSchema}.AIUsageType');
+        expect(insert, 'the AIUsageType seed INSERT must exist in the migration').toBeGreaterThan(-1);
+        // Each seeded row is `(@UsageTypeX, 'Name', '...')` — take the first quoted literal per row.
+        const block = sql.slice(insert, sql.indexOf('GO', insert));
+        return [...block.matchAll(/\(\s*@UsageType\w+\s*,\s*'([^']+)'/g)].map((m) => m[1]);
+    }
+
+    it('carries every usage type the migration seeds', () => {
+        const seeded = seededUsageTypeNames();
+
+        expect(seeded.length, 'the seed INSERT should have been parsed').toBeGreaterThan(0);
+        for (const name of seeded) {
+            expect(
+                MODEL_USAGE_UNIT_KINDS as readonly string[],
+                `AIUsageType seeds '${name}', so ModelUsageUnitKind must carry it or every run ` +
+                `recorded in that measure is silently unpriceable`
+            ).toContain(name);
+        }
+    });
+
+    it('seeds Tokens, which the NOT NULL default on AIModelCost.UsageTypeID depends on', () => {
+        // The column is `NOT NULL CONSTRAINT DF_AIModelCost_UsageTypeID DEFAULT '<Tokens id>'`.
+        // If that row stopped being seeded the default would point at a non-existent parent and the
+        // foreign key would reject every insert — including the ones the release-time metadata-sync
+        // migration makes through the pre-existing stored procedure.
+        expect(seededUsageTypeNames()).toContain('Tokens');
     });
 
     /**

@@ -217,6 +217,16 @@ describe('OpenAIAudioGenerator — billable duration', () => {
         expect(result.success).toBe(true);
         expect(result.usage).toBeUndefined();
     });
+
+    it('reports NO usage for a zero duration rather than a measure with no quantity', async () => {
+        // Zero is not a billable quantity. Reporting `ForMedia('Seconds', 0)` would reach the
+        // pricing layer's "kind with no quantity" refusal and log an error for genuinely silent
+        // audio; leaving usage unset says the same thing without the false alarm.
+        transcribe.mockResolvedValue({ text: 'hello world', duration: 0 });
+        const result = await makeGenerator().SpeechToText({ model: '', audioData: audio(64) });
+        expect(result.success).toBe(true);
+        expect(result.usage).toBeUndefined();
+    });
 });
 
 describe('OpenAIAudioGenerator — capability reporting', () => {

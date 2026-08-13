@@ -8,15 +8,23 @@ import { AIEngineBase, BasePriceUnitType, NormalizedUsage } from "@memberjunctio
  * What a prompt run recorded about the work it did, in whichever measure applies.
  *
  * Token counts and continuous units are both present because they are not alternatives at the
- * schema level — `UnitsKind` is what says which pair is meaningful.
+ * schema level — the usage type is what says which pair is meaningful.
+ *
+ * Carried as the measure NAME, not as `UsageTypeID`. The pricing drivers are keyed on the measure
+ * (`ModelUsageUnitKind`); resolving the foreign key once, here at the storage boundary, keeps every
+ * pure function below independent of how the catalog is persisted — and keeps them testable without
+ * a loaded engine.
  */
 export type RecordedRunUsage = {
     tokensPrompt: number;
     tokensCacheRead: number;
     tokensCacheWrite: number;
     tokensCompletion: number;
-    /** Null means the run was token-billed. */
-    unitsKind: MJAIPromptRunEntityExtended['UnitsKind'];
+    /**
+     * Null means the run was token-billed — OR that a set `UsageTypeID` could not be resolved.
+     * The two are separated before this type is built; see `RecordedUsage`.
+     */
+    unitsKind: ModelUsageUnitKind | null;
     inputUnits: number;
     outputUnits: number;
 };
@@ -52,15 +60,15 @@ export function normalizeRecordedUsage(
     recorded: RecordedRunUsage,
     driverUnitKind: ModelUsageUnitKind
 ): NormalizeUsageResult {
-    // Units without a kind name nothing: nothing says what measure they are in, so there is no
+    // Units without a measure name nothing: nothing says what they are counted in, so there is no
     // driver they can honestly be handed to. Falling through would treat them as Tokens and price
     // the run's (zero) token counts — writing Cost = 0 for work that was actually billed. Refusing
-    // surfaces the producer that forgot to set UnitsKind instead of reporting paid work as free.
+    // surfaces the producer that forgot to set UsageTypeID instead of reporting paid work as free.
     if (recorded.unitsKind == null && (recorded.inputUnits > 0 || recorded.outputUnits > 0)) {
         return {
             ok: false,
-            reason: `run recorded ${recorded.inputUnits} input / ${recorded.outputUnits} output units but no UnitsKind, ` +
-                `so there is no measure to price them in`
+            reason: `run recorded ${recorded.inputUnits} input / ${recorded.outputUnits} output units but no ` +
+                `resolvable usage type, so there is no measure to price them in`
         };
     }
 
@@ -192,18 +200,26 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
             // Ensure AI metadata is loaded
             await AIEngineBase.Instance.Config(false, this.ContextCurrentUser);
             
-            // Get the active cost configuration
+            // Select the cost row by the measure this run actually recorded, not just by
+            // model+vendor: a model with rows in two measures would otherwise hand back whichever
+            // started most recently and be refused below, reporting a measure mismatch where the
+            // real answer was "pick the other row".
+            const recorded = this.RecordedUsage();
             const activeCost = AIEngineBase.Instance.GetActiveModelCost(
-                this.ModelID, 
+                this.ModelID,
                 this.VendorID,
-                'Realtime' // For now, assume all prompt runs are realtime
+                'Realtime', // For now, assume all prompt runs are realtime
+                recorded.unitsKind ?? 'Tokens'
             );
-            
+
             if (!activeCost) {
-                LogError(`No active cost configuration found for Model: ${this.ModelID}, Vendor: ${this.VendorID}`);
+                LogError(
+                    `No active cost configuration priced in ${recorded.unitsKind ?? 'Tokens'} found for ` +
+                    `Model: ${this.ModelID}, Vendor: ${this.VendorID}`
+                );
                 return;
             }
-            
+
             // Resolve the calculator the cost row's unit type names (logs and returns null when
             // the unit type or its driver class is missing)
             const priceCalculator = AIEngineBase.Instance.GetPriceCalculator(activeCost);
@@ -211,7 +227,7 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
                 return;
             }
 
-            const usage = this.BuildNormalizedUsage(priceCalculator);
+            const usage = this.BuildNormalizedUsage(priceCalculator, recorded);
             if (!usage) {
                 return;
             }
@@ -242,14 +258,32 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
         }
     }
 
-    /** This run's recorded usage, with nulls collapsed to zero for the pure helpers above. */
+    /**
+     * This run's recorded usage, with nulls collapsed to zero for the pure helpers above.
+     *
+     * `UsageTypeID` is resolved to its measure NAME here, through the engine's cached catalog, so
+     * the pure functions never see a foreign key. Two different situations both produce a null:
+     * the column is unset (token-billed, the ordinary case), or it is set to an id the catalog does
+     * not contain. The second is logged, because it is a real fault — a stale cache or a deleted
+     * row — that would otherwise be indistinguishable from an ordinary token-billed run. It is
+     * deliberately NOT defaulted to 'Tokens': `normalizeRecordedUsage` refuses a null measure
+     * whenever units were recorded, which is the safe direction, and defaulting here would price
+     * seconds as tokens and write a confident zero.
+     */
     protected RecordedUsage(): RecordedRunUsage {
+        const usageTypeName = AIEngineBase.Instance.UsageTypeName(this.UsageTypeID);
+        if (this.UsageTypeID && usageTypeName === null) {
+            LogError(
+                `AIPromptRun ${this.ID} references usage type ${this.UsageTypeID}, which is not in the ` +
+                `loaded catalog; its units cannot be priced.`
+            );
+        }
         return {
             tokensPrompt: this.TokensPrompt ?? 0,
             tokensCacheRead: this.TokensCacheRead ?? 0,
             tokensCacheWrite: this.TokensCacheWrite ?? 0,
             tokensCompletion: this.TokensCompletion ?? 0,
-            unitsKind: this.UnitsKind,
+            unitsKind: usageTypeName as ModelUsageUnitKind | null,
             inputUnits: this.InputUnitsUsed ?? 0,
             outputUnits: this.OutputUnitsUsed ?? 0
         };
@@ -258,9 +292,16 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
     /**
      * Turns this run's recorded usage into the quantities the resolved calculator prices, or null
      * (having logged why) when the two disagree about what is being measured.
+     *
+     * Takes the recorded usage as a parameter rather than re-reading it: `CalculateAndSetCost` needs
+     * the measure BEFORE it can select a cost row, and `RecordedUsage` logs when a `UsageTypeID`
+     * fails to resolve — calling it twice would report the same fault twice for one save.
      */
-    protected BuildNormalizedUsage(priceCalculator: BasePriceUnitType): NormalizedUsage | null {
-        const result = normalizeRecordedUsage(this.RecordedUsage(), priceCalculator.UnitKind);
+    protected BuildNormalizedUsage(
+        priceCalculator: BasePriceUnitType,
+        recorded: RecordedRunUsage = this.RecordedUsage()
+    ): NormalizedUsage | null {
+        const result = normalizeRecordedUsage(recorded, priceCalculator.UnitKind);
         if (result.ok === false) {
             LogError(`Cannot cost AIPromptRun ${this.ID}: ${result.reason}.`);
             return null;

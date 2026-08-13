@@ -135,6 +135,21 @@ describe('GroqAudioGenerator — single-pass transcription', () => {
         expect(transcribe.mock.calls[0][0].response_format).toBe('verbose_json');
     });
 
+    it('still requests verbose_json for distil-whisper, which supports it and is billed by duration', async () => {
+        // `distil-whisper-large-v3-en` does not START with "whisper" but is a Whisper model. A
+        // startsWith guard would drop its duration and leave every run through it uncosted.
+        await makeGenerator().SpeechToText({ model: 'distil-whisper-large-v3-en', audioData: audio(64) });
+        expect(transcribe.mock.calls[0][0].response_format).toBe('verbose_json');
+    });
+
+    it('falls back to json for a non-Whisper model rather than risking a rejected request', async () => {
+        // Groq's STT surface is Whisper-only today, so this guards the future: an unconditional
+        // verbose_json turns a working transcription into a hard API error the day a model that
+        // rejects it appears. The sibling OpenAI provider already behaves this way.
+        await makeGenerator().SpeechToText({ model: 'some-future-stt-model', audioData: audio(64) });
+        expect(transcribe.mock.calls[0][0].response_format).toBe('json');
+    });
+
     it('uses the supplied file name so the container format can be inferred', async () => {
         await makeGenerator().SpeechToText({ model: '', audioData: audio(64), fileName: 'episode-104.m4a' });
         expect(toFileCalls[0].name).toBe('episode-104.m4a');
@@ -189,6 +204,16 @@ describe('GroqAudioGenerator — billable duration', () => {
 
     it('reports NO usage when the duration is not a usable number', async () => {
         transcribe.mockResolvedValue({ text: 'hello world', duration: Number.NaN });
+        const result = await makeGenerator().SpeechToText({ model: '', audioData: audio(64) });
+        expect(result.success).toBe(true);
+        expect(result.usage).toBeUndefined();
+    });
+
+    it('reports NO usage for a zero duration rather than a measure with no quantity', async () => {
+        // Zero is not a billable quantity. Reporting `ForMedia('Seconds', 0)` would reach the
+        // pricing layer's "kind with no quantity" refusal and log an error for genuinely silent
+        // audio; leaving usage unset says the same thing without the false alarm.
+        transcribe.mockResolvedValue({ text: 'hello world', duration: 0 });
         const result = await makeGenerator().SpeechToText({ model: '', audioData: audio(64) });
         expect(result.success).toBe(true);
         expect(result.usage).toBeUndefined();

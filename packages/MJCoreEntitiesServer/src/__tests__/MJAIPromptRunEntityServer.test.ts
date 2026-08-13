@@ -130,7 +130,7 @@ describe('normalizeRecordedUsage', () => {
         expect(result.ok).toBe(false);
     });
 
-    it('refuses units recorded without a UnitsKind rather than pricing them as tokens', () => {
+    it('refuses units recorded without a usage type rather than pricing them as tokens', () => {
         // The producer-bug case: units are present but nothing says what measure they are in.
         // Treating the run as token-billed would price its zero token counts and persist Cost = 0
         // for work that was actually billed — B60's failure mode through a different door.
@@ -138,11 +138,11 @@ describe('normalizeRecordedUsage', () => {
 
         expect(result.ok).toBe(false);
         if (result.ok === false) {
-            expect(result.reason).toContain('UnitsKind');
+            expect(result.reason).toContain('usage type');
         }
     });
 
-    it('refuses output-only units recorded without a UnitsKind', () => {
+    it('refuses output-only units recorded without a usage type', () => {
         expect(normalizeRecordedUsage(usage({ unitsKind: null, outputUnits: 3 }), 'Tokens').ok).toBe(false);
     });
 

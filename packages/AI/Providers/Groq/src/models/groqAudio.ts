@@ -38,6 +38,24 @@ type GroqVerboseTranscription = {
 };
 
 /**
+ * Whether a transcription model accepts `response_format: 'verbose_json'`.
+ *
+ * Groq's STT surface is Whisper-only today, so asking unconditionally happens to work — but the
+ * moment a non-Whisper model appears, an unconditional request turns every transcription through it
+ * into a hard API error. The sibling OpenAI provider already carries this guard because OpenAI's
+ * GPT-4o transcription models reject `verbose_json` outright; the asymmetry was the bug, not the
+ * behaviour.
+ *
+ * Matched with `includes` rather than `startsWith`: Groq serves `distil-whisper-large-v3-en`
+ * alongside `whisper-large-v3`, and it is a Whisper model that supports `verbose_json`. A
+ * `startsWith('whisper')` test would deny it the duration field and leave every run through it
+ * uncosted — the exact failure this PR exists to remove.
+ */
+function supportsVerboseJson(model: string): boolean {
+    return model.toLowerCase().includes('whisper');
+}
+
+/**
  * Groq implementation of {@link BaseAudioGenerator}, covering speech-to-text via Whisper.
  *
  * Groq offers no text-to-speech surface, so `CreateSpeech` and the voice/dictionary methods
@@ -134,11 +152,12 @@ export class GroqAudioGenerator extends BaseAudioGenerator {
 
     private async transcribeOne(audio: Buffer, model: string, params: SpeechToTextParams): Promise<TranscriptionPiece> {
         // `verbose_json` rather than `json` purely for the `duration` field — the quantity Groq
-        // bills by. The transcript text is identical between the two formats.
+        // bills by. The transcript text is identical between the two formats. Models that would
+        // reject verbose_json fall back to `json` and simply report no duration.
         const response = await this._client.audio.transcriptions.create({
             file: await toFile(audio, params.fileName || 'audio.mp3'),
             model,
-            response_format: 'verbose_json',
+            response_format: supportsVerboseJson(model) ? 'verbose_json' : 'json',
             language: params.language,
             prompt: params.prompt,
             temperature: params.temperature,
@@ -147,8 +166,13 @@ export class GroqAudioGenerator extends BaseAudioGenerator {
         // groq-sdk types the verbose response as the plain transcription shape, without `duration`.
         // Narrow it here and range-check rather than trusting the cast: an absent or nonsense
         // duration must leave usage unreported, not produce a NaN cost.
+        //
+        // `> 0`, not `>= 0`: a zero duration is not a billable quantity. Accepting it produces
+        // `ForMedia('Seconds', 0)`, which the pricing layer then refuses as "a measure with no
+        // quantity" and logs as an error — the right outcome reached by a route that reports
+        // genuinely silent audio as a fault. Leaving usage undefined says the same thing quietly.
         const verbose = response as GroqVerboseTranscription;
-        const duration = typeof verbose.duration === 'number' && isFinite(verbose.duration) && verbose.duration >= 0
+        const duration = typeof verbose.duration === 'number' && isFinite(verbose.duration) && verbose.duration > 0
             ? verbose.duration
             : undefined;
 

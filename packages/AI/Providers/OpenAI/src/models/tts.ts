@@ -144,8 +144,12 @@ export class OpenAIAudioGenerator extends BaseAudioGenerator {
             temperature: params.temperature
         });
 
+        // `> 0`, not `>= 0`: a zero duration is not a billable quantity. Accepting it produces
+        // `ForMedia('Seconds', 0)`, which the pricing layer then refuses as "a measure with no
+        // quantity" and logs as an error — the right outcome reached by a route that reports
+        // genuinely silent audio as a fault. Leaving usage undefined says the same thing quietly.
         const reported = (response as { duration?: number }).duration;
-        const duration = typeof reported === 'number' && isFinite(reported) && reported >= 0
+        const duration = typeof reported === 'number' && isFinite(reported) && reported > 0
             ? reported
             : undefined;
 

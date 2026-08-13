@@ -1,6 +1,6 @@
 import { ModelUsageUnitKind } from "@memberjunction/ai";
 import { MJAIModelCostEntity } from "@memberjunction/core-entities";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, RequiresSubclass } from "@memberjunction/global";
 
 /**
  * A run's billable quantities, already split into the buckets a price unit type prices
@@ -21,41 +21,26 @@ export interface NormalizedUsage {
     cacheWrite?: number;
 }
 
-/**
- * The divisor each TOKEN-measured price unit type normalizes by, keyed by DriverClass.
- *
- * Split out from the full table below because token-rate math — cache-savings figures, per-token
- * cost splits — is meaningful only for these. A consumer doing that math must skip a cost row
- * priced by audio duration or by the image rather than fall back to a token divisor, which would
- * divide an hourly rate by a million and report noise.
- *
- * Keyed by **DriverClass**, never by the unit type's display name: the names are editable metadata
- * (`Per 1M Tokens` today) while the driver class is the contract the ClassFactory resolves.
- */
-export const TOKEN_PRICE_UNIT_TYPE_DIVISORS: Readonly<Record<string, number>> = {
-    PerMillionTokens: 1_000_000,
-    PerHundredThousandTokens: 100_000,
-    PerThousandTokens: 1_000
-};
-
-/**
- * The divisor each built-in price unit type normalizes by, keyed by DriverClass.
- *
- * Exported so consumers that need the scale of a cost row without instantiating a driver — the
- * Explorer cost dashboards, most notably — can read it from the same place the drivers do, rather
- * than restating the table and drifting from it.
- */
-export const PRICE_UNIT_TYPE_DIVISORS: Readonly<Record<string, number>> = {
-    ...TOKEN_PRICE_UNIT_TYPE_DIVISORS,
-    TimePerHour: 3_600,
-    TimePerMinute: 60,
-    PerImage: 1
-};
 
 /**
  * This class serves as the abstract base class for handling price unit
  * types and is used by different price unit types implementations.
+ *
+ * ## Why `@RequiresSubclass()`
+ * `CalculateNormalizedCost` is abstract, and `abstract` is erased at runtime — so without this
+ * marker `ClassFactory.CreateInstance(BasePriceUnitType, 'NoSuchDriver')` falls back to
+ * `new BasePriceUnitType()` and hands back a HOLLOW object whose only pricing method is
+ * `undefined`. Every `if (!calculator)` guard written against that call is a dead branch, and the
+ * failure surfaces as a `TypeError` inside cost math rather than as "this driver is not
+ * registered".
+ *
+ * The `UnitKind` default below makes the hollow instance especially convincing: it answers
+ * `'Tokens'`, so a token-billed run passes the kind check, proceeds, and only then throws. The
+ * marker turns all of that into an explicit resolution failure — `CreateInstance` throws with
+ * context, `TryCreateInstance` reports `{Resolved: false, Instance: null}`, and
+ * {@link AIEngineBase.GetPriceCalculator}'s null return becomes real.
  */
+@RequiresSubclass()
 export abstract class BasePriceUnitType {
     /**
      * The base measure this driver prices. Callers must hand it quantities in this measure —
@@ -66,6 +51,23 @@ export abstract class BasePriceUnitType {
      */
     public get UnitKind(): ModelUsageUnitKind {
         return 'Tokens';
+    }
+
+    /**
+     * How many quantities in this driver's {@link UnitKind} make up ONE billed unit — 1,000,000 for
+     * a per-million-tokens rate, 3,600 for a per-hour rate, 1 for a per-image rate.
+     *
+     * This is the divisor the pricing math applies, exposed as a property so it exists in exactly
+     * ONE place per driver. Consumers that need the scale of a cost row without doing the math
+     * (the Explorer cost dashboards) read it from here rather than restating the table; a restated
+     * copy is a second source of truth for the arithmetic that prices every run.
+     *
+     * Defaults to 1 — "the quantity IS the number of billed units" — which is both the correct
+     * answer for a per-image rate and a safe default for any subclass outside this repo that
+     * predates this property.
+     */
+    public get UnitsPerBillingUnit(): number {
+        return 1;
     }
 
     /**
@@ -175,6 +177,10 @@ export abstract class BasePriceUnitType {
 
 @RegisterClass(BasePriceUnitType,'PerMillionTokens')
 export class PerMillionTokensPriceUnitType extends BasePriceUnitType {
+    public override get UnitsPerBillingUnit(): number {
+        return 1_000_000;
+    }
+
     /**
      * Calculates normalized cost for the Per Million Tokens unit type, and token counts
      * @param activeCost The active cost configuration
@@ -187,8 +193,7 @@ export class PerMillionTokensPriceUnitType extends BasePriceUnitType {
         inputTokens: number,
         outputTokens: number
     ): number {
-        const divisor = 1000000; // Prices are per million tokens
-        return this.InternalCalculateNormalizedCost(divisor, activeCost, inputTokens, outputTokens);
+        return this.InternalCalculateNormalizedCost(this.UnitsPerBillingUnit, activeCost, inputTokens, outputTokens);
     }
 
     override CalculateNormalizedCostWithCache(
@@ -199,7 +204,7 @@ export class PerMillionTokensPriceUnitType extends BasePriceUnitType {
         outputTokens: number
     ): number {
         return this.InternalCalculateNormalizedCostWithCache(
-            1000000, activeCost, uncachedInputTokens, cacheReadTokens, cacheWriteTokens, outputTokens
+            this.UnitsPerBillingUnit, activeCost, uncachedInputTokens, cacheReadTokens, cacheWriteTokens, outputTokens
         );
     }
 }
@@ -207,6 +212,10 @@ export class PerMillionTokensPriceUnitType extends BasePriceUnitType {
 
 @RegisterClass(BasePriceUnitType,'PerThousandTokens')
 export class PerThousandTokensPriceUnitType extends BasePriceUnitType {
+    public override get UnitsPerBillingUnit(): number {
+        return 1_000;
+    }
+
     /**
      * Calculates normalized cost for the Per Thousand Tokens unit type, and token counts
      * @param activeCost The active cost configuration
@@ -219,8 +228,7 @@ export class PerThousandTokensPriceUnitType extends BasePriceUnitType {
         inputTokens: number,
         outputTokens: number
     ): number {
-        const divisor = 1000; // Prices are per thousand tokens
-        return this.InternalCalculateNormalizedCost(divisor, activeCost, inputTokens, outputTokens);
+        return this.InternalCalculateNormalizedCost(this.UnitsPerBillingUnit, activeCost, inputTokens, outputTokens);
     }
 
     override CalculateNormalizedCostWithCache(
@@ -231,13 +239,17 @@ export class PerThousandTokensPriceUnitType extends BasePriceUnitType {
         outputTokens: number
     ): number {
         return this.InternalCalculateNormalizedCostWithCache(
-            1000, activeCost, uncachedInputTokens, cacheReadTokens, cacheWriteTokens, outputTokens
+            this.UnitsPerBillingUnit, activeCost, uncachedInputTokens, cacheReadTokens, cacheWriteTokens, outputTokens
         );
     }
 }
 
 @RegisterClass(BasePriceUnitType,'PerHundredThousandTokens')
 export class PerHundredThousandTokensPriceUnitType extends BasePriceUnitType {
+    public override get UnitsPerBillingUnit(): number {
+        return 100_000;
+    }
+
     /**
      * Calculates normalized cost for the Per Hundred Thousand Tokens unit type, and token counts
      * @param activeCost The active cost configuration
@@ -250,8 +262,7 @@ export class PerHundredThousandTokensPriceUnitType extends BasePriceUnitType {
         inputTokens: number,
         outputTokens: number
     ): number {
-        const divisor = 100000; // Prices are per hundred thousand tokens
-        return this.InternalCalculateNormalizedCost(divisor, activeCost, inputTokens, outputTokens);
+        return this.InternalCalculateNormalizedCost(this.UnitsPerBillingUnit, activeCost, inputTokens, outputTokens);
     }
 
     override CalculateNormalizedCostWithCache(
@@ -262,7 +273,7 @@ export class PerHundredThousandTokensPriceUnitType extends BasePriceUnitType {
         outputTokens: number
     ): number {
         return this.InternalCalculateNormalizedCostWithCache(
-            100000, activeCost, uncachedInputTokens, cacheReadTokens, cacheWriteTokens, outputTokens
+            this.UnitsPerBillingUnit, activeCost, uncachedInputTokens, cacheReadTokens, cacheWriteTokens, outputTokens
         );
     }
 }
@@ -280,12 +291,19 @@ export class PerHundredThousandTokensPriceUnitType extends BasePriceUnitType {
  * at the input rate — is both correct and inert here.
  */
 export abstract class BaseTimePriceUnitType extends BasePriceUnitType {
-    /** Seconds per unit of the price row's period — 60 for a per-minute rate, 3600 for per-hour. */
-    protected abstract get SecondsPerUnit(): number;
-
     public override get UnitKind(): ModelUsageUnitKind {
         return 'Seconds';
     }
+
+    /**
+     * Seconds per unit of the price row's period — 60 for a per-minute rate, 3600 for per-hour.
+     *
+     * Declared through the inherited {@link BasePriceUnitType.UnitsPerBillingUnit} rather than a
+     * separate `SecondsPerUnit` hook, so a time driver's divisor is readable by the same generic
+     * accessor as every other driver's. Two names for one number is what let the exported divisor
+     * table drift from the drivers in the first place.
+     */
+    public abstract override get UnitsPerBillingUnit(): number;
 
     /**
      * @param activeCost The active cost configuration
@@ -297,21 +315,21 @@ export abstract class BaseTimePriceUnitType extends BasePriceUnitType {
         inputSeconds: number,
         outputSeconds: number
     ): number {
-        return this.InternalCalculateNormalizedCost(this.SecondsPerUnit, activeCost, inputSeconds, outputSeconds);
+        return this.InternalCalculateNormalizedCost(this.UnitsPerBillingUnit, activeCost, inputSeconds, outputSeconds);
     }
 }
 
 @RegisterClass(BasePriceUnitType,'TimePerMinute')
 export class TimePerMinutePriceUnitType extends BaseTimePriceUnitType {
-    protected get SecondsPerUnit(): number {
+    public override get UnitsPerBillingUnit(): number {
         return 60;
     }
 }
 
 @RegisterClass(BasePriceUnitType,'TimePerHour')
 export class TimePerHourPriceUnitType extends BaseTimePriceUnitType {
-    protected get SecondsPerUnit(): number {
-        return 3600;
+    public override get UnitsPerBillingUnit(): number {
+        return 3_600;
     }
 }
 
@@ -338,6 +356,37 @@ export class PerImagePriceUnitType extends BasePriceUnitType {
         inputImages: number,
         outputImages: number
     ): number {
-        return this.InternalCalculateNormalizedCost(1, activeCost, inputImages, outputImages);
+        // UnitsPerBillingUnit is the inherited default of 1 — an image IS the billed unit.
+        return this.InternalCalculateNormalizedCost(this.UnitsPerBillingUnit, activeCost, inputImages, outputImages);
     }
 }
+
+/**
+ * The divisor each TOKEN-measured price unit type normalizes by, keyed by DriverClass.
+ *
+ * Token-rate math — cache-savings figures, per-token cost splits — is meaningful only for these. A
+ * consumer doing that math must SKIP a cost row priced by audio duration or by the image rather than
+ * fall back to a token divisor, which would divide an hourly rate by a million and report noise.
+ * Restricting the map to the token drivers is what makes a missing key the correct signal to skip
+ * rather than something to paper over with a default.
+ *
+ * Keyed by **DriverClass**, never by the unit type's display name: the names are editable metadata
+ * (`Per 1M Tokens` today) while the driver class is the contract the ClassFactory resolves. The keys
+ * are written out rather than read from `constructor.name`, which minifiers rewrite — this map is
+ * consumed by the Explorer dashboards, where that would silently empty it.
+ *
+ * **The NUMBERS are derived from the driver instances, never restated here.** They live in exactly
+ * one place per driver — {@link BasePriceUnitType.UnitsPerBillingUnit} — because a hand-written copy
+ * of the arithmetic that prices every run is a second source of truth held together by nothing but a
+ * unit test. Deriving makes drift impossible instead of merely detectable.
+ */
+export const TOKEN_PRICE_UNIT_TYPE_DIVISORS: Readonly<Record<string, number>> = Object.freeze(
+    Object.fromEntries(
+        ([
+            ['PerMillionTokens', new PerMillionTokensPriceUnitType()],
+            ['PerHundredThousandTokens', new PerHundredThousandTokensPriceUnitType()],
+            ['PerThousandTokens', new PerThousandTokensPriceUnitType()]
+        ] as ReadonlyArray<readonly [string, BasePriceUnitType]>)
+            .map(([driverClass, driver]) => [driverClass, driver.UnitsPerBillingUnit])
+    )
+);

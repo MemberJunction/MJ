@@ -340,6 +340,17 @@ describe('AIEngineBase', () => {
         const PER_MINUTE = 'AAAAAAAA-0000-4000-8000-00000000000A';
         const PER_MILLION = 'BBBBBBBB-0000-4000-8000-00000000000B';
 
+        /** The `MJ: AI Usage Types` catalog rows a cost row's UsageTypeID points at. */
+        const USAGE_TYPE_ID: Readonly<Record<string, string>> = {
+            Tokens: 'CCCCCCCC-0000-4000-8000-00000000000C',
+            Seconds: 'DDDDDDDD-0000-4000-8000-00000000000D',
+            Images: 'EEEEEEEE-0000-4000-8000-00000000000E',
+        };
+
+        function usageTypeRows() {
+            return Object.entries(USAGE_TYPE_ID).map(([Name, ID]) => ({ ID, Name }));
+        }
+
         /**
          * Seeds an active cost row and the driver that prices it.
          *
@@ -348,11 +359,17 @@ describe('AIEngineBase', () => {
          * Stubbing it puts CalculateModelCost's OWN logic under test — the guards, the kind match
          * and the normalization — which is what these cover; class-factory resolution is a
          * separate concern with its own coverage.
+         *
+         * `usageKind` is the measure the COST ROW declares (its `UsageTypeID`), which is what
+         * `GetActiveModelCost` now filters on. It is deliberately independent of the driver, so a
+         * row whose declared measure and driver disagree can be constructed and refused.
          */
-        function seed(unitTypeID: string, driver: BasePriceUnitType | null) {
+        function seed(unitTypeID: string, driver: BasePriceUnitType | null, usageKind: string = 'Tokens') {
+            set('_usageTypes', usageTypeRows());
             set('_modelCosts', [{
                 ModelID: 'm1', VendorID: 'v1', ProcessingType: 'Realtime', Status: 'Active',
                 StartedAt: null, EndedAt: null, UnitTypeID: unitTypeID, Currency: 'USD',
+                UsageTypeID: USAGE_TYPE_ID[usageKind],
                 InputPricePerUnit: 6, OutputPricePerUnit: 6,
                 CacheReadPricePerUnit: null, CacheWritePricePerUnit: null,
             }]);
@@ -361,7 +378,7 @@ describe('AIEngineBase', () => {
         }
 
         it('prices a duration run through its per-minute driver', () => {
-            seed(PER_MINUTE, new TimePerMinutePriceUnitType());
+            seed(PER_MINUTE, new TimePerMinutePriceUnitType(), 'Seconds');
             const result = AIEngineBase.Instance.CalculateModelCost('m1', 'v1', {
                 unitKind: 'Seconds', inputUnits: 120, outputUnits: 0,
             } as unknown as Parameters<typeof AIEngineBase.Instance.CalculateModelCost>[2]);
@@ -382,25 +399,63 @@ describe('AIEngineBase', () => {
             // The mirror of the case above, and the one that survived the first fix: a run naming
             // Seconds but reporting zero seconds normalizes to {input: 0, output: 0} and persists a
             // cost of 0 — "free" written against work that was billed.
-            seed(PER_MINUTE, new TimePerMinutePriceUnitType());
+            seed(PER_MINUTE, new TimePerMinutePriceUnitType(), 'Seconds');
             expect(AIEngineBase.Instance.CalculateModelCost('m1', 'v1', {
                 unitKind: 'Seconds', inputUnits: 0, outputUnits: 0, promptTokens: 5000,
             } as unknown as Parameters<typeof AIEngineBase.Instance.CalculateModelCost>[2])).toBeNull();
         });
 
-        it('refuses when the cost row prices a different measure than the run reported', () => {
+        it('refuses when the model has no cost row in the measure the run reported', () => {
             // A per-million-token row against a duration run would divide seconds by a million.
-            seed(PER_MILLION, new PerMillionTokensPriceUnitType());
+            // The row is now excluded at SELECTION, so the refusal names the missing price rather
+            // than a measure mismatch — the model genuinely has no Seconds pricing.
+            seed(PER_MILLION, new PerMillionTokensPriceUnitType(), 'Tokens');
+            expect(AIEngineBase.Instance.CalculateModelCost('m1', 'v1', {
+                unitKind: 'Seconds', inputUnits: 120, outputUnits: 0,
+            } as unknown as Parameters<typeof AIEngineBase.Instance.CalculateModelCost>[2])).toBeNull();
+        });
+
+        it('refuses a cost row whose declared measure and driver disagree', () => {
+            // Selection passes (the row says Seconds) but the driver prices tokens — a unit type
+            // misconfiguration that would divide seconds by a million. This is the belt-and-braces
+            // check behind the kind-filtered selection, and the only thing that catches it.
+            seed(PER_MILLION, new PerMillionTokensPriceUnitType(), 'Seconds');
             expect(AIEngineBase.Instance.CalculateModelCost('m1', 'v1', {
                 unitKind: 'Seconds', inputUnits: 120, outputUnits: 0,
             } as unknown as Parameters<typeof AIEngineBase.Instance.CalculateModelCost>[2])).toBeNull();
         });
 
         it('refuses when the unit type has no registered driver in this build', () => {
-            seed(PER_MINUTE, null);   // no driver registered for this unit type in this build
+            seed(PER_MINUTE, null, 'Seconds');   // no driver registered for this unit type in this build
             expect(AIEngineBase.Instance.CalculateModelCost('m1', 'v1', {
                 unitKind: 'Seconds', inputUnits: 120, outputUnits: 0,
             } as unknown as Parameters<typeof AIEngineBase.Instance.CalculateModelCost>[2])).toBeNull();
+        });
+
+        it('picks the cost row matching the run measure, not merely the most recent one', () => {
+            // The forward blocker behind finding #2: with two Active rows for one model+vendor —
+            // one per measure — a measure-blind selector returns whichever started last and the run
+            // is refused downstream. Which is a sort-order coin flip reported as a pricing gap.
+            const older = new Date(Date.now() - 86_400_000);
+            const newer = new Date(Date.now() - 3_600_000);
+            set('_usageTypes', usageTypeRows());
+            const secondsRow = {
+                ModelID: 'm1', VendorID: 'v1', ProcessingType: 'Realtime', Status: 'Active',
+                StartedAt: older, EndedAt: null, UnitTypeID: PER_MINUTE, Currency: 'USD',
+                UsageTypeID: USAGE_TYPE_ID['Seconds'],
+                InputPricePerUnit: 6, OutputPricePerUnit: 6,
+                CacheReadPricePerUnit: null, CacheWritePricePerUnit: null,
+            };
+            const tokensRow = { ...secondsRow, StartedAt: newer, UnitTypeID: PER_MILLION, UsageTypeID: USAGE_TYPE_ID['Tokens'] };
+            set('_modelCosts', [secondsRow, tokensRow]);
+
+            // Measure-aware: each measure resolves its OWN row regardless of start order.
+            expect(AIEngineBase.Instance.GetActiveModelCost('m1', 'v1', 'Realtime', 'Seconds')).toBe(secondsRow);
+            expect(AIEngineBase.Instance.GetActiveModelCost('m1', 'v1', 'Realtime', 'Tokens')).toBe(tokensRow);
+            // A measure nothing prices yields null rather than the wrong row.
+            expect(AIEngineBase.Instance.GetActiveModelCost('m1', 'v1', 'Realtime', 'Images')).toBeNull();
+            // Omitting the measure keeps the historical most-recently-started behaviour.
+            expect(AIEngineBase.Instance.GetActiveModelCost('m1', 'v1', 'Realtime')).toBe(tokensRow);
         });
 
         it('refuses when the model has no active cost row at all', () => {
