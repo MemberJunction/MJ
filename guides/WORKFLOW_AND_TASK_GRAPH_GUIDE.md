@@ -502,6 +502,12 @@ that shifted each poll would be unusable.
 
 ---
 
+## Debugging a run
+
+The Run Console on **Workflows → Runs** is the debugger. Breakpoints, edge overrides, force-complete and edit-input are wired there. See the **[Workflow Debugger Guide](WORKFLOW_DEBUGGER_GUIDE.md)** for the walkthrough, the visual vocabulary (a forced path must never look like a real verdict), and the verb gates.
+
+---
+
 ## Troubleshooting
 
 ### The workflow finished but did nothing

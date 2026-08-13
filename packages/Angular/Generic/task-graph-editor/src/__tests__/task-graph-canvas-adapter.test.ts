@@ -194,6 +194,64 @@ describe('SpecToConnections', () => {
     it('gives edges stable ids, so re-rendering does not churn selection', () => {
         expect(SpecToConnections(spec())[0].ID).toBe(SpecToConnections(spec())[0].ID);
     });
+
+    it('styles an operator-forced edge as dotted, never dashed', () => {
+        const edgeID = '1e0a5b3c-1111-2222-3333-444455556666';
+        const s = spec({
+            tasks: [
+                task({ tempId: 'a' }),
+                task({ tempId: 'b', dependsOn: [{ id: edgeID, tempId: 'a', condition: 'data.ok' }] }),
+            ],
+        });
+        const conn = SpecToConnections(s, undefined, { edgeOverrides: { [edgeID]: 'true' } })[0];
+        expect(conn.Style).toBe('dotted');
+        expect(conn.Label).toBe('forced yes');
+        expect(conn.LabelIcon).toBe('fa-hand');
+        expect(conn.Data?.['EdgeID']).toBe(edgeID);
+    });
+
+    it('keeps a false-overridden edge visible after a skip cascade', () => {
+        const edgeID = '1e0a5b3c-1111-2222-3333-444455556666';
+        const s = spec({
+            tasks: [
+                task({ tempId: 'a' }),
+                task({ tempId: 'b', dependsOn: [{ id: edgeID, tempId: 'a', condition: 'data.ok' }] }),
+            ],
+        });
+        const hidden = SpecToConnections(s, { a: 'Complete', b: 'Skipped' });
+        expect(hidden).toHaveLength(0);
+        const kept = SpecToConnections(s, { a: 'Complete', b: 'Skipped' }, { edgeOverrides: { [edgeID]: 'false' } });
+        expect(kept).toHaveLength(1);
+        expect(kept[0].Style).toBe('dotted');
+        expect(kept[0].Label).toBe('forced no');
+    });
+
+    it('shows the condition expression as the label in debugger mode', () => {
+        const s = spec({
+            tasks: [
+                task({ tempId: 'a' }),
+                task({ tempId: 'b', dependsOn: [{ tempId: 'a', condition: 'data.approved' }] }),
+            ],
+        });
+        const conn = SpecToConnections(s, undefined, { showConditions: true })[0];
+        expect(conn.Label).toBe('data.approved');
+        expect(conn.Style).toBe('dashed');
+    });
+});
+
+describe('SpecToNodes — debug badges', () => {
+    it('emits a breakpoint badge and a distinct paused-here badge', () => {
+        const nodes = SpecToNodes(spec(), undefined, undefined, {
+            breakpoints: ['a'],
+            pausedAtTaskID: 'a',
+        });
+        const badges = nodes.find((n) => n.ID === 'a')?.Badges ?? [];
+        expect(badges.map((b) => b.Value)).toEqual(['paused', 'break']);
+    });
+
+    it('emits no badges when the overlay is empty', () => {
+        expect(SpecToNodes(spec())[0].Badges).toBeUndefined();
+    });
 });
 
 describe('graph queries', () => {
