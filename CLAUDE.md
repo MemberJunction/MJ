@@ -130,6 +130,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 | [`typescript-style.md`](.claude/rules/typescript-style.md) | `**/*.ts` | No `any`, no `.Get()`/`.Set()`, derive field types from the entity, no cross-package re-exports, `BaseSingleton`, no dynamic `import()`, naming conventions, functional decomposition, OOD |
 | [`design-tokens.md`](.claude/rules/design-tokens.md) | `**/*.scss`, `**/*.css` | No hardcoded colors, the semantic token catalog, hex→token mappings, `color-mix()`, the CI gates |
 | [`testing.md`](.claude/rules/testing.md) | `**/*.test.ts`, `**/__tests__/**` | Vitest conventions, test structure, the scaffold script, fixing test drift, CI integration |
+| [`changesets.md`](.claude/rules/changesets.md) | `.changeset/**` | Bump levels — `minor` is reserved for migration/metadata branches, everything else `patch`; why the `fixed` group makes one stray `minor` repo-wide; the `check:changeset` self-check |
 
 ### Nested `CLAUDE.md` — load when you read a file in that tree
 

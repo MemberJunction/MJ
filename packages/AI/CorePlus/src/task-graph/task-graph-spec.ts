@@ -41,10 +41,48 @@ export type TaskGraphDependency = {
      * a graph stalled by a typo cannot be mistaken for one that simply took another branch.
      */
     condition?: string;
+    /*
+     * WHICH ORIGIN STATUSES DECIDE A CONDITION (settled in Round 3, R3-2):
+     *
+     *   Complete   — always decides, under either `failureSemantics`.
+     *   Failed     — decides ONLY under `failureSemantics: 'edges'`, where a flow's failure handling
+     *                IS its outgoing edges. Under `'block'` (the default) the edge is neither
+     *                evaluated nor dropped: it stays live so the block cascade traverses it and owns
+     *                everything downstream, which is what `'block'` means.
+     *   Cancelled  — NEVER decides, under either. A cancelled step did not run, so its guards have
+     *                no outcome to describe.
+     *   Skipped    — never evaluated; the edge drops. A branch that was not taken does not get a
+     *                vote, and evaluating against an empty envelope would let a negated condition
+     *                hand its target a satisfied prerequisite.
+     *   Pending / In Progress / Deferred — undecided; the edge is kept and the prerequisite gate
+     *                keeps the target waiting.
+     *
+     * `stepResult.step` carries a STATUS WORD (`'Success'` / `'Failed'`), not the step's name —
+     * matching what the flow engine actually exposes, which is what the documented condition
+     * `stepResult.step === 'Success'` tests against. The step's name is not a condition root on
+     * either engine.
+     */
     /**
-     * How this edge participates in the target's join. `Prerequisite` (the default) means the target
-     * waits for it; `Optional` means any one satisfied predecessor is enough; `Corequisite` means
-     * co-scheduled.
+     * How this edge participates in the target's join.
+     *
+     * `Prerequisite` (the default) is the only value that GATES: the target waits for it. Everything
+     * the engine does with joins — eligibility, the skip cascade, the block walk, seed confirmation —
+     * asks `isGatingEdge`, and that returns true for `Prerequisite` alone.
+     *
+     * **`Optional` therefore means "this edge does not make the target wait", not "any one satisfied
+     * predecessor is enough".** The doc used to claim the second, which is an OR-join, and the
+     * difference is not academic: a node whose incoming edges are ALL `Optional` has no gating edges
+     * at all, so it is eligible in wave one — before any of its predecessors has run. It also cannot
+     * be rescued by an `Optional` route when an exclusive loser seeds it for skipping, because seed
+     * confirmation asks the same question.
+     *
+     * An OR-join is a coherent thing to want and is NOT implemented. Nothing in the compiler emits
+     * `Optional` today, so the gap is latent; implementing it means teaching eligibility that a
+     * target with only optional routes waits for the FIRST of them, which is a real semantic change
+     * and not a doc fix. Recorded here so the next person reads the code's meaning rather than the
+     * intention it was described with.
+     *
+     * `Corequisite` is likewise non-gating today and carries no scheduling behaviour of its own.
      */
     dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional';
 
@@ -287,7 +325,15 @@ export type TaskGraphValidationError = {
         /** The `configuration` bag is missing a field its `kind` requires. */
         | 'InvalidConfiguration'
         /** Members of one `exclusiveGroup` do not all leave the same origin. */
-        | 'InvalidExclusiveGroup';
+        | 'InvalidExclusiveGroup'
+        /**
+         * An edge condition cannot be parsed.
+         *
+         * Syntax only — an unknown identifier is not this error. The condition envelope is dynamic,
+         * so whether `payload.x` resolves is a question about a run that has not happened yet;
+         * whether `payload.x >` parses is not.
+         */
+        | 'InvalidCondition';
     Message: string;
     /** The offending node, when the error is attributable to one. */
     TempId?: string;

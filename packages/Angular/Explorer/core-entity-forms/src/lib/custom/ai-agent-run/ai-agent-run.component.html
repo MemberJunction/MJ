@@ -180,6 +180,7 @@
               <as-split-area [size]="45">
                 <mj-ai-agent-run-step-detail
                   [selectedTimelineItem]="selectedTimelineItem"
+                  [Provider]="ProviderToUse"
                   (closePanel)="closeJsonPanel()"
                   (navigateToActionLog)="navigateToActionLog($event)"
                   (copyToClipboard)="copyToClipboard($event)">

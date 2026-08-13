@@ -1,5 +1,174 @@
 # Change Log - @memberjunction/core
 
+## 6.1.0-edge.2
+
+### Minor Changes
+
+- 0967ba7: BEHAVIOR CHANGE: RunView `'simple'` rows are now normalized so `Date` and numeric columns hold real `Date`s and `number`s on every tier, matching what the generated entity types declare. Previously the shape depended on where the code ran — a fresh server-side query returned real `Date`s (driver-parsed), a server-side Redis cache hit returned ISO strings, and a browser client over GraphQL returned ISO strings — three shapes for the same call. Normalization runs unconditionally at the ProviderBase choke point every provider's pipeline flows through, so both sides of the wire now see the one shape the platform's types promise.
+
+  What client code needs to check: code that read simple-row date columns as strings — `localeCompare` sorts, `.slice(0, 10)`, equality against ISO literals, template bindings printing the raw value — now receives `Date` objects and must use Date semantics (defensive `new Date(x)` wrapping keeps working unchanged). Safety rules: existing `Date` instances pass through (idempotent), `NULL` stays `NULL` rather than becoming 1970, unparseable values are left as-is rather than replaced with `Invalid Date`, and integer strings beyond `Number.MAX_SAFE_INTEGER` stay strings so deliberately-string BIGINTs (PostgreSQL) are never precision-corrupted. Rows already in the right shape keep their identity (the server fast path is zero-copy); rows that convert are shallow-copied so cached entries are never written to. Skipped for `entity_object` (BaseEntity already converts), `count_only`, and view-only runs that carry neither `EntityName` nor a loaded `ViewEntity`.
+
+### Patch Changes
+
+- 8288711: Fix process-wide server cache corruption, and make the cache structurally unable to be
+  corrupted by consumers.
+
+  **Take this bump urgently if you run MJAPI.** `ResolverBase` mapped GraphQL transport field
+  names onto the data provider's own result rows, which the server cache holds _by reference_.
+  Preparing one GraphQL response therefore rewrote `__mj_CreatedAt` to the wire alias
+  `_mj__CreatedAt` **inside the live cache**, and every later read served the corrupted shape —
+  failing in `BaseEntity.SetMany` with `Field _mj__CreatedAt does not exist on <Entity>`. The
+  cache is process-wide, so a single response poisoned every subsequent request across all
+  workers. Fixed by mapping onto copies.
+
+  Fixing it at the reader alone left the whole class of bug open — nothing in the type system or
+  the API surface said "this array is shared, do not mutate," and the exposure runs in both
+  directions (a cache _hit_ returns the stored array; a cache _miss_ stores the array it is about
+  to return). So the cache now defends itself:
+  - **`ILocalStorageProvider` gains an optional `readonly SharesReferences?: boolean`**, declaring
+    whether a provider hands back live references (the in-memory providers) or serialized copies
+    (IndexedDB, localStorage, Redis, MMKV). **Fully backward compatible**: existing implementations
+    keep compiling, and omitting the property is not an opt-out — `LocalCacheManager` measures any
+    provider that does not declare one (store a sentinel, read it back, compare identity), so a
+    provider written before this contract still gets the correct protection instead of silently
+    losing it to a falsy default.
+  - **`LocalCacheManager` deep-freezes row data at write time** — rows, their nested values, and
+    the array itself — but only when the provider shares references. Mutations then throw a
+    `TypeError` at the offending line instead of silently corrupting shared state, and cache
+    **hits cost nothing extra** (the freeze is a one-time per-write cost). Applied at both write
+    funnels: `SetRunViewResult` / `SetRunQueryResult` and `storeCachedResults`, the in-place
+    slot-maintenance path that bypasses the first. The freeze lands immediately after the only
+    gate that can decline a write (the synchronous oversized-entry check) and **before** the
+    awaited eviction steps — callers do not always await these methods, so any yield point
+    before the freeze is a window in which shared rows are handed out still mutable. Browser
+    clients are untouched (IndexedDB / localStorage serialize), but **Node-side clients — the
+    CLI, MetadataSync, and anything else on an in-memory provider — do get the freeze**, so
+    "client behavior is unchanged" holds only for the browser. The freeze decision also follows
+    the provider across `SetStorageProvider`: MJAPI initializes on the in-memory provider during
+    engine loading and swaps to Redis afterward, two providers with opposite semantics in one
+    process. The deep-freeze skips **binary payloads**
+    (`Buffer`/TypedArray/`ArrayBuffer`, e.g. `varbinary` columns — `Object.freeze` throws on
+    non-empty views by spec), freezes parent-first so cycles terminate, and a freeze failure of
+    any kind degrades to a logged, unfrozen store — it can never fail a `RunView`/`RunQuery`.
+  - **Dataset cache slots get their own key namespace.** `GetDatasetByName` keyed its
+    write-through cache with the same fingerprint builder ordinary reads use, passing only
+    `{ EntityName, ExtraFilter }` — and every shipped dataset item has a NULL `WhereClause`, so a
+    dataset item and a plain unfiltered `RunView` of the same entity produced an IDENTICAL key and
+    silently shared one slot. That leaked the `MJ_Metadata` scaffolding exemption below to ordinary
+    callers of `MJ: Entities` / `MJ: Entity Fields` (the most-read entities in the process, served
+    unfrozen), and in the other direction let an ordinary read repopulate an evicted slot FROZEN so
+    the next metadata refresh threw. `GenerateRunViewFingerprint` now takes an optional dataset
+    segment, appended only when supplied — ordinary reads keep their exact pre-existing key, so no
+    existing cache entry is invalidated.
+  - **`CacheWriteOptions.ProviderInternalScaffolding`** exempts slots whose only consumer is the
+    provider that wrote them — scoped to the **`MJ_Metadata` dataset only** at its single write
+    site. Metadata bootstrap needs this: the provider's own assembly (`PostProcessEntityMetadata`,
+    plus `GetAllMetadata`'s Applications assembly) hydrates its object graph by mutating those
+    rows in place. Every **other** dataset's cached rows are frozen shared state like any RunView
+    result, because `GetDatasetByName` serves them to arbitrary consumers (`BaseEngine.Load` hands
+    the live arrays to every engine subclass). The flag is persisted and carried forward through
+    slot maintenance so a later save cannot re-freeze the slot.
+
+  Pre-existing consumer bugs surfaced by the freeze and fixed:
+  - **`BaseEntity.Get()` wrote to its own source row.** The raw-mode fast path keeps the caller's
+    row by reference and `Get()` wrote back into it to memoize a converted `Date` or an rtrimmed
+    fixed-width string — so on a cache-served row, _reading_ a `datetime` or `CHAR(n)` field threw.
+    This broke AI cost calculation on `MJ: AI Model Costs.Currency`. `Get()` now memoizes into a
+    per-instance side table and never writes to the row at all. Gating the write on a once-sampled
+    `Object.isFrozen` was not sufficient: the freeze is asynchronous relative to the consumer (cache
+    writes are not always awaited), so the sample could be stale by the first read and the write
+    still threw. Keeping the memo off the row makes freeze timing irrelevant AND restores the
+    optimization for frozen rows, which the isFrozen-guard version had given up.
+  - **`ResolverBase.MapFieldNamesToCodeNames` renamed fields on its argument.** Callers pass rows
+    straight from `findBy`/`RunView` — the cache's own objects — so with the freeze in place
+    `UserByEmail`, `UserByID`, `UserByEmployeeID` and every CodeGen-generated single-record resolver
+    over a cached entity threw `Cannot add property _mj__CreatedAt, object is not extensible`
+    (reproduced live against a running MJAPI). Before the freeze it did something quieter and worse:
+    it rewrote the cached row's keys. It now returns a copy, which fixes every call site at once;
+    `ArrayMapFieldNamesToCodeNames` likewise returns a new array of new objects.
+  - **`GenericDatabaseProvider.serveFromServerCache` and the smart-cache legs** duplicated
+    `CachedRunViewResult` as four inline structural types, which had already caused one silent
+    field drop; they now share the canonical type.
+  - **The singular server RunView path silently dropped a `PostRunView` hook's returned
+    replacement result** (`PostRunView` reassigned a local; `RunView` returned the pre-hook
+    reference), while the client and batch paths honored it. The freeze un-masked this: with
+    in-place row mutation now throwing, no signature-conformant result-modifying hook worked on
+    that path at all. `PostRunView` now copies a hook-supplied replacement onto the result object
+    it was handed, so the change reaches the caller — its `Promise<void>` signature is unchanged,
+    so external subclasses that override it keep compiling. Hook docs (`PostRunViewHook`,
+    `BaseServerMiddleware.PostRunView`) now state that rows may be frozen shared cache state:
+    modify by mapping onto copies (`results.Results = results.Results.map(r => ({ ...r, ... }))`)
+    or return a new result — never mutate rows in place.
+  - **Cache-served reads skipped the `PostRunView` hook chain entirely.** `PostRunView` is the
+    OUTPUT half of the data-hook enforcement seam (masking / audit) and hooks receive
+    `contextUser`, so masking is per-user while a cache slot is shared — there is no correct way
+    to apply it once at write time for a reader who has not arrived yet. Three of the four server
+    paths already ran the chain (miss, mixed batch, client smart-cache); the singular cache hit and
+    the all-cached batch returned early, so masking depended on whether a _sibling_ view in the same
+    batch happened to miss. This looked correct before only by accident: the cache write precedes
+    the hooks, so an in-place masking hook wrote through into the cached rows — which both made
+    later hits appear masked and baked one user's masking decision into a shared slot. Both hit
+    paths now run the chain against the per-hit result wrapper, so a hook's replacement reaches the
+    caller and can never write back into the cache. The zero-hook path (the default — no shipped
+    middleware overrides `PostRunView`) costs ~80ns, down from ~2.4µs: `GetDataHooks` now memoizes
+    the resolved global object store, whose `GetGlobalObjectStore()` probe throws and catches a
+    `ReferenceError` on every call under Node (~1.4µs), and the hit paths check for registered hooks
+    before awaiting the chain.
+
+  The cache result types stay ordinary mutable arrays, documented as shared-and-frozen: the runtime
+  freeze is the enforcement, and a `readonly` marker would have broken existing downstream readers
+  without adding protection. **This release contains no breaking changes** — every public signature
+  it touches is additive or unchanged.
+
+  Consumer-facing contract, documented in `guides/CACHING_AND_PUBSUB_GUIDE.md`: **treat rows from
+  `RunView`/`RunViews`/`RunQuery` as read-only** unless you produced them. Copy before mutating —
+  `rows.map(r => ({ ...r }))`, `[...rows].sort(...)`. Narrow-`Fields` requests and
+  `ResultType: 'entity_object'` results are unaffected (both get per-caller objects).
+
+- fccd0b2: `RelatedRecordCollection.Load()` now refuses to load over unsaved work instead of silently discarding it. `Add()` and `Create()` deliberately do not mark a collection loaded, so a collection that has only ever been appended to still has `IsLoaded === false` — and the "already loaded" early return therefore did not protect it. Any later `Load()` (a lazy read, a refresh, a sibling component sharing the entity) replaced `items` wholesale and took the caller's unsaved children with it, along with any queued removals, reporting nothing: the screen simply showed fewer rows than the user typed and the save wrote fewer children than they entered. The load now throws when the collection is dirty and `force` is not set, naming how many children and removals would have been lost; `Load(true)` still discards, which is what a deliberate refresh means. Merging was rejected — it invents an ordering and can duplicate — and refusing matches what this collection already does elsewhere, where a load that would produce quietly wrong data throws rather than returning something plausible.
+- 15319b4: Fix `ValidateAsync` overrides being silently skipped on save.
+
+  `BaseEntity.ValidateAsync` documents itself as _"automatically called by Save() AFTER the
+  synchronous Validate() passes"_. It was not. `Save()` reached it only when a subclass **also**
+  overrode `DefaultSkipAsyncValidation` — a separate getter the docstring never mentioned, defaulting
+  to `true`. An override written against the documentation alone never ran: it reads as enforced,
+  reviews as enforced, and is not.
+
+  The default cannot be justified on cost. The base `ValidateAsync` returns success immediately, so
+  skipping it saves a subclass that did not override it essentially nothing. The flag's only reachable
+  effect was therefore to disable the async rules of subclasses that had _written_ async rules — which
+  is how `OrderEntityServer.ValidateAsync`, holding both the "cannot confirm an order with no lines"
+  guard and an entire per-line validation loop, was dead on every save in production. It is the same
+  reasoning that already exempts companion validation from the flag.
+
+  Overriding `ValidateAsync` is now what turns it on. Precedence, in order of authority:
+  1. `EntitySaveOptions.SkipAsyncValidation`, when set, wins outright.
+  2. An explicit `DefaultSkipAsyncValidation` override wins next — **either value**. Stating a policy
+     still beats inferring one, so a class that deliberately opts out keeps opting out.
+  3. Only when no policy is stated is it inferred: run `ValidateAsync` if a subclass overrode it.
+
+  Distinguishing "chose `true`" from "never made a choice" is what makes that safe; a getter cannot
+  express it, so the two are told apart by comparing property descriptors against `BaseEntity.prototype`
+  (cached per class, handling accessors and methods, and finding overrides anywhere in a multi-level
+  chain).
+
+  **Blast radius in this repo is zero.** All 17 classes overriding `ValidateAsync` were checked: 16
+  already override `DefaultSkipAsyncValidation` explicitly and so take rule 2 unchanged, and the 17th
+  is `RelatedRecordCollection`, whose `ValidateAsync(result)` is `EntityCompanion`'s method in a
+  different hierarchy. CodeGen never emits `ValidateAsync`, so generated classes are unaffected. Full
+  MJCore suite green: 119 files, 1823 tests.
+
+  **Downstream applications should expect a behaviour change**, and it is the intended one: a
+  `ValidateAsync` that has been quietly dead will start running, and can start refusing saves it was
+  always written to refuse. Pass `SkipAsyncValidation: true`, or override `DefaultSkipAsyncValidation`
+  to return `true`, for any case that should stay off.
+
+- Updated dependencies [080f4cd]
+- Updated dependencies [48ff99f]
+- Updated dependencies [de343b5]
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/sql-dialect@6.1.0-edge.2
+
 ## 6.1.0-edge.1
 
 ### Minor Changes
