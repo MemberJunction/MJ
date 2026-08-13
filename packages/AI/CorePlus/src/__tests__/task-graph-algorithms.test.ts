@@ -124,6 +124,21 @@ describe('ComputeEligibleTasks', () => {
         expect(ids(ComputeEligibleTasks(nodes, edges))).toEqual(['b']);
     });
 
+    it('runs an ALL-Optional node in the first wave, alongside its own dependencies', () => {
+        // The consequence the spec doc calls out and nothing asserted: `Optional` means "does not
+        // make the target wait", so a node reached ONLY by optional edges has no gating edges at
+        // all and is eligible immediately — at the same moment as the steps it nominally follows.
+        //
+        // Pinned because it reads like a bug when first seen, and because it is the exact behaviour
+        // an OR-join would change. An OR-join ("any one satisfied predecessor is enough") would
+        // make `join` wait for the first of a/b; today it waits for neither. If someone implements
+        // that later, this test is what tells them they changed a documented semantic rather than
+        // fixed an oversight.
+        const nodes = [node('a', 'Pending'), node('b', 'Pending'), node('join')];
+        const edges = [edge('join', 'a', 'Optional'), edge('join', 'b', 'Optional')];
+        expect(ids(ComputeEligibleTasks(nodes, edges)).sort()).toEqual(['a', 'b', 'join']);
+    });
+
     it('treats an absent dependencyType as Prerequisite', () => {
         // `a` is a root and therefore eligible; `b` must be withheld because its untyped
         // dependency on the still-Pending `a` gates by default.
