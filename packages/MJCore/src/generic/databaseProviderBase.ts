@@ -10,7 +10,7 @@ import { EntityTransactionScope } from "./entityTransactionScope";
 import { LogError } from "./logging";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
-import { SQLExpressionValidator, uuidv4 } from "@memberjunction/global";
+import { SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
@@ -1075,16 +1075,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     protected ValidateUserProvidedSQLClause(clause: string): boolean {
         // Remove string literals to avoid false positives.
         //
-        // SECURITY: this MUST match how SQL Server / PostgreSQL (with the default
-        // standard_conforming_strings=on) actually parse string literals — a literal is closed by
-        // the next single quote and `''` is an embedded quote; a backslash is an ORDINARY character
-        // and does NOT escape the closing quote. An earlier version honored backslash escaping
-        // (`\'`), which let an attacker write `x\'; DROP TABLE ...; --` : the whole payload was
-        // swallowed as one "string literal" and stripped, so the injected statement bypassed the
-        // keyword denylist below while the database still terminated the literal at the real quote.
-        // Do NOT reintroduce backslash-escape handling here.
-        const stringLiteralPattern = /'(?:[^']|'')*'|"(?:[^"]|"")*"/g;
-        const clauseWithoutStrings = clause.replace(stringLiteralPattern, '');
+        // 🚨 SECURITY: this uses the SHARED stripper in @memberjunction/global. It must match how
+        // SQL Server / PostgreSQL actually parse literals — see StripSQLStringLiterals for the full
+        // rationale and the backslash-escape bypass it exists to prevent. Do NOT inline a regex here;
+        // an inline copy is exactly how this screen and SQLExpressionValidator drifted apart before.
+        const clauseWithoutStrings = StripSQLStringLiterals(clause);
         const lowerClause = clauseWithoutStrings.toLowerCase();
 
         const forbiddenPatterns: RegExp[] = [
