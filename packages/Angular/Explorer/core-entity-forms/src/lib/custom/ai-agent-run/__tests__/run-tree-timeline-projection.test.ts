@@ -344,3 +344,116 @@ describe('ProjectRunTreeToTimeline — status and marker colour', () => {
         expect(rows.find((r) => r.id === 'sub')?.provenance).toBeUndefined();
     });
 });
+
+/**
+ * A dispatched workflow, exactly as the tree query returns it.
+ *
+ * `get-agent-run-tree.sql` joins the submit STEP to the graph it produced, so one workflow always
+ * arrives as two rows. The step's status describes the SUBMISSION and its title names the GRAPH,
+ * which is the contradiction these tests are about.
+ */
+function dispatchedWorkflow(overrides: { stepStatus?: string; graphStatus?: string } = {}): AgentRunTreeNode {
+    return node({
+        NodeID: 'run',
+        NodeType: 'Run',
+        Name: 'Demo Flow Agent',
+        Status: 'Paused' as AgentRunTreeStatus,
+        Children: [
+            node({
+                NodeID: 'submit-step',
+                NodeType: 'Step',
+                SourceKind: 'TaskGraph',
+                Name: 'Task Graph: Demo Flow Agent',
+                Status: (overrides.stepStatus ?? 'Completed') as AgentRunTreeStatus,
+                DurationMs: 291,
+                Children: [
+                    node({
+                        NodeID: 'graph',
+                        NodeType: 'TaskGraph',
+                        Name: 'Demo Flow Agent',
+                        Status: (overrides.graphStatus ?? 'In Progress') as AgentRunTreeStatus,
+                        SourceEntity: 'MJ: Tasks',
+                        Children: [
+                            node({ NodeID: 'step-1', NodeType: 'Task', Name: 'Get NVIDIA Stock Price', Status: 'Pending' as AgentRunTreeStatus }),
+                            node({ NodeID: 'step-2', NodeType: 'Task', Name: 'Get Weather', Status: 'Pending' as AgentRunTreeStatus }),
+                        ],
+                    }),
+                ],
+            }),
+        ],
+    });
+}
+
+describe('a dispatched workflow is one row, not two', () => {
+    it('does not report Completed above steps that have not run', () => {
+        // The reported defect: "Task Graph: Demo Flow Agent — Completed" sitting above two Pending
+        // steps, while the page header correctly said PAUSED / "Workflow still running". The step
+        // row was telling the truth about the SUBMISSION under a title naming the GRAPH.
+        const items = flatten(ProjectRunTreeToTimeline(dispatchedWorkflow()));
+        const workflowRow = items.find((i) => i.title === 'Task Graph: Demo Flow Agent');
+
+        expect(workflowRow?.status).toBe('Running');
+        expect(items.some((i) => i.status === 'Completed')).toBe(false);
+    });
+
+    it('collapses the pair, so the workflow appears once', () => {
+        const items = flatten(ProjectRunTreeToTimeline(dispatchedWorkflow()));
+
+        expect(items.map((i) => i.id)).toEqual(['run', 'submit-step', 'step-1', 'step-2']);
+        // The STEP's id survives, not the graph's: selection, deep links and the detail pane all
+        // resolve against the row the timeline already addressed.
+        expect(items[1].id).toBe('submit-step');
+    });
+
+    it('keeps the submission timing that the merge would otherwise discard', () => {
+        // A slow submit is a slow validate-and-persist — a different problem from a slow workflow,
+        // and the only place that number now exists.
+        const [, workflowRow] = flatten(ProjectRunTreeToTimeline(dispatchedWorkflow()));
+
+        expect(workflowRow.subtitle).toContain('dispatched in');
+        expect(workflowRow.subtitle).toContain('291');
+    });
+
+    it('inherits the graph status once the graph finishes', () => {
+        // Asserts the id list too: with both halves reading Completed, a status-only assertion
+        // would pass whether or not the collapse happened, which is no evidence at all.
+        const items = flatten(ProjectRunTreeToTimeline(dispatchedWorkflow({ graphStatus: 'Complete' })));
+
+        expect(items.map((i) => i.id)).toEqual(['run', 'submit-step', 'step-1', 'step-2']);
+        expect(items[1].status).toBe('Completed');
+    });
+
+    it('leaves a FAILED submission as its own row', () => {
+        // There is no graph to inherit from, and the failure is the whole story. Collapsing here
+        // would hide the only thing that happened.
+        const tree = dispatchedWorkflow({ stepStatus: 'Failed' });
+        const items = flatten(ProjectRunTreeToTimeline(tree));
+
+        expect(items.map((i) => i.id)).toEqual(['run', 'submit-step', 'graph', 'step-1', 'step-2']);
+        expect(items[1].status).toBe('Failed');
+    });
+
+    it('leaves a submission still in flight as its own row', () => {
+        const items = flatten(ProjectRunTreeToTimeline(dispatchedWorkflow({ stepStatus: 'Running' })));
+
+        expect(items.map((i) => i.id)).toContain('graph');
+        expect(items[1].status).toBe('Running');
+    });
+
+    it('declines to collapse a shape it does not recognise', () => {
+        // A projection that guesses when its assumption breaks is how a display invents a status
+        // nobody wrote. Two graph children is not a shape this understands.
+        const tree = dispatchedWorkflow();
+        const step = tree.Children[0];
+        step.Children = [...step.Children, node({ NodeID: 'graph-2', NodeType: 'TaskGraph', Name: 'Another' })];
+
+        expect(flatten(ProjectRunTreeToTimeline(tree)).map((i) => i.id)).toContain('graph');
+    });
+
+    it('leaves an ordinary step alone', () => {
+        // Guard against over-reach: only a TaskGraph-kind step with a graph under it collapses.
+        const items = flatten(ProjectRunTreeToTimeline(sampleTree()));
+
+        expect(items.map((i) => i.id)).toEqual(['run', 'step', 'graph', 'task-a', 'task-b', 'subrun']);
+    });
+});

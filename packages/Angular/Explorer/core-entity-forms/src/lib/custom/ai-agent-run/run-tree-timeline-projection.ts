@@ -266,6 +266,38 @@ function itemTypeOf(node: AgentRunTreeNode): TimelineItem['type'] {
     return NODE_ITEM_TYPE[node.NodeType] ?? 'step';
 }
 
+
+/**
+ * The graph a `TaskGraph` submit step handed off to, when the pair is a clean 1:1.
+ *
+ * **Why these two rows are one thing.** `get-agent-run-tree.sql` joins the submit STEP to the graph
+ * it produced through `JSON_VALUE(s.OutputData, '$.parentTaskID')`, so a dispatched workflow always
+ * arrives as a `Step` row whose single child is the `TaskGraph` row. They are the same workflow
+ * described twice, and the two descriptions disagree on the only question a reader is asking: the
+ * step's status reports the SUBMISSION (`Completed` in ~300ms, correctly — see `base-agent.ts`,
+ * "Success means 'this graph is durable and will run', NOT 'this graph has run'"), while its title
+ * names the GRAPH, which is still running. A row titled after the workflow, marked Completed, above
+ * children that are Pending, reads as a finished workflow. The header gets this right — PAUSED plus
+ * "Workflow still running" — and the tree was the one place that contradicted it.
+ *
+ * **Null in three cases, all deliberate.** A submission that did not SUCCEED keeps its own row —
+ * failed, cancelled, or still in flight — because there is either no graph to inherit a status from
+ * or nothing yet to inherit, and the submission is then the whole story. An unexpected shape — no
+ * `TaskGraph` child, or more than one, or extra children beside it — also declines, because a
+ * projection that guesses when its assumption breaks is how a display invents a status nobody wrote.
+ *
+ * The success test is on the normalized word, since a step says `Completed` and a task says
+ * `Complete`; comparing raw is the two-letter difference this file already exists to absorb.
+ */
+function collapsibleGraphChild(node: AgentRunTreeNode): AgentRunTreeNode | null {
+    if (node.NodeType !== 'Step' || node.SourceKind !== 'TaskGraph') return null;
+    if (NormalizeStatus(node.Status) !== 'Completed') return null;
+    const graphChildren = node.Children.filter((child) => child.NodeType === 'TaskGraph');
+    return graphChildren.length === 1 && node.Children.length === graphChildren.length
+        ? graphChildren[0]
+        : null;
+}
+
 /**
  * Flattens a run tree into timeline rows, in display order.
  *
@@ -295,6 +327,20 @@ export function ProjectRunTreeToTimeline(
      * lights up the recursive template and the expand machinery that were already there.
      */
     const build = (node: AgentRunTreeNode, level: number, parentID: string | undefined, position: number): TimelineItem => {
+        // A dispatched workflow arrives as two rows for one thing — see `collapsibleGraphChild`.
+        // Merged into one that keeps the step's identity (its id, so selection and deep links still
+        // resolve) and takes its STATUS and timing from the graph, which is what the title claims to
+        // describe. The submission's own latency survives in the subtitle rather than being lost.
+        const graph = collapsibleGraphChild(node);
+        if (graph) {
+            const item = toTimelineItem(graph, level, parentID, position);
+            item.id = node.NodeID;
+            item.title = node.Name;
+            item.subtitle = describeDispatchedWorkflow(node, graph);
+            item.children = graph.Children.map((child, index) => build(child, level + 1, node.NodeID, index + 1));
+            return item;
+        }
+
         const item = toTimelineItem(node, level, parentID, position);
         item.children = node.Children.map((child, index) => build(child, level + 1, node.NodeID, index + 1));
         return item;
@@ -303,6 +349,21 @@ export function ProjectRunTreeToTimeline(
     return skipRoot
         ? root.Children.map((child, index) => build(child, baseLevel, root.NodeID, index + 1))
         : [build(root, baseLevel, undefined, 1)];
+}
+
+
+/**
+ * Subtitle for a collapsed submit-step/graph pair.
+ *
+ * Keeps the fact the merge would otherwise discard: how long the SUBMISSION took. That number is
+ * meaningful on its own — a slow submit is a slow validate-and-persist, which is a different problem
+ * from a slow workflow — and leaving it on a row whose duration now belongs to the graph would be
+ * two unrelated timings competing for one field.
+ */
+function describeDispatchedWorkflow(step: AgentRunTreeNode, graph: AgentRunTreeNode): string {
+    const base = describeNode(graph);
+    const dispatch = step.DurationMs != null ? `dispatched in ${formatDuration(step.DurationMs)}` : 'dispatched';
+    return base ? `${base} · ${dispatch}` : dispatch;
 }
 
 /** One node as a timeline row. */
