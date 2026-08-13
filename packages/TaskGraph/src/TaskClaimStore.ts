@@ -981,10 +981,12 @@ export class TaskClaimStore {
     /** Runs the affected-rows statement, returning 0 on error rather than throwing into the loop. */
     private async affectedRows(db: DatabaseProviderBase, sql: string, contextUser: UserInfo): Promise<number> {
         try {
-            // Trailing SELECT is how the row count comes back as data across both dialects, rather
-            // than depending on a driver-specific rowsAffected field.
+            // The count comes back as data rather than through a driver-specific rowsAffected
+            // field. The wrapper is dialect-owned because `@@ROWCOUNT` is T-SQL only: emitted on
+            // PostgreSQL it left a bare `ROWCOUNT` identifier, which folds to lowercase, so every
+            // guarded write failed with `column "rowcount" does not exist`.
             const rows = await db.ExecuteSQL<{ AffectedRows: number }>(
-                `${sql};\nSELECT @@ROWCOUNT AS ${db.QuoteIdentifier('AffectedRows')}`,
+                db.Dialect.AffectedRowCountSQL(sql, 'AffectedRows'),
                 undefined, undefined, contextUser,
             );
             return Number(rows?.[0]?.AffectedRows ?? 0);

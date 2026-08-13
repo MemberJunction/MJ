@@ -1,0 +1,21 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT78 - Materialized Entity Base-View Read Redirect",
+    "Description": "Live-DB proof that RunView(DataSource:'Materialized') on an entity is served from the entity's physical snapshot via resolveEffectiveBaseView, not the live base view (the higher-blast-radius redirect that can affect RunView for any entity). Fabricates an EntityBaseView MaterializedResult (SourceEntityID) + a snapshot carrying a sentinel row absent from the live view; EMR1 asserts a Materialized RunView returns the sentinel, EMR2 (negative control) asserts the same read Live returns it nowhere. Server transport. Self-cleaning fixtures; SQL-Server only (skips when no mssql pool).",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "A Materialized RunView on the entity is served from the snapshot (returns the sentinel) while the same read Live returns the sentinel nowhere. 2 checks (EMR1-EMR2)."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "materialized-entity-read"
+        }
+      ]
+    },
+    "Status": "Active"
+  }
+}
