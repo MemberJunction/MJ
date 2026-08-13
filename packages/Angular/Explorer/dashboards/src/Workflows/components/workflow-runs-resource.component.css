@@ -9,24 +9,50 @@
   align-items: center;
 }
 
-/* List alone until something is selected; two panes after. The canvas gets the larger share
-   because a graph is the thing being read once it is open. */
+/* List alone until something is selected; two resizable panes after. The size is the user's — see
+   the LAYOUT_KEYS note on the component for why it is persisted server-side rather than locally. */
 .wfr-split {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--mj-space-3);
   height: 100%;
   min-height: 0;
 }
 
-.wfr-split-open {
-  grid-template-columns: minmax(28rem, 40%) 1fr;
+/* A gutter you can find. The default is a hairline, which is discoverable only by accident. */
+:host ::ng-deep .wfr-split > .as-split-gutter,
+:host ::ng-deep .wfr-graph-split > .as-split-gutter {
+  background: transparent !important;
+  position: relative;
 }
 
-@media (max-width: 900px) {
-  .wfr-split-open {
-    grid-template-columns: 1fr;
-  }
+:host ::ng-deep .wfr-split > .as-split-gutter::after,
+:host ::ng-deep .wfr-graph-split > .as-split-gutter::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  background: var(--mj-border-default);
+  border-radius: var(--mj-radius-full);
+}
+
+:host ::ng-deep .wfr-split.as-horizontal > .as-split-gutter::after,
+:host ::ng-deep .wfr-graph-split.as-horizontal > .as-split-gutter::after {
+  width: 2px;
+}
+
+:host ::ng-deep .wfr-graph-split.as-vertical > .as-split-gutter::after {
+  height: 2px;
+}
+
+:host ::ng-deep .wfr-split > .as-split-gutter:hover::after,
+:host ::ng-deep .wfr-graph-split > .as-split-gutter:hover::after {
+  background: var(--mj-brand-primary);
+}
+
+/* The canvas and the step record sit SIDE BY SIDE — a JSON record in a strip along the bottom shows
+   about ten lines. Stacks below the breakpoint, where three columns would leave each too narrow to
+   use. */
+.wfr-graph-split {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .wfr-list {
@@ -119,6 +145,9 @@
 .wfr-detail {
   display: flex;
   flex-direction: column;
+  /* Fills its split area. Without it the column sizes to its CONTENT, so the canvas below —
+     `flex: 1 1 auto` of an auto-height parent — got its intrinsic height and left dead space. */
+  height: 100%;
   min-height: 0;
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-default);
@@ -246,19 +275,24 @@
   border-bottom-color: var(--mj-brand-primary);
 }
 
-/* The canvas takes the larger share; the step pane below it is a reading surface, not a diagram. */
 .wfr-graph-pane {
-  flex: 1 1 55%;
+  height: 100%;
   min-height: 12rem;
 }
 
 .wfr-steps-pane {
-  flex: 1 1 45%;
   display: flex;
   flex-direction: column;
+  height: 100%;
   min-height: 0;
-  border-top: 1px solid var(--mj-border-default);
+  border-left: 1px solid var(--mj-border-default);
   overflow: hidden;
+}
+
+/* Stacked layout puts the divider back on top, where the eye expects it. */
+:host ::ng-deep .as-vertical .wfr-steps-pane {
+  border-left: none;
+  border-top: 1px solid var(--mj-border-default);
 }
 
 .wfr-step-list {
@@ -267,8 +301,9 @@
   gap: var(--mj-space-1);
   padding: var(--mj-space-2);
   border-bottom: 1px solid var(--mj-border-default);
-  max-height: 30%;
+  max-height: 8rem;
   overflow-y: auto;
+  flex: none;
 }
 
 .wfr-step {
@@ -319,8 +354,13 @@
 }
 
 .wfr-step-json-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mj-space-2);
   padding: var(--mj-space-1) var(--mj-space-3);
   font-weight: 600;
   font-size: var(--mj-font-size-sm);
   color: var(--mj-text-secondary);
+  flex: none;
 }
