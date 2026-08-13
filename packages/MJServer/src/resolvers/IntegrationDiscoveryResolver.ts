@@ -39,6 +39,7 @@ import type {
     GenerateIntegrationActionResult
 } from "@memberjunction/integration-engine";
 import { IntegrationEngineBase } from "@memberjunction/integration-engine-base";
+import { buildIntegrationLLMPKCallback } from "@memberjunction/core-entities-server";
 import {
     SchemaBuilder,
     TypeMapper,
@@ -2387,8 +2388,39 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         provider: IMetadataProvider,
         universalPKConvention?: string,
     ): Promise<CreateConnectionPipelineSummary> {
+        // Sync lock (#3656).  This pipeline rewrites the very IO/IOF rows, field
+        // maps and DDL a sync reads, so it must not overlap a sync or another
+        // maintenance operation for the same connection.  The two other
+        // pipeline call sites — IntegrationRefreshConnectorSchema and
+        // IntegrationSchemaEvolution — already take this lock inline; this is
+        // the third and fourth (create/update/reactivate) finally taking it too.
+        if (!IntegrationEngine.AcquireMaintenanceLock(companyIntegrationID, 'schema refresh')) {
+            throw new Error(
+                'Schema refresh not started: a sync or another maintenance operation is currently running for this connection. Retry after it completes.'
+            );
+        }
+        try {
+            return await this.runSchemaRefreshPipelineLocked(companyIntegrationID, user, provider, universalPKConvention);
+        } finally {
+            IntegrationEngine.ReleaseMaintenanceLock(companyIntegrationID);
+        }
+    }
+
+    /** The body of {@link runSchemaRefreshPipeline}, run with the maintenance lock held. */
+    private async runSchemaRefreshPipelineLocked(
+        companyIntegrationID: string,
+        user: UserInfo,
+        provider: IMetadataProvider,
+        universalPKConvention?: string,
+    ): Promise<CreateConnectionPipelineSummary> {
         const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, provider);
         const pipeline = new IntegrationConnectorCreationPipeline();
+        // SoftPKClassifier's LLM tier (universal → naming → statistical → LLM →
+        // synthetic) only runs when this callback is supplied.  It used to be
+        // wired by the CompanyIntegration save hook; with that hook gone
+        // (#3738) it is wired here, so the create/update/reactivate paths keep
+        // the same PK-inference quality they had before.
+        const llmInference = await buildIntegrationLLMPKCallback(user);
         const runOpts = {
             Connector: connector,
             CompanyIntegration: companyIntegration,
@@ -2397,6 +2429,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             UniversalPKConvention: universalPKConvention || undefined,
             ConsoleMirror: true,
             TriggerType: 'Manual' as const,
+            LLMInference: llmInference ?? undefined,
         };
         const result = await pipeline.Run(runOpts as unknown as Parameters<typeof pipeline.Run>[0]);
 
@@ -2621,7 +2654,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             ci.IntegrationID = input.IntegrationID;
             ci.CompanyID = input.CompanyID;
             ci.CredentialID = credentialID;
-            ci.IsActive = true;
+            // Created INACTIVE on purpose (#3738).  A connection is not marked
+            // active until its credential has had a chance to prove itself in
+            // step 3 below — so nothing downstream ever observes an active row
+            // backed by a password that is about to be rejected and rolled back.
+            ci.IsActive = false;
             ci.Name = input.CredentialName; // Name is required on CompanyIntegration
             if (input.ExternalSystemID) ci.ExternalSystemID = input.ExternalSystemID;
             if (input.Configuration) ci.Configuration = input.Configuration;
@@ -2648,6 +2685,19 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }
                 testPassed = true;
                 testMessage = testResult.Message;
+            }
+
+            // 3b. Credential has proven itself (or the caller declined a test,
+            // which is the pre-existing default) — activate.  Ordering matters:
+            // this save is what makes the connection usable, and it must not
+            // happen while the credential is still unverified.
+            ci.IsActive = true;
+            if (!await ci.Save()) {
+                await this.rollbackCreatedConnection(ci, credential);
+                return {
+                    Success: false,
+                    Message: `Failed to activate CompanyIntegration: ${ci.LatestResult?.Message || 'Unknown error'}`,
+                };
             }
 
             // 4. Auto-run schema refresh pipeline (intermittent server-side period).
@@ -2967,10 +3017,16 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
     /**
      * Reactivates a previously deactivated CompanyIntegration by setting IsActive=true.
+     *
+     * Before #3738 this mutation inherited a full schema refresh from the
+     * CompanyIntegration save hook, with no way to decline it.  The refresh is
+     * now this resolver's own, explicit step — same default behaviour, but
+     * visible in the API and suppressible with `runSchemaRefresh: false`.
      */
     @Mutation(() => MutationResultOutput)
     async IntegrationReactivateConnection(
         @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("runSchemaRefresh", () => Boolean, { defaultValue: true, description: "When true (default), re-runs IntegrationConnectorCreationPipeline after reactivating so the catalog reflects the source as it is now. Pass false to reactivate without a live scan — useful when the catalog is known-current, or when the source is large enough that discovery should be scheduled separately." }) runSchemaRefresh: boolean,
         @Ctx() ctx: AppContext
     ): Promise<MutationResultOutput> {
         try {
@@ -2981,6 +3037,23 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             if (!loaded) return { Success: false, Message: 'CompanyIntegration not found' };
             ci.IsActive = true;
             if (!await ci.Save()) return { Success: false, Message: `Failed to reactivate: ${ci.LatestResult?.Message ?? 'Unknown error'}` };
+
+            if (runSchemaRefresh) {
+                try {
+                    const refreshResult = await this.runSchemaRefreshPipeline(companyIntegrationID, user, md);
+                    return {
+                        Success: true,
+                        Message: `Reactivated, schema refresh: ${refreshResult.ObjectsCreated} created, ${refreshResult.ObjectsUpdated} updated, ${refreshResult.UnresolvedObjects.length} PK-unresolved`,
+                    };
+                } catch (refreshErr) {
+                    // Refresh failure does NOT undo the reactivation — the
+                    // connection is active, only discovery failed, and the
+                    // operator can re-run IntegrationRefreshConnectorSchema.
+                    LogError(`IntegrationReactivateConnection: pipeline error — ${refreshErr}`);
+                    return { Success: true, Message: `Reactivated (schema refresh failed: ${this.formatError(refreshErr)})` };
+                }
+            }
+
             return { Success: true, Message: 'Reactivated' };
         } catch (e) {
             LogError(`IntegrationReactivateConnection error: ${e}`);
