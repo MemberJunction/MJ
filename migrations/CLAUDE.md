@@ -357,13 +357,27 @@ silent. Nothing fails to build; the runtime falls back to `BaseEntity`, and ever
 clean-environment CodeGen run turns into a diff nobody can tell apart from real drift. That is
 exactly how issue #3737 was reported: by a provisioning tripwire, days later.
 
-`.github/workflows/ci-codegen-tail.yml` gates it on every PR touching `migrations/**` or any of the
-three generated artifacts. Run it yourself before pushing — it needs no database and no build:
+It is enforced by the **`Check migrations`** job (`.github/workflows/changes.yml`) — the one required
+status context — on every PR, not only PRs that touch `migrations/`. Run the same command before
+pushing; it needs no database and no build, and it is *literally* the command CI runs:
 
 ```bash
-npm run check:codegen-tail          # your PR's migrations vs origin/next
-npm run check:codegen-tail:all      # sweep the full migration history
+npm run check:codegen-tail        # ~2s over the full migration history
 ```
+
+**What green means, precisely.** The check keys on `CREATE TABLE`, so it covers one shape — a **new
+core-schema table** shipped without its generated entity — plus disagreement between the three
+rosters. A migration that only adds a column, widens a type, renames an entity, re-points a
+relationship, or changes metadata leaves no `CREATE TABLE` and usually no roster change, and is
+**invisible to this check**. Green is *not* "the CodeGen tail is committed"; it is "no new table is
+missing its entity, and the three generated rosters agree." The definitive check is DB-bearing
+(migrate → `mj codegen` → `git diff --exit-code`), whose natural home is
+`.github/workflows/migrations.yml` — it already stands up SQL Server and runs `mj migrate` on push
+to `next`.
+
+Failures are scoped to what your branch introduces: drift already present on the base branch is
+reported as a warning instead of failing your PR, because both checks are whole-repo and one bad
+merge would otherwise block every subsequent migration PR.
 
 A core-schema table that is deliberately *not* an entity goes in `NON_ENTITY_TABLES` in
 `.github/scripts/check-codegen-tail.mjs`, with a comment saying why.
