@@ -27,8 +27,30 @@
  */
 export type GateOutcome = 'keep' | 'drop' | 'hold';
 
+/**
+ * How a failure propagates in a graph — the spec's `failureSemantics`, restated here so this module
+ * stays free of entity imports.
+ *
+ * `'block'` (the default) means a failure is terminal for everything downstream. `'edges'` means a
+ * flow's failure handling IS its outgoing edges, so a failed step's drawn recovery path runs.
+ */
+export type FailureSemantics = 'block' | 'edges';
+
 /** The evaluator's answer, in the shape `IConditionEvaluator` returns. */
 export type ConditionVerdict = { Success: boolean; Value?: unknown; ErrorMessage?: string };
+
+/**
+ * The invocation's contribution to the condition envelope — the flow dialect's `data`/`context`.
+ *
+ * Separate from the origin's output on purpose: `payload`, `output` and `stepResult` describe what
+ * the previous STEP produced, while these describe how the workflow was INVOKED. They travel with
+ * the graph on its parent's metadata bag because the instance evaluating a condition is routinely
+ * not the process that accepted the graph.
+ */
+export type ConditionInvocation = {
+    Data?: unknown;
+    Context?: unknown;
+};
 
 /** The origin fields a condition can see. Structural, so `MJTaskEntity` satisfies it as-is. */
 export type ConditionOrigin = {
@@ -77,9 +99,15 @@ const NO_OUTPUT: Readonly<Record<string, unknown>> = Object.freeze({});
  * silently dropped branch — which is the same reasoning P2 used, applied to a narrower class.
  */
 const DATA_ABSENCE_SIGNATURES: readonly RegExp[] = [
+    // Property reads — the original list.
     /cannot read propert(?:y|ies) .* of (?:undefined|null)/i,
     /cannot read propert(?:y|ies) of (?:undefined|null)/i,
-    /(?:undefined|null) is not an object/i,      // WebKit's phrasing of the same thing
+    /(?:undefined|null) is not an object/i,            // WebKit's phrasing of the same thing
+    // R3-6: absence reached through the OTHER operators the door blesses.
+    /cannot use '?in'? operator/i,                     // `'x' in payload.missing`
+    /cannot convert undefined or null to object/i,     // `Object.keys(payload.missing)`
+    /(?:undefined|null) is not iterable/i,             // spread / for-of over an absent collection
+    /is not a function/i,                              // `payload.missing.map(...)` — see below
 ];
 
 /** A malformed `OutputPayload` is not grounds to drop a prerequisite — it reads as no output. */
@@ -105,7 +133,11 @@ export function ParseConditionOutput(payload: string | null | undefined): unknow
  * each task's output is its own, and inventing a merged one would give conditions a value the flow
  * engine never had.
  */
-export function BuildConditionContext(origin: ConditionOrigin, output: unknown): Record<string, unknown> {
+export function BuildConditionContext(
+    origin: ConditionOrigin,
+    output: unknown,
+    invocation: ConditionInvocation = {},
+): Record<string, unknown> {
     // The envelope and the spec's declared roots (`CONDITION_ROOTS`, in ai-core-plus) are one
     // contract split across two packages, and the validator refuses conditions on the strength of
     // that list. A key here with no entry there is a root nobody may reference; an entry there with
@@ -126,10 +158,30 @@ export function BuildConditionContext(origin: ConditionOrigin, output: unknown):
         errorMessage: origin.ErrorMessage ?? null,
         // flow dialect
         payload: readable(envelope.payload ?? output),
-        stepResult: { Success: succeeded, step: origin.Name, result: readable(envelope.result ?? output) },
+        // `step` IS A STATUS WORD, NOT THE STEP'S NAME (R3-3, decided against the walker's actual
+        // exposure rather than against the spec's prose). `FlowAgentType` stores
+        // `{ Success: true, step: 'Success', result, rawResult }`, and the documented condition
+        // `stepResult.step === 'Success'` only means anything under that reading. Putting the
+        // origin's name here made that condition false for every step whose name was not literally
+        // "Success" — which is all of them. The name is deliberately NOT exposed under another key:
+        // the walker did not expose it, and inventing a root is how the two engines drift.
+        stepResult: {
+            Success: succeeded,
+            step: succeeded ? 'Success' : 'Failed',
+            result: readable(envelope.result ?? output),
+        },
         flowContext: { currentStepId: origin.ID, completedSteps: [], executionPath: [], stepCount: 0 },
-        data: envelope.data ?? NO_OUTPUT,
-        context: envelope.context ?? NO_OUTPUT,
+        // FROM THE INVOCATION, NOT THE ORIGIN'S OUTPUT (R3-3).
+        //
+        // These were `envelope.data`/`envelope.context` — keys of the origin STEP's parsed output —
+        // which is a different thing entirely from what the dialect documents and what the walker
+        // provided. `FlowAgentType.buildConditionContext` sets these from `ExecuteAgentParams`, and
+        // `data.userApproval === true` is that class's own documented pattern. A step's output
+        // essentially never carries a `data` key, so every such condition resolved `undefined`, read
+        // a clean `false`, and silently took the branch the walker would not have — with no throw,
+        // no hold, and the validator blessing the condition at the door.
+        data: invocation.Data ?? NO_OUTPUT,
+        context: invocation.Context ?? NO_OUTPUT,
     };
 }
 
@@ -145,7 +197,38 @@ export function BuildConditionContext(origin: ConditionOrigin, output: unknown):
  * @param originStatus the origin task's status right now
  * @param evaluate     runs the condition; only called once the origin can decide it
  */
-export function DecideGate(originStatus: string, evaluate: () => ConditionVerdict): GateOutcome {
+export function DecideGate(
+    originStatus: string,
+    failureSemantics: FailureSemantics,
+    evaluate: () => ConditionVerdict,
+): GateOutcome {
+    // A FAILURE DECIDES AN ORDINARY EDGE ONLY WHERE THE DIALECT SAYS FAILURES DECIDE (R3-2).
+    //
+    // R2-4 threaded semantics into the EXCLUSIVE dialect and left this one blind, which reproduced
+    // R2-4's own catastrophe through the other door. Under `'block'` — the spec's default — a Failed
+    // origin's conditional edge that evaluated false was DROPPED, its target landed in
+    // `unreachableTaskIDs`, it seeded the skip cascade, and the dropped edge simultaneously severed
+    // `ComputeTasksToBlock`'s forward walk: `Skipped` satisfies prerequisites, so a join fed by an
+    // independent healthy route executed downstream of an unhandled failure while the parent still
+    // rolled up Failed.
+    //
+    // R2-3 made it far more reachable, not less: a failed step almost never has output, so the
+    // null-safe envelope answers nearly every positive condition with a confident false→drop where
+    // it previously threw→held visibly.
+    //
+    // Keeping the edge is what hands the graph back to the block cascade — the edge stays in
+    // `liveEdges`, the walk traverses it, and everything downstream blocks, which is what `'block'`
+    // means. Under `'edges'`, a flow's failure handling IS its outgoing edges, so it still decides.
+    if (originStatus === 'Failed' && failureSemantics !== 'edges') return 'keep';
+
+    // A CANCELLED ORIGIN NEVER DECIDES, under either dialect. A cancelled step's guards were never
+    // meant to route anything — the step did not run, so there is no outcome for them to describe —
+    // and after R2-9's partial cancel deliberately leaves a graph active, letting a Cancelled
+    // child's false edge skip-release downstream work would run steps in a workflow the user
+    // stopped. Keeping the edge leaves it to the block cascade, which treats Cancelled as
+    // unsatisfiable.
+    if (originStatus === 'Cancelled') return 'keep';
+
     // A BRANCH THAT WAS NOT TAKEN DOES NOT GET A VOTE.
     //
     // The walker never stood at a skipped step, so it never read that step's outgoing guards. This
@@ -176,7 +259,16 @@ export function DecideGate(originStatus: string, evaluate: () => ConditionVerdic
     // no. Holding it is a permanent stall on a terminal origin whose output can never change — and
     // since Q1 now refuses syntax errors at the door, this became almost the only way the hold
     // mechanism fired in production, on conditions their authors meant as false.
-    return IsDataAbsence(result.ErrorMessage) ? 'drop' : 'hold';
+    // A verdict that failed without saying WHY is not evidence of absence — it is evidence of
+    // nothing, and the conservative reading of nothing is the visible one.
+    if (!result.ErrorMessage) return 'hold';
+
+    // Inverted from "is this a known absence shape?" to "is this a broken guard?" (R3-6). The
+    // envelope guarantees declared roots resolve, so a ReferenceError is the only failure that can
+    // mean the guard names something that does not exist; every other throw is the expression
+    // meeting data that is not there. Enumerating absence messages closed the shapes we had seen
+    // and left the next operator's shape open.
+    return IsBrokenGuard(result.ErrorMessage) ? 'hold' : 'drop';
 }
 
 /**
@@ -188,4 +280,23 @@ export function DecideGate(originStatus: string, evaluate: () => ConditionVerdic
 export function IsDataAbsence(errorMessage: string | undefined): boolean {
     if (!errorMessage) return false;
     return DATA_ABSENCE_SIGNATURES.some((pattern) => pattern.test(errorMessage));
+}
+
+/**
+ * Whether an evaluation failure is a BROKEN GUARD rather than absent data.
+ *
+ * **This is the structural half of R3-6, and it is the one that matters.** Enumerating V8 message
+ * strings closes today's holes and leaves tomorrow's open: `'in'` and `Object` were both blessed at
+ * the door while their absence messages went unmatched, and each miss is a permanent silent stall on
+ * a terminal origin whose output can never change.
+ *
+ * Since the null-safe envelope guarantees every declared ROOT resolves, a `ReferenceError` is the
+ * only failure that can mean "this guard names something that does not exist" — everything else is
+ * the expression tripping over data that is not there, whatever operator it tripped over. So the
+ * classification is inverted: name the broken-guard case, and treat the rest as absence. The
+ * signature list above is kept as a fast path and as documentation of the shapes seen in the wild.
+ */
+export function IsBrokenGuard(errorMessage: string | undefined): boolean {
+    if (!errorMessage) return false;
+    return /is not defined|reference ?error|can't find variable/i.test(errorMessage);
 }
