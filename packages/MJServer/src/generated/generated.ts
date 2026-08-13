@@ -15676,7 +15676,7 @@ export class MJAIModelCost_ {
     @MaxLength(3)
     Currency: string;
         
-    @Field() 
+    @Field({description: `DEPRECATED — descriptive only; nothing prices, filters or branches on it. The authority on what a cost row measures is UnitTypeID -> AIModelPriceUnitType.UsageTypeID. Retained only so existing configurations still validate and historical spCreateAIModelCost calls keep working; do not populate it for new cost rows.`}) 
     @MaxLength(36)
     PriceTypeID: string;
         
@@ -15709,10 +15709,6 @@ export class MJAIModelCost_ {
     @Field(() => Float, {nullable: true, description: `Optional price per unit for input tokens written to the AI provider's prompt cache (cache writes / creation), expressed in the same currency and UnitType as InputPricePerUnit. When NULL, cache-write tokens are priced at InputPricePerUnit. Populated for providers that bill cache creation separately (e.g. Anthropic, ~1.25x input); leave NULL for providers that do not (OpenAI, Gemini), which also report 0 cache-write tokens.`}) 
     CacheWritePricePerUnit?: number;
         
-    @Field({description: `The base measure this price is per — Tokens for a conventional text model, Seconds for audio, Images for image generation. Says what InputPricePerUnit and OutputPricePerUnit are quantities OF; the linked AIModelPriceUnitType says at what granularity they are billed and owns the conversion.`}) 
-    @MaxLength(36)
-    UsageTypeID: string;
-        
     @Field() 
     @MaxLength(50)
     Model: string;
@@ -15728,10 +15724,6 @@ export class MJAIModelCost_ {
     @Field() 
     @MaxLength(100)
     UnitType: string;
-        
-    @Field() 
-    @MaxLength(50)
-    UsageType: string;
         
 }
 
@@ -15784,9 +15776,6 @@ export class CreateMJAIModelCostInput {
 
     @Field(() => Float, { nullable: true })
     CacheWritePricePerUnit: number | null;
-
-    @Field({ nullable: true })
-    UsageTypeID?: string;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -15842,9 +15831,6 @@ export class UpdateMJAIModelCostInput {
 
     @Field(() => Float, { nullable: true })
     CacheWritePricePerUnit?: number | null;
-
-    @Field({ nullable: true })
-    UsageTypeID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -16361,6 +16347,17 @@ export class MJAIModelPriceUnitType_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({description: `The base measure this billing unit is a quantity of — Tokens for a per-1M-tokens rate, Seconds for a per-minute or per-hour rate, Images for a per-image rate. This is the authority on what a cost row priced by this unit type measures: AIModelCost deliberately does NOT carry its own copy, because two copies can disagree and nothing would arbitrate.`}) 
+    @MaxLength(36)
+    UsageTypeID: string;
+        
+    @Field(() => Float, {description: `How many units of the base measure make ONE billed unit: 1000000 for a per-1M-tokens rate, 3600 for per-hour, 60 for per-minute, 1 for per-image. Cost is (quantity / UnitsPerBillingUnit) * PricePerUnit. Holding the divisor as DATA is what lets a new linear billing unit ship by seeding a row, with no driver class and no build — the code-only requirement is what made bug B60 possible. DriverClass remains for non-linear pricing (tiered rates, per-image-by-resolution, minimum-billing increments).`}) 
+    UnitsPerBillingUnit: number;
+        
+    @Field() 
+    @MaxLength(50)
+    UsageType: string;
+        
     @Field(() => [MJAIModelCost_])
     MJAIModelCosts_UnitTypeIDArray: MJAIModelCost_[]; // Link to MJAIModelCosts
     
@@ -16383,6 +16380,12 @@ export class CreateMJAIModelPriceUnitTypeInput {
     @Field({ nullable: true })
     DriverClass?: string;
 
+    @Field({ nullable: true })
+    UsageTypeID?: string;
+
+    @Field(() => Float, { nullable: true })
+    UnitsPerBillingUnit?: number;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -16404,6 +16407,12 @@ export class UpdateMJAIModelPriceUnitTypeInput {
 
     @Field({ nullable: true })
     DriverClass?: string;
+
+    @Field({ nullable: true })
+    UsageTypeID?: string;
+
+    @Field(() => Float, { nullable: true })
+    UnitsPerBillingUnit?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -18795,9 +18804,9 @@ export class MJAIPromptRun_ {
     @Field(() => Float, {nullable: true, description: `Quantity of continuous output produced by this run, expressed in the base measure named by UsageTypeID (e.g. seconds of audio synthesized, or images generated). NULL for token-billed runs.`}) 
     OutputUnitsUsed?: number;
         
-    @Field({nullable: true, description: `The base measure the InputUnitsUsed / OutputUnitsUsed quantities are counted in. NULL means the run was token-billed and the Tokens* columns carry the quantity. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type driver converts.`}) 
+    @Field({description: `The base measure this run's quantities are counted in. Defaults to Tokens, where the Tokens* columns carry the quantity and the units columns are unused; a continuous-media run sets it to Seconds, Characters or Images and populates InputUnitsUsed / OutputUnitsUsed. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type converts. NOT NULL deliberately — an earlier revision used NULL to mean "token-billed", an implicit convention the runtime then had to defend in four separate places.`}) 
     @MaxLength(36)
-    UsageTypeID?: string;
+    UsageTypeID: string;
         
     @Field() 
     @MaxLength(255)
@@ -18843,9 +18852,9 @@ export class MJAIPromptRun_ {
     @MaxLength(255)
     TestRun?: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(50)
-    UsageType?: string;
+    UsageType: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -19154,7 +19163,7 @@ export class CreateMJAIPromptRunInput {
     OutputUnitsUsed: number | null;
 
     @Field({ nullable: true })
-    UsageTypeID: string | null;
+    UsageTypeID?: string;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -19431,7 +19440,7 @@ export class UpdateMJAIPromptRunInput {
     OutputUnitsUsed?: number | null;
 
     @Field({ nullable: true })
-    UsageTypeID?: string | null;
+    UsageTypeID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -22245,7 +22254,7 @@ export class MJAISkillResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: AI Usage Types
 //****************************************************************************
-@ObjectType({ description: `The base measure a quantity of AI usage is expressed in — Tokens, Seconds, Characters or Images. Referenced by AIModelCost (what a price is per) and by AIPromptRun (what a recorded quantity counts). Distinct from AIModelPriceUnitType, which names the BILLING measure and owns the conversion driver: audio recorded in Seconds may be billed by the TimePerHour price unit type.` })
+@ObjectType({ description: `The base measure a quantity of AI usage is expressed in — Tokens, Seconds, Characters or Images. Referenced by AIModelPriceUnitType (what a billing unit is a quantity of, and therefore what every cost row priced by it measures) and by AIPromptRun (what a recorded quantity counts). Distinct from AIModelPriceUnitType itself, which names the BILLING unit and its scale: audio recorded in Seconds may be billed by the Per Hour unit type.` })
 export class MJAIUsageType_ {
     @Field() 
     @MaxLength(36)
@@ -22264,11 +22273,11 @@ export class MJAIUsageType_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field(() => [MJAIModelCost_])
-    MJAIModelCosts_UsageTypeIDArray: MJAIModelCost_[]; // Link to MJAIModelCosts
-    
     @Field(() => [MJAIPromptRun_])
     MJAIPromptRuns_UsageTypeIDArray: MJAIPromptRun_[]; // Link to MJAIPromptRuns
+    
+    @Field(() => [MJAIModelPriceUnitType_])
+    MJAIModelPriceUnitTypes_UsageTypeIDArray: MJAIModelPriceUnitType_[]; // Link to MJAIModelPriceUnitTypes
     
 }
 
@@ -22369,16 +22378,6 @@ export class MJAIUsageTypeResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJAIModelCost_])
-    async MJAIModelCosts_UsageTypeIDArray(@Root() mjaiusagetype_: MJAIUsageType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Model Costs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIModelCosts')} WHERE ${provider.QuoteIdentifier('UsageTypeID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Model Costs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [mjaiusagetype_.ID], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Costs', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJAIPromptRun_])
     async MJAIPromptRuns_UsageTypeIDArray(@Root() mjaiusagetype_: MJAIUsageType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
@@ -22386,6 +22385,16 @@ export class MJAIUsageTypeResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIPromptRuns')} WHERE ${provider.QuoteIdentifier('UsageTypeID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaiusagetype_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIModelPriceUnitType_])
+    async MJAIModelPriceUnitTypes_UsageTypeIDArray(@Root() mjaiusagetype_: MJAIUsageType_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Model Price Unit Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIModelPriceUnitTypes')} WHERE ${provider.QuoteIdentifier('UsageTypeID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Model Price Unit Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiusagetype_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Price Unit Types', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

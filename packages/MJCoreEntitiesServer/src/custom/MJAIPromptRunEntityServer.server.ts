@@ -272,7 +272,9 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
      */
     protected RecordedUsage(): RecordedRunUsage {
         const usageTypeName = AIEngineBase.Instance.UsageTypeName(this.UsageTypeID);
-        if (this.UsageTypeID && usageTypeName === null) {
+        if (usageTypeName === null) {
+            // UsageTypeID is NOT NULL with a default of Tokens, so an unresolvable value is always a
+            // real fault — a stale cache or a deleted catalog row — never an ordinary unset column.
             LogError(
                 `AIPromptRun ${this.ID} references usage type ${this.UsageTypeID}, which is not in the ` +
                 `loaded catalog; its units cannot be priced.`

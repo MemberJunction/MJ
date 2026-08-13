@@ -448,7 +448,7 @@ export const AiCostChecks: NamedCheck[] = [
                 ID: string;
                 ModelID: string | null;
                 VendorID: string | null;
-                UsageTypeID: string | null;
+                UsageTypeID: string;
                 TokensUsed: number | null;
                 InputUnitsUsed: number | null;
                 OutputUnitsUsed: number | null;
@@ -476,13 +476,21 @@ export const AiCostChecks: NamedCheck[] = [
             // look at rather than listing hundreds of run ids.
             const priceExisted = new Map<string, number>();
             let noPriceConfigured = 0;
+            let unresolvableMeasure = 0;
             for (const row of uncosted) {
                 if (!row.ModelID || !row.VendorID) {
                     // Cost calculation requires both; without them the run is correctly skipped.
                     noPriceConfigured++;
                     continue;
                 }
-                const measure = engine.UsageTypeName(row.UsageTypeID) ?? 'Tokens';
+                // UsageTypeID is NOT NULL with a default of Tokens, so an unresolvable value is a real
+                // fault rather than an unset column — counted separately instead of defaulted to
+                // Tokens, which would attribute it to a pricing gap it has nothing to do with.
+                const measure = engine.UsageTypeName(row.UsageTypeID);
+                if (measure === null) {
+                    unresolvableMeasure++;
+                    continue;
+                }
                 const cost = engine.GetActiveModelCost(row.ModelID, row.VendorID, 'Realtime', measure as never);
                 if (!cost) {
                     noPriceConfigured++;
@@ -496,6 +504,12 @@ export const AiCostChecks: NamedCheck[] = [
                 console.warn(
                     `      ⚠ ${noPriceConfigured}/${uncosted.length} uncosted run(s) have NO active cost row in the ` +
                     `measure they recorded — a pricing-coverage gap, not a pipeline failure (see AC5)`
+                );
+            }
+            if (unresolvableMeasure > 0) {
+                console.warn(
+                    `      ⚠ ${unresolvableMeasure}/${uncosted.length} uncosted run(s) name a UsageTypeID absent from ` +
+                    `the MJ: AI Usage Types catalog — a deleted row or a stale cache, not a pricing gap`
                 );
             }
             const offenders = [...priceExisted.entries()].map(([key, n]) => `${key}: ${n} run(s)`);

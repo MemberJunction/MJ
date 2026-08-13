@@ -1,6 +1,14 @@
 import { ModelUsageUnitKind } from "@memberjunction/ai";
-import { MJAIModelCostEntity } from "@memberjunction/core-entities";
+import { MJAIModelCostEntity, MJAIModelPriceUnitTypeEntity } from "@memberjunction/core-entities";
 import { RegisterClass, RequiresSubclass } from "@memberjunction/global";
+
+/**
+ * The DriverClass a price unit type names to be priced from its own row rather than from code.
+ *
+ * Seeding a row with this driver, a `UsageTypeID` and a `UnitsPerBillingUnit` is all a new LINEAR
+ * billing unit needs — no class, no registration, no build. See {@link LinearPriceUnitType}.
+ */
+export const LINEAR_PRICE_UNIT_DRIVER_CLASS = 'Linear';
 
 /**
  * A run's billable quantities, already split into the buckets a price unit type prices
@@ -42,6 +50,21 @@ export interface NormalizedUsage {
  */
 @RequiresSubclass()
 export abstract class BasePriceUnitType {
+    /**
+     * The `MJ: AI Model Price Unit Types` row this driver was resolved for, when the caller supplied
+     * it — {@link AIEngineBase.GetPriceCalculator} always does.
+     *
+     * Optional, and read by no built-in driver except {@link LinearPriceUnitType}: the hardcoded
+     * drivers know their own measure and scale, and any subclass outside this repo predates the
+     * parameter entirely and keeps working because extra constructor arguments are inert in JS.
+     * It exists so a driver CAN be configured by data instead of by code.
+     */
+    protected readonly PriceUnitType?: MJAIModelPriceUnitTypeEntity;
+
+    constructor(priceUnitType?: MJAIModelPriceUnitTypeEntity) {
+        this.PriceUnitType = priceUnitType;
+    }
+
     /**
      * The base measure this driver prices. Callers must hand it quantities in this measure —
      * a driver that prices audio never receives token counts, and vice versa.
@@ -358,6 +381,81 @@ export class PerImagePriceUnitType extends BasePriceUnitType {
     ): number {
         // UnitsPerBillingUnit is the inherited default of 1 — an image IS the billed unit.
         return this.InternalCalculateNormalizedCost(this.UnitsPerBillingUnit, activeCost, inputImages, outputImages);
+    }
+}
+
+/**
+ * Prices any LINEAR billing unit entirely from its own `MJ: AI Model Price Unit Types` row.
+ *
+ * ## Why this exists — it closes B60's class, not just its instance
+ *
+ * The three continuous-media unit types that shipped uncosted (`Per Image`, `Per Minute`,
+ * `Per Hour`) were seeded as DATA by one person while the driver classes that price them were
+ * never written by another. The seam was silent for months. Every hardcoded driver below is a
+ * standing invitation to repeat that: seeding a row is not sufficient, so a row can always exist
+ * without the code that gives it meaning.
+ *
+ * With the measure (`UsageTypeID`) and the divisor (`UnitsPerBillingUnit`) held as columns, a linear
+ * unit type needs no code at all — it names this driver and states its own arithmetic. "Per 1,000
+ * Characters" becomes one seeded row rather than a row plus a class plus a registration plus a
+ * release.
+ *
+ * ## Why unregistered driver names still refuse
+ *
+ * This is opt-in via `DriverClass = 'Linear'` rather than a fallback for any unresolvable driver.
+ * `DriverClass` is NOT NULL, so every row names something, and an unrecognised name is ambiguous
+ * between "a new linear unit type" and "a genuinely non-linear driver whose code is missing". Pricing
+ * the second linearly would produce a confident wrong number, which is the one outcome this whole
+ * subsystem is built to avoid. So an unknown driver keeps refusing, and a row that WANTS data-driven
+ * pricing says so.
+ *
+ * `DriverClass` therefore remains the escape hatch for genuinely non-linear pricing: tiered rates,
+ * per-image-by-resolution, or minimum-billing increments such as the Groq 10-second floor.
+ */
+@RegisterClass(BasePriceUnitType, LINEAR_PRICE_UNIT_DRIVER_CLASS)
+export class LinearPriceUnitType extends BasePriceUnitType {
+    /**
+     * The measure named by the row's usage type. Falls back to `Tokens` only when this driver was
+     * constructed with no row at all, which `GetPriceCalculator` never does — a caller that
+     * instantiates it directly gets the same default every other driver has.
+     */
+    public override get UnitKind(): ModelUsageUnitKind {
+        const name = this.PriceUnitType?.UsageType;
+        return (name as ModelUsageUnitKind | undefined) ?? 'Tokens';
+    }
+
+    /**
+     * The row's divisor. A non-positive or non-finite value would turn cost into Infinity or NaN, so
+     * it falls back to 1 — the identity — rather than propagating a poisoned number into a persisted
+     * cost. The database also carries `CK_AIModelPriceUnitType_UnitsPerBillingUnit CHECK (> 0)`, so
+     * reaching this fallback means something bypassed the constraint.
+     */
+    public override get UnitsPerBillingUnit(): number {
+        const raw = Number(this.PriceUnitType?.UnitsPerBillingUnit);
+        return Number.isFinite(raw) && raw > 0 ? raw : 1;
+    }
+
+    CalculateNormalizedCost(
+        activeCost: MJAIModelCostEntity,
+        inputQuantity: number,
+        outputQuantity: number
+    ): number {
+        return this.InternalCalculateNormalizedCost(this.UnitsPerBillingUnit, activeCost, inputQuantity, outputQuantity);
+    }
+
+    override CalculateNormalizedCostWithCache(
+        activeCost: MJAIModelCostEntity,
+        uncachedInputTokens: number,
+        cacheReadTokens: number,
+        cacheWriteTokens: number,
+        outputTokens: number
+    ): number {
+        // Per-bucket rates are meaningful for token measures and inert for the others (no vendor
+        // caches audio or images), so applying them uniformly is correct either way: with no cache
+        // quantities recorded, this reduces exactly to input + output at their own rates.
+        return this.InternalCalculateNormalizedCostWithCache(
+            this.UnitsPerBillingUnit, activeCost, uncachedInputTokens, cacheReadTokens, cacheWriteTokens, outputTokens
+        );
     }
 }
 

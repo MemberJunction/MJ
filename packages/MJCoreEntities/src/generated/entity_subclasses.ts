@@ -5881,7 +5881,9 @@ export const MJAIModelCostSchema = z.object({
         * * Field Name: PriceTypeID
         * * Display Name: Price Type
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)`),
+        * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)
+        * * Default Value: ECE2BCB7-C854-4BF7-A517-D72793A40652
+        * * Description: DEPRECATED — descriptive only; nothing prices, filters or branches on it. The authority on what a cost row measures is UnitTypeID -> AIModelPriceUnitType.UsageTypeID. Retained only so existing configurations still validate and historical spCreateAIModelCost calls keep working; do not populate it for new cost rows.`),
     InputPricePerUnit: z.number().describe(`
         * * Field Name: InputPricePerUnit
         * * Display Name: Input Price Per Unit
@@ -5931,13 +5933,6 @@ export const MJAIModelCostSchema = z.object({
         * * Display Name: Cache Write Price Per Unit
         * * SQL Data Type: decimal(18, 8)
         * * Description: Optional price per unit for input tokens written to the AI provider's prompt cache (cache writes / creation), expressed in the same currency and UnitType as InputPricePerUnit. When NULL, cache-write tokens are priced at InputPricePerUnit. Populated for providers that bill cache creation separately (e.g. Anthropic, ~1.25x input); leave NULL for providers that do not (OpenAI, Gemini), which also report 0 cache-write tokens.`),
-    UsageTypeID: z.string().describe(`
-        * * Field Name: UsageTypeID
-        * * Display Name: Usage Type
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: AI Usage Types (vwAIUsageTypes.ID)
-        * * Default Value: 1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D
-        * * Description: The base measure this price is per — Tokens for a conventional text model, Seconds for audio, Images for image generation. Says what InputPricePerUnit and OutputPricePerUnit are quantities OF; the linked AIModelPriceUnitType says at what granularity they are billed and owns the conversion.`),
     Model: z.string().describe(`
         * * Field Name: Model
         * * Display Name: Model Name
@@ -5954,10 +5949,6 @@ export const MJAIModelCostSchema = z.object({
         * * Field Name: UnitType
         * * Display Name: Unit Type Name
         * * SQL Data Type: nvarchar(100)`),
-    UsageType: z.string().describe(`
-        * * Field Name: UsageType
-        * * Display Name: Usage Type Name
-        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type MJAIModelCostEntityType = z.infer<typeof MJAIModelCostSchema>;
@@ -6116,6 +6107,23 @@ export const MJAIModelPriceUnitTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    UsageTypeID: z.string().describe(`
+        * * Field Name: UsageTypeID
+        * * Display Name: Usage Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Usage Types (vwAIUsageTypes.ID)
+        * * Default Value: 1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D
+        * * Description: The base measure this billing unit is a quantity of — Tokens for a per-1M-tokens rate, Seconds for a per-minute or per-hour rate, Images for a per-image rate. This is the authority on what a cost row priced by this unit type measures: AIModelCost deliberately does NOT carry its own copy, because two copies can disagree and nothing would arbitrate.`),
+    UnitsPerBillingUnit: z.number().describe(`
+        * * Field Name: UnitsPerBillingUnit
+        * * Display Name: Units Per Billing Unit
+        * * SQL Data Type: decimal(19, 8)
+        * * Default Value: 1
+        * * Description: How many units of the base measure make ONE billed unit: 1000000 for a per-1M-tokens rate, 3600 for per-hour, 60 for per-minute, 1 for per-image. Cost is (quantity / UnitsPerBillingUnit) * PricePerUnit. Holding the divisor as DATA is what lets a new linear billing unit ship by seeding a row, with no driver class and no build — the code-only requirement is what made bug B60 possible. DriverClass remains for non-linear pricing (tiered rates, per-image-by-resolution, minimum-billing increments).`),
+    UsageType: z.string().describe(`
+        * * Field Name: UsageType
+        * * Display Name: Usage Type
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type MJAIModelPriceUnitTypeEntityType = z.infer<typeof MJAIModelPriceUnitTypeSchema>;
@@ -6742,7 +6750,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Optional configuration used for this execution.`),
     RunAt: z.date().describe(`
         * * Field Name: RunAt
-        * * Display Name: Run At
+        * * Display Name: Started At
         * * SQL Data Type: datetimeoffset
         * * Default Value: sysdatetimeoffset()
         * * Description: When the prompt run started, with timezone offset information.`),
@@ -6773,12 +6781,12 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Total number of tokens used (prompt + completion).`),
     TokensPrompt: z.number().nullable().describe(`
         * * Field Name: TokensPrompt
-        * * Display Name: Tokens (Prompt)
+        * * Display Name: Prompt Tokens
         * * SQL Data Type: int
         * * Description: Number of tokens in the prompt.`),
     TokensCompletion: z.number().nullable().describe(`
         * * Field Name: TokensCompletion
-        * * Display Name: Tokens (Completion)
+        * * Display Name: Completion Tokens
         * * SQL Data Type: int
         * * Description: Number of tokens in the completion/result.`),
     TotalCost: z.number().nullable().describe(`
@@ -6847,12 +6855,12 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.`),
     TokensPromptRollup: z.number().nullable().describe(`
         * * Field Name: TokensPromptRollup
-        * * Display Name: Tokens Prompt (Rollup)
+        * * Display Name: Prompt Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.`),
     TokensCompletionRollup: z.number().nullable().describe(`
         * * Field Name: TokensCompletionRollup
-        * * Display Name: Tokens Completion (Rollup)
+        * * Display Name: Completion Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.`),
     Temperature: z.number().nullable().describe(`
@@ -6927,7 +6935,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Number of validation attempts that passed validation`),
     FinalValidationPassed: z.boolean().nullable().describe(`
         * * Field Name: FinalValidationPassed
-        * * Display Name: Final Validation Passed
+        * * Display Name: Validation Passed
         * * SQL Data Type: bit
         * * Description: Whether validation ultimately passed (1) or failed (0)`),
     ValidationBehavior: z.string().nullable().describe(`
@@ -6972,12 +6980,12 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Timestamp of the last validation attempt`),
     TotalRetryDurationMS: z.number().nullable().describe(`
         * * Field Name: TotalRetryDurationMS
-        * * Display Name: Retry Duration (ms)
+        * * Display Name: Total Retry Duration (ms)
         * * SQL Data Type: int
         * * Description: Total time spent on retries in milliseconds (excluding first attempt)`),
     ValidationAttempts: z.string().nullable().describe(`
         * * Field Name: ValidationAttempts
-        * * Display Name: Validation History
+        * * Display Name: Validation Attempt Logs
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array containing detailed information about each validation attempt`),
     ValidationSummary: z.string().nullable().describe(`
@@ -7003,13 +7011,13 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: JSON array of duration in milliseconds for each failover attempt`),
     OriginalModelID: z.string().nullable().describe(`
         * * Field Name: OriginalModelID
-        * * Display Name: Original Model
+        * * Display Name: Original Model ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
         * * Description: The AI Model ID that was originally attempted before any failovers`),
     OriginalRequestStartTime: z.date().nullable().describe(`
         * * Field Name: OriginalRequestStartTime
-        * * Display Name: Original Start Time
+        * * Display Name: Original Request Start
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp when the original request started, before any failovers`),
     TotalFailoverDuration: z.number().nullable().describe(`
@@ -7134,7 +7142,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.`),
     ModelSpecificResponseDetails: z.string().nullable().describe(`
         * * Field Name: ModelSpecificResponseDetails
-        * * Display Name: Response Metadata
+        * * Display Name: Provider Response Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.`),
     EffortLevel: z.number().nullable().describe(`
@@ -7185,67 +7193,68 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Rollup of TokensCacheWrite across this prompt run and all of its descendant prompt runs. For a leaf run this equals TokensCacheWrite. Mirrors TokensUsedRollup/TokensPromptRollup; populated for providers that report cache writes (e.g. Anthropic), otherwise 0 or NULL.`),
     InputUnitsUsed: z.number().nullable().describe(`
         * * Field Name: InputUnitsUsed
-        * * Display Name: Input Units
+        * * Display Name: Input Units Used
         * * SQL Data Type: decimal(19, 8)
         * * Description: Quantity of continuous input consumed by this run, expressed in the base measure named by UsageTypeID (e.g. seconds of audio submitted for transcription). NULL for token-billed runs, which use the Tokens* columns instead.`),
     OutputUnitsUsed: z.number().nullable().describe(`
         * * Field Name: OutputUnitsUsed
-        * * Display Name: Output Units
+        * * Display Name: Output Units Used
         * * SQL Data Type: decimal(19, 8)
         * * Description: Quantity of continuous output produced by this run, expressed in the base measure named by UsageTypeID (e.g. seconds of audio synthesized, or images generated). NULL for token-billed runs.`),
-    UsageTypeID: z.string().nullable().describe(`
+    UsageTypeID: z.string().describe(`
         * * Field Name: UsageTypeID
-        * * Display Name: Usage Type
+        * * Display Name: Usage Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Usage Types (vwAIUsageTypes.ID)
-        * * Description: The base measure the InputUnitsUsed / OutputUnitsUsed quantities are counted in. NULL means the run was token-billed and the Tokens* columns carry the quantity. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type driver converts.`),
+        * * Default Value: 1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D
+        * * Description: The base measure this run's quantities are counted in. Defaults to Tokens, where the Tokens* columns carry the quantity and the units columns are unused; a continuous-media run sets it to Seconds, Characters or Images and populates InputUnitsUsed / OutputUnitsUsed. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type converts. NOT NULL deliberately — an earlier revision used NULL to mean "token-billed", an implicit convention the runtime then had to defend in four separate places.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
-        * * Display Name: Prompt Name
+        * * Display Name: Prompt
         * * SQL Data Type: nvarchar(255)`),
     Model: z.string().describe(`
         * * Field Name: Model
-        * * Display Name: Model Name
+        * * Display Name: Model
         * * SQL Data Type: nvarchar(50)`),
     Vendor: z.string().describe(`
         * * Field Name: Vendor
-        * * Display Name: Vendor Name
+        * * Display Name: Vendor
         * * SQL Data Type: nvarchar(50)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent Name
+        * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
-        * * Display Name: Configuration Name
+        * * Display Name: Configuration
         * * SQL Data Type: nvarchar(100)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Run Name
+        * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
     OriginalModel: z.string().nullable().describe(`
         * * Field Name: OriginalModel
-        * * Display Name: Original Model Name
+        * * Display Name: Original Model
         * * SQL Data Type: nvarchar(50)`),
     RerunFromPromptRun: z.string().nullable().describe(`
         * * Field Name: RerunFromPromptRun
-        * * Display Name: Rerun From Run Name
+        * * Display Name: Rerun From Run
         * * SQL Data Type: nvarchar(255)`),
     Judge: z.string().nullable().describe(`
         * * Field Name: Judge
-        * * Display Name: Judge Name
+        * * Display Name: Judge
         * * SQL Data Type: nvarchar(255)`),
     ChildPrompt: z.string().nullable().describe(`
         * * Field Name: ChildPrompt
-        * * Display Name: Child Prompt Name
+        * * Display Name: Child Prompt
         * * SQL Data Type: nvarchar(255)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run Name
+        * * Display Name: Test Run
         * * SQL Data Type: nvarchar(255)`),
-    UsageType: z.string().nullable().describe(`
+    UsageType: z.string().describe(`
         * * Field Name: UsageType
-        * * Display Name: Usage Type Name
+        * * Display Name: Usage Type
         * * SQL Data Type: nvarchar(50)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -7253,7 +7262,7 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier`),
     RootRerunFromPromptRunID: z.string().nullable().describe(`
         * * Field Name: RootRerunFromPromptRunID
-        * * Display Name: Root Rerun From
+        * * Display Name: Root Rerun Source
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -49192,8 +49201,11 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
     /**
     * * Field Name: PriceTypeID
     * * Display Name: Price Type
-    * * SQL Data Type: uniqueidentifier
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Model Price Types (vwAIModelPriceTypes.ID)
+    * * Default Value: ECE2BCB7-C854-4BF7-A517-D72793A40652
+    * * Description: DEPRECATED — descriptive only; nothing prices, filters or branches on it. The authority on what a cost row measures is UnitTypeID -> AIModelPriceUnitType.UsageTypeID. Retained only so existing configurations still validate and historical spCreateAIModelCost calls keep working; do not populate it for new cost rows.
     */
     get PriceTypeID(): string {
         return this.Get('PriceTypeID');
@@ -49318,21 +49330,6 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
     }
 
     /**
-    * * Field Name: UsageTypeID
-    * * Display Name: Usage Type
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: AI Usage Types (vwAIUsageTypes.ID)
-    * * Default Value: 1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D
-    * * Description: The base measure this price is per — Tokens for a conventional text model, Seconds for audio, Images for image generation. Says what InputPricePerUnit and OutputPricePerUnit are quantities OF; the linked AIModelPriceUnitType says at what granularity they are billed and owns the conversion.
-    */
-    get UsageTypeID(): string {
-        return this.Get('UsageTypeID');
-    }
-    set UsageTypeID(value: string) {
-        this.Set('UsageTypeID', value);
-    }
-
-    /**
     * * Field Name: Model
     * * Display Name: Model Name
     * * SQL Data Type: nvarchar(50)
@@ -49366,15 +49363,6 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
     */
     get UnitType(): string {
         return this.Get('UnitType');
-    }
-
-    /**
-    * * Field Name: UsageType
-    * * Display Name: Usage Type Name
-    * * SQL Data Type: nvarchar(50)
-    */
-    get UsageType(): string {
-        return this.Get('UsageType');
     }
 }
 
@@ -49857,6 +49845,44 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: UsageTypeID
+    * * Display Name: Usage Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Usage Types (vwAIUsageTypes.ID)
+    * * Default Value: 1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D
+    * * Description: The base measure this billing unit is a quantity of — Tokens for a per-1M-tokens rate, Seconds for a per-minute or per-hour rate, Images for a per-image rate. This is the authority on what a cost row priced by this unit type measures: AIModelCost deliberately does NOT carry its own copy, because two copies can disagree and nothing would arbitrate.
+    */
+    get UsageTypeID(): string {
+        return this.Get('UsageTypeID');
+    }
+    set UsageTypeID(value: string) {
+        this.Set('UsageTypeID', value);
+    }
+
+    /**
+    * * Field Name: UnitsPerBillingUnit
+    * * Display Name: Units Per Billing Unit
+    * * SQL Data Type: decimal(19, 8)
+    * * Default Value: 1
+    * * Description: How many units of the base measure make ONE billed unit: 1000000 for a per-1M-tokens rate, 3600 for per-hour, 60 for per-minute, 1 for per-image. Cost is (quantity / UnitsPerBillingUnit) * PricePerUnit. Holding the divisor as DATA is what lets a new linear billing unit ship by seeding a row, with no driver class and no build — the code-only requirement is what made bug B60 possible. DriverClass remains for non-linear pricing (tiered rates, per-image-by-resolution, minimum-billing increments).
+    */
+    get UnitsPerBillingUnit(): number {
+        return this.Get('UnitsPerBillingUnit');
+    }
+    set UnitsPerBillingUnit(value: number) {
+        this.Set('UnitsPerBillingUnit', value);
+    }
+
+    /**
+    * * Field Name: UsageType
+    * * Display Name: Usage Type
+    * * SQL Data Type: nvarchar(50)
+    */
+    get UsageType(): string {
+        return this.Get('UsageType');
     }
 }
 
@@ -52031,7 +52057,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RunAt
-    * * Display Name: Run At
+    * * Display Name: Started At
     * * SQL Data Type: datetimeoffset
     * * Default Value: sysdatetimeoffset()
     * * Description: When the prompt run started, with timezone offset information.
@@ -52110,7 +52136,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensPrompt
-    * * Display Name: Tokens (Prompt)
+    * * Display Name: Prompt Tokens
     * * SQL Data Type: int
     * * Description: Number of tokens in the prompt.
     */
@@ -52123,7 +52149,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensCompletion
-    * * Display Name: Tokens (Completion)
+    * * Display Name: Completion Tokens
     * * SQL Data Type: int
     * * Description: Number of tokens in the completion/result.
     */
@@ -52282,7 +52308,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensPromptRollup
-    * * Display Name: Tokens Prompt (Rollup)
+    * * Display Name: Prompt Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.
     */
@@ -52295,7 +52321,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensCompletionRollup
-    * * Display Name: Tokens Completion (Rollup)
+    * * Display Name: Completion Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.
     */
@@ -52490,7 +52516,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: FinalValidationPassed
-    * * Display Name: Final Validation Passed
+    * * Display Name: Validation Passed
     * * SQL Data Type: bit
     * * Description: Whether validation ultimately passed (1) or failed (0)
     */
@@ -52607,7 +52633,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TotalRetryDurationMS
-    * * Display Name: Retry Duration (ms)
+    * * Display Name: Total Retry Duration (ms)
     * * SQL Data Type: int
     * * Description: Total time spent on retries in milliseconds (excluding first attempt)
     */
@@ -52620,7 +52646,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ValidationAttempts
-    * * Display Name: Validation History
+    * * Display Name: Validation Attempt Logs
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array containing detailed information about each validation attempt
     */
@@ -52686,7 +52712,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: OriginalModelID
-    * * Display Name: Original Model
+    * * Display Name: Original Model ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     * * Description: The AI Model ID that was originally attempted before any failovers
@@ -52700,7 +52726,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: OriginalRequestStartTime
-    * * Display Name: Original Start Time
+    * * Display Name: Original Request Start
     * * SQL Data Type: datetimeoffset
     * * Description: Timestamp when the original request started, before any failovers
     */
@@ -52993,7 +53019,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ModelSpecificResponseDetails
-    * * Display Name: Response Metadata
+    * * Display Name: Provider Response Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.
     */
@@ -53124,7 +53150,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: InputUnitsUsed
-    * * Display Name: Input Units
+    * * Display Name: Input Units Used
     * * SQL Data Type: decimal(19, 8)
     * * Description: Quantity of continuous input consumed by this run, expressed in the base measure named by UsageTypeID (e.g. seconds of audio submitted for transcription). NULL for token-billed runs, which use the Tokens* columns instead.
     */
@@ -53137,7 +53163,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: OutputUnitsUsed
-    * * Display Name: Output Units
+    * * Display Name: Output Units Used
     * * SQL Data Type: decimal(19, 8)
     * * Description: Quantity of continuous output produced by this run, expressed in the base measure named by UsageTypeID (e.g. seconds of audio synthesized, or images generated). NULL for token-billed runs.
     */
@@ -53150,21 +53176,22 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: UsageTypeID
-    * * Display Name: Usage Type
+    * * Display Name: Usage Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Usage Types (vwAIUsageTypes.ID)
-    * * Description: The base measure the InputUnitsUsed / OutputUnitsUsed quantities are counted in. NULL means the run was token-billed and the Tokens* columns carry the quantity. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type driver converts.
+    * * Default Value: 1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D
+    * * Description: The base measure this run's quantities are counted in. Defaults to Tokens, where the Tokens* columns carry the quantity and the units columns are unused; a continuous-media run sets it to Seconds, Characters or Images and populates InputUnitsUsed / OutputUnitsUsed. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type converts. NOT NULL deliberately — an earlier revision used NULL to mean "token-billed", an implicit convention the runtime then had to defend in four separate places.
     */
-    get UsageTypeID(): string | null {
+    get UsageTypeID(): string {
         return this.Get('UsageTypeID');
     }
-    set UsageTypeID(value: string | null) {
+    set UsageTypeID(value: string) {
         this.Set('UsageTypeID', value);
     }
 
     /**
     * * Field Name: Prompt
-    * * Display Name: Prompt Name
+    * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
     */
     get Prompt(): string {
@@ -53173,7 +53200,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: Model
-    * * Display Name: Model Name
+    * * Display Name: Model
     * * SQL Data Type: nvarchar(50)
     */
     get Model(): string {
@@ -53182,7 +53209,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: Vendor
-    * * Display Name: Vendor Name
+    * * Display Name: Vendor
     * * SQL Data Type: nvarchar(50)
     */
     get Vendor(): string {
@@ -53191,7 +53218,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent Name
+    * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -53200,7 +53227,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: Configuration
-    * * Display Name: Configuration Name
+    * * Display Name: Configuration
     * * SQL Data Type: nvarchar(100)
     */
     get Configuration(): string | null {
@@ -53209,7 +53236,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent Run Name
+    * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -53218,7 +53245,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: OriginalModel
-    * * Display Name: Original Model Name
+    * * Display Name: Original Model
     * * SQL Data Type: nvarchar(50)
     */
     get OriginalModel(): string | null {
@@ -53227,7 +53254,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RerunFromPromptRun
-    * * Display Name: Rerun From Run Name
+    * * Display Name: Rerun From Run
     * * SQL Data Type: nvarchar(255)
     */
     get RerunFromPromptRun(): string | null {
@@ -53236,7 +53263,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: Judge
-    * * Display Name: Judge Name
+    * * Display Name: Judge
     * * SQL Data Type: nvarchar(255)
     */
     get Judge(): string | null {
@@ -53245,7 +53272,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ChildPrompt
-    * * Display Name: Child Prompt Name
+    * * Display Name: Child Prompt
     * * SQL Data Type: nvarchar(255)
     */
     get ChildPrompt(): string | null {
@@ -53254,7 +53281,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run Name
+    * * Display Name: Test Run
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -53263,10 +53290,10 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: UsageType
-    * * Display Name: Usage Type Name
+    * * Display Name: Usage Type
     * * SQL Data Type: nvarchar(50)
     */
-    get UsageType(): string | null {
+    get UsageType(): string {
         return this.Get('UsageType');
     }
 
@@ -53281,7 +53308,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RootRerunFromPromptRunID
-    * * Display Name: Root Rerun From
+    * * Display Name: Root Rerun Source
     * * SQL Data Type: uniqueidentifier
     */
     get RootRerunFromPromptRunID(): string | null {
@@ -55881,7 +55908,7 @@ export class MJAISkillEntity extends BaseEntity<MJAISkillEntityType> {
  * * Schema: __mj
  * * Base Table: AIUsageType
  * * Base View: vwAIUsageTypes
- * * @description The base measure a quantity of AI usage is expressed in — Tokens, Seconds, Characters or Images. Referenced by AIModelCost (what a price is per) and by AIPromptRun (what a recorded quantity counts). Distinct from AIModelPriceUnitType, which names the BILLING measure and owns the conversion driver: audio recorded in Seconds may be billed by the TimePerHour price unit type.
+ * * @description The base measure a quantity of AI usage is expressed in — Tokens, Seconds, Characters or Images. Referenced by AIModelPriceUnitType (what a billing unit is a quantity of, and therefore what every cost row priced by it measures) and by AIPromptRun (what a recorded quantity counts). Distinct from AIModelPriceUnitType itself, which names the BILLING unit and its scale: audio recorded in Seconds may be billed by the Per Hour unit type.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class

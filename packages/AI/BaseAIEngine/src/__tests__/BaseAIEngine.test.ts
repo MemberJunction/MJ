@@ -360,20 +360,26 @@ describe('AIEngineBase', () => {
          * and the normalization — which is what these cover; class-factory resolution is a
          * separate concern with its own coverage.
          *
-         * `usageKind` is the measure the COST ROW declares (its `UsageTypeID`), which is what
-         * `GetActiveModelCost` now filters on. It is deliberately independent of the driver, so a
-         * row whose declared measure and driver disagree can be constructed and refused.
+         * `usageKind` is declared on the PRICE UNIT TYPE, not on the cost row: the cost row carries
+         * no measure of its own, precisely so it cannot contradict its unit type. `UsageType` is the
+         * denormalized name CodeGen puts on the view for the UsageTypeID foreign key. It stays
+         * independent of the driver, so a unit type whose declared measure and driver disagree can
+         * still be constructed and refused.
          */
         function seed(unitTypeID: string, driver: BasePriceUnitType | null, usageKind: string = 'Tokens') {
             set('_usageTypes', usageTypeRows());
             set('_modelCosts', [{
                 ModelID: 'm1', VendorID: 'v1', ProcessingType: 'Realtime', Status: 'Active',
                 StartedAt: null, EndedAt: null, UnitTypeID: unitTypeID, Currency: 'USD',
-                UsageTypeID: USAGE_TYPE_ID[usageKind],
                 InputPricePerUnit: 6, OutputPricePerUnit: 6,
                 CacheReadPricePerUnit: null, CacheWritePricePerUnit: null,
             }]);
-            set('_modelPriceUnitTypes', [{ ID: unitTypeID, DriverClass: driver?.constructor.name ?? 'Unregistered' }]);
+            set('_modelPriceUnitTypes', [{
+                ID: unitTypeID,
+                DriverClass: driver?.constructor.name ?? 'Unregistered',
+                UsageTypeID: USAGE_TYPE_ID[usageKind],
+                UsageType: usageKind,
+            }]);
             vi.spyOn(AIEngineBase.Instance, 'GetPriceCalculator').mockReturnValue(driver);
         }
 
@@ -439,14 +445,17 @@ describe('AIEngineBase', () => {
             const older = new Date(Date.now() - 86_400_000);
             const newer = new Date(Date.now() - 3_600_000);
             set('_usageTypes', usageTypeRows());
+            set('_modelPriceUnitTypes', [
+                { ID: PER_MINUTE, DriverClass: 'TimePerMinute', UsageTypeID: USAGE_TYPE_ID['Seconds'], UsageType: 'Seconds' },
+                { ID: PER_MILLION, DriverClass: 'PerMillionTokens', UsageTypeID: USAGE_TYPE_ID['Tokens'], UsageType: 'Tokens' },
+            ]);
             const secondsRow = {
                 ModelID: 'm1', VendorID: 'v1', ProcessingType: 'Realtime', Status: 'Active',
                 StartedAt: older, EndedAt: null, UnitTypeID: PER_MINUTE, Currency: 'USD',
-                UsageTypeID: USAGE_TYPE_ID['Seconds'],
                 InputPricePerUnit: 6, OutputPricePerUnit: 6,
                 CacheReadPricePerUnit: null, CacheWritePricePerUnit: null,
             };
-            const tokensRow = { ...secondsRow, StartedAt: newer, UnitTypeID: PER_MILLION, UsageTypeID: USAGE_TYPE_ID['Tokens'] };
+            const tokensRow = { ...secondsRow, StartedAt: newer, UnitTypeID: PER_MILLION };
             set('_modelCosts', [secondsRow, tokensRow]);
 
             // Measure-aware: each measure resolves its OWN row regardless of start order.

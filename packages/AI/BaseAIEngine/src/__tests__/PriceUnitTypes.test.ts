@@ -39,6 +39,7 @@ import {
     TimePerMinutePriceUnitType,
     TimePerHourPriceUnitType,
     PerImagePriceUnitType,
+    LinearPriceUnitType,
     TOKEN_PRICE_UNIT_TYPE_DIVISORS,
 } from '../PriceUnitTypes';
 import { MODEL_USAGE_UNIT_KINDS, type ModelUsageUnitKind } from '@memberjunction/ai';
@@ -377,6 +378,66 @@ describe('CalculateCost — the quantity-based entry point', () => {
         const calculator = new TimePerMinutePriceUnitType();
         const cost = createMockCost(0.006, 0);
         expect(calculator.CalculateCost(cost as never, { input: 60, output: 0 })).toBeCloseTo(0.006, 10);
+    });
+});
+
+describe('LinearPriceUnitType — priced entirely from its own catalog row', () => {
+    /** A `MJ: AI Model Price Unit Types` row as the engine hands it to the driver. */
+    const row = (usageType: string, unitsPerBillingUnit: number) =>
+        ({ UsageType: usageType, UnitsPerBillingUnit: unitsPerBillingUnit } as never);
+
+    it('takes its measure from the row, not from code', () => {
+        expect(new LinearPriceUnitType(row('Seconds', 60)).UnitKind).toBe('Seconds');
+        expect(new LinearPriceUnitType(row('Images', 1)).UnitKind).toBe('Images');
+        expect(new LinearPriceUnitType(row('Characters', 1000)).UnitKind).toBe('Characters');
+    });
+
+    it('takes its divisor from the row, so a new linear unit type needs no code', () => {
+        // The B60 fix: 'Per 1,000 Characters' is one seeded row, not a row + a class + a release.
+        const driver = new LinearPriceUnitType(row('Characters', 1000));
+        const cost = createMockCost(2, 0);
+        // 1000 characters at $2 per 1000 = exactly $2.
+        expect(driver.CalculateNormalizedCost(cost as never, 1000, 0)).toBeCloseTo(2, 10);
+        expect(driver.UnitsPerBillingUnit).toBe(1000);
+    });
+
+    it('reproduces a hardcoded driver exactly, given the same row values', () => {
+        // If the data-driven path disagreed with the hardcoded one, migrating a unit type from a
+        // class to a row would silently re-price every run through it.
+        const cost = createMockCost(0.111, 0.222);
+        const linear = new LinearPriceUnitType(row('Seconds', 3600));
+        const hardcoded = new TimePerHourPriceUnitType();
+        for (const seconds of [1, 60, 1234.5, 7200]) {
+            expect(linear.CalculateNormalizedCost(cost as never, seconds, 0))
+                .toBeCloseTo(hardcoded.CalculateNormalizedCost(cost as never, seconds, 0), 12);
+        }
+    });
+
+    it('falls back to the identity divisor rather than producing Infinity or NaN', () => {
+        // The database carries CHECK (UnitsPerBillingUnit > 0), so reaching this means something
+        // bypassed the constraint — a poisoned cost is worse than a wrong-scale one.
+        const cost = createMockCost(5, 0);
+        for (const bad of [0, -60, Number.NaN, Number.POSITIVE_INFINITY]) {
+            const driver = new LinearPriceUnitType(row('Tokens', bad));
+            expect(driver.UnitsPerBillingUnit).toBe(1);
+            expect(Number.isFinite(driver.CalculateNormalizedCost(cost as never, 3, 0))).toBe(true);
+        }
+    });
+
+    it('defaults to Tokens and 1 when constructed with no row at all', () => {
+        const driver = new LinearPriceUnitType();
+        expect(driver.UnitKind).toBe('Tokens');
+        expect(driver.UnitsPerBillingUnit).toBe(1);
+    });
+
+    it('applies per-bucket cache rates on the row divisor', () => {
+        const cost = createMockCost(3, 15);
+        cost.CacheReadPricePerUnit = 0.3;
+        const driver = new LinearPriceUnitType(row('Tokens', 1_000_000));
+        const expected =
+            (100_000 / 1_000_000) * 3 + (200_000 / 1_000_000) * 0.3 + (50_000 / 1_000_000) * 15;
+        expect(driver.CalculateNormalizedCostWithCache(cost as never, 100_000, 200_000, 0, 50_000))
+            .toBeCloseTo(expected, 12);
     });
 });
 

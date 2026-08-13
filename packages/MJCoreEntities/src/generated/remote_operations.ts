@@ -608,6 +608,10 @@ export interface TaskGraphSubmitInput {
     environmentID: string;
     /** Conversation this graph answers, when submitted from a conversational channel. */
     conversationDetailID?: string;
+    /** Continuation hops that produced this graph. Counts toward the runaway-loop reinvoke cap exactly as in-process submissions do; omit for a fresh submission. */
+    reinvokeDepth?: number;
+    /** The invocation's runtime parameters, resolved by the flow dialect's `data.*` and `context.*` condition roots. Without it those documented conditions evaluate against nothing. */
+    invocation?: { data?: unknown; context?: unknown };
 }
 
 /** Output of `TaskGraph.Submit`. */

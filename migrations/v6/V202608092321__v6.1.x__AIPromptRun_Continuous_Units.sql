@@ -15,21 +15,42 @@
     the run and the cost point at, which is what makes "what does this price buy" answerable by a
     join instead of by convention.
 
-    Note the two are DIFFERENT questions and stay separate columns:
+    Note the two are DIFFERENT questions and stay separate rows:
       - AIUsageType is the BASE MEASURE of a quantity (Seconds, Images, Tokens, Characters).
       - AIModelPriceUnitType is the BILLING measure and its arithmetic (TimePerHour,
-        PerMillionTokens, PerImage) — it owns the DriverClass that converts base → price.
-    Audio billed per hour is recorded in Seconds and priced by the TimePerHour driver. Collapsing
+        PerMillionTokens, PerImage) — it owns the conversion from base measure to billed unit.
+    Audio billed per hour is recorded in Seconds and priced by the Per Hour unit type. Collapsing
     the two would force a new usage type for every billing granularity.
 
-    NULLABILITY, deliberately different on the two tables:
-      - AIModelCost.UsageTypeID is NOT NULL. Every price is per something, historical rows included,
-        so it is backfilled to Tokens and then tightened — a cost row that cannot say what its unit
-        measures is not interpretable.
-      - AIPromptRun.UsageTypeID is NULL-able. NULL means token-billed, where the Tokens* columns
-        already carry the quantity; the units columns are meaningless there. Making it NOT NULL
-        would require rewriting every historical run row to say "Tokens" to express something the
-        token columns already say, and that UPDATE is unbounded on a large deployment.
+    WHERE THE MEASURE LIVES: ON THE PRICE UNIT TYPE, AND NOWHERE ELSE.
+    An earlier revision of this migration ALSO put UsageTypeID on AIModelCost, so a cost row could
+    state its own measure. That is derivable — a cost row already names a UnitTypeID — and holding it
+    in two places makes the contradiction representable: nothing stops a cost row saying
+    `UsageType = Seconds` while its UnitTypeID points at `Per 1M Tokens`, whose measure is Tokens.
+    That is not abstract. Cost-row selection filters on the measure and the pricing driver reports
+    its own, so a divergence turns the safety check into a comparison between two columns with no
+    arbiter. Single-sourcing on AIModelPriceUnitType makes it unrepresentable instead of unlikely,
+    and the NOT NULL FK there means every cost row still resolves exactly one non-null measure
+    through its UnitTypeID — guaranteed permanently by the FK chain rather than by a backfill a later
+    insert can drift from.
+
+    THE DIVISOR BECOMES DATA (UnitsPerBillingUnit).
+    cost = (quantity / UnitsPerBillingUnit) * PricePerUnit — 1,000,000 for a per-1M-tokens row,
+    3,600 for per-hour, 1 for per-image. That number previously existed ONLY inside a TypeScript
+    class, which is the root cause of bug B60 rather than a detail of it: `Per Image`, `Per Minute`
+    and `Per Hour` were seeded as data by one person, the matching driver classes were never written
+    by another, and the seam between them was silent for months while six ACTIVE image cost rows
+    priced nothing. As a column, seeding the row is sufficient — a generic driver reads UsageTypeID
+    and UnitsPerBillingUnit and does the arithmetic. DriverClass remains, for genuinely non-linear
+    pricing (tiered rates, per-image-by-resolution, minimum-billing increments such as the Groq
+    10-second floor this branch's metadata notes as unmodelled).
+
+    NULLABILITY:
+      - AIModelPriceUnitType.UsageTypeID / UnitsPerBillingUnit are NOT NULL. Every billing unit is
+        per something, at some scale; a row that cannot say either prices nothing.
+      - AIPromptRun.UsageTypeID is NOT NULL, defaulted to Tokens. NULL previously meant
+        "token-billed", an implicit convention the runtime had to defend in four separate places.
+        Making the column state it removes all four.
 
     Deliberately NOT added: rollup columns for units. Units of different types cannot be summed
     across a run tree (seconds + images is meaningless), so cost remains the universal aggregate and
@@ -51,7 +72,7 @@ GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'The base measure a quantity of AI usage is expressed in — Tokens, Seconds, Characters or Images. Referenced by AIModelCost (what a price is per) and by AIPromptRun (what a recorded quantity counts). Distinct from AIModelPriceUnitType, which names the BILLING measure and owns the conversion driver: audio recorded in Seconds may be billed by the TimePerHour price unit type.',
+    @value = N'The base measure a quantity of AI usage is expressed in — Tokens, Seconds, Characters or Images. Referenced by AIModelPriceUnitType (what a billing unit is a quantity of, and therefore what every cost row priced by it measures) and by AIPromptRun (what a recorded quantity counts). Distinct from AIModelPriceUnitType itself, which names the BILLING unit and its scale: audio recorded in Seconds may be billed by the Per Hour unit type.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = 'AIUsageType';
 GO
@@ -72,9 +93,9 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'Description';
 GO
 
--- Seeded here rather than as declarative metadata because the backfill below and the NOT NULL
--- tightening on AIModelCost both depend on the Tokens row existing within this migration. These are
--- schema-level enumerands, not tunable application metadata.
+-- Seeded here rather than as declarative metadata because the NOT NULL columns added below default
+-- to the Tokens row, so it must exist within this migration — a declarative seed pushed later would
+-- be too late for the FK. These are schema-level enumerands, not tunable application metadata.
 DECLARE @UsageTypeTokens     UNIQUEIDENTIFIER = '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D';
 DECLARE @UsageTypeSeconds    UNIQUEIDENTIFIER = '4115A8C8-311E-4DE5-9325-6A61C69CA6A7';
 DECLARE @UsageTypeCharacters UNIQUEIDENTIFIER = '8B075F49-3963-47D5-895C-1B3889A85009';
@@ -89,49 +110,118 @@ VALUES
 GO
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 2. AIModelCost — say what the price is per
+-- 2. AIModelPriceUnitType — the single home of the measure AND the divisor
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- NOT NULL **with a DEFAULT**, added in one statement — the default is load-bearing, not a
--- convenience, and adding the column NULL / backfilling / tightening is what does NOT work here.
+-- Both NOT NULL **with a DEFAULT**, added in one statement. The defaults are load-bearing, not a
+-- convenience, and adding the columns NULL / backfilling / tightening is what does NOT work here.
 --
--- Two separate insert paths write AIModelCost without knowing this column exists:
---   1. `spCreateAIModelCost`, which CodeGen only regenerates with the new parameter AFTER this
---      migration runs — so every insert between the two is short one column.
---   2. The release-time consolidated `*__Metadata_Sync.sql` migration, which ships seeded cost rows
---      and calls that stored procedure. It carries a LATER timestamp than this file, so on a
---      from-scratch build it runs afterwards, against the tightened column, through the old
---      signature.
--- Without the default, (2) aborts the upgrade for every deployment with:
---   "Cannot insert the value NULL into column 'UsageTypeID'". Found by a clean-room bootstrap;
--- it cannot reproduce on a database that already has the seeded rows.
+-- Two separate insert paths write AIModelPriceUnitType without knowing these columns exist:
+--   1. `spCreateAIModelPriceUnitType`, which CodeGen only regenerates with the new parameters AFTER
+--      this migration runs — so every insert between the two is short two columns.
+--   2. The release-time consolidated `*__Metadata_Sync.sql` migration, which calls that stored
+--      procedure. It carries a LATER timestamp than this file, so on a from-scratch build it runs
+--      afterwards, against the tightened columns, through the old signature.
+-- Without the defaults, (2) aborts the upgrade with "Cannot insert the value NULL into column
+-- 'UsageTypeID'". Found by a clean-room bootstrap; it cannot reproduce on a database that already
+-- has the seeded rows.
 --
--- SQL Server populates existing rows from the default as part of ADD, so this IS the backfill:
--- every cost row that exists today prices tokens (the schema had no way to express anything else,
--- which is the defect being fixed), making Tokens the correct value rather than a placeholder for
--- an unknown one — and the correct value for any future insert that does not specify a measure.
-ALTER TABLE ${flyway:defaultSchema}.AIModelCost
+-- SQL Server populates existing rows from the default as part of ADD, so the ADD is the backfill and
+-- the UPDATE below only has to correct the rows whose measure or scale is not the default.
+ALTER TABLE ${flyway:defaultSchema}.AIModelPriceUnitType
 ADD UsageTypeID UNIQUEIDENTIFIER NOT NULL
-    CONSTRAINT DF_AIModelCost_UsageTypeID DEFAULT '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D'
-    CONSTRAINT FK_AIModelCost_UsageType FOREIGN KEY REFERENCES ${flyway:defaultSchema}.AIUsageType(ID);
+        CONSTRAINT DF_AIModelPriceUnitType_UsageTypeID DEFAULT '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D'
+        CONSTRAINT FK_AIModelPriceUnitType_UsageType FOREIGN KEY REFERENCES ${flyway:defaultSchema}.AIUsageType(ID),
+    UnitsPerBillingUnit DECIMAL(19,8) NOT NULL
+        CONSTRAINT DF_AIModelPriceUnitType_UnitsPerBillingUnit DEFAULT 1
+        CONSTRAINT CK_AIModelPriceUnitType_UnitsPerBillingUnit CHECK (UnitsPerBillingUnit > 0);
 GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'The base measure this price is per — Tokens for a conventional text model, Seconds for audio, Images for image generation. Says what InputPricePerUnit and OutputPricePerUnit are quantities OF; the linked AIModelPriceUnitType says at what granularity they are billed and owns the conversion.',
+    @value = N'The base measure this billing unit is a quantity of — Tokens for a per-1M-tokens rate, Seconds for a per-minute or per-hour rate, Images for a per-image rate. This is the authority on what a cost row priced by this unit type measures: AIModelCost deliberately does NOT carry its own copy, because two copies can disagree and nothing would arbitrate.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'AIModelCost',
+    @level1type = N'TABLE', @level1name = 'AIModelPriceUnitType',
     @level2type = N'COLUMN', @level2name = 'UsageTypeID';
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'How many units of the base measure make ONE billed unit: 1000000 for a per-1M-tokens rate, 3600 for per-hour, 60 for per-minute, 1 for per-image. Cost is (quantity / UnitsPerBillingUnit) * PricePerUnit. Holding the divisor as DATA is what lets a new linear billing unit ship by seeding a row, with no driver class and no build — the code-only requirement is what made bug B60 possible. DriverClass remains for non-linear pricing (tiered rates, per-image-by-resolution, minimum-billing increments).',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'AIModelPriceUnitType',
+    @level2type = N'COLUMN', @level2name = 'UnitsPerBillingUnit';
+GO
+
+-- Correct the six shipped rows. Keyed on DriverClass rather than ID: the driver class is the
+-- contract the ClassFactory resolves and is what identifies a unit type's arithmetic, so this
+-- applies correctly even to a deployment that seeded its own row for one of these units. Rows left
+-- at the defaults (Tokens, 1) are wrong only if a deployment added a non-token unit type of its own,
+-- which cannot be corrected from here and is why UnitsPerBillingUnit carries a CHECK rather than
+-- being silently trusted.
+UPDATE ${flyway:defaultSchema}.AIModelPriceUnitType
+SET UsageTypeID = '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D',    -- Tokens
+    UnitsPerBillingUnit = 1000000
+WHERE DriverClass = 'PerMillionTokens';
+
+UPDATE ${flyway:defaultSchema}.AIModelPriceUnitType
+SET UsageTypeID = '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D',    -- Tokens
+    UnitsPerBillingUnit = 100000
+WHERE DriverClass = 'PerHundredThousandTokens';
+
+UPDATE ${flyway:defaultSchema}.AIModelPriceUnitType
+SET UsageTypeID = '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D',    -- Tokens
+    UnitsPerBillingUnit = 1000
+WHERE DriverClass = 'PerThousandTokens';
+
+UPDATE ${flyway:defaultSchema}.AIModelPriceUnitType
+SET UsageTypeID = '4115A8C8-311E-4DE5-9325-6A61C69CA6A7',    -- Seconds
+    UnitsPerBillingUnit = 3600
+WHERE DriverClass = 'TimePerHour';
+
+UPDATE ${flyway:defaultSchema}.AIModelPriceUnitType
+SET UsageTypeID = '4115A8C8-311E-4DE5-9325-6A61C69CA6A7',    -- Seconds
+    UnitsPerBillingUnit = 60
+WHERE DriverClass = 'TimePerMinute';
+
+UPDATE ${flyway:defaultSchema}.AIModelPriceUnitType
+SET UsageTypeID = 'D16F94D1-6200-4A4B-934C-FD827E337E4D',    -- Images
+    UnitsPerBillingUnit = 1
+WHERE DriverClass = 'PerImage';
 GO
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 3. AIPromptRun — record the billable quantity in its own measure
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- UsageTypeID is NOT NULL **with a DEFAULT**, in a single ADD, for two independent reasons.
+--
+-- 1. The same stored-procedure signature trap as section 2, on a second table:
+--    `spCreateAIPromptRun` gains the parameter only when CodeGen runs AFTER this migration, and the
+--    release-time consolidated `*__Metadata_Sync.sql` carries a later timestamp, so on a
+--    from-scratch build it inserts through the old signature against the tightened column. Without
+--    the default that aborts the upgrade. This is the same class as the EntityField.Sequence trap in
+--    migrations/CLAUDE.md: invisible on a dev database that already has the rows, fatal on a clean
+--    install.
+--
+-- 2. It is also the cheaper backfill. The alternative — ADD NULL, batch-UPDATE every historical row
+--    to Tokens, then ALTER COLUMN ... NOT NULL — reads and writes the whole table and then takes a
+--    schema-modification lock to re-validate it. `ADD ... NOT NULL CONSTRAINT DF DEFAULT` is a
+--    metadata-only operation on supported editions: SQL Server records the default and materialises
+--    it on read, touching no existing row. AIPromptRun is among the largest tables in a mature
+--    install, so this is the difference between an instant ALTER and a long blocking one. Note the
+--    two are not independent choices — the default has to exist from the start for reason 1, and
+--    once it does, adding the column nullable buys nothing.
+--
+-- Tokens is the correct value for every historical row, not a placeholder: before this migration the
+-- schema had no way to express any other measure, which is the defect being fixed.
 ALTER TABLE ${flyway:defaultSchema}.AIPromptRun
-ADD InputUnitsUsed DECIMAL(19,8) NULL,
-    OutputUnitsUsed DECIMAL(19,8) NULL,
-    UsageTypeID UNIQUEIDENTIFIER NULL
+ADD InputUnitsUsed DECIMAL(19,8) NULL
+        CONSTRAINT CK_AIPromptRun_InputUnitsUsed_NonNegative CHECK (InputUnitsUsed >= 0),
+    OutputUnitsUsed DECIMAL(19,8) NULL
+        CONSTRAINT CK_AIPromptRun_OutputUnitsUsed_NonNegative CHECK (OutputUnitsUsed >= 0),
+    UsageTypeID UNIQUEIDENTIFIER NOT NULL
+        CONSTRAINT DF_AIPromptRun_UsageTypeID DEFAULT '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D'
         CONSTRAINT FK_AIPromptRun_UsageType FOREIGN KEY REFERENCES ${flyway:defaultSchema}.AIUsageType(ID);
 GO
 
@@ -153,11 +243,113 @@ GO
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'The base measure the InputUnitsUsed / OutputUnitsUsed quantities are counted in. NULL means the run was token-billed and the Tokens* columns carry the quantity. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type driver converts.',
+    @value = N'The base measure this run''s quantities are counted in. Defaults to Tokens, where the Tokens* columns carry the quantity and the units columns are unused; a continuous-media run sets it to Seconds, Characters or Images and populates InputUnitsUsed / OutputUnitsUsed. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type converts. NOT NULL deliberately — an earlier revision used NULL to mean "token-billed", an implicit convention the runtime then had to defend in four separate places.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = 'AIPromptRun',
     @level2type = N'COLUMN', @level2name = 'UsageTypeID';
 GO
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 4. Demote AIModelPriceType — descriptive only, and stop offering it for edit
+-- ─────────────────────────────────────────────────────────────────────────────
+
+/*
+    Three vocabularies described one concept, and the MANDATORY one was the one nothing read.
+
+    `AIModelCost.PriceTypeID` is a NOT NULL FK to `MJ: AI Model Price Types` (Tokens, Minutes, Image
+    Generation, API Calls). It is editable in the generated Explorer form, exposed over GraphQL, and
+    cached on `AIEngineBase.ModelPriceTypes` — and no business logic anywhere prices, filters or
+    branches on it. Meanwhile AIModelPriceUnitType carries the real contract. The incoherence is
+    visible in this branch's own seed data: the Groq Whisper rows are PriceType = Minutes AND
+    UnitType = Per Hour, and the Comments field has to apologise for it.
+
+    Adding AIUsageType without demoting this leaves a fourth vocabulary and locks the ambiguity in
+    permanently, so the demotion ships in the same migration as the addition.
+
+    NOT dropped, deliberately. The column is NOT NULL and carried by 235 metadata rows; dropping it
+    is on the Forbidden list in packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md and would break every
+    historical `EXEC spCreateAIModelCost`. That policy's Deprecation section is the intended path:
+    the field stays physically present and functional, and is flagged not-for-new-use.
+
+    On the EntityField UPDATEs below vs. migrations/CLAUDE.md's "no EntityField updates in a
+    migration": that rule protects metadata CodeGen OWNS and derives from the schema — field
+    creation, sequences, value lists. Status / IncludeInGeneratedForm / AutoUpdateDescription are
+    human editorial decisions with no schema source, so CodeGen has nothing to derive them from and
+    will not restore them. Precedent for exactly this shape:
+    migrations/v2/V202511111500__v2.118.x__Add_ResponseForm_And_Commands_To_ConversationDetail.sql.
+*/
+
+DECLARE @AIModelCostEntityID UNIQUEIDENTIFIER =
+    (SELECT [ID] FROM ${flyway:defaultSchema}.Entity WHERE [Name] = 'MJ: AI Model Costs');
+
+UPDATE ${flyway:defaultSchema}.EntityField
+SET [Status] = 'Deprecated',
+    -- IncludeInGeneratedForm = 0 is the step that actually ends the ambiguity. Deprecating while
+    -- still rendering an editable dropdown beside the authoritative field documents the confusion
+    -- rather than stopping it — authors keep populating both, which is how it got here.
+    [IncludeInGeneratedForm] = 0,
+    -- AutoUpdateDescription defaults to 1, which lets a later CodeGen pass overwrite the text below
+    -- from the column comment. Clearing it is what makes this demotion survive regeneration.
+    [AutoUpdateDescription] = 0,
+    [Description] = N'DEPRECATED — descriptive only; nothing prices, filters or branches on it. The authority on what a cost row measures is UnitTypeID -> AIModelPriceUnitType.UsageTypeID. Retained only so existing configurations still validate and historical spCreateAIModelCost calls keep working; do not populate it for new cost rows.'
+WHERE [EntityID] = @AIModelCostEntityID
+  AND [Name] = 'PriceTypeID';
+GO
+
+-- A database default so future cost-row authors can omit a field they are being told not to think
+-- about. Without it, every new row must still name a value from the vocabulary just deprecated,
+-- which is incoherent enough that people would reasonably ignore the deprecation. Additive, and
+-- allowed under the publish policy. 'Tokens' is the AIModelPriceType row every existing token cost
+-- row already uses.
+DECLARE @PriceTypeTokens UNIQUEIDENTIFIER =
+    (SELECT TOP 1 [ID] FROM ${flyway:defaultSchema}.AIModelPriceType WHERE [Name] = 'Tokens');
+
+IF @PriceTypeTokens IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE [name] = 'DF_AIModelCost_PriceTypeID')
+BEGIN
+    DECLARE @AddDefault NVARCHAR(MAX) = N'
+        ALTER TABLE ${flyway:defaultSchema}.AIModelCost
+        ADD CONSTRAINT DF_AIModelCost_PriceTypeID
+        DEFAULT ''' + CAST(@PriceTypeTokens AS NVARCHAR(36)) + N''' FOR [PriceTypeID];';
+    EXEC sp_executesql @AddDefault;
+END
+GO
+
+-- Drop-then-add rather than sp_updateextendedproperty, which THROWS when the property does not
+-- already exist ("Property 'MS_Description' does not exist for ..."). Whether it exists depends on
+-- whether CodeGen has ever run against this database: on a mature dev database it has, so the update
+-- form works and looks correct; on a clean-room build from migrations alone it has not, and the
+-- update form aborts the whole migration. Found by exactly that clean-room build — the same
+-- fresh-install-only class as the stored-procedure signature traps above, and as the
+-- EntityField.Sequence trap in migrations/CLAUDE.md, which is why that file prescribes this pattern
+-- for modifying any existing description.
+IF EXISTS (
+    SELECT 1 FROM sys.extended_properties
+    WHERE major_id = OBJECT_ID('${flyway:defaultSchema}.AIModelCost')
+      AND minor_id = (
+          SELECT column_id FROM sys.columns
+          WHERE object_id = OBJECT_ID('${flyway:defaultSchema}.AIModelCost')
+            AND name = 'PriceTypeID'
+      )
+      AND name = 'MS_Description'
+)
+BEGIN
+    EXEC sp_dropextendedproperty
+        @name = N'MS_Description',
+        @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+        @level1type = N'TABLE', @level1name = 'AIModelCost',
+        @level2type = N'COLUMN', @level2name = 'PriceTypeID';
+END
+GO
+
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'DEPRECATED — descriptive only. The authority on what a cost row measures is UnitTypeID -> AIModelPriceUnitType.UsageTypeID. Retained because the column is NOT NULL and referenced by shipped configurations; do not populate it for new cost rows.',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'AIModelCost',
+    @level2type = N'COLUMN', @level2name = 'PriceTypeID';
+GO
+
 
 
 
@@ -214,18 +406,21 @@ GO
    EVERYTHING BELOW THIS LINE WAS GENERATED BY THE MEMBERJUNCTION CODEGEN TOOL.
    DO NOT EDIT IT BY HAND.
 
-   Produced by `mj codegen` against a clean-room database built from migrations + metadata alone
-   (bootstrap-clean-db), so it reflects only what this migration's DDL above actually causes.
+   Produced by `mj codegen` against a clean-room database built from migrations alone (a private
+   SQL Server database created empty, then migrated by this branch), so it reflects only what the
+   hand-written DDL above actually causes — nothing inherited from a dev database's accumulated state.
 
    Contains:
-     - EntityField INSERT/UPDATE rows for AIUsageType, AIModelCost.UsageTypeID, and the three new
-       AIPromptRun columns (Sequence values are apply-time MAX()+ordinal expressions, never literals)
+     - EntityField INSERT/UPDATE rows for AIUsageType, the two new AIModelPriceUnitType columns, and
+       the three new AIPromptRun columns (Sequence values are apply-time MAX()+ordinal expressions,
+       never literals — verified by .github/scripts/check-migration-entityfield-sequence.sh)
      - The new MJ: AI Usage Types entity registration and its permissions
-     - Regenerated base views for AIUsageType, AIModelCost and AIPromptRun, including the
+     - Regenerated base views for AIUsageType, AIModelPriceUnitType and AIPromptRun, including the
        denormalized UsageType name columns the new foreign keys introduce
-     - Regenerated spCreate / spUpdate / spDelete procedures for those entities — note spCreateAIModelCost
-       and spUpdateAIModelCost gain the UsageTypeID parameter here, which is why the DDL above gives the
-       column a DEFAULT: between the ALTER and this block, the OLD signature is still what callers use
+     - Regenerated spCreate / spUpdate / spDelete procedures for those entities — note
+       spCreateAIModelPriceUnitType and spCreateAIPromptRun gain the new parameters HERE, which is
+       exactly why the DDL above gives every new NOT NULL column a DEFAULT: between the ALTER and
+       this block, the OLD signature is still what callers use
      - Permission grants and extended properties
 
    If the hand-written DDL above changes, DO NOT patch this section — re-run `mj codegen` and replace
@@ -257,10 +452,10 @@ GO
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '2182eceb-5564-4ac5-8140-cc7ec5a5f23d',
+         'ee8095dd-3b12-49f2-857f-b6a20200def9',
          'MJ: AI Usage Types',
          'AI Usage Types',
-         'The base measure a quantity of AI usage is expressed in — Tokens, Seconds, Characters or Images. Referenced by AIModelCost (what a price is per) and by AIPromptRun (what a recorded quantity counts). Distinct from AIModelPriceUnitType, which names the BILLING measure and owns the conversion driver: audio recorded in Seconds may be billed by the TimePerHour price unit type.',
+         'The base measure a quantity of AI usage is expressed in — Tokens, Seconds, Characters or Images. Referenced by AIModelPriceUnitType (what a billing unit is a quantity of, and therefore what every cost row priced by it measures) and by AIPromptRun (what a recorded quantity counts). Distinct from AIModelPriceUnitType itself, which names the BILLING unit and its scale: audio recorded in Seconds may be billed by the Per Hour unit type.',
          NULL,
          'AIUsageType',
          'vwAIUsageTypes',
@@ -283,22 +478,22 @@ GO
 /* SQL generated to add new entity MJ: AI Usage Types to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '2182eceb-5564-4ac5-8140-cc7ec5a5f23d', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'ee8095dd-3b12-49f2-857f-b6a20200def9', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Usage Types for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('2182eceb-5564-4ac5-8140-cc7ec5a5f23d', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('ee8095dd-3b12-49f2-857f-b6a20200def9', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Usage Types for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('2182eceb-5564-4ac5-8140-cc7ec5a5f23d', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('ee8095dd-3b12-49f2-857f-b6a20200def9', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: AI Usage Types for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('2182eceb-5564-4ac5-8140-cc7ec5a5f23d', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('ee8095dd-3b12-49f2-857f-b6a20200def9', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AIUsageType */
 ALTER TABLE [${flyway:defaultSchema}].[AIUsageType] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
@@ -332,9 +527,9 @@ GO
 ALTER TABLE [${flyway:defaultSchema}].[AIUsageType] ADD CONSTRAINT [DF___mj_AIUsageType___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
-/* SQL text to insert 9 new entity field(s) */
+/* SQL text to insert 10 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7d9837bd-a521-40f2-82fd-6a0109b3d5f2' OR (EntityID = '5A5CF9A9-EAE7-4ECB-B1B7-277BAAC73127' AND Name = 'UsageTypeID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'def5aab8-977c-4401-8983-f1219ec5d1bd' OR (EntityID = 'EE8095DD-3B12-49F2-857F-B6A20200DEF9' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -367,27 +562,153 @@ GO
          )
          VALUES
          (
-            '7d9837bd-a521-40f2-82fd-6a0109b3d5f2',
-            '5A5CF9A9-EAE7-4ECB-B1B7-277BAAC73127', -- Entity: MJ: AI Model Costs
-            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '5A5CF9A9-EAE7-4ECB-B1B7-277BAAC73127') + 18,
-            'UsageTypeID',
-            'Usage Type ID',
-            'The base measure this price is per — Tokens for a conventional text model, Seconds for audio, Images for image generation. Says what InputPricePerUnit and OutputPricePerUnit are quantities OF; the linked AIModelPriceUnitType says at what granularity they are billed and owns the conversion.',
+            'def5aab8-977c-4401-8983-f1219ec5d1bd',
+            'EE8095DD-3B12-49F2-857F-B6A20200DEF9', -- Entity: MJ: AI Usage Types
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'EE8095DD-3B12-49F2-857F-B6A20200DEF9') + 1,
+            'ID',
+            'ID',
+            NULL,
             'uniqueidentifier',
             16,
             0,
             0,
             0,
-            '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D',
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
             0,
             1,
             0,
             0,
-            '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D',
-            'ID',
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0baaa046-e50a-4968-b5de-c89636f7b50b' OR (EntityID = 'EE8095DD-3B12-49F2-857F-B6A20200DEF9' AND Name = 'Name')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '0baaa046-e50a-4968-b5de-c89636f7b50b',
+            'EE8095DD-3B12-49F2-857F-B6A20200DEF9', -- Entity: MJ: AI Usage Types
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'EE8095DD-3B12-49F2-857F-B6A20200DEF9') + 2,
+            'Name',
+            'Name',
+            'Unique name of the base measure, e.g. Tokens, Seconds, Characters, Images.',
+            'nvarchar',
+            100,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            1,
+            1,
+            0,
+            1,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2c83cfec-9ee2-483f-8678-f9191cfe170e' OR (EntityID = 'EE8095DD-3B12-49F2-857F-B6A20200DEF9' AND Name = 'Description')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '2c83cfec-9ee2-483f-8678-f9191cfe170e',
+            'EE8095DD-3B12-49F2-857F-B6A20200DEF9', -- Entity: MJ: AI Usage Types
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'EE8095DD-3B12-49F2-857F-B6A20200DEF9') + 3,
+            'Description',
+            'Description',
+            'Human-readable explanation of what the measure counts and how it is recorded.',
+            'nvarchar',
+            -1,
             0,
             0,
             1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
             0,
             0,
             0,
@@ -397,7 +718,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6c08b2dd-1fa7-40e8-a885-744b62cc8294' OR (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'InputUnitsUsed')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e86d9da9-3f31-465c-86a5-53dfceae0c21' OR (EntityID = 'EE8095DD-3B12-49F2-857F-B6A20200DEF9' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -430,7 +751,133 @@ GO
          )
          VALUES
          (
-            '6c08b2dd-1fa7-40e8-a885-744b62cc8294',
+            'e86d9da9-3f31-465c-86a5-53dfceae0c21',
+            'EE8095DD-3B12-49F2-857F-B6A20200DEF9', -- Entity: MJ: AI Usage Types
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'EE8095DD-3B12-49F2-857F-B6A20200DEF9') + 4,
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '37fd11dd-f48b-4dfa-8a6e-65a023e03e38' OR (EntityID = 'EE8095DD-3B12-49F2-857F-B6A20200DEF9' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '37fd11dd-f48b-4dfa-8a6e-65a023e03e38',
+            'EE8095DD-3B12-49F2-857F-B6A20200DEF9', -- Entity: MJ: AI Usage Types
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'EE8095DD-3B12-49F2-857F-B6A20200DEF9') + 5,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c5fc09be-a79a-4b16-8aab-fa9a2b5c3bb4' OR (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'InputUnitsUsed')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c5fc09be-a79a-4b16-8aab-fa9a2b5c3bb4',
             '7C1C98D0-3978-4CE8-8E3F-C90301E59767', -- Entity: MJ: AI Prompt Runs
             (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7C1C98D0-3978-4CE8-8E3F-C90301E59767') + 89,
             'InputUnitsUsed',
@@ -460,7 +907,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ba0f3df2-8a0e-4a57-8107-747135a88b40' OR (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'OutputUnitsUsed')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7a696c06-a55c-4085-908c-f821121bd6ed' OR (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'OutputUnitsUsed')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -493,7 +940,7 @@ GO
          )
          VALUES
          (
-            'ba0f3df2-8a0e-4a57-8107-747135a88b40',
+            '7a696c06-a55c-4085-908c-f821121bd6ed',
             '7C1C98D0-3978-4CE8-8E3F-C90301E59767', -- Entity: MJ: AI Prompt Runs
             (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7C1C98D0-3978-4CE8-8E3F-C90301E59767') + 90,
             'OutputUnitsUsed',
@@ -523,7 +970,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3dc95f00-71f3-4e22-9006-ca6843a034c4' OR (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'UsageTypeID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3865dd7b-9071-45ba-b93c-9e390c16cc92' OR (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'UsageTypeID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -556,100 +1003,37 @@ GO
          )
          VALUES
          (
-            '3dc95f00-71f3-4e22-9006-ca6843a034c4',
+            '3865dd7b-9071-45ba-b93c-9e390c16cc92',
             '7C1C98D0-3978-4CE8-8E3F-C90301E59767', -- Entity: MJ: AI Prompt Runs
             (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7C1C98D0-3978-4CE8-8E3F-C90301E59767') + 91,
             'UsageTypeID',
             'Usage Type ID',
-            'The base measure the InputUnitsUsed / OutputUnitsUsed quantities are counted in. NULL means the run was token-billed and the Tokens* columns carry the quantity. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type driver converts.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'dc0b10e9-3056-43ca-a4bc-4d769ac9795f' OR (EntityID = '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D' AND Name = 'ID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'dc0b10e9-3056-43ca-a4bc-4d769ac9795f',
-            '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D', -- Entity: MJ: AI Usage Types
-            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D') + 1,
-            'ID',
-            'ID',
-            NULL,
+            'The base measure this run''s quantities are counted in. Defaults to Tokens, where the Tokens* columns carry the quantity and the units columns are unused; a continuous-media run sets it to Seconds, Characters or Images and populates InputUnitsUsed / OutputUnitsUsed. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type converts. NOT NULL deliberately — an earlier revision used NULL to mean "token-billed", an implicit convention the runtime then had to defend in four separate places.',
             'uniqueidentifier',
             16,
             0,
             0,
             0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
+            '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D',
             0,
             1,
             0,
             0,
+            'EE8095DD-3B12-49F2-857F-B6A20200DEF9',
+            'ID',
+            0,
+            0,
             1,
-            1,
+            0,
+            0,
+            0,
             'Search',
             GETUTCDATE(),
             GETUTCDATE()
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '43b1d931-f247-427c-8ee3-a9a39e6c2312' OR (EntityID = '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D' AND Name = 'Name')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e4f0fac9-b543-404a-8a5e-abb01a3327d5' OR (EntityID = '7815F891-EF05-4B4B-BB1C-DB60C1DF9C21' AND Name = 'UsageTypeID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -682,37 +1066,37 @@ GO
          )
          VALUES
          (
-            '43b1d931-f247-427c-8ee3-a9a39e6c2312',
-            '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D', -- Entity: MJ: AI Usage Types
-            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D') + 2,
-            'Name',
-            'Name',
-            'Unique name of the base measure, e.g. Tokens, Seconds, Characters, Images.',
-            'nvarchar',
-            100,
+            'e4f0fac9-b543-404a-8a5e-abb01a3327d5',
+            '7815F891-EF05-4B4B-BB1C-DB60C1DF9C21', -- Entity: MJ: AI Model Price Unit Types
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7815F891-EF05-4B4B-BB1C-DB60C1DF9C21') + 7,
+            'UsageTypeID',
+            'Usage Type ID',
+            'The base measure this billing unit is a quantity of — Tokens for a per-1M-tokens rate, Seconds for a per-minute or per-hour rate, Images for a per-image rate. This is the authority on what a cost row priced by this unit type measures: AIModelCost deliberately does NOT carry its own copy, because two copies can disagree and nothing would arbitrate.',
+            'uniqueidentifier',
+            16,
             0,
             0,
             0,
-            NULL,
+            '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D',
+            0,
+            1,
+            0,
+            0,
+            'EE8095DD-3B12-49F2-857F-B6A20200DEF9',
+            'ID',
+            0,
             0,
             1,
             0,
             0,
-            NULL,
-            NULL,
-            1,
-            1,
             0,
-            1,
-            0,
-            1,
             'Search',
             GETUTCDATE(),
             GETUTCDATE()
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '18dbf3c2-b640-4e08-aaa6-b91bb37c8417' OR (EntityID = '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D' AND Name = 'Description')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8d7dd9dc-df8b-4ea6-b726-31751fb01653' OR (EntityID = '7815F891-EF05-4B4B-BB1C-DB60C1DF9C21' AND Name = 'UnitsPerBillingUnit')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -745,146 +1129,20 @@ GO
          )
          VALUES
          (
-            '18dbf3c2-b640-4e08-aaa6-b91bb37c8417',
-            '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D', -- Entity: MJ: AI Usage Types
-            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D') + 3,
-            'Description',
-            'Description',
-            'Human-readable explanation of what the measure counts and how it is recorded.',
-            'nvarchar',
-            -1,
+            '8d7dd9dc-df8b-4ea6-b726-31751fb01653',
+            '7815F891-EF05-4B4B-BB1C-DB60C1DF9C21', -- Entity: MJ: AI Model Price Unit Types
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7815F891-EF05-4B4B-BB1C-DB60C1DF9C21') + 8,
+            'UnitsPerBillingUnit',
+            'Units Per Billing Unit',
+            'How many units of the base measure make ONE billed unit: 1000000 for a per-1M-tokens rate, 3600 for per-hour, 60 for per-minute, 1 for per-image. Cost is (quantity / UnitsPerBillingUnit) * PricePerUnit. Holding the divisor as DATA is what lets a new linear billing unit ship by seeding a row, with no driver class and no build — the code-only requirement is what made bug B60 possible. DriverClass remains for non-linear pricing (tiered rates, per-image-by-resolution, minimum-billing increments).',
+            'decimal',
+            9,
+            19,
+            8,
             0,
+            '(1)',
             0,
             1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '89034ae2-4807-4a96-9d1f-1c5f83136d8c' OR (EntityID = '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '89034ae2-4807-4a96-9d1f-1c5f83136d8c',
-            '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D', -- Entity: MJ: AI Usage Types
-            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D') + 4,
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '05f8bb70-5ce0-4b86-8070-a47186347183' OR (EntityID = '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '05f8bb70-5ce0-4b86-8070-a47186347183',
-            '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D', -- Entity: MJ: AI Usage Types
-            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D') + 5,
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
             0,
             0,
             NULL,
@@ -902,186 +1160,117 @@ GO
       END;
 
 
-/* Create Entity Relationship: MJ: AI Usage Types -> MJ: AI Model Costs (One To Many via UsageTypeID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '453d1539-8c5c-46a9-8e3a-0cd946412cff'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('453d1539-8c5c-46a9-8e3a-0cd946412cff', '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D', '5A5CF9A9-EAE7-4ECB-B1B7-277BAAC73127', 'UsageTypeID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
-   END;
-                    
 /* Create Entity Relationship: MJ: AI Usage Types -> MJ: AI Prompt Runs (One To Many via UsageTypeID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '0f929533-911f-4a43-833e-7b8e3fc4e0f9'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'f62de59a-8e28-49ca-838d-2a25238610d3'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('0f929533-911f-4a43-833e-7b8e3fc4e0f9', '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D', '7C1C98D0-3978-4CE8-8E3F-C90301E59767', 'UsageTypeID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('f62de59a-8e28-49ca-838d-2a25238610d3', 'EE8095DD-3B12-49F2-857F-B6A20200DEF9', '7C1C98D0-3978-4CE8-8E3F-C90301E59767', 'UsageTypeID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
    END;
 
-/* Index for Foreign Keys for AIModelCost */
+
+/* Create Entity Relationship: MJ: AI Usage Types -> MJ: AI Model Price Unit Types (One To Many via UsageTypeID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'aa5360ba-6820-4fbe-86b7-62bdf791a800'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('aa5360ba-6820-4fbe-86b7-62bdf791a800', 'EE8095DD-3B12-49F2-857F-B6A20200DEF9', '7815F891-EF05-4B4B-BB1C-DB60C1DF9C21', 'UsageTypeID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
+   END;
+
+/* Index for Foreign Keys for AIModelPriceUnitType */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: AI Model Costs
+-- Entity: MJ: AI Model Price Unit Types
 -- Item: Index for Foreign Keys
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
--- Index for foreign key ModelID in table AIModelCost
+-- Index for foreign key UsageTypeID in table AIModelPriceUnitType
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIModelCost_ModelID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIModelCost]')
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIModelPriceUnitType_UsageTypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIModelPriceUnitType]')
 )
-CREATE INDEX IDX_AUTO_MJ_FKEY_AIModelCost_ModelID ON [${flyway:defaultSchema}].[AIModelCost] ([ModelID]);
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIModelPriceUnitType_UsageTypeID ON [${flyway:defaultSchema}].[AIModelPriceUnitType] ([UsageTypeID]);
 
--- Index for foreign key VendorID in table AIModelCost
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIModelCost_VendorID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIModelCost]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_AIModelCost_VendorID ON [${flyway:defaultSchema}].[AIModelCost] ([VendorID]);
+/* SQL text to update entity field related entity name field map for entity field ID E4F0FAC9-B543-404A-8A5E-ABB01A3327D5 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='E4F0FAC9-B543-404A-8A5E-ABB01A3327D5', @RelatedEntityNameFieldMap='UsageType';
 
--- Index for foreign key PriceTypeID in table AIModelCost
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIModelCost_PriceTypeID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIModelCost]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_AIModelCost_PriceTypeID ON [${flyway:defaultSchema}].[AIModelCost] ([PriceTypeID]);
-
--- Index for foreign key UnitTypeID in table AIModelCost
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIModelCost_UnitTypeID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIModelCost]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_AIModelCost_UnitTypeID ON [${flyway:defaultSchema}].[AIModelCost] ([UnitTypeID]);
-
--- Index for foreign key UsageTypeID in table AIModelCost
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AIModelCost_UsageTypeID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIModelCost]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_AIModelCost_UsageTypeID ON [${flyway:defaultSchema}].[AIModelCost] ([UsageTypeID]);
-
-/* SQL text to update entity field related entity name field map for entity field ID 7D9837BD-A521-40F2-82FD-6A0109B3D5F2 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='7D9837BD-A521-40F2-82FD-6A0109B3D5F2', @RelatedEntityNameFieldMap='UsageType';
-
-/* Base View SQL for MJ: AI Model Costs */
+/* Base View SQL for MJ: AI Model Price Unit Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: AI Model Costs
--- Item: vwAIModelCosts
+-- Entity: MJ: AI Model Price Unit Types
+-- Item: vwAIModelPriceUnitTypes
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
 ------------------------------------------------------------
------ BASE VIEW FOR ENTITY:      MJ: AI Model Costs
+----- BASE VIEW FOR ENTITY:      MJ: AI Model Price Unit Types
 -----               SCHEMA:      ${flyway:defaultSchema}
------               BASE TABLE:  AIModelCost
+-----               BASE TABLE:  AIModelPriceUnitType
 -----               PRIMARY KEY: ID
 ------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[vwAIModelCosts]', 'V') IS NOT NULL
-    DROP VIEW [${flyway:defaultSchema}].[vwAIModelCosts];
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwAIModelPriceUnitTypes]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwAIModelPriceUnitTypes];
 GO
 
-CREATE VIEW [${flyway:defaultSchema}].[vwAIModelCosts]
+CREATE VIEW [${flyway:defaultSchema}].[vwAIModelPriceUnitTypes]
 AS
 SELECT
     a.*,
-    MJAIModel_ModelID.[Name] AS [Model],
-    MJAIVendor_VendorID.[Name] AS [Vendor],
-    MJAIModelPriceType_PriceTypeID.[Name] AS [PriceType],
-    MJAIModelPriceUnitType_UnitTypeID.[Name] AS [UnitType],
     MJAIUsageType_UsageTypeID.[Name] AS [UsageType]
 FROM
-    [${flyway:defaultSchema}].[AIModelCost] AS a
-INNER JOIN
-    [${flyway:defaultSchema}].[AIModel] AS MJAIModel_ModelID
-  ON
-    [a].[ModelID] = MJAIModel_ModelID.[ID]
-INNER JOIN
-    [${flyway:defaultSchema}].[AIVendor] AS MJAIVendor_VendorID
-  ON
-    [a].[VendorID] = MJAIVendor_VendorID.[ID]
-INNER JOIN
-    [${flyway:defaultSchema}].[AIModelPriceType] AS MJAIModelPriceType_PriceTypeID
-  ON
-    [a].[PriceTypeID] = MJAIModelPriceType_PriceTypeID.[ID]
-INNER JOIN
-    [${flyway:defaultSchema}].[AIModelPriceUnitType] AS MJAIModelPriceUnitType_UnitTypeID
-  ON
-    [a].[UnitTypeID] = MJAIModelPriceUnitType_UnitTypeID.[ID]
+    [${flyway:defaultSchema}].[AIModelPriceUnitType] AS a
 INNER JOIN
     [${flyway:defaultSchema}].[AIUsageType] AS MJAIUsageType_UsageTypeID
   ON
     [a].[UsageTypeID] = MJAIUsageType_UsageTypeID.[ID]
 GO
-GRANT SELECT ON [${flyway:defaultSchema}].[vwAIModelCosts] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIModelPriceUnitTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 
-/* Base View Permissions SQL for MJ: AI Model Costs */
+/* Base View Permissions SQL for MJ: AI Model Price Unit Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: AI Model Costs
--- Item: Permissions for vwAIModelCosts
+-- Entity: MJ: AI Model Price Unit Types
+-- Item: Permissions for vwAIModelPriceUnitTypes
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
-GRANT SELECT ON [${flyway:defaultSchema}].[vwAIModelCosts] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIModelPriceUnitTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 
-/* spCreate SQL for MJ: AI Model Costs */
+/* spCreate SQL for MJ: AI Model Price Unit Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: AI Model Costs
--- Item: spCreateAIModelCost
+-- Entity: MJ: AI Model Price Unit Types
+-- Item: spCreateAIModelPriceUnitType
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
 ------------------------------------------------------------
------ CREATE PROCEDURE FOR AIModelCost
+----- CREATE PROCEDURE FOR AIModelPriceUnitType
 ------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateAIModelCost]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateAIModelCost];
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateAIModelPriceUnitType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateAIModelPriceUnitType];
 GO
 
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIModelCost]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIModelPriceUnitType]
     @ID uniqueidentifier = NULL,
-    @ModelID uniqueidentifier,
-    @VendorID uniqueidentifier,
-    @StartedAt_Clear bit = 0,
-    @StartedAt datetimeoffset = NULL,
-    @EndedAt_Clear bit = 0,
-    @EndedAt datetimeoffset = NULL,
-    @Status nvarchar(20),
-    @Currency nchar(3),
-    @PriceTypeID uniqueidentifier,
-    @InputPricePerUnit decimal(18, 8),
-    @OutputPricePerUnit decimal(18, 8),
-    @UnitTypeID uniqueidentifier,
-    @ProcessingType nvarchar(20),
-    @Comments_Clear bit = 0,
-    @Comments nvarchar(MAX) = NULL,
-    @CacheReadPricePerUnit_Clear bit = 0,
-    @CacheReadPricePerUnit decimal(18, 8) = NULL,
-    @CacheWritePricePerUnit_Clear bit = 0,
-    @CacheWritePricePerUnit decimal(18, 8) = NULL,
-    @UsageTypeID uniqueidentifier = NULL
+    @Name nvarchar(100),
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @DriverClass nvarchar(255),
+    @UsageTypeID uniqueidentifier = NULL,
+    @UnitsPerBillingUnit decimal(19, 8) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -1090,232 +1279,168 @@ BEGIN
     IF @ID IS NOT NULL
     BEGIN
         -- User provided a value, use it
-        INSERT INTO [${flyway:defaultSchema}].[AIModelCost]
+        INSERT INTO [${flyway:defaultSchema}].[AIModelPriceUnitType]
             (
                 [ID],
-                [ModelID],
-                [VendorID],
-                [StartedAt],
-                [EndedAt],
-                [Status],
-                [Currency],
-                [PriceTypeID],
-                [InputPricePerUnit],
-                [OutputPricePerUnit],
-                [UnitTypeID],
-                [ProcessingType],
-                [Comments],
-                [CacheReadPricePerUnit],
-                [CacheWritePricePerUnit],
-                [UsageTypeID]
+                [Name],
+                [Description],
+                [DriverClass],
+                [UsageTypeID],
+                [UnitsPerBillingUnit]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
                 @ID,
-                @ModelID,
-                @VendorID,
-                CASE WHEN @StartedAt_Clear = 1 THEN NULL ELSE ISNULL(@StartedAt, sysdatetimeoffset()) END,
-                CASE WHEN @EndedAt_Clear = 1 THEN NULL ELSE ISNULL(@EndedAt, NULL) END,
-                @Status,
-                @Currency,
-                @PriceTypeID,
-                @InputPricePerUnit,
-                @OutputPricePerUnit,
-                @UnitTypeID,
-                @ProcessingType,
-                CASE WHEN @Comments_Clear = 1 THEN NULL ELSE ISNULL(@Comments, NULL) END,
-                CASE WHEN @CacheReadPricePerUnit_Clear = 1 THEN NULL ELSE ISNULL(@CacheReadPricePerUnit, NULL) END,
-                CASE WHEN @CacheWritePricePerUnit_Clear = 1 THEN NULL ELSE ISNULL(@CacheWritePricePerUnit, NULL) END,
-                CASE WHEN @UsageTypeID = '00000000-0000-0000-0000-000000000000' THEN '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D' ELSE ISNULL(@UsageTypeID, '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D') END
+                @Name,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                @DriverClass,
+                CASE WHEN @UsageTypeID = '00000000-0000-0000-0000-000000000000' THEN '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D' ELSE ISNULL(@UsageTypeID, '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D') END,
+                ISNULL(@UnitsPerBillingUnit, 1)
             )
     END
     ELSE
     BEGIN
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [${flyway:defaultSchema}].[AIModelCost]
+        INSERT INTO [${flyway:defaultSchema}].[AIModelPriceUnitType]
             (
-                [ModelID],
-                [VendorID],
-                [StartedAt],
-                [EndedAt],
-                [Status],
-                [Currency],
-                [PriceTypeID],
-                [InputPricePerUnit],
-                [OutputPricePerUnit],
-                [UnitTypeID],
-                [ProcessingType],
-                [Comments],
-                [CacheReadPricePerUnit],
-                [CacheWritePricePerUnit],
-                [UsageTypeID]
+                [Name],
+                [Description],
+                [DriverClass],
+                [UsageTypeID],
+                [UnitsPerBillingUnit]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
-                @ModelID,
-                @VendorID,
-                CASE WHEN @StartedAt_Clear = 1 THEN NULL ELSE ISNULL(@StartedAt, sysdatetimeoffset()) END,
-                CASE WHEN @EndedAt_Clear = 1 THEN NULL ELSE ISNULL(@EndedAt, NULL) END,
-                @Status,
-                @Currency,
-                @PriceTypeID,
-                @InputPricePerUnit,
-                @OutputPricePerUnit,
-                @UnitTypeID,
-                @ProcessingType,
-                CASE WHEN @Comments_Clear = 1 THEN NULL ELSE ISNULL(@Comments, NULL) END,
-                CASE WHEN @CacheReadPricePerUnit_Clear = 1 THEN NULL ELSE ISNULL(@CacheReadPricePerUnit, NULL) END,
-                CASE WHEN @CacheWritePricePerUnit_Clear = 1 THEN NULL ELSE ISNULL(@CacheWritePricePerUnit, NULL) END,
-                CASE WHEN @UsageTypeID = '00000000-0000-0000-0000-000000000000' THEN '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D' ELSE ISNULL(@UsageTypeID, '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D') END
+                @Name,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                @DriverClass,
+                CASE WHEN @UsageTypeID = '00000000-0000-0000-0000-000000000000' THEN '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D' ELSE ISNULL(@UsageTypeID, '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D') END,
+                ISNULL(@UnitsPerBillingUnit, 1)
             )
     END
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [${flyway:defaultSchema}].[vwAIModelCosts] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [${flyway:defaultSchema}].[vwAIModelPriceUnitTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIModelCost] TO [cdp_Developer], [cdp_Integration];
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIModelPriceUnitType] TO [cdp_Developer], [cdp_Integration];
 
-/* spCreate Permissions for MJ: AI Model Costs */
+/* spCreate Permissions for MJ: AI Model Price Unit Types */
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIModelCost] TO [cdp_Developer], [cdp_Integration];
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIModelPriceUnitType] TO [cdp_Developer], [cdp_Integration];
 
-/* spUpdate SQL for MJ: AI Model Costs */
+/* spUpdate SQL for MJ: AI Model Price Unit Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: AI Model Costs
--- Item: spUpdateAIModelCost
+-- Entity: MJ: AI Model Price Unit Types
+-- Item: spUpdateAIModelPriceUnitType
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
 ------------------------------------------------------------
------ UPDATE PROCEDURE FOR AIModelCost
+----- UPDATE PROCEDURE FOR AIModelPriceUnitType
 ------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateAIModelCost]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateAIModelCost];
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateAIModelPriceUnitType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateAIModelPriceUnitType];
 GO
 
-CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIModelCost]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIModelPriceUnitType]
     @ID uniqueidentifier,
-    @ModelID uniqueidentifier = NULL,
-    @VendorID uniqueidentifier = NULL,
-    @StartedAt_Clear bit = 0,
-    @StartedAt datetimeoffset = NULL,
-    @EndedAt_Clear bit = 0,
-    @EndedAt datetimeoffset = NULL,
-    @Status nvarchar(20) = NULL,
-    @Currency nchar(3) = NULL,
-    @PriceTypeID uniqueidentifier = NULL,
-    @InputPricePerUnit decimal(18, 8) = NULL,
-    @OutputPricePerUnit decimal(18, 8) = NULL,
-    @UnitTypeID uniqueidentifier = NULL,
-    @ProcessingType nvarchar(20) = NULL,
-    @Comments_Clear bit = 0,
-    @Comments nvarchar(MAX) = NULL,
-    @CacheReadPricePerUnit_Clear bit = 0,
-    @CacheReadPricePerUnit decimal(18, 8) = NULL,
-    @CacheWritePricePerUnit_Clear bit = 0,
-    @CacheWritePricePerUnit decimal(18, 8) = NULL,
-    @UsageTypeID uniqueidentifier = NULL
+    @Name nvarchar(100) = NULL,
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @DriverClass nvarchar(255) = NULL,
+    @UsageTypeID uniqueidentifier = NULL,
+    @UnitsPerBillingUnit decimal(19, 8) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [${flyway:defaultSchema}].[AIModelCost]
+        [${flyway:defaultSchema}].[AIModelPriceUnitType]
     SET
-        [ModelID] = ISNULL(@ModelID, [ModelID]),
-        [VendorID] = ISNULL(@VendorID, [VendorID]),
-        [StartedAt] = CASE WHEN @StartedAt_Clear = 1 THEN NULL ELSE ISNULL(@StartedAt, [StartedAt]) END,
-        [EndedAt] = CASE WHEN @EndedAt_Clear = 1 THEN NULL ELSE ISNULL(@EndedAt, [EndedAt]) END,
-        [Status] = ISNULL(@Status, [Status]),
-        [Currency] = ISNULL(@Currency, [Currency]),
-        [PriceTypeID] = ISNULL(@PriceTypeID, [PriceTypeID]),
-        [InputPricePerUnit] = ISNULL(@InputPricePerUnit, [InputPricePerUnit]),
-        [OutputPricePerUnit] = ISNULL(@OutputPricePerUnit, [OutputPricePerUnit]),
-        [UnitTypeID] = ISNULL(@UnitTypeID, [UnitTypeID]),
-        [ProcessingType] = ISNULL(@ProcessingType, [ProcessingType]),
-        [Comments] = CASE WHEN @Comments_Clear = 1 THEN NULL ELSE ISNULL(@Comments, [Comments]) END,
-        [CacheReadPricePerUnit] = CASE WHEN @CacheReadPricePerUnit_Clear = 1 THEN NULL ELSE ISNULL(@CacheReadPricePerUnit, [CacheReadPricePerUnit]) END,
-        [CacheWritePricePerUnit] = CASE WHEN @CacheWritePricePerUnit_Clear = 1 THEN NULL ELSE ISNULL(@CacheWritePricePerUnit, [CacheWritePricePerUnit]) END,
-        [UsageTypeID] = ISNULL(@UsageTypeID, [UsageTypeID])
+        [Name] = ISNULL(@Name, [Name]),
+        [Description] = CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, [Description]) END,
+        [DriverClass] = ISNULL(@DriverClass, [DriverClass]),
+        [UsageTypeID] = ISNULL(@UsageTypeID, [UsageTypeID]),
+        [UnitsPerBillingUnit] = ISNULL(@UnitsPerBillingUnit, [UnitsPerBillingUnit])
     WHERE
         [ID] = @ID
 
     -- Check if the update was successful
     IF @@ROWCOUNT = 0
         -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwAIModelCosts] WHERE 1=0
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwAIModelPriceUnitTypes] WHERE 1=0
     ELSE
         -- Return the updated record so the caller can see the updated values and any calculated fields
         SELECT
                                         *
                                     FROM
-                                        [${flyway:defaultSchema}].[vwAIModelCosts]
+                                        [${flyway:defaultSchema}].[vwAIModelPriceUnitTypes]
                                     WHERE
                                         [ID] = @ID
                                     
 END
 GO
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIModelCost] TO [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIModelPriceUnitType] TO [cdp_Developer], [cdp_Integration]
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the AIModelCost table
+----- TRIGGER FOR __mj_UpdatedAt field for the AIModelPriceUnitType table
 ------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateAIModelCost]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateAIModelCost];
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateAIModelPriceUnitType]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateAIModelPriceUnitType];
 GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateAIModelCost
-ON [${flyway:defaultSchema}].[AIModelCost]
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateAIModelPriceUnitType
+ON [${flyway:defaultSchema}].[AIModelPriceUnitType]
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [${flyway:defaultSchema}].[AIModelCost]
+        [${flyway:defaultSchema}].[AIModelPriceUnitType]
     SET
         __mj_UpdatedAt = GETUTCDATE()
     FROM
-        [${flyway:defaultSchema}].[AIModelCost] AS _organicTable
+        [${flyway:defaultSchema}].[AIModelPriceUnitType] AS _organicTable
     INNER JOIN
         INSERTED AS I ON
         _organicTable.[ID] = I.[ID];
 END;
 GO
 
-/* spUpdate Permissions for MJ: AI Model Costs */
+/* spUpdate Permissions for MJ: AI Model Price Unit Types */
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIModelCost] TO [cdp_Developer], [cdp_Integration];
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIModelPriceUnitType] TO [cdp_Developer], [cdp_Integration];
 
-/* spDelete SQL for MJ: AI Model Costs */
+/* spDelete SQL for MJ: AI Model Price Unit Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: AI Model Costs
--- Item: spDeleteAIModelCost
+-- Entity: MJ: AI Model Price Unit Types
+-- Item: spDeleteAIModelPriceUnitType
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
 ------------------------------------------------------------
------ DELETE PROCEDURE FOR AIModelCost
+----- DELETE PROCEDURE FOR AIModelPriceUnitType
 ------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteAIModelCost]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteAIModelCost];
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteAIModelPriceUnitType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteAIModelPriceUnitType];
 GO
 
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteAIModelCost]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteAIModelPriceUnitType]
     @ID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM
-        [${flyway:defaultSchema}].[AIModelCost]
+        [${flyway:defaultSchema}].[AIModelPriceUnitType]
     WHERE
         [ID] = @ID
 
@@ -1327,11 +1452,11 @@ BEGIN
         SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
 END
 GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIModelCost] TO [cdp_Developer], [cdp_Integration];
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIModelPriceUnitType] TO [cdp_Developer], [cdp_Integration];
 
-/* spDelete Permissions for MJ: AI Model Costs */
+/* spDelete Permissions for MJ: AI Model Price Unit Types */
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIModelCost] TO [cdp_Developer], [cdp_Integration];
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIModelPriceUnitType] TO [cdp_Developer], [cdp_Integration];
 
 /* Index for Foreign Keys for AIPromptRun */
 -----------------------------------------------------------------
@@ -1450,8 +1575,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_AIPromptRun_UsageTypeID ON [${flyway:defaultSchema}].[AIPromptRun] ([UsageTypeID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 3DC95F00-71F3-4E22-9006-CA6843A034C4 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='3DC95F00-71F3-4E22-9006-CA6843A034C4', @RelatedEntityNameFieldMap='UsageType';
+/* SQL text to update entity field related entity name field map for entity field ID 3865DD7B-9071-45BA-B93C-9E390C16CC92 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='3865DD7B-9071-45BA-B93C-9E390C16CC92', @RelatedEntityNameFieldMap='UsageType';
 
 /* Root ID Function SQL for MJ: AI Prompt Runs.ParentID */
 -----------------------------------------------------------------
@@ -1659,7 +1784,7 @@ LEFT OUTER JOIN
     [${flyway:defaultSchema}].[vwTestRuns] AS MJTestRun_TestRunID
   ON
     [a].[TestRunID] = MJTestRun_TestRunID.[ID]
-LEFT OUTER JOIN
+INNER JOIN
     [${flyway:defaultSchema}].[AIUsageType] AS MJAIUsageType_UsageTypeID
   ON
     [a].[UsageTypeID] = MJAIUsageType_UsageTypeID.[ID]
@@ -1864,7 +1989,6 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIPromptRun]
     @InputUnitsUsed decimal(19, 8) = NULL,
     @OutputUnitsUsed_Clear bit = 0,
     @OutputUnitsUsed decimal(19, 8) = NULL,
-    @UsageTypeID_Clear bit = 0,
     @UsageTypeID uniqueidentifier = NULL
 AS
 BEGIN
@@ -2057,7 +2181,7 @@ BEGIN
                 CASE WHEN @TokensCacheWriteRollup_Clear = 1 THEN NULL ELSE ISNULL(@TokensCacheWriteRollup, NULL) END,
                 CASE WHEN @InputUnitsUsed_Clear = 1 THEN NULL ELSE ISNULL(@InputUnitsUsed, NULL) END,
                 CASE WHEN @OutputUnitsUsed_Clear = 1 THEN NULL ELSE ISNULL(@OutputUnitsUsed, NULL) END,
-                CASE WHEN @UsageTypeID_Clear = 1 THEN NULL ELSE ISNULL(@UsageTypeID, NULL) END
+                CASE WHEN @UsageTypeID = '00000000-0000-0000-0000-000000000000' THEN '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D' ELSE ISNULL(@UsageTypeID, '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D') END
             )
     END
     ELSE
@@ -2244,7 +2368,7 @@ BEGIN
                 CASE WHEN @TokensCacheWriteRollup_Clear = 1 THEN NULL ELSE ISNULL(@TokensCacheWriteRollup, NULL) END,
                 CASE WHEN @InputUnitsUsed_Clear = 1 THEN NULL ELSE ISNULL(@InputUnitsUsed, NULL) END,
                 CASE WHEN @OutputUnitsUsed_Clear = 1 THEN NULL ELSE ISNULL(@OutputUnitsUsed, NULL) END,
-                CASE WHEN @UsageTypeID_Clear = 1 THEN NULL ELSE ISNULL(@UsageTypeID, NULL) END
+                CASE WHEN @UsageTypeID = '00000000-0000-0000-0000-000000000000' THEN '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D' ELSE ISNULL(@UsageTypeID, '1ED9E605-FD5B-4B66-9C68-B64A2A6A1F8D') END
             )
     END
     -- return the new record from the base view, which might have some calculated fields
@@ -2439,7 +2563,6 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIPromptRun]
     @InputUnitsUsed decimal(19, 8) = NULL,
     @OutputUnitsUsed_Clear bit = 0,
     @OutputUnitsUsed decimal(19, 8) = NULL,
-    @UsageTypeID_Clear bit = 0,
     @UsageTypeID uniqueidentifier = NULL
 AS
 BEGIN
@@ -2534,7 +2657,7 @@ BEGIN
         [TokensCacheWriteRollup] = CASE WHEN @TokensCacheWriteRollup_Clear = 1 THEN NULL ELSE ISNULL(@TokensCacheWriteRollup, [TokensCacheWriteRollup]) END,
         [InputUnitsUsed] = CASE WHEN @InputUnitsUsed_Clear = 1 THEN NULL ELSE ISNULL(@InputUnitsUsed, [InputUnitsUsed]) END,
         [OutputUnitsUsed] = CASE WHEN @OutputUnitsUsed_Clear = 1 THEN NULL ELSE ISNULL(@OutputUnitsUsed, [OutputUnitsUsed]) END,
-        [UsageTypeID] = CASE WHEN @UsageTypeID_Clear = 1 THEN NULL ELSE ISNULL(@UsageTypeID, [UsageTypeID]) END
+        [UsageTypeID] = ISNULL(@UsageTypeID, [UsageTypeID])
     WHERE
         [ID] = @ID
 
@@ -6206,7 +6329,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
 
 /* SQL text to insert 2 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fdce7937-53f6-4522-a1e1-6dc5bbbd2aa9' OR (EntityID = '5A5CF9A9-EAE7-4ECB-B1B7-277BAAC73127' AND Name = 'UsageType')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c9518f18-00ba-44f2-9ae6-4b1c8b3b2fdb' OR (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'UsageType')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -6239,70 +6362,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
          VALUES
          (
-            'fdce7937-53f6-4522-a1e1-6dc5bbbd2aa9',
-            '5A5CF9A9-EAE7-4ECB-B1B7-277BAAC73127', -- Entity: MJ: AI Model Costs
-            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '5A5CF9A9-EAE7-4ECB-B1B7-277BAAC73127') + 23,
-            'UsageType',
-            'Usage Type',
-            NULL,
-            'nvarchar',
-            100,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '94537627-b53e-4c5e-9c1f-04ab8c335c85' OR (EntityID = '7C1C98D0-3978-4CE8-8E3F-C90301E59767' AND Name = 'UsageType')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '94537627-b53e-4c5e-9c1f-04ab8c335c85',
+            'c9518f18-00ba-44f2-9ae6-4b1c8b3b2fdb',
             '7C1C98D0-3978-4CE8-8E3F-C90301E59767', -- Entity: MJ: AI Prompt Runs
             (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7C1C98D0-3978-4CE8-8E3F-C90301E59767') + 103,
             'UsageType',
@@ -6312,7 +6372,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
             100,
             0,
             0,
-            1,
+            0,
             NULL,
             0,
             0,
@@ -6332,1302 +6392,66 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
       END;
 
-/* Set field properties for entity */
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IsNameField = 1
-               WHERE ID = '4333EAE9-2185-403F-B742-B8FF9631C860'
-               AND AutoUpdateIsNameField = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IsNameField = 0
-               WHERE ID = 'BB204D9E-2D75-4DB7-8022-55E73A56CBCA'
-               AND AutoUpdateIsNameField = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IsNameField = 0
-               WHERE ID = 'EFAFC399-58A9-42E6-AFF4-A31CBE7CAC16'
-               AND AutoUpdateIsNameField = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = 'BB204D9E-2D75-4DB7-8022-55E73A56CBCA'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-/* Set field properties for entity */
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '18DBF3C2-B640-4E08-AAA6-B91BB37C8417'
-               AND AutoUpdateDefaultInView = 1;
-
-            UPDATE [${flyway:defaultSchema}].[Entity]
-            SET AllowUserSearchAPI = 0
-            WHERE ID = '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D'
-            AND AutoUpdateAllowUserSearchAPI = 1;
-
-/* Set categories for 5 fields */
-
--- UPDATE Entity Field Category Info MJ: AI Usage Types.ID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'DC0B10E9-3056-43CA-A4BC-4D769AC9795F' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Usage Types.Name 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Measure Details',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '43B1D931-F247-427C-8EE3-A9A39E6C2312' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Usage Types.Description 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Measure Details',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '18DBF3C2-B640-4E08-AAA6-B91BB37C8417' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Usage Types.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '89034AE2-4807-4A96-9D1F-1C5F83136D8C' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Usage Types.__mj_UpdatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '05F8BB70-5CE0-4B86-8070-A47186347183' AND AutoUpdateCategory = 1;
-
-/* Set entity icon to fa fa-calculator */
-
-               UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-calculator', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D';
-
-/* Insert FieldCategoryInfo setting for entity */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('9888e7cd-a0f1-4300-b630-f844ddfd7ff0', '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D', 'FieldCategoryInfo', '{"Measure Details":{"icon":"fa fa-info-circle","description":"Definition and naming of the base AI usage measures"},"System Metadata":{"icon":"fa fa-cog","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
-
-/* Insert FieldCategoryIcons setting (legacy) */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('8a22fc54-5ca2-43a0-9c20-61a256459b60', '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D', 'FieldCategoryIcons', '{"Measure Details":"fa fa-info-circle","System Metadata":"fa fa-cog"}', GETUTCDATE(), GETUTCDATE());
-
-/* Set DefaultForNewUser=false for NEW entity (category: reference, confidence: high) */
-
-         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
-         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '2182ECEB-5564-4AC5-8140-CC7EC5A5F23D';
-
-/* Set categories for 23 fields */
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.ID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'D17303CA-6FF4-4AE7-967D-280A513D86B1' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '9FABB12A-530B-4BA6-B010-45764AC367D2' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.__mj_UpdatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '4BD7F876-9955-4709-BE02-E7B08DEF0183' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.ModelID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F4CE42AF-8176-4AE7-ABBC-920E05246BDC' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.VendorID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '0FBBF368-839D-4AF7-8511-367E1C2192B5' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.Model 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'BB204D9E-2D75-4DB7-8022-55E73A56CBCA' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.Vendor 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'EFAFC399-58A9-42E6-AFF4-A31CBE7CAC16' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.StartedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '0BC22B43-6899-4C85-A5CB-9BCBA5921ADB' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.EndedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'E492CEA6-2FC8-406D-AFD4-CADA71500C5F' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.Status 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'A6584C65-63F7-46CA-8A58-25BC5B6BFD54' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.ProcessingType 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '4333EAE9-2185-403F-B742-B8FF9631C860' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.Comments 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '28EA9FCF-10DA-4B66-B861-A19025ACEE01' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.Currency 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '7C3423FB-4C5A-47D8-8028-86C118673AE9' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.PriceTypeID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'E15E12CB-7D14-477D-ADBA-29486BD55EC7' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.InputPricePerUnit 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '3B3BFA27-ED58-4919-9C16-CD1B367D7662' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.OutputPricePerUnit 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'B308AD69-D31B-4B46-802C-09698DBBAF18' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.UnitTypeID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '298CFC42-48AE-4409-9D39-20014FFF1234' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.CacheReadPricePerUnit 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '7A23BCB6-C173-46D4-A44D-881C0A18862D' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.CacheWritePricePerUnit 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '1B169EA7-98A6-4533-91CB-E265C839AE06' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.PriceType 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '29D4E0F8-B86C-4EB4-BF82-B44778494A53' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.UnitType 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'E3600DEA-E0E2-46A3-9FB3-2B0FD203E01F' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.UsageTypeID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Pricing Details',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Usage Type',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '7D9837BD-A521-40F2-82FD-6A0109B3D5F2' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Model Costs.UsageType 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Pricing Details',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Usage Type Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'FDCE7937-53F6-4522-A1E1-6DC5BBBD2AA9' AND AutoUpdateCategory = 1;
-
-/* Set categories for 105 fields */
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'BB1A9EFA-52A5-4D39-A67B-0C623C037EA8' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.PromptID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '9407CD9F-EB55-4BB5-8CDD-5D2E70D9D739' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ModelID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '71548843-FAAA-493F-A7D3-FDCB4A3A80DF' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.VendorID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F4E86C22-D315-4DB1-9DA1-A5779B78EAAC' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.AgentID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'C1D2EC52-E3DE-46E1-A7B7-C353C811E74C' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ConfigurationID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'FE9C78CB-14F9-4F2D-85A1-51860E35C95B' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.RunAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Run At',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '403EBB3C-A506-4A45-807C-28B5BE669837' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.CompletedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'C292566B-AEB6-495C-B228-97F4509E159F' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ExecutionTimeMS 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '6C2E9D77-1A55-40B2-A6B5-B385BB95C14F' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.Success 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '621DBFAD-A8A3-4B94-9247-418F4B310FD2' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ErrorMessage 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F9A3491B-AC3C-4CD2-BBC6-6CC0BCD674DA' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ParentID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '559A6C83-012D-436E-BCD0-BF5BC195D1DD' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.RunType 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '0524D957-C4AA-4CB6-AFEB-EAA4A0B831A0' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ExecutionOrder 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '54DFB777-475B-4C79-A736-10556471D86E' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.RerunFromPromptRunID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'AF55FAF1-BC63-432B-9137-5D0678DC08AA' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.Status 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '206BDDB4-41C4-4CC4-8057-43BE145DFE13' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.Cancelled 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '70260832-4420-451A-9A22-359FD83885FC' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.CancellationReason 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '085BE7AF-5389-43C0-BEE4-3748840E61F6' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.CacheHit 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '1E91D9BA-2775-488F-B647-EB44EF9E6112' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.CacheKey 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '6D6AC347-E634-4846-B9F3-B9F46FBE16CC' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.WasSelectedResult 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '3A3908B7-C914-48AD-9C91-3095CB4B6475' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.StreamingEnabled 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '69C2BA6E-FB8B-4F52-90CF-6D4D3FEAB81B' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.FirstTokenTime 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F2B24363-336F-48D2-9B68-D9A81B27A224' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ErrorDetails 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '4B843B2C-8CC0-4B48-814C-1BF3B88D69BA' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ChildPromptID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '2CD14363-BDDB-45BA-AEDE-731EE053CAB1' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.RunName 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F3050F3E-E62C-47B3-8F6F-F12DC42C86E7' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.Comments 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '037160AF-8D33-43F7-9C60-F200306B6DBC' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TestRunID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'CECDF34F-B76C-421E-9746-416F3C1CAB0B' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.Parent 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Parent Run Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '6B04C39C-CB71-464E-95BD-FFE0473C3799' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.RerunFromPromptRun 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Rerun From Run Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'E433AB22-95B8-42C7-921E-37B9BB04E6E2' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TestRun 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Test Run Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '3F5B9551-EB7D-4CA9-B177-9D0473598E32' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.RootParentID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F9F9EC70-B3C6-4619-9A43-0D8986A28A85' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.RootRerunFromPromptRunID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Root Rerun From',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '55613DC7-0DDA-43AF-AE04-0F3D2BC709D0' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.Messages 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = 'Other'
-WHERE 
-   ID = 'A863F3D6-18E5-4FBD-B498-BC74BB6C7592' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.Result 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'D3C9BC7E-8FDA-4CC9-A6AF-F928183ED4EC' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.StopSequences 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '81BC5339-5D6D-41F7-8D40-B619AC308284' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ResponseFormat 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '500B3FE9-F420-4036-AD0A-0CC999E6478A' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.JudgeID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'CC0E9225-A041-4DA5-8C1C-AB26091D9A37' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.JudgeScore 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'FCF30C26-0363-49F8-AF94-D8403348A6F1' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ModelSpecificResponseDetails 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Response Metadata',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '645594E9-9A4D-4302-9268-C5D0656D4189' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.AssistantPrefill 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'DD1CA15C-264A-4D3A-A85A-9F6EE270C338' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.Prompt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Prompt Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'E114B8EB-89A2-4EF2-A45E-0D52E011FCCE' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.Model 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Model Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '5603B884-25A8-4D10-94A3-636E59F3E91C' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.Vendor 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Vendor Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F1D62EEE-FEEF-4D0C-8955-7AB4442A9150' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.Agent 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Agent Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '2DE35331-2554-4E99-8C8E-2FB392B3B658' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.Configuration 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Configuration Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F7A51776-F0C9-4411-9481-E46DC3EE9D4F' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.OriginalModel 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Original Model Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'E939815B-9896-49C5-BA22-6E25BEFE2F34' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.Judge 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Judge Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '20386410-106D-4540-A077-111FF35B281C' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ChildPrompt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Child Prompt Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '6EE88511-CE87-4BA6-AA0F-DA675C5C757B' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TokensUsed 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '8EB9EB12-02C0-4D19-BC14-0DC706C9EE58' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TokensPrompt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Tokens (Prompt)',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '82D0E001-0826-44BC-B394-0299DAFBBB62' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TokensCompletion 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Tokens (Completion)',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '4F3C2E1E-2F65-4B98-82BB-CB48B6285546' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TotalCost 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '74BCF682-06A6-4DDC-BF1E-C7B5601D715E' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.Cost 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'ADCD9C84-0FB1-45F4-9A9F-B42BD51A2503' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.CostCurrency 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '2A925F19-E0EA-41AF-8323-4542F310A09E' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TokensUsedRollup 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '16B3DCD4-E1A3-456B-AC93-FF72B2507B19' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TokensPromptRollup 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Tokens Prompt (Rollup)',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '05F66D0A-9E5B-4A31-9B03-F26DF3FA70B1' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TokensCompletionRollup 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Tokens Completion (Rollup)',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'BF642024-62C7-41E2-86AA-FCE253463DE1' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.DescendantCost 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'E1E51DB3-0F7A-4A20-8E82-0CE8E9257F47' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.FailoverAttempts 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'C84B4CE2-5FE8-4BE0-9A3A-D0C5440E58B8' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.FailoverErrors 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '67CB5D9F-21C7-472F-968B-1A546D4DF8B1' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.FailoverDurations 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'E592040A-9AB1-4181-974D-D40598259CF2' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.OriginalModelID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Original Model',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '12569670-4ECE-445A-ADCF-E3018DC1B723' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.OriginalRequestStartTime 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Original Start Time',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '24CB1A5A-CC8F-4FAB-BCF8-3324534165BF' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TotalFailoverDuration 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '9C1D702A-F8B3-4B2B-8B88-E64621FDAA08' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.QueueTime 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '9DF1B01F-510B-481F-A669-F0C128437817' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.PromptTime 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '01E72544-1D2A-4FF2-9BC0-497E41F65473' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.CompletionTime 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '248F35BE-627E-4A29-8A08-CAB9DF3BA396' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TokensCacheRead 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'CE759024-EDCE-42BE-85E1-15069D68626C' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TokensCacheWrite 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F81872DE-BE88-47EE-A581-8E5808E48013' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TokensCacheReadRollup 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '645DFA6E-9B83-4D3E-A0E8-4F4646E3E70E' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TokensCacheWriteRollup 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '17BF5A60-74DC-41C8-81A5-3C49FEC3016A' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.InputUnitsUsed 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Performance & Cost Metrics',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Input Units',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '6C08B2DD-1FA7-40E8-A885-744B62CC8294' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.OutputUnitsUsed 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Performance & Cost Metrics',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Output Units',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'BA0F3DF2-8A0E-4A57-8107-747135A88B40' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.UsageTypeID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Performance & Cost Metrics',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Usage Type',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '3DC95F00-71F3-4E22-9006-CA6843A034C4' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.UsageType 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Performance & Cost Metrics',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Usage Type Name',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '94537627-B53E-4C5E-9C1F-04AB8C335C85' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.Temperature 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '95C3A075-173A-4858-9EC2-49EF6B976669' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TopP 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'B7B30E68-EE85-4883-96D9-A1E3053396DF' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TopK 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'C39350C9-4593-4129-A130-73C730EE8559' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.MinP 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'EBC17D08-2D86-4B7C-9B37-3A9D19E1E98F' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.FrequencyPenalty 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F4723C61-222A-40F3-9C97-941715514B96' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.PresencePenalty 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'AF8F23C2-DEFE-442D-BD79-2178777C48EA' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.Seed 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'DED8E59B-666C-4D6E-9CEA-EB762B444F42' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.LogProbs 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '180A9E6F-8C78-42F1-9187-D969F3A0DFF2' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TopLogProbs 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '5601E9C4-A756-4453-8117-E8E5460CAEFC' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ModelSelection 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F7B5B241-3D39-4715-80CA-77AB79AF8374' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ModelPowerRank 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'FF696B62-DD4F-4D12-A120-27464D4F3BEE' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.SelectionStrategy 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '0F79694C-7A55-4E18-BBF6-C0A3B8D9BAF0' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.EffortLevel 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '7B1032DB-F8AF-4EAF-9F03-7B9049FBA39D' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ValidationAttemptCount 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'E5C8EB19-4E38-4962-A9C3-01B99B2CAF71' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.SuccessfulValidationCount 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'BB43B8DA-7A21-4734-9EE0-49BBAB0A2EBC' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.FinalValidationPassed 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Final Validation Passed',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'B818BC71-69CA-48AB-8E82-FDBA4ACE9B9E' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ValidationBehavior 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '19C655EA-36B6-4D1E-AD16-07E68D848C07' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.RetryStrategy 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'D8524915-5BE7-4BF6-8751-847427DCDFF5' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.MaxRetriesConfigured 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '90035368-1453-43A8-B3D0-F822A75E63C3' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.FinalValidationError 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'A56CAAE4-C17C-4217-BF68-D4D1CE427ADF' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ValidationErrorCount 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'AA772A8F-17FC-453A-AB19-69766C073663' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.CommonValidationError 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '2F7169BB-CDD8-43BE-B74D-C2D2D5AA2734' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.FirstAttemptAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '3FB83B39-DC79-4824-91B1-F4C7AC91FD50' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.LastAttemptAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '70717F1D-4FF4-488A-8BE4-0A2D47A0C702' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.TotalRetryDurationMS 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Retry Duration (ms)',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '10064F90-AA41-4DC5-981B-D308C767FD63' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ValidationAttempts 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Validation History',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '33BF165E-77A3-447D-94F3-DCB61EF83698' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.ValidationSummary 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '730E6B0B-B28C-4E90-A879-003181340C68' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'BAFFFCD7-77C9-4716-A0E2-60C41814CCC8' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Prompt Runs.__mj_UpdatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'C32DE832-7849-457C-9A45-5F9BE3AF68CE' AND AutoUpdateCategory = 1;
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd3693446-a054-4d37-b9d9-0089adb3dbfd' OR (EntityID = '7815F891-EF05-4B4B-BB1C-DB60C1DF9C21' AND Name = 'UsageType')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'd3693446-a054-4d37-b9d9-0089adb3dbfd',
+            '7815F891-EF05-4B4B-BB1C-DB60C1DF9C21', -- Entity: MJ: AI Model Price Unit Types
+            (SELECT COALESCE(MAX([Sequence]), 0) FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7815F891-EF05-4B4B-BB1C-DB60C1DF9C21') + 9,
+            'UsageType',
+            'Usage Type',
+            NULL,
+            'nvarchar',
+            100,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
 

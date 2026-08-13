@@ -576,12 +576,12 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * and the mismatch is only noticed downstream where the run is refused rather than priced.
      * Passing the measure the run actually recorded makes the choice deterministic.
      *
-     * The filter reads `AIModelCost.UsageTypeID` directly rather than resolving
-     * `UnitTypeID → AIModelPriceUnitType → UsageTypeID`: the value is denormalised onto the cost
-     * row precisely so this selection stays an in-memory field compare over every cached cost row,
-     * with no per-candidate join or driver instantiation. A database CHECK holds the two in
-     * agreement (see the `AIUsageType` migration), so reading the near copy is not a shortcut that
-     * can drift.
+     * The measure is resolved through the cost row's `UnitTypeID` into the cached
+     * `ModelPriceUnitTypes`, whose `UsageType` is the denormalised name CodeGen puts on the view.
+     * `AIModelCost` deliberately carries NO usage-type column of its own: it would be a second copy
+     * of a derivable fact, and nothing would arbitrate a row claiming `Seconds` while its unit type
+     * says `Tokens` — which is precisely the comparison this method exists to make trustworthy.
+     * Both lookups are in-memory over already-loaded caches, so single-sourcing costs nothing.
      *
      * @param modelID - The ID of the AI model
      * @param vendorID - The ID of the vendor
@@ -607,7 +607,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             cost.Status === 'Active' &&
             (!cost.StartedAt || new Date(cost.StartedAt) <= now) &&
             (!cost.EndedAt || new Date(cost.EndedAt) > now) &&
-            (usageKind === undefined || this.UsageTypeName(cost.UsageTypeID) === usageKind)
+            (usageKind === undefined || this.CostRowUsageKind(cost) === usageKind)
         );
 
         // If multiple active costs exist, return the most recently started one
@@ -712,6 +712,21 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     /**
+     * The base measure a cost row prices in, resolved through its price unit type.
+     *
+     * Null when the row's `UnitTypeID` is not in the loaded catalog — a stale cache or a deleted row.
+     * Callers must treat that as "unknown measure" and refuse, never as `Tokens`: a cost row whose
+     * unit type cannot be resolved cannot be priced, and defaulting is how seconds get charged at a
+     * per-million-tokens rate.
+     */
+    public CostRowUsageKind(cost: MJAIModelCostEntity): string | null {
+        const priceUnitType = this.ModelPriceUnitTypes.find(put => UUIDsEqual(put.ID, cost.UnitTypeID));
+        // `UsageType` is the denormalized name CodeGen adds to the view for the UsageTypeID foreign
+        // key, so this needs no third lookup into the usage-type catalog.
+        return priceUnitType?.UsageType ?? null;
+    }
+
+    /**
      * Resolves the price unit type driver a cost row is priced by, logging and returning null when
      * the row points at a unit type this deployment has no calculator for.
      */
@@ -729,9 +744,14 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         // is additionally marked `@RequiresSubclass()`, so the fallback is refused at the factory;
         // this call site reports it rather than throwing, because a missing driver is a data problem
         // to be logged and skipped, not an invariant break.
+        // The row is passed as a constructor argument so a driver CAN be configured by data rather
+        // than by code — `LinearPriceUnitType` reads its measure and divisor straight off it, which
+        // is what lets a new linear billing unit ship as one seeded row. Inert for every hardcoded
+        // driver, and for any subclass outside this repo, since extra arguments are ignored.
         const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<BasePriceUnitType>(
             BasePriceUnitType,
-            priceUnitType.DriverClass
+            priceUnitType.DriverClass,
+            priceUnitType
         );
         if (!resolution.Resolved || !resolution.Instance) {
             LogError(
