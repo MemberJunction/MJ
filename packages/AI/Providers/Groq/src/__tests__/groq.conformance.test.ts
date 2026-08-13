@@ -8,11 +8,11 @@
  * because GroqLLM falls back to `error.name === 'AbortError'` / `signal.aborted` when the error
  * is not an instance of the SDK's APIUserAbortError.
  */
-import { RunLLMConformanceSuite } from '@memberjunction/ai/dist/test-support/llm-conformance.js';
 import {
+    RunLLMConformanceSuite,
     CreateOpenAICompatibleSeamMock,
     OpenAICompatibleChatClient
-} from '@memberjunction/ai/dist/test-support/openai-compatible-seam.js';
+} from '@memberjunction/unit-testing';
 import { GroqLLM } from '../models/groq';
 
 const seam = CreateOpenAICompatibleSeamMock();

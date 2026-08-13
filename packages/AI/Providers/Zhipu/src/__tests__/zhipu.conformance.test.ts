@@ -10,11 +10,11 @@
  * AbortError-named abort error exercises OpenAILLM's `error.name === 'AbortError'` cancellation
  * fallback (its instanceof APIUserAbortError check is SDK-internal).
  */
-import { RunLLMConformanceSuite } from '@memberjunction/ai/dist/test-support/llm-conformance.js';
 import {
+    RunLLMConformanceSuite,
     CreateOpenAICompatibleSeamMock,
     OpenAICompatibleChatClient
-} from '@memberjunction/ai/dist/test-support/openai-compatible-seam.js';
+} from '@memberjunction/unit-testing';
 import { ZhipuLLM } from '../models/zhipu';
 
 const seam = CreateOpenAICompatibleSeamMock();

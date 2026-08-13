@@ -13,7 +13,7 @@ import {
     ExpectedUsageCounts,
     FailureSite,
     RunLLMConformanceSuite
-} from '@memberjunction/ai/dist/test-support/llm-conformance.js';
+} from '@memberjunction/unit-testing';
 
 const mockChat = vi.hoisted(() => vi.fn());
 

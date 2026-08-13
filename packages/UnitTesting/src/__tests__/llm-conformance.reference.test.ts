@@ -1,6 +1,6 @@
 /**
- * Runs the shared LLM conformance suite (src/test-support/llm-conformance.ts) against an
- * in-package reference driver that implements the IDEAL BaseLLM contract:
+ * Runs the shared LLM conformance suite (src/ai/llm-conformance.ts) against an in-package
+ * reference driver that implements the IDEAL BaseLLM contract:
  *  - non-streaming failures resolve a failed ChatResult WITH errorInfo,
  *  - a pre-aborted streaming request resolves the cancelled shape (empty stream + cancelled
  *    finalize) instead of rejecting,
@@ -8,24 +8,30 @@
  *  - no KnownDeviations are declared.
  *
  * This is the suite's own regression test: if the conformance suite or the OpenAI-compatible
- * seam mock drifts from BaseLLM's real template-method behavior, this file breaks here in Core
- * before any provider package sees it.
+ * seam mock drifts from BaseLLM's real template-method behavior, this file breaks here (next to
+ * the suite) before any provider package sees it.
  */
-import { BaseLLM } from '../generic/baseLLM';
-import { ChatParams, ChatResult, ChatMessageRole } from '../generic/chat.types';
-import { ModelUsage } from '../generic/baseModel';
-import { AIErrorInfo } from '../generic/errorTypes';
-import { ErrorAnalyzer } from '../generic/errorAnalyzer';
-import { ClassifyParams, ClassifyResult } from '../generic/classify.types';
-import { SummarizeParams, SummarizeResult } from '../generic/summarize.types';
-import { RunLLMConformanceSuite } from '../test-support/llm-conformance';
+import {
+    BaseLLM,
+    ChatParams,
+    ChatResult,
+    ChatMessageRole,
+    ModelUsage,
+    AIErrorInfo,
+    ErrorAnalyzer,
+    ClassifyParams,
+    ClassifyResult,
+    SummarizeParams,
+    SummarizeResult
+} from '@memberjunction/ai';
+import { RunLLMConformanceSuite } from '../ai/llm-conformance';
 import {
     CreateOpenAICompatibleSeamMock,
     OpenAICompatibleChatClient,
     OpenAICompatibleChunkPayload,
     OpenAICompatibleResponsePayload,
     OpenAICompatibleUsagePayload
-} from '../test-support/openai-compatible-seam';
+} from '../ai/openai-compatible-seam';
 
 /** True when the failure represents the caller's cancellation rather than a vendor fault. */
 function isCancellationError(error: unknown, token: AbortSignal | undefined): boolean {

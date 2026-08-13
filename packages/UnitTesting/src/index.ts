@@ -37,3 +37,23 @@ export {
   type FxPromptModel,
   type AICatalog,
 } from './ai/catalog-fixtures';
+
+// ---- Shared BaseLLM streaming/ChatResult conformance suite (applied by provider packages) ----
+export {
+  RunLLMConformanceSuite,
+  type ExpectedUsageCounts,
+  type FailureSite,
+  type LLMConformanceDeviationKind,
+  type LLMConformanceDeviation,
+  type LLMConformanceSuiteConfig,
+} from './ai/llm-conformance';
+export {
+  CreateOpenAICompatibleSeamMock,
+  type OpenAICompatibleSeam,
+  type OpenAICompatibleChatClient,
+  type OpenAICompatibleUsagePayload,
+  type OpenAICompatibleResponsePayload,
+  type OpenAICompatibleChunkPayload,
+  type OpenAICompatibleRequestBody,
+  type OpenAICompatibleRequestOptions,
+} from './ai/openai-compatible-seam';

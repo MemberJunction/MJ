@@ -1,17 +1,18 @@
 /**
  * @fileoverview Shared BaseLLM streaming / ChatResult conformance suite.
  *
- * WHY THIS FILE LIVES IN `src/` (AND SHIPS IN `dist/`): every LLM provider package implements the
+ * WHY THIS LIVES IN `@memberjunction/unit-testing`: every LLM provider package implements the
  * same `BaseLLM` template-method contract (chunk accumulation, finalize, cancellation, failure
  * shapes), but each package tests it in isolation. This module packages the SHARED contract as a
  * parameterized Vitest suite that provider packages import in THEIR OWN tests, so the contract is
- * asserted once and applied uniformly. It deliberately lives in `src/` (not `src/__tests__/`,
- * which is excluded from compilation) so it compiles into `dist/test-support/` and is importable
- * from any provider package's test file.
+ * asserted once and applied uniformly. It belongs in the shared test-utilities package — which is
+ * where MJ's cross-package test harness (TestLLM, the ChatResult factories) already lives — rather
+ * than shipping inside the runtime `@memberjunction/ai` package, so vendor packages never carry
+ * test code or an optional `vitest` peer dependency in their published output.
  *
- * HOW A PROVIDER PACKAGE USES IT (deep import — see note below):
+ * HOW A PROVIDER PACKAGE USES IT:
  * ```ts
- * import { RunLLMConformanceSuite } from '@memberjunction/ai/dist/test-support/llm-conformance.js';
+ * import { RunLLMConformanceSuite } from '@memberjunction/unit-testing';
  * import { MyProviderLLM } from '../models/myProvider';
  *
  * RunLLMConformanceSuite({
@@ -21,11 +22,10 @@
  * });
  * ```
  *
- * DELIBERATELY NOT EXPORTED FROM THE PACKAGE INDEX: this module imports `vitest` (a
- * devDependency). Exporting it from `src/index.ts` would make the package's runtime entry point
- * require vitest for every production consumer. The deep `dist/test-support/...` import keeps the
- * runtime entry clean while remaining resolvable (the package publishes its full `dist/` and has
- * no restricting `exports` map). Only ever import this module from test code.
+ * This module imports `vitest` and is exported from the package index like the rest of
+ * `@memberjunction/unit-testing` — a test-only package that consumers depend on as a
+ * devDependency, so importing it never pulls test code into a runtime bundle. Only ever import it
+ * from test code.
  *
  * RULES FOR CONFORMANCE TEST FILES:
  *  - Do NOT `vi.mock('@memberjunction/ai')` in a test file that runs this suite — the whole point
@@ -61,9 +61,7 @@
  * moment the driver is fixed (forcing the ledger entry to be removed).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { BaseLLM } from '../generic/baseLLM';
-import { ChatMessageRole, ChatParams, ChatResult, StreamingChatCallbacks } from '../generic/chat.types';
-import { ModelUsage } from '../generic/baseModel';
+import { BaseLLM, ChatMessageRole, ChatParams, ChatResult, StreamingChatCallbacks, ModelUsage } from '@memberjunction/ai';
 
 /**
  * Token counts a scripted vendor response reports, expressed provider-agnostically. Adapters map

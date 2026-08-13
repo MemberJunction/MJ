@@ -12,7 +12,7 @@ import {
     ExpectedUsageCounts,
     FailureSite,
     RunLLMConformanceSuite
-} from '@memberjunction/ai/dist/test-support/llm-conformance.js';
+} from '@memberjunction/unit-testing';
 
 const mockPost = vi.hoisted(() => vi.fn());
 const mockModelClient = vi.hoisted(() => vi.fn());

@@ -268,7 +268,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'startup-mode': 3,
         'storage': 6,
         'subscription-isolation': 2,
-        'task-graph-execution': 26,
+        'task-graph-execution': 27,
         'task-graph-orchestration': 18,
         'templates': 8,
         'transaction-groups': 5,
@@ -300,5 +300,216 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
         expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(81);
+    });
+});
+
+describe('gated-skip snapshot (a check must not start self-skipping silently)', () => {
+    // The deterministic lane runs with neither RUN_MUTATION_TESTS nor RUN_AGENT_TESTS, so a check
+    // that declares RequiresMutation or RequiresLiveModel is SKIPPED there — it contributes no
+    // coverage until a scheduled lane arms its gate. The ALL-bundle guard above pins how MANY
+    // checks exist; this guard pins exactly WHICH ones are gated out of the default lane. A change
+    // that makes a check newly self-skip (or silently un-gates one) fails here instead of quietly
+    // shrinking the deterministic tier with only the CI step-summary as the tell. When the change
+    // is deliberate, paste the printed set over the matching snapshot below.
+    //
+    // Scope: per-check static gates only (RequiresMutation / RequiresLiveModel — the two flags a
+    // check author sets). The client-vs-server split (bundles that skip when MJAPI is absent) is a
+    // suite-metadata concern owned by the servers-before-clients ordering / sibling-parity guards,
+    // not this snapshot.
+    const GATE_TEST_LOCAL_PREFIXES = new Set(['regtest', 'bundleX', 'bundleY', 'lifecycletest', 'self-test']);
+
+    const collectGated = (flag: 'RequiresMutation' | 'RequiresLiveModel'): string[] => {
+        const reg = IntegrationCheckRegistry.Instance;
+        const ids: string[] = [];
+        for (const name of reg.GetBundleNames()) {
+            if (GATE_TEST_LOCAL_PREFIXES.has(name)) {
+                continue;
+            }
+            for (const c of reg.GetBundle(name)) {
+                if (c[flag]) {
+                    ids.push(c.Id);
+                }
+            }
+        }
+        return ids.sort();
+    };
+    const pasteReady = (ids: string[]): string => ids.map(id => `        '${id}',`).join('\n');
+
+    // Checks skipped in the deterministic lane unless RUN_MUTATION_TESTS=1 arms the nightly mutation rig.
+    const EXPECTED_MUTATION_GATED: string[] = [
+        'actions-pipeline.AP2',
+        'app-behavioral.AB1',
+        'app-behavioral.AB2',
+        'cache-gauntlet.CG1',
+        'cache-gauntlet.CG2',
+        'cache-gauntlet.CG3',
+        'cache-gauntlet.CG4',
+        'cache-gauntlet.CG5',
+        'cache-gauntlet.CG6',
+        'cache-gauntlet.CG7',
+        'cache-gauntlet.CG8',
+        'cache-immutability.F12',
+        'client-cache.C10',
+        'content-vectorization.CV1',
+        'content-vectorization.CV2',
+        'content-vectorization.CV3',
+        'content-vectorization.CV4',
+        'content-vectorization.CV5',
+        'content-vectorization.CV6',
+        'entity-actions.EA1',
+        'entity-actions.EA2',
+        'entity-actions.EA3',
+        'entity-actions.EA4',
+        'entity-actions.EA5',
+        'entity-actions.EA6',
+        'entity-actions.EA7',
+        'entity-actions.EA8',
+        'entity-graph-client.EGC3',
+        'entity-graph-client.EGC4',
+        'entity-graph-client.EGC5',
+        'entity-graph-client.EGC6',
+        'entity-graph-client.EGC8',
+        'entity-graph-client.EGC9',
+        'entity-graph.EG1',
+        'entity-graph.EG2',
+        'entity-graph.EG3',
+        'entity-graph.EG4',
+        'entity-graph.EG5',
+        'entity-graph.EG6',
+        'entity-graph.EG7',
+        'entity-graph.EG8',
+        'entity-server-invariants.ESI1',
+        'entity-server-invariants.ESI2',
+        'entity-server-invariants.ESI3',
+        'entity-server-invariants.ESI4',
+        'entity-server-invariants.ESI9',
+        'entity-writes.EW1',
+        'entity-writes.EW2',
+        'entity-writes.EW3',
+        'entity-writes.EW5',
+        'entity-writes.EW6',
+        'entity-writes.EW7',
+        'entity-writes.EW9',
+        'permission-engine.PE11',
+        'permission-engine.PE12',
+        'permission-engine.PE13',
+        'server-cache.S17',
+        'server-cache.S23',
+        'server-cache.S24',
+        'server-cache.S29',
+        'server-cache.S30',
+        'server-cache.S31b',
+        'task-graph-execution.TX1',
+        'task-graph-execution.TX10',
+        'task-graph-execution.TX11',
+        'task-graph-execution.TX12',
+        'task-graph-execution.TX13',
+        'task-graph-execution.TX14',
+        'task-graph-execution.TX15',
+        'task-graph-execution.TX16',
+        'task-graph-execution.TX17',
+        'task-graph-execution.TX18',
+        'task-graph-execution.TX19',
+        'task-graph-execution.TX2',
+        'task-graph-execution.TX20',
+        'task-graph-execution.TX21',
+        'task-graph-execution.TX22',
+        'task-graph-execution.TX23',
+        'task-graph-execution.TX24',
+        'task-graph-execution.TX25',
+        'task-graph-execution.TX26',
+        'task-graph-execution.TX27',
+        'task-graph-execution.TX3',
+        'task-graph-execution.TX4',
+        'task-graph-execution.TX5',
+        'task-graph-execution.TX6',
+        'task-graph-execution.TX7',
+        'task-graph-execution.TX8',
+        'task-graph-execution.TX9',
+        'task-graph-orchestration.TG14',
+        'task-graph-orchestration.TG15',
+        'task-graph-orchestration.TG16',
+        'task-graph-orchestration.TG18',
+        'transaction-groups.TG2',
+        'transaction-groups.TG3',
+        'transaction-groups.TG4',
+        'transaction-groups.TG5',
+        'view-execution.V8',
+        'view-security.VS1',
+        'view-security.VS2',
+        'view-security.VS3',
+    ];
+
+    // Checks skipped in the deterministic lane unless RUN_AGENT_TESTS=1 arms the weekly live-model lane.
+    const EXPECTED_LIVE_MODEL_GATED: string[] = [
+        'agent-artifact-tools.AT1',
+        'agent-artifact-tools.AT2',
+        'agent-artifact-tools.AT3',
+        'agent-artifact-tools.AT4',
+        'agent-artifact-tools.AT5',
+        'agent-artifact-tools.AT6',
+        'agent-artifact-tools.AT7',
+        'agent-artifact-tools.AT8',
+        'agent-artifact-tools.AT9',
+        'agent-carry-forward.CF1',
+        'agent-carry-forward.CF2',
+        'agent-carry-forward.CF3',
+        'agent-carry-forward.CF4',
+        'agent-carry-forward.CF5',
+        'agent-carry-forward.CF6',
+        'agent-compaction-e2e.CE2',
+        'agent-compaction-e2e.CE9',
+        'agent-loop-live.AL1',
+        'agent-loop-live.AL2',
+        'agent-loop-live.AL3',
+        'agent-loop-live.AL4',
+        'agent-loop-live.AL5',
+        'agent-loop-live.AL6',
+        'agent-loop-live.AL7',
+        'agent-memory-guards.MG1',
+        'agent-memory-guards.MG2',
+        'agent-memory-guards.MG3',
+        'agent-memory-guards.MG4',
+        'agent-memory-guards.MG5',
+        'agent-payload-guards.PG1',
+        'agent-payload-guards.PG2',
+        'agent-payload-guards.PG3',
+        'agent-payload-guards.PG4',
+        'agent-payload-guards.PG5',
+        'agent-payload-guards.PG6',
+        'agent-payload-guards.PG7',
+        'agent-payload-guards.PG8',
+        'agent-payload-guards.PG9',
+        'agent-plan-mode.PM1',
+        'agent-plan-mode.PM2',
+        'agent-plan-mode.PM3',
+        'agent-plan-mode.PM4',
+        'agent-plan-mode.PM5',
+        'agent-plan-mode.PM6',
+        'agent-rag-search.RS4',
+        'agent-rag-search.RS5',
+        'agent-rag-search.RS6',
+        'agent-runner.AR1',
+        'agent-skills-live.SL1',
+        'agent-skills-live.SL2',
+        'agent-skills-live.SL3',
+        'agent-skills-live.SL4',
+        'agent-skills-live.SL5',
+        'agent-wire-callback.WC1',
+        'agent-wire-callback.WC2',
+        'shipped-agents-live.SA1',
+        'shipped-agents-live.SA2',
+        'shipped-agents-live.SA3',
+        'shipped-agents-live.SA4',
+    ];
+
+    it('the mutation-gated (RequiresMutation) set is exactly the pinned snapshot', () => {
+        const actual = collectGated('RequiresMutation');
+        expect(actual, `Mutation-gated set drifted (a check newly self-skips or un-gated). Paste over EXPECTED_MUTATION_GATED if deliberate:\n${pasteReady(actual)}`).toEqual(EXPECTED_MUTATION_GATED);
+    });
+
+    it('the live-model-gated (RequiresLiveModel) set is exactly the pinned snapshot', () => {
+        const actual = collectGated('RequiresLiveModel');
+        expect(actual, `Live-model-gated set drifted (a check newly self-skips or un-gated). Paste over EXPECTED_LIVE_MODEL_GATED if deliberate:\n${pasteReady(actual)}`).toEqual(EXPECTED_LIVE_MODEL_GATED);
     });
 });

@@ -26,8 +26,8 @@
  *    `chunk.x_groq.usage`, Groq's native placement — so a driver that drops stream usage is
  *    provably dropping data the vendor sent).
  *
- * Ships in src/ (compiled to dist/test-support/) for the same reason as ./llm-conformance —
- * see that file's header. Test-code only; never import from runtime code.
+ * Exported from `@memberjunction/unit-testing` alongside ./llm-conformance — see that file's
+ * header. Test-code only; never import from runtime code.
  */
 import { ExpectedUsageCounts, FailureSite } from './llm-conformance';
 
