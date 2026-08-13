@@ -1,0 +1,21 @@
+{
+  "name": "@memberjunction/gamenight",
+  "version": "6.1.0-edge.1",
+  "description": "Board Game Night demo app — custom BaseEntity business logic for play sessions.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@memberjunction/core": "6.1.0-edge.1",
+    "@memberjunction/global": "6.1.0-edge.1",
+    "mj_generatedentities": "1.0.0"
+  }
+}

@@ -1,0 +1,30 @@
+[
+  {
+    "fields": {
+      "AgentID": "@lookup:MJ: AI Agents.Name=Game Night Scorekeeper",
+      "ActionID": "@lookup:MJ: Actions.Name=Web Search",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "2B0C201D-A170-4A4F-A189-F16A120B2EF8"
+    },
+    "sync": {
+      "lastModified": "2026-08-12T22:22:16.755Z",
+      "checksum": "a52948ca41214b7132ef129df7c6f77c750b30352ed2ee2bbf82d75a0038e112"
+    }
+  },
+  {
+    "fields": {
+      "AgentID": "@lookup:MJ: AI Agents.Name=Game Night Scorekeeper",
+      "ActionID": "@lookup:MJ: Actions.Name=URL Metadata Extractor",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8466538C-10EA-46B7-9AD5-DCDEF287B8E6"
+    },
+    "sync": {
+      "lastModified": "2026-08-12T22:22:16.768Z",
+      "checksum": "f4ec1554f2366e8bf073d344e36b0f5a10defbd4a619446ae4c170a1f59ce8d5"
+    }
+  }
+]

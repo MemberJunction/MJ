@@ -1,0 +1,16 @@
+[
+  {
+    "fields": {
+      "AgentID": "@lookup:MJ: AI Agents.Name=Game Night Scorekeeper",
+      "SkillID": "@lookup:MJ: AI Skills.Name=Document Builder",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "9731BFF6-2ED7-4E54-ABC9-0359BD6C851D"
+    },
+    "sync": {
+      "lastModified": "2026-08-13T00:21:04.958Z",
+      "checksum": "36b9654112b2496839f106289ff448a478346afa0e9d893b02d18c960205c088"
+    }
+  }
+]

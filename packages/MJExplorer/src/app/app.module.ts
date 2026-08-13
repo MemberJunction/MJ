@@ -31,6 +31,21 @@ import {CLASS_REGISTRATIONS} from '@memberjunction/ng-bootstrap-lite';
 // same file, so installed apps' @RegisterClass decorators run when the bundle loads (B2).
 import {CLASS_REGISTRATIONS as LOCAL_CLASSES} from './generated/class-registrations-manifest';
 
+// Board Game Night business logic. The call is what keeps this import alive: the entity subclass is
+// only ever reached through ClassFactory, so without a used reference the bundler drops the module and
+// its @RegisterClass decorator never runs. It cannot ride the supplemental manifest above either —
+// that is generated with `--exclude-packages @memberjunction`, and this package is @memberjunction/*.
+import { LoadGameNightEntities } from '@memberjunction/gamenight';
+LoadGameNightEntities();
+
+// Hand-written form overrides. Same tree-shaking reasoning as above: the override is reached only
+// through ClassFactory, so the call is what keeps the module in the bundle.
+import { CustomFormsModule, LoadCustomForms } from './custom/custom-forms.module';
+LoadCustomForms();
+
+import { CustomDashboardsModule, LoadCustomDashboards } from './custom/dashboards/custom-dashboards.module';
+LoadCustomDashboards();
+
 // static code path builder
 const combinedClasses = [...CLASS_REGISTRATIONS, ...LOCAL_CLASSES];
 
@@ -86,8 +101,11 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     // Explorer App Shell (includes login UI, validation, and mj-shell wrapper)
     MJExplorerAppModule.forRoot(environment),
 
-    // App-specific modules
-    GeneratedFormsModule
+    // App-specific modules. CustomFormsModule must come after GeneratedFormsModule so its overrides
+    // register second and win the ClassFactory priority.
+    GeneratedFormsModule,
+    CustomFormsModule,
+    CustomDashboardsModule
   ],
   providers: [
     SharedService,

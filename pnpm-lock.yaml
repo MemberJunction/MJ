@@ -10420,6 +10420,18 @@ importers:
         specifier: ^3.1.1
         version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/GameNight:
+    dependencies:
+      '@memberjunction/core':
+        specifier: 6.1.0-edge.1
+        version: link:../MJCore
+      '@memberjunction/global':
+        specifier: 6.1.0-edge.1
+        version: link:../MJGlobal
+      mj_generatedentities:
+        specifier: 1.0.0
+        version: link:../GeneratedEntities
+
   packages/GeneratedActions:
     dependencies:
       '@memberjunction/actions':
@@ -10894,6 +10906,12 @@ importers:
 
   packages/MJAPI:
     dependencies:
+      '@memberjunction/actions':
+        specifier: 6.1.0-edge.1
+        version: link:../Actions/Engine
+      '@memberjunction/actions-base':
+        specifier: 6.1.0-edge.1
+        version: link:../Actions/Base
       '@memberjunction/ai':
         specifier: 6.1.0-edge.1
         version: link:../AI/Core
@@ -10903,6 +10921,9 @@ importers:
       '@memberjunction/core':
         specifier: 6.1.0-edge.1
         version: link:../MJCore
+      '@memberjunction/gamenight':
+        specifier: 6.1.0-edge.1
+        version: link:../GameNight
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../MJGlobal
@@ -11490,6 +11511,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.1
         version: link:../MJCoreEntities
+      '@memberjunction/gamenight':
+        specifier: 6.1.0-edge.1
+        version: link:../GameNight
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
         version: link:../MJGlobal
@@ -11511,9 +11535,15 @@ importers:
       '@memberjunction/ng-bootstrap-lite':
         specifier: 6.1.0-edge.1
         version: link:../Angular/BootstrapLite
+      '@memberjunction/ng-composer':
+        specifier: 6.1.0-edge.1
+        version: link:../Angular/Generic/composer
       '@memberjunction/ng-container-directives':
         specifier: 6.1.0-edge.1
         version: link:../Angular/Generic/container-directives
+      '@memberjunction/ng-conversations':
+        specifier: 6.1.0-edge.1
+        version: link:../Angular/Generic/conversations
       '@memberjunction/ng-core-entity-forms':
         specifier: 6.1.0-edge.1
         version: link:../Angular/Explorer/core-entity-forms
@@ -11559,6 +11589,9 @@ importers:
       '@memberjunction/ng-ui-components':
         specifier: 6.1.0-edge.1
         version: link:../Angular/Generic/ui-components
+      '@memberjunction/ng-whiteboard':
+        specifier: 6.1.0-edge.1
+        version: link:../Angular/Generic/whiteboard
       '@memberjunction/ng-workspace-initializer':
         specifier: 6.1.0-edge.1
         version: link:../Angular/Explorer/workspace-initializer

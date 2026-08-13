@@ -1,0 +1,392 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Board Game Night"
+    Icon="fa-solid fa-dice"
+    Subtitle="Who is actually good, how badly the box lies, and what the shelf is made of">
+
+    <div meta>
+      @if (!IsLoading && !LoadError) {
+        <!-- A single derived headline, not a row count the tables below already show.
+             Wrapped in a real interactive element rather than a click handler on the badge: keyboard
+             users need to reach it, and a bare (click) on a span gives them no way in. role/tabindex
+             plus Enter and Space match native button behaviour. -->
+        <span
+          class="bgn-meta-toggle"
+          role="button"
+          tabindex="0"
+          [attr.aria-expanded]="ShowSessions"
+          [attr.aria-label]="(ShowSessions ? 'Hide' : 'Show') + ' the ' + TotalSessions + ' play sessions'"
+          (click)="ToggleSessions()"
+          (keydown.enter)="ToggleSessions()"
+          (keydown.space)="ToggleSessions()">
+          <mj-stat-badge
+            Icon="fa-solid fa-chart-line"
+            [Label]="TotalSessions + ' sessions across ' + TotalGames + ' games'">
+          </mj-stat-badge>
+          <i
+            class="bgn-meta-toggle__chevron fa-solid"
+            [class.fa-chevron-down]="!ShowSessions"
+            [class.fa-chevron-up]="ShowSessions"
+            aria-hidden="true"></i>
+        </span>
+      }
+    </div>
+
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="loadData()"></mj-refresh-button>
+    </div>
+  </mj-page-header>
+
+  <!--
+    [Flex]="true" turns the body into a flex column instead of a scrolling block, which is what gives
+    the splitter below a definite height to divide. Each pane then scrolls itself, so the page never
+    scrolls as a whole and a dragged pane boundary stays where you put it.
+  -->
+  <mj-page-body [Flex]="true">
+    <as-split
+      direction="vertical"
+      unit="percent"
+      gutterSize="8"
+      class="bgn-split"
+      (dragEnd)="OnChatSplitDragEnd($event)">
+
+      <as-split-area [size]="ChatPct" [minSize]="15">
+        <!-- ====================== Full chat (MJ conversations widget) ====================== -->
+        <!-- Sits above the panels on purpose: the question you want to ask is about the numbers
+             below, so asking it should not mean leaving the page. -->
+        <section class="bgn-panel bgn-chat">
+      <header class="bgn-panel__head bgn-chat__head">
+        <div>
+          <h2 class="bgn-panel__title">
+            <i class="fa-solid fa-comments" aria-hidden="true"></i> Full chat with Scorekeeper
+          </h2>
+          <p class="bgn-panel__note">
+            It can read the stats below and log a session for you. Try
+            <em>"who has the most Catan wins?"</em> or
+            <em>"log Patchwork last night, Cait beat Han 30&ndash;22"</em>.
+          </p>
+        </div>
+      </header>
+
+      @if (ChatError) {
+        <mj-alert Variant="danger" [Message]="ChatError"></mj-alert>
+      }
+
+      <!--
+        Gated on currentUser AND the resolved agent id: the chat-area needs a UserInfo at mount time,
+        and mounting before the agent id lands would show a generic picker for a moment — the exact
+        thing the pinning is for.
+
+        Scorekeeper is the ONLY agent reachable here, which takes all three inputs below:
+        `defaultAgentId` routes non-mention messages to it, `showAgentPicker=false` hides the
+        per-conversation pin, and `allowAgentMentions=false` closes the last door — an `@` mention
+        overrides the pinned default in message routing, so leaving it on would let someone hand this
+        panel to any other agent in the environment.
+      -->
+      @if (currentUser && ScorekeeperAgentId) {
+        <div class="bgn-chat__host">
+          <mj-conversation-chat-area
+            [environmentId]="ChatEnvironmentId"
+            [currentUser]="currentUser"
+            [conversationId]="ChatConversationId"
+            [conversation]="ChatConversation"
+            [isNewConversation]="ChatIsNewConversation"
+            [defaultAgentId]="ScorekeeperAgentId"
+            [showAgentPicker]="false"
+            [allowAgentMentions]="false"
+            [emptyStateGreeting]="'Ask me about game night.'"
+            (conversationCreated)="OnChatConversationCreated($event.conversation)">
+          </mj-conversation-chat-area>
+        </div>
+        } @else if (!ChatError) {
+          <mj-loading text="Connecting to Game Night Scorekeeper..."></mj-loading>
+        }
+        </section>
+      </as-split-area>
+
+      <as-split-area [size]="100 - ChatPct" [minSize]="25">
+        @if (IsLoading) {
+          <mj-loading text="Loading game night data..."></mj-loading>
+        } @else if (LoadError) {
+          <mj-alert Variant="danger" [Message]="LoadError"></mj-alert>
+        } @else {
+
+        <!-- One scrolling stack. The single splitter above is the only resize handle; these panels
+             sit in their natural order and the pane scrolls as a whole. -->
+        <div class="bgn-pane">
+
+      <!-- ===================== Sessions drill-down (from the header count) ==================== -->
+      @if (ShowSessions) {
+        <section class="bgn-panel">
+          <header class="bgn-panel__head bgn-chat__head">
+            <div>
+              <h2 class="bgn-panel__title">Play sessions</h2>
+              <p class="bgn-panel__note">
+                All {{ SessionRows.length }} sessions, newest first. Built from data already on this page,
+                so opening this costs no extra query.
+              </p>
+            </div>
+            <button mjButton variant="flat" size="sm" (click)="ToggleSessions()">Hide</button>
+          </header>
+
+          <!-- Filters the rows already on the page — no query, so results appear as you type. -->
+          <div class="bgn-search">
+            <i class="bgn-search__icon fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+            <input
+              type="search"
+              class="bgn-search__input"
+              [(ngModel)]="SessionSearch"
+              placeholder="Search sessions — game, player, place, outcome, date..."
+              aria-label="Search play sessions" />
+            @if (IsSessionSearchActive) {
+              <span class="bgn-search__count" aria-live="polite">
+                {{ VisibleSessionCount }} of {{ SessionRows.length }}
+              </span>
+              <button
+                type="button"
+                class="bgn-search__clear"
+                (click)="ClearSessionSearch()"
+                title="Clear search"
+                aria-label="Clear search">
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+              </button>
+            }
+          </div>
+
+          <div class="bgn-sessions">
+            <table class="bgn-table">
+              <!-- Every column is sortable. The header is a real <button> inside the <th> so keyboard
+                   users can reach it, and aria-sort tells a screen reader the current state. -->
+              <thead>
+                <tr>
+                  @for (col of SessionColumns; track col.Field) {
+                    <th
+                      scope="col"
+                      [class.bgn-num]="col.Numeric"
+                      [attr.aria-sort]="SortStateFor(col.Field)">
+                      <button
+                        type="button"
+                        class="bgn-sort"
+                        [class.bgn-sort--active]="SessionSortField === col.Field"
+                        (click)="SortSessions(col.Field)"
+                        [attr.title]="'Sort by ' + col.Label">
+                        {{ col.Label }}
+                        <i
+                          class="bgn-sort__icon fa-solid"
+                          [class.fa-sort]="SessionSortField !== col.Field"
+                          [class.fa-sort-up]="SessionSortField === col.Field && SessionSortDir === 'asc'"
+                          [class.fa-sort-down]="SessionSortField === col.Field && SessionSortDir === 'desc'"
+                          aria-hidden="true"></i>
+                      </button>
+                    </th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (s of SortedSessionRows; track $index) {
+                  <tr>
+                    <th scope="row" class="bgn-name">{{ s.Game }}</th>
+                    <td class="bgn-dim">{{ s.PlayedOn }}</td>
+                    <td>{{ s.Outcome }}</td>
+                    <td class="bgn-num">{{ s.DurationMinutes ?? '—' }}</td>
+                    <td class="bgn-num bgn-dim">{{ s.BoxMaxMinutes ?? '—' }}</td>
+                    <td class="bgn-dim">{{ s.LocationName ?? '—' }}</td>
+                    <td class="bgn-dim">{{ s.Players }}</td>
+                    <td>{{ s.Winners }}</td>
+                  </tr>
+                } @empty {
+                  <!-- Only reachable via the search box: with no filter there are always rows here. -->
+                  <tr>
+                    <td class="bgn-search__none" [attr.colspan]="SessionColumns.length">
+                      No session matches &ldquo;{{ SessionSearch.trim() }}&rdquo;.
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
+
+      <!-- ============================= Leaderboard (diverging) ============================= -->
+      <section class="bgn-panel">
+        <header class="bgn-panel__head">
+          <h2 class="bgn-panel__title">Skill above chance</h2>
+          <p class="bgn-panel__note">
+            Win rate minus the chance baseline for the tables actually played. The baseline is one
+            over the number of competing <em>sides</em>, so a six-player team game counts as two.
+            Zero means exactly average.
+          </p>
+        </header>
+
+        <!-- Two poles, so identity is never colour-alone: each arm is also labelled and sits on a
+             fixed side of the axis. -->
+        <div class="bgn-legend">
+          <span class="bgn-legend__item">
+            <span class="bgn-swatch bgn-swatch--above"></span> above chance
+          </span>
+          <span class="bgn-legend__item">
+            <span class="bgn-swatch bgn-swatch--below"></span> below chance
+          </span>
+        </div>
+
+        @if (Leaderboard.length === 0) {
+          <mj-empty-state Icon="fa-solid fa-dice" Title="No competitive sessions yet"></mj-empty-state>
+        } @else {
+          <table class="bgn-table">
+            <thead>
+              <tr>
+                <th scope="col">Player</th>
+                <th scope="col">Skill</th>
+                <th scope="col" class="bgn-num">Plays</th>
+                <th scope="col" class="bgn-num">Wins</th>
+                <th scope="col" class="bgn-num">Win %</th>
+                <th scope="col" class="bgn-num">Chance %</th>
+                <th scope="col" class="bgn-chart-col">Lift (points)</th>
+                <th scope="col" class="bgn-num">Avg place</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of Leaderboard; track row.Nickname) {
+                <tr>
+                  <th scope="row" class="bgn-name">{{ row.Nickname }}</th>
+                  <td class="bgn-dim">{{ row.SkillLevel }}</td>
+                  <td class="bgn-num">{{ row.Plays }}</td>
+                  <td class="bgn-num">{{ row.Wins }}</td>
+                  <td class="bgn-num">{{ row.WinPct | number: '1.1-1' }}</td>
+                  <td class="bgn-num bgn-dim">{{ row.ChancePct | number: '1.1-1' }}</td>
+                  <td class="bgn-chart-col">
+                    <!-- Diverging: a centre line at zero, one arm per direction. -->
+                    <div
+                      class="bgn-diverge"
+                      [title]="row.Nickname + ': ' + FormatSigned(row.LiftPts) + ' points vs chance'">
+                      <div class="bgn-diverge__arm bgn-diverge__arm--left">
+                        @if (!IsAboveChance(row)) {
+                          <span class="bgn-bar bgn-bar--below" [style.width.%]="LiftBarPct(row)"></span>
+                        }
+                      </div>
+                      <div class="bgn-diverge__axis" aria-hidden="true"></div>
+                      <div class="bgn-diverge__arm bgn-diverge__arm--right">
+                        @if (IsAboveChance(row)) {
+                          <span class="bgn-bar bgn-bar--above" [style.width.%]="LiftBarPct(row)"></span>
+                        }
+                      </div>
+                      <span class="bgn-diverge__value">{{ FormatSigned(row.LiftPts) }}</span>
+                    </div>
+                  </td>
+                  <td class="bgn-num">{{ row.AvgPlacement | number: '1.2-2' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+
+      <!-- ========================= Actual vs box estimate (2 series) ====================== -->
+      <section class="bgn-panel">
+        <header class="bgn-panel__head">
+          <h2 class="bgn-panel__title">How badly the box lies</h2>
+          <p class="bgn-panel__note">
+            Average actual duration against the publisher's stated maximum. Both series are minutes on
+            one shared scale. Positive means the game runs longer than the box promises.
+          </p>
+        </header>
+
+        <div class="bgn-legend">
+          <span class="bgn-legend__item">
+            <span class="bgn-swatch bgn-swatch--actual"></span> actual
+          </span>
+          <span class="bgn-legend__item">
+            <span class="bgn-swatch bgn-swatch--estimate"></span> box maximum
+          </span>
+        </div>
+
+        @if (PlayTimes.length === 0) {
+          <mj-empty-state Icon="fa-solid fa-clock" Title="No timed sessions yet"></mj-empty-state>
+        } @else {
+          <table class="bgn-table">
+            <thead>
+              <tr>
+                <th scope="col">Game</th>
+                <th scope="col" class="bgn-num">Sessions</th>
+                <th scope="col" class="bgn-chart-col">Minutes</th>
+                <th scope="col" class="bgn-num">Actual</th>
+                <th scope="col" class="bgn-num">Box</th>
+                <th scope="col" class="bgn-num">Over/under</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of PlayTimes; track row.Game) {
+                <tr>
+                  <th scope="row" class="bgn-name">{{ row.Game }}</th>
+                  <td class="bgn-num">{{ row.Sessions }}</td>
+                  <td class="bgn-chart-col">
+                    <div class="bgn-pair">
+                      <span
+                        class="bgn-bar bgn-bar--actual"
+                        [style.width.%]="PlayTimeBarPct(row.AvgActualMinutes)"
+                        [title]="row.Game + ': ' + (row.AvgActualMinutes | number: '1.0-0') + ' min actual'">
+                      </span>
+                      <span
+                        class="bgn-bar bgn-bar--estimate"
+                        [style.width.%]="PlayTimeBarPct(row.BoxMaxMinutes)"
+                        [title]="row.Game + ': ' + (row.BoxMaxMinutes ?? 0) + ' min box maximum'">
+                      </span>
+                    </div>
+                  </td>
+                  <td class="bgn-num">{{ row.AvgActualMinutes | number: '1.0-0' }}</td>
+                  <td class="bgn-num bgn-dim">{{ row.BoxMaxMinutes ?? '-' }}</td>
+                  <td class="bgn-num">
+                    @if (row.DeltaPct !== null) {
+                      {{ FormatSigned(row.DeltaPct) }}%
+                    } @else {
+                      <span class="bgn-dim">-</span>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+
+      <!-- ============================== Category mix (1 series) =========================== -->
+      <section class="bgn-panel">
+        <header class="bgn-panel__head">
+          <h2 class="bgn-panel__title">Collection mix</h2>
+          <!-- Single series: the title names it, so no legend box. -->
+          <p class="bgn-panel__note">
+            Games per category. One game carries exactly one category, which is the limitation a
+            many-to-many tag layer would fix.
+          </p>
+        </header>
+
+        @if (Categories.length === 0) {
+          <mj-empty-state Icon="fa-solid fa-layer-group" Title="No categorised games"></mj-empty-state>
+        } @else {
+          <table class="bgn-table">
+            <tbody>
+              @for (row of Categories; track row.Category) {
+                <tr>
+                  <th scope="row" class="bgn-name">{{ row.Category }}</th>
+                  <td class="bgn-chart-col">
+                    <span
+                      class="bgn-bar bgn-bar--single"
+                      [style.width.%]="CategoryBarPct(row)"
+                      [title]="row.Category + ': ' + row.Games + ' games'">
+                    </span>
+                  </td>
+                  <td class="bgn-num bgn-cat-count">{{ row.Games }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+
+        </div>
+        }
+      </as-split-area>
+    </as-split>
+  </mj-page-body>
+</mj-page-layout>

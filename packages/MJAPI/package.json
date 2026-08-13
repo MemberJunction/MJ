@@ -38,6 +38,9 @@
     "@memberjunction/templates": "6.1.0-edge.1",
     "axios": "^1.13.4",
     "class-validator": "^0.14.3",
+    "@memberjunction/actions": "6.1.0-edge.1",
+    "@memberjunction/actions-base": "6.1.0-edge.1",
+    "@memberjunction/gamenight": "6.1.0-edge.1",
     "mj_generatedactions": "1.0.0",
     "mj_generatedentities": "1.0.0"
   },

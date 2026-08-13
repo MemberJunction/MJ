@@ -513,8 +513,13 @@ INSERT INTO [BoardGameNight].[Publisher] ([ID], [Name], [FoundedYear], [Country]
     ('B6A00001-0000-4000-8000-000000000015', N'Flatout Games',       2018, N'United States',  N'https://flatoutgames.com'),
     ('B6A00001-0000-4000-8000-000000000016', N'FryxGames',           2010, N'Sweden',         N'https://www.fryxgames.se'),
     ('B6A00001-0000-4000-8000-000000000017', N'Starling Games',      2016, N'United States',  N'https://starling.games'),
-    ('B6A00001-0000-4000-8000-000000000018', N'CMYK',                2019, N'United States',  N'https://cmyk.games');
-PRINT '  Inserted 18 publishers';
+    ('B6A00001-0000-4000-8000-000000000018', N'CMYK',                2019, N'United States',  N'https://cmyk.games'),
+    -- Poker has no publisher -- it is a traditional, public-domain game that predates the industry.
+    -- Game.PublisherID is NOT NULL, so a sentinel row is the only way to model it. That tension is
+    -- the lesson: a required FK forces you to invent a row for the "there isn't one" case, and the
+    -- alternative (making PublisherID nullable) would weaken the constraint for all 20 real games.
+    ('B6A00001-0000-4000-8000-000000000019', N'Public Domain',       NULL, NULL,              NULL);
+PRINT '  Inserted 19 publishers';
 GO
 
 -- ---- Designers (20) ----
@@ -566,8 +571,16 @@ INSERT INTO [BoardGameNight].[Game]
     ('B6A00003-0000-4000-8000-000000000017', N'The Crew',            'B6A00001-0000-4000-8000-000000000011', 2019, 2, 5,  20,  20, 2.02, N'Co-op',        N'Owned',      '2023-11-11', 14.99,  N'Cheapest game on the shelf, highest plays per dollar.'),
     ('B6A00003-0000-4000-8000-000000000018', N'Patchwork',           'B6A00001-0000-4000-8000-000000000012', 2014, 2, 2,  15,  30, 1.61, N'Abstract',     N'Owned',      '2021-12-01', 24.99,  N'Strictly two players. Our default weeknight game.'),
     ('B6A00003-0000-4000-8000-000000000019', N'Just One',            'B6A00001-0000-4000-8000-000000000004', 2018, 3, 7,  20,  20, 1.06, N'Party',        N'Owned',      '2022-10-28', 24.99,  N'Cooperative despite being a party game. Great for mixed groups.'),
-    ('B6A00003-0000-4000-8000-000000000020', N'Wavelength',          'B6A00001-0000-4000-8000-000000000018', 2019, 2, 12, 30,  45, 1.19, N'Party',        N'Sold',       '2022-07-04', 29.99,  N'Sold in 2026. Fun but rarely hit the table.');
-PRINT '  Inserted 20 games';
+    ('B6A00003-0000-4000-8000-000000000020', N'Wavelength',          'B6A00001-0000-4000-8000-000000000018', 2019, 2, 12, 30,  45, 1.19, N'Party',        N'Sold',       '2022-07-04', 29.99,  N'Sold in 2026. Fun but rarely hit the table.'),
+    -- Poker: the row that shows the limit of a single-Category model. CK_BGN_Game_Category has no
+    -- 'Card Game', no 'Bluffing', and no 'Gambling'. The closest legal value is 'Strategy' -- true,
+    -- but it loses almost everything a person would actually search for. Adding those values to the
+    -- CHECK constraint would not fix it either, because a game needs SEVERAL of them at once and the
+    -- column holds one. That is the case a many-to-many tag layer solves.
+    -- Note also: no GameDesigner row below, because a traditional game has no attributable
+    -- designer. A pure junction table models that by absence rather than by a sentinel.
+    ('B6A00003-0000-4000-8000-000000000021', N'Poker',               'B6A00001-0000-4000-8000-000000000019', 1829, 2, 10, 30, 240, 2.20, N'Strategy',     N'Owned',      '2018-06-01',  5.99,  N'A deck of cards and a box of chips. Cheapest entry on the shelf and the only game here that came without a box.');
+PRINT '  Inserted 21 games';
 GO
 
 -- ---- GameDesigner links (pure junction -- IDs auto-generated) ----
@@ -602,7 +615,7 @@ INSERT INTO [BoardGameNight].[Player]
     ([ID], [FirstName], [LastName], [Nickname], [Email], [JoinedDate], [SkillLevel], [IsActive]) VALUES
     ('B6A00004-0000-4000-8000-000000000001', N'Caitlin', N'Tuttle',    N'Cait',  N'caitlin@example.com', '2018-06-01', N'Regular', 1),
     ('B6A00004-0000-4000-8000-000000000002', N'Marcus',  N'Webb',      N'Mars',  N'marcus@example.com',  '2018-06-01', N'Shark',   1),
-    ('B6A00004-0000-4000-8000-000000000003', N'Priya',   N'Raghavan',  N'Pree',  N'priya@example.com',   '2019-03-14', N'Regular', 1),
+    ('B6A00004-0000-4000-8000-000000000003', N'Kaden',   N'McLaughlin',  N'K',  N'kaden@example.com',   '2019-03-14', N'Regular', 1),
     ('B6A00004-0000-4000-8000-000000000004', N'Diego',   N'Salazar',   N'Dee',   N'diego@example.com',   '2020-09-22', N'Casual',  1),
     ('B6A00004-0000-4000-8000-000000000005', N'Hannah',  N'Kowalski',  N'Han',   N'hannah@example.com',  '2019-01-08', N'Shark',   1),
     ('B6A00004-0000-4000-8000-000000000006', N'Tomas',   N'Lindqvist', N'Tommy', N'tomas@example.com',   '2021-05-30', N'Casual',  1),
@@ -637,8 +650,17 @@ INSERT INTO [BoardGameNight].[PlaySession]
     ('B6A00005-0000-4000-8000-000000000021', 'B6A00003-0000-4000-8000-000000000008', '2026-06-20T18:30:00', N'Marcus & Hannah''s Loft',   140, N'Co-op Loss', N'Scenario 14. Exhausted two characters before the boss.'),
     ('B6A00005-0000-4000-8000-000000000022', 'B6A00003-0000-4000-8000-000000000001', '2026-07-11T19:00:00', N'Caitlin''s Place',          60,  N'Completed',  N'Three players is the sweet spot.'),
     ('B6A00005-0000-4000-8000-000000000023', 'B6A00003-0000-4000-8000-000000000010', '2026-07-25T20:00:00', N'Community Center Room B',   30,  N'Completed',  N'Full table of eight. Chaos, in a good way.'),
-    ('B6A00005-0000-4000-8000-000000000024', 'B6A00003-0000-4000-8000-000000000007', '2026-08-08T19:30:00', N'Priya''s Apartment',        100, N'Abandoned',  N'Called it at midnight with no clear leader. Scores not recorded.');
-PRINT '  Inserted 24 play sessions';
+    ('B6A00005-0000-4000-8000-000000000024', 'B6A00003-0000-4000-8000-000000000007', '2026-08-08T19:30:00', N'Priya''s Apartment',        100, N'Abandoned',  N'Called it at midnight with no clear leader. Scores not recorded.'),
+
+    -- Poker nights (S25-S27). Three deliberately different table sizes, because Poker is the only
+    -- game in the collection with a MaxPlayers of 10 and the leaderboard's chance baseline is
+    -- 1/sides -- so these three sessions alone span baselines of 16.7%, 14.3% and 50%.
+    -- S27 is heads-up: two players, which is the only NON-team session in the whole data set with a
+    -- 50% baseline. Compare it against Codenames, which reaches 50% with six players on two teams.
+    ('B6A00005-0000-4000-8000-000000000025', 'B6A00003-0000-4000-8000-000000000021', '2025-12-06T19:00:00', N'Marcus & Hannah''s Loft',   180, N'Completed',  N'Six-handed, quarter-ante. Marcus took two big pots off Jonah early and never gave them back.'),
+    ('B6A00005-0000-4000-8000-000000000026', 'B6A00003-0000-4000-8000-000000000021', '2026-05-30T18:30:00', N'Community Center Room B',   240, N'Completed',  N'Biggest table we have run. Ada learned pot odds the expensive way.'),
+    ('B6A00005-0000-4000-8000-000000000027', 'B6A00003-0000-4000-8000-000000000021', '2026-08-01T20:00:00', N'Caitlin''s Place',           95, N'Completed',  N'Heads-up. Played until someone busted, which took ninety-five minutes.');
+PRINT '  Inserted 27 play sessions';
 GO
 
 -- ---- PlaySessionPlayer: the payload rows (IDs auto-generated) ----
@@ -802,7 +824,48 @@ INSERT INTO [BoardGameNight].[PlaySessionPlayer]
     ('B6A00005-0000-4000-8000-000000000024', 'B6A00004-0000-4000-8000-000000000001', NULL, NULL, 0, N'Marquise de Cat',   NULL),
     ('B6A00005-0000-4000-8000-000000000024', 'B6A00004-0000-4000-8000-000000000002', NULL, NULL, 0, N'Eyrie Dynasties',   NULL),
     ('B6A00005-0000-4000-8000-000000000024', 'B6A00004-0000-4000-8000-000000000005', NULL, NULL, 0, N'Woodland Alliance', NULL),
-    ('B6A00005-0000-4000-8000-000000000024', 'B6A00004-0000-4000-8000-000000000008', NULL, NULL, 0, N'Vagabond',          NULL);
+    ('B6A00005-0000-4000-8000-000000000024', 'B6A00004-0000-4000-8000-000000000008', NULL, NULL, 0, N'Vagabond',          NULL),
+
+    -- ---- Poker sessions (S25-S27) ----
+    --
+    -- Score is the END CHIP COUNT, and poker is zero-sum: everyone buys in for 100, so the scores in
+    -- each session sum to exactly 100 * participants (600 / 700 / 200 below). No other game here has
+    -- that property, which makes these rows the natural place to demo a cross-row integrity check.
+    --
+    -- FactionOrColor is NULL throughout -- poker has no factions, spirits, or player colours. The
+    -- column is genuinely optional, not merely unfilled.
+    --
+    -- S27 also gives the data set its only Score = 0 on a COMPETITIVE row. Read it against the two
+    -- other kinds of "nothing" already present: NULL Score means the game does not score at all
+    -- (co-op), 0 in Codenames means the losing team, and 0 here means busted out with no chips left.
+    -- Three different absences, three different encodings, all of them correct.
+
+    -- S25 Poker (competitive, 6p -- 600 chips, chance baseline 1/6 = 16.7%)
+    ('B6A00005-0000-4000-8000-000000000025', 'B6A00004-0000-4000-8000-000000000002', 245, 1, 1, NULL, N'Two big pots off Jonah in the first hour.'),
+    ('B6A00005-0000-4000-8000-000000000025', 'B6A00004-0000-4000-8000-000000000005', 155, 2, 0, NULL, NULL),
+    ('B6A00005-0000-4000-8000-000000000025', 'B6A00004-0000-4000-8000-000000000001',  90, 3, 0, NULL, NULL),
+    ('B6A00005-0000-4000-8000-000000000025', 'B6A00004-0000-4000-8000-000000000003',  60, 4, 0, NULL, NULL),
+    ('B6A00005-0000-4000-8000-000000000025', 'B6A00004-0000-4000-8000-000000000006',  30, 5, 0, NULL, NULL),
+    ('B6A00005-0000-4000-8000-000000000025', 'B6A00004-0000-4000-8000-000000000008',  20, 6, 0, NULL, N'Down early and never recovered.'),
+
+    -- S26 Poker (competitive, 7p -- 700 chips, chance baseline 1/7 = 14.3%)
+    -- Jonah plays S25 (Dec 2025) but not S26 or S27, both of which fall after the March 2026 session
+    -- that S14's note calls his last before moving away, and after which Player.IsActive = 0.
+    -- Heads up: the pre-existing seed data does NOT hold that line -- Jonah also appears in S15, S17,
+    -- S18, S20, S21, S23 and S24, all later than S14. Only S23 explains itself ('Visiting for the
+    -- weekend'). Worth reconciling if the demo ever teaches IsActive or soft deletes, because a
+    -- learner who checks will find the contradiction before you point it out.
+    ('B6A00005-0000-4000-8000-000000000026', 'B6A00004-0000-4000-8000-000000000005', 280, 1, 1, NULL, N'Never showed a hand she did not have.'),
+    ('B6A00005-0000-4000-8000-000000000026', 'B6A00004-0000-4000-8000-000000000003', 145, 2, 0, NULL, NULL),
+    ('B6A00005-0000-4000-8000-000000000026', 'B6A00004-0000-4000-8000-000000000001', 120, 3, 0, NULL, NULL),
+    ('B6A00005-0000-4000-8000-000000000026', 'B6A00004-0000-4000-8000-000000000002',  85, 4, 0, NULL, N'Card dead for three hours.'),
+    ('B6A00005-0000-4000-8000-000000000026', 'B6A00004-0000-4000-8000-000000000004',  40, 5, 0, NULL, NULL),
+    ('B6A00005-0000-4000-8000-000000000026', 'B6A00004-0000-4000-8000-000000000007',  20, 6, 0, NULL, N'Called three rivers she should have folded.'),
+    ('B6A00005-0000-4000-8000-000000000026', 'B6A00004-0000-4000-8000-000000000006',  10, 7, 0, NULL, NULL),
+
+    -- S27 Poker (competitive, 2p heads-up -- 200 chips, chance baseline 1/2 = 50%)
+    ('B6A00005-0000-4000-8000-000000000027', 'B6A00004-0000-4000-8000-000000000001', 200, 1, 1, NULL, N'Took every chip on the table.'),
+    ('B6A00005-0000-4000-8000-000000000027', 'B6A00004-0000-4000-8000-000000000005',   0, 2, 0, NULL, N'Busted. Zero chips, which is not the same as NULL.');
 PRINT '  Inserted play session participation records';
 GO
 
@@ -826,6 +889,132 @@ UNION ALL SELECT 'GameDesigner',      COUNT(*) FROM [BoardGameNight].[GameDesign
 UNION ALL SELECT 'Player',            COUNT(*) FROM [BoardGameNight].[Player]
 UNION ALL SELECT 'PlaySession',       COUNT(*) FROM [BoardGameNight].[PlaySession]
 UNION ALL SELECT 'PlaySessionPlayer', COUNT(*) FROM [BoardGameNight].[PlaySessionPlayer];
+GO
+
+
+-- -------------------------------------------------------------------------------------------------
+-- LEADERBOARD AND WIN PROBABILITY
+--
+-- Placed above the table dumps on purpose: this is the output anyone actually wants to read when the
+-- script finishes, and burying it under 400 rows of raw grids hides it.
+--
+-- Every rate here is reported next to the chance baseline it should be compared against, because a
+-- raw win percentage means nothing on its own -- winning 1 game in 4 at a four-player table IS
+-- average, not a slump.
+--
+-- How the baseline is computed. The number of competing SIDES in a session is
+-- COUNT(DISTINCT Placement), NOT the participant count:
+--     four-player Scythe      -> placements 1/2/3/4       -> 4 sides -> 25% baseline
+--     six-player Codenames    -> placements 1/1/1/2/2/2   -> 2 sides -> 50% baseline
+-- One expression handles both, which is exactly why the team party games were seeded with tied
+-- placements. Using COUNT(*) instead would tell you Codenames players are twice as good as they are.
+--
+-- What is excluded from the competitive numbers, and why:
+--   * Co-op sessions ('Co-op Win' / 'Co-op Loss') -- every participant shares one IsWinner value, so
+--     they measure the group, not the player. Reported on their own in the third grid.
+--   * The abandoned session -- Placement IS NULL, so there is no result to score.
+--
+-- Each block repeats its own CTE so it can be copy-pasted and run standalone. These are ad-hoc
+-- SELECTs, not persisted views -- CodeGen owns the [BoardGameNight].[vw*] namespace.
+-- -------------------------------------------------------------------------------------------------
+PRINT '';
+PRINT '--- Leaderboard: competitive win rate vs. the chance baseline ---';
+GO
+;WITH [Sides] AS (
+    SELECT psp.[PlaySessionID], COUNT(DISTINCT psp.[Placement]) AS [Sides]
+    FROM [BoardGameNight].[PlaySessionPlayer] psp
+        INNER JOIN [BoardGameNight].[PlaySession] s ON s.[ID] = psp.[PlaySessionID]
+    WHERE s.[Outcome] = 'Completed' AND psp.[Placement] IS NOT NULL
+    GROUP BY psp.[PlaySessionID]
+),
+[Competitive] AS (
+    SELECT psp.[PlayerID], s.[GameID], psp.[IsWinner], psp.[Placement],
+           1.0 / sd.[Sides] AS [ChanceOfWin]
+    FROM [BoardGameNight].[PlaySessionPlayer] psp
+        INNER JOIN [BoardGameNight].[PlaySession] s ON s.[ID] = psp.[PlaySessionID]
+        INNER JOIN [Sides] sd                       ON sd.[PlaySessionID] = psp.[PlaySessionID]
+    WHERE s.[Outcome] = 'Completed' AND psp.[Placement] IS NOT NULL
+)
+SELECT
+    p.[Nickname],
+    p.[SkillLevel],
+    COUNT(*)                                                                  AS [Plays],
+    SUM(CAST(c.[IsWinner] AS INT))                                            AS [Wins],
+    CAST(100.0 * SUM(CAST(c.[IsWinner] AS INT)) / COUNT(*)   AS DECIMAL(5,1)) AS [WinPct],
+    CAST(100.0 * AVG(c.[ChanceOfWin])                        AS DECIMAL(5,1)) AS [ChancePct],
+    -- Percentage POINTS above or below chance. This is the column to read, not WinPct.
+    CAST(100.0 * SUM(CAST(c.[IsWinner] AS INT)) / COUNT(*)
+         - 100.0 * AVG(c.[ChanceOfWin])                      AS DECIMAL(6,1)) AS [LiftPts],
+    CAST(AVG(CAST(c.[Placement] AS DECIMAL(5,2)))            AS DECIMAL(5,2)) AS [AvgPlacement]
+FROM [BoardGameNight].[Player] p
+    INNER JOIN [Competitive] c ON c.[PlayerID] = p.[ID]
+GROUP BY p.[Nickname], p.[SkillLevel]
+ORDER BY [LiftPts] DESC, [Plays] DESC;
+GO
+
+PRINT '';
+PRINT '--- Win probability per player per game (competitive sessions only) ---';
+GO
+;WITH [Sides] AS (
+    SELECT psp.[PlaySessionID], COUNT(DISTINCT psp.[Placement]) AS [Sides]
+    FROM [BoardGameNight].[PlaySessionPlayer] psp
+        INNER JOIN [BoardGameNight].[PlaySession] s ON s.[ID] = psp.[PlaySessionID]
+    WHERE s.[Outcome] = 'Completed' AND psp.[Placement] IS NOT NULL
+    GROUP BY psp.[PlaySessionID]
+),
+[Competitive] AS (
+    SELECT psp.[PlayerID], s.[GameID], psp.[IsWinner], psp.[Placement], psp.[Score],
+           1.0 / sd.[Sides] AS [ChanceOfWin]
+    FROM [BoardGameNight].[PlaySessionPlayer] psp
+        INNER JOIN [BoardGameNight].[PlaySession] s ON s.[ID] = psp.[PlaySessionID]
+        INNER JOIN [Sides] sd                       ON sd.[PlaySessionID] = psp.[PlaySessionID]
+    WHERE s.[Outcome] = 'Completed' AND psp.[Placement] IS NOT NULL
+),
+[PlayerPrior] AS (
+    -- Each player's overall competitive win rate. Used as the shrinkage target below.
+    SELECT [PlayerID],
+           CAST(SUM(CAST([IsWinner] AS INT)) AS DECIMAL(10,4)) / COUNT(*) AS [PriorRate]
+    FROM [Competitive]
+    GROUP BY [PlayerID]
+)
+SELECT
+    p.[Nickname],
+    g.[Name]                                                                  AS [Game],
+    COUNT(*)                                                                  AS [Plays],
+    SUM(CAST(c.[IsWinner] AS INT))                                            AS [Wins],
+    CAST(100.0 * SUM(CAST(c.[IsWinner] AS INT)) / COUNT(*)   AS DECIMAL(5,1)) AS [RawWinPct],
+    -- Empirical-Bayes shrinkage toward the player's own overall rate, k = 3 pseudo-plays.
+    -- With 24 sessions most (player, game) pairs have exactly one play, and RawWinPct there is only
+    -- ever 0 or 100 -- which is noise, not skill. This column is what you sort on; RawWinPct is
+    -- shown beside it so the shrinkage is visible rather than hidden.
+    CAST(100.0 * (SUM(CAST(c.[IsWinner] AS INT)) + 3 * pp.[PriorRate])
+         / (COUNT(*) + 3)                                    AS DECIMAL(5,1)) AS [SmoothedWinPct],
+    CAST(100.0 * AVG(c.[ChanceOfWin])                        AS DECIMAL(5,1)) AS [ChancePct],
+    CAST(AVG(CAST(c.[Placement] AS DECIMAL(5,2)))            AS DECIMAL(5,2)) AS [AvgPlacement],
+    -- Only comparable WITHIN a game: Codenames scores 1/0, Wavelength 10/7, Wingspan 70-100.
+    CAST(AVG(CAST(c.[Score] AS DECIMAL(10,2)))               AS DECIMAL(8,2)) AS [AvgScore]
+FROM [BoardGameNight].[Player] p
+    INNER JOIN [Competitive] c            ON c.[PlayerID] = p.[ID]
+    INNER JOIN [PlayerPrior] pp           ON pp.[PlayerID] = p.[ID]
+    INNER JOIN [BoardGameNight].[Game] g  ON g.[ID] = c.[GameID]
+GROUP BY p.[Nickname], g.[Name], pp.[PriorRate]
+ORDER BY [SmoothedWinPct] DESC, [Plays] DESC, p.[Nickname];
+GO
+
+PRINT '';
+PRINT '--- Co-op record per player (shared outcome -- measures the group, not the player) ---';
+GO
+SELECT
+    p.[Nickname],
+    COUNT(*)                                                                    AS [CoopSessions],
+    SUM(CAST(psp.[IsWinner] AS INT))                                            AS [CoopWins],
+    CAST(100.0 * SUM(CAST(psp.[IsWinner] AS INT)) / COUNT(*) AS DECIMAL(5,1))   AS [CoopWinPct]
+FROM [BoardGameNight].[Player] p
+    INNER JOIN [BoardGameNight].[PlaySessionPlayer] psp ON psp.[PlayerID] = p.[ID]
+    INNER JOIN [BoardGameNight].[PlaySession] s         ON s.[ID] = psp.[PlaySessionID]
+WHERE s.[Outcome] IN ('Co-op Win', 'Co-op Loss')
+GROUP BY p.[Nickname]
+ORDER BY [CoopWinPct] DESC, [CoopSessions] DESC;
 GO
 
 
@@ -905,21 +1094,9 @@ FROM [BoardGameNight].[PlaySessionPlayer] psp
 ORDER BY s.[PlayedAt], psp.[Placement], p.[Nickname];
 GO
 
-PRINT '';
-PRINT '--- Preview of the leaderboard you will build as a virtual entity later ---';
-SELECT
-    p.[Nickname],
-    p.[SkillLevel],
-    COUNT(DISTINCT psp.[PlaySessionID])                              AS [SessionsPlayed],
-    SUM(CAST(psp.[IsWinner] AS INT))                                 AS [Wins],
-    CAST(100.0 * SUM(CAST(psp.[IsWinner] AS INT))
-         / NULLIF(COUNT(DISTINCT psp.[PlaySessionID]), 0) AS DECIMAL(5,1)) AS [WinRatePct],
-    AVG(CAST(psp.[Placement] AS DECIMAL(5,2)))                       AS [AvgPlacement]
-FROM [BoardGameNight].[Player] p
-    LEFT JOIN [BoardGameNight].[PlaySessionPlayer] psp ON psp.[PlayerID] = p.[ID]
-GROUP BY p.[Nickname], p.[SkillLevel]
-ORDER BY [Wins] DESC, [SessionsPlayed] DESC;
-GO
+-- The leaderboard that used to sit here has moved to the top of Phase 5, above the table dumps, and
+-- gained a chance baseline plus a per-player-per-game breakdown. It is still the right thing to turn
+-- into a virtual entity later -- start from the version up there, not from a naive win-count.
 
 PRINT '';
 PRINT '--- Data integrity: every competitive session should have exactly one winner ---';

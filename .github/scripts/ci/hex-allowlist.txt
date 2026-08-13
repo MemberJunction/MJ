@@ -69,3 +69,13 @@ packages/Angular/Generic/artifacts/src/lib/components/plugins/component-feedback
 # Suggestion type-badge identity colors — entity badge teal (#11998e) distinguishes it
 # from the brand-blue user badge; no teal semantic token exists.
 packages/Angular/Generic/conversations/src/lib/components/mention/mention-dropdown.component.css
+
+# Category 3: Categorical colors (must remain distinct; no semantic token equivalent)
+# Board Game Night dashboard data marks — one diverging pair (blue #2a78d6 / red #e34948, gray
+# midpoint from a border token) for lift-vs-chance, and two categorical slots (blue + orange
+# #eb6834) for the actual-vs-box-estimate series. A series colour must stay itself in both themes
+# rather than being re-themed into another hue, so semantic tokens are wrong here by definition.
+# Values are not eyeballed: each co-occurring set passes the dataviz palette validator (lightness
+# band, chroma floor, CVD separation, normal-vision floor, surface contrast) in light AND dark, with
+# dark using its own steps from the same ramps. All chrome in the file uses --mj-* tokens.
+packages/MJExplorer/src/app/custom/dashboards/board-game-night-dashboard.component.css

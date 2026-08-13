@@ -393,6 +393,14 @@ export class DogShelterAdoptionApplication_ {
     @MaxLength(100)
     Dog: string;
         
+    @Field() 
+    @MaxLength(100)
+    Adopter: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ReviewedByStaff?: string;
+        
 }
 
 //****************************************************************************
@@ -1028,6 +1036,10 @@ export class DogShelterDogTrait_ {
     @MaxLength(100)
     Trait: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    AssignedByStaff?: string;
+        
 }
 
 //****************************************************************************
@@ -1648,6 +1660,10 @@ export class DogShelterFosterPlacement_ {
     @Field() 
     @MaxLength(100)
     Dog: string;
+        
+    @Field() 
+    @MaxLength(100)
+    FosterAdopter: string;
         
 }
 
@@ -2294,6 +2310,10 @@ export class DogShelterMedicalRecord_ {
     @Field() 
     @MaxLength(100)
     Dog: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    VeterinarianStaff?: string;
         
 }
 
@@ -3582,6 +3602,10 @@ export class DogShelterStaff_ {
     @Field() 
     @MaxLength(200)
     Shelter: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    Supervisor?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)

@@ -223,6 +223,14 @@ export const DogShelterAdoptionApplicationSchema = z.object({
         * * Field Name: Dog
         * * Display Name: Dog Name
         * * SQL Data Type: nvarchar(100)`),
+    Adopter: z.string().describe(`
+        * * Field Name: Adopter
+        * * Display Name: Adopter Name
+        * * SQL Data Type: nvarchar(100)`),
+    ReviewedByStaff: z.string().nullable().describe(`
+        * * Field Name: ReviewedByStaff
+        * * Display Name: Reviewer Name
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type DogShelterAdoptionApplicationEntityType = z.infer<typeof DogShelterAdoptionApplicationSchema>;
@@ -409,6 +417,10 @@ export const DogShelterDogTraitSchema = z.object({
     Trait: z.string().describe(`
         * * Field Name: Trait
         * * Display Name: Trait Name
+        * * SQL Data Type: nvarchar(100)`),
+    AssignedByStaff: z.string().nullable().describe(`
+        * * Field Name: AssignedByStaff
+        * * Display Name: Assigned By Staff Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -640,7 +652,7 @@ export const DogShelterFosterPlacementSchema = z.object({
         * * Description: Date the placement ended. NULL while the placement is still Active. Never earlier than StartDate.`),
     Status: z.union([z.literal('Active'), z.literal('Completed'), z.literal('Ended Early')]).describe(`
         * * Field Name: Status
-        * * Display Name: Status
+        * * Display Name: Placement Status
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Active
     * * Value List Type: List
@@ -656,7 +668,7 @@ export const DogShelterFosterPlacementSchema = z.object({
         * * Description: Why the dog was placed in foster care, for example post-surgery recovery or kennel stress.`),
     Notes: z.string().nullable().describe(`
         * * Field Name: Notes
-        * * Display Name: Notes
+        * * Display Name: Foster Notes
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Notes from the foster caregiver about how the dog behaves in a home.`),
     __mj_CreatedAt: z.date().describe(`
@@ -672,6 +684,10 @@ export const DogShelterFosterPlacementSchema = z.object({
     Dog: z.string().describe(`
         * * Field Name: Dog
         * * Display Name: Dog Name
+        * * SQL Data Type: nvarchar(100)`),
+    FosterAdopter: z.string().describe(`
+        * * Field Name: FosterAdopter
+        * * Display Name: Foster Caregiver Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -875,7 +891,7 @@ export const DogShelterMedicalRecordSchema = z.object({
         * * Description: Short description of what was done, for example DHPP booster or dental cleaning with two extractions.`),
     VeterinarianStaffID: z.string().nullable().describe(`
         * * Field Name: VeterinarianStaffID
-        * * Display Name: Veterinarian or Staff
+        * * Display Name: Veterinarian Staff
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Staffs (vwStaffs.ID)
         * * Description: The Veterinarian or Vet Tech who performed the work. NULL for records entered from an outside clinic.`),
@@ -892,7 +908,7 @@ export const DogShelterMedicalRecordSchema = z.object({
         * * Description: Date a follow-up is due, for example the next booster. NULL when no follow-up is needed.`),
     Notes: z.string().nullable().describe(`
         * * Field Name: Notes
-        * * Display Name: Clinical Notes
+        * * Display Name: Notes
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Additional clinical notes.`),
     __mj_CreatedAt: z.date().describe(`
@@ -908,6 +924,10 @@ export const DogShelterMedicalRecordSchema = z.object({
     Dog: z.string().describe(`
         * * Field Name: Dog
         * * Display Name: Dog Name
+        * * SQL Data Type: nvarchar(100)`),
+    VeterinarianStaff: z.string().nullable().describe(`
+        * * Field Name: VeterinarianStaff
+        * * Display Name: Staff Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -1260,7 +1280,7 @@ export const DogShelterStaffSchema = z.object({
         * * Description: Unique identifier for the staff member.`),
     ShelterID: z.string().describe(`
         * * Field Name: ShelterID
-        * * Display Name: Shelter
+        * * Display Name: Shelter ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Shelters (vwShelters.ID)
         * * Description: The shelter location this person works at.`),
@@ -1316,7 +1336,7 @@ export const DogShelterStaffSchema = z.object({
         * * Description: When 0, the person no longer works at the shelter. Historical records still reference them, so rows are deactivated rather than deleted.`),
     SupervisorID: z.string().nullable().describe(`
         * * Field Name: SupervisorID
-        * * Display Name: Supervisor
+        * * Display Name: Supervisor ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Staffs (vwStaffs.ID)
         * * Description: SELF-REFERENCING foreign key to the staff member this person reports to. NULL for the shelter manager at the top of each location hierarchy.`),
@@ -1332,11 +1352,15 @@ export const DogShelterStaffSchema = z.object({
         * * Default Value: getutcdate()`),
     Shelter: z.string().describe(`
         * * Field Name: Shelter
-        * * Display Name: Shelter Name
+        * * Display Name: Shelter
         * * SQL Data Type: nvarchar(200)`),
+    Supervisor: z.string().nullable().describe(`
+        * * Field Name: Supervisor
+        * * Display Name: Supervisor
+        * * SQL Data Type: nvarchar(100)`),
     RootSupervisorID: z.string().nullable().describe(`
         * * Field Name: RootSupervisorID
-        * * Display Name: Root Supervisor
+        * * Display Name: Root Supervisor ID
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -1989,6 +2013,24 @@ export class DogShelterAdoptionApplicationEntity extends BaseEntity<DogShelterAd
     get Dog(): string {
         return this.Get('Dog');
     }
+
+    /**
+    * * Field Name: Adopter
+    * * Display Name: Adopter Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Adopter(): string {
+        return this.Get('Adopter');
+    }
+
+    /**
+    * * Field Name: ReviewedByStaff
+    * * Display Name: Reviewer Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ReviewedByStaff(): string | null {
+        return this.Get('ReviewedByStaff');
+    }
 }
 
 
@@ -2481,6 +2523,15 @@ export class DogShelterDogTraitEntity extends BaseEntity<DogShelterDogTraitEntit
     */
     get Trait(): string {
         return this.Get('Trait');
+    }
+
+    /**
+    * * Field Name: AssignedByStaff
+    * * Display Name: Assigned By Staff Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get AssignedByStaff(): string | null {
+        return this.Get('AssignedByStaff');
     }
 }
 
@@ -3140,7 +3191,7 @@ export class DogShelterFosterPlacementEntity extends BaseEntity<DogShelterFoster
 
     /**
     * * Field Name: Status
-    * * Display Name: Status
+    * * Display Name: Placement Status
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Active
     * * Value List Type: List
@@ -3172,7 +3223,7 @@ export class DogShelterFosterPlacementEntity extends BaseEntity<DogShelterFoster
 
     /**
     * * Field Name: Notes
-    * * Display Name: Notes
+    * * Display Name: Foster Notes
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Notes from the foster caregiver about how the dog behaves in a home.
     */
@@ -3210,6 +3261,15 @@ export class DogShelterFosterPlacementEntity extends BaseEntity<DogShelterFoster
     */
     get Dog(): string {
         return this.Get('Dog');
+    }
+
+    /**
+    * * Field Name: FosterAdopter
+    * * Display Name: Foster Caregiver Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get FosterAdopter(): string {
+        return this.Get('FosterAdopter');
     }
 }
 
@@ -3808,7 +3868,7 @@ export class DogShelterMedicalRecordEntity extends BaseEntity<DogShelterMedicalR
 
     /**
     * * Field Name: VeterinarianStaffID
-    * * Display Name: Veterinarian or Staff
+    * * Display Name: Veterinarian Staff
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Staffs (vwStaffs.ID)
     * * Description: The Veterinarian or Vet Tech who performed the work. NULL for records entered from an outside clinic.
@@ -3849,7 +3909,7 @@ export class DogShelterMedicalRecordEntity extends BaseEntity<DogShelterMedicalR
 
     /**
     * * Field Name: Notes
-    * * Display Name: Clinical Notes
+    * * Display Name: Notes
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Additional clinical notes.
     */
@@ -3887,6 +3947,15 @@ export class DogShelterMedicalRecordEntity extends BaseEntity<DogShelterMedicalR
     */
     get Dog(): string {
         return this.Get('Dog');
+    }
+
+    /**
+    * * Field Name: VeterinarianStaff
+    * * Display Name: Staff Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get VeterinarianStaff(): string | null {
+        return this.Get('VeterinarianStaff');
     }
 }
 
@@ -4912,7 +4981,7 @@ export class DogShelterStaffEntity extends BaseEntity<DogShelterStaffEntityType>
 
     /**
     * * Field Name: ShelterID
-    * * Display Name: Shelter
+    * * Display Name: Shelter ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Shelters (vwShelters.ID)
     * * Description: The shelter location this person works at.
@@ -5037,7 +5106,7 @@ export class DogShelterStaffEntity extends BaseEntity<DogShelterStaffEntityType>
 
     /**
     * * Field Name: SupervisorID
-    * * Display Name: Supervisor
+    * * Display Name: Supervisor ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: Staffs (vwStaffs.ID)
     * * Description: SELF-REFERENCING foreign key to the staff member this person reports to. NULL for the shelter manager at the top of each location hierarchy.
@@ -5071,7 +5140,7 @@ export class DogShelterStaffEntity extends BaseEntity<DogShelterStaffEntityType>
 
     /**
     * * Field Name: Shelter
-    * * Display Name: Shelter Name
+    * * Display Name: Shelter
     * * SQL Data Type: nvarchar(200)
     */
     get Shelter(): string {
@@ -5079,8 +5148,17 @@ export class DogShelterStaffEntity extends BaseEntity<DogShelterStaffEntityType>
     }
 
     /**
+    * * Field Name: Supervisor
+    * * Display Name: Supervisor
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Supervisor(): string | null {
+        return this.Get('Supervisor');
+    }
+
+    /**
     * * Field Name: RootSupervisorID
-    * * Display Name: Root Supervisor
+    * * Display Name: Root Supervisor ID
     * * SQL Data Type: uniqueidentifier
     */
     get RootSupervisorID(): string | null {

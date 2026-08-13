@@ -1,0 +1,652 @@
+/*
+ * Board Game Night dashboard.
+ *
+ * Every surface, ink, and border below is an MJ semantic token so the panel adapts to dark mode.
+ * The DATA MARK fills are literal hex — that is the sanctioned "categorical/chart colors" exception
+ * in .claude/rules/design-tokens.md, because a series colour must stay itself in both themes rather
+ * than being re-themed into a different hue. Those values are not eyeballed: the co-occurring sets
+ * (blue+orange for the two-series panel, blue+red for the diverging one) were run through the
+ * dataviz palette validator and pass the lightness band, chroma floor, CVD separation, normal-vision
+ * floor, and surface-contrast checks in BOTH light and dark. Dark mode uses its own steps from the
+ * same ramps — selected, not an automatic flip.
+ */
+
+:host {
+  display: block;
+  height: 100%;
+}
+
+/* ---- Resizable layout ---------------------------------------------------------------------- */
+
+/* The splitter divides the page body's height, so it must claim all of it and allow its children to
+   shrink below content size — without min-height:0 a tall pane refuses to shrink and the gutter
+   stops moving. */
+.bgn-split {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Each area is a flex column so the panel inside can grow to fill it rather than sitting at its
+   natural height with dead space underneath. */
+:host as-split-area {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* A stack of panels that scrolls on its own. This is what keeps a dragged boundary put: overflow
+   lives here, not on the page. */
+.bgn-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  /* Breathing room for the scrollbar so it never sits on a panel border. */
+  padding-right: var(--mj-space-2);
+}
+
+/* Gutter — angular-split ships an unstyled grey bar; this gives it the panel's own vocabulary and,
+   more importantly, makes it look draggable before you try. */
+:host ::ng-deep .as-split-gutter {
+  background-color: transparent !important;
+  transition: background-color 120ms ease;
+}
+
+:host ::ng-deep .as-split-gutter:hover,
+:host ::ng-deep .as-split-gutter.as-dragged {
+  background-color: color-mix(in srgb, var(--mj-brand-primary) 22%, transparent) !important;
+}
+
+/* The grip itself: a short centered bar rather than the default icon, so it reads as a handle at
+   any gutter size. */
+:host ::ng-deep .as-split-gutter .as-split-gutter-icon {
+  background-image: none !important;
+  background-color: var(--mj-border-strong, var(--mj-border-default));
+  border-radius: 2px;
+}
+
+:host ::ng-deep .as-split.as-horizontal > .as-split-gutter > .as-split-gutter-icon {
+  width: 2px;
+  height: 28px;
+}
+
+:host ::ng-deep .as-split.as-vertical > .as-split-gutter > .as-split-gutter-icon {
+  width: 28px;
+  height: 2px;
+}
+
+/* ---- Panels -------------------------------------------------------------------------------- */
+
+.bgn-panel {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  box-shadow: var(--mj-shadow-sm);
+  padding: var(--mj-space-4);
+  margin-bottom: var(--mj-space-4);
+}
+
+.bgn-panel__head {
+  margin-bottom: var(--mj-space-3);
+}
+
+.bgn-panel__title {
+  margin: 0 0 var(--mj-space-1) 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+/* The note carries the "how to read this" sentence. Secondary ink keeps it recessive. */
+.bgn-panel__note {
+  margin: 0;
+  max-width: 70ch;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--mj-text-secondary);
+}
+
+/* ---- Clickable header count ---------------------------------------------------------------- */
+
+/* Signals interactivity without restyling the badge itself — the chevron and cursor do that job. */
+.bgn-meta-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-1);
+  cursor: pointer;
+  border-radius: var(--mj-radius-sm, 4px);
+}
+
+/* Keyboard users must be able to see where they are; the browser default outline is suppressed on
+   many hosts, so the ring is explicit. */
+.bgn-meta-toggle:focus-visible {
+  outline: 2px solid var(--mj-border-strong, var(--mj-border-default));
+  outline-offset: 2px;
+}
+
+.bgn-meta-toggle__chevron {
+  font-size: 0.625rem;
+  color: var(--mj-text-muted);
+}
+
+/* ---- Sortable headers ---------------------------------------------------------------------- */
+
+/*
+ * A real button, styled to look like the header text it replaces. Inheriting font and color keeps the
+ * table header visually identical to the non-sortable ones elsewhere on the page.
+ */
+.bgn-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-1);
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bgn-sort:hover {
+  color: var(--mj-text-primary);
+}
+
+.bgn-sort:focus-visible {
+  outline: 2px solid var(--mj-border-strong, var(--mj-border-default));
+  outline-offset: 2px;
+  border-radius: var(--mj-radius-sm, 4px);
+}
+
+/* The active column reads as primary ink so the sorted column is obvious at a glance. */
+.bgn-sort--active {
+  color: var(--mj-text-primary);
+}
+
+/* Inactive columns keep a faint double-arrow: it advertises that the column IS sortable without
+   competing with the active one. */
+.bgn-sort__icon {
+  font-size: 0.625rem;
+  opacity: 0.45;
+}
+
+.bgn-sort--active .bgn-sort__icon {
+  opacity: 1;
+}
+
+/* Numeric columns right-align, so their header button must too or label and values disagree. */
+.bgn-num .bgn-sort {
+  justify-content: flex-end;
+}
+
+/* ---- Sessions drill-down ------------------------------------------------------------------- */
+
+/* Capped and scrollable: 27 rows today, but this list only grows with every game night. */
+.bgn-sessions {
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+/* Search box above the log. Sits outside .bgn-sessions so it stays put while the rows scroll. */
+.bgn-search {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  margin-bottom: var(--mj-space-2);
+  padding: var(--mj-space-1) var(--mj-space-2);
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+}
+
+/* Focus lands on the input but reads as the whole bar — the icon and count are part of the control. */
+.bgn-search:focus-within {
+  border-color: var(--mj-border-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+}
+
+.bgn-search__icon {
+  flex: 0 0 auto;
+  font-size: 0.8125rem;
+  color: var(--mj-text-muted);
+}
+
+.bgn-search__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--mj-space-1) 0;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--mj-text-primary);
+  /* The bar itself carries the chrome, so the input contributes none of its own. */
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+.bgn-search__input::placeholder {
+  color: var(--mj-text-disabled);
+}
+
+/* Safari paints its own clear affordance on type=search; we ship our own button. */
+.bgn-search__input::-webkit-search-decoration,
+.bgn-search__input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.bgn-search__count {
+  flex: 0 0 auto;
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--mj-text-muted);
+  white-space: nowrap;
+}
+
+.bgn-search__clear {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  font-size: 0.75rem;
+  color: var(--mj-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--mj-radius-sm, 4px);
+  cursor: pointer;
+}
+
+.bgn-search__clear:hover {
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-hover);
+}
+
+/* Empty result row — centered and quiet, so it reads as a state rather than a data row. */
+.bgn-search__none {
+  padding: var(--mj-space-4) var(--mj-space-2);
+  text-align: center;
+  color: var(--mj-text-muted);
+}
+
+/* The chat panel fills its split area rather than carrying a fixed height — the splitter owns the
+   sizing now, and a hardcoded height would fight it. */
+.bgn-chat {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* No bottom margin: the gutter provides the separation between panes. */
+  margin-bottom: 0;
+}
+
+/* Host for MJ's conversations widget. The widget scrolls internally, so this just has to give it a
+   bounded box to scroll inside. */
+.bgn-chat__host {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  overflow: hidden;
+}
+
+.bgn-chat__host > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* ---- Agent tables inside the chat -----------------------------------------------------------
+ *
+ * The Scorekeeper answers in markdown, and its answers are mostly TABLES — leaderboards, per-game
+ * records, session lists. The shared <mj-markdown> styles give every cell a full box border AND
+ * zebra striping, which at chat width reads as a spreadsheet grid: the borders fight the stripes and
+ * neither ends up guiding the eye along a row.
+ *
+ * These overrides are scoped under .bgn-chat__host with ::ng-deep, so they restyle the agent's
+ * output on THIS dashboard only. Editing the shared markdown component would silently restyle every
+ * conversation surface in Explorer, which is not this dashboard's call to make.
+ */
+
+/* Horizontal rules only. A row is a line of related numbers; vertical borders chop it into cells and
+   make it read column-first. */
+:host ::ng-deep .bgn-chat__host .mj-markdown-container table {
+  /* display:block is what makes a wide table scroll inside the chat instead of forcing the whole
+     panel wider — there is no wrapper element available to put the overflow on. */
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: var(--mj-space-3) 0;
+  font-size: 0.8125rem;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+}
+
+:host ::ng-deep .bgn-chat__host .mj-markdown-container th,
+:host ::ng-deep .bgn-chat__host .mj-markdown-container td {
+  padding: var(--mj-space-2) var(--mj-space-3);
+  border: none;
+  border-bottom: 1px solid var(--mj-border-subtle, var(--mj-border-default));
+  /* Numbers are the point of these tables — line the digits up. */
+  font-variant-numeric: tabular-nums;
+  /* Wrapping a stats row makes it unreadable; scrolling the table is the better trade. */
+  white-space: nowrap;
+}
+
+:host ::ng-deep .bgn-chat__host .mj-markdown-container th {
+  padding-top: var(--mj-space-3);
+  padding-bottom: var(--mj-space-2);
+  background: var(--mj-bg-surface-sunken);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mj-text-secondary);
+  /* The one strong rule in the table: it separates labels from data. */
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+/* Stripes off — with row rules they are redundant, and together they are noise. */
+:host ::ng-deep .bgn-chat__host .mj-markdown-container tr:nth-child(even) {
+  background: transparent;
+}
+
+/* Hover instead: it tracks the row you are actually reading, which stripes cannot. */
+:host ::ng-deep .bgn-chat__host .mj-markdown-container tbody tr:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+/* The last row's rule would double with the table border. */
+:host ::ng-deep .bgn-chat__host .mj-markdown-container tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* First column is the label (player, game); the rest are figures. Keeping the label at normal
+   weight but the rest tabular gives a clean ragged-left, aligned-right feel without guessing at
+   which columns are numeric. */
+:host ::ng-deep .bgn-chat__host .mj-markdown-container tbody td:first-child {
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+/* ---- Superseded inline chat styles (kept only where still referenced) --------------------------------------------------------------------- */
+
+/* Kept visually quiet: it is a utility above the data, not the headline of the page. */
+.bgn-chat__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--mj-space-3);
+}
+
+.bgn-chat__log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-2);
+  /* Capped so a long exchange scrolls instead of pushing the leaderboard off-screen. */
+  max-height: 260px;
+  overflow-y: auto;
+  padding: var(--mj-space-2);
+  margin-bottom: var(--mj-space-2);
+  background: var(--mj-bg-page);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+}
+
+.bgn-chat__turn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bgn-chat__who {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--mj-text-muted);
+}
+
+.bgn-chat__text {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--mj-text-primary);
+  /* The agent replies in prose with its own line breaks; preserve them without collapsing wraps. */
+  white-space: pre-wrap;
+  /*
+   * Monospace on purpose. The agent is instructed to draw tables and bar charts with characters, and
+   * column alignment is meaningless in a proportional font — "Cait" and "Tommy" would push their
+   * columns to different places and the picture falls apart. Prose reads fine in mono; a misaligned
+   * table does not.
+   */
+  font-family: var(--mj-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  /* Long bar rows scroll rather than wrap, which would break the alignment they depend on. */
+  overflow-x: auto;
+}
+
+/* The agent's turn gets a surface + rule so the two speakers are distinguishable without color alone. */
+.bgn-chat__turn--agent .bgn-chat__text {
+  padding: var(--mj-space-2);
+  background: var(--mj-bg-surface);
+  border-left: 2px solid var(--mj-border-strong, var(--mj-border-default));
+  border-radius: var(--mj-radius-sm, 4px);
+}
+
+.bgn-chat__composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--mj-space-2);
+}
+
+.bgn-chat__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  resize: vertical;
+}
+
+/* ---- Legend -------------------------------------------------------------------------------- */
+
+.bgn-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mj-space-3);
+  margin-bottom: var(--mj-space-2);
+}
+
+/* Legend text wears text ink, never the series colour — the swatch beside it carries identity. */
+.bgn-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-1);
+  font-size: 0.75rem;
+  color: var(--mj-text-secondary);
+}
+
+.bgn-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+
+/* ---- Table --------------------------------------------------------------------------------- */
+
+.bgn-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.bgn-table thead th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  /* Axis/label ink is deliberately the most recessive of the three. */
+  color: var(--mj-text-muted);
+  padding: 0 var(--mj-space-2) var(--mj-space-2) var(--mj-space-2);
+  border-bottom: 1px solid var(--mj-border-default);
+  white-space: nowrap;
+}
+
+.bgn-table tbody td,
+.bgn-table tbody th {
+  padding: var(--mj-space-2);
+  border-bottom: 1px solid var(--mj-border-subtle, var(--mj-border-default));
+  vertical-align: middle;
+}
+
+.bgn-table tbody tr:last-child td,
+.bgn-table tbody tr:last-child th {
+  border-bottom: none;
+}
+
+.bgn-name {
+  text-align: left;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+}
+
+.bgn-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+}
+
+.bgn-dim {
+  color: var(--mj-text-secondary);
+}
+
+/* The plot column takes the slack so the numeric columns stay tight. */
+.bgn-chart-col {
+  width: 40%;
+  min-width: 160px;
+}
+
+.bgn-cat-count {
+  width: 3rem;
+}
+
+/* ---- Marks ---------------------------------------------------------------------------------- */
+
+/*
+ * Thin marks with a 4px rounded data-end. Bars are anchored at the baseline: the diverging arms round
+ * only on their outer edge so the rounding never floats away from the axis.
+ */
+.bgn-bar {
+  display: block;
+  height: 10px;
+  border-radius: 0 4px 4px 0;
+  min-width: 2px;
+}
+
+.bgn-bar--above,
+.bgn-bar--single,
+.bgn-bar--actual {
+  background: #2a78d6; /* categorical slot 1 / diverging warm-side pole — validated */
+}
+
+.bgn-bar--below {
+  background: #e34948; /* diverging opposite pole — validated */
+  border-radius: 4px 0 0 4px;
+  margin-left: auto; /* grows leftward from the axis */
+}
+
+.bgn-bar--estimate {
+  background: #eb6834; /* categorical slot 2 — validated against slot 1 */
+}
+
+.bgn-swatch--above,
+.bgn-swatch--actual {
+  background: #2a78d6;
+}
+
+.bgn-swatch--below {
+  background: #e34948;
+}
+
+.bgn-swatch--estimate {
+  background: #eb6834;
+}
+
+/* ---- Diverging layout ----------------------------------------------------------------------- */
+
+.bgn-diverge {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.bgn-diverge__arm {
+  flex: 1 1 50%;
+  display: flex;
+  min-width: 0;
+}
+
+.bgn-diverge__arm--left {
+  justify-content: flex-end;
+}
+
+/* The neutral midpoint of a diverging scale is gray — never a third hue. */
+.bgn-diverge__axis {
+  flex: 0 0 1px;
+  align-self: stretch;
+  min-height: 16px;
+  background: var(--mj-border-strong, var(--mj-border-default));
+}
+
+.bgn-diverge__value {
+  flex: 0 0 auto;
+  margin-left: var(--mj-space-2);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  /* Selective direct label: the value rides the mark, so no number-on-every-point elsewhere. */
+  color: var(--mj-text-primary);
+}
+
+/* ---- Paired bars ---------------------------------------------------------------------------- */
+
+/*
+ * A 2px surface-coloured gap separates the two fills so adjacent marks never bleed into one another.
+ */
+.bgn-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ---- Dark mode ------------------------------------------------------------------------------ */
+
+/*
+ * Dark steps from the same ramps, validated against the dark chart surface — chosen, not flipped.
+ */
+@media (prefers-color-scheme: dark) {
+  .bgn-bar--above,
+  .bgn-bar--single,
+  .bgn-bar--actual,
+  .bgn-swatch--above,
+  .bgn-swatch--actual {
+    background: #3987e5;
+  }
+
+  .bgn-bar--below,
+  .bgn-swatch--below {
+    background: #e66767;
+  }
+
+  .bgn-bar--estimate,
+  .bgn-swatch--estimate {
+    background: #d95926;
+  }
+}
