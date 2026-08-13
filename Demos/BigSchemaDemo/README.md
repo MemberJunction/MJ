@@ -2,11 +2,31 @@
 
 A droppable, regenerable **schema-scale test bed** for MemberJunction CodeGen.
 
-Real customer databases are not one schema with 2,000 tables. They are **two to three dozen schemas, 100–150 tables each**, foreign-keyed inside the schema and occasionally across schemas. This demo builds that shape on demand, seeds just enough data that every FK is real, and is designed to be thrown away.
+It builds a private database shaped like a multi-schema application: **two to three dozen schemas, 100–150 tables each**, with foreign keys inside each schema and a few across schemas. Seed data is small and logical so every FK lands on a real parent. The database is meant to be thrown away.
 
-Use it to prove the work in [`guides/CODEGEN_LARGE_SCHEMA_GUIDE.md`](../../guides/CODEGEN_LARGE_SCHEMA_GUIDE.md): per-schema emit, write-if-changed, dirty-schema regen, skip-entity strings, schema-parallel file gen, incremental `tsc`, hydrate-by-schema, and `schemaOutput` routing.
+Use it to exercise the layout in [`guides/CODEGEN_LARGE_SCHEMA_GUIDE.md`](../../guides/CODEGEN_LARGE_SCHEMA_GUIDE.md): per-schema emit, write-if-changed, dirty-schema regen, skip-entity strings, schema-parallel file gen, incremental `tsc`, catalog projections, and `schemaOutput` routing.
 
 It is **not** in the npm workspace. It will not slow a `pnpm build`. It will not publish 2,880 entity classes.
+
+```mermaid
+flowchart LR
+  subgraph db["Private database"]
+    C["__mj<br/>platform catalog"]
+    B1["bsd_crm"]
+    B2["bsd_billing"]
+    B3["bsd_… × 22"]
+  end
+
+  subgraph emit["schemaOutput"]
+    CORE["packages/MJCoreEntities<br/>__mj.ts only"]
+    DEMO["Demos/BigSchemaDemo/generated<br/>24 schema files"]
+  end
+
+  C --> CORE
+  B1 --> DEMO
+  B2 --> DEMO
+  B3 --> DEMO
+```
 
 ---
 
@@ -22,15 +42,15 @@ Each schema is named `bsd_<domain>` (`bsd_crm`, `bsd_billing`, …) so it is tri
 
 Inside a schema the tables are a small, honest domain model, not `Table_001`…`Table_120` with no relationships:
 
-```
-Hub  1───*  Child_*  1───*  Grandchild_*
- │ \         │
- │  \        └── Lookup_01   (nullable)
- │   \
- │    *  XRef_*  (Hub + Lookup, many-to-many stand-in)
- │
- └──  Bridge.LocalHubID          (every schema except the first)
-         Bridge.RemoteHubID  ──►  previous schema's Hub
+```mermaid
+erDiagram
+  Hub ||--o{ Child : has
+  Child ||--o{ Grandchild : has
+  Lookup ||--o{ Child : "optional"
+  Hub ||--o{ XRef : "many-to-many"
+  Lookup ||--o{ XRef : "many-to-many"
+  Hub ||--o{ Bridge : "LocalHub"
+  PrevHub ||--o{ Bridge : "RemoteHub — previous schema"
 ```
 
 Counts scale with the profile. On `standard`, a schema is roughly 1 hub, 8 lookups, ~77 children, ~20 grandchildren, ~13 xrefs, and 1 bridge.
