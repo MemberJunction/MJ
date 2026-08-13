@@ -149,3 +149,115 @@ export function SuppressTaskGraphSubmission(reason: string): void {
 export function TaskGraphSubmissionSuppressedBecause(): string | null {
     return submissionSuppressedBecause;
 }
+
+/**
+ * What a sanitization pass kept, and what it refused to keep.
+ *
+ * `DroppedPaths` is the point: a value that silently vanished from a condition's reach is a
+ * wrong branch nobody can explain later, so the caller gets the list and logs it.
+ */
+export type SanitizedInvocation = {
+    Envelope: TaskGraphInvocationEnvelope | undefined;
+    DroppedPaths: string[];
+};
+
+/** How deep the walk goes before it stops trusting the shape. */
+const MAX_INVOCATION_DEPTH = 8;
+
+/** How many values one envelope may contribute, so a graph row cannot be a memory dump. */
+const MAX_INVOCATION_NODES = 2_000;
+
+/**
+ * Reduces an invocation envelope to what is safe to persist and read back later.
+ *
+ * **Why this exists.** `ExecuteAgentParams.context` is documented as possibly being a CLASS INSTANCE
+ * carrying "external service credentials or connection information" — Skip's `SkipAgentContext` is
+ * the named example. R3-3 carried that object into the parent task's `InputPayload` verbatim, which
+ * fails two ways at once: `JSON.stringify` throws `Converting circular structure to JSON` the moment
+ * the context holds a socket, a pool, or a provider (killing the agent run at submit time), and if
+ * it had NOT thrown, the credentials in it would have been written to a database row that outlives
+ * the run and is readable by anything with task access.
+ *
+ * **What survives.** JSON data: primitives, arrays, plain objects, `Date` (as ISO), and anything
+ * exposing `toJSON()`. That is deliberately the same set `JSON.stringify` would have kept, minus the
+ * ways it explodes — conditions reference `data.approved` and `context.tier`, not live handles.
+ *
+ * **What does not, and why dropping beats guessing.** Class instances, functions, `Map`/`Set`,
+ * sockets, streams, anything circular, anything past the depth or node cap. Walking a socket's own
+ * enumerable properties instead would "work" — and would persist its internals, which is the leak
+ * this is here to prevent. Every drop is reported by path so the operator sees `context.db` left the
+ * envelope rather than discovering it as a branch that quietly took the wrong edge.
+ */
+export function SanitizeInvocationEnvelope(
+    envelope: TaskGraphInvocationEnvelope | undefined,
+): SanitizedInvocation {
+    if (!envelope) return { Envelope: undefined, DroppedPaths: [] };
+
+    const dropped: string[] = [];
+    let nodes = 0;
+    // Identity-based, and scoped to the CURRENT PATH rather than the whole walk: an object legitimately
+    // referenced twice by siblings is not a cycle, and treating it as one would drop real data.
+    const walk = (value: unknown, path: string, depth: number, ancestors: Set<object>): unknown => {
+        if (value === null) return null;
+        const kind = typeof value;
+        if (kind === 'string' || kind === 'number' || kind === 'boolean') {
+            if (kind === 'number' && !Number.isFinite(value as number)) {
+                // NaN/Infinity serialize as null, which reads as "present and empty" to a condition.
+                dropped.push(path);
+                return undefined;
+            }
+            return value;
+        }
+        if (kind === 'undefined') return undefined;      // absent, not dropped — nothing was lost
+        if (kind !== 'object') { dropped.push(path); return undefined; }   // function, symbol, bigint
+
+        if (++nodes > MAX_INVOCATION_NODES) { dropped.push(path); return undefined; }
+        if (depth > MAX_INVOCATION_DEPTH) { dropped.push(path); return undefined; }
+
+        const object = value as object;
+        if (ancestors.has(object)) { dropped.push(path); return undefined; }
+
+        if (object instanceof Date) return object.toISOString();
+
+        const maybeToJSON = (object as { toJSON?: unknown }).toJSON;
+        if (typeof maybeToJSON === 'function') {
+            return walk((maybeToJSON as () => unknown).call(object), path, depth + 1, ancestors);
+        }
+
+        const nextAncestors = new Set(ancestors).add(object);
+        if (Array.isArray(object)) {
+            return object.map((entry, index) => {
+                const kept = walk(entry, `${path}[${index}]`, depth + 1, nextAncestors);
+                // A hole in an array is `null` rather than a shifted index — position carries meaning.
+                return kept === undefined ? null : kept;
+            });
+        }
+
+        const prototype = Object.getPrototypeOf(object);
+        if (prototype !== Object.prototype && prototype !== null) {
+            // A class instance, a Map, a Set, a Socket. See the doc block: refused, not unwrapped.
+            dropped.push(path);
+            return undefined;
+        }
+
+        const result: Record<string, unknown> = {};
+        for (const [key, entry] of Object.entries(object)) {
+            const kept = walk(entry, path ? `${path}.${key}` : key, depth + 1, nextAncestors);
+            if (kept !== undefined) result[key] = kept;
+        }
+        return result;
+    };
+
+    const data = walk(envelope.Data, 'data', 0, new Set());
+    const context = walk(envelope.Context, 'context', 0, new Set());
+    // An envelope whose every field was dropped is no envelope: writing `{}` would tell the
+    // dispatcher a `data.x` condition resolved to absent-data rather than never having been carried.
+    if (data === undefined && context === undefined) return { Envelope: undefined, DroppedPaths: dropped };
+    return {
+        Envelope: {
+            ...(data === undefined ? {} : { Data: data }),
+            ...(context === undefined ? {} : { Context: context }),
+        },
+        DroppedPaths: dropped,
+    };
+}
