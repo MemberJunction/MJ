@@ -9,6 +9,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FindAgentRunTreeNodes, type AgentRunTreeNode } from '@memberjunction/ai-core-plus';
 import { NormalizeStatus, ProjectRunTreeToTimeline } from './run-tree-timeline-projection';
+import { ActionEngineBase } from '@memberjunction/actions-base';
 export interface TimelineItem {
   id: string;
   /**
@@ -91,6 +92,8 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
   @Output() navigateToEntity = new EventEmitter<{ entityName: string; recordId: string }>();
 
   private destroy$ = new Subject<void>();
+  /** Resolved once the action cache is warm, so a first paint without icons can be re-rendered with them. */
+  private actionsReady = false;
   
   // Public observables from data helper
   steps$!: Observable<MJAIAgentRunStepEntity[]>;
@@ -116,6 +119,16 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
     // AIEngineBase is deferred at startup; ensure it's loaded before timeline
     // items render — getStepIconInfo / sub-agent lookups read .Agents synchronously.
     await AIEngineBase.Instance.EnsureLoaded();
+    // Same reason, for the same kind of read: `resolveActionIcon` looks up `.Actions` synchronously
+    // inside the projection. Cheap when another surface already warmed it, and a no-op on reload.
+    try {
+      await ActionEngineBase.Instance.EnsureLoaded();
+      this.actionsReady = true;
+    } catch {
+      // An action cache that will not load costs icons, not rows — every action keeps the generic
+      // glyph it had before. Never worth failing a run view over.
+      this.actionsReady = false;
+    }
 
     // Initialize observables from the data helper
     this.steps$ = this.dataHelper.steps$;
@@ -140,9 +153,16 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
         // template keeps showing the mj-loading indicator.
         return !(isLoading && steps.length === 0);
       }),
-      map(([steps, subRuns, actionLogs, promptRuns]) =>
-        this.buildTimelineItems(steps, subRuns, actionLogs, promptRuns)
-      ),
+      map(([steps, subRuns, actionLogs, promptRuns]) => {
+        // Built here rather than on demand: this is where the logs arrive, and the resolver runs
+        // synchronously inside the projection, which cannot await anything.
+        this.actionIDByLogID = new Map(
+          (actionLogs ?? [])
+            .filter((log) => log.ID && log.ActionID)
+            .map((log) => [log.ID.toLowerCase(), log.ActionID]),
+        );
+        return this.buildTimelineItems(steps, subRuns, actionLogs, promptRuns);
+      }),
       shareReplay(1)
     );
     
@@ -230,6 +250,33 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
   }
   
   /**
+   * Font Awesome class for an action node, or null to keep the row-kind default.
+   *
+   * **Why the row kind is the wrong answer here.** The same action reaches the timeline through two
+   * different arms of the tree query — as a graph Task and as a loop pass — and each arm had its own
+   * generic glyph, so one Google Custom Search drew a lightning bolt and the next drew a paper
+   * plane. What the step IS does not change with where it ran.
+   *
+   * **Two hops, both already paid for.** The node points at its `MJ: Action Execution Logs` row,
+   * which the data service has already fetched by id for this run, and that row names the action,
+   * whose `IconClass` is in `ActionEngineBase`'s cache. No query is issued here.
+   *
+   * Null for a step that never RAN — a skipped branch has no execution log, so it keeps the generic
+   * icon, which is the honest rendering of "this did not happen".
+   */
+  private resolveActionIcon(node: AgentRunTreeNode): string | null {
+    if (node.SourceEntity !== 'MJ: Action Execution Logs' || !node.SourceID) return null;
+    const actionID = this.actionIDByLogID.get(node.SourceID.toLowerCase());
+    if (!actionID) return null;
+    const action = ActionEngineBase.Instance.Actions?.find((a) => UUIDsEqual(a.ID, actionID));
+    return action?.IconClass || null;
+  }
+
+  /** Execution-log id → action id, from the logs this run already loaded. Lowercased keys: the tree returns strings, and casing between sources is not guaranteed. */
+  private actionIDByLogID = new Map<string, string>();
+
+
+  /**
    * The graph a TaskGraph step dispatched, from the run tree.
    *
    * Null until the tree arrives (the setter above republishes then) and null for a submission that
@@ -306,6 +353,20 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
           return { icon: 'fa-robot' };
         }
       }
+    }
+
+    // An action step draws its OWN action's icon, exactly as a sub-agent step draws its agent's —
+    // the two cases are the same idea, and only one of them was implemented. `TargetLogID` names
+    // the execution log this run already loaded; that log names the action, whose IconClass is in
+    // ActionEngineBase's cache. A step whose action cannot be resolved (an action with no icon, a
+    // cache that did not load) falls through to the step-type default below, which is the same
+    // lightning bolt it drew before.
+    if (step.StepType === 'Actions' && step.TargetLogID) {
+      const actionID = this.actionIDByLogID.get(step.TargetLogID.toLowerCase());
+      const action = actionID
+        ? ActionEngineBase.Instance.Actions?.find((a) => UUIDsEqual(a.ID, actionID))
+        : undefined;
+      if (action?.IconClass) return { icon: action.IconClass };
     }
 
     // Default icons for each step type (includes fa-robot for sub-agents without agent metadata)
@@ -500,7 +561,7 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
       // matches the step — not the whole run, which is already on screen above it.
       const stepNode = FindAgentRunTreeNodes(this.RunTree, (n) => n.NodeID === item.id)[0] ?? null;
 
-      item.children = ProjectRunTreeToTimeline(stepNode, item.level + 1, true);
+      item.children = ProjectRunTreeToTimeline(stepNode, item.level + 1, true, (n) => this.resolveActionIcon(n));
       item.childrenLoaded = true;
       item.hasNoChildren = item.children.length === 0;
     } catch (e) {

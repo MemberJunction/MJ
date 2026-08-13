@@ -488,3 +488,59 @@ describe('the expand path the run timeline actually uses', () => {
         expect(flatten(ProjectRunTreeToTimeline(parent, 1, true)).map((r) => r.id)).toEqual(['nested-run']);
     });
 });
+
+describe('what the work IS beats what kind of row it is', () => {
+    // The same action reaches the timeline through two arms of the tree query — as a graph Task and
+    // as a loop pass — and each arm had its own generic glyph, so one Google Custom Search drew a
+    // lightning bolt and the next a paper plane.
+    const actionRun = () => node({
+        NodeID: 'graph',
+        NodeType: 'TaskGraph',
+        Name: 'Demo',
+        Children: [
+            node({
+                NodeID: 'task-web', NodeType: 'Task', SourceKind: 'Action', Name: 'Step 2(b): Web Search',
+                SourceEntity: 'MJ: Action Execution Logs', SourceID: 'log-web',
+            }),
+            node({
+                NodeID: 'task-skipped', NodeType: 'Task', SourceKind: 'Action', Name: 'Step 2(a): Get Weather',
+                Status: 'Skipped' as AgentRunTreeStatus, SourceEntity: 'MJ: Tasks', SourceID: 'task-skipped',
+            }),
+            node({
+                NodeID: 'pass-1', NodeType: 'Step', SourceKind: 'Actions', Name: '1: Google Custom Search',
+                SourceEntity: 'MJ: Action Execution Logs', SourceID: 'log-google',
+            }),
+        ],
+    });
+
+    const resolver = (n: AgentRunTreeNode) =>
+        n.SourceID === 'log-google' ? 'fa-brands fa-google'
+        : n.SourceID === 'log-web' ? 'fa-solid fa-magnifying-glass'
+        : null;
+
+    it('draws each executed action with its own icon, wherever it ran', () => {
+        const byId = new Map(flatten(ProjectRunTreeToTimeline(actionRun(), 0, false, resolver)).map((i) => [i.id, i]));
+
+        expect(byId.get('task-web')?.icon).toBe('fa-solid fa-magnifying-glass');
+        expect(byId.get('pass-1')?.icon).toBe('fa-brands fa-google');
+    });
+
+    it('leaves a step that never ran on the generic icon', () => {
+        // A skipped branch has no execution log, so there is no action to draw. Inventing one would
+        // claim work happened that did not.
+        const byId = new Map(flatten(ProjectRunTreeToTimeline(actionRun(), 0, false, resolver)).map((i) => [i.id, i]));
+
+        expect(byId.get('task-skipped')?.icon).not.toBe('fa-brands fa-google');
+        expect(byId.get('task-skipped')?.icon).toBeTruthy();
+    });
+
+    it('falls back to the row kind when no resolver is supplied', () => {
+        // Every existing caller passes none, so the default must be exactly what it always was.
+        const withResolver = flatten(ProjectRunTreeToTimeline(actionRun(), 0, false, resolver));
+        const without = flatten(ProjectRunTreeToTimeline(actionRun()));
+
+        expect(without.find((i) => i.id === 'pass-1')?.icon)
+            .not.toBe(withResolver.find((i) => i.id === 'pass-1')?.icon);
+        expect(without.every((i) => !!i.icon)).toBe(true);
+    });
+});

@@ -93,11 +93,22 @@ const TASK_KIND_PRESENTATION: Record<string, { icon: string }> = {
  * That is what makes a sub-agent run nested inside a graph revert to ordinary agent styling at the
  * run boundary: below it, the work is ordinary agent work again.
  */
-function presentationOf(node: AgentRunTreeNode): { icon: string; color: MarkerColor } {
+function presentationOf(node: AgentRunTreeNode, resolveIcon?: TimelineIconResolver): { icon: string; color: MarkerColor } {
     const workflow = node.NodeType === 'Task' || node.NodeType === 'TaskGraph';
     let icon = node.NodeType === 'Task' && node.SourceKind
         ? (TASK_KIND_PRESENTATION[node.SourceKind] ?? NODE_PRESENTATION.Task).icon
         : (NODE_PRESENTATION[node.NodeType] ?? NODE_PRESENTATION.Step).icon;
+
+    // What the work IS beats what kind of row it is. An executed action resolves to its own icon —
+    // Google Custom Search draws the Google mark whether it ran as a graph step or as the fifth
+    // pass of a loop, which is the whole point: the same action was rendering as two different
+    // generic glyphs depending on which arm of the tree query produced the row.
+    //
+    // Resolved by the HOST, not here: reaching an action means the execution log the row points at
+    // plus the action cache, and a pure projection that reached for either would stop being pure
+    // and stop being testable without a database.
+    const resolved = resolveIcon?.(node);
+    if (resolved) icon = resolved;
 
     // A loop that ran its iterations at once is a different shape of work from one that ran them in
     // turn, and the passes underneath look identical either way — same rows, same durations. The
@@ -313,6 +324,7 @@ export function ProjectRunTreeToTimeline(
     root: AgentRunTreeNode | null,
     baseLevel = 0,
     skipRoot = false,
+    resolveIcon?: TimelineIconResolver,
 ): TimelineItem[] {
     if (!root) return [];
 
@@ -333,7 +345,7 @@ export function ProjectRunTreeToTimeline(
         // describe. The submission's own latency survives in the subtitle rather than being lost.
         const graph = collapsibleGraphChild(node);
         if (graph) {
-            const item = toTimelineItem(graph, level, parentID, position);
+            const item = toTimelineItem(graph, level, parentID, position, resolveIcon);
             item.id = node.NodeID;
             item.title = node.Name;
             item.subtitle = describeDispatchedWorkflow(node, graph);
@@ -341,7 +353,7 @@ export function ProjectRunTreeToTimeline(
             return item;
         }
 
-        const item = toTimelineItem(node, level, parentID, position);
+        const item = toTimelineItem(node, level, parentID, position, resolveIcon);
         item.children = node.Children.map((child, index) => build(child, level + 1, node.NodeID, index + 1));
         return item;
     };
@@ -374,14 +386,24 @@ function describeDispatchedWorkflow(step: AgentRunTreeNode, graph: AgentRunTreeN
     return base ? `${base} · ${dispatch}` : dispatch;
 }
 
+/**
+ * How a host offers a better icon for a row than the row's own kind implies.
+ *
+ * Returns a Font Awesome class, or null/undefined to keep the kind's default. The host resolves it
+ * — for an action that means the execution log the node points at, plus `ActionEngineBase`'s cache —
+ * so this file needs neither a data provider nor an engine to stay unit-testable.
+ */
+export type TimelineIconResolver = (node: AgentRunTreeNode) => string | null | undefined;
+
 /** One node as a timeline row. */
 function toTimelineItem(
     node: AgentRunTreeNode,
     level: number,
     parentID: string | undefined,
     position: number,
+    resolveIcon?: TimelineIconResolver,
 ): TimelineItem {
-    const presentation = presentationOf(node);
+    const presentation = presentationOf(node, resolveIcon);
 
     return {
         id: node.NodeID,
