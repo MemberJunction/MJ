@@ -1,5 +1,5 @@
 ---
-'@memberjunction/core-entities': patch
+'@memberjunction/core-entities': minor
 ---
 
 Generated remote-operation clients for the workflow debug verbs that #3770 shipped.
