@@ -56,7 +56,7 @@
 import { RunView, LocalCacheManager, EntityPermissionType, UserInfo } from '@memberjunction/core';
 import type { IMetadataProvider, RunViewParams, RowLevelSecurityFilterInfo, EntityInfo, APIKeyRowFilterBinding } from '@memberjunction/core';
 import type { MJQueryCategoryEntity } from '@memberjunction/core-entities';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';

@@ -7,7 +7,6 @@ export * from "./custom/ReadOnlyExternalBaseEntity";
 export * from './custom/MJDashboardEntityExtended';
 export * from './custom/MJListDetailEntityExtended';
 export * from './custom/MJListEntityExtended';
-export * from './custom/MJScheduledActionEntityExtended';
 export * from './custom/MJEntityEntityExtended';
 export * from './custom/MJEntityFieldEntityExtended';
 export * from './custom/MJComponentEntityExtended';

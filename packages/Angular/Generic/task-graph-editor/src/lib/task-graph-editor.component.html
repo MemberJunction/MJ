@@ -1,0 +1,73 @@
+<div class="mj-tge">
+  <!-- An EDITABLE empty canvas must still render the editor, because the palette is the only way to
+       add a step — showing a bare empty state instead made "Add one to start building this workflow"
+       an instruction the user could not follow. The hint stays, as a banner above a usable canvas. -->
+  @if (IsEmpty && ReadOnly) {
+    <mj-empty-state
+      Icon="fa-diagram-project"
+      Title="Nothing here yet"
+      [Message]="EmptyStateMessage">
+    </mj-empty-state>
+  } @else {
+    @if (IsEmpty) {
+      <mj-alert Variant="info" class="mj-tge__empty-hint" [Message]="EmptyStateMessage"></mj-alert>
+    }
+    @if (!IsValid && ValidationErrors.length > 0) {
+      <!-- Author-time validation comes from the SAME function the engine runs at submission, so a
+           graph that looks fine here cannot be rejected later for a reason the canvas never showed. -->
+      <mj-alert Variant="warning" class="mj-tge__validation">
+        <strong>{{ ValidationErrors.length }} problem{{ ValidationErrors.length === 1 ? '' : 's' }} to fix</strong>
+        <ul class="mj-tge__validation-list">
+          @for (err of ValidationErrors; track err.Code + (err.TempId ?? '')) {
+            <li>{{ err.Message }}</li>
+          }
+        </ul>
+      </mj-alert>
+    }
+
+    <div class="mj-tge__workspace">
+      <mj-flow-editor
+        class="mj-tge__canvas"
+        [Nodes]="Nodes"
+        [Connections]="Connections"
+        [NodeTypes]="NodeTypes"
+        [ReadOnly]="ReadOnly"
+        [ShowToolbar]="ShowToolbar"
+        [ToolbarVisibility]="ToolbarVisibility"
+        [ToolbarAlign]="ToolbarAlign"
+        [ShowPalette]="ShowPalette && !ReadOnly"
+        [ShowMinimap]="ShowMinimap"
+        [ShowLegend]="ShowLegend"
+        [ShowStatusBar]="ShowStatusBar"
+        [AutoLayoutDirection]="AutoLayoutDirection"
+        (NodeSelected)="OnNodeSelected($event)"
+        (NodeAdded)="OnNodeAdded($event)"
+        (NodeRemoved)="OnNodeRemoved($event)"
+        (NodesChanged)="OnNodesChanged($event)"
+        (NodeMoved)="OnNodeMoved($event)"
+        (ConnectionCreated)="OnConnectionCreated($event)"
+        (ConnectionRemoved)="OnConnectionRemoved($event)"
+        (ConnectionSelected)="OnConnectionSelected($event)"
+        (LegendToggled)="OnLegendToggled($event)"
+        (BeforeContextMenu)="BeforeContextMenu.emit($event)"
+        (AfterContextMenuAction)="AfterContextMenuAction.emit($event)">
+      </mj-flow-editor>
+
+      <!-- The canvas draws structure; this supplies content. A step added from the palette arrives
+           unnamed and (with nothing to default to) unassigned, so without this panel the author can
+           create a step but never finish one. -->
+      @if (ShowProperties && !ReadOnly) {
+        <mj-task-graph-properties
+          class="mj-tge__properties"
+          [Task]="SelectedTask"
+          [Spec]="Spec"
+          [ReadOnly]="ReadOnly"
+          [AvailableAgentNames]="AvailableAgentNames"
+          [AvailableActionNames]="AvailableActionNames"
+          (TaskPropertyChangeRequested)="OnTaskPropertyChangeRequested($event)"
+          (DependencyConditionChangeRequested)="OnDependencyConditionChangeRequested($event)">
+        </mj-task-graph-properties>
+      }
+    </div>
+  }
+</div>

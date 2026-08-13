@@ -1,3 +1,4 @@
+import { TaskGraphEditorModule } from '@memberjunction/ng-task-graph-editor';
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
@@ -11,8 +12,7 @@ import {
   MJSwitchComponent,
   MJAccordionModule,
   MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent,
-  MJEmptyStateComponent
-} from '@memberjunction/ng-ui-components';
+  MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { AngularSplitModule } from 'angular-split';
 
 // MemberJunction imports
@@ -61,6 +61,8 @@ import { TestHarnessWindowManagerService } from './lib/test-harness-window-manag
     MJDialogTitlebarComponent,
     MJDialogActionsComponent,
     MJEmptyStateComponent,
+    MJAlertComponent,
+    TaskGraphEditorModule,
     AngularSplitModule,
     // MemberJunction
     ContainerDirectivesModule,

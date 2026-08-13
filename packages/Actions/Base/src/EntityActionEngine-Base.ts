@@ -2,6 +2,7 @@ import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, Us
 import { UUIDsEqual } from "@memberjunction/global";
 import { MJActionExecutionLogEntity, MJActionResultCodeEntity, MJEntityActionFilterEntity, MJEntityActionInvocationEntity, MJEntityActionInvocationTypeEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { ActionParam, AIDirective, RunActionParams } from "./ActionEngine-Base";
+import { EntityChangeContext } from "./EntityChangeContext";
 import { MJEntityActionEntityExtended } from "./MJEntityActionEntityExtended";
 import { IsEntityActionInScope, ResolveEntityActionScopeResolver } from "./EntityActionScopeResolver";
 
@@ -36,6 +37,18 @@ export class EntityActionInvocationParams {
      * If the invocation type is list-oriented, this parameter will be needed
      */
     public ListID?: string;
+
+    /**
+     * What changed about the record, for filters that need both sides of the save.
+     *
+     * Captured by the dispatcher at the moment the lifecycle event fires, **not** read from the entity
+     * later: `After*` dispatch is fire-and-forget, and by the time an action's filter runs the entity
+     * has been reloaded from the save's returned row and its `OldValue`s reset. A filter reading the
+     * live entity would see before-values identical to after-values and conclude nothing changed.
+     *
+     * Absent on invocations with no save behind them (a View or List fan-out, a direct call).
+     */
+    public EntityChange?: EntityChangeContext;
 }
 
 

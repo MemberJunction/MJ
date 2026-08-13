@@ -4,6 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import { RunView } from '@memberjunction/core';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJAIPromptRunEntity } from '@memberjunction/core-entities';
+import { WalkAgentRunTree, type AgentRunTreeNode } from '@memberjunction/ai-core-plus';
 import * as d3 from 'd3';
 import { AIAgentRunCostService } from './ai-agent-run-cost.service';
 
@@ -81,6 +82,46 @@ interface SimpleActionLog {
 })
 export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
   @Input() agentRunId!: string;
+
+  /**
+   * The run's execution tree, loaded once by the form and shared with every tab.
+   *
+   * **This is what makes the totals honest.** Analytics derives cost from prompt runs reached
+   * through the run's own STEPS, which cannot see work the run dispatched: a task-graph's spend
+   * lives on Task rows and on prompt runs those tasks produced, so a workflow's cost was simply
+   * missing from every figure on this tab. Each tree node reports its OWN cost — never a rollup —
+   * so a total is an honest sum rather than a double-count.
+   */
+  @Input()
+  set RunTree(value: AgentRunTreeNode | null) {
+    this.runTree = value;
+    this.cdr.markForCheck();
+  }
+  public runTree: AgentRunTreeNode | null = null;
+
+  /**
+   * What the dispatched work cost, from the tree — the part the step-based figures cannot see.
+   *
+   * Zero when there is no graph, so a run that dispatched nothing reads exactly as it did before.
+   */
+  public get DispatchedCost(): { Cost: number; Tokens: number; NodeCount: number } {
+    if (!this.runTree) return { Cost: 0, Tokens: 0, NodeCount: 0 };
+    let cost = 0, tokens = 0, nodeCount = 0;
+    for (const node of WalkAgentRunTree(this.runTree)) {
+      // Only nodes the RUN's own step list cannot reach. Counting the run's steps here as well
+      // would double every figure this tab already shows correctly.
+      if (node.NodeType !== 'Task' && node.NodeType !== 'TaskGraph') continue;
+      nodeCount++;
+      cost += node.Cost ?? 0;
+      tokens += node.Tokens ?? 0;
+    }
+    return { Cost: cost, Tokens: tokens, NodeCount: nodeCount };
+  }
+
+  /** True when this run dispatched a workflow, so the tab can show the extra figures at all. */
+  public get HasDispatchedWork(): boolean {
+    return this.DispatchedCost.NodeCount > 0;
+  }
   
   private destroy$ = new Subject<void>();
   

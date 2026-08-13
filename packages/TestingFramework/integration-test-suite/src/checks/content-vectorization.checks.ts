@@ -99,6 +99,10 @@ function installStubs(): void {
             const field = typeof providerConfig?.['namespaceField'] === 'string' ? (providerConfig['namespaceField'] as string) : undefined;
             return field && sourceRecord?.[field] != null ? { namespace: String(sourceRecord[field]) } : {};
         },
+        // Declares no source-record dependencies — the namespace field lives on the item itself, so
+        // resolveDriverFieldPaths short-circuits and CV6 still exercises namespace routing through
+        // BuildProviderDirectives. Mirrors the unit-test double in AutotagBaseEngine.test.ts.
+        GetSourceRecordFieldPaths: () => [] as string[],
         CreateRecords: async (records: CapturedRecord[], _indexName?: string, providerConfig?: Record<string, unknown>) => {
             S.Upserts.push({ providerConfig, records: records.map(r => ({ id: r.id, metadata: r.metadata, providerTemporaryDirectives: r.providerTemporaryDirectives })) });
             return { success: true, message: 'stubbed upsert (captured)' };
@@ -346,6 +350,84 @@ export const ContentVectorizationChecks: NamedCheck[] = [
             Assert(!!up?.providerConfig && (up.providerConfig as Record<string, unknown>)['namespaceField'] === 'ContentSourceID', `providerConfig threaded to CreateRecords: ${JSON.stringify(up?.providerConfig)}`);
             Assert(!!up?.records[0]?.providerTemporaryDirectives && (up.records[0].providerTemporaryDirectives as Record<string, unknown>)['namespace'] === sourceID, `per-record namespace directive resolved to the ContentSourceID: ${JSON.stringify(up?.records[0]?.providerTemporaryDirectives)}`);
             console.log('      → CV6: dimensions=1536 + namespace directive routed');
+        }
+    },
+    {
+        Id: 'content-vectorization.CV7',
+        Name: 'CV7: a source declaring VectorEntityName under the explicit strategy omits Entity and carries ContentSourceID instead',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            if (guardSkip('CV7')) return;
+            await ensureBase(ctx);
+            // The whole opt-in, against the real cascade: CV5 covers 'explicit' WITHOUT a declaration and
+            // asserts Entity survives, so this is its counterpart. ChunkTextStorage/VectorIDStrategy are
+            // left unset deliberately — 'alwaysChunk' and 'recordId' are the hardcoded defaults, and the
+            // gate has to be satisfied by them rather than by values this fixture spells out.
+            const { sourceID, contentTypeID } = await makeSource(ctx, 'cv7', {
+                VectorEntityName: 'MJ: Content Item Chunks',
+                VectorMetadata: { FieldStrategy: 'explicit', Fields: { Name: { Included: true } } },
+            });
+            const itemID = await makeItem(ctx, sourceID, contentTypeID, 'cv7-declared', 'Declared-entity content item.');
+            await refreshEngines(ctx);
+            resetCaptures();
+
+            await AutotagBaseEngine.Instance.VectorizeContentItems(await loadItems(ctx, [itemID]), ctx.User);
+
+            const meta = soleMeta();
+            Assert(meta['Entity'] === undefined, `a declared source under 'explicit' omits Entity, got ${JSON.stringify(meta['Entity'])}`);
+            // The invariant: what search resolves the declaration THROUGH must be present and a string.
+            AssertEqual(meta['ContentSourceID'], sourceID, 'ContentSourceID promoted as the attribution key');
+            AssertEqual(meta['Name'], `${S.Prefix}-cv7-declared`, 'the configured display field is still included');
+            Assert(meta['RecordID'] === undefined, 'explicit still drops RecordID (recovered from the vector id)');
+            // And the id really is recoverable: under 'recordId' the vector id IS the chunk row's PK.
+            const chunks = await loadChunks(ctx, itemID);
+            AssertEqual(chunks.length, 1, 'one chunk row');
+            const up = S.Upserts[S.Upserts.length - 1];
+            Assert(UUIDsEqual(up?.records[0]?.id ?? '', chunks[0].ID), `vector id is the chunk PK, so an omitted RecordID is still resolvable: ${up?.records[0]?.id} vs ${chunks[0].ID}`);
+            console.log(`      → CV7: metadata = ${JSON.stringify(meta)}`);
+        }
+    },
+    {
+        Id: 'content-vectorization.CV8',
+        Name: 'CV8: the Entity key survives a declaration the reader would refuse — an unresolvable name, and one naming the item entity',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            if (guardSkip('CV8')) return;
+            await ensureBase(ctx);
+            // Two configurations that satisfy every gate condition except a usable declaration. Both must
+            // keep writing Entity: omitting it against a declaration search will refuse is unrecoverable
+            // without a re-embed, so the write side fails safe rather than closed.
+            const cases: Array<{ label: string; config: Record<string, unknown>; why: string }> = [
+                {
+                    label: 'cv8-typo',
+                    why: 'declaration missing the `MJ: ` prefix, so it resolves to nothing',
+                    config: {
+                        VectorEntityName: 'Content Item Chunks',
+                        VectorMetadata: { FieldStrategy: 'explicit', Fields: { Name: { Included: true } } },
+                    },
+                },
+                {
+                    label: 'cv8-level',
+                    why: 'declaration names the ITEM entity while alwaysChunk stores chunk-level vectors',
+                    config: {
+                        VectorEntityName: 'MJ: Content Items',
+                        VectorMetadata: { FieldStrategy: 'explicit', Fields: { Name: { Included: true } } },
+                    },
+                },
+            ];
+
+            for (const c of cases) {
+                const { sourceID, contentTypeID } = await makeSource(ctx, c.label, c.config);
+                const itemID = await makeItem(ctx, sourceID, contentTypeID, c.label, `Refusal-path content item (${c.label}).`);
+                await refreshEngines(ctx);
+                resetCaptures();
+
+                await AutotagBaseEngine.Instance.VectorizeContentItems(await loadItems(ctx, [itemID]), ctx.User);
+
+                const meta = soleMeta();
+                AssertEqual(meta['Entity'], 'MJ: Content Item Chunks', `${c.label}: Entity kept — ${c.why}`);
+                console.log(`      → CV8/${c.label}: Entity kept (${c.why})`);
+            }
         }
     }
 ];

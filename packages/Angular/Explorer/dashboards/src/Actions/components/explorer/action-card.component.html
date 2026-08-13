@@ -99,19 +99,19 @@
             <div class="stat-label">Last Run</div>
           </div>
           <div class="stat-item params">
-            <div class="stat-value">{{ Action.Params.length || 0 }}</div>
+            <div class="stat-value">{{ Action.Params.Items.length || 0 }}</div>
             <div class="stat-label">Parameters</div>
           </div>
         </div>
 
-        @if (Action.Params && Action.Params.length > 0) {
+        @if (Action.Params && Action.Params.Items.length > 0) {
           <div class="params-preview">
             <div class="params-header">
               <i class="fa-solid fa-sliders"></i>
               Parameters
             </div>
             <div class="params-list">
-              @for (param of Action.Params.slice(0, 4); track param.Name) {
+              @for (param of Action.Params.Items.slice(0, 4); track param.Name) {
                 <span class="param-tag" [class.required]="param.IsRequired">
                   {{ param.Name }}
                   @if (param.IsRequired) {
@@ -119,8 +119,8 @@
                   }
                 </span>
               }
-              @if (Action.Params.length > 4) {
-                <span class="param-more">+{{ Action.Params.length - 4 }} more</span>
+              @if (Action.Params.Items.length > 4) {
+                <span class="param-more">+{{ Action.Params.Items.length - 4 }} more</span>
               }
             </div>
           </div>
