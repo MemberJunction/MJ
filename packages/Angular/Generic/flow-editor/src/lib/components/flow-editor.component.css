@@ -37,13 +37,59 @@
 
 /* ── Toolbar Area ──────────────────────────────────────────── */
 
-.mj-flow-editor-toolbar-area {
+.mj-flow-editor-toolbar-area,
+.mj-flow-editor-toolbar-chip,
+.mj-flow-editor-toolbar-tab {
   position: absolute;
   top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
   z-index: 20;
 }
+.mj-flow-editor-toolbar-area[data-align="center"],
+.mj-flow-editor-toolbar-chip[data-align="center"],
+.mj-flow-editor-toolbar-tab[data-align="center"] {
+  left: 50%;
+  transform: translateX(-50%);
+}
+.mj-flow-editor-toolbar-area[data-align="left"],
+.mj-flow-editor-toolbar-chip[data-align="left"],
+.mj-flow-editor-toolbar-tab[data-align="left"] {
+  left: 10px;
+}
+.mj-flow-editor-toolbar-area[data-align="right"],
+.mj-flow-editor-toolbar-chip[data-align="right"],
+.mj-flow-editor-toolbar-tab[data-align="right"] {
+  right: 10px;
+}
+
+.mj-flow-editor-toolbar-chip,
+.mj-flow-editor-toolbar-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-elevated);
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+}
+.mj-flow-editor-toolbar-chip:hover,
+.mj-flow-editor-toolbar-tab:hover {
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-hover);
+}
+.mj-flow-editor-toolbar-chip {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--mj-radius-md);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.mj-flow-editor-toolbar-tab {
+  width: 22px;
+  height: 18px;
+  padding: 0;
+  border-radius: var(--mj-radius-sm);
+  opacity: 0.55;
+}
+.mj-flow-editor-toolbar-tab:hover { opacity: 1; }
 
 /* ── Canvas Area ───────────────────────────────────────────── */
 
@@ -207,18 +253,18 @@ f-line-alignment {
 /* Connection paths — default stroke color prevents invisible connections */
 .f-connection path {
   stroke: var(--mj-text-disabled);
-  stroke-width: 2;
+  stroke-width: var(--connection-width, 2px);
   fill: none;
   transition: stroke 0.15s ease, stroke-width 0.15s ease;
 }
 
 .f-connection:hover path {
-  stroke-width: 3;
+  stroke-width: calc(var(--connection-width, 2px) + 1px);
 }
 
 .f-connection.f-selected path {
   stroke: var(--mj-brand-primary);
-  stroke-width: 3;
+  stroke-width: max(3px, var(--connection-width, 2px));
 }
 
 /* Colored connections use the --connection-color custom property,
@@ -229,7 +275,7 @@ f-line-alignment {
 
 .mj-flow-connection-colored.f-selected path {
   stroke: var(--connection-color, var(--mj-brand-primary));
-  stroke-width: 3;
+  stroke-width: max(3px, var(--connection-width, 2px));
   filter: brightness(0.85);
 }
 
@@ -241,6 +287,17 @@ f-line-alignment {
 /* Dotted connection style */
 .mj-flow-connection-dotted path {
   stroke-dasharray: 3 3;
+}
+
+.mj-flow-connection-animated path {
+  stroke-dasharray: 14 10;
+  stroke-linecap: round;
+  stroke-width: var(--connection-width, 4.5px);
+  animation: mj-flow-dash 0.5s linear infinite;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--connection-color, var(--mj-brand-primary)) 70%, transparent));
+}
+@keyframes mj-flow-dash {
+  to { stroke-dashoffset: -24; }
 }
 
 /* Connection for create (dragging) */
@@ -369,6 +426,16 @@ f-line-alignment {
   width: 16px;
   text-align: center;
   font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+}
+
+.mj-flow-context-menu-shortcut {
+  margin-left: auto;
+  padding: 0 4px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 3px;
+  font-size: 10px;
+  font-family: inherit;
   color: var(--mj-text-muted);
 }
 
