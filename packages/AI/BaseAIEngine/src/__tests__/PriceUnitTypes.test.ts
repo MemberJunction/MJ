@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { resolve, join } from 'node:path';
 /**
  * Unit tests for PriceUnitTypes
  *
@@ -537,7 +537,27 @@ describe('ModelUsageUnitKind vs. the AIUsageType catalog', () => {
      * list here would drift the moment someone adds a row, which is precisely the event it exists
      * to catch.
      */
-    const MIGRATION = resolve(__dirname, '../../../../../migrations/v6/V202608092321__v6.1.x__AIPromptRun_Continuous_Units.sql');
+    /**
+     * Resolved by SUFFIX rather than by full filename.
+     *
+     * A migration's leading timestamp is not stable: `Check migrations` requires it to exceed every
+     * timestamp already on the base branch, so a long-lived branch has to re-date its migration
+     * whenever `next` moves past it. Hardcoding the full name means every such rename silently breaks
+     * this test — and this is the test that pins `ModelUsageUnitKind` against the seeded catalog, so
+     * breaking it is exactly what must not happen quietly.
+     */
+    const MIGRATIONS_DIR = resolve(__dirname, '../../../../../migrations/v6');
+    const MIGRATION_SUFFIX = '__AIPromptRun_Continuous_Units.sql';
+    const MIGRATION = (() => {
+        const matches = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(MIGRATION_SUFFIX));
+        if (matches.length !== 1) {
+            throw new Error(
+                `expected exactly one migration ending in ${MIGRATION_SUFFIX} under ${MIGRATIONS_DIR}, ` +
+                `found ${matches.length}: ${matches.join(', ')}`
+            );
+        }
+        return join(MIGRATIONS_DIR, matches[0]);
+    })();
 
     /** The names the migration actually seeds into AIUsageType. */
     function seededUsageTypeNames(): string[] {

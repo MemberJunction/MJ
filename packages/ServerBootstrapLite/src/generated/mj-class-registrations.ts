@@ -188,7 +188,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (401 classes)
+// @memberjunction/core-entities (403 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -464,6 +464,8 @@ import {
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
+    MJMaterializedResultEntity,
+    MJMaterializedResultQueryEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -952,13 +954,21 @@ import {
     PredictiveStudioTrainModelServerOperation,
 } from '@memberjunction/predictive-studio';
 
-// @memberjunction/task-graph (8 classes)
+// @memberjunction/task-graph (16 classes)
 import {
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
+    TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
+    TaskGraphOverrideEdgeServerOperation,
+    TaskGraphPauseServerOperation,
+    TaskGraphResumeServerOperation,
     TaskGraphRetryTaskServerOperation,
+    TaskGraphSetBreakpointsServerOperation,
+    TaskGraphSkipTaskServerOperation,
+    TaskGraphStepServerOperation,
     TaskGraphSubmitServerOperation,
+    TaskGraphUpdateTaskInputServerOperation,
     WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
@@ -1514,6 +1524,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
+    MJMaterializedResultEntity,
+    MJMaterializedResultQueryEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -1886,9 +1898,17 @@ export const CLASS_REGISTRATIONS: any[] = [
     PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
+    TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
+    TaskGraphOverrideEdgeServerOperation,
+    TaskGraphPauseServerOperation,
+    TaskGraphResumeServerOperation,
     TaskGraphRetryTaskServerOperation,
+    TaskGraphSetBreakpointsServerOperation,
+    TaskGraphSkipTaskServerOperation,
+    TaskGraphStepServerOperation,
     TaskGraphSubmitServerOperation,
+    TaskGraphUpdateTaskInputServerOperation,
     WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
@@ -2099,7 +2119,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 902;
+export const CLASS_REGISTRATIONS_COUNT = 912;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

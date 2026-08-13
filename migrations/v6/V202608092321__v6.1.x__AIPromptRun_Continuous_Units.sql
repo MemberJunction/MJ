@@ -6471,10 +6471,14 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
      - ValidateInputUnitsUsedGreaterThanOrEqualToZero -> errors when `!= null && < 0`.  Matches
        CK_AIPromptRun_InputUnitsUsed_NonNegative CHECK (InputUnitsUsed >= 0).
 
-   NOTE the asymmetry: no validator was generated for OutputUnitsUsed, whose CHECK is identical in
-   shape to InputUnitsUsed'. The database constraint enforces it either way, so this is a gap in
-   generation coverage rather than a hole in enforcement; left as generated rather than hand-written,
-   because hand-authoring a row CodeGen owns is what puts the two permanently out of step.
+     - ValidateOutputUnitsUsedGreaterThanOrEqualToZero -> errors when `!= null && < 0`.  Matches
+       CK_AIPromptRun_OutputUnitsUsed_NonNegative CHECK (OutputUnitsUsed >= 0).
+
+   The OutputUnitsUsed validator arrived on a LATER CodeGen pass than the other two, which is worth
+   knowing rather than tidying away: generation of these bodies is not deterministic across runs, so
+   "CodeGen produced no validator for this constraint" means "not yet", not "never". The database
+   constraint enforces the rule regardless — the validator only moves the failure earlier, into
+   BaseEntity.Validate() instead of the INSERT.
    --------------------------------------------------------------------------------------------- */
 
 /* Generated Validation Functions for MJ: AI Model Price Unit Types */
@@ -6504,3 +6508,17 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedB
 			));
 		}
 	}', 'Input units used must be greater than or equal to 0 to ensure usage metrics are not negative.', 'ValidateInputUnitsUsedGreaterThanOrEqualToZero', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', 'C5FC09BE-A79A-4B16-8AAB-FA9A2B5C3BB4');
+
+/* Generated Validation Functions for MJ: AI Prompt Runs */
+-- CHECK constraint for MJ: AI Prompt Runs: Field: OutputUnitsUsed was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
+INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
+                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([OutputUnitsUsed]>=(0))', 'public ValidateOutputUnitsUsedGreaterThanOrEqualToZero(result: ValidationResult) {
+	if (this.OutputUnitsUsed != null && this.OutputUnitsUsed < 0) {
+		result.Errors.push(new ValidationErrorInfo(
+			"OutputUnitsUsed",
+			"Output units used must be greater than or equal to 0.",
+			this.OutputUnitsUsed,
+			ValidationErrorType.Failure
+		));
+	}
+}', 'The number of output units used must be greater than or equal to zero to prevent negative usage tracking.', 'ValidateOutputUnitsUsedGreaterThanOrEqualToZero', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', '7A696C06-A55C-4085-908C-F821121BD6ED');
