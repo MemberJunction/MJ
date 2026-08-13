@@ -33,7 +33,7 @@ import {
     type TaskGraphRetryInput,
     type TaskGraphStatusOutput,
 } from '@memberjunction/core-entities';
-import { ComputeParentRollup, type TaskGraphNodeStatus, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
+import { ComputeParentRollup, type TaskGraphInvocationEnvelope, type TaskGraphNodeStatus, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import { TaskGraphService, TaskGraphSubmitContext } from '../TaskGraphService';
 import { LoadWorkflowDraftOperation } from './WorkflowDraftOperation';
 
@@ -77,11 +77,43 @@ function submitContext(
  * Returning before execution is the point: the caller is freed the moment the work is safe, and the
  * dispatcher owns it from there. That is what lets an agent submit a graph over MCP without holding
  * anything open.
+ *
+ * **KNOWN LIMITATION (C5): a graph submitted through this operation is fully detached.**
+ * `TaskGraphSubmitContext` carries `AgentRunID` and `ReinvokeDepth`, and this input shape has no
+ * field for either, so a remote submission always records `submittedByAgentRunID: null` and depth
+ * zero. Three consequences, all silent:
+ *
+ *   - no cost rollup — the graph's spend never reaches the calling agent's run;
+ *   - no `reinvoke` — settlement has nobody to restart, so it degrades to a message;
+ *   - the continuation depth restarts at zero, so a chain submitted this way is not counted by the
+ *     cap that bounds it.
+ *
+ * That may be the intended contract — a remote caller is not obviously "a run this graph belongs
+ * to" — but it is currently a consequence of the input shape rather than a decision. Closing it
+ * means additive optional inputs on a PUBLISHED remote operation, which is a metadata change plus
+ * CodeGen, not an edit here. Flagged rather than done quietly.
+ *
+ * **R3-3 widened this gap.** The submit contract now carries an invocation envelope — the flow
+ * dialect's `data`/`context` condition roots — and this input shape has no field for that either.
+ * So a graph submitted remotely evaluates `data.x`/`context.x` against nothing, which is the exact
+ * silent-wrong-branch this round fixed on the in-process path. Whatever is decided for `AgentRunID`
+ * and `ReinvokeDepth` has to cover the envelope in the same change, or the same class of drop
+ * recurs on the remote seam.
  */
 @RegisterClass(BaseRemotableOperation, 'TaskGraph.Submit')
 export class TaskGraphSubmitServerOperation extends TaskGraphSubmitOperation {
     protected async InternalExecute(
-        input: TaskGraphSubmitInput,
+        // Widened locally until CodeGen re-emits the base from the updated metadata row, the
+        // RetryTask precedent. Two of the three fields the in-process path carries now ride the
+        // remote one too: `reinvokeDepth`, because the runaway-loop cap is a safety bound that
+        // must count remote hops the same as local ones, and `invocation`, because a flow graph's
+        // documented `data.*`/`context.*` conditions (R3-3) are dead on arrival without it.
+        // `AgentRunID` stays deliberately absent — whether a remote caller's graph should BIND to
+        // an agent run is the D1 execution-identity design question, not a dropped field.
+        input: TaskGraphSubmitInput & {
+            reinvokeDepth?: number;
+            invocation?: { data?: unknown; context?: unknown };
+        },
         provider: IMetadataProvider,
         user: UserInfo,
     ): Promise<TaskGraphSubmitOutput> {
@@ -89,9 +121,17 @@ export class TaskGraphSubmitServerOperation extends TaskGraphSubmitOperation {
         if (!input?.environmentID) throw new Error('environmentID is required');
 
         const spec: TaskGraphSpec = input.spec;
+        const invocation: TaskGraphInvocationEnvelope | undefined =
+            input.invocation && (input.invocation.data !== undefined || input.invocation.context !== undefined)
+                ? { Data: input.invocation.data, Context: input.invocation.context }
+                : undefined;
         const result = await new TaskGraphService().Submit(
             spec,
-            submitContext(provider, user, input.environmentID, input.conversationDetailID),
+            {
+                ...submitContext(provider, user, input.environmentID, input.conversationDetailID),
+                ReinvokeDepth: Number.isFinite(input.reinvokeDepth) ? Number(input.reinvokeDepth) : undefined,
+                Invocation: invocation,
+            },
         );
         return {
             success: result.Success,
@@ -113,8 +153,12 @@ export class TaskGraphCancelServerOperation extends TaskGraphCancelOperation {
 
         // EnvironmentID is unused on the cancel path — the graph already exists, so nothing new is
         // created that would need one.
-        const ok = await new TaskGraphService().Cancel(input.parentTaskID, submitContext(provider, user, ''));
-        if (!ok) return { success: false, errorMessage: 'Cancel failed; see the server log for detail.' };
+        const result = await new TaskGraphService().Cancel(input.parentTaskID, submitContext(provider, user, ''));
+        // The verdict names what survived, so the caller can tell the user which parts of their
+        // workflow are still running rather than reporting a success the graph does not reflect.
+        if (!result.Success) {
+            return { success: false, errorMessage: result.ErrorMessage ?? 'Cancel failed; see the server log for detail.' };
+        }
 
         const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', user);
         const loaded = await parent.Load(input.parentTaskID);
