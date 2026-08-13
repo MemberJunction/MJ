@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { VectorDBBase } from '@memberjunction/ai-vectordb';
 
 // Mock all external dependencies, preserving BaseEngine and related classes
 // Shared mock function so tests can reconfigure RunView behavior
@@ -870,7 +871,15 @@ describe('AutotagBaseEngine', () => {
         if (typeof driverClass === 'string' && driverClass.includes('Embed')) {
           return { EmbedTexts: mockEmbedTexts } as never;
         }
-        return { CreateRecords: mockCreateRecords, DeleteRecords: mockDeleteRecords } as never;
+        // Shaped like an EXTERNAL provider (Pinecone): needs a key, no colocated support. The engine
+        // now wires the colocated host on every instance, so the double must answer these.
+        return {
+          CreateRecords: mockCreateRecords,
+          DeleteRecords: mockDeleteRecords,
+          TryWireColocatedHost: vi.fn().mockReturnValue(false),
+          SupportsColocatedQuery: false,
+          RequiresAPIKey: true,
+        } as never;
       });
 
       return { mockEmbedTexts, mockCreateRecords, mockDeleteRecords };
@@ -999,6 +1008,9 @@ describe('AutotagBaseEngine', () => {
           BuildProviderDirectives: buildDirectives,
           // Declares no source-record dependencies — the namespace field lives on the item itself.
           GetSourceRecordFieldPaths: vi.fn().mockReturnValue([]),
+          TryWireColocatedHost: vi.fn().mockReturnValue(false),
+          SupportsColocatedQuery: false,
+          RequiresAPIKey: true,
         } as never;
       });
 
@@ -1121,6 +1133,76 @@ describe('AutotagBaseEngine', () => {
       expect(meta.Tags).toBeUndefined();
       expect(meta.EntityIcon).toBeUndefined();
       expect(meta.__mj_UpdatedAt).toBeUndefined();
+    });
+
+    // A colocated provider keeps vectors in the application's own database: no credentials to present,
+    // and it needs the active data-provider connection wired in before use. Both facts are only
+    // knowable after instantiation, which is why the key check moved below it.
+    describe('createVectorDBInstance — colocated providers', () => {
+      /** Swap in a vector-DB double with the given colocated/key characteristics. */
+      async function withVectorDB(shape: { SupportsColocatedQuery: boolean; RequiresAPIKey: boolean }, apiKey: string | null) {
+        const { MJGlobal } = await import('@memberjunction/global');
+        const { GetAIAPIKey } = await import('@memberjunction/ai');
+        vi.mocked(GetAIAPIKey).mockReturnValue(apiKey as never);
+        const tryWire = vi.fn().mockReturnValue(shape.SupportsColocatedQuery);
+        const createRecords = vi.fn().mockResolvedValue({ success: true, message: 'OK' });
+        vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockImplementation((_base, driverClass) => {
+          if (typeof driverClass === 'string' && driverClass.includes('Embed')) {
+            return { EmbedTexts: vi.fn().mockResolvedValue({ vectors: [[0.1, 0.2, 0.3]] }) } as never;
+          }
+          return { CreateRecords: createRecords, DeleteRecords: vi.fn(), ...shape, TryWireColocatedHost: tryWire } as never;
+        });
+        return { tryWire, createRecords };
+      }
+
+      const create = (): VectorDBBase =>
+        (engine as unknown as { createVectorDBInstance: (k: string) => VectorDBBase }).createVectorDBInstance.call(engine, 'SQLServerVectorDatabase');
+
+      afterEach(async () => {
+        const { GetAIAPIKey } = await import('@memberjunction/ai');
+        vi.mocked(GetAIAPIKey).mockReturnValue('mock-api-key' as never);
+      });
+
+      it('wires the host connection on every instance it creates', async () => {
+        const { tryWire } = await withVectorDB({ SupportsColocatedQuery: true, RequiresAPIKey: false }, null);
+
+        create();
+
+        // Without this the provider throws "requires a host connection" the first time it is used —
+        // and it failed confusingly: CreateIndex logged and continued, then vectorization died later
+        // on a vector-database cache miss.
+        expect(tryWire).toHaveBeenCalledTimes(1);
+      });
+
+      it('creates a colocated provider with no API key at all', async () => {
+        await withVectorDB({ SupportsColocatedQuery: true, RequiresAPIKey: false }, null);
+
+        // Previously this threw before instantiation, so a colocated store could only be used by
+        // inventing a meaningless AI_VENDOR_API_KEY__SQLServerVectorDatabase.
+        expect(() => create()).not.toThrow();
+      });
+
+      it('never hands the constructor an empty key, because VectorDBBase rejects one', async () => {
+        await withVectorDB({ SupportsColocatedQuery: true, RequiresAPIKey: false }, null);
+        const { MJGlobal } = await import('@memberjunction/global');
+
+        create();
+
+        // Not cosmetic. `VectorDBBase`'s constructor throws "API key cannot be empty" and colocated
+        // providers do not override it, so passing '' would break the keyless case this supports —
+        // and the mocked ClassFactory in these tests would never surface it. Assert the ARGUMENT.
+        const key = vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mock.calls.at(-1)?.[2];
+        expect(typeof key).toBe('string');
+        expect((key as string).length).toBeGreaterThan(0);
+      });
+
+      it('still refuses an external provider with no API key', async () => {
+        await withVectorDB({ SupportsColocatedQuery: false, RequiresAPIKey: true }, null);
+
+        // The relaxation is scoped to providers that genuinely need no credentials — Pinecone and
+        // friends must still fail loudly rather than attempt an unauthenticated call.
+        expect(() => create()).toThrow(/No API key found for vector DB SQLServerVectorDatabase/);
+      });
     });
 
     // Omitting `Entity` is only safe while something else can still name the vector's entity. Every
@@ -2008,7 +2090,12 @@ describe('AutotagBaseEngine', () => {
         if (typeof driverClass === 'string' && driverClass.includes('Embed')) {
           return { EmbedTexts: vi.fn().mockResolvedValue({ vectors: [[0.1, 0.2]] }) } as never;
         }
-        return { CreateRecords: vi.fn().mockResolvedValue({ success: true }) } as never;
+        return {
+          CreateRecords: vi.fn().mockResolvedValue({ success: true }),
+          TryWireColocatedHost: vi.fn().mockReturnValue(false),
+          SupportsColocatedQuery: false,
+          RequiresAPIKey: true,
+        } as never;
       });
 
       const items = [{

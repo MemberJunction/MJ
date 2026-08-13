@@ -2797,23 +2797,49 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
     /** Create a BaseEmbeddings instance for a given driver class */
     private createEmbeddingInstance(driverClass: string): BaseEmbeddings {
+        // No pre-flight key check, deliberately — the same call the EntityDocument pipeline already
+        // makes (`entityVectorSync.ts`), for the reason documented there: an empty key is legitimate
+        // for local-only drivers (LocalEmbedding runs ONNX in-process and does `super(apiKey || 'local')`),
+        // and for a cloud driver that genuinely needs one the constructor or the first inference call
+        // raises a real provider-level auth error, which is more actionable than a guard here.
+        // Gating up front made local embedding models unusable from this pipeline without inventing a
+        // meaningless AI_VENDOR_API_KEY__LocalEmbedding.
         const apiKey = GetAIAPIKey(driverClass);
-        if (!apiKey) {
-            throw new Error(`No API key found for embedding driver ${driverClass} — set AI_VENDOR_API_KEY__${driverClass} in .env`);
-        }
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(BaseEmbeddings, driverClass, apiKey);
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(BaseEmbeddings, driverClass, apiKey || '');
         if (!instance) throw new Error(`Failed to create embedding instance for ${driverClass}`);
         return instance;
     }
 
-    /** Create a VectorDBBase instance for a given class key */
+    /**
+     * Create a VectorDBBase instance for a given class key, wired for colocated storage where the
+     * provider supports it.
+     *
+     * The ordering is load-bearing. A **colocated** provider (SQLServerVectorDatabase, pgvector) keeps
+     * vectors in the application's own database: it has no credentials to present, and it needs the
+     * active data-provider connection handed to it before use or it throws "requires a host connection".
+     * Neither fact is knowable until the instance exists — so instantiate first, wire, and only then
+     * enforce the key, for providers that actually need one.
+     *
+     * Demanding a key up front made every colocated store unusable from this pipeline: callers had to
+     * invent a meaningless `AI_VENDOR_API_KEY__SQLServerVectorDatabase`, and even then the missing host
+     * connection failed later and confusingly — `CreateIndex` logged and continued, then vectorization
+     * died on a vector-database cache miss, which reads like bad metadata rather than a missing wire-up.
+     *
+     * This mirrors what the EntityDocument pipeline already does (`entityVectorSync.ts`), so the two
+     * vectorization paths now agree about colocated providers.
+     */
     private createVectorDBInstance(classKey: string): VectorDBBase {
         const apiKey = GetAIAPIKey(classKey);
-        if (!apiKey) {
+        // The sentinel is required, not cosmetic: `VectorDBBase`'s constructor rejects an empty key
+        // outright, and a colocated provider does not override it — so passing '' would throw
+        // "API key cannot be empty" for precisely the keyless case this method exists to support.
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(VectorDBBase, classKey, apiKey || 'colocated');
+        if (!instance) throw new Error(`Failed to create vector DB instance for ${classKey}`);
+
+        instance.TryWireColocatedHost(this.ProviderToUse);
+        if (!instance.SupportsColocatedQuery && instance.RequiresAPIKey && !apiKey) {
             throw new Error(`No API key found for vector DB ${classKey} — set AI_VENDOR_API_KEY__${classKey} in .env`);
         }
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(VectorDBBase, classKey, apiKey);
-        if (!instance) throw new Error(`Failed to create vector DB instance for ${classKey}`);
         return instance;
     }
 
