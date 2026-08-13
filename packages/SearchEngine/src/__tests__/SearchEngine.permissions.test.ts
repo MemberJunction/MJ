@@ -62,12 +62,17 @@ function createUser(id: string): UserInfo {
     return { ID: id, Name: 'Test User', Email: 't@example.com' } as UserInfo;
 }
 
-function makeResult(recordId: string, entityName: string, resultType: SearchResultItem['ResultType'] = 'entity-record'): SearchResultItem {
+function makeResult(
+    recordId: string,
+    entityName: string,
+    resultType: SearchResultItem['ResultType'] = 'entity-record',
+    sourceType: string = 'entity'
+): SearchResultItem {
     return {
         ID: `r-${recordId}`,
         EntityName: entityName,
         RecordID: recordId,
-        SourceType: 'entity',
+        SourceType: sourceType,
         Title: `record ${recordId}`,
         Snippet: `snippet for ${recordId}`,
         Score: 0.9,
@@ -229,6 +234,124 @@ describe('SearchEngine.filterByPermissions (safety net)', () => {
             const out = await engine.TestFilterByPermissions([r1, r2, r3], user);
 
             expect(out.map(r => r.RecordID)).toEqual(['first', 'second', 'third']);
+        });
+
+        // ─────────────────────────────────────────────────────────────────
+        // Ownership verification when no row filter applies.
+        //
+        // `CanRead` establishes that the user may read THIS ENTITY. It does not establish that the
+        // results are this entity's records — `EntityName` is provider output, and for the vector and
+        // 3rd-party lanes it comes from the index (vector metadata's `Entity` key, or the index name).
+        // Admitting on the label alone lets whoever writes the index choose which entity's permissions
+        // are evaluated.
+        //
+        // Lanes that queried the entity through RunView are exempt because their ids came out of it.
+        // ─────────────────────────────────────────────────────────────────
+        const readableNoRowFilter = () => makeEntity({
+            Name: 'Customers',
+            CanRead: true,
+            Exempt: false,
+            RlsClause: '',      // no row filter for this user/entity
+        }) as unknown as EntityInfo;
+
+        it('drops a vector hit whose record id is not a record of the entity it claims', async () => {
+            // The defect this closes: before, the label alone admitted the group.
+            mockEntityByName.mockReturnValue(readableNoRowFilter());
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [] }); // id is not a Customer
+
+            const out = await engine.TestFilterByPermissions(
+                [makeResult('not-a-customer', 'Customers', 'entity-record', 'vector')], user
+            );
+
+            expect(out).toHaveLength(0);
+            expect(mockRunViewFn).toHaveBeenCalled();
+        });
+
+        it('keeps a vector hit whose record id IS a record of the entity', async () => {
+            mockEntityByName.mockReturnValue(readableNoRowFilter());
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [{ ID: 'aaa' }] });
+
+            const out = await engine.TestFilterByPermissions(
+                [makeResult('aaa', 'Customers', 'entity-record', 'vector')], user
+            );
+
+            expect(out).toHaveLength(1);
+            expect(out[0].RecordID).toBe('aaa');
+        });
+
+        it('does NOT verify entity-lane results — the hot path costs nothing extra', async () => {
+            mockEntityByName.mockReturnValue(readableNoRowFilter());
+
+            const out = await engine.TestFilterByPermissions(
+                [makeResult('aaa', 'Customers', 'entity-record', 'entity')], user
+            );
+
+            expect(out).toHaveLength(1);
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+        });
+
+        it('does NOT verify full-text results either', async () => {
+            mockEntityByName.mockReturnValue(readableNoRowFilter());
+
+            const out = await engine.TestFilterByPermissions(
+                [makeResult('aaa', 'Customers', 'entity-record', 'fulltext')], user
+            );
+
+            expect(out).toHaveLength(1);
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+        });
+
+        it('verifies an unrecognised 3rd-party SourceType — the allowlist fails safe', async () => {
+            mockEntityByName.mockReturnValue(readableNoRowFilter());
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
+
+            const out = await engine.TestFilterByPermissions(
+                [makeResult('aaa', 'Customers', 'entity-record', 'azure-ai-search')], user
+            );
+
+            expect(out).toHaveLength(0);
+        });
+
+        it('partitions a mixed group: entity-lane passes through, vector hit is verified', async () => {
+            mockEntityByName.mockReturnValue(readableNoRowFilter());
+            // Only the entity-lane id is a real Customer; the vector hit's id is not.
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
+
+            const out = await engine.TestFilterByPermissions([
+                makeResult('from-entity-lane', 'Customers', 'entity-record', 'entity'),
+                makeResult('from-vector-lane', 'Customers', 'entity-record', 'vector'),
+            ], user);
+
+            expect(out.map(r => r.RecordID)).toEqual(['from-entity-lane']);
+        });
+
+        it('still verifies ownership for an RLS-EXEMPT user', async () => {
+            // Exemption says which ROWS of an entity the user may see. It says nothing about whether a
+            // result is that entity's row at all, so the check still applies.
+            mockEntityByName.mockReturnValue(makeEntity({
+                Name: 'Customers',
+                CanRead: true,
+                Exempt: true,
+                RlsClause: '',
+            }) as unknown as EntityInfo);
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
+
+            const out = await engine.TestFilterByPermissions(
+                [makeResult('not-a-customer', 'Customers', 'entity-record', 'vector')], user
+            );
+
+            expect(out).toHaveLength(0);
+        });
+
+        it('fails closed when the ownership RunView fails', async () => {
+            mockEntityByName.mockReturnValue(readableNoRowFilter());
+            mockRunViewFn.mockResolvedValue({ Success: false, ErrorMessage: 'SQL timeout' });
+
+            const out = await engine.TestFilterByPermissions(
+                [makeResult('aaa', 'Customers', 'entity-record', 'vector')], user
+            );
+
+            expect(out).toHaveLength(0);
         });
 
         it('passes storage-file results through without entity-level checks (handled by FileStorageAccountPermission)', async () => {

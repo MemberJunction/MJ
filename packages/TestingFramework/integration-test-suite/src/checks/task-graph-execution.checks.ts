@@ -27,7 +27,9 @@ import {
 } from '@memberjunction/core-entities';
 import type { TaskGraphSpec, TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
 import {
+    ParseTaskGraphDebugState,
     ParseTaskGraphParentMetadata,
+    TASK_TYPE_NAME,
     TaskClaimStore,
     TaskGraphDispatcher,
     TaskGraphService,
@@ -216,6 +218,33 @@ async function resolveTaskTypeID(ctx: IntegrationCheckContext): Promise<string> 
     Assert(await tt.Save(), `could not create a TaskType fixture: ${tt.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     CREATED_TASK_TYPE_IDS.push(tt.ID);
     return tt.ID;
+}
+
+/**
+ * The `AI Workflow` task type specifically — NOT interchangeable with `resolveTaskTypeID`.
+ *
+ * The type-scoped claim-store verbs (`TrySkipPending` and friends) carry `TypeID` in their WHERE
+ * clause so a graph verb can never touch a row outside the workflow substrate. A check that passes
+ * the wrong type ID to one of them still sees the refusal it asserts — but earned by the type
+ * predicate rather than by the guard actually under test, which is a green test proving nothing.
+ * Resolved by reading, never creating: `TaskGraphService.Submit` has already minted the row by the
+ * time any check calls this, so an absent one means the graph under test was typed as something
+ * else and the check should fail rather than mint a type that makes it vacuous.
+ */
+async function resolveWorkflowTaskTypeID(ctx: IntegrationCheckContext): Promise<string> {
+    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
+        {
+            EntityName: 'MJ: Task Types',
+            ExtraFilter: `Name='${TASK_TYPE_NAME}'`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            MaxRows: 1,
+        },
+        ctx.User,
+    );
+    const id = res.Results?.[0]?.ID;
+    Assert(!!id, `could not resolve the '${TASK_TYPE_NAME}' task type`);
+    return id!;
 }
 
 /** Any real agent name — the graph must resolve one, but the stub is what actually runs. */
@@ -570,6 +599,39 @@ async function waitFor<T>(read: () => Promise<T>, done: (value: T) => boolean, w
     }
     Assert(done(latest), `${what} (last saw ${JSON.stringify(latest)})`);
     return latest;
+}
+
+
+/** How long to wait for a SECOND task to wrongly slip through after a one-shot allowance. */
+const TWO_INSTANCE_DRAIN_MS = 8_000;
+
+/** Parent statuses that mean the graph is over. */
+const TERMINAL_PARENT_STATUSES: ReadonlySet<string> = new Set(['Complete', 'Failed', 'Cancelled', 'Skipped']);
+
+/** How many of a graph's steps have started (or finished) — the count a step allowance must bound. */
+async function countStarted(ctx: IntegrationCheckContext, parentID: string): Promise<number> {
+    return [...(await loadChildren(ctx, parentID)).values()]
+        .filter((t) => t.Status !== 'Pending').length;
+}
+
+/** Lets the dispatchers poll, then reports how many steps have started. */
+async function settleAndCount(ctx: IntegrationCheckContext, parentID: string): Promise<number> {
+    await settle(TWO_INSTANCE_DRAIN_MS);
+    return countStarted(ctx, parentID);
+}
+
+/** One task's current status. */
+async function statusOf(ctx: IntegrationCheckContext, taskID: string): Promise<string> {
+    return (await loadTask(ctx, taskID)).Status;
+}
+
+/** True once the graph records that a BREAKPOINT paused it, rather than a person. */
+async function pausedByBreakpoint(ctx: IntegrationCheckContext, parentID: string): Promise<boolean> {
+    // Read through the engine's own parser rather than JSON-walking the bag: `$.debug` is written by
+    // guarded JSON_MODIFY statements, and a check that re-implements the read is a second opinion
+    // about a shape only one of them owns.
+    const debug = ParseTaskGraphDebugState((await loadTask(ctx, parentID)).InputPayload);
+    return debug.paused === true && debug.pausedReason === 'breakpoint';
 }
 
 /** A well-formed run ID that will never exist, for TX14's read-failure trigger. */
@@ -1449,8 +1511,12 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
                 'could not stage the sibling as claimed');
 
             // The guarded skip must refuse it — its predicate is `Status='Pending'`, and a claimed
-            // task is `In Progress`.
-            const skipped = await claims.TrySkipPending(ctx.Provider, sibling.ID, ctx.User);
+            // task is `In Progress`. The REAL workflow type ID is passed deliberately: the verb is
+            // type-scoped, so a wrong one would produce the same refusal for the wrong reason and
+            // leave the Pending guard untested.
+            const skipped = await claims.TrySkipPending(
+                ctx.Provider, sibling.ID, await resolveWorkflowTaskTypeID(ctx), ctx.User,
+            );
             AssertEqual(skipped, false, 'a claimed sibling was skipped — its running work would be discarded');
 
             const after = (await loadChildren(ctx, parentID)).get('ER Sibling')!;
@@ -1837,6 +1903,108 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             AssertEqual(after.Status, 'In Progress', 'the stopped instance reconciled the task back to Pending');
 
             console.log('      → a stop during boot stayed stopped; no timer outlived it');
+        }
+    },
+
+
+    {
+        Id: 'task-graph-execution.TX27',
+        Name: 'TX27: a step allowance armed on one instance releases exactly one task, whichever instance owns it',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // #3770's handover exercise (d)-(h), which nothing in CI could run: step allowances live
+            // in the claim store precisely so a Run Console attached to instance A can single-step a
+            // graph whose tasks are executed by a dispatcher on instance B. Two instances is the
+            // whole point, and no test had two.
+            //
+            // The console is one CALLER of the debug verbs, so the verbs are driven directly here —
+            // deterministic, no browser session, and it runs on every future change instead of once.
+            //
+            // THE FAILURE MODE, named in the handover: an allowance granted on A consumed as a
+            // FREE-RUN signal on B, so more than one step executes per press.
+            const agentName = await resolveAgentName(ctx);
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-two-instance (safe to delete)',
+                tasks: [
+                    agentTask('a', 'TI One', agentName),
+                    agentTask('b', 'TI Two', agentName, ['a']),
+                    agentTask('c', 'TI Three', agentName, ['b']),
+                    agentTask('d', 'TI Four', agentName, ['c']),
+                ],
+            });
+            const service = new TaskGraphService();
+            const context = {
+                EnvironmentID: await resolveEnvironmentID(ctx),
+                ConversationDetailID: null,
+                ContextUser: ctx.User,
+                Provider: ctx.Provider,
+            };
+
+            // (d) PAUSE on "instance A" — durable state, so BOTH instances must stop advancing it.
+            Assert((await service.PauseGraph(parentID, context)).Success, 'pause was refused');
+
+            const instanceA = buildDispatcher(ctx, RUNNER, 'it-tx27-instance-a');
+            const instanceB = buildDispatcher(ctx, RUNNER, 'it-tx27-instance-b');
+            await instanceA.Start();
+            await instanceB.Start();
+            try {
+                const ranAfterPause = await settleAndCount(ctx, parentID);
+                AssertEqual(ranAfterPause, 0,
+                    'a paused graph advanced anyway — the pause is not gating both instances');
+
+                // (e) STEP once. Exactly one task may start, whichever instance wins the claim.
+                Assert((await service.StepGraph(parentID, 'one', context)).Success, 'step was refused');
+                await waitFor(() => countStarted(ctx, parentID), (n) => n >= 1,
+                    'the step allowance released nothing within the timeout');
+                await settle(TWO_INSTANCE_DRAIN_MS);   // give a SECOND task time to slip through
+                AssertEqual(await countStarted(ctx, parentID), 1,
+                    'more than one task ran for a single step — the allowance was consumed as a free-run signal');
+
+                // The allowance is spent: nothing further moves until told again.
+                const afterConsume = await settleAndCount(ctx, parentID);
+                AssertEqual(afterConsume, 1, 'the graph kept running after its one-shot allowance was consumed');
+
+                // (f) BREAKPOINT on a downstream step, then resume. The graph must halt there even
+                // though a different instance may be the executor.
+                const children = await loadChildren(ctx, parentID);
+                const breakOn = children.get('TI Three')!;
+                Assert((await service.SetBreakpoints(parentID, [breakOn.ID], context)).Success, 'breakpoints refused');
+                Assert((await service.ResumeGraph(parentID, context)).Success, 'resume was refused');
+
+                await waitFor(() => statusOf(ctx, breakOn.ID), (st) => st === 'Pending',
+                    'the breakpoint task should still be Pending when the graph halts on it');
+                await waitFor(() => pausedByBreakpoint(ctx, parentID), (hit) => hit,
+                    'the graph never paused on the breakpoint');
+                AssertEqual(await statusOf(ctx, breakOn.ID), 'Pending',
+                    'the breakpoint task RAN — the graph did not halt before claiming it');
+                AssertEqual(await statusOf(ctx, children.get('TI Two')!.ID), 'Complete',
+                    'the step before the breakpoint should have run');
+
+                // (g) FORCE COMPLETE the step we are stopped on, and SKIP the one after it. Both are
+                // verbs the console offers; what matters here is that the graph's own gating honours
+                // the forced and skipped results rather than re-deciding them.
+                Assert(
+                    (await service.ForceCompleteTask(breakOn.ID, { forcedBy: 'TX27' }, context)).Success,
+                    'force-complete was refused',
+                );
+                Assert((await service.SkipTask(children.get('TI Four')!.ID, context)).Success, 'skip was refused');
+                Assert((await service.SetBreakpoints(parentID, [], context)).Success, 'clearing breakpoints refused');
+                Assert((await service.ResumeGraph(parentID, context)).Success, 'final resume was refused');
+
+                const settled = await waitFor(
+                    async () => (await loadTask(ctx, parentID)).Status,
+                    (st) => TERMINAL_PARENT_STATUSES.has(st),
+                    'the graph never settled after the forced completion and skip',
+                );
+                AssertEqual(settled, 'Complete',
+                    'a graph whose remaining work was forced and skipped should settle Complete');
+                AssertEqual(await statusOf(ctx, breakOn.ID), 'Complete', 'the forced step did not stay Complete');
+                AssertEqual(await statusOf(ctx, children.get('TI Four')!.ID), 'Skipped', 'the skipped step did not stay Skipped');
+            } finally {
+                await Promise.all([instanceA.Stop(), instanceB.Stop()]);
+            }
+
+            console.log('      → two instances honoured one pause, one step, one breakpoint, and two interventions');
         }
     },
 
