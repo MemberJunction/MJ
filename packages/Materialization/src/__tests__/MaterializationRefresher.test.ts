@@ -29,7 +29,12 @@ describe('MaterializationRefresher.buildFullRebuildStatementsSQLServer', () => {
             const swap = stmts[2];
             expect(swap.startsWith('SET XACT_ABORT ON;')).toBe(true); // rolls back on mid-swap error (no orphaned tran)
             expect(swap).toContain('BEGIN TRANSACTION;');
-            expect(swap.trim().endsWith('COMMIT TRANSACTION;')).toBe(true);
+            // The batch commits and THEN restores the connection default: SET options persist for the session,
+            // and the pool reuses this physical connection for unrelated requests, which would otherwise
+            // inherit XACT_ABORT ON and see their recoverable statement errors escalate to transaction aborts.
+            expect(swap).toContain('COMMIT TRANSACTION;');
+            expect(swap.trim().endsWith('SET XACT_ABORT OFF;')).toBe(true);
+            expect(swap.indexOf('COMMIT TRANSACTION;')).toBeLessThan(swap.indexOf('SET XACT_ABORT OFF;'));
             expect(swap).toContain('DROP TABLE [__mj].[materialized_Demo]');
             expect(swap).toContain("EXEC sp_rename '__mj.materialized_Demo__shadow', 'materialized_Demo'");
             // CREATE VIEW runs via EXEC() (must be sole statement of its batch) and points at the canonical name

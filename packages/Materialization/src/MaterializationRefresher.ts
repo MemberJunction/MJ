@@ -204,7 +204,11 @@ export class MaterializationRefresher {
                 `  EXEC sp_rename '${schema}.${shadow}', '${tableName}';\n` +
                 `  EXEC('CREATE OR ALTER VIEW ${obj(viewName)} AS SELECT * FROM ${obj(tableName)}');\n` +
                 indexLine +
-                `COMMIT TRANSACTION;`,
+                // Restore the connection default after the swap. SET options persist for the SESSION and the
+                // pool hands this same physical connection to unrelated requests, which would otherwise
+                // silently inherit XACT_ABORT ON — converting their recoverable statement-level errors into
+                // full transaction aborts, far from anything to do with materialization.
+                `COMMIT TRANSACTION;\nSET XACT_ABORT OFF;`,
         ];
     }
 
@@ -456,6 +460,10 @@ export class MaterializationRefresher {
             // shadow is renamed INTO the canonical name, so there's nothing to drop.) Never let a cleanup error
             // mask the original failure. `exec`/`isPostgres` are re-derived because they're scoped to the try.
             await this.dropShadowTableBestEffort(provider, matResult.SchemaName, runShadowName);
+            // A batch that aborted mid-swap never reached its trailing `SET XACT_ABORT OFF`, so the pooled
+            // connection would go back to the pool still carrying ON. Reset it best-effort here (no-op on PG,
+            // which has no such setting) so the leak cannot outlive the failed refresh.
+            await this.resetXactAbortBestEffort(provider);
             return await this.failRefresh(matResult, provider, options, msg);
         }
     }
@@ -465,6 +473,21 @@ export class MaterializationRefresher {
      * a crashed/failed rebuild leaves no orphan). Uses IF EXISTS so it's a no-op when the shadow was never
      * created or was already renamed into the canonical table on success.
      */
+    /**
+     * Restores `XACT_ABORT` to the connection default after a failed refresh, swallowing any error. SQL Server
+     * only — PostgreSQL has no equivalent session setting, so this is a no-op there. Needed because a batch
+     * that aborts mid-swap never reaches the trailing `SET XACT_ABORT OFF` in its own statement list.
+     */
+    private async resetXactAbortBestEffort(provider: IMetadataProvider): Promise<void> {
+        try {
+            const exec = provider as unknown as ISQLExecutor;
+            if (exec.PlatformKey === 'postgresql') return;
+            await exec.ExecuteSQL('SET XACT_ABORT OFF');
+        } catch (resetErr) {
+            LogError(`MaterializationRefresher: best-effort XACT_ABORT reset failed (ignored): ${resetErr instanceof Error ? resetErr.message : String(resetErr)}`);
+        }
+    }
+
     private async dropShadowTableBestEffort(provider: IMetadataProvider, schema: string, shadowName: string): Promise<void> {
         // Fail CLOSED. This runs from the RefreshOne catch block — which is exactly where
         // assertSafeObjectNames may have just REJECTED these very names. Interpolating them here would let the
@@ -660,7 +683,7 @@ export class MaterializationRefresher {
                 : MaterializationRefresher.buildDirtyGroupRecomputeStatementsSQLServer(opts);
             const batch = isPostgres
                 ? `BEGIN;\n${dg.join(';\n')};\nCOMMIT;`
-                : `SET XACT_ABORT ON;\nBEGIN TRANSACTION;\n${dg.join(';\n')};\nCOMMIT TRANSACTION;`;
+                : `SET XACT_ABORT ON;\nBEGIN TRANSACTION;\n${dg.join(';\n')};\nCOMMIT TRANSACTION;\nSET XACT_ABORT OFF;`;
             await exec.ExecuteSQL(batch);
         }
 
@@ -1249,7 +1272,11 @@ export class MaterializationRefresher {
                       // table can't overflow the 128-char sysname limit and roll back the swap — matches
                       // buildFullRebuildStatementsSQLServer.
                       (surrogateColumn ? `  CREATE UNIQUE INDEX [UQ_MJ_Materialized_Surrogate] ON ${obj(tableName)} (${q(surrogateColumn)});\n` : '') +
-                      `COMMIT TRANSACTION;`,
+                      // Restore the connection default after the swap. SET options persist for the SESSION and the
+                // pool hands this same physical connection to unrelated requests, which would otherwise
+                // silently inherit XACT_ABORT ON — converting their recoverable statement-level errors into
+                // full transaction aborts, far from anything to do with materialization.
+                `COMMIT TRANSACTION;\nSET XACT_ABORT OFF;`,
               ];
 
         return { preStatements, insertBatches, postStatements };
