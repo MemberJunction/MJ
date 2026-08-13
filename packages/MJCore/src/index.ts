@@ -44,6 +44,7 @@ export * from "./generic/explorerNavigationItem";
 export * from "./generic/compositeKey";
 export * from "./generic/authEvaluator";
 export * from "./generic/metadataUtil";
+export * from "./generic/schemaHydration";
 export * from "./generic/authTypes";
 export * from "./generic/graphqlTypeNames";
 

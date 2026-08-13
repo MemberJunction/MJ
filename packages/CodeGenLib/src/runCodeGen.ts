@@ -12,7 +12,9 @@ import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { applyIncludeSchemaScope } from './Database/schema-scope';
+import { partitionEntitiesByOutputDirectory } from './Config/schema-output';
 import { outputDir, commands, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig, CommandInfo } from './Config/config';
+import { collectDirtySchemas, SchemaEmitOptions } from './Misc/schema-emit';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
 import { CodeGenReporter } from './Misc/codegen-reporter';
 import * as MJ from '@memberjunction/core';
@@ -466,6 +468,26 @@ export class RunCodeGenBase {
   }
 
   /**
+   * Resolve dirty-schema emit options for one generator call.
+   * `--skipdb` (files only) and `fileEmit.dirtySchemaOnly === false` rebuild
+   * every schema; write-if-changed still keeps mtimes stable. A full run with
+   * no new/modified entities yields an empty Set — the generator then only
+   * writes schema files that are missing.
+   */
+  protected buildSchemaEmitOptions(entities: MJ.EntityInfo[], skipDB: boolean): SchemaEmitOptions {
+    const fileEmit = configInfo.fileEmit;
+    if (skipDB || fileEmit?.dirtySchemaOnly === false) {
+      return { dirtySchemas: 'all' };
+    }
+    return {
+      dirtySchemas: collectDirtySchemas(entities, [
+        ...ManageMetadataBase.newEntityList,
+        ...ManageMetadataBase.modifiedEntityList,
+      ]),
+    };
+  }
+
+  /**
    * Runs the file-generation phase of CodeGen: GraphQL resolvers, entity
    * subclasses (core + non-core), Angular components, DB schema JSON, and
    * action subclasses. Extracted so the caller can skip this phase entirely
@@ -527,7 +549,13 @@ export class RunCodeGenBase {
         if (isVerbose) startSpinner('Generating CORE Entity GraphQL Resolver Code...');
         const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase)!;
         const ok = await reporter.phase('generateGraphQLCore', async () =>
-          graphQLGenerator.generateGraphQLServerCode(coreEntities, graphQLCoreResolversOutputDir, '@memberjunction/core-entities', true),
+          graphQLGenerator.generateGraphQLServerCode(
+            coreEntities,
+            graphQLCoreResolversOutputDir,
+            '@memberjunction/core-entities',
+            true,
+            this.buildSchemaEmitOptions(coreEntities, skipDB),
+          ),
         );
         if (!ok) {
           failSpinner('Error generating GraphQL server code');
@@ -542,9 +570,27 @@ export class RunCodeGenBase {
         const entityPackageName = typeof configInfo.entityPackageName === 'string'
           ? (configInfo.entityPackageName || 'mj_generatedentities')
           : 'mj_generatedentities';
-        const ok = await reporter.phase('generateGraphQL', async () =>
-          graphQLGenerator.generateGraphQLServerCode(localNonCoreEntities, graphqlOutputDir, entityPackageName, false),
+        const graphqlGroups = partitionEntitiesByOutputDirectory(
+          localNonCoreEntities,
+          'GraphQLServer',
+          graphqlOutputDir,
+          configInfo.schemaOutput,
         );
+        const ok = await reporter.phase('generateGraphQL', async () => {
+          for (const [dir, group] of graphqlGroups) {
+            const groupOk = graphQLGenerator.generateGraphQLServerCode(
+              group,
+              dir,
+              entityPackageName,
+              false,
+              this.buildSchemaEmitOptions(group, skipDB),
+            );
+            if (!groupOk) {
+              return false;
+            }
+          }
+          return true;
+        });
         if (!ok) {
           failSpinner('Error generating GraphQL Resolver code');
           return false;
@@ -556,7 +602,13 @@ export class RunCodeGenBase {
         if (isVerbose) startSpinner('Generating CORE Entity Subclass Code...');
         const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
         const ok = await reporter.phase('generateEntitySubclassesCore', () =>
-          entitySubClassGeneratorObject.generateAllEntitySubClasses(conn, coreEntities, coreEntitySubClassOutputDir, skipDB),
+          entitySubClassGeneratorObject.generateAllEntitySubClasses(
+            conn,
+            coreEntities,
+            coreEntitySubClassOutputDir,
+            skipDB,
+            this.buildSchemaEmitOptions(coreEntities, skipDB),
+          ),
         );
         if (!ok) {
           failSpinner('Error generating entity subclass code');
@@ -568,9 +620,27 @@ export class RunCodeGenBase {
       if (entitySubClassOutputDir) {
         if (isVerbose) startSpinner('Generating Entity Subclass Code...');
         const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        const ok = await reporter.phase('generateEntitySubclasses', () =>
-          entitySubClassGeneratorObject.generateAllEntitySubClasses(conn, localNonCoreEntities, entitySubClassOutputDir, skipDB),
+        const entityGroups = partitionEntitiesByOutputDirectory(
+          localNonCoreEntities,
+          'EntitySubClasses',
+          entitySubClassOutputDir,
+          configInfo.schemaOutput,
         );
+        const ok = await reporter.phase('generateEntitySubclasses', async () => {
+          for (const [dir, group] of entityGroups) {
+            const groupOk = await entitySubClassGeneratorObject.generateAllEntitySubClasses(
+              conn,
+              group,
+              dir,
+              skipDB,
+              this.buildSchemaEmitOptions(group, skipDB),
+            );
+            if (!groupOk) {
+              return false;
+            }
+          }
+          return true;
+        });
         if (!ok) {
           failSpinner('Error generating entity subclass code');
           return false;

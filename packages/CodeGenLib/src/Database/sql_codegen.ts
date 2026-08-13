@@ -15,6 +15,7 @@ import { MJEntityEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
 import { TempBatchFile } from '../Misc/temp_batch_file';
+import { writeFileIfChanged as writeFileIfChangedShared } from '../Misc/file-write';
 
 
 export const SPType = {
@@ -213,7 +214,8 @@ export class SQLCodeGenBase {
             // AI Engine init because vwAIModels is gone. SQL Server doesn't
             // hit this because its execution path is bulk-monolithic, not
             // phased per-entity.
-            const perEntityBatchSize = configInfo.dbPlatform === 'postgresql' ? 1 : 5;
+            const configuredBatch = configInfo.fileEmit?.sqlEntityBatchSize ?? 8;
+            const perEntityBatchSize = configInfo.dbPlatform === 'postgresql' ? 1 : configuredBatch;
 
             // Generate SQL for entities that don't need cascade delete regeneration
             const genResult = await this.generateAndExecuteEntitySQLToSeparateFiles({
@@ -838,14 +840,7 @@ export class SQLCodeGenBase {
      * This avoids false timestamp updates and unnecessary I/O.
      */
     protected writeFileIfChanged(filePath: string, newContent: string): boolean {
-        if (fs.existsSync(filePath)) {
-            const existing = fs.readFileSync(filePath, 'utf-8');
-            if (existing === newContent) {
-                return false;
-            }
-        }
-        fs.writeFileSync(filePath, newContent);
-        return true;
+        return writeFileIfChangedShared(filePath, newContent);
     }
 
     /**

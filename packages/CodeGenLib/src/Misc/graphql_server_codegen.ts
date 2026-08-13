@@ -11,8 +11,16 @@ import {
 import fs from 'fs';
 import path from 'path';
 import { logError } from './status_logging';
-import { getExternalEntitySchemas, mjCoreSchema, resolveEntityPackageName } from '../Config/config';
+import { configInfo, getExternalEntitySchemas, mjCoreSchema, resolveEntityPackageName } from '../Config/config';
 import { makeDir, sortBySequenceAndCreatedAt, sortRelatedEntities } from './util';
+import { writeFileIfChanged } from './file-write';
+import {
+  SchemaEmitOptions,
+  buildSchemaBarrel,
+  groupEntitiesBySchema,
+  sanitizeSchemaFileName,
+  schemasToEmit,
+} from './schema-emit';
 
 /**
  * Describes which GraphQL ObjectTypes are actually resolvable in the file being generated, so the
@@ -48,36 +56,112 @@ export class GraphQLServerGeneratorBase {
     entities: EntityInfo[],
     outputDirectory: string,
     generatedEntitiesImportLibrary: string,
-    excludeRelatedEntitiesExternalToSchema: boolean
+    excludeRelatedEntitiesExternalToSchema: boolean,
+    options?: SchemaEmitOptions,
   ): boolean {
-    const isInternal = generatedEntitiesImportLibrary.trim().toLowerCase().startsWith('@memberjunction/');
-    // Every entity in THIS call gets its ObjectType emitted inline into the single generated.ts, so this
-    // set is exactly the set of types a reverse-relationship member may reference by bare name.
-    const availability: GeneratedTypeAvailability = {
-      generatedEntityNames: new Set(entities.map((e) => e.Name.trim().toLowerCase())),
-      isInternal,
-    };
-    let sRet: string = '';
     try {
-      sRet = this.generateAllEntitiesServerFileHeader(entities, generatedEntitiesImportLibrary, isInternal);
+      const emit = this.resolveEmitOptions(options);
+      makeDir(outputDirectory);
 
-      for (let i: number = 0; i < entities.length; ++i) {
-        sRet += this.generateServerEntityString(
-          entities[i],
-          false,
+      if (!emit.perSchema) {
+        const content = this.assembleGraphQLServerFile(
+          entities,
           generatedEntitiesImportLibrary,
           excludeRelatedEntitiesExternalToSchema,
-          availability
+        );
+        this.emitFile(path.join(outputDirectory, 'generated.ts'), content, emit.writeIfChanged);
+        return true;
+      }
+
+      const grouped = groupEntitiesBySchema(entities);
+      const schemas = [...grouped.keys()].sort((a, b) => a.localeCompare(b));
+      const schemasDir = path.join(outputDirectory, 'graphql-schemas');
+      makeDir(schemasDir);
+
+      const toEmit = schemasToEmit(schemas, emit.dirtySchemas, (schemaName) =>
+        fs.existsSync(path.join(schemasDir, `${sanitizeSchemaFileName(schemaName)}.ts`)),
+      );
+
+      for (const schemaName of toEmit) {
+        const schemaEntities = grouped.get(schemaName) ?? [];
+        const content = this.assembleGraphQLServerFile(
+          schemaEntities,
+          generatedEntitiesImportLibrary,
+          excludeRelatedEntitiesExternalToSchema,
+        );
+        this.emitFile(
+          path.join(schemasDir, `${sanitizeSchemaFileName(schemaName)}.ts`),
+          content,
+          emit.writeIfChanged,
         );
       }
-      makeDir(outputDirectory);
-      fs.writeFileSync(path.join(outputDirectory, 'generated.ts'), sRet);
 
+      const barrel = buildSchemaBarrel(
+        schemas,
+        'graphql-schemas',
+        `/********************************************************************************
+* GraphQL server barrel — AUTO GENERATED. Do not edit.
+* Re-exports one file per schema. Cross-schema child-array fields are omitted
+* because a bare type name only compiles when the related ObjectType is in the
+* same file (see GeneratedTypeAvailability).
+*
+**********************************************************************************/
+`,
+      );
+      this.emitFile(path.join(outputDirectory, 'generated.ts'), barrel, emit.writeIfChanged);
       return true;
     } catch (err) {
       logError(err as string);
       return false;
     }
+  }
+
+  /**
+   * Build one GraphQL server file (one schema, or the legacy monolith). Availability
+   * is computed from THIS file's entities so a reverse-relationship member only
+   * names a type that is actually declared here.
+   */
+  public assembleGraphQLServerFile(
+    entities: EntityInfo[],
+    generatedEntitiesImportLibrary: string,
+    excludeRelatedEntitiesExternalToSchema: boolean,
+  ): string {
+    const isInternal = generatedEntitiesImportLibrary.trim().toLowerCase().startsWith('@memberjunction/');
+    const availability: GeneratedTypeAvailability = {
+      generatedEntityNames: new Set(entities.map((e) => e.Name.trim().toLowerCase())),
+      isInternal,
+    };
+    let sRet = this.generateAllEntitiesServerFileHeader(entities, generatedEntitiesImportLibrary, isInternal);
+    for (const entity of entities) {
+      sRet += this.generateServerEntityString(
+        entity,
+        false,
+        generatedEntitiesImportLibrary,
+        excludeRelatedEntitiesExternalToSchema,
+        availability,
+      );
+    }
+    return sRet;
+  }
+
+  protected resolveEmitOptions(options?: SchemaEmitOptions): Required<SchemaEmitOptions> {
+    const defaults = configInfo?.fileEmit;
+    return {
+      perSchema: options?.perSchema ?? defaults?.perSchema ?? true,
+      dirtySchemas: options?.dirtySchemas ?? 'all',
+      parallel: options?.parallel ?? defaults?.parallel ?? true,
+      concurrency: options?.concurrency ?? defaults?.concurrency ?? 8,
+      writeIfChanged: options?.writeIfChanged ?? defaults?.writeIfChanged ?? true,
+    };
+  }
+
+  protected emitFile(filePath: string, content: string, useWriteIfChanged: boolean): void {
+    if (useWriteIfChanged) {
+      writeFileIfChanged(filePath, content);
+      return;
+    }
+    makeDir(path.dirname(filePath));
+    fs.writeFileSync(filePath, content);
   }
 
   protected _graphQLTypeSuffix = '_';
