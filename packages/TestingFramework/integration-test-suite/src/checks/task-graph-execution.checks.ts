@@ -28,6 +28,7 @@ import {
 import type { TaskGraphSpec, TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
 import {
     ParseTaskGraphParentMetadata,
+    TASK_TYPE_NAME,
     TaskClaimStore,
     TaskGraphDispatcher,
     TaskGraphService,
@@ -216,6 +217,33 @@ async function resolveTaskTypeID(ctx: IntegrationCheckContext): Promise<string> 
     Assert(await tt.Save(), `could not create a TaskType fixture: ${tt.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     CREATED_TASK_TYPE_IDS.push(tt.ID);
     return tt.ID;
+}
+
+/**
+ * The `AI Workflow` task type specifically — NOT interchangeable with `resolveTaskTypeID`.
+ *
+ * The type-scoped claim-store verbs (`TrySkipPending` and friends) carry `TypeID` in their WHERE
+ * clause so a graph verb can never touch a row outside the workflow substrate. A check that passes
+ * the wrong type ID to one of them still sees the refusal it asserts — but earned by the type
+ * predicate rather than by the guard actually under test, which is a green test proving nothing.
+ * Resolved by reading, never creating: `TaskGraphService.Submit` has already minted the row by the
+ * time any check calls this, so an absent one means the graph under test was typed as something
+ * else and the check should fail rather than mint a type that makes it vacuous.
+ */
+async function resolveWorkflowTaskTypeID(ctx: IntegrationCheckContext): Promise<string> {
+    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
+        {
+            EntityName: 'MJ: Task Types',
+            ExtraFilter: `Name='${TASK_TYPE_NAME}'`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            MaxRows: 1,
+        },
+        ctx.User,
+    );
+    const id = res.Results?.[0]?.ID;
+    Assert(!!id, `could not resolve the '${TASK_TYPE_NAME}' task type`);
+    return id!;
 }
 
 /** Any real agent name — the graph must resolve one, but the stub is what actually runs. */
@@ -1449,8 +1477,12 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
                 'could not stage the sibling as claimed');
 
             // The guarded skip must refuse it — its predicate is `Status='Pending'`, and a claimed
-            // task is `In Progress`.
-            const skipped = await claims.TrySkipPending(ctx.Provider, sibling.ID, ctx.User);
+            // task is `In Progress`. The REAL workflow type ID is passed deliberately: the verb is
+            // type-scoped, so a wrong one would produce the same refusal for the wrong reason and
+            // leave the Pending guard untested.
+            const skipped = await claims.TrySkipPending(
+                ctx.Provider, sibling.ID, await resolveWorkflowTaskTypeID(ctx), ctx.User,
+            );
             AssertEqual(skipped, false, 'a claimed sibling was skipped — its running work would be discarded');
 
             const after = (await loadChildren(ctx, parentID)).get('ER Sibling')!;
