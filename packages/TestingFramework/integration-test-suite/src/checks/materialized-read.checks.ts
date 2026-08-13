@@ -39,6 +39,7 @@ import type {
     MJMaterializedResultEntity,
     MJMaterializedResultQueryEntity,
 } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -148,7 +149,7 @@ export async function createMaterializedReadFixtures(ctx: IntegrationCheckContex
  * of the extraction path on the credential-free lane.
  */
 async function ensureQueryMetadata(md: Metadata, user: UserInfo, queryID: string): Promise<void> {
-    const q = QueryEngine.Instance.Queries.find((x) => x.ID === queryID);
+    const q = QueryEngine.Instance.Queries.find((x) => UUIDsEqual(x.ID, queryID));
     const haveFields = new Set((q?.QueryFields ?? []).map((f) => (f.Name ?? '').toLowerCase()));
     let seq = (q?.QueryFields ?? []).length;
     for (const name of ['ID', 'Name']) {
@@ -193,7 +194,7 @@ export async function teardownMaterializedReadFixtures(ctx: IntegrationCheckCont
 
 /** True when a result set contains the sentinel row (matched by its ID). */
 function containsSentinel(results: unknown[], sentinelID: string): boolean {
-    return results.some((r) => String((r as { ID?: unknown }).ID ?? '').toLowerCase() === sentinelID.toLowerCase());
+    return results.some((r) => UUIDsEqual(String((r as { ID?: unknown }).ID ?? ''), sentinelID));
 }
 
 export const MaterializedReadChecks: NamedCheck[] = [
