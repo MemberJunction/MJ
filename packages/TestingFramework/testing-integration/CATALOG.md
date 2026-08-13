@@ -79,10 +79,10 @@ Bundles live in [`integration-test-suite/src/checks/`](../integration-test-suite
 | queue | 7 | det | server |
 | auth-validation | 7 | det | server |
 
-**569 checks / 80 registered bundles today** (IT01–IT80; the table above lists the majors — run `mj test list` or read `integration-test-suite/src/checks/` for the full set): 65 members land in the **deterministic** suite, 15 in **live-model**. The 2026-07 expansion added the IT31–IT52 client-first bundles; IT64–IT80 followed — the newest are storage/queue/auth-validation at IT77–IT79, plus startup-mode renumbered out of a duplicate IT31 to IT80. The bundle count is pinned by `check-registry.test.ts` — treat that as the source of truth over any hand-count here. The older bundles are `bootstrapIntegrationServer` (in-process) — migrating them to client transport where a client path exists is tracked in the plan (Workstream M); the 2026-07 bundles are client-first where a client surface exists.
+**604 checks / 81 registered bundles today** (IT01–IT81; the table above lists the majors — run `mj test list` or read `integration-test-suite/src/checks/` for the full set): 66 members land in the **deterministic** suite, 15 in **live-model**. The 2026-07 expansion added the IT31–IT52 client-first bundles; IT64–IT81 followed — the newest are storage/queue/auth-validation at IT77–IT79, startup-mode renumbered out of a duplicate IT31 to IT80, and cache-immutability at IT81. The bundle count is pinned by `check-registry.test.ts` — treat that as the source of truth over any hand-count here. The older bundles are `bootstrapIntegrationServer` (in-process) — migrating them to client transport where a client path exists is tracked in the plan (Workstream M); the 2026-07 bundles are client-first where a client surface exists.
 
 > **Suite ordering invariant**: ALL server-transport members are sequenced before ALL
-> client-transport members (deterministic suite: servers 1–41, clients 42–60). The first client
+> client-transport members (deterministic suite: servers 1–46, clients 47–66). The first client
 > bundle rebinds the process-global provider to GraphQL (issue #3251), so a server member
 > sequenced after any client member hard-errors. Keep the invariant when joining new members.
 

@@ -6,13 +6,19 @@
 
 Harden `SafeExpressionEvaluator` against a sandbox escape, and correct Skipped-status reporting.
 
-**`SafeExpressionEvaluator` sandbox escape closed.** The denylist matched only dotted/call forms
-(`process.`, `Function(`), so bracket-string member access — `globalThis["Function"](...)`,
-`x["process"]` — reached host globals and the `Function` constructor: a confirmed arbitrary-code
-route from any metadata-authored expression (field rules, flow/loop agent conditions, task-graph
-conditions). The dangerous identifiers (`globalThis`, `global`, `process`, `Function`, `eval`,
-`require`, `window`, `document`) are now denied as whole words, which also covers the bracket form.
-Expressions that referenced those tokens are now rejected at validation.
+**`SafeExpressionEvaluator` sandbox escape closed.** The previous defense was a textual denylist,
+which a split-token expression walked straight through:
+`[]["cons"+"tructor"]["cons"+"tructor"]("return process.pid")()` spells none of the banned words yet
+climbs `[].constructor.constructor` to the `Function` constructor and reaches `process` — a
+confirmed arbitrary-code route from any metadata-authored expression (field rules, flow/loop agent
+conditions, task-graph conditions). Validation is now a **structural AST allowlist**: the expression
+is parsed and every node checked before compilation, rejecting computed member access whose key is
+not a literal (the concatenation route), `.constructor`/`__proto__`/`prototype` access, any call
+outside the safe-method list, and host-global identifiers. Because the check is structural it cannot
+be defeated by string assembly, and it also stops the denylist's over-rejection of legitimate data —
+`name == 'constructor'` and a field named `window` are now valid again. The supported surface
+(comparisons, logical ops, dotted/indexed access, safe methods, arrow-function array callbacks,
+`typeof`) is unchanged, and `validateSyntax` continues to parse-without-executing on top of it.
 
 **Skipped test status wired through reporting.** `MJ: Test Suite Runs` now records `SkippedTests`
 and `ErrorTests` (previously left NULL); the CLI single-test and suite-markdown formatters render

@@ -41,7 +41,7 @@ content-free) and a **content** package (private, never published) — and there
   │   @memberjunction/testing-integration     │   │  @memberjunction/integration-test-suite  │
   │   (published — FRAMEWORK ONLY)            │   │  (private: true — MJ's OWN test content) │
   │                                           │   │                                          │
-  │  IntegrationCheckRegistry (BaseSingleton) │◀──┤  src/checks/  · 80 bundles · 569 checks  │
+  │  IntegrationCheckRegistry (BaseSingleton) │◀──┤  src/checks/  · 81 bundles · 604 checks  │
   │  NamedCheck / BundleLifecycle contracts   │   │  src/index.ts barrel (side-effect-       │
   │  bootstrap  (server / client / PostgreSQL)│   │    imports every bundle → registers all) │
   │  InstrumentedLocalStorageProvider         │   │  src/__tests__/  count table + parity    │
@@ -239,12 +239,12 @@ metadata-driven end to end:
 MJ: Test Types ──▶ "Integration Test"  { DriverClass: "IntegrationTestDriver", Status: Active }
       │                                  metadata/test-types/.integration-test-type.json  (normal metadata — inert type def)
       ▼
-MJ: Tests ───────▶ IT01…IT80            Configuration selects bundles + tier + transport
+MJ: Tests ───────▶ IT01…IT81            Configuration selects bundles + tier + transport
       │                                  metadata-optional/integration-test/tests/integration/.IT*.json
       ▼
 MJ: Test Suites ─▶ "Integration Tests"  (parent — 0 members; running it errors, exit 1)
-                   ├─ "Integration Tests — Deterministic"   IT01–IT15, IT20–IT52, IT64–IT80  (65 members, the blocking tier;
-                   │                                        ORDERING INVARIANT: server-transport members seq 1–45, client seq 46–65 —
+                   ├─ "Integration Tests — Deterministic"   IT01–IT15, IT20–IT52, IT64–IT81  (66 members, the blocking tier;
+                   │                                        ORDERING INVARIANT: server-transport members seq 1–46, client seq 47–66 —
                    │                                        the first client bundle rebinds the global provider (#3251), so a server
                    │                                        member sequenced after any client member hard-errors)
                    └─ "Integration Tests — Live Model"      IT16–IT19, IT53–IT63  (15 members)
@@ -824,9 +824,9 @@ sidecar-dependent scripts (`cross-server-invalidation-tests.ts`, `agent-memory-t
 | Path | What |
 |---|---|
 | [`packages/TestingFramework/testing-integration/`](../packages/TestingFramework/testing-integration/) | The **framework** (published): driver, registry, check contracts, bootstraps, tiers, instrumented cache |
-| [`packages/TestingFramework/integration-test-suite/`](../packages/TestingFramework/integration-test-suite/) | The **content** (private, never published): all 30 check bundles, their unit tests, and the standalone rigs |
+| [`packages/TestingFramework/integration-test-suite/`](../packages/TestingFramework/integration-test-suite/) | The **content** (private, never published): all 81 check bundles, their unit tests, and the standalone rigs |
 | [`metadata/test-types/.integration-test-type.json`](../metadata/test-types/.integration-test-type.json) | The `Integration Test` TestType — an inert type definition, kept in the normal `metadata/` tree |
-| [`metadata-optional/integration-test/`](../metadata-optional/integration-test/) | The optional sibling root — the IT01–IT80 Tests (80 records), the suite hierarchy, the seeded RLS test users/role/permission, AND the synthetic AI stack the live tier drives (14 `IT: *` agents, 14 prompts, 42 model bindings, a skill, a search scope). Kept out of the default-pushed `metadata/` tree so these test-only records never reach production. **Must be seeded once per environment** |
+| [`metadata-optional/integration-test/`](../metadata-optional/integration-test/) | The optional sibling root — the IT01–IT81 Tests (81 records), the suite hierarchy, the seeded RLS test users/role/permission, AND the synthetic AI stack the live tier drives (14 `IT: *` agents, 14 prompts, 42 model bindings, a skill, a search scope). Kept out of the default-pushed `metadata/` tree so these test-only records never reach production. **Must be seeded once per environment** |
 | `mj.config.cjs` → `testing.checkModules` | The runtime seam that loads the private suite package (or a consumer's own check packages) into `mj test` |
 | [`packages/TestingFramework/Engine/`](../packages/TestingFramework/Engine/) | `TestEngine`, `BaseTestDriver`, suite fixture lifecycle |
 | [`packages/TestingFramework/CLI/`](../packages/TestingFramework/CLI/) | `mj test run` / `suite` / `list` / `validate` / `history` |

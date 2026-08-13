@@ -66,6 +66,11 @@ on:
   push:
     branches: [next]
   workflow_dispatch:
+    inputs:
+      run_live_model:
+        description: 'Also run the Live Model suite (real LLM calls — costs budget). Off by default so a manual re-run of the deterministic gate does not silently spend the weekly budget.'
+        type: boolean
+        default: false
   # Scheduled lanes for the tiers the PR gate cannot afford or cannot key:
   #   0 6 * * *   NIGHTLY — deterministic suite WITH RUN_MUTATION_TESTS=1 (the save/delete
   #               cache-invalidation checks S17/S23/S24/S29/S30/S31b/C10 — the bug class that
@@ -292,7 +297,7 @@ jobs:
   # silent pass.
   integration-live-model:
     name: Integration (Live Model, weekly)
-    if: (github.event_name == 'schedule' && github.event.schedule == '30 6 * * 0') || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'schedule' && github.event.schedule == '30 6 * * 0') || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_live_model == 'true')
     timeout-minutes: 90
     runs-on: ubuntu-latest
     env:

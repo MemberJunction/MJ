@@ -76,7 +76,7 @@ node scripts/scaffold-tests.mjs packages/YourPackage
 node scripts/check-dom-spec-placement.mjs        # *.dom.test.ts must NOT sit in __tests__/ (it would silently never run)
 node scripts/check-spec-antipatterns.mjs packages   # test-theater lint: vacuous asserts, skips, NO_ERRORS_SCHEMA, `any`
 node scripts/classify-explorer-components.mjs --min 85   # Explorer in-scope DOM coverage gate (--register regenerates plans/testing/phase-3-explorer-deferral-register.md)
-node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=137   # per-component DOM coverage report + ratchet (Bootstrap gate: --max-none=0)
+node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=134   # per-component DOM coverage report + ratchet (Bootstrap gate: --max-none=0)
 ```
 
 All four run in `test.yml`, so CI catches what you skipped.

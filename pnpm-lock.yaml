@@ -1416,7 +1416,7 @@ importers:
     devDependencies:
       '@memberjunction/unit-testing':
         specifier: 6.1.0-edge.1
-        version: link:../../UnitTesting
+        version: 6.1.0-edge.1
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -11831,6 +11831,9 @@ importers:
 
   packages/MJGlobal:
     dependencies:
+      acorn:
+        specifier: ^8.15.0
+        version: 8.15.0
       lodash:
         specifier: ^4.17.23
         version: 4.17.23
@@ -13887,7 +13890,7 @@ importers:
     devDependencies:
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
-        version: link:../MJGlobal
+        version: 6.1.0-edge.1
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -14122,7 +14125,7 @@ importers:
     devDependencies:
       '@memberjunction/global':
         specifier: 6.1.0-edge.1
-        version: link:../MJGlobal
+        version: 6.1.0-edge.1
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -14440,7 +14443,7 @@ importers:
         specifier: 6.1.0-edge.2
         version: link:../../APIKeys/Engine
       '@memberjunction/auth-providers':
-        specifier: 6.1.0-edge.1
+        specifier: 6.1.0-edge.2
         version: link:../../AuthProviders
       '@memberjunction/codegen-lib':
         specifier: 6.1.0-edge.2
@@ -14506,7 +14509,7 @@ importers:
         specifier: 6.1.0-edge.2
         version: link:../../QueryProcessor
       '@memberjunction/queue':
-        specifier: 6.1.0-edge.1
+        specifier: 6.1.0-edge.2
         version: link:../../MJQueue
       '@memberjunction/record-set-processor':
         specifier: 6.1.0-edge.2
@@ -14521,13 +14524,13 @@ importers:
         specifier: 6.1.0-edge.2
         version: link:../../SearchEngine
       '@memberjunction/server-bootstrap-lite':
-        specifier: 6.1.0-edge.1
+        specifier: 6.1.0-edge.2
         version: link:../../ServerBootstrapLite
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.1.0-edge.2
         version: link:../../SQLServerDataProvider
       '@memberjunction/storage':
-        specifier: 6.1.0-edge.1
+        specifier: 6.1.0-edge.2
         version: link:../../MJStorage
       '@memberjunction/task-graph':
         specifier: 6.1.0-edge.2
@@ -14620,7 +14623,7 @@ importers:
   packages/UnitTesting:
     dependencies:
       '@memberjunction/ai':
-        specifier: 6.1.0-edge.1
+        specifier: 6.1.0-edge.2
         version: link:../AI/Core
       '@memberjunction/global':
         specifier: 6.1.0-edge.2
@@ -18354,6 +18357,9 @@ packages:
   '@mediapipe/tasks-vision@0.10.14':
     resolution: {integrity: sha512-vOifgZhkndgybdvoRITzRkIueWWSiCKuEUXXK6Q4FaJsFvRJuwgg++vqFUMlL0Uox62U5aEXFhHxlhV7Ja5e3Q==}
 
+  '@memberjunction/global@6.1.0-edge.1':
+    resolution: {integrity: sha512-0C34Gvb/93b7GD5g7nmOZEU6XCPZuvv9BbCbgrbOTdvR/XQdSPyWfJMDyS3ZpncbbVQ9X115AivN/MqafqUZog==}
+
   '@memberjunction/skyway-core@0.6.2':
     resolution: {integrity: sha512-qrwF6EaqlbwyDl0dnd0U7AaQqfkL9NbVGT/8dy3PO61bJXavrATex+Gy7bImiwsQgslZiwswIb2fzwi04n/vKA==}
     engines: {node: '>=18.0.0'}
@@ -18365,6 +18371,9 @@ packages:
   '@memberjunction/skyway-sqlserver@0.6.2':
     resolution: {integrity: sha512-2mVkECnMhGieU++ZesoK3NDMveBgamkpWKTeYo3T0r9OTxhISNrM6clXUuZOhq7vKCQwNPb2SY53/n60J+ecuw==}
     engines: {node: '>=18.0.0'}
+
+  '@memberjunction/unit-testing@6.1.0-edge.1':
+    resolution: {integrity: sha512-0rpZD1dKNwNxa7Z2SIdTZTnwzba58ilgNfHkIPGmRYA/IGXCf48ZLkutLwYyWFi1gGmXQ+rUmvL0ZsP/5ib/JQ==}
 
   '@mermaid-js/parser@0.6.3':
     resolution: {integrity: sha512-lnjOhe7zyHjc+If7yT4zoedx2vo4sHaTmtkl1+or8BRTnCtDmcTpAjpzDSfCZrshM5bCoz0GyidzadJAH1xobA==}
@@ -35680,6 +35689,12 @@ snapshots:
 
   '@mediapipe/tasks-vision@0.10.14': {}
 
+  '@memberjunction/global@6.1.0-edge.1':
+    dependencies:
+      lodash: 4.17.23
+      rxjs: 7.8.2
+      uuid: 13.0.0
+
   '@memberjunction/skyway-core@0.6.2':
     dependencies:
       crc-32: 1.2.2
@@ -35698,6 +35713,10 @@ snapshots:
       mssql: 11.0.1
     transitivePeerDependencies:
       - supports-color
+
+  '@memberjunction/unit-testing@6.1.0-edge.1':
+    dependencies:
+      '@memberjunction/global': 6.1.0-edge.1
 
   '@mermaid-js/parser@0.6.3':
     dependencies:

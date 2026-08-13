@@ -534,5 +534,18 @@
       "lastModified": "2026-08-11T06:04:34.538Z",
       "checksum": "bf0e9cb9af67f5e9c625412a4fedc13051c62a981f357c6cff79b3ff1e6a8851"
     }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Queue Types",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "5178BBEF-8F08-416E-90A9-A8255C851B84"
+    }
   }
 ]

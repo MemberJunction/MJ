@@ -5,17 +5,19 @@ import { SafeExpressionEvaluator } from '../SafeExpressionEvaluator';
  * Adversarial security tests for SafeExpressionEvaluator.
  *
  * SafeExpressionEvaluator compiles the caller's expression into a real JavaScript
- * function via `new Function(...)` and runs it. Its ONLY defense against arbitrary
- * code execution is a regular-expression denylist (DANGEROUS_PATTERNS) plus a
- * property-name filter on the context object. This suite documents, with evidence:
+ * function via `new Function(...)` and runs it. Its defense against arbitrary code
+ * execution is a STRUCTURAL ALLOWLIST: the expression is parsed to an AST and every
+ * node is checked against a whitelist before it is ever compiled. A construct that
+ * is not on the list — computed member access with a non-literal key, `.constructor`
+ * / `__proto__` access, any call outside the safe-method list, a host-global
+ * identifier — is rejected at validation time and never reaches `new Function`.
  *
- *   (a) which attacks the denylist stops (the promises the code keeps), and
- *   (b) the former bracket-string sandbox-escape route (globalThis["Function"](...)),
- *       now CLOSED by denying the dangerous identifiers as whole words — see the
- *       "SANDBOX ESCAPE — bracket-string member access" block below.
- *
- * The escape tests assert the route is BLOCKED; they are regression guards that the
- * hole stays closed. Any weakening of the denylist will surface here as a failure.
+ * This is what closes the string-concatenation escape a textual denylist could not:
+ * `[]["cons"+"tructor"]["cons"+"tructor"]("…")()` parses to computed member access
+ * whose key is a `+` expression, not a literal, so it is rejected structurally no
+ * matter how the dangerous name is spelled. See the "string-concatenation escape"
+ * block below. Because the check is structural, it also stops over-rejecting data
+ * that merely mentions a reserved word (`name == 'constructor'` is a legal compare).
  */
 describe('SafeExpressionEvaluator - Security', () => {
   let evaluator: SafeExpressionEvaluator;
@@ -123,11 +125,6 @@ describe('SafeExpressionEvaluator - Security', () => {
       expectBlocked('a == `x`', { a: 'x' });
     });
 
-    it('should block template-expression syntax ${...}', () => {
-      // ${ can never appear without a { , so the curly-brace rule fires first; either way it is rejected.
-      expectBlocked("a == '${x}'", { a: 'x' });
-    });
-
     it.each(['throw', 'try', 'catch', 'finally', 'async', 'await', 'class', 'extends', 'this'])(
       'should block the "%s" keyword',
       (keyword) => {
@@ -213,21 +210,77 @@ describe('SafeExpressionEvaluator - Security', () => {
     });
   });
 
-  // ---------------------------------------------------------------
-  // Denylist over-blocking (false positives) — a usability limitation
-  // ---------------------------------------------------------------
-  describe('denylist over-blocking (false positives)', () => {
-    it('should (over-)reject comparing against the literal string "constructor"', () => {
-      // Harmless data comparison, but "constructor" as a token is denied even inside a string literal.
-      expectBlocked('name == "constructor"', { name: 'a' });
+  // ===============================================================
+  // STRING-CONCATENATION ESCAPE — the route a textual denylist missed (blocked)
+  // ===============================================================
+  //
+  // The prior whole-word denylist matched only literal tokens, so splitting a
+  // dangerous name across a `+` expression spelled it nowhere in the source:
+  //
+  //     []["cons"+"tructor"]["cons"+"tructor"]("return process.pid")()
+  //
+  // `[].constructor` is Array; `Array.constructor` is Function; the resulting
+  // Function constructor runs in global scope and reaches `process`. The AST walk
+  // rejects it because the computed member key is a `+` (BinaryExpression), not a
+  // literal — no matter how the name is assembled.
+  // ===============================================================
+  describe('string-concatenation sandbox escape (blocked)', () => {
+    it('blocks the Function-constructor climb built from split string literals', () => {
+      expectBlocked('[]["cons"+"tructor"]["cons"+"tructor"]("return 1")()');
     });
 
-    it('should (over-)reject comparing against the literal string "this"', () => {
-      expectBlocked('label == "this"', { label: 'a' });
+    it('blocks a split-name computed member access on a context value', () => {
+      expectBlocked('x["con"+"structor"]', { x: 1 });
     });
 
-    it('should still allow words that merely contain a reserved token as a substring', () => {
-      // "thistle" contains "this" but not as a whole word, so the \bthis\b boundary spares it.
+    it('blocks a split host-global name reached via computed access', () => {
+      expectBlocked('({})["__pro"+"to__"]', {});
+    });
+
+    it('blocks any dynamic (non-literal) computed member key', () => {
+      // Even a harmless-looking dynamic key is refused: dynamic keys are the escape surface.
+      expectBlocked('x[y]', { x: { a: 1 }, y: 'a' });
+    });
+
+    it('blocks a parenthesized string key that resolves to a dangerous property', () => {
+      expectBlocked('x[("constructor")]', { x: 1 });
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // No over-blocking of harmless data — the structural allowlist fix
+  // ---------------------------------------------------------------
+  // The old denylist rejected any expression whose TEXT mentioned a reserved token,
+  // even inside a string literal or as a field name. The AST walk distinguishes a
+  // reserved word used as CODE (blocked) from the same characters used as DATA
+  // (allowed), so these legitimate comparisons now succeed.
+  describe('legitimate data that mentions reserved words (allowed)', () => {
+    it('allows comparing a field against the literal string "constructor"', () => {
+      const r = evaluator.evaluate('name == "constructor"', { name: 'constructor' });
+      expect(r.success).toBe(true);
+      expect(r.value).toBe(true);
+    });
+
+    it('allows comparing a field against the literal string "this"', () => {
+      const r = evaluator.evaluate('label == "this"', { label: 'this' });
+      expect(r.success).toBe(true);
+      expect(r.value).toBe(true);
+    });
+
+    it('allows a `${...}` sequence inside a plain string literal', () => {
+      const r = evaluator.evaluate("a == '${x}'", { a: '${x}' });
+      expect(r.success).toBe(true);
+      expect(r.value).toBe(true);
+    });
+
+    it('allows reading a context field whose name is a former reserved token', () => {
+      // `payload.window` is a data field read, not host-global access.
+      const r = evaluator.evaluate("payload.window == 'morning'", { payload: { window: 'morning' } });
+      expect(r.success).toBe(true);
+      expect(r.value).toBe(true);
+    });
+
+    it('still allows words that merely contain a reserved token as a substring', () => {
       const r = evaluator.evaluate('label == "thistle"', { label: 'thistle' });
       expect(r.success).toBe(true);
       expect(r.value).toBe(true);

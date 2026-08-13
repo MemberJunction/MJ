@@ -41,11 +41,22 @@ jobs:
             exit 1
           fi
 
-      # A workflow_run checkout without a ref resolves to the DEFAULT branch tip —
-      # which is `next` here, not the released `main` commit the tag will claim. Pin
-      # to the triggering run's head SHA so the version (and everything else) is read
-      # from the commit that was actually published. Manual dispatch falls back to
-      # the dispatched ref's SHA.
+      # A workflow_run checkout without a ref resolves to the DEFAULT branch tip
+      # (`next`), so we pin to a specific SHA instead.
+      #
+      # CAVEAT — the two paths read different versions, and only one is correct:
+      #   * workflow_dispatch (how a certified image is actually built, per the header):
+      #     `github.sha` is the dispatched ref, i.e. the certified TAG's commit, which
+      #     carries the bumped version. Correct.
+      #   * workflow_run (automatic, after publish.yml): `head_sha` is the commit that
+      #     TRIGGERED publish.yml — publish.yml then runs `pnpm run version` and pushes
+      #     the bump as a LATER commit, so `head_sha` still holds the PRE-bump (previous)
+      #     version. Reading it here would tag one release behind. This is currently
+      #     inert because every next->main publish is Edge-suffixed and the `channel`
+      #     job skips it — but if an unsuffixed version ever ships through this trigger,
+      #     the tag would be wrong. Fix before then: trigger off `release: published`
+      #     (its payload carries the tag) or have publish.yml expose the pushed release
+      #     commit/tag as a workflow output, and checkout that.
       - name: Checkout repo
         uses: actions/checkout@v4
         with:

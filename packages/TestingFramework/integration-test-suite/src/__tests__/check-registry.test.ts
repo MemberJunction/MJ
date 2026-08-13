@@ -99,7 +99,7 @@ describe('IntegrationCheckRegistry', () => {
 describe('migrated bundles (coverage-loss guard)', () => {
     const bundles: Array<[string, NamedCheck[], number]> = [
         ['server-cache', ServerCacheChecks, 32],
-        ['cache-immutability', CacheImmutabilityChecks, 15], // F1-F15 freeze-on-write runtime contract (IT77); F13/F14 cover review findings C1/C2, F15 covers M3 (dataset key collision)
+        ['cache-immutability', CacheImmutabilityChecks, 15], // F1-F15 freeze-on-write runtime contract (IT81); F13/F14 cover review findings C1/C2, F15 covers M3 (dataset key collision)
         ['client-cache', ClientCacheChecks, 13],
         ['runquery-cache', RunQueryCacheChecks, 12], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20
         // RLS1–RLS10 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters) share one bundle
@@ -220,6 +220,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'app-wiring': 10,
         'auth-validation': 7,
         'cache-gauntlet': 8,
+        'cache-immutability': 15,
         'class-resolution': 5,
         'client-cache': 13,
         'codegen-determinism': 6,
@@ -267,7 +268,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'startup-mode': 3,
         'storage': 6,
         'subscription-isolation': 2,
-        'task-graph-execution': 7,
+        'task-graph-execution': 26,
         'task-graph-orchestration': 18,
         'templates': 8,
         'transaction-groups': 5,
@@ -298,6 +299,6 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(80);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(81);
     });
 });
