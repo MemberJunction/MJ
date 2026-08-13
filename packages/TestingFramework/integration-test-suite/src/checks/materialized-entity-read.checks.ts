@@ -23,6 +23,7 @@ import { randomUUID } from 'node:crypto';
 import { RunView, Metadata, LogError } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
 import type { MJMaterializedResultEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -126,7 +127,7 @@ export const MaterializedEntityReadChecks: NamedCheck[] = [
             const res = await readSentinel(ctx, 'Materialized');
             Assert(res.Success, `materialized RunView must succeed: ${res.ErrorMessage}`);
             Assert((res.Results?.length ?? 0) === 1, `EMR1: exactly the sentinel row must come back from the snapshot, got ${res.Results?.length}`);
-            AssertEqual(String(res.Results?.[0]?.ID ?? '').toLowerCase(), SentinelID.toLowerCase(), 'EMR1: the returned row is the snapshot-only sentinel — proof the read hit the materialized view, not the live base view');
+            Assert(UUIDsEqual(String(res.Results?.[0]?.ID ?? ''), SentinelID), 'EMR1: the returned row is the snapshot-only sentinel — proof the read hit the materialized view, not the live base view');
         },
     },
     {
