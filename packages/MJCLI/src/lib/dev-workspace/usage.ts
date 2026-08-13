@@ -45,7 +45,8 @@ export const DEV_WORKSPACE_USAGE: PluginUsage = {
     `(b) a package under its packages/ dir naming or depending on the @mj-biz-apps scope, (c) a root package name ` +
     `of memberjunction-workspace (the MJ monorepo). Use --include to add a repo detection missed and --exclude to ` +
     `drop one. Existing files are NEVER overwritten silently — the run refuses unless --force, which keeps a ` +
-    `<name>.bak copy of each. Workspace globs cover each member's repo root and packages/* only, never apps/*, ` +
+    `<name>.bak copy of each. Workspace globs cover each member's repo root plus the packages-rooted globs of the ` +
+    `member's own pnpm-workspace.yaml (packages/* when it has none) — never apps/*, ` +
     `because app-shell names collide across repos. Auth SDKs and @angular/service-worker are peerDependencies of ` +
     `the MJ libraries that expose them: a shell serving those features declares its own picks in its own ` +
     `package.json — the command prints that guidance instead of hoisting them. Light command: no MJ bootstrap, ` +

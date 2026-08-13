@@ -31,6 +31,17 @@ export interface MemberPackageInfo {
 /** Why a sibling directory qualified as a workspace member candidate. */
 export type CandidateReason = 'mj-app-json' | 'bizapps-packages' | 'mj-monorepo';
 
+/**
+ * Where a member's {@link CandidateRepo.WorkspaceGlobs} came from:
+ * - `member-workspace-yaml` — parsed from the member's own pnpm-workspace.yaml.
+ * - `no-workspace-yaml` — the member has no workspace file; the proven `packages/*` default.
+ * - `workspace-yaml-without-packages-globs` — the member HAS a workspace file but it
+ *   yielded no packages-rooted positive glob (unsupported shape, or a layout this
+ *   generator excludes); the default was substituted and the command MUST warn —
+ *   a silent fallback is the #3795 failure mode.
+ */
+export type WorkspaceGlobsSource = 'member-workspace-yaml' | 'no-workspace-yaml' | 'workspace-yaml-without-packages-globs';
+
 /** A sibling repo checkout that qualifies (or was explicitly included) as a workspace member. */
 export interface CandidateRepo {
   /** Directory basename — this is the name used in the workspace globs. */
@@ -44,6 +55,18 @@ export interface CandidateRepo {
   Packages: MemberPackageInfo[];
   /** Raw contents of the repo's root `turbo.json`, or null when absent. */
   TurboJson: string | null;
+  /**
+   * The member's own workspace globs, relative to its repo root: the `packages:`
+   * list of its `pnpm-workspace.yaml` with positives filtered to packages-rooted
+   * entries and negations all kept (a `!**\/dist\/**` guard included — they only subtract),
+   * or `['packages/*']` when the repo has no workspace file. Never empty. The MJ
+   * monorepo declares 42 nested globs (`packages/AI/*`,
+   * `packages/Angular/Explorer/*`, ...) — assuming `packages/*` for it silently
+   * dropped 248 of its 307 packages from the workspace (#3795).
+   */
+  WorkspaceGlobs: string[];
+  /** Provenance of {@link CandidateRepo.WorkspaceGlobs}; the command warns on the fallback case. */
+  WorkspaceGlobsSource: WorkspaceGlobsSource;
 }
 
 /** A devDependency version conflict the union resolver decided (never silently). */

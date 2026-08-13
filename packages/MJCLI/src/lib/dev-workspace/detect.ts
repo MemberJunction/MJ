@@ -14,18 +14,28 @@
  *    makes linking it locally worthwhile,
  *  - it is the MJ monorepo (root package name `memberjunction-workspace`).
  *
+ * Each member's own `pnpm-workspace.yaml` is read here too: its `packages:` globs
+ * (filtered to packages-rooted ones) become the member's {@link CandidateRepo.WorkspaceGlobs},
+ * so a repo that nests its packages (the MJ monorepo declares 42 globs) contributes
+ * all of them to the generated workspace instead of a hardcoded `packages/*` (#3795).
+ *
  * @module lib/dev-workspace/detect
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import type { CandidateReason, CandidateRepo, MemberPackageInfo, MemberPackageJson } from './types.js';
+import type { CandidateReason, CandidateRepo, MemberPackageInfo, MemberPackageJson, WorkspaceGlobsSource } from './types.js';
 
 /** Root package name that identifies the MJ monorepo checkout. */
 export const MJ_MONOREPO_PACKAGE_NAME = 'memberjunction-workspace';
 
+/** Workspace globs assumed for a member repo that has no `pnpm-workspace.yaml`. */
+export const DEFAULT_WORKSPACE_GLOBS: readonly string[] = ['packages/*'];
+
 /** Hard caps so every walk is bounded; hitting one is an error, not a truncation. */
 const MAX_SIBLING_DIRS = 500;
 const MAX_PACKAGES_PER_REPO = 1000;
+/** Longest member pnpm-workspace.yaml we will parse (a bigger file is not plausibly one). */
+const MAX_MEMBER_WORKSPACE_YAML_BYTES = 1_000_000;
 
 export interface DetectOptions {
   /** Override for tests only; defaults to {@link MAX_SIBLING_DIRS}. */
@@ -60,6 +70,130 @@ function loadRepoPackages(repoPath: string): MemberPackageInfo[] {
   return packages;
 }
 
+/** Matches one YAML block-list entry at ANY indent (zero included): `- value`, `- 'value'`, `- "value"`, optional trailing comment. */
+const YAML_LIST_ENTRY_PATTERN = /^\s*-\s+(?:'([^']*)'|"([^"]*)"|([^\s#][^#]*?))\s*(?:#.*)?$/;
+/** Matches the top-level `packages:` key line, capturing whatever follows the colon. */
+const PACKAGES_KEY_PATTERN = /^packages:\s*(.*)$/;
+
+/**
+ * Parses the top-level `packages:` list out of a pnpm-workspace.yaml. Pure.
+ * Deliberately minimal — pnpm-workspace.yaml's `packages:` list is the only YAML
+ * this command reads, so a hand-rolled parser beats a yaml dependency. Handles
+ * block lists at any indent (zero included) and single- or multi-line flow style;
+ * anchors/aliases and other exotica yield [] and are surfaced by the command's
+ * zero-globs warning. Returns every entry verbatim (negations included).
+ */
+export function ParseWorkspacePackagesGlobs(yamlText: string): string[] {
+  const lines = yamlText.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const match = PACKAGES_KEY_PATTERN.exec(lines[i].trimEnd());
+    if (match === null) continue;
+    const remainder = match[1].trim();
+    if (remainder.startsWith('[')) return parseFlowEntries(lines, i);
+    if (remainder.length === 0 || remainder.startsWith('#')) return parseBlockEntries(lines, i + 1);
+    return []; // `packages: <scalar/anchor>` — not a list this parser understands
+  }
+  return [];
+}
+
+/**
+ * Reads block-list entries starting at `startIndex`. Blank lines and full-line
+ * comments NEVER end the list — a maintainer's `# --- AI ---` section comment
+ * inside MJ's 42-glob list must not silently truncate the parse (review finding
+ * on #3795: it dropped 39 of 42 globs). Only a line that is not an entry, not
+ * blank, and not a comment (i.e. the next `key:` line) ends it.
+ */
+function parseBlockEntries(lines: readonly string[], startIndex: number): string[] {
+  const entries: string[] = [];
+  for (let i = startIndex; i < lines.length; i++) {
+    const bare = lines[i].trim();
+    if (bare.length === 0 || bare.startsWith('#')) continue;
+    const match = YAML_LIST_ENTRY_PATTERN.exec(lines[i].trimEnd());
+    if (match === null) break; // the next key (any indent) ends the list
+    const value = match[1] ?? match[2] ?? match[3];
+    if (value !== undefined && value.length > 0) entries.push(value);
+  }
+  return entries;
+}
+
+/**
+ * Reads a flow-style list (`packages: ['a', 'b']`), which may span lines, up to
+ * its closing bracket. An unterminated list yields whatever was collected — the
+ * command's zero-globs warning surfaces any resulting nonsense.
+ */
+function parseFlowEntries(lines: readonly string[], keyIndex: number): string[] {
+  const pieces: string[] = [];
+  let text = lines[keyIndex].slice(lines[keyIndex].indexOf('[') + 1);
+  for (let i = keyIndex; i < lines.length; i++) {
+    const close = text.indexOf(']');
+    if (close >= 0) {
+      pieces.push(text.slice(0, close));
+      break;
+    }
+    pieces.push(text);
+    text = i + 1 < lines.length ? lines[i + 1].trimEnd() : '';
+  }
+  return pieces
+    .join(',')
+    .split(',')
+    .map((entry) => stripQuotes(entry.trim()))
+    .filter((entry) => entry.length > 0);
+}
+
+/** Strips one matching pair of surrounding quotes off a scalar, if present. */
+function stripQuotes(value: string): string {
+  const match = /^'([^']*)'$|^"([^"]*)"$/.exec(value);
+  return match === null ? value : (match[1] ?? match[2] ?? '');
+}
+
+/** Result of {@link SelectPackagesGlobs}: the globs plus whether the default had to stand in. */
+export interface SelectedPackagesGlobs {
+  Globs: string[];
+  /** True when the member declared no packages-rooted positive glob and {@link DEFAULT_WORKSPACE_GLOBS} was substituted. */
+  UsedFallback: boolean;
+}
+
+/**
+ * Filters a member's declared workspace globs down to the ones this generator
+ * re-prefixes. POSITIVE globs must be rooted under `packages/` (producer packages
+ * only — app-shell globs like `apps/*` are dropped because shell names collide
+ * across repos; see `build.ts`). NEGATIONS are ALL kept, packages-rooted or not
+ * (a `!**\/dist\/**` guard included): a negation only subtracts, and dropping one inverts
+ * its guard — dist/ copies of package.json would join the workspace (review
+ * finding on #3795). Leading `./` is stripped and duplicates collapse. When no
+ * packages-rooted positive remains, the default stands in (negations still kept)
+ * and `UsedFallback` reports it so the command can warn — a silent fallback was
+ * the core #3795 disease. Pure.
+ */
+export function SelectPackagesGlobs(declaredGlobs: readonly string[]): SelectedPackagesGlobs {
+  const selected: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of declaredGlobs) {
+    const negated = raw.startsWith('!');
+    const body = (negated ? raw.slice(1) : raw).replace(/^\.\//, '');
+    if (!negated && !body.startsWith('packages/')) continue;
+    const glob = negated ? `!${body}` : body;
+    if (seen.has(glob)) continue;
+    seen.add(glob);
+    selected.push(glob);
+  }
+  const hasPositiveGlob = selected.some((glob) => !glob.startsWith('!'));
+  if (hasPositiveGlob) return { Globs: selected, UsedFallback: false };
+  return { Globs: [...DEFAULT_WORKSPACE_GLOBS, ...selected], UsedFallback: true };
+}
+
+/** Loads a repo's workspace globs, with their provenance, from its pnpm-workspace.yaml (bounded read). */
+function loadWorkspaceGlobs(repoPath: string): { Globs: string[]; Source: WorkspaceGlobsSource } {
+  const yamlPath = path.join(repoPath, 'pnpm-workspace.yaml');
+  if (!existsSync(yamlPath)) return { Globs: [...DEFAULT_WORKSPACE_GLOBS], Source: 'no-workspace-yaml' };
+  const size = statSync(yamlPath).size;
+  if (size > MAX_MEMBER_WORKSPACE_YAML_BYTES) {
+    throw new Error(`${yamlPath} is ${size} bytes — over the ${MAX_MEMBER_WORKSPACE_YAML_BYTES} cap; not a plausible pnpm-workspace.yaml`);
+  }
+  const selected = SelectPackagesGlobs(ParseWorkspacePackagesGlobs(readFileSync(yamlPath, 'utf8')));
+  return { Globs: selected.Globs, Source: selected.UsedFallback ? 'workspace-yaml-without-packages-globs' : 'member-workspace-yaml' };
+}
+
 /** True when any of the package's name/dependency sections mentions the bizapps scope. */
 function mentionsBizAppsScope(pkg: MemberPackageJson): boolean {
   if (pkg.name?.startsWith('@mj-biz-apps/')) return true;
@@ -86,6 +220,7 @@ export function LoadRepo(parentDir: string, dirName: string): CandidateRepo | nu
   if (rootPkg === null) return null;
   const packages = loadRepoPackages(repoPath);
   const turboPath = path.join(repoPath, 'turbo.json');
+  const workspaceGlobs = loadWorkspaceGlobs(repoPath);
   return {
     Name: dirName,
     Path: repoPath,
@@ -93,6 +228,8 @@ export function LoadRepo(parentDir: string, dirName: string): CandidateRepo | nu
     RootPackageJson: rootPkg,
     Packages: packages,
     TurboJson: existsSync(turboPath) ? readFileSync(turboPath, 'utf8') : null,
+    WorkspaceGlobs: workspaceGlobs.Globs,
+    WorkspaceGlobsSource: workspaceGlobs.Source,
   };
 }
 

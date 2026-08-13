@@ -144,13 +144,36 @@ export default class DevWorkspace extends Command {
     this.log(chalk.dim(`packageManager pin ${rootPkg.Pin} from ${rootPkg.PinSource}`));
     const turbo = PickTurboJson(members);
     this.log(chalk.dim(`turbo.json copied from ${turbo.Source}`));
+    for (const member of members) {
+      this.reportMemberGlobs(member);
+    }
     const workspaceFiles: GeneratedFile[] = [
-      { Name: 'pnpm-workspace.yaml', Content: BuildWorkspaceYaml(memberNames) },
+      { Name: 'pnpm-workspace.yaml', Content: BuildWorkspaceYaml(members) },
       { Name: '.npmrc', Content: BuildNpmrc() },
       { Name: 'package.json', Content: rootPkg.Content },
       { Name: 'turbo.json', Content: turbo.Content },
     ];
     const written = [...workspaceFiles.map((f) => f.Name), SENTINEL_FILE_NAME];
     return [...workspaceFiles, { Name: SENTINEL_FILE_NAME, Content: BuildSentinel(written, memberNames) }];
+  }
+
+  /**
+   * Logs where a member's workspace globs came from — and warns LOUDLY when the
+   * member has its own pnpm-workspace.yaml that yielded nothing usable, because a
+   * silent packages/* fallback is exactly the #3795 failure: an install that
+   * succeeds while the member's real packages resolve from the registry.
+   */
+  private reportMemberGlobs(member: CandidateRepo): void {
+    if (member.WorkspaceGlobsSource === 'workspace-yaml-without-packages-globs') {
+      this.warn(
+        `${member.Name} has its own pnpm-workspace.yaml but it yielded NO globs rooted under packages/ — ` +
+          `assuming ${member.Name}/packages/*. If that repo keeps packages anywhere else, they will NOT be ` +
+          `linked into this workspace (they would resolve from the registry instead). Check ${member.Name}/pnpm-workspace.yaml.`
+      );
+      return;
+    }
+    if (member.WorkspaceGlobsSource === 'member-workspace-yaml') {
+      this.log(chalk.dim(`${member.Name} contributes ${member.WorkspaceGlobs.length} workspace globs from its own pnpm-workspace.yaml`));
+    }
   }
 }

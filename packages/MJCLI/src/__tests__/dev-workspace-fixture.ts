@@ -13,10 +13,12 @@ export interface FixtureRepoSpec {
   RootPackageJson?: MemberPackageJson;
   /** Write an mj-app.json marker file. */
   MjAppJson?: boolean;
-  /** package.json contents keyed by directory name under the repo's packages dir. */
+  /** package.json contents keyed by directory path under the repo's packages dir (may be nested, e.g. `AI/Engine`). */
   Packages?: Record<string, MemberPackageJson>;
   /** Raw turbo.json contents. */
   TurboJson?: string;
+  /** Raw contents of the repo's own pnpm-workspace.yaml. */
+  PnpmWorkspaceYaml?: string;
   /** Create a .git directory (marks the dir as a git repo root). */
   GitDir?: boolean;
 }
@@ -46,6 +48,9 @@ function writeFixtureRepo(repoDir: string, spec: FixtureRepoSpec): void {
   }
   if (spec.TurboJson !== undefined) {
     writeFileSync(path.join(repoDir, 'turbo.json'), spec.TurboJson, 'utf8');
+  }
+  if (spec.PnpmWorkspaceYaml !== undefined) {
+    writeFileSync(path.join(repoDir, 'pnpm-workspace.yaml'), spec.PnpmWorkspaceYaml, 'utf8');
   }
   if (spec.GitDir === true) {
     mkdirSync(path.join(repoDir, '.git'), { recursive: true });

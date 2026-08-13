@@ -7,9 +7,12 @@
  * Content rules reproduce the manual setup this command replaces — each one was
  * proven by joining these repos by hand before any of it was automated:
  *  - pnpm-workspace.yaml: `linkWorkspacePackages: true`, the 16-name build-scripts
- *    allowlist, and per member ONLY the repo root + `packages/*` globs (producer
- *    packages only — `apps/*` globs collide because every repo names its apps
- *    `mj_api`/`mj_explorer`).
+ *    allowlist, and per member the repo root plus the member's OWN packages-rooted
+ *    workspace globs re-prefixed with its directory name (producer packages only —
+ *    `apps/*` globs collide because every repo names its apps `mj_api`/`mj_explorer`,
+ *    so detection filters them out before they reach this module). A member with no
+ *    workspace file of its own contributes the proven `packages/*` default; the MJ
+ *    monorepo contributes its 42 nested globs (#3795).
  *  - .npmrc: exactly three settings lines. There is deliberately no
  *    `public-hoist-pattern[]` block — see "Why no hoist block" below.
  *  - package.json: private root manifest, pnpm `packageManager` pin, the
@@ -137,11 +140,37 @@ function yamlListEntry(name: string): string {
 }
 
 /**
- * Builds `pnpm-workspace.yaml`: member repo roots plus their `packages/*` globs only.
+ * One member's glob lines: the repo root plus each of its workspace globs
+ * re-prefixed with its directory name (negations keep the `!` outside the prefix,
+ * as pnpm requires). Preconditions — enforced, since violating them silently
+ * drops packages from the workspace or admits colliding app shells (#3795): the
+ * member has at least one glob, and every POSITIVE glob is packages-rooted.
+ * Negations are exempt (a `!**\/dist\/**` guard survives verbatim): they only
+ * subtract, so re-prefixing one can never admit anything.
+ */
+function memberGlobLines(member: Pick<CandidateRepo, 'Name' | 'WorkspaceGlobs'>): string[] {
+  if (member.WorkspaceGlobs.length === 0) {
+    throw new Error(`Member ${member.Name} has no workspace globs — detection must supply at least the packages/* default`);
+  }
+  const lines = [`  - '${member.Name}'`];
+  for (const glob of member.WorkspaceGlobs) {
+    const negated = glob.startsWith('!');
+    const body = negated ? glob.slice(1) : glob;
+    if (!negated && !body.startsWith('packages/')) {
+      throw new Error(`Member ${member.Name} glob '${glob}' is not rooted under packages/ — detection must filter app-shell globs out`);
+    }
+    lines.push(negated ? `  - '!${member.Name}/${body}'` : `  - '${member.Name}/${glob}'`);
+  }
+  return lines;
+}
+
+/**
+ * Builds `pnpm-workspace.yaml`: per member (sorted by name) the repo root plus the
+ * member's own packages-rooted workspace globs re-prefixed with its directory name.
  * Producer packages only — never `apps/*` (app-shell names collide across repos).
  */
-export function BuildWorkspaceYaml(memberNames: readonly string[]): string {
-  if (memberNames.length === 0) {
+export function BuildWorkspaceYaml(members: ReadonlyArray<Pick<CandidateRepo, 'Name' | 'WorkspaceGlobs'>>): string {
+  if (members.length === 0) {
     throw new Error('BuildWorkspaceYaml requires at least one member repo');
   }
   const lines: string[] = [`# ${GENERATED_HEADER}`, 'linkWorkspacePackages: true', ''];
@@ -150,9 +179,10 @@ export function BuildWorkspaceYaml(memberNames: readonly string[]): string {
     lines.push(yamlListEntry(dep));
   }
   lines.push('', 'packages:');
-  for (const name of [...memberNames].sort()) {
-    lines.push(`  - '${name}'`);
-    lines.push(`  - '${name}/packages/*'`);
+  // Plain codepoint order (what Array.prototype.sort did on the old name list) —
+  // keeps regenerated output byte-identical for pre-existing workspaces.
+  for (const member of [...members].sort((a, b) => (a.Name < b.Name ? -1 : a.Name > b.Name ? 1 : 0))) {
+    lines.push(...memberGlobLines(member));
   }
   return `${lines.join('\n')}\n`;
 }

@@ -35,8 +35,18 @@ function repo(name: string, overrides?: Partial<CandidateRepo>): CandidateRepo {
     RootPackageJson: {},
     Packages: [],
     TurboJson: null,
+    WorkspaceGlobs: ['packages/*'],
+    WorkspaceGlobsSource: 'no-workspace-yaml',
     ...overrides,
   };
+}
+
+/** The glob lines of the generated yaml's `packages:` section. */
+function packagesSectionGlobs(yaml: string): string[] {
+  return yaml
+    .slice(yaml.indexOf('packages:'))
+    .split('\n')
+    .filter((line) => line.startsWith('  - '));
 }
 
 describe('BuildWorkspaceYaml', () => {
@@ -45,7 +55,7 @@ describe('BuildWorkspaceYaml', () => {
   });
 
   it('emits linkWorkspacePackages and the 16-name build-scripts allowlist', () => {
-    const yaml = BuildWorkspaceYaml(['bizapps-common']);
+    const yaml = BuildWorkspaceYaml([repo('bizapps-common')]);
     expect(yaml).toContain('linkWorkspacePackages: true');
     expect(ONLY_BUILT_DEPENDENCIES).toHaveLength(16);
     expect(yaml).toContain("  - '@apollo/protobufjs'"); // scoped names quoted
@@ -53,11 +63,9 @@ describe('BuildWorkspaceYaml', () => {
     expect(yaml).toContain('  - tesseract.js');
   });
 
-  it('emits exactly a repo-root glob and a packages glob per member, sorted', () => {
-    const yaml = BuildWorkspaceYaml(['bizapps-tasks', 'bizapps-common']);
-    const packagesSection = yaml.slice(yaml.indexOf('packages:'));
-    const globs = packagesSection.split('\n').filter((l) => l.startsWith('  - '));
-    expect(globs).toEqual([
+  it('emits a repo-root glob and the default packages glob per plain member, sorted', () => {
+    const yaml = BuildWorkspaceYaml([repo('bizapps-tasks'), repo('bizapps-common')]);
+    expect(packagesSectionGlobs(yaml)).toEqual([
       "  - 'bizapps-common'",
       "  - 'bizapps-common/packages/*'",
       "  - 'bizapps-tasks'",
@@ -65,8 +73,57 @@ describe('BuildWorkspaceYaml', () => {
     ]);
   });
 
+  // The #3795 regression: MJ declares 42 nested globs of its own; hardcoding
+  // packages/* dropped 248 of its 307 packages from the workspace, silently.
+  it('re-prefixes every glob a nested-layout member declares, in declaration order', () => {
+    const yaml = BuildWorkspaceYaml([
+      repo('MJ', { WorkspaceGlobs: ['packages/*', 'packages/AI/*', 'packages/Angular/Explorer/*', 'packages/AI/AICLI'] }),
+      repo('bizapps-tasks'),
+    ]);
+    expect(packagesSectionGlobs(yaml)).toEqual([
+      "  - 'MJ'",
+      "  - 'MJ/packages/*'",
+      "  - 'MJ/packages/AI/*'",
+      "  - 'MJ/packages/Angular/Explorer/*'",
+      "  - 'MJ/packages/AI/AICLI'",
+      "  - 'bizapps-tasks'",
+      "  - 'bizapps-tasks/packages/*'",
+    ]);
+  });
+
+  it('emits a member whose own file declares packages/* exactly once — no doubled glob', () => {
+    const yaml = BuildWorkspaceYaml([repo('bizapps-common', { WorkspaceGlobs: ['packages/*'] })]);
+    const occurrences = packagesSectionGlobs(yaml).filter((line) => line === "  - 'bizapps-common/packages/*'");
+    expect(occurrences).toHaveLength(1);
+  });
+
+  it('re-prefixes a packages-rooted negation with the ! outside the member name', () => {
+    const yaml = BuildWorkspaceYaml([repo('MJ', { WorkspaceGlobs: ['packages/*', '!packages/Internal/*'] })]);
+    expect(packagesSectionGlobs(yaml)).toContain("  - '!MJ/packages/Internal/*'");
+  });
+
+  // Review finding on #3795: dropping a non-packages-rooted negation INVERTS its
+  // guard — mjcentral guards packages/** with !**/dist/**, and without the guard a
+  // dist/ copy of a package.json joins the workspace as a duplicate member.
+  it('keeps non-packages-rooted negations re-prefixed (mjcentral dist-guard shape)', () => {
+    const yaml = BuildWorkspaceYaml([
+      repo('mjcentral', { WorkspaceGlobs: ['packages/**', '!**/.next/**', '!**/dist/**'] }),
+    ]);
+    expect(packagesSectionGlobs(yaml)).toEqual([
+      "  - 'mjcentral'",
+      "  - 'mjcentral/packages/**'",
+      "  - '!mjcentral/**/.next/**'",
+      "  - '!mjcentral/**/dist/**'",
+    ]);
+  });
+
   it('never emits an apps glob (app-shell names collide across repos)', () => {
-    expect(BuildWorkspaceYaml(['bizapps-common', 'bizapps-accounting'])).not.toContain('/apps/');
+    expect(BuildWorkspaceYaml([repo('bizapps-common'), repo('bizapps-accounting')])).not.toContain('/apps/');
+  });
+
+  it('enforces the detection preconditions: globs present, POSITIVE globs packages-rooted', () => {
+    expect(() => BuildWorkspaceYaml([repo('bare', { WorkspaceGlobs: [] })])).toThrow(/no workspace globs/);
+    expect(() => BuildWorkspaceYaml([repo('shelly', { WorkspaceGlobs: ['apps/*'] })])).toThrow(/not rooted under packages\//);
   });
 });
 

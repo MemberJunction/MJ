@@ -24,8 +24,8 @@ const MAX_WORKSPACE_YAML_BYTES = 1_000_000;
 
 /**
  * Parses member repo names out of a generated pnpm-workspace.yaml: entries under
- * `packages:` that contain no `/` are member repo roots (each member also has a
- * `<name>/packages` glob line, which is skipped). Pure.
+ * `packages:` that contain no `/` are member repo roots (each member also has one
+ * or more `<name>/packages/...` glob lines, which are skipped). Pure.
  */
 export function ParseWorkspaceMembers(yamlText: string): string[] {
   const members: string[] = [];
