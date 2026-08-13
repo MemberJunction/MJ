@@ -1,6 +1,7 @@
 /**
  * Tests for the pure content builders behind `mj dev workspace`
- * (src/lib/dev-workspace/build.ts). Content rules come from the quickstart:
+ * (src/lib/dev-workspace/build.ts). Content rules reproduce the manual setup this
+ * command replaces:
  * producer packages-only globs, the three .npmrc lines (and NO hoist block), the
  * devDependency union with highest-version-wins conflict logging, and the pnpm
  * packageManager pin.
@@ -10,6 +11,7 @@ import {
   BASELINE_DEV_DEPENDENCIES,
   BuildNpmrc,
   BuildRootPackageJson,
+  BuildSentinel,
   BuildShellPeerGuidance,
   BuildWorkspaceYaml,
   CompareVersionStrings,
@@ -19,6 +21,7 @@ import {
   PickTurboJson,
   ResolveDevDependencyUnion,
   ResolvePnpmPin,
+  SENTINEL_MARKER,
   SHELL_PROVIDED_PEERS,
 } from '../lib/dev-workspace/build.js';
 import type { CandidateRepo } from '../lib/dev-workspace/types.js';
@@ -180,7 +183,7 @@ describe('ResolveDevDependencyUnion', () => {
     expect(Conflicts).toEqual([]);
   });
 
-  it('fills the quickstart baseline (turbo, tsc-alias) only when no member declares them', () => {
+  it('fills the generator baseline (turbo, tsc-alias) only when no member declares them', () => {
     const { DevDependencies } = ResolveDevDependencyUnion([repo('a')]);
     expect(DevDependencies.turbo).toBe(BASELINE_DEV_DEPENDENCIES.turbo);
     expect(DevDependencies['tsc-alias']).toBe(BASELINE_DEV_DEPENDENCIES['tsc-alias']);
@@ -203,7 +206,7 @@ describe('ResolvePnpmPin', () => {
     expect(Source).toBe('other');
   });
 
-  it('ignores npm pins and falls back to the quickstart-proven pin', () => {
+  it('ignores npm pins and falls back to the proven fallback pin', () => {
     const { Pin, Source } = ResolvePnpmPin([
       repo('bizapps-common', { RootPackageJson: { packageManager: 'npm@10.5.0' } }),
     ]);
@@ -243,6 +246,33 @@ describe('BuildRootPackageJson', () => {
     const result = BuildRootPackageJson('Blue Cypress Code!', [repo('a')]);
     const manifest = JSON.parse(result.Content) as { name: string };
     expect(manifest.name).toBe('blue-cypress-code-dev-workspace');
+  });
+});
+
+describe('BuildSentinel', () => {
+  it('records the marker, the files written, and the members — sorted, no timestamp', () => {
+    const content = BuildSentinel(
+      ['pnpm-workspace.yaml', '.npmrc', '.mj-dev-workspace.json'],
+      ['bizapps-tasks', 'MJ-repo']
+    );
+    const sentinel = JSON.parse(content) as { generatedBy: string; files: string[]; members: string[] };
+    expect(sentinel.generatedBy).toBe(SENTINEL_MARKER);
+    expect(SENTINEL_MARKER).toBe('mj dev workspace');
+    expect(sentinel.files).toEqual(['.mj-dev-workspace.json', '.npmrc', 'pnpm-workspace.yaml']);
+    expect(sentinel.members).toEqual(['MJ-repo', 'bizapps-tasks']);
+    expect(Object.keys(sentinel)).toEqual(['generatedBy', 'files', 'members']);
+    expect(content.endsWith('\n')).toBe(true);
+  });
+
+  it('is deterministic — identical input in any order produces identical bytes', () => {
+    const a = BuildSentinel(['a.json', 'b.json'], ['repo-1', 'repo-2']);
+    const b = BuildSentinel(['b.json', 'a.json'], ['repo-2', 'repo-1']);
+    expect(a).toBe(b);
+  });
+
+  it('throws on an empty file list or an empty member list', () => {
+    expect(() => BuildSentinel([], ['repo-1'])).toThrow(/at least one generated file/);
+    expect(() => BuildSentinel(['a.json'], [])).toThrow(/at least one member/);
   });
 });
 

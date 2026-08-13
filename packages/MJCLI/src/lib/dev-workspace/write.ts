@@ -14,13 +14,23 @@ import { copyFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { GeneratedFile, WriteResult } from './types.js';
 
-/** The four files `mj dev workspace` owns at the parent directory. */
+/** The four workspace files `mj dev workspace` owns at the parent directory. */
 export const WORKSPACE_FILE_NAMES: readonly string[] = [
   'pnpm-workspace.yaml',
   '.npmrc',
   'package.json',
   'turbo.json',
 ];
+
+/**
+ * The sentinel manifest, written through this module like any other generated
+ * file (so the never-overwrite-silently rule covers it too). Its presence is what
+ * lets `mj dev workspace clean` prove the residue at a parent is its own.
+ */
+export const SENTINEL_FILE_NAME = '.mj-dev-workspace.json';
+
+/** Every file `mj dev workspace` writes at the parent: the four plus the sentinel. */
+export const GENERATED_FILE_NAMES: readonly string[] = [...WORKSPACE_FILE_NAMES, SENTINEL_FILE_NAME];
 
 /**
  * Throws unless the parent directory is a plain directory that is NOT a git repo

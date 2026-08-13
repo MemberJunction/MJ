@@ -13,6 +13,7 @@ describe('dev workspace command modules load cleanly', () => {
       import('../commands/dev/index.js'),
       import('../commands/dev/workspace/index.js'),
       import('../commands/dev/workspace/status.js'),
+      import('../commands/dev/workspace/clean.js'),
     ]);
     for (const mod of modules) {
       expect(mod.default).toBeDefined();
@@ -41,11 +42,13 @@ describe('dev workspace flag defaults', () => {
     expect(DevWorkspace.examples.join('\n')).not.toContain('hoist');
   });
 
-  it('dir defaults to the current directory on both commands', async () => {
+  it('dir defaults to the current directory on all three commands', async () => {
     const { default: DevWorkspace } = await import('../commands/dev/workspace/index.js');
     const { default: DevWorkspaceStatus } = await import('../commands/dev/workspace/status.js');
+    const { default: DevWorkspaceClean } = await import('../commands/dev/workspace/clean.js');
     expect(DevWorkspace.flags.dir.default).toBe('.');
     expect(DevWorkspaceStatus.flags.dir.default).toBe('.');
+    expect(DevWorkspaceClean.flags.dir.default).toBe('.');
   });
 
   it('include and exclude are repeatable', async () => {
@@ -55,10 +58,25 @@ describe('dev workspace flag defaults', () => {
   });
 });
 
+describe('dev workspace clean flag defaults', () => {
+  it('dry-run and force both default to false — clean deletes only when asked', async () => {
+    const { default: DevWorkspaceClean } = await import('../commands/dev/workspace/clean.js');
+    expect(DevWorkspaceClean.flags['dry-run'].type).toBe('boolean');
+    expect(DevWorkspaceClean.flags['dry-run'].default).toBe(false);
+    expect(DevWorkspaceClean.flags.force.default).toBe(false);
+  });
+
+  it('documents the dry-run-first path in its examples', async () => {
+    const { default: DevWorkspaceClean } = await import('../commands/dev/workspace/clean.js');
+    expect(DevWorkspaceClean.examples.join('\n')).toContain('--dry-run');
+  });
+});
+
 describe('light-command registration', () => {
   it('dev commands run without the MJ bootstrap', () => {
     expect(LIGHT_COMMANDS.has('dev')).toBe(true);
     expect(LIGHT_COMMANDS.has('dev workspace')).toBe(true);
     expect(LIGHT_COMMANDS.has('dev workspace status')).toBe(true);
+    expect(LIGHT_COMMANDS.has('dev workspace clean')).toBe(true);
   });
 });

@@ -4,13 +4,15 @@ import path from 'node:path';
 import {
   BuildNpmrc,
   BuildRootPackageJson,
+  BuildSentinel,
   BuildShellPeerGuidance,
   BuildWorkspaceYaml,
   PickTurboJson,
 } from '../../../lib/dev-workspace/build.js';
 import { DetectCandidates, LoadRepo } from '../../../lib/dev-workspace/detect.js';
+import { WORKSPACE_DIR_ENV_VAR } from '../../../lib/dev-workspace/dir-flag.js';
 import { RunPnpmInstall } from '../../../lib/dev-workspace/pnpm.js';
-import { AssertParentDirSafe, WriteWorkspaceFiles } from '../../../lib/dev-workspace/write.js';
+import { AssertParentDirSafe, SENTINEL_FILE_NAME, WriteWorkspaceFiles } from '../../../lib/dev-workspace/write.js';
 import type { CandidateRepo, GeneratedFile } from '../../../lib/dev-workspace/types.js';
 
 /**
@@ -20,22 +22,30 @@ import type { CandidateRepo, GeneratedFile } from '../../../lib/dev-workspace/ty
  * single pnpm workspace at their common parent directory (pnpm-workspace.yaml,
  * .npmrc, package.json, turbo.json), then runs `pnpm install` there.
  *
- * Automates the hand-driven recipe in plans/openapp-hackathon-quickstart.md.
+ * Automates what was previously a hand-run setup: writing those files yourself and
+ * keeping them in step as repos come and go.
  * Linking only — app REGISTRATION into a running host is deliberately phase 2.
  */
 export default class DevWorkspace extends Command {
-  static description = 'Generate the cross-repo pnpm workspace files at the repos\' common parent directory and install';
+  static description =
+    'Join sibling repo clones into one pnpm workspace: writes pnpm-workspace.yaml, .npmrc, package.json, ' +
+    'turbo.json and the .mj-dev-workspace.json sentinel at their common parent, then runs pnpm install there. ' +
+    'Members are the parent\'s immediate subdirectories carrying an mj-app.json, a @mj-biz-apps package, or the ' +
+    'MJ monorepo root name. Existing files are never overwritten without --force (which keeps a .bak of each). ' +
+    'Generated files are ephemeral — never commit them; tear them down with `dev workspace clean`.';
 
   static examples = [
     '<%= config.bin %> dev workspace --dir ~/code/bluecypress',
     '<%= config.bin %> dev workspace --dir ~/code/bluecypress --exclude bizapps-sonar',
     '<%= config.bin %> dev workspace --dir ~/code/bluecypress --include bizapps-common --include bizapps-tasks',
     '<%= config.bin %> dev workspace --dir ~/code/bluecypress --no-install --force',
+    'MJ_DEV_WORKSPACE_DIR=~/code/bluecypress <%= config.bin %> dev workspace',
   ];
 
   static flags = {
     dir: Flags.string({
-      description: 'Parent directory holding the sibling repo clones (must NOT itself be a git repo)',
+      description: `Parent directory holding the sibling repo clones (must NOT itself be a git repo; env: ${WORKSPACE_DIR_ENV_VAR})`,
+      env: WORKSPACE_DIR_ENV_VAR,
       default: '.',
     }),
     include: Flags.string({
@@ -83,6 +93,7 @@ export default class DevWorkspace extends Command {
         this.log(chalk.dim('Skipped pnpm install (--no-install); run `pnpm install` at the parent when ready.'));
       }
       this.log(chalk.dim(`\nCheck the result any time with: ${this.config.bin} dev workspace status --dir ${parentDir}`));
+      this.log(chalk.dim(`Tear it back down with:          ${this.config.bin} dev workspace clean --dir ${parentDir}`));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.error(message);
@@ -118,7 +129,11 @@ export default class DevWorkspace extends Command {
     return selected;
   }
 
-  /** Builds the four file contents (pure builders) and logs every resolution decision. */
+  /**
+   * Builds every file's content (pure builders) and logs each resolution decision.
+   * The sentinel comes last and records the names of the files alongside it, so its
+   * inventory is true by construction rather than by a constant kept in step.
+   */
   private buildFiles(parentDir: string, members: CandidateRepo[]): GeneratedFile[] {
     const memberNames = members.map((m) => m.Name);
     const rootPkg = BuildRootPackageJson(path.basename(parentDir), members);
@@ -129,11 +144,13 @@ export default class DevWorkspace extends Command {
     this.log(chalk.dim(`packageManager pin ${rootPkg.Pin} from ${rootPkg.PinSource}`));
     const turbo = PickTurboJson(members);
     this.log(chalk.dim(`turbo.json copied from ${turbo.Source}`));
-    return [
+    const workspaceFiles: GeneratedFile[] = [
       { Name: 'pnpm-workspace.yaml', Content: BuildWorkspaceYaml(memberNames) },
       { Name: '.npmrc', Content: BuildNpmrc() },
       { Name: 'package.json', Content: rootPkg.Content },
       { Name: 'turbo.json', Content: turbo.Content },
     ];
+    const written = [...workspaceFiles.map((f) => f.Name), SENTINEL_FILE_NAME];
+    return [...workspaceFiles, { Name: SENTINEL_FILE_NAME, Content: BuildSentinel(written, memberNames) }];
   }
 }

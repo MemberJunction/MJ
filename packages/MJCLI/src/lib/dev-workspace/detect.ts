@@ -9,8 +9,9 @@
  * `package.json` AND any of:
  *  - it carries an `mj-app.json` (an Open App repo),
  *  - any package.json one level under its `packages/` dir mentions the
- *    `@mj-biz-apps/` scope in its own name or dependency sections (the
- *    quickstart's `grep -l '@mj-biz-apps/'` member detection),
+ *    `@mj-biz-apps/` scope in its own name or dependency sections — such a repo
+ *    either publishes into that scope or consumes it, which is exactly what
+ *    makes linking it locally worthwhile,
  *  - it is the MJ monorepo (root package name `memberjunction-workspace`).
  *
  * @module lib/dev-workspace/detect
