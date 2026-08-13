@@ -945,10 +945,11 @@ export class TaskClaimStore {
      * expired on the clock that judges it, and this verb would then complete a task underneath a
      * running executor. That interleaving is the entire reason the gate is narrow, so the gate must
      * not be the thing that gets it wrong. The database is the one reference every instance shares.
-     * (Residual asymmetry, stated rather than hidden: `ClaimExpiresAt` is *written* from the
-     * claiming process's clock by `TryClaim`, so this trades app-vs-app skew for app-vs-DB skew.
-     * Moving the write to `SYSUTCDATETIME()` too would close it completely, but that is a change to
-     * the Round 1 claim protocol itself and does not belong in a debug verb.)
+     * (This verb once carried a residual asymmetry — it *judged* on the database clock while
+     * `TryClaim` still *wrote* the lease from the claiming process's clock, trading app-vs-app skew
+     * for app-vs-DB skew. The claim protocol has since moved its write to `SYSUTCDATETIME()` as
+     * well, so both ends of the comparison now come from the one shared clock and the window is
+     * closed rather than relocated.)
      */
     public async TryForceComplete(
         provider: IMetadataProvider,
