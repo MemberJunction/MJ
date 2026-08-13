@@ -11,6 +11,51 @@ function LogStatusVerbose(message: string): void {
     LogStatusEx({ message, verboseOnly: true });
 }
 
+/**
+ * Recursively freezes a value that is about to enter the cache, so consumers holding the
+ * same reference cannot mutate shared state.
+ *
+ * Only invoked when the storage provider reports
+ * {@link ILocalStorageProvider.SharesReferences} — a serializing backend (IndexedDB,
+ * localStorage, Redis, MMKV) already isolates stored data, and freezing there would
+ * needlessly immobilize the caller's own rows.
+ *
+ * Freezing the ARRAY matters as much as the rows: `results.sort()` / `.push()` on a live
+ * cache array silently reorders or grows the cached slot for every later reader.
+ *
+ * Freezes BEFORE recursing, so the `isFrozen` short-circuit both skips already-frozen
+ * subtrees (cheap re-entry for in-place slot maintenance, which carries existing rows
+ * forward by reference) and terminates cycles.
+ *
+ * Two value kinds are skipped, not frozen — accepted residuals:
+ * - Binary payloads (`Buffer`/TypedArray/`ArrayBuffer`, e.g. `varbinary` columns): the spec
+ *   makes `Object.freeze` THROW on a non-empty view, so attempting it would turn a cache
+ *   write into a crash.
+ * - `Date` internal slots: `Object.freeze` cannot protect them — `setHours` and friends
+ *   still work.
+ */
+function deepFreezeCacheValue<T>(value: T, visited: WeakSet<object> = new WeakSet<object>()): T {
+    if (value === null || typeof value !== 'object'
+        || ArrayBuffer.isView(value) || value instanceof ArrayBuffer) {
+        return value;
+    }
+    // Cycle termination and re-entry short-circuit key off an explicit visited set rather than
+    // `Object.isFrozen`. Those are not the same test: an object frozen SHALLOWLY by someone else
+    // (a caller that ran `Object.freeze(row)` before handing it over) reports frozen while its
+    // nested values are still writable, so keying off isFrozen would skip the whole subtree and
+    // leave shared state mutable. Already-frozen objects are cheap to re-freeze; unvisited
+    // children are the thing that must not be skipped.
+    if (visited.has(value as object)) {
+        return value;
+    }
+    visited.add(value as object);
+    Object.freeze(value);
+    for (const nested of Object.values(value)) {
+        deepFreezeCacheValue(nested, visited);
+    }
+    return value;
+}
+
 // ============================================================================
 // TYPES AND INTERFACES
 // ============================================================================
@@ -76,7 +121,18 @@ export interface CacheStats {
  * to prevent data inconsistency.
  */
 export interface CachedRunViewData {
-    /** The cached result rows */
+    /**
+     * The cached result rows.
+     *
+     * ⚠️ These rows are SHARED: under a reference-sharing storage provider (see
+     * `ILocalStorageProvider.SharesReferences`) they are the same objects held by every reader
+     * of this slot, and they are deep-frozen at write time. Mutating one corrupts process-wide
+     * state and throws a `TypeError`. Build a new array / new rows instead.
+     *
+     * Deliberately typed mutable rather than `readonly`: the runtime freeze is the enforcement,
+     * and a `readonly` marker here would be a compile break for existing downstream code that
+     * reads cache entries — without adding protection the freeze does not already provide.
+     */
     results: unknown[];
     /** The maximum __mj_UpdatedAt timestamp from the results */
     maxUpdatedAt: string;
@@ -91,6 +147,13 @@ export interface CachedRunViewData {
      * Backward-compatible: entries without this field are served normally (no regression).
      */
     schemaHash?: string;
+    /**
+     * Set when the slot was written with {@link CacheWriteOptions.ProviderInternalScaffolding}.
+     * Persisted so that in-place slot maintenance (`storeCachedResults`, driven by BaseEntity
+     * save/delete events) can carry the exemption FORWARD. Without it, the first save event
+     * touching a scaffolding slot would freeze it and break the owner that mutates those rows.
+     */
+    providerInternalScaffolding?: boolean;
 }
 
 /**
@@ -98,7 +161,11 @@ export interface CachedRunViewData {
  * Includes rowCount (derived from results.length) and totalRowCount (from the database).
  */
 export interface CachedRunViewResult {
-    /** The cached result rows */
+    /**
+     * The cached result rows — shared and deep-frozen; see {@link CachedRunViewData.results}.
+     * Callers that need to transform rows (e.g. GraphQL transport field renaming) must map
+     * onto copies: `results.map(r => ({ ...r }))`.
+     */
     results: unknown[];
     /** The maximum __mj_UpdatedAt timestamp from the results */
     maxUpdatedAt: string;
@@ -115,6 +182,37 @@ export interface CachedRunViewResult {
      * permanently disabling post-migration drift detection for that slot.
      */
     schemaHash?: string;
+    /**
+     * Surfaced from the stored payload so in-place maintenance can carry the freeze exemption
+     * forward. See {@link CachedRunViewData.providerInternalScaffolding}.
+     */
+    providerInternalScaffolding?: boolean;
+}
+
+/**
+ * Per-write options for the cache write methods.
+ */
+export interface CacheWriteOptions {
+    /**
+     * Declares that this slot is **provider-internal scaffolding**: the provider doing the
+     * write is its only consumer, and the rows are transient input to that provider's own
+     * assembly step rather than data served to arbitrary callers.
+     *
+     * Such slots are exempt from the defensive deep-freeze. The freeze exists to stop
+     * *consumers* from corrupting shared rows they were handed; it buys nothing for rows with
+     * a single owner, and it would break owners that legitimately use those rows as scratch
+     * space.
+     *
+     * The motivating case is metadata bootstrap: `GetDatasetByName` caches each dataset item
+     * through this cache, and `PostProcessEntityMetadata` then hydrates a graph by sorting the
+     * row array in place and attaching child collections onto each entity/field row. Freezing
+     * those rows makes `GetAllMetadata()` throw and the process boots with no metadata at all.
+     *
+     * **Do not set this to avoid fixing a mutation.** If the rows reach anything other than
+     * the writing provider, the correct fix is for the mutator to copy first. Defaults to
+     * `false` — caller-facing results are always frozen.
+     */
+    ProviderInternalScaffolding?: boolean;
 }
 
 /**
@@ -301,6 +399,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     private _storageProvider: ILocalStorageProvider | null = null;
+
+    /**
+     * Whether the active storage provider hands back live object references, resolved once at
+     * initialization — from the provider's declared {@link ILocalStorageProvider.SharesReferences}
+     * when it states one, otherwise measured empirically. Gates the defensive deep-freeze.
+     */
+    private _sharesReferences: boolean = false;
     private _registry: Map<string, CacheEntryInfo> = new Map();
     private _initialized: boolean = false;
     private _initializePromise: Promise<void> | null = null;
@@ -364,16 +469,69 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * Decides whether the storage provider hands back live object references — the condition
+     * that makes the defensive deep-freeze necessary.
+     *
+     * Prefers the provider's declared {@link ILocalStorageProvider.SharesReferences}. When a
+     * provider does not state one (any implementation written before that property existed),
+     * MEASURE it rather than guessing: store a sentinel object, read it back, and compare
+     * identity. A reference-sharing store returns the very same object; anything with a
+     * serialization or structured-clone boundary returns a copy. This is what keeps the
+     * property optional — an external provider that never declares it still gets the correct
+     * protection instead of silently losing it to a falsy default.
+     *
+     * Fails closed to `false` if the probe cannot complete (a provider whose backing store is
+     * not ready at init): that matches the pre-freeze behavior rather than immobilizing rows
+     * for a provider we could not classify.
+     */
+    private async resolveSharesReferences(storageProvider: ILocalStorageProvider): Promise<boolean> {
+        if (typeof storageProvider.SharesReferences === 'boolean') {
+            return storageProvider.SharesReferences;
+        }
+
+        const probeKey = '__mj_sharesreferences_probe__';
+        const sentinel = { probe: true };
+        try {
+            await storageProvider.SetItem(probeKey, sentinel, CacheCategory.Default);
+            const readBack = await storageProvider.GetItem<typeof sentinel>(probeKey, CacheCategory.Default);
+            const shares = readBack === sentinel;
+            LogStatusVerbose(
+                `[CACHE-INIT] Storage provider "${storageProvider.constructor?.name ?? 'unknown'}" did not declare ` +
+                `SharesReferences; probed it as ${shares} (freeze-on-write ${shares ? 'ENABLED' : 'disabled'}).`
+            );
+            return shares;
+        } catch (e) {
+            LogError(
+                `LocalCacheManager: could not probe SharesReferences on the storage provider; ` +
+                `assuming it isolates (freeze-on-write disabled). Declare SharesReferences to be explicit. ${e}`
+            );
+            return false;
+        } finally {
+            try {
+                await storageProvider.Remove(probeKey, CacheCategory.Default);
+            } catch {
+                /* best-effort cleanup — a leftover probe key is harmless */
+            }
+        }
+    }
+
+    /**
      * Internal initialization logic - only called once by the first caller
      */
     private async doInitialize(
         storageProvider: ILocalStorageProvider,
         config?: Partial<LocalCacheManagerConfig>
     ): Promise<void> {
-        this._storageProvider = storageProvider;
         if (config) {
             this._config = { ...this._config, ...config };
         }
+        // Resolve the freeze decision BEFORE publishing the provider. The probe awaits I/O, and
+        // `_storageProvider` is what every write path reads to decide whether to freeze — so
+        // assigning it first opens a window where writes see the new provider paired with the
+        // PREVIOUS provider's (or the default `false`) freeze decision. Same ordering bug that
+        // `SetStorageProvider` had; fixed here too rather than left as the one asymmetric path.
+        this._sharesReferences = await this.resolveSharesReferences(storageProvider);
+        this._storageProvider = storageProvider;
 
         await this.loadRegistry();
         this._initialized = true;
@@ -429,13 +587,25 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param newProvider - The new storage provider to use
      */
     public async SetStorageProvider(newProvider: ILocalStorageProvider): Promise<void> {
+        // The freeze decision belongs to the ACTIVE provider, not to whichever one happened to be
+        // installed at Initialize. MJAPI initializes on the in-memory provider during engine
+        // loading and swaps to Redis afterward, so these two have OPPOSITE reference semantics on
+        // every Redis deployment — carrying the old answer forward means freezing rows Redis has
+        // already isolated (all of the hazard, none of the protection), or, on the reverse swap,
+        // silently dropping the protection.
+        //
+        // Resolved BEFORE `_storageProvider` is published in both branches: the probe awaits I/O,
+        // and write paths read `_storageProvider` to decide whether to freeze, so publishing first
+        // would pair the new provider with the old provider's decision for the duration of the probe.
         if (!this._initialized) {
             // Not yet initialized — just set the provider and return
+            this._sharesReferences = await this.resolveSharesReferences(newProvider);
             this._storageProvider = newProvider;
             return;
         }
 
         const oldProvider = this._storageProvider;
+        this._sharesReferences = await this.resolveSharesReferences(newProvider);
         this._storageProvider = newProvider;
 
         // Migrate existing cached data from old provider to new provider
@@ -1221,7 +1391,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      *
      * @param name - The dataset name
      * @param itemFilters - Optional filters applied to the dataset
-     * @param dataset - The dataset result to cache
+     * @param dataset - The dataset result to cache. Deep-frozen on reference-sharing storage,
+     *                  like every other cache write funnel — see below.
      * @param keyPrefix - Prefix for the cache key (typically includes connection info)
      */
     public async SetDataset(
@@ -1236,6 +1407,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // Estimate size from a string representation (used only for cache eviction
         // accounting; the actual stored value is the native object).
         const sizeBytes = this.estimateSize(JSON.stringify(dataset));
+
+        // Fourth write funnel, held to the same contract as SetRunViewResult /
+        // SetRunQueryResult / storeCachedResults. `GetDataset` hands this object straight back
+        // out, so on a reference-sharing provider every reader shares it — the same exposure the
+        // other three close. It has no in-repo caller today (GetDatasetByName caches per ITEM via
+        // SetRunViewResult), but it is exported public API, so an external caller would otherwise
+        // get an unprotected slot with no indication that it differs from the documented rule.
+        //
+        // Frozen BEFORE the awaited eviction below, for the same reason as the other funnels: a
+        // yield point between the decision to cache and the freeze is a window in which the
+        // caller can still mutate what is about to become shared state.
+        this.freezeRowDataIfProviderSharesReferences(dataset);
 
         // Check if we need to evict entries
         await this.evictIfNeeded(sizeBytes);
@@ -1398,7 +1581,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      *   pre-RLS format so normal cache sharing is preserved and no existing entries are invalidated.
      * @returns A unique, human-readable fingerprint string
      */
-    public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string, rlsWhereClause?: string): string {
+    public GenerateRunViewFingerprint(params: RunViewParams, connectionPrefix?: string, rlsWhereClause?: string, datasetSegment?: string): string {
         const entity = params.EntityName?.trim() || 'Unknown';
         const rawFilter = params.ExtraFilter;
         const filter = (typeof rawFilter === 'string' ? rawFilter : rawFilter ? JSON.stringify(rawFilter) : '').trim();
@@ -1506,6 +1689,26 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const viewKey = (params.ViewID || params.ViewName || params.ViewEntity?.PrimaryKey?.ToConcatenatedString() || '').trim();
         if (viewKey.length > 0) {
             parts.push(`vw:${viewKey}`);
+        }
+
+        // Dataset namespace. `GetDatasetByName` caches each dataset ITEM's rows through this same
+        // builder, supplying only entity + the item's WhereClause — and every shipped item has a
+        // NULL WhereClause, so without this segment a dataset item emits the identical fingerprint
+        // to a plain unfiltered read of the same entity and the two silently share one slot. That
+        // is not merely a stale-data risk: the MJ_Metadata dataset writes its rows with
+        // `ProviderInternalScaffolding` (deliberately UNFROZEN, because bootstrap rearranges them
+        // in place), so the shared slot hands ordinary callers unprotected rows for the hottest
+        // entities in the process — and, in the other direction, an ordinary read repopulating an
+        // evicted slot stores it FROZEN and the next metadata refresh throws.
+        //
+        // Dataset items may also project columns (`DatasetItem.Columns`), where a RunView slot is
+        // always the full field set — so the two are not interchangeable in shape either.
+        //
+        // Appended ONLY when supplied, so ordinary reads keep their exact pre-existing key and no
+        // existing cache entry is invalidated by this change.
+        const dataset = (datasetSegment ?? '').trim();
+        if (dataset.length > 0) {
+            parts.push(`ds:${dataset}`);
         }
 
         // Only include connection if provided
@@ -1620,6 +1823,67 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * Deep-freezes an about-to-be-stored cache payload when — and only when — the active
+     * storage provider hands out live object references
+     * ({@link ILocalStorageProvider.SharesReferences}).
+     *
+     * This is the cache's structural defense against consumer corruption. Under a
+     * reference-sharing provider the rows a caller receives ARE the cached rows, in both
+     * directions: on a hit the reader gets the stored array, and on a miss the cache stored
+     * the caller's own array. Any in-place mutation therefore edits process-wide state. One
+     * such mutation shipped as a P1 (a resolver renamed `__mj_CreatedAt` to its GraphQL
+     * transport alias in place, so every later read served rows `BaseEntity.SetMany`
+     * rejects). Freezing makes that failure immediate and attributable — a `TypeError` at
+     * the offending line — instead of silent corruption, and costs nothing per cache hit.
+     *
+     * On serializing providers this is a no-op: their stored data is already isolated, and
+     * freezing would only immobilize the caller's own rows for no safety gain.
+     *
+     * @param payload - The envelope being handed to the storage provider. Frozen in place;
+     *                  the same reference is returned for call-site convenience.
+     */
+    /**
+     * Whether the CURRENTLY-INSTALLED provider hands back live references.
+     *
+     * Prefers the active provider's own declaration, read live on each call — a property read,
+     * so it costs nothing on the write path, and it stays correct no matter how many times the
+     * provider is swapped or which code path does the swapping. `_sharesReferences` (resolved at
+     * `Initialize`/`SetStorageProvider`) is the fallback for providers that declare nothing, where
+     * the answer can only come from the async probe and therefore cannot be recomputed here.
+     *
+     * Belt-and-braces with the re-resolution in {@link SetStorageProvider}: that keeps the probed
+     * value correct across swaps, and this keeps DECLARED providers correct even if some future
+     * swap site forgets to re-resolve.
+     */
+    private activeProviderSharesReferences(): boolean {
+        const declared = this._storageProvider?.SharesReferences;
+        return typeof declared === 'boolean' ? declared : this._sharesReferences;
+    }
+
+    private freezeRowDataIfProviderSharesReferences<T>(payload: T): T {
+        if (!this.activeProviderSharesReferences()) {
+            return payload;
+        }
+        try {
+            return deepFreezeCacheValue(payload);
+        } catch (e) {
+            // The freeze is protective, never load-bearing — an exotic value Object.freeze
+            // rejects (beyond the guarded binary kinds) must degrade to a stored write rather
+            // than taking down the read path it defends.
+            //
+            // The payload is PARTIALLY frozen at this point and cannot be un-frozen: the walk
+            // freezes parent-first, so everything visited before the throw is already immutable.
+            // Say that plainly instead of claiming "unfrozen" — an operator debugging a
+            // downstream TypeError needs to know the entry is a mix, not a clean opt-out.
+            LogError(
+                `LocalCacheManager: freeze-on-write failed partway; storing the entry with ` +
+                `whatever was frozen before the failure (partial protection, not none). ${e}`
+            );
+            return payload;
+        }
+    }
+
+    /**
      * Stores a RunView result in the cache.
      *
      * Note: rowCount is NOT persisted - it is always derived from results.length
@@ -1635,6 +1899,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      *   AllowCaching gating in multi-provider scenarios (parallel client connections to multiple
      *   servers). Falls back to `Metadata.Provider` (global default) when omitted, which is fine
      *   for single-provider apps but wrong when AllowCaching differs across servers.
+     * @param ttlMs - Optional time-based expiry (required for external-data-source entities).
+     * @param options - See {@link CacheWriteOptions}. Pass `{ ProviderInternalScaffolding: true }`
+     *   only for slots the writing provider is the sole consumer of.
      */
     public async SetRunViewResult(
         fingerprint: string,
@@ -1644,7 +1911,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         aggregateResults?: AggregateResult[],
         totalRowCount?: number,
         provider?: IMetadataProvider,
-        ttlMs?: number
+        ttlMs?: number,
+        options?: CacheWriteOptions
     ): Promise<void> {
         if (!this._storageProvider || !this._config.enabled) return;
 
@@ -1706,6 +1974,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         // Persist results, maxUpdatedAt, aggregateResults, totalRowCount, and schemaHash
         const data: CachedRunViewData = { results, maxUpdatedAt };
+        if (options?.ProviderInternalScaffolding) {
+            // Persisted so event-driven in-place maintenance carries the exemption forward.
+            data.providerInternalScaffolding = true;
+        }
         if (aggregateResults && aggregateResults.length > 0) {
             data.aggregateResults = aggregateResults;
         }
@@ -1733,11 +2005,25 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             return;
         }
 
-        // Per-entity memory limit: evict oldest entries for this entity if over budget
+        // The oversized gate above is the ONLY step that can decline this write, and it is
+        // synchronous — so by here the row set is definitely becoming shared state, and it is
+        // frozen with no intervening yield point. That ordering is load-bearing: the eviction
+        // steps below are awaited, and callers hold this very array while they run (the
+        // smart-cache stale leg does not await this method at all). Freezing after them leaves
+        // a window in which shared rows are handed out still mutable — and `BaseEntity`
+        // samples `Object.isFrozen` once at load, so a freeze arriving mid-construction makes
+        // a later field READ throw. Declining writes still leave the caller's rows mutable,
+        // because the decline happens before this point.
+        if (!options?.ProviderInternalScaffolding) {
+            this.freezeRowDataIfProviderSharesReferences(data);
+        }
+
+        // Per-entity memory limit: evict oldest entries for this entity if over budget.
+        // Evicts OTHER entries only — it cannot cancel this write.
         const entityName = params.EntityName || 'Unknown';
         await this.enforcePerEntityMemoryLimit(entityName, sizeBytes);
 
-        // Check if we need to evict entries (global budget)
+        // Check if we need to evict entries (global budget). Also eviction-only.
         await this.evictIfNeeded(sizeBytes);
 
         try {
@@ -1886,6 +2172,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             totalRowCount: parsed.totalRowCount,
             // Surfaced so in-place maintenance can carry it forward on rewrite (B38).
             schemaHash: parsed.schemaHash,
+            // Same carry-forward rationale: a maintained scaffolding slot must stay exempt.
+            providerInternalScaffolding: parsed.providerInternalScaffolding,
         };
         if (parsed.aggregateResults) {
             result.aggregateResults = parsed.aggregateResults;
@@ -2140,7 +2428,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 const updatedResults = Array.from(resultMap.values());
 
                 return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt,
-                    { totalRowCount: cached.totalRowCount, rowCount: cached.results.length, schemaHash: cached.schemaHash });
+                    { totalRowCount: cached.totalRowCount, rowCount: cached.results.length, schemaHash: cached.schemaHash,
+                      providerInternalScaffolding: cached.providerInternalScaffolding });
             } catch (e) {
                 LogError(`LocalCacheManager.UpsertSingleEntity failed: ${e}`);
                 return false;
@@ -2192,7 +2481,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 const updatedResults = Array.from(resultMap.values());
 
                 return await this.storeCachedResults(fingerprint, updatedResults, newMaxUpdatedAt,
-                    { totalRowCount: cached.totalRowCount, rowCount: cached.results.length, schemaHash: cached.schemaHash });
+                    { totalRowCount: cached.totalRowCount, rowCount: cached.results.length, schemaHash: cached.schemaHash,
+                      providerInternalScaffolding: cached.providerInternalScaffolding });
             } catch (e) {
                 LogError(`LocalCacheManager.RemoveSingleEntity failed: ${e}`);
                 return false;
@@ -2218,7 +2508,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         fingerprint: string,
         updatedResults: unknown[],
         newMaxUpdatedAt: string,
-        prior?: { totalRowCount?: number; rowCount: number; schemaHash?: string }
+        prior?: { totalRowCount?: number; rowCount: number; schemaHash?: string; providerInternalScaffolding?: boolean }
     ): Promise<boolean> {
         const data: CachedRunViewData = {
             results: updatedResults,
@@ -2238,6 +2528,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (prior?.schemaHash) {
             data.schemaHash = prior.schemaHash;
         }
+        // Carry the freeze exemption forward too — a scaffolding slot that gets maintained in
+        // place must not silently become frozen, or the owner that mutates those rows breaks on
+        // the next read (for the metadata dataset that means booting with no metadata).
+        if (prior?.providerInternalScaffolding) {
+            data.providerInternalScaffolding = true;
+        }
         // Aggregates are deliberately NOT carried here — see hasAggregates(): an aggregate-bearing
         // slot is invalidated on mutation rather than maintained, so this path never runs for one.
         if (prior?.totalRowCount != null) {
@@ -2248,6 +2544,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // value is the native object. This runs on every save/delete event per matching
         // unfiltered fingerprint, so avoiding a full serialization here matters most.
         const sizeBytes = this.estimateResultsSize(updatedResults);
+
+        // Second write funnel — this path bypasses SetRunViewResult entirely, so it must
+        // freeze too. Rows carried forward from the prior slot are already frozen (the
+        // isFrozen short-circuit makes re-entry cheap); what this catches is the NEW array
+        // and the freshly upserted row. Scaffolding slots stay exempt (see above).
+        if (!prior?.providerInternalScaffolding) {
+            this.freezeRowDataIfProviderSharesReferences(data);
+        }
 
         await this._storageProvider!.SetItem<CachedRunViewData>(fingerprint, data, CacheCategory.RunViewCache);
 
@@ -2379,7 +2683,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             return;
         }
 
-        // Check if we need to evict entries
+        // Same reference-sharing exposure as the RunView path (GetRunQueryResult hands
+        // `results` straight back out) — closed here rather than waiting for a mutator to
+        // find it. Placed immediately after the only declining gate and BEFORE the awaited
+        // eviction below, for the same reason as SetRunViewResult: callers of this method do
+        // not always await it, so any yield point before the freeze is a window in which the
+        // caller can still mutate the rows the cache is about to store.
+        this.freezeRowDataIfProviderSharesReferences(data);
+
+        // Check if we need to evict entries. Evicts OTHER entries only — cannot cancel this write.
         await this.evictIfNeeded(sizeBytes);
 
         const now = Date.now();
@@ -2414,6 +2726,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @returns The cached results, maxUpdatedAt, rowCount, and queryId, or null if not found
      */
     public async GetRunQueryResult(fingerprint: string): Promise<{
+        /**
+         * The cached result rows — shared and deep-frozen under a reference-sharing storage
+         * provider, exactly like {@link CachedRunViewData.results}. Do not mutate.
+         */
         results: unknown[];
         maxUpdatedAt: string;
         rowCount: number;

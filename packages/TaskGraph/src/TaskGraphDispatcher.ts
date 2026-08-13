@@ -31,23 +31,98 @@ import {
     type EdgeConditionOutcome,
 
     ComputeSkipCascade,
+    ConfirmSkipSeeds,
+    LayoutGraphNodes,
+    type GraphLayoutEdge,
     ApplyOutputMapping,
     BuildMappedInput,
     ResolveMappedInput,
     type ForEachOperation,
     type WhileOperation,
+
+    LoadAgentRunTree,
+    SumAgentRunTreeCost,
+    WalkAgentRunTree,
+    type AgentRunTreeNode,
 } from '@memberjunction/ai-core-plus';
-import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
-import { IShutdownable, ShutdownRegistry } from '@memberjunction/global';
+import { IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { IShutdownable, ShutdownRegistry, UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
-import type { MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
-import { TaskClaimStore } from './TaskClaimStore';
+import type { MJTaskEntity_ITaskStepConfiguration, MJTaskEntity_ITaskLoopIteration } from '@memberjunction/core-entities';
+import { TaskClaimStore, TERMINAL_PARENT_STATUSES, TERMINAL_PARENT_STATUS_SQL } from './TaskClaimStore';
+import {
+    BuildConditionContext,
+    DecideGate,
+    IsBrokenGuard,
+    ParseConditionOutput,
+    type ConditionInvocation,
+} from './condition-gate';
+import { HumanTaskSQL, IsHumanTask } from './task-predicates';
+import {
+    IsSettlementExpired,
+    IsSubmittingRunReady,
+    SelectUnsettledGraphIDs,
+    SweepCutoff,
+    UNSETTLED_SWEEP_WINDOW_HOURS,
+    UNSETTLED_STARTUP_WINDOW_HOURS,
+} from './settlement-rescue';
 import { DispatcherConditionEvaluator } from './DispatcherConditionEvaluator';
+import {
+    DecideClaimGate,
+    OverrideVerdictFor,
+    ParseTaskGraphDebugState,
+    type TaskGraphDebugState,
+} from './debug-state';
 import { RunForEachLoop, RunWhileLoop, type LoopBodyInvoker } from './TaskLoopExecutor';
+import { RegisterTaskGraphKick } from './task-graph-kick';
 import { NotificationEngine } from '@memberjunction/notifications';
 
 /** Metadata-seeded notification type for human tasks (metadata/notifications/.task-assignment-type.json). */
 const HUMAN_TASK_NOTIFICATION_TYPE = 'Task Assignment';
+
+/**
+ * Statuses a graph parent has stopped moving from.
+ *
+ * Shared by the guarded terminal write and the unsettled-graph sweep, so "terminal" means exactly
+ * one thing in both — the two disagreeing is how a graph becomes invisible to the machinery that is
+ * supposed to rescue it.
+ */
+const TERMINAL_TASK_STATUSES: ReadonlySet<string> = new Set<string>(TERMINAL_PARENT_STATUSES);
+
+/**
+ * How long `Stop()` waits for in-flight tasks and timer passes before giving up and saying so.
+ *
+ * Generous, because the alternative to waiting is a dispatcher that writes after its host believes
+ * it has shut down — settling graphs onto a connection somebody else now owns.
+ */
+const STOP_DRAIN_TIMEOUT_MS = 30_000;
+
+/**
+ * How many consecutive failing passes a graph gets before this instance stops re-queueing it.
+ *
+ * Not a giving-up threshold so much as a stop-shouting one: past this the graph has failed to settle
+ * on every attempt for minutes, so something is wrong that another identical attempt will not fix,
+ * and continuing costs a full graph load per poll forever. It is reported and left to the startup
+ * sweep, which is the wider net.
+ */
+const MAX_SETTLEMENT_RETRY_PASSES = 20;
+
+/**
+ * What the cost rollup managed to do.
+ *
+ * `refused-permanent` is a decision the next pass would repeat identically — a truncated tree, a
+ * graph the tree cannot see — so the settlement proceeds without a number. `failed-transient` is a
+ * condition that may clear, so the pass defers rather than claiming the marker and locking the
+ * wrong answer in.
+ */
+type RollupVerdict = 'landed' | 'refused-permanent' | 'failed-transient';
+
+/** Whether the submitting run's half may proceed, and whether anyone is still waiting for it. */
+type SubmittingRunReadiness = {
+    Verdict: 'ready' | 'defer';
+    /** The submitter was cancelled: settle the graph, announce nothing. */
+    SubmitterCancelled: boolean;
+};
 
 /**
  * Written to a human task's `ClaimedBy` once its assignee has been told it is ready.
@@ -57,10 +132,24 @@ const HUMAN_TASK_NOTIFICATION_TYPE = 'Task Assignment';
  * from reclamation, so this value is never mistaken for a live claim.
  */
 const HUMAN_TASK_NOTIFIED_MARKER = '__human-notified__';
-import { IsReinvokeCapReached, MAX_REINVOKE_DEPTH, ParseTaskGraphParentMetadata, type TaskGraphParentMetadata } from './TaskGraphService';
+
+/**
+ * The run-query capability of a provider, when it has one.
+ *
+ * `IMetadataProvider` does not extend `IRunQueryProvider`, but every provider that ships implements
+ * both. Narrowing by CAPABILITY rather than casting states that honestly: a provider that genuinely
+ * cannot run queries returns undefined and the caller reports it, instead of the call failing later
+ * behind a type assertion that claimed it could.
+ */
+function asRunQueryProvider(provider: IMetadataProvider): IRunQueryProvider | undefined {
+    const candidate = provider as unknown as Partial<IRunQueryProvider>;
+    return typeof candidate.RunQuery === 'function' ? (candidate as IRunQueryProvider) : undefined;
+}
+import { IsReinvokeCapReached, MAX_REINVOKE_DEPTH, ParseTaskGraphParentMetadata, TASK_TYPE_NAME, type TaskGraphParentMetadata } from './TaskGraphService';
 import {
     DEFAULT_DISPATCHER_CONFIG,
     ProviderFactory,
+    type ReconciliationEvent,
     TaskActionRunner,
     TaskAgentRunner,
     TaskPromptRunner,
@@ -69,6 +158,7 @@ import {
     type TaskContinuationParams,
     type TaskGraphFrame,
     type TaskGraphObserver,
+    type TaskRunProgressCallback,
 } from './types';
 
 /**
@@ -92,6 +182,27 @@ type TaskBodyOutcome = {
      * omits it. Recorded into the step's `Configuration.runtime` when the outcome is written.
      */
     PromptRunID?: string;
+    /** The action execution log an Action step produced — the action's answer to PromptRunID. */
+    ActionLogID?: string;
+    /**
+     * One entry per pass, for a loop step.
+     *
+     * A loop's passes are the only work in a graph that produces runs nothing links back to: the
+     * run tree traverses six relationships and an iteration is none of them, and `ParentRunID`
+     * records parentage without being a link the tree follows. Recorded into the step's
+     * `Configuration.runtime` so the passes become reachable — for the timeline, and for the
+     * settlement rollup that was under-counting every loop-bearing workflow.
+     */
+    Iterations?: MJTaskEntity_ITaskLoopIteration[];
+    /**
+     * The resolved payload this step STARTED from — dependencies' outputs merged with its authored
+     * input.
+     *
+     * Returned from the body rather than recomputed at the call site because the body is the only
+     * place that knows it: the merge happens inside `runTaskBody`, and a caller reconstructing it
+     * would be a second implementation of the same rule, free to drift.
+     */
+    PayloadAtStart?: Record<string, unknown>;
 };
 
 /** What a task's position in its graph tells the runner: how deep, and who submitted it. */
@@ -115,6 +226,64 @@ function stringifyBindings(bindings: Record<string, unknown>): Record<string, st
     return out;
 }
 
+/**
+ * How much of a loop's per-pass payloads may be kept, and what happens when that runs out.
+ *
+ * **Why a budget exists at all.** A loop's trace lives inside one `Configuration` column, and its
+ * size is the product of two things nobody bounds: how many passes the loop runs, and how large the
+ * body's input and output are. A hundred-pass loop over documents would put megabytes in a column
+ * that the run tree, the timeline, the canvas and the Workflows list all read — punishing every
+ * reader of the row for a detail only someone inspecting one pass will ever open.
+ *
+ * **What it protects.** Only the payloads. `promptRunID` / `agentRunID` / `actionLogID` / `success`
+ * are always recorded: those point at the durable rows where the real forensics live, and they are
+ * what cost roll-up and the timeline traverse. Losing a payload costs a reader some detail; losing a
+ * pointer would lose the pass.
+ *
+ * **Omission is stated, never silent.** Once the budget is spent, further passes record a marker
+ * saying so and how large the value was, because a pass showing nothing is indistinguishable from a
+ * pass that produced nothing — and that ambiguity is exactly the failure this whole area keeps
+ * hitting.
+ */
+const ITERATION_PAYLOAD_BUDGET_BYTES = 128 * 1024;
+
+/** Per-value cap, so one enormous pass cannot consume the whole budget by itself. */
+const ITERATION_PAYLOAD_VALUE_BYTES = 16 * 1024;
+
+class IterationPayloadBudget {
+    private spent = 0;
+
+    /**
+     * The value if it fits, or a marker describing what was left out.
+     *
+     * @returns the value, a marker object, or undefined when there was nothing to record
+     */
+    public Take(value: unknown): Record<string, unknown> | undefined {
+        if (value == null) return undefined;
+        const asRecord = value && typeof value === 'object' && !Array.isArray(value)
+            ? value as Record<string, unknown>
+            : { value };
+
+        let size: number;
+        try {
+            size = JSON.stringify(asRecord)?.length ?? 0;
+        } catch {
+            // Circular or otherwise unserializable. It could not be persisted anyway, and saying so
+            // is better than a pass that silently shows nothing.
+            return { __omitted: 'unserializable' };
+        }
+
+        if (size > ITERATION_PAYLOAD_VALUE_BYTES) {
+            return { __omitted: 'too-large', __bytes: size, __limit: ITERATION_PAYLOAD_VALUE_BYTES };
+        }
+        if (this.spent + size > ITERATION_PAYLOAD_BUDGET_BYTES) {
+            return { __omitted: 'budget-exhausted', __bytes: size, __limit: ITERATION_PAYLOAD_BUDGET_BYTES };
+        }
+        this.spent += size;
+        return asRecord;
+    }
+}
+
 /** Deep-merges a prompt's JSON response into the payload, preserving what earlier steps established. */
 function deepMergePayload(
     base: Record<string, unknown>,
@@ -134,6 +303,13 @@ function deepMergePayload(
 }
 
 /** A graph's children + edges, in both algorithm shape and mutable-entity shape. */
+/** One gating edge's decided verdict, queued for a change-only `GateDecision` frame. */
+type GateDecisionRecord = {
+    edge: MJTaskDependencyEntity;
+    verdict: 'satisfied' | 'notTaken' | 'held';
+    reason?: string;
+};
+
 type GraphState = {
     nodes: TaskGraphNode[];
     edges: TaskGraphEdge[];
@@ -143,6 +319,17 @@ type GraphState = {
      * not taken, so they can never legitimately run.
      */
     unreachableTaskIDs: Set<string>;
+    /**
+     * Everything this pass will write `Skipped` — the confirmed seeds, the unreachable targets, AND
+     * the cascade's descendants.
+     *
+     * Held on the graph state rather than recomputed at skip time so the claim filter and the
+     * propagation pass read the SAME set. The skip writes are sequential per-entity saves, so a
+     * descendant is briefly eligible between its ancestor's write and its own — `Skipped` satisfies
+     * prerequisites — and another instance loading in that window would claim and execute a branch
+     * that was never taken (R2-14).
+     */
+    cascadeSkipTaskIDs: Set<string>;
     /**
      * Targets of a LOSING exclusive edge. These become `Skipped`, not `Blocked` — a branch that was
      * not taken is a normal outcome, and blocking it would poison the parent rollup.
@@ -163,31 +350,112 @@ type GraphState = {
     handledFailureIDs: Set<string>;
 };
 
-/**
- * Statuses at which an origin's outgoing conditions may be decided.
- *
- * `Skipped` is included: a branch that was not taken IS settled, and a condition on an edge leaving
- * it should resolve rather than hang the graph forever.
- */
-const TERMINAL_FOR_CONDITIONS: ReadonlySet<MJTaskEntity['Status']> = new Set<MJTaskEntity['Status']>([
-    'Complete', 'Failed', 'Cancelled', 'Skipped',
-]);
-
 export class TaskGraphDispatcher implements IShutdownable {
     private readonly config: TaskGraphDispatcherConfig;
     private readonly claims: TaskClaimStore;
+
+    /**
+     * Edges already reported as unevaluable, so the report is once per transition and not once per
+     * poll. Per-instance and in-memory by design: a restart re-reports, which is the right amount of
+     * noise for a condition that is still broken after a restart.
+     */
+    private readonly reportedUnevaluableConditions = new Set<string>();
+
+    /** Resolved once it EXISTS; null while it does not, so a fresh install is not cached blind. */
+    private cachedWorkflowTaskTypeID: string | null = null;
+
+    /**
+     * Graphs this instance is still trying to settle, with how many passes it has spent trying.
+     *
+     * **The sweep's window is on `__mj_UpdatedAt`, and a failing pass writes nothing** — the terminal
+     * write returns rowcount 0 because the row is already terminal, the layout pass touches only
+     * children, a refused CAS writes nothing at all. So a graph that fails to settle stops advancing
+     * its own timestamp and, after 24h of futile retries, ages out of the steady-state window while
+     * the process is up. The doc comment claimed the bound was "on abandonment, not age"; for this
+     * case it was on age, and R2-2's deferral made the case ordinary rather than exotic.
+     *
+     * In memory rather than a touch column because the alternative is a write on every failed
+     * attempt — more load exactly when something is already wrong — and because a restart is covered
+     * by the wide startup sweep, which is the durable backstop this leans on.
+     */
+    private readonly retryingSettlement = new Map<string, number>();
+
+    /**
+     * Graphs whose settled-branch ANNOUNCEMENTS have already been made by this process.
+     *
+     * Re-entry is the point of the rescue, but only the parts that failed should repeat. Layout and
+     * the `GraphSettled` frame are idempotent facts about a finished graph, so a graph stuck in
+     * retry was re-persisting geometry and re-emitting the same frame every poll — for the whole
+     * 24h window, for as long as it kept failing.
+     */
+    private readonly announcedSettlements = new Set<string>();
+
+    /** Graphs already reported as settled-but-undeliverable by this instance. */
+    private readonly reportedUndeliverable = new Set<string>();
+
+    /** Live claim heartbeats by task ID, so the drain can silence the ones it gives up waiting for. */
+    private readonly heartbeats = new Map<string, ReturnType<typeof setInterval>>();
+
+    /** Latched once the drain has given up waiting, so a late arrival does not re-register. */
+    private heartbeatsPurged = false;
     private readonly conditionEvaluator: DispatcherConditionEvaluator;
 
     private running = false;
     private pollTimer: ReturnType<typeof setInterval> | null = null;
     private reconcileTimer: ReturnType<typeof setInterval> | null = null;
+    private unregisterKick: (() => void) | null = null;
     /** Tasks this instance is currently executing — bounds concurrency and drives heartbeats. */
     private readonly inFlight = new Set<string>();
     /** Guards against a slow poll overlapping the next tick. */
     private polling = false;
 
+    /**
+     * Timer-driven passes currently running — poll and reconcile alike.
+     *
+     * A counter rather than a boolean because the two timers overlap by design, and `Stop()` has to
+     * wait for BOTH. Neither pass is held by anything else: they are launched `void`-ed from
+     * `setInterval`, so without this they are unobservable from the outside and a stopped dispatcher
+     * keeps writing.
+     */
+    private activePasses = 0;
+
     /** Graph → owning user, from the parent's durable metadata. Ownership never changes, so this never goes stale. */
     private readonly ownerByParentID = new Map<string, string | null>();
+
+    /** Monotonic pass counter for `PassCompleted` frames, so a viewer can order and gap-detect ticks. */
+    private passCounter = 0;
+
+    /**
+     * Debug state per graph, cached for ONE pass. `pollOnce` clears it at entry, so within a pass
+     * the claim filter and the propagation loop read the same state (loading it twice could see a
+     * pause land between them and gate half a pass), and across passes a control verb written by any
+     * instance is picked up within one poll interval.
+     */
+    private readonly debugStateByGraph = new Map<string, TaskGraphDebugState>();
+
+    /**
+     * The pause state last announced per graph, so `GraphPaused`/`GraphResumed` are emitted on the
+     * TRANSITION rather than every pass — the verbs write durable state, not events, and it is this
+     * instance's job to notice the change and say so exactly once.
+     */
+    private readonly announcedPaused = new Map<string, boolean>();
+
+    /**
+     * The verdict last emitted per gating edge. `GateDecision` frames announce CHANGES: edges are
+     * re-resolved every pass, and an unconditional emission would repeat every few seconds for as
+     * long as the graph lives — the frame-topic version of the log flood
+     * `logUnevaluableConditionOnce` exists to prevent.
+     *
+     * Nested by graph so a settled run's entries go in one delete. Flat per-edge maps in a process
+     * that runs for weeks are a slow leak with no upper bound but the table's size.
+     */
+    private readonly emittedGateVerdicts = new Map<string, Map<string, string>>();
+
+    /** Last `NodeProgress` emission per task, for rate limiting chatty runners. Nested by graph. */
+    private readonly nodeProgressLastEmit = new Map<string, Map<string, number>>();
+
+    /** Minimum interval between `NodeProgress` frames for one task. */
+    private static readonly NODE_PROGRESS_MIN_INTERVAL_MS = 1_000;
 
     constructor(
         private readonly providerFactory: ProviderFactory,
@@ -238,6 +506,39 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
+     * A progress sink for one task's runner, rate-limited into `NodeProgress` frames.
+     *
+     * Rate-limited HERE rather than asking every runner to be polite, for the same reason `emit`
+     * swallows observer throws in one place: a chatty runner (an agent streaming token-level
+     * updates) must not be able to flood the topic, and the limit belongs to the announcement, not
+     * the work. A 100% report always passes — the terminal update is the one a viewer must not lose.
+     */
+    private nodeProgressEmitter(
+        graphID: string,
+        ownerUserID: string | null,
+        taskID: string,
+        taskName: string,
+    ): TaskRunProgressCallback {
+        return (message: string, percent?: number) => {
+            const now = Date.now();
+            let perTask = this.nodeProgressLastEmit.get(graphID);
+            if (!perTask) { perTask = new Map<string, number>(); this.nodeProgressLastEmit.set(graphID, perTask); }
+            const last = perTask.get(taskID) ?? 0;
+            if (percent !== 100 && now - last < TaskGraphDispatcher.NODE_PROGRESS_MIN_INTERVAL_MS) return;
+            perTask.set(taskID, now);
+            this.emit({
+                Kind: 'NodeProgress',
+                ParentTaskID: graphID,
+                OwnerUserID: ownerUserID,
+                TaskID: taskID,
+                TaskName: taskName,
+                ProgressMessage: message,
+                ProgressPercent: percent,
+            });
+        };
+    }
+
+    /**
      * Who a graph belongs to, memoized for the process's lifetime.
      *
      * Read from the parent's durable metadata rather than a column, because `Task.UserID` means
@@ -255,17 +556,111 @@ export class TaskGraphDispatcher implements IShutdownable {
         const cached = this.ownerByParentID.get(parentTaskID);
         if (cached !== undefined) return cached;
 
-        let owner: string | null = null;
         try {
             const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
-            if (await parent.Load(parentTaskID)) {
-                owner = this.readParentMetadata(parent).submittedByUserID ?? null;
+            if (!(await parent.Load(parentTaskID))) {
+                // NOT CACHED (C1). A failed load is not an answer, and caching it as one is
+                // permanent for the life of the process: the delivery filter fails closed on a null
+                // owner, so every frame for this graph reaches nobody until a restart. One
+                // transient blip, and a viewer watches a workflow that never appears to move.
+                LogError(`[TaskGraphDispatcher] Could not load graph ${parentTaskID} to resolve its owner; frames for it are unaddressed this pass.`);
+                return null;
             }
+            const owner = this.readParentMetadata(parent).submittedByUserID ?? null;
+            // A successfully-read graph with no owner IS an answer — a scheduled or remote-triggered
+            // graph legitimately has none — so that one caches.
+            this.ownerByParentID.set(parentTaskID, owner);
+            return owner;
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Could not resolve owner for graph ${parentTaskID}: ${e instanceof Error ? e.message : String(e)}`);
+            return null;
         }
-        this.ownerByParentID.set(parentTaskID, owner);
-        return owner;
+    }
+
+    /**
+     * A graph's debug state, cached for the current pass.
+     *
+     * Read fresh (BypassCache) because the state is written by direct `JSON_MODIFY` statements that
+     * fire no cache invalidation — the same reason every row read in this class bypasses the cache.
+     */
+    private async readDebugState(provider: IMetadataProvider, parentTaskID: string): Promise<TaskGraphDebugState> {
+        const cached = this.debugStateByGraph.get(parentTaskID);
+        if (cached !== undefined) return cached;
+        await this.primeDebugStates(provider, [parentTaskID]);
+        return this.debugStateByGraph.get(parentTaskID) ?? {};
+    }
+
+    /**
+     * Reads the debug bag for a set of graphs in ONE query, priming the per-pass cache.
+     *
+     * Batched because both loops in a pass — propagation and claiming — walk every active graph, so
+     * a per-graph read made observability cost scale with the number of live workflows on a path
+     * that is meant to be flat. One `ID IN (…)` per pass costs the same whether a server is running
+     * one workflow or fifty.
+     *
+     * Already-cached graphs are skipped, so calling this from both loops is free the second time.
+     */
+    private async primeDebugStates(provider: IMetadataProvider, parentTaskIDs: readonly string[]): Promise<void> {
+        const missing = parentTaskIDs.filter((id) => !this.debugStateByGraph.has(id));
+        if (missing.length === 0) return;
+
+        try {
+            const idList = missing.map((id) => `'${id}'`).join(',');
+            const rows = await RunView.FromMetadataProvider(provider).RunView<{ ID: string; InputPayload: string | null }>(
+                {
+                    EntityName: 'MJ: Tasks',
+                    ExtraFilter: `ID IN (${idList})`,
+                    Fields: ['ID', 'InputPayload'],
+                    ResultType: 'simple',
+                    // The bag is written by direct JSON_MODIFY statements, which fire no cache
+                    // invalidation — a cached read here would gate on state a verb already changed.
+                    BypassCache: true,
+                },
+                this.contextUser,
+            );
+            const byID = new Map((rows.Success ? rows.Results ?? [] : []).map((r) => [r.ID, r.InputPayload]));
+            for (const id of missing) {
+                this.debugStateByGraph.set(id, ParseTaskGraphDebugState(byID.get(id) ?? null));
+            }
+        } catch (e) {
+            // "Not being debugged" is the safe reading of "could not read": gating real work on a
+            // transient read failure would turn a database hiccup into a paused workflow. Cached as
+            // empty for this pass only, so the next pass tries again.
+            LogError(`[TaskGraphDispatcher] Could not read debug state for ${missing.length} graph(s): ${e instanceof Error ? e.message : String(e)}`);
+            for (const id of missing) this.debugStateByGraph.set(id, {});
+        }
+    }
+
+    /**
+     * Announces a graph's pause-state TRANSITION, once, whichever instance notices first in its own
+     * frame stream.
+     *
+     * Per-instance dedup rather than a CAS: frames are advisory commentary, and a viewer receiving
+     * the transition from two instances is a duplicate line, not a duplicate execution — the price
+     * of a cross-instance guard here would be a write on every pass for a purely cosmetic guarantee.
+     */
+    private async announcePauseTransition(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        debug: TaskGraphDebugState,
+    ): Promise<void> {
+        const paused = debug.paused === true;
+        const previous = this.announcedPaused.get(parentTaskID);
+        if (previous === paused) return;
+        this.announcedPaused.set(parentTaskID, paused);
+        // First sighting of an unpaused graph needs no announcement — "running" is the default a
+        // viewer already assumes; only a transition is information.
+        if (previous === undefined && !paused) return;
+
+        this.emit({
+            Kind: paused ? 'GraphPaused' : 'GraphResumed',
+            ParentTaskID: parentTaskID,
+            OwnerUserID: await this.resolveOwner(provider, parentTaskID),
+            TaskID: debug.pausedAtTaskID ?? undefined,
+            Reason: paused
+                ? (debug.pausedReason === 'breakpoint' ? 'breakpoint' : 'paused by user')
+                : 'resumed',
+        });
     }
 
     /**
@@ -286,16 +681,75 @@ export class TaskGraphDispatcher implements IShutdownable {
 
         LogStatus(`[TaskGraphDispatcher] Starting as instance '${this.config.InstanceID}'.`);
         await this.Reconcile();
+        // One wide pass over graphs that reached terminal without settling, mirroring what claim
+        // reconciliation above already does for tasks. The realistic producer of a >24h-stale
+        // unsettled graph is this process having been DOWN — an outage, a long deploy — which the
+        // steady-state window cannot see and which would otherwise leave those runs parked forever.
+        // Counted as a pass (R2-13). It settles graphs, delivers continuations and can start fresh
+        // reinvoke turns, and it runs AFTER this instance registers for shutdown — so a `Stop()`
+        // landing during it used to return immediately while the sweep carried on doing all of that
+        // against a host that believed the dispatcher had stopped.
+        this.activePasses++;
+        try {
+            await this.sweepUnsettledGraphs(UNSETTLED_STARTUP_WINDOW_HOURS);
+        } finally {
+            this.activePasses--;
+        }
+
+        // A `Stop()` LANDING DURING THE BOOT AWAITS MUST NOT BE UNDONE HERE (R3-4).
+        //
+        // Everything above this line is awaited — reconciliation and the counted startup sweep,
+        // which R2-13's own fix makes `Stop()` wait out. So a host that shuts down during boot
+        // drains correctly, logs "Stopped.", and returns with both timer fields null — and then
+        // this continuation ran anyway and installed both timers on the stopped instance.
+        //
+        // `pollOnce` was inert (its own `running` guard), but `Reconcile` had no such guard: it
+        // minted a provider and ran `ReleaseExpiredClaims` — a real UPDATE returning tasks to
+        // Pending — every two minutes forever, against a pool the host may have torn down. Nothing
+        // would ever call `Stop()` again, since `ShutdownRegistry.ShutdownAll` clears its items
+        // after one pass, and the intervals pinned the event loop so the process could not exit.
+        if (!this.running) {
+            LogStatus(`[TaskGraphDispatcher] Stopped during startup; not installing timers.`);
+            return;
+        }
 
         this.pollTimer = setInterval(() => { void this.pollOnce(); }, this.config.PollIntervalSeconds * 1000);
+        this.unregisterKick = RegisterTaskGraphKick(() => { this.Kick(); });
+        // Do not wait a full interval for work that already exists (or is about to be submitted).
+        this.Kick();
         this.reconcileTimer = setInterval(
-            () => { void this.Reconcile(); },
+            // Guarded HERE rather than inside `Reconcile` (R3-4). The defect is a stopped
+            // instance's TIMER executing `ReleaseExpiredClaims` — a real UPDATE — forever; the
+            // public method itself stays callable, because reconciling on demand before starting is
+            // a legitimate use (IT74's crash-recovery check does exactly that) and a guard there
+            // would silently no-op it, which is the class of failure this whole effort is about.
+            () => { if (this.running) void this.Reconcile(); },
             this.config.ReconciliationIntervalSeconds * 1000,
         );
+        // Belt and suspenders: `Stop()` remains the real teardown, but an un-`unref`'d interval
+        // keeps the event loop alive on its own, so a leaked instance can prevent process exit.
+        this.pollTimer.unref?.();
+        this.reconcileTimer.unref?.();
     }
 
     /**
-     * Stops accepting new work and waits for in-flight tasks to finish.
+     * Stops accepting new work and waits for everything already started to finish.
+     *
+     * **"Everything" includes the timer passes, and that is the fix.** This waited only on
+     * `inFlight` — the task executions — while a poll pass is a `void`-ed promise nothing held. So
+     * `Stop()` returned while a pass was mid-flight, and that pass went on to settle graphs, emit
+     * lifecycle frames and CLAIM NEW TASKS afterwards. Three consequences, all of them quiet:
+     *
+     *  - a `GraphSettled` frame arrived after every subscriber had gone, so the settlement was
+     *    invisible to exactly the viewer watching for it;
+     *  - a process shutting down claimed work it was about to abandon, leaving claims to expire —
+     *    the orphaned-claim state reconciliation exists to clean up, manufactured by the shutdown;
+     *  - the host reused the connection the moment `Stop()` resolved, and the still-running pass's
+     *    statements collided with it (`Requests can only be made in the LoggedIn state`).
+     *
+     * A pass is bookkeeping for work that already happened, so it is DRAINED rather than cancelled:
+     * abandoning one halfway is the crash window the unsettled sweep exists to rescue, and choosing
+     * to open it on every clean shutdown would be perverse.
      *
      * Deliberately does NOT release claims on the way out: an abandoned claim expires on its own,
      * and releasing eagerly would hand a still-running task to another instance mid-execution.
@@ -303,15 +757,39 @@ export class TaskGraphDispatcher implements IShutdownable {
      */
     public async Stop(): Promise<void> {
         this.running = false;
+        this.unregisterKick?.();
+        this.unregisterKick = null;
         if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
         if (this.reconcileTimer) { clearInterval(this.reconcileTimer); this.reconcileTimer = null; }
 
-        const deadline = Date.now() + 30_000;
-        while (this.inFlight.size > 0 && Date.now() < deadline) {
-            await new Promise((r) => setTimeout(r, 250));
+        // Short poll interval: a pass is usually milliseconds from done, and the old 250ms granularity
+        // was most of the cost of stopping a dispatcher that had nothing left to do.
+        const deadline = Date.now() + STOP_DRAIN_TIMEOUT_MS;
+        while ((this.activePasses > 0 || this.inFlight.size > 0) && Date.now() < deadline) {
+            await new Promise((r) => setTimeout(r, 25));
         }
         if (this.inFlight.size > 0) {
-            LogError(`[TaskGraphDispatcher] Stopped with ${this.inFlight.size} task(s) still in flight; their claims will expire.`);
+            // The promise in this message was FALSE while the process lived (R2-13): each in-flight
+            // task heartbeats its own claim on its own timer, so an over-drain task renewed its lease
+            // indefinitely and the claim never expired — reconciliation could not reclaim the work,
+            // and the host's shutdown was waiting on something that had stopped being reclaimable.
+            // Stopping the heartbeats makes the sentence true. The task itself keeps running; its
+            // completion write is guarded on still owning the claim, so if another instance reclaims
+            // the task in the meantime, the abandoned executor's result is refused rather than raced.
+            // Latched, because the purge RACES the registration it is purging (C5). A task stalled
+            // in its two pre-heartbeat awaits — creating a provider, loading the row — registers
+            // AFTER this line and would renew its claim for the rest of the process's life, which is
+            // exactly the state the drain timeout means to end, under exactly the database duress
+            // that causes drain timeouts in the first place.
+            this.heartbeatsPurged = true;
+            for (const stop of this.heartbeats.values()) clearInterval(stop);
+            this.heartbeats.clear();
+            LogError(`[TaskGraphDispatcher] Stopped with ${this.inFlight.size} task(s) still in flight; their claims will now expire.`);
+        }
+        if (this.activePasses > 0) {
+            // Loud, because from here on this instance writes to a database the host believes it has
+            // finished with — the precise shape that produced connection-state errors downstream.
+            LogError(`[TaskGraphDispatcher] Stopped with ${this.activePasses} pass(es) still running; their writes may land after shutdown.`);
         }
         LogStatus(`[TaskGraphDispatcher] Stopped.`);
     }
@@ -332,6 +810,53 @@ export class TaskGraphDispatcher implements IShutdownable {
      * that shape indicates tampering or a bug and Record Changes already carries the audit trail.
      */
     public async Reconcile(): Promise<void> {
+        this.activePasses++;
+        try {
+            await this.reconcileOnce();
+        } finally {
+            this.activePasses--;
+        }
+    }
+
+    /**
+     * Announces expired claims the sweep just released, so a viewer watching the graph sees "the
+     * step's worker vanished and the engine requeued it" as it happens.
+     *
+     * Best-effort by contract: the release already succeeded and is the durable truth; a frame that
+     * cannot be addressed (row unloadable, no parent) is dropped, never retried.
+     */
+    private async announceReclaims(provider: IMetadataProvider, released: readonly ReconciliationEvent[]): Promise<void> {
+        if (!this.observer || released.length === 0) return;
+        try {
+            const idList = released.map((r) => `'${r.TaskID}'`).join(',');
+            const rows = await RunView.FromMetadataProvider(provider).RunView<{ ID: string; ParentID: string | null; Name: string }>(
+                {
+                    EntityName: 'MJ: Tasks',
+                    ExtraFilter: `ID IN (${idList})`,
+                    Fields: ['ID', 'ParentID', 'Name'],
+                    ResultType: 'simple',
+                    BypassCache: true,
+                },
+                this.contextUser,
+            );
+            for (const row of (rows.Success ? rows.Results : []) ?? []) {
+                const graphID = row.ParentID ?? row.ID;
+                this.emit({
+                    Kind: 'ClaimChanged',
+                    ParentTaskID: graphID,
+                    OwnerUserID: await this.resolveOwner(provider, graphID),
+                    TaskID: row.ID,
+                    TaskName: row.Name,
+                    ClaimEvent: 'reclaimed',
+                });
+            }
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not announce reclaimed task(s) (ignored): ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /** The reconciliation body. Wrapped by {@link Reconcile} so `Stop()` can drain it. */
+    private async reconcileOnce(): Promise<void> {
         let provider: IMetadataProvider | null = null;
         try {
             provider = await this.providerFactory.CreateProvider();
@@ -343,9 +868,20 @@ export class TaskGraphDispatcher implements IShutdownable {
                     `${orphaned.length} orphaned task(s) reported.`,
                 );
             }
+            await this.announceReclaims(provider, released);
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Reconciliation failed: ${e instanceof Error ? e.message : String(e)}`);
         }
+    }
+
+    /**
+     * Run a pass now instead of waiting for the next poll tick.
+     *
+     * Submit calls this (via {@link KickTaskGraphDispatchers}) so a just-written graph is claimed
+     * in milliseconds rather than up to {@link TaskGraphDispatcherConfig.PollIntervalSeconds}.
+     */
+    public Kick(): void {
+        void this.pollOnce();
     }
 
     /**
@@ -356,32 +892,85 @@ export class TaskGraphDispatcher implements IShutdownable {
      */
     private async pollOnce(): Promise<void> {
         if (!this.running || this.polling) return;
-        const capacity = this.config.MaxConcurrentTasks - this.inFlight.size;
-        if (capacity <= 0) return;
 
         this.polling = true;
+        this.activePasses++;
+        // One pass, one read of each graph's debug state — see `readDebugState`.
+        this.debugStateByGraph.clear();
+        const passNumber = ++this.passCounter;
         try {
             const provider = await this.providerFactory.CreateProvider();
+            // `running` is re-read after every await from here on. The entry check above only proves
+            // the dispatcher was live when the tick fired; each await is a point where `Stop` can
+            // land, and a stopped instance must neither mutate graph state nor take new work. Left
+            // unchecked, a stopped dispatcher goes on to roll up graphs (emitting GraphSettled to an
+            // observer nobody is listening to any more) and to claim tasks it will never run — which
+            // then sit claimed until their lease expires.
+            if (!this.running) return;
 
-            // Settle graphs before picking new work, so a failure earlier in this pass stops its
-            // branch immediately rather than after another wave has already launched.
+            // SETTLEMENT IS NOT GATED ON CAPACITY (R2-11).
+            //
+            // This used to return at `capacity <= 0` before reaching the rollup, so a handful of
+            // wedged long-running tasks froze EVERYTHING for the whole instance: no settlement, no
+            // skip or block propagation, no human-task settlement, no continuation delivery — for
+            // graphs that had nothing to do with the tasks holding the slots. A per-task hang is an
+            // accepted limitation; "one hung task stops every workflow on this host" is not, and the
+            // two were the same line of code.
+            //
+            // Only CLAIMING consumes capacity, because only claiming starts work.
             await this.propagateAndRollup(provider);
 
-            const candidates = await this.findClaimableTasks(provider, capacity);
+            const capacity = this.config.MaxConcurrentTasks - this.inFlight.size;
+            if (capacity <= 0) return;
+
+            // The rollup above can take seconds, and `Stop()` may have been called during it. Claiming
+            // now would start work the process has already decided to abandon — the claim then sits
+            // until its TTL expires and another instance reclaims it. Settling first and checking
+            // here is the right order: bookkeeping for finished work always completes, new work never
+            // starts after the decision to stop.
+            if (!this.running) return;
+
+            const { tasks: candidates, stats } = await this.findClaimableTasks(provider, capacity);
+            const claimedByGraph = new Map<string, number>();
             for (const task of candidates) {
+                // Re-checked EVERY iteration, not once before the loop (R2-13). Claiming is itself
+                // awaited, so a multi-task wave can straddle a `Stop`; and `findClaimableTasks` loads
+                // and resolves every active graph, so the scan before this loop can run for seconds.
+                // Unchecked, a shutting-down process takes ownership of work it is about to abandon,
+                // manufacturing the orphaned claims reconciliation exists to clean up.
+                if (!this.running) break;
                 if (this.inFlight.size >= this.config.MaxConcurrentTasks) break;
                 if (!(await this.claims.TryClaim(provider, task.ID, this.contextUser))) {
                     // Another instance won the race, or the task is no longer Pending. Normal.
                     continue;
                 }
+                const graphID = task.ParentID ?? task.ID;
+                claimedByGraph.set(graphID, (claimedByGraph.get(graphID) ?? 0) + 1);
                 this.inFlight.add(task.ID);
                 // Intentionally not awaited — the poll loop must keep dispatching while this runs.
                 void this.executeClaimed(task.ID).finally(() => this.inFlight.delete(task.ID));
+            }
+
+            // The engine's heartbeat, per watched graph: what was ready, what was held, what this
+            // instance took. A stuck run is a strip of these ticking with nothing moving, which is
+            // the honest visual of a stall — and the reason this frame exists.
+            for (const [graphID, s] of stats) {
+                this.emit({
+                    Kind: 'PassCompleted',
+                    ParentTaskID: graphID,
+                    OwnerUserID: await this.resolveOwner(provider, graphID),
+                    PassNumber: passNumber,
+                    EligibleCount: s.eligible,
+                    HeldCount: s.held,
+                    ClaimedCount: claimedByGraph.get(graphID) ?? 0,
+                    InstanceInFlightCount: this.inFlight.size,
+                });
             }
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Poll failed: ${e instanceof Error ? e.message : String(e)}`);
         } finally {
             this.polling = false;
+            this.activePasses--;
         }
     }
 
@@ -402,20 +991,45 @@ export class TaskGraphDispatcher implements IShutdownable {
                 return;
             }
 
+            // Emitted after the claim is held, not before: a frame saying "started" for work another
+            // instance actually took would be a lie a viewer cannot detect.
+            const graphID = task.ParentID ?? taskID;
+            const ownerUserID = await this.resolveOwner(provider, graphID);
+
             heartbeat = setInterval(() => {
                 void this.claims.Heartbeat(provider, taskID, this.contextUser).then((ok) => {
                     if (!ok) {
                         // Lost ownership — reconciliation reclaimed it, or a human intervened.
                         LogError(`[TaskGraphDispatcher] Lost claim on task ${taskID} while executing; another instance may take it over.`);
+                        // Announced so a viewer sees "this step's worker lost its lease" the moment
+                        // it happens instead of discovering it in a forensic query later — the R2-1
+                        // wedge class, made visible.
+                        this.emit({
+                            Kind: 'ClaimChanged', ParentTaskID: graphID, OwnerUserID: ownerUserID,
+                            TaskID: taskID, TaskName: task.Name,
+                            ClaimEvent: 'heartbeat-lost', ClaimedBy: this.config.InstanceID,
+                        });
                     }
                 });
             }, this.config.HeartbeatIntervalSeconds * 1000);
+            // Registered so `Stop()` can reach it — unless the drain has already given up, in which
+            // case this task arrived too late to be waited for and must not renew its lease (C5).
+            // Its completion write stays guarded, so if another instance reclaims the task in the
+            // meantime this executor's result is refused rather than raced.
+            if (this.heartbeatsPurged || !this.running) {
+                clearInterval(heartbeat);
+                heartbeat = null;
+            } else {
+                this.heartbeats.set(taskID, heartbeat);
+            }
 
-            // Emitted after the claim is held, not before: a frame saying "started" for work another
-            // instance actually took would be a lie a viewer cannot detect.
-            const graphID = task.ParentID ?? taskID;
-            const ownerUserID = await this.resolveOwner(provider, graphID);
             this.emit({ Kind: 'TaskStarted', ParentTaskID: graphID, OwnerUserID: ownerUserID, TaskID: taskID, TaskName: task.Name, Status: 'In Progress' });
+            this.emit({
+                Kind: 'ClaimChanged', ParentTaskID: graphID, OwnerUserID: ownerUserID,
+                TaskID: taskID, TaskName: task.Name,
+                ClaimEvent: 'claimed', ClaimedBy: this.config.InstanceID,
+                ClaimExpiresAt: new Date(Date.now() + this.config.ClaimTTLSeconds * 1000).toISOString(),
+            });
 
             const dependencyOutputs = await this.loadDependencyOutputs(provider, taskID);
             let inputPayload: unknown = null;
@@ -424,15 +1038,19 @@ export class TaskGraphDispatcher implements IShutdownable {
                 catch (e) { LogError(`[TaskGraphDispatcher] Task ${taskID} has malformed InputPayload: ${e}`); }
             }
 
-            const result = await this.runTaskBody(task, provider, inputPayload, dependencyOutputs);
+            const onProgress = this.nodeProgressEmitter(graphID, ownerUserID, taskID, task.Name);
+            const result = await this.runTaskBody(task, provider, inputPayload, dependencyOutputs, onProgress);
 
-            // A prompt can end the workflow early and say why. Honour it before recording the
-            // outcome, so the remaining tasks are already Skipped by the time the rollup runs and
-            // the graph settles Complete rather than looking abandoned with work left Pending.
-            if (result.ChatMessage) {
-                await this.endGraphEarly(provider, task, result.ChatMessage);
-            }
-
+            // ONLY THE CONFIRMED OWNER MUTATES THE GRAPH (R2-10).
+            //
+            // The early-finish skips used to run BEFORE this, so a lapsed claim produced the worst
+            // possible pair: the siblings were terminally Skipped and satisfying dependents, while
+            // the completion was refused and the task re-ran on another instance — where it might
+            // not end early at all. The graph would then be missing steps nobody decided to skip.
+            //
+            // Recording first costs a poll: the skips now land after the completion, so a rollup
+            // that lands in between sees work still Pending and settles one pass later. That is a
+            // delay; the other order was a wrong graph.
             const recorded = await this.claims.CompleteClaimed(
                 provider,
                 taskID,
@@ -441,7 +1059,9 @@ export class TaskGraphDispatcher implements IShutdownable {
                     OutputPayload: result.Output != null ? JSON.stringify(result.Output) : null,
                     ErrorMessage: result.ErrorMessage ?? null,
                     AgentRunID: result.AgentRunID ?? null,
-                    Configuration: this.configurationWithRuntime(task, result.PromptRunID),
+                    Configuration: this.configurationWithRuntime(
+                        task, result.PromptRunID, result.ActionLogID, result.Iterations, result.PayloadAtStart,
+                    ),
                 },
                 this.contextUser,
             );
@@ -462,6 +1082,14 @@ export class TaskGraphDispatcher implements IShutdownable {
                     Status: result.Success ? 'Complete' : 'Failed',
                     ErrorMessage: result.Success ? undefined : (result.ErrorMessage ?? undefined),
                 });
+
+                // A prompt can end the workflow early and say why — honoured only now that this
+                // instance is the confirmed owner of the outcome. The remaining tasks are Skipped
+                // here so the graph settles Complete rather than looking abandoned with work left
+                // Pending; a rollup that lands between the two simply settles one pass later.
+                if (result.ChatMessage) {
+                    await this.endGraphEarly(provider, task, result.ChatMessage);
+                }
             }
         } catch (e) {
             LogError(`[TaskGraphDispatcher] Execution failed for ${taskID}: ${e instanceof Error ? e.message : String(e)}`);
@@ -475,6 +1103,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             } catch { /* already logged; nothing further to do */ }
         } finally {
             if (heartbeat) clearInterval(heartbeat);
+            this.heartbeats.delete(taskID);
         }
     }
 
@@ -484,8 +1113,11 @@ export class TaskGraphDispatcher implements IShutdownable {
      * All four decisions — what is eligible, what must block, what the parent status is, whether the
      * graph is wedged — are delegated to the pure algorithms, unchanged from Phase 1.
      */
-    private async propagateAndRollup(provider: IMetadataProvider): Promise<void> {
-        for (const parentID of await this.findActiveGraphIDs(provider)) {
+    private async propagateAndRollup(provider: IMetadataProvider, graphIDs?: readonly string[]): Promise<void> {
+        const graphs = graphIDs ?? await this.findActiveGraphIDs(provider);
+        // One read for every graph this pass touches, rather than one per graph — see primeDebugStates.
+        await this.primeDebugStates(provider, graphs);
+        for (const parentID of graphs) {
             // Human steps settle BEFORE the graph state is read, so an answer given since the last
             // poll is already reflected when eligibility and rollup are computed. Doing it after
             // would delay every dependent branch by a full poll interval for no reason — and on a
@@ -493,8 +1125,12 @@ export class TaskGraphDispatcher implements IShutdownable {
             // between "answered and moving" and "answered and apparently still stuck".
             await this.expireOverdueRequests(provider, parentID);
             await this.settleAnsweredHumanTasks(provider, parentID);
+            await this.reconcileWaitingHumanTasks(provider, parentID);
 
-            const graph = await this.loadGraphState(provider, parentID);
+            // Edge overrides apply to propagation exactly as they apply to claiming — a branch the
+            // operator answered 'false' must cascade its skips here, not merely stop being claimed.
+            const debug = await this.readDebugState(provider, parentID);
+            const graph = await this.loadGraphState(provider, parentID, debug);
             if (graph.nodes.length === 0) continue;
 
             // SKIPS FIRST — before blocking, before eligibility. A task whose gating predecessors
@@ -508,16 +1144,21 @@ export class TaskGraphDispatcher implements IShutdownable {
             // route" and "something upstream broke". A reader cannot tell those apart, so every
             // conditional workflow looked half-failed and people went hunting for bugs that did not
             // exist. `Blocked` is now reserved for FAILURE-driven unsatisfiability.
-            const skipSeeds = new Set([...graph.skipSeedTaskIDs, ...graph.unreachableTaskIDs]);
-            const toSkip = new Set([
-                ...skipSeeds,
-                ...ComputeSkipCascade(graph.nodes, graph.edges, [...skipSeeds]),
-            ]);
+            // Computed once in `loadGraphState` so the claim filter sees the same set this pass is
+            // about to write — see R2-14 there.
+            const toSkip = graph.cascadeSkipTaskIDs;
+            const skippedByRoute: string[] = [];
             for (const taskID of toSkip) {
                 const entity = graph.entityById.get(taskID);
                 if (!entity || entity.Status !== 'Pending') continue;
-                entity.Status = 'Skipped';
-                if (await entity.Save()) {
+                // The in-memory check above is a cheap pre-filter; the guard that matters is IN the
+                // statement (R3-1's audit item). This snapshot was loaded at the top of the pass and
+                // a task can be claimed and started before its skip write lands — R2-14 closed that
+                // window for the claim filter, and this closes it for the write itself.
+                const skipTypeID = await this.workflowTaskTypeID(provider);
+                if (skipTypeID && await this.claims.TrySkipPending(provider, taskID, skipTypeID, this.contextUser)) {
+                    entity.Status = 'Skipped';
+                    skippedByRoute.push(taskID);
                     LogStatus(`[TaskGraphDispatcher] Skipped '${entity.Name}' (${taskID}) — another branch was taken.`);
                     // Announced separately from TaskBlocked because it means something different to
                     // a viewer: nothing went wrong, this route simply was not the one chosen.
@@ -535,6 +1176,14 @@ export class TaskGraphDispatcher implements IShutdownable {
                     if (node) node.status = 'Skipped';
                 }
             }
+
+            // A human step reached by a route the workflow did not take has the same zombie request
+            // as one skipped by an early finish (R2-10): notified, `Requested` forever, and invisible
+            // to the settle and expiry sweeps because they filter on Pending tasks and this one is
+            // not Pending any more. Same treatment, different reason.
+            await this.withdrawOpenRequests(
+                provider, skippedByRoute, 'The workflow took a different route, so this step is no longer needed.',
+            );
 
             // Only failure-driven unsatisfiability reaches here now; not-taken branches were skipped
             // above. A task already Skipped is left alone rather than overwritten — the two passes
@@ -560,11 +1209,15 @@ export class TaskGraphDispatcher implements IShutdownable {
                 }
             }
 
-            if (IsGraphStalled(graph.nodes, graph.edges)) {
+            // Holds are passed in, or the detector reports a held graph as healthy: a held target's
+            // gating edge is still live and its origin Complete, so ComputeEligibleTasks counts it
+            // as eligible and "something is eligible" reads as "not stalled". A graph waiting
+            // forever on a broken condition then produced no diagnostics at all.
+            if (IsGraphStalled(graph.nodes, graph.edges, graph.holdTaskIDs)) {
                 LogError(`[TaskGraphDispatcher] Graph ${parentID} is stalled: pending work with no satisfiable path.`);
             }
 
-            const fresh = await this.loadGraphState(provider, parentID);
+            const fresh = await this.loadGraphState(provider, parentID, debug);
             // ComputeParentRollup treats an empty child set as Complete-and-terminal, which is right
             // for a graph that genuinely has no children and catastrophic for one whose reload came
             // back empty transiently — it would mark live work finished and fire its continuation.
@@ -573,27 +1226,140 @@ export class TaskGraphDispatcher implements IShutdownable {
             const rollup = ComputeParentRollup(fresh.nodes, fresh.handledFailureIDs);
             const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
             if (!(await parent.Load(parentID))) continue;
-            if (parent.Status !== rollup.status || parent.PercentComplete !== rollup.percentComplete) {
-                parent.Status = rollup.status;
-                parent.PercentComplete = rollup.percentComplete;
-                if (rollup.isTerminal) parent.CompletedAt = new Date();
-                await parent.Save();
+            // A graph starts when its first step does.
+            //
+            // `StartedAt` is stamped by the CLAIM, and a parent is never claimed — it is a container,
+            // not a unit of work — so the graph row carried no start time even after it completed.
+            // A settled workflow therefore reported a CompletedAt with no beginning: it sorted as
+            // "not started" in the run tree, showed no timestamp, and no duration could be computed
+            // for the thing whose duration people actually ask about.
+            //
+            // Taken from the earliest child rather than from the clock, because that is when work
+            // genuinely began — a graph can sit Pending for a long time between submission (already
+            // recorded as CreatedAt) and a dispatcher picking up its first task.
+            // Column-scoped for the same reason the terminal write is: a full-row save here would
+            // carry this instance's `InputPayload` snapshot and could erase a continuation marker
+            // another instance had just claimed. Guarded on `StartedAt IS NULL`, so calling it on
+            // every pass is free.
+            const earliestChildStart = this.earliestStart(fresh.entityById);
+            if (parent.StartedAt == null && earliestChildStart != null) {
+                await this.claims.TryStampParentStart(provider, parentID, earliestChildStart, this.contextUser);
+                parent.StartedAt = earliestChildStart;
             }
 
-            if (rollup.isTerminal) {
-                // Emitted before the continuation is delivered, and outside its once-only guard: a
-                // viewer watching the run should learn it finished whether or not this instance is
-                // the one that wins the delivery CAS.
-                this.emit({
-                    Kind: 'GraphSettled',
-                    ParentTaskID: parentID,
-                    OwnerUserID: await this.resolveOwner(provider, parentID),
-                    Status: rollup.status,
-                    CompletedCount: fresh.nodes.filter((n) => n.status === 'Complete').length,
-                    TotalCount: fresh.nodes.length,
-                });
-                await this.rollUpCostToSubmittingRun(provider, parent);
-                await this.deliverContinuation(provider, parent, fresh);
+            // THE TERMINAL WRITE IS GUARDED AND COLUMN-SCOPED, not a full-row save.
+            //
+            // `GenerateSaveSQL` sends every updateable column on every save, so a full-row save
+            // carries the whole in-memory snapshot — including `InputPayload`, where the continuation
+            // marker lives. Two instances both compute the terminal rollup; if one claims the marker
+            // and the other then saves its pre-marker snapshot, the marker is ERASED and the
+            // settlement delivers twice. For `reinvoke` that is a second billed agent turn.
+            //
+            // Guarding on "not already terminal" also makes the write idempotent across the
+            // re-entrant settle path below, and replaces an unchecked `Save()` whose failure left the
+            // graph active — re-emitting frames and recomputing cost every poll, forever.
+            if (rollup.outcome === 'settled') {
+                const settled = await this.claims.TrySettleParent(
+                    provider, parentID, rollup.status, rollup.percentComplete, this.contextUser,
+                );
+                if (!settled && !TERMINAL_TASK_STATUSES.has(parent.Status)) {
+                    // Neither "already terminal" nor a successful write: the statement failed. Leave
+                    // the graph active so the next pass retries rather than settling on a status the
+                    // database never accepted. Re-queued explicitly, because a failed write is
+                    // exactly the case where the row's own timestamp does not advance.
+                    LogError(`[TaskGraphDispatcher] Could not write terminal status for graph ${parentID}; leaving it active to retry.`);
+                    this.keepRetryingSettlement(parentID);
+                    continue;
+                }
+                parent.Status = rollup.status;
+            } else if (parent.Status !== rollup.status || parent.PercentComplete !== rollup.percentComplete) {
+                // Guarded and column-scoped for the same reason the terminal write is — and the race
+                // here needs no exotic timing. This instance may have computed a non-terminal rollup
+                // from a snapshot taken before another instance settled the graph; a full-row save
+                // would then REVERT the status and erase the continuation marker with it, and the
+                // next pass would settle and deliver a second time. See TryUpdateParentProgress.
+                await this.claims.TryUpdateParentProgress(
+                    provider, parentID, rollup.status, rollup.percentComplete, this.contextUser,
+                );
+            }
+
+            if (rollup.outcome === 'settled') {
+                // ANNOUNCE ONCE PER PROCESS, RETRY THE REST (R2-12). Layout and the frame are
+                // idempotent facts about a finished graph; the cost, lifecycle and delivery writes
+                // below are the ones re-entry exists to retry. Without this split, a graph that keeps
+                // failing to settle re-persisted geometry and re-emitted the same frame every poll
+                // for the whole rescue window.
+                if (!this.announcedSettlements.has(parentID)) {
+                    // Geometry is settled once, here, so every viewer of this run agrees on it.
+                    await this.persistComputedLayout(fresh);
+                    // Emitted before the continuation is delivered, and outside its once-only guard: a
+                    // viewer watching the run should learn it finished whether or not this instance is
+                    // the one that wins the delivery CAS.
+                    this.emit({
+                        Kind: 'GraphSettled',
+                        ParentTaskID: parentID,
+                        OwnerUserID: await this.resolveOwner(provider, parentID),
+                        Status: rollup.status,
+                        CompletedCount: fresh.nodes.filter((n) => n.status === 'Complete').length,
+                        TotalCount: fresh.nodes.length,
+                    });
+                    this.announcedSettlements.add(parentID);
+                }
+                // READ-ONLY GATE, before any write to the submitting run's half (R2-2).
+                //
+                // A graph can settle before the run that submitted it has parked at all. `BaseAgent`
+                // sets `Paused` in `finalizeAgentRun`, AFTER the graph is durable and dispatchable —
+                // so a fast graph finishes first, and both writes below then land wrong: the
+                // lifecycle write silently returns (its guard is `Status === 'Paused'`), and the cost
+                // write is overwritten moments later by finalize's own full-row save, which carries
+                // the in-memory nulls it had before the dispatcher wrote anything.
+                //
+                // Deferring the whole half — rather than doing the parts that happen to work — is
+                // what keeps the marker honest: nothing below claims it, so the graph stays
+                // terminal-and-undelivered and the rescue sweep brings it back next pass, by which
+                // time finalize has parked the run and both writes land.
+                const readiness = await this.submittingRunReadiness(provider, parent);
+                if (readiness.Verdict === 'defer') { this.keepRetryingSettlement(parentID); continue; }
+
+                // A settled graph will not produce another verdict, claim or progress report, so the
+                // per-graph observability caches for it are dead weight from here. Unbounded, they
+                // are a slow leak in a process that runs for weeks — one that grows with every
+                // workflow the server has ever seen rather than with anything live. (A deferred
+                // settlement below repopulates them naturally on the retry pass.)
+                this.forgetGraphObservability(parentID);
+                // R3-8: the rollup gets a verdict, and a TRANSIENT failure defers exactly as a
+                // failed lifecycle write does. Continuing past one would settle the run and claim
+                // the marker, which permanently excludes the graph from the rescue sweep — making
+                // the rollup's own "retrying on a later settlement" log a promise it could not keep.
+                // Permanent refusals (truncated tree, graph not in the tree) proceed as before:
+                // those do not clear on their own, and deferring on them would stall forever.
+                if (await this.rollUpCostToSubmittingRun(provider, parent) === 'failed-transient') {
+                    this.keepRetryingSettlement(parentID);
+                    continue;
+                }
+                // Deliberately AFTER the rollup and OUTSIDE its refusal paths. The rollup declines
+                // to write a number it cannot stand behind — a truncated tree, an unreachable graph
+                // — and every one of those returns early. If the run's lifecycle were settled in
+                // there, a refused rollup would strand the run parked forever, which is a far worse
+                // failure than a missing cost figure. Cost and lifecycle are separate concerns with
+                // separate failure modes, so they get separate writes.
+                if (await this.settleSubmittingRun(provider, parent, rollup.status) === 'defer') {
+                    // The lifecycle write did not land. Delivering now would claim the marker and
+                    // make this the LAST pass to look at the graph — leaving the run Paused forever,
+                    // which is the exact permanence R2-2 removes. Leave the marker unset and retry.
+                    this.keepRetryingSettlement(parentID);
+                    continue;
+                }
+                if (await this.deliverContinuation(provider, parent, fresh, readiness.SubmitterCancelled)) {
+                    // Delivered, expired, or lost the CAS to a peer — every one of those means this
+                    // graph is somebody's finished business and needs nothing further from here.
+                    this.retryingSettlement.delete(parentID);
+                    this.announcedSettlements.delete(parentID);
+                } else {
+                    // This instance cannot deliver. Stay quiet about it — the frame is already out —
+                    // and leave the graph for a capable peer via the sweep.
+                    this.keepRetryingSettlement(parentID);
+                }
             }
         }
     }
@@ -618,61 +1384,180 @@ export class TaskGraphDispatcher implements IShutdownable {
      * - `TotalCostRollup` — the run plus everything it caused. Provisional until the graph settles,
      *   which is now.
      *
+     * **The tree is the authority; these columns are its settlement-time cache.** The total is a SUM
+     * over `GetAgentRunTree`, not arithmetic of its own. The previous version walked the graph's
+     * child tasks and added each one's agent run, which was wrong in two ways that no test could
+     * see: a `Prompt` task has no agent run at all, so every prompt step's spend was simply missing;
+     * and it read each nested run's `…Rollup ?? …Total`, mixing a descendant-inclusive number with an
+     * own-spend one and depending on whether that nested graph happened to have settled yet. The
+     * tree already models every one of those cases — it reaches prompt runs through
+     * `Configuration.runtime.promptRunID`, and it descends into nested runs and their graphs
+     * structurally — so summing it cannot disagree with what the run viewer shows, because it IS
+     * what the run viewer shows.
+     *
+     * **This refuses rather than guesses.** A tree that failed to load, hit the depth cap, or does
+     * not contain the settling graph would still produce a number — a lower bound. Writing one would
+     * put an authoritative-looking total in a column every cost surface reads. Each of those cases
+     * logs and leaves the column alone, so `?? TotalCost` keeps its honest meaning: not settled.
+     *
      * A graph with no submitting run (a scheduled job, a remote-operation caller) simply has nobody
      * to credit — its own Task rows still carry the truth, and this returns quietly.
      */
-    private async rollUpCostToSubmittingRun(provider: IMetadataProvider, parent: MJTaskEntity): Promise<void> {
+    private async rollUpCostToSubmittingRun(
+        provider: IMetadataProvider,
+        parent: MJTaskEntity,
+    ): Promise<RollupVerdict> {
         const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
-        if (!meta.submittedByAgentRunID) return;
+        if (!meta.submittedByAgentRunID) return 'landed';
+        const runID = meta.submittedByAgentRunID;
 
         try {
-            const children = await this.loadChildTasks(provider, parent.ID);
-            const runIDs = [...new Set(children.map((c) => c.AgentRunID).filter((id): id is string => !!id))];
-
-            const submitting = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
-            if (!(await submitting.Load(meta.submittedByAgentRunID))) return;
-
-            // Start from what the run itself spent, so the rollup is a superset rather than a
-            // replacement — a Loop agent that both reasoned AND dispatched a graph paid for both.
-            let cost = submitting.TotalCost ?? 0;
-            let tokens = submitting.TotalTokensUsed ?? 0;
-            let promptTokens = submitting.TotalPromptTokensUsed ?? 0;
-            let completionTokens = submitting.TotalCompletionTokensUsed ?? 0;
-
-            for (const runID of runIDs) {
-                const nested = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
-                if (!(await nested.Load(runID))) continue;
-                // Prefer the nested run's OWN rollup: if that agent dispatched a graph of its own,
-                // its rollup already includes it, and reading TotalCost would lose a whole subtree.
-                cost += nested.TotalCostRollup ?? nested.TotalCost ?? 0;
-                tokens += nested.TotalTokensUsedRollup ?? nested.TotalTokensUsed ?? 0;
-                promptTokens += nested.TotalPromptTokensUsedRollup ?? nested.TotalPromptTokensUsed ?? 0;
-                completionTokens += nested.TotalCompletionTokensUsedRollup ?? nested.TotalCompletionTokensUsed ?? 0;
+            const runQuery = asRunQueryProvider(provider);
+            if (!runQuery) {
+                // Permanent for this host: a provider that cannot run queries will not grow the
+                // ability on the next pass, so deferring would stall the graph forever.
+                LogError(`[TaskGraphDispatcher] Cannot roll up cost for run ${runID}: provider cannot run queries.`);
+                return 'refused-permanent';
             }
 
-            submitting.TotalCostRollup = cost;
-            submitting.TotalTokensUsedRollup = tokens;
-            submitting.TotalPromptTokensUsedRollup = promptTokens;
-            submitting.TotalCompletionTokensUsedRollup = completionTokens;
+            const tree = await LoadAgentRunTree(runID, runQuery, this.contextUser);
 
-            if (!(await submitting.Save())) {
+            // Each of these means the sum would be a LOWER BOUND, and the column's whole contract is
+            // that it equals the tree. A known-low number presented as a total is worse than no
+            // number: the readers all fall back to TotalCost when this is null, which at least
+            // *says* it is the run's own spend rather than claiming to be the whole story.
+            //
+            // Refusing is NOT the same as leaving the column alone. A run that submitted two graphs
+            // has a rollup from the first; if the second cannot be summed, the first graph's total
+            // sits in the authoritative column excluding work that has since happened — stale, not
+            // absent, and `?? TotalCost` cannot save a reader from a non-null wrong number. So a
+            // refusal CLEARS it, restoring the fallback's honest meaning: not settled.
+            if (tree.ErrorMessage || !tree.Root) {
+                // TRANSIENT — nothing cleared (R2-15), and now nothing delivered either (R3-8).
+                //
+                // R2-15 stopped this path erasing a correct total. What it did not stop was the pass
+                // CONTINUING: settlement flipped the run terminal and delivery claimed the marker,
+                // which permanently excludes the graph from the rescue sweep — so this function's
+                // own promise of "retrying on a later settlement" was structurally impossible to
+                // keep. One transient DB error, no interleaving, and a multi-graph run kept a wrong
+                // non-null authoritative total forever while a first-graph run stayed null.
                 LogError(
-                    `[TaskGraphDispatcher] Could not record graph cost against run ${meta.submittedByAgentRunID}: ` +
-                    `${submitting.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                    `[TaskGraphDispatcher] Could not load the run tree for ${runID} to roll up graph ` +
+                    `${parent.ID}: ${tree.ErrorMessage ?? 'the run tree came back empty'}. Leaving any ` +
+                    `existing rollup alone and deferring settlement so a later pass can retry.`,
                 );
-                return;
+                return 'failed-transient';
+            }
+            if (tree.Truncated) {
+                // PERMANENT: the tree is genuinely too deep, and it will be just as deep next pass.
+                await this.clearStaleRollup(provider, runID,
+                    `the run tree hit the depth cap, so any total would silently under-report ` +
+                    `(graph ${parent.ID} still carries its own costs)`);
+                return 'refused-permanent';
+            }
+            // The graph that just settled must appear in the tree. If it does not, the tree stopped
+            // at the run — the submitting step never recorded its parentTaskID — and the sum is
+            // merely the run's own spend wearing the name of a rollup. That is precisely the silent
+            // under-count this rewrite exists to remove, so it is reported rather than written.
+            if (!this.treeContainsGraph(tree.Root, parent.ID)) {
+                // PERMANENT: a missing parentTaskID link is a fact about how the graph was
+                // submitted, not a condition that clears on its own.
+                await this.clearStaleRollup(provider, runID,
+                    `graph ${parent.ID} is not reachable from it, so the tree cannot see the work. ` +
+                    `Did the submitting step record parentTaskID?`);
+                return 'refused-permanent';
+            }
+
+            const totals = SumAgentRunTreeCost(tree.Root);
+
+
+
+            // Assignment, never accumulation. The tree already contains the run's own spend as its
+            // ROOT node, and it reads own-cost everywhere, so recomputing from scratch on every
+            // settlement lands on the same answer — which is what makes this safe to call again when
+            // a second graph settles, or when the terminal check is re-evaluated after a HITL wait.
+            //
+            // COLUMN-SCOPED (C4). A full-row save here carried a whole snapshot of the run, and two
+            // instances entering the settled branch for one graph is by design — so a peer's rollup,
+            // loaded before this instance settled the run, would write `Paused` back over
+            // `Completed` along with everything else it had read.
+            if (!(await this.claims.TrySetRunCostRollup(provider, runID, totals, this.contextUser))) {
+                LogError(`[TaskGraphDispatcher] Could not record graph cost against run ${runID}.`);
+                return 'failed-transient';
             }
 
             LogStatus(
-                `[TaskGraphDispatcher] Credited graph ${parent.ID} to run ${meta.submittedByAgentRunID}: ` +
-                `${runIDs.length} nested run(s), ${tokens} token(s), cost ${cost}.`,
+                `[TaskGraphDispatcher] Credited graph ${parent.ID} to run ${runID}: ` +
+                `${tree.Rows.length} node(s), ${totals.Tokens} token(s), cost ${totals.Cost}.`,
             );
         } catch (e) {
             // A failed rollup must never fail the graph. The work finished; only the accounting for
             // it is missing, and a graph marked Failed because its cost could not be summed would be
             // a far worse lie than a cost of null.
+            // A throw is transient by default: nothing here proves the condition will persist, and
+            // the cost of being wrong in this direction is one deferred pass rather than a
+            // permanently wrong authoritative total.
             LogError(`[TaskGraphDispatcher] Cost rollup failed for graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
+            return 'failed-transient';
         }
+        return 'landed';
+    }
+
+    /**
+     * Clears a rollup that can no longer be trusted, and says why.
+     *
+     * **Why clear rather than leave.** The four `…Rollup` columns are a cache of the run tree, and
+     * every reader treats a value there as the total. When the tree cannot be summed, any value
+     * already in the column was computed from an EARLIER settlement — it excludes the graph that
+     * just finished, so it is not merely incomplete, it is a wrong total presented as a right one.
+     * `?? TotalCost` protects a reader from null, not from stale.
+     *
+     * Nulling restores the invariant this whole design rests on: **when the column is present, it
+     * equals the tree.** Absent means not settled, which is exactly what a reader should conclude.
+     * A run with no rollup yet is untouched — there is nothing stale to clear, and writing nulls
+     * over nulls would churn Record Changes for nothing.
+     */
+    private async clearStaleRollup(provider: IMetadataProvider, runID: string, reason: string): Promise<void> {
+        LogError(`[TaskGraphDispatcher] Not recording cost for run ${runID}: ${reason}.`);
+        try {
+            const run = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+            if (!(await run.Load(runID))) return;
+            if (run.TotalCostRollup == null && run.TotalTokensUsedRollup == null) return;   // nothing stale
+
+            run.TotalCostRollup = null;
+            run.TotalTokensUsedRollup = null;
+            run.TotalPromptTokensUsedRollup = null;
+            run.TotalCompletionTokensUsedRollup = null;
+            if (!(await run.Save())) {
+                LogError(
+                    `[TaskGraphDispatcher] Could not clear the now-stale rollup on run ${runID}: ` +
+                    `${run.LatestResult?.CompleteMessage ?? 'unknown error'}. It still shows a total that ` +
+                    `excludes the graph that just settled.`,
+                );
+                return;
+            }
+            LogStatus(
+                `[TaskGraphDispatcher] Cleared the rollup on run ${runID}: it was computed before this ` +
+                `graph settled and can no longer be recomputed, so it would have under-reported.`,
+            );
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not clear the rollup on run ${runID}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /**
+     * Whether the settling graph is actually reachable from the submitting run's tree.
+     *
+     * Matched on the graph's parent Task id, which is the node the `TaskGraph` member of the query
+     * emits. A run that submitted a graph but recorded no `parentTaskID` produces a tree that stops
+     * at the run — structurally indistinguishable, at the SUM, from a run that never dispatched
+     * anything. This is the check that tells those two apart.
+     */
+    private treeContainsGraph(root: AgentRunTreeNode, parentTaskID: string): boolean {
+        for (const node of WalkAgentRunTree(root)) {
+            if (node.NodeType === 'TaskGraph' && UUIDsEqual(node.NodeID, parentTaskID)) return true;
+        }
+        return false;
     }
 
     /**
@@ -691,25 +1576,77 @@ export class TaskGraphDispatcher implements IShutdownable {
         try {
             LogStatus(`[TaskGraphDispatcher] '${task.Name}' ended the workflow early: ${message}`);
 
+            // DECLARE BEFORE MUTATING (R3-1).
+            //
+            // The early finish is decided by one task's result and known to nothing else: skip seeds
+            // come from durable condition and exclusive-group state, so no claim filter anywhere —
+            // including this instance's own, since `executeClaimed` is not awaited and the poll loop
+            // runs concurrently — can tell the remaining steps are about to be skipped. Stamping it
+            // first is what lets `loadGraphState` fold them into the filter, which closes the window
+            // for every instance instead of narrowing it for one.
+            const typeID = await this.workflowTaskTypeID(provider);
+            if (typeID) await this.claims.TryDeclareEarlyFinish(provider, task.ParentID, typeID, this.contextUser);
+
+            const skipped: string[] = [];
+            const claimedMeanwhile: string[] = [];
             for (const sibling of await this.loadChildTasks(provider, task.ParentID)) {
-                if (sibling.ID === task.ID || sibling.Status !== 'Pending') continue;
-                sibling.Status = 'Skipped';
-                if (await sibling.Save()) {
-                    this.emit({
-                        Kind: 'TaskSkipped',
-                        ParentTaskID: task.ParentID,
-                        OwnerUserID: await this.resolveOwner(provider, task.ParentID),
-                        TaskID: sibling.ID,
-                        TaskName: sibling.Name,
-                        Status: 'Skipped',
-                    });
+                if (UUIDsEqual(sibling.ID, task.ID) || sibling.Status !== 'Pending') continue;
+                // GUARDED, not a full-row save against the snapshot above. A sibling claimed between
+                // that load and this write is mid-execution; overwriting it to `Skipped` discards a
+                // running step's outcome while its side effects have already fired. Rowcount is the
+                // verdict — see TaskClaimStore.TrySkipPending.
+                if (!typeID || !(await this.claims.TrySkipPending(provider, sibling.ID, typeID, this.contextUser))) {
+                    claimedMeanwhile.push(sibling.Name);
+                    continue;
                 }
+                skipped.push(sibling.ID);
+                this.emit({
+                    Kind: 'TaskSkipped',
+                    ParentTaskID: task.ParentID,
+                    OwnerUserID: await this.resolveOwner(provider, task.ParentID),
+                    TaskID: sibling.ID,
+                    TaskName: sibling.Name,
+                    Status: 'Skipped',
+                });
             }
 
-            const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
-            if (await parent.Load(task.ParentID)) {
-                parent.OutputPayload = JSON.stringify({ message });
-                await parent.Save();
+            if (claimedMeanwhile.length > 0) {
+                // Reported rather than forced. Those steps were already running when the workflow
+                // decided to stop; their results are real and are allowed to land. The graph settles
+                // once they finish, which is a pass later than it would have and correct.
+                LogStatus(
+                    `[TaskGraphDispatcher] Early finish left ${claimedMeanwhile.length} step(s) running ` +
+                    `(${claimedMeanwhile.join(', ')}) — they were claimed before the skip and their outcomes stand.`,
+                );
+            }
+
+            // WITHDRAW WHAT WE JUST SKIPPED (R2-10).
+            //
+            // A skipped human step leaves its `MJ: AI Agent Requests` row `Requested` forever:
+            // un-answerable, because answering settles nothing once the task is terminal, and
+            // immortal, because the human settle and expiry sweeps both filter on `Status='Pending'`
+            // tasks and this one no longer is. The person keeps seeing "a workflow is waiting on
+            // you" for a workflow that finished without them. `Cancel` has always done this; the
+            // early-finish path skipped exactly the same rows and did not.
+            await this.withdrawOpenRequests(provider, skipped, 'The workflow finished before this step was needed.');
+
+            // Column-scoped, because skipping the siblings above just made this graph fully
+            // terminal — so another instance can settle it and claim the marker before this line
+            // runs. A full-row save from the snapshot we loaded first would undo both. See
+            // TaskClaimStore.TrySetParentOutput.
+            if (typeID) {
+                await this.claims.TrySetParentOutput(
+                    provider, task.ParentID, JSON.stringify({ message }), typeID, this.contextUser,
+                );
+            } else {
+                // Surfaced rather than dropped (R2-10). The graph still ends early — the siblings
+                // are already Skipped — but the reason it ended goes nowhere, and a workflow that
+                // stopped for a stated reason with no stated reason recorded is exactly the kind of
+                // silence this round exists to remove.
+                LogError(
+                    `[TaskGraphDispatcher] Could not resolve the workflow task type, so the early-finish ` +
+                    `reason for graph ${task.ParentID} was not recorded: ${message}`,
+                );
             }
         } catch (e) {
             // The work itself succeeded; only the early-finish bookkeeping failed. Failing the task
@@ -755,21 +1692,13 @@ export class TaskGraphDispatcher implements IShutdownable {
      * as a recovery path; they are ordinary sequencing, and treating them as recovery would let a
      * graph sail past a failure it never anticipated.
      */
-    private async computeHandledFailures(
-        provider: IMetadataProvider,
-        parentTaskID: string,
+    private computeHandledFailures(
+        failureSemantics: TaskGraphParentMetadata['failureSemantics'],
         nodes: TaskGraphNode[],
         edges: TaskGraphEdge[],
-    ): Promise<Set<string>> {
+    ): Set<string> {
         const handled = new Set<string>();
-        // Cheap exit before touching the database: with no failures there is nothing to handle, and
-        // this runs on every poll for every active graph.
-        if (!nodes.some((n) => n.status === 'Failed')) return handled;
-
-        const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
-        if (!(await parent.Load(parentTaskID))) return handled;
-        const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
-        if (meta.failureSemantics !== 'edges') return handled;
+        if (failureSemantics !== 'edges') return handled;
 
         for (const node of nodes) {
             if (node.status !== 'Failed') continue;
@@ -806,20 +1735,41 @@ export class TaskGraphDispatcher implements IShutdownable {
      * user-visible noise and, for `reinvoke`, an unbounded agent-run loop. Given one of the two has
      * to be chosen, the quiet failure is the safe one.
      *
-     * The marker is written with a compare-and-swap read-back, so two instances reconciling the same
-     * completed graph produce one winner rather than two.
+     * The marker is claimed with a real compare-and-swap (one guarded UPDATE, rowcount as verdict),
+     * so two instances reconciling the same completed graph produce one winner rather than two.
      */
     private async deliverContinuation(
         provider: IMetadataProvider,
         parent: MJTaskEntity,
         graph: GraphState,
-    ): Promise<void> {
+        submitterCancelled: boolean,
+    ): Promise<boolean> {
         const meta = this.readParentMetadata(parent);
-        if (meta.continuationDeliveredAt) return;
+        if (meta.continuationDeliveredAt) return true;
 
-        // At the cap, downgrade rather than refuse: the results still reach the user, the chain just
+        // Nobody is waiting: the run that submitted this graph was cancelled. Claim the marker so
+        // nothing re-offers the graph, and record WHY nothing was announced — "we chose not to" and
+        // "we found it too late" are different facts about a settlement, and a reader afterwards
+        // should be able to tell them apart.
+        if (submitterCancelled) {
+            if (await this.claimContinuation(provider, parent.ID, 'cancelled')) {
+                LogStatus(
+                    `[TaskGraphDispatcher] Graph ${parent.ID} settled, but the run that submitted it was ` +
+                    `cancelled — no message posted and no reinvoke started.`,
+                );
+            }
+            return true;
+        }
+
+        // At the cap, DOWNGRADE rather than refuse: the results still reach the user, the chain just
         // stops growing. Refusing outright would lose the outcome of work that actually completed.
-        const mode = IsReinvokeCapReached(meta) ? 'message' : meta.continuation;
+        //
+        // But a downgrade only applies to something that was going to be delivered (C2). Mapping the
+        // cap straight onto `'message'` also promoted `continuation: 'none'` — a graph that asked
+        // for silence — into a message nobody requested. Latent today because `Submit` refuses to
+        // create a graph past the cap, and exactly the kind of latent that stops being latent the
+        // moment a producer bypasses that check.
+        const mode = meta.continuation !== 'none' && IsReinvokeCapReached(meta) ? 'message' : meta.continuation;
         if (mode !== 'none' && IsReinvokeCapReached(meta) && meta.continuation === 'reinvoke') {
             LogStatus(
                 `[TaskGraphDispatcher] Graph ${parent.ID} hit the reinvoke cap (${MAX_REINVOKE_DEPTH}); ` +
@@ -827,14 +1777,51 @@ export class TaskGraphDispatcher implements IShutdownable {
             );
         }
 
-        if (!(await this.claimContinuation(provider, parent.ID, meta))) return;
+        // A SETTLEMENT NOBODY IS WAITING FOR STILL SETTLES — it just does not get announced.
+        //
+        // Run settlement and cost rollup are status corrections and are always safe to apply late; a
+        // run left `Paused` forever is strictly worse than a stale notification skipped. A stale
+        // NOTIFICATION is not: posting a day-old "your workflow finished" into a live conversation,
+        // or worse starting a fresh billed agent turn for it, is the outcome the age-out exists to
+        // avoid. So an aged-out settlement claims the marker as `expired` and logs, which both
+        // records what happened and stops any later pass delivering it. Second rung on the ladder
+        // the reinvoke cap already established.
+        const expired = IsSettlementExpired(parent.CompletedAt, new Date());
 
-        if (mode === 'none') return;
+        // ONLY AN INSTANCE THAT CAN DELIVER MAY CLAIM THE RIGHT TO (R2-6).
+        //
+        // The claim ran before the deliverer check, so an instance constructed WITHOUT one — a
+        // worker tier, an integration bundle, a second dev session — could observe the settlement
+        // first, win the CAS, mark the graph `delivered`, and discard the message or reinvoke a
+        // capable peer would have made moments later. Permanently, decided by poll timing.
+        //
+        // Declining leaves the marker unset, so the rescue sweep keeps offering the graph until an
+        // instance that can deliver takes it. Run settlement and cost rollup have already happened
+        // above and are not held up by this — what is deferred is the announcement, which is the only
+        // part this instance genuinely cannot do.
+        //
+        // `expired` is exempt: recording "too old to deliver" requires no deliverer, and a graph past
+        // its window has nothing left for a capable peer to do.
+        if (!expired && mode !== 'none' && !this.continuationDeliverer) {
+            this.reportUndeliverableOnce(parent.ID);
+            return false;
+        }
+
+        if (!(await this.claimContinuation(provider, parent.ID, expired ? 'expired' : 'delivered'))) return true;
+
+        if (expired) {
+            LogStatus(
+                `[TaskGraphDispatcher] Graph ${parent.ID} settled after its delivery window ` +
+                `(${UNSETTLED_SWEEP_WINDOW_HOURS}h); the run and its cost were corrected, but the ` +
+                `continuation was NOT delivered. Marked expired.`,
+            );
+            return true;
+        }
+
+        if (mode === 'none') return true;
 
         const summary = this.buildContinuationSummary(parent, graph);
         LogStatus(`[TaskGraphDispatcher] Graph ${parent.ID} finished — ${summary}`);
-
-        if (!this.continuationDeliverer) return;
 
         const params: TaskContinuationParams = {
             ParentTaskID: parent.ID,
@@ -871,6 +1858,12 @@ export class TaskGraphDispatcher implements IShutdownable {
             // on the marker: a missed notification visible in the record beats one repeated forever.
             LogError(`[TaskGraphDispatcher] Continuation delivery failed for ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
         }
+        // C1: the function is declared `Promise<boolean>` and fell off the end here, so EVERY
+        // successfully delivered graph resolved `undefined` — read as "not resolved" by the caller,
+        // which then re-queued it and paid another full settle pass (run-tree cost query included)
+        // and polluted R2-6's retry accounting. No double delivery, because the CAS holds; just a
+        // wasted pass per settlement and a retry counter measuring the wrong thing.
+        return true;
     }
 
     /** Reads the parent's durable continuation metadata through the shared parser. */
@@ -884,23 +1877,29 @@ export class TaskGraphDispatcher implements IShutdownable {
      * `MJ: Tasks` stays user-writable (D20), so a plain "read, decide, write" is not enough — the
      * read-back is what makes a lost race observable instead of producing a duplicate delivery.
      */
+    /**
+     * True when this graph finished so long ago that announcing it would surprise rather than inform.
+     *
+     * Measured from the parent's completion, not from when we noticed: the point is how stale the
+     * NEWS is to whoever would receive it.
+     */
     private async claimContinuation(
         provider: IMetadataProvider,
         parentID: string,
-        meta: TaskGraphParentMetadata,
+        deliveredAs: 'delivered' | 'expired' | 'cancelled' = 'delivered',
     ): Promise<boolean> {
-        const row = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
-        if (!(await row.Load(parentID))) return false;
-
-        const current = this.readParentMetadata(row);
-        if (current.continuationDeliveredAt) return false; // a peer got there first
-
-        row.InputPayload = JSON.stringify({ ...meta, continuationDeliveredAt: new Date().toISOString() });
-        if (!(await row.Save())) {
-            LogError(`[TaskGraphDispatcher] Could not mark continuation delivered for ${parentID}; skipping to avoid a duplicate.`);
-            return false;
-        }
-        return true;
+        // ONE GUARDED STATEMENT — see TaskClaimStore.TryClaimContinuation.
+        //
+        // This was Load → check the marker → `Save()`: an unconditional last-write-wins UPDATE that
+        // two dispatchers could both pass. The comments here and at the call site called it a
+        // compare-and-swap read-back; it was read-check-write, and for `continuation: 'reinvoke'`
+        // losing that race means two fresh agent turns billed for one settlement, each able to
+        // submit further graphs.
+        // The type discriminator is part of the guard, not a caller-side filter — see
+        // TryClaimContinuation. Nothing to claim if the type does not exist: no graph was submitted.
+        const typeID = await this.workflowTaskTypeID(provider);
+        if (!typeID) return false;
+        return this.claims.TryClaimContinuation(provider, parentID, deliveredAs, typeID, this.contextUser);
     }
 
     /** One line describing how the graph ended, for the completion log and message delivery. */
@@ -942,12 +1941,12 @@ export class TaskGraphDispatcher implements IShutdownable {
             // Nothing will change on a retry. Mark it so the loop stops, and leave the task Pending
             // and visible — a person can still see it in the Tasks UI, which is the fallback the
             // notification was only ever an accelerant for.
-            await this.markHumanTaskNotified(task);
+            await this.markHumanTaskNotified(task, provider);
             return;
         }
 
         if (!task.UserID) {
-            await this.markHumanTaskNotified(task);
+            await this.markHumanTaskNotified(task, provider);
             return;
         }
 
@@ -964,7 +1963,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             LogError(`[TaskGraphDispatcher] Could not notify ${task.UserID} about task ${task.ID}: ${e instanceof Error ? e.message : String(e)}`);
         }
 
-        await this.markHumanTaskNotified(task);
+        await this.markHumanTaskNotified(task, provider);
 
         // Emitted once, alongside the marker, so a viewer sees the graph stop on a person rather
         // than appearing to stall for no reason.
@@ -990,8 +1989,92 @@ export class TaskGraphDispatcher implements IShutdownable {
      * invalidate. Left cached, a completed task keeps reading as `In Progress` and the graph never
      * rolls up: submitted work simply never settles.
      */
-    private async findActiveGraphIDs(provider: IMetadataProvider): Promise<string[]> {
+    /**
+     * Settles graphs that reached terminal without completing their post-settlement sequence.
+     *
+     * Runs the ordinary propagation path, which is safe to re-enter by construction: the terminal
+     * write is guarded on not-already-terminal, the cost rollup assigns rather than accumulates, run
+     * settlement is guarded on `Paused`, and delivery is guarded by the continuation CAS. A revisit
+     * therefore corrects whatever is missing and does nothing where nothing is.
+     *
+     * @param windowHours how far back to look — wide once at startup, narrow in steady state
+     */
+    private async sweepUnsettledGraphs(windowHours: number): Promise<void> {
+        try {
+            const provider = await this.providerFactory.CreateProvider();
+            const ids = await this.findActiveGraphIDs(provider, windowHours);
+            if (ids.length === 0) return;
+            LogStatus(`[TaskGraphDispatcher] Startup sweep: reviewing ${ids.length} graph(s), including any that reached terminal without settling.`);
+            await this.propagateAndRollup(provider, ids);
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Unsettled-graph sweep failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /**
+     * The `AI Workflow` task type, resolved once per process.
+     *
+     * `MJ: Tasks` is a GENERAL-PURPOSE entity — conversations and user to-dos live there too — so an
+     * unscoped sweep treats every root task hierarchy as a workflow: rolling up and overwriting the
+     * status of somebody's to-do list, raising agent requests against plain tasks, and (once the
+     * continuation CAS exists) injecting marker keys into a user's own `InputPayload`.
+     *
+     * `Submit` has always stamped this type on the parent and every child (`ensureTaskType`, which
+     * runs before the persist transaction), so the discriminator D3 called for already exists on
+     * every dispatcher-owned row. Verified against the live database: every parent graph carries it.
+     *
+     * Null when the type row does not exist yet — no graph has ever been submitted — in which case
+     * there is nothing for the dispatcher to find and the sweep returns empty rather than unscoped.
+     *
+     * **A miss is never cached**, and that is not a micro-optimisation. `TaskGraphService.Submit`
+     * creates the row on first use, so on a fresh install the ordinary sequence is: dispatcher
+     * starts, looks, finds nothing — then somebody submits the first workflow. Caching that first
+     * `null` would blind this process to every graph until it was restarted, with each poll reporting
+     * a clean, empty sweep. The row is created once and never removed, so the retry costs one
+     * `MaxRows: 1` lookup per poll for exactly as long as there is genuinely nothing to dispatch.
+     */
+    private async workflowTaskTypeID(provider: IMetadataProvider): Promise<string | null> {
+        if (this.cachedWorkflowTaskTypeID) return this.cachedWorkflowTaskTypeID;
+        const result = await RunView.FromMetadataProvider(provider).RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Task Types',
+                ExtraFilter: `Name='${TASK_TYPE_NAME}'`,
+                Fields: ['ID'],
+                // Ordered, and reading two (R2-7). An unordered `MaxRows: 1` against two rows sharing
+                // the name lets this instance bind a different ID than `Submit` did — after which
+                // every graph the other stamped is invisible to all three sweep arms here.
+                OrderBy: '__mj_CreatedAt ASC, ID ASC',
+                ResultType: 'simple',
+                MaxRows: 2,
+            },
+            this.contextUser,
+        );
+        if (!result.Success) {
+            // A failed lookup is not "no such type" — saying so would silently skip a poll cycle's
+            // worth of real work. Report it, and let the next cycle ask again.
+            LogError(`[TaskGraphDispatcher] Could not resolve the '${TASK_TYPE_NAME}' task type: ${result.ErrorMessage}`);
+            return null;
+        }
+        const rows = result.Results ?? [];
+        if (rows.length > 1) {
+            LogError(
+                `[TaskGraphDispatcher] More than one '${TASK_TYPE_NAME}' task type exists. Binding the ` +
+                `oldest (${rows[0].ID}); any graph stamped with the other is invisible to this sweep and ` +
+                `will never settle. Merge them.`,
+            );
+        }
+        this.cachedWorkflowTaskTypeID = rows[0]?.ID ?? null;
+        return this.cachedWorkflowTaskTypeID;
+    }
+
+    private async findActiveGraphIDs(provider: IMetadataProvider, windowHours: number = UNSETTLED_SWEEP_WINDOW_HOURS): Promise<string[]> {
         const rv = RunView.FromMetadataProvider(provider);
+
+        // EVERY arm is scoped to workflow graphs. Unscoped, the dispatcher rewrites tasks that are
+        // none of its business — see workflowTaskTypeID.
+        const typeID = await this.workflowTaskTypeID(provider);
+        if (!typeID) return [];
+        const ofWorkflowType = `TypeID='${typeID}'`;
 
         // TWO queries, because "has work left to do" and "needs attention" are not the same set.
         //
@@ -1004,24 +2087,51 @@ export class TaskGraphDispatcher implements IShutdownable {
         //
         // The second query closes it: a parent that is itself non-terminal still needs looking at,
         // whatever its children are doing.
-        const [withPendingWork, unsettledParents] = await rv.RunViews([
+        // THREE queries. The third rescues a graph that reached terminal without settling.
+        //
+        // The post-settlement sequence — cost rollup, run settlement, continuation delivery — runs
+        // AFTER the parent's terminal write, and a terminal parent with all-terminal children
+        // matches neither query above. So a process that died in that window left the submitting
+        // agent run `Paused` FOREVER: no rollup, no notification, and nothing that would ever look
+        // again. The metadata's own doc comment promised "the next sweep retries"; that sweep did
+        // not exist.
+        //
+        // Bounded rather than unbounded, because the marker lives in `InputPayload` JSON and cannot
+        // be filtered in SQL: the window is what keeps this a targeted rescue instead of a re-parse
+        // of every graph ever run. `__mj_UpdatedAt` advances on each settle attempt, so a graph
+        // being actively retried stays in the window — the bound is on ABANDONMENT, not on age.
+        const cutoff = SweepCutoff(new Date(), windowHours);
+        const [withPendingWork, unsettledParents, terminalRecent] = await rv.RunViews([
             {
                 EntityName: 'MJ: Tasks',
-                ExtraFilter: `ParentID IS NOT NULL AND Status IN ('Pending','In Progress')`,
+                ExtraFilter: `${ofWorkflowType} AND ParentID IS NOT NULL AND Status IN ('Pending','In Progress')`,
                 Fields: ['ParentID'],
                 ResultType: 'simple',
                 BypassCache: true,
             },
             {
                 EntityName: 'MJ: Tasks',
-                ExtraFilter: `ParentID IS NULL AND Status IN ('Pending','In Progress')`,
+                ExtraFilter: `${ofWorkflowType} AND ParentID IS NULL AND Status IN ('Pending','In Progress')`,
                 Fields: ['ID'],
+                ResultType: 'simple',
+                BypassCache: true,
+            },
+            {
+                EntityName: 'MJ: Tasks',
+                ExtraFilter:
+                    `${ofWorkflowType} AND ParentID IS NULL AND Status IN (${TERMINAL_PARENT_STATUS_SQL}) ` +
+                    `AND __mj_UpdatedAt >= '${cutoff}'`,
+                Fields: ['ID', 'InputPayload'],
                 ResultType: 'simple',
                 BypassCache: true,
             },
         ], this.contextUser);
 
         const ids = new Set<string>();
+        // Graphs this instance is mid-retry on, whatever the window says (R2-12). A failing pass
+        // writes nothing, so their `__mj_UpdatedAt` has stopped advancing and the third arm below
+        // will eventually stop finding them — which would turn a retry into a silent abandonment.
+        for (const id of this.retryingSettlement.keys()) ids.add(id);
         for (const r of (withPendingWork?.Results ?? []) as Array<{ ParentID: string }>) {
             if (r.ParentID) ids.add(r.ParentID);
         }
@@ -1029,6 +2139,13 @@ export class TaskGraphDispatcher implements IShutdownable {
         // nodes, so they cost one empty load and nothing else.
         for (const r of (unsettledParents?.Results ?? []) as Array<{ ID: string }>) {
             if (r.ID) ids.add(r.ID);
+        }
+        // The marker is JSON, so the filter is in TypeScript rather than in SQL — see
+        // SelectUnsettledGraphIDs, which owns that decision and is tested directly.
+        for (const id of SelectUnsettledGraphIDs(
+            (terminalRecent?.Results ?? []) as Array<{ ID: string; InputPayload: string | null }>,
+        )) {
+            ids.add(id);
         }
         return [...ids];
     }
@@ -1040,11 +2157,20 @@ export class TaskGraphDispatcher implements IShutdownable {
      * complete" as a query is possible but would be a second, independently-maintained definition of
      * the same rule, free to drift from the one the in-run executor uses.
      */
-    private async findClaimableTasks(provider: IMetadataProvider, limit: number): Promise<MJTaskEntity[]> {
+    private async findClaimableTasks(
+        provider: IMetadataProvider,
+        limit: number,
+    ): Promise<{ tasks: MJTaskEntity[]; stats: Map<string, { eligible: number; held: number }> }> {
         const claimable: MJTaskEntity[] = [];
-        for (const parentID of await this.findActiveGraphIDs(provider)) {
+        const stats = new Map<string, { eligible: number; held: number }>();
+        const activeGraphs = await this.findActiveGraphIDs(provider);
+        // Usually a no-op — propagateAndRollup primed these earlier in the same pass.
+        await this.primeDebugStates(provider, activeGraphs);
+        for (const parentID of activeGraphs) {
             if (claimable.length >= limit) break;
-            const graph = await this.loadGraphState(provider, parentID);
+            const debug = await this.readDebugState(provider, parentID);
+            await this.announcePauseTransition(provider, parentID, debug);
+            const graph = await this.loadGraphState(provider, parentID, debug);
             // HOLD is what makes "a broken condition stalls visibly" true rather than merely stated.
             // An undecided exclusive group keeps all its edges, and a kept edge on a Complete origin
             // is a SATISFIED prerequisite — so without this filter every branch of the fork would be
@@ -1065,9 +2191,73 @@ export class TaskGraphDispatcher implements IShutdownable {
             const eligible = ComputeEligibleTasks(graph.nodes, graph.edges, graph.handledFailureIDs)
                 .filter((n) =>
                     !graph.holdTaskIDs.has(n.id) &&
+                    // CONFIRMED seeds, not raw ones (P1). Holding a decided loser out of claiming
+                    // closes a real race — the loser could be claimed between eligibility and the
+                    // skip write — and that role is unchanged. What changed is which targets count
+                    // as decided: a task another live route still reaches was never a loser, so it
+                    // must stay claimable and run when its own prerequisites are met.
                     !graph.skipSeedTaskIDs.has(n.id) &&
-                    !graph.unreachableTaskIDs.has(n.id));
+                    !graph.unreachableTaskIDs.has(n.id) &&
+                    // ...and everything the cascade is about to reach (R2-14). A descendant of a
+                    // seed is eligible for the moments between its ancestor's skip landing and its
+                    // own, because Skipped satisfies prerequisites — a window another instance can
+                    // and does claim inside.
+                    !graph.cascadeSkipTaskIDs.has(n.id));
+            stats.set(parentID, { eligible: eligible.length, held: graph.holdTaskIDs.size });
+
+            // THE DEBUG GATE — pause, single-step, breakpoints — decided by the pure function, with
+            // the CAS writes staying here. Every control is a gate on CLAIMING: a claimed task can
+            // never be interrupted mid-flight anyway, so "paused" means nothing new starts while
+            // in-flight work finishes and its completions land. That is also why the gate sits
+            // BEFORE the runner checks and the human notification below: pausing a graph must not
+            // keep notifying assignees — a notification is starting something.
+            const gate = DecideClaimGate(debug, eligible.map((n) => n.id));
+            if (gate.mode === 'closed') continue;
+            let allowedTaskIDs: Set<string> | null = null;
+            if (gate.mode === 'breakpoint') {
+                const typeID = await this.workflowTaskTypeID(provider);
+                // The pause is a CAS so two instances arriving at the same breakpoint in the same
+                // interval produce one announcement — the loser simply sees a paused graph next pass.
+                if (typeID && await this.claims.TryPauseAtBreakpoint(provider, parentID, gate.taskID, typeID, this.contextUser)) {
+                    const owner = await this.resolveOwner(provider, parentID);
+                    const name = graph.entityById.get(gate.taskID)?.Name;
+                    LogStatus(`[TaskGraphDispatcher] Graph ${parentID} paused at breakpoint on '${name}' (${gate.taskID}).`);
+                    this.emit({ Kind: 'BreakpointHit', ParentTaskID: parentID, OwnerUserID: owner, TaskID: gate.taskID, TaskName: name });
+                    this.emit({ Kind: 'GraphPaused', ParentTaskID: parentID, OwnerUserID: owner, TaskID: gate.taskID, Reason: 'breakpoint' });
+                    this.announcedPaused.set(parentID, true);
+                }
+                continue;
+            }
+            if (gate.mode === 'step') {
+                allowedTaskIDs = new Set(gate.taskIDs);
+
+                // THE ALLOWANCE IS CONSUMED ONLY IF SOMETHING WILL ACTUALLY MOVE.
+                //
+                // "Eligible" is a graph-shape answer; whether this host can run the step is a
+                // separate one, decided below by the runner checks. Consuming first meant a step
+                // onto a node this instance has no runner for — or one already in flight — spent
+                // the allowance and released nothing, leaving the operator pressing a button that
+                // did nothing and no reason anywhere. Deciding first costs one pre-pass over a set
+                // that is at most the frontier.
+                const releasable = eligible.filter((n) => {
+                    const entity = graph.entityById.get(n.id);
+                    return entity ? allowedTaskIDs!.has(n.id) && this.canActOn(entity) : false;
+                });
+                if (releasable.length === 0) {
+                    await this.reportStepReleasedNothing(provider, parentID, gate.taskIDs, graph);
+                    continue;
+                }
+
+                const typeID = await this.workflowTaskTypeID(provider);
+                // Consuming the allowance is the race: exactly one instance clears the marker and
+                // releases work; the loser waits for the next allowance. A lost consume is normal.
+                if (!typeID || !(await this.claims.TryConsumeStepMarker(provider, parentID, typeID, this.contextUser))) {
+                    continue;
+                }
+            }
+
             for (const node of eligible) {
+                if (allowedTaskIDs && !allowedTaskIDs.has(node.id)) continue;
                 const entity = graph.entityById.get(node.id);
                 if (!entity) continue;
 
@@ -1092,6 +2282,19 @@ export class TaskGraphDispatcher implements IShutdownable {
                     // is silent — the graph sits In Progress looking like it is still working.
                     if (!this.promptRunner) continue;
                 } else if (!entity.AgentID) {
+                    // No runner column at all — a person completes this one. Asked through the same
+                    // predicate the human settle/expiry sweeps use, so a task that gets NOTIFIED here
+                    // is a task those sweeps can later see; the two disagreeing is how a human task
+                    // ends up asked and then never settled.
+                    if (!IsHumanTask(entity)) {
+                        // Neither a runner nor a person: nothing can ever move this. Loud, because
+                        // the alternative is a graph that waits forever on nobody.
+                        LogError(
+                            `[TaskGraphDispatcher] Task '${entity.Name}' (${entity.ID}) has no runner ` +
+                            `assignment and is not a human step — nothing can execute it. The graph will stall.`,
+                        );
+                        continue;
+                    }
                     await this.notifyHumanTaskReady(entity, provider);
                     continue;
                 }
@@ -1100,8 +2303,95 @@ export class TaskGraphDispatcher implements IShutdownable {
                 claimable.push(entity);
                 if (claimable.length >= limit) break;
             }
+
+            if (debug.skipBreakpointTaskID) {
+                const skip = debug.skipBreakpointTaskID;
+                const claimedThisPass = claimable.some((t) => UUIDsEqual(t.ID, skip));
+                const stillEligible = eligible.some((n) => UUIDsEqual(n.id, skip));
+                if (claimedThisPass || !stillEligible) {
+                    await this.clearSkipBreakpoint(provider, parentID);
+                }
+            }
         }
-        return claimable;
+        return { tasks: claimable, stats };
+    }
+
+    private async clearSkipBreakpoint(provider: IMetadataProvider, parentTaskID: string): Promise<void> {
+        const typeID = await this.workflowTaskTypeID(provider);
+        if (!typeID) return;
+        await this.claims.TryWriteDebugFields(
+            provider,
+            parentTaskID,
+            [TaskClaimStore.DebugField('$.debug.skipBreakpointTaskID', { Kind: 'null' })],
+            typeID,
+            this.contextUser,
+        );
+    }
+
+    /**
+     * Drops the per-graph frame-dedup state for a graph that has settled.
+     *
+     * `ownerByParentID` is deliberately NOT purged here: it is the delivery key for the
+     * `GraphSettled` frame emitted moments earlier and for any rescue-sweep pass that revisits the
+     * graph, it is one small string per graph, and ownership never changes — the cost of keeping it
+     * is bounded and the cost of losing it is a re-query on a path that is meant to be cheap.
+     */
+    private forgetGraphObservability(parentTaskID: string): void {
+        this.emittedGateVerdicts.delete(parentTaskID);
+        this.nodeProgressLastEmit.delete(parentTaskID);
+        this.announcedPaused.delete(parentTaskID);
+        this.debugStateByGraph.delete(parentTaskID);
+    }
+
+    /**
+     * Whether THIS host can act on a task right now — the runner-availability question, asked
+     * without acting on it.
+     *
+     * Mirrors the checks in the claim loop so a step allowance is spent only when something will
+     * actually move. A human step counts as actionable: stepping onto one legitimately produces a
+     * notification rather than a claim.
+     */
+    private canActOn(entity: MJTaskEntity): boolean {
+        if (this.inFlight.has(entity.ID)) return false;
+        if (entity.ActionID) return !!this.actionRunner;
+        if (entity.PromptID) return !!this.promptRunner;
+        if (entity.AgentID) return true;
+        return IsHumanTask(entity);
+    }
+
+    /**
+     * Says why a step press released nothing, instead of leaving the allowance spent and the
+     * console silent.
+     *
+     * The allowance is deliberately NOT consumed on this path — the operator's intent stands, and
+     * the step will release as soon as the named work becomes actionable (a runner arrives, an
+     * in-flight task finishes). Announced once per pass rather than logged only, because the person
+     * waiting is looking at the console, not the server log.
+     */
+    private async reportStepReleasedNothing(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        requestedTaskIDs: readonly string[],
+        graph: GraphState,
+    ): Promise<void> {
+        const names = requestedTaskIDs
+            .map((id) => graph.entityById.get(id)?.Name)
+            .filter((n): n is string => !!n);
+        const subject = names.length > 0 ? `"${names.join('", "')}"` : 'the next step';
+        const reason =
+            `Step is still waiting: ${subject} cannot start on this server yet — it is already ` +
+            `running, or no runner for that step type is loaded here. The step will release as ` +
+            `soon as it can; nothing was lost.`;
+
+        LogStatus(`[TaskGraphDispatcher] Step on graph ${parentTaskID} released nothing: ${reason}`);
+        this.emit({
+            Kind: 'StepRefused',
+            ParentTaskID: parentTaskID,
+            OwnerUserID: await this.resolveOwner(provider, parentTaskID),
+            TaskID: requestedTaskIDs[0],
+            TaskName: names[0],
+            Reason: reason,
+        });
     }
 
     /**
@@ -1111,11 +2401,16 @@ export class TaskGraphDispatcher implements IShutdownable {
      * notification: the task stays visible in the inbox either way, whereas a notification storm is
      * not self-correcting.
      */
-    private async markHumanTaskNotified(task: MJTaskEntity): Promise<void> {
-        task.ClaimedBy = HUMAN_TASK_NOTIFIED_MARKER;
-        if (!(await task.Save())) {
-            LogError(`[TaskGraphDispatcher] Could not mark task ${task.ID} as notified; it may notify again.`);
+    private async markHumanTaskNotified(task: MJTaskEntity, provider: IMetadataProvider): Promise<void> {
+        // Guarded, not a full-row save against a snapshot (R3-5). This row was loaded at the top of
+        // the pass; a full-row write could revert a status it has reached since, and two instances
+        // could both stamp it after both having seen it absent. The predicate makes it once-only.
+        if (await this.claims.TryMarkHumanNotified(provider, task.ID, HUMAN_TASK_NOTIFIED_MARKER, this.contextUser)) {
+            task.ClaimedBy = HUMAN_TASK_NOTIFIED_MARKER;
+            return;
         }
+        // Rowcount 0 is ordinary: another instance marked it, or the task is no longer Pending.
+        // Either way this instance has nothing left to do about the notification.
     }
 
     /**
@@ -1136,8 +2431,13 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
     ): Promise<'raised' | 'permanent-failure' | 'transient-failure'> {
         try {
-            const existing = await this.findOpenRequest(provider, task.ID);
-            if (existing) return 'raised';   // already waiting on someone
+            const existing = await this.findOpenRequests(provider, task.ID);
+            if (existing.length > 0) {
+                // Somebody IS waiting on this task — but "somebody" may be two rows, so collapse
+                // before returning. Free: the rows are already in hand.
+                await this.withdrawDuplicateRequests(provider, task.ID, existing, existing[0].ID);
+                return 'raised';
+            }
 
             const request = await provider.GetEntityObject<MJAIAgentRequestEntity>(
                 'MJ: AI Agent Requests', this.contextUser,
@@ -1166,7 +2466,36 @@ export class TaskGraphDispatcher implements IShutdownable {
             // The graph's own run is the provenance a reader follows back to see what led here.
             request.OriginatingAgentRunID = await this.submittingRunOf(provider, task);
 
-            if (!(await request.Save())) {
+            // The deadline, when the author set one. `expireOverdueRequests` has always been able to
+            // enforce this — it expires the request and fails the step so a give-up edge can route
+            // around it — but nothing ever WROTE the column, so that whole path had never run outside
+            // a test and a workflow waiting on someone who left the company waited forever.
+            // Absent means no deadline, deliberately: expiring on a timeout nobody chose would be
+            // worse than waiting.
+            const expiresInHours = this.parseConfiguration(task)?.human?.expiresInHours;
+            if (expiresInHours && expiresInHours > 0) {
+                request.ExpiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000);
+            }
+
+            if (await request.Save()) {
+                // INSERT-THEN-RESELECT (R3-5). The check above is read-then-write in a system whose
+                // every other cross-instance write is a CAS, and there is no unique index behind it —
+                // so two overlapping instances both read "none open", both insert, and both ping the
+                // assignee. When one is answered, `settleAnsweredHumanTasks` settles from the single
+                // latest terminal request and NOTHING ever touches the other: the withdrawal paths
+                // fire only on skips and cancels, and both human sweeps scope to `Pending` tasks,
+                // which the settled task no longer is. The duplicate becomes a durable, unanswerable,
+                // immortal inbox item — the zombie class R2-10 removed from the skip paths.
+                //
+                // Checking harder is what created the window, so the resolution is to let both
+                // inserts happen and then agree on a winner: the oldest open row. A loser withdraws
+                // its own row and returns `raised` — somebody IS waiting on this task, which is what
+                // the caller needs to know.
+                await this.withdrawDuplicateRequests(
+                    provider, task.ID, await this.findOpenRequests(provider, task.ID), request.ID);
+                return 'raised';
+            }
+            {
                 LogError(
                     `[TaskGraphDispatcher] Could not raise a request for task ${task.ID}: ` +
                     `${request.LatestResult?.CompleteMessage ?? 'unknown error'}`,
@@ -1205,21 +2534,31 @@ export class TaskGraphDispatcher implements IShutdownable {
         }
     }
 
-    /** The still-open request for a task, if one exists. */
-    private async findOpenRequest(
+    /**
+     * Every still-open request for a task, oldest first.
+     *
+     * Plural, and ordered, for one reason each. Ordered, because the oldest row is the one every
+     * instance must agree is "the" request — it is the one the assignee most likely already saw,
+     * and the one `withdrawDuplicateRequests` keeps; unordered, two instances could each decide a
+     * different duplicate was the keeper and withdraw each other's. Plural, because a caller that
+     * only ever sees the first cannot notice there are two, which is how the duplicate below
+     * survived: every reader of this took `[0]` and moved on.
+     */
+    private async findOpenRequests(
         provider: IMetadataProvider,
         taskID: string,
-    ): Promise<MJAIAgentRequestEntity | null> {
+    ): Promise<MJAIAgentRequestEntity[]> {
         const result = await RunView.FromMetadataProvider(provider).RunView<MJAIAgentRequestEntity>(
             {
                 EntityName: 'MJ: AI Agent Requests',
                 ExtraFilter: `OriginatingTaskID='${taskID}' AND Status='Requested'`,
+                OrderBy: '__mj_CreatedAt ASC, ID ASC',
                 ResultType: 'entity_object',
                 BypassCache: true,
             },
             this.contextUser,
         );
-        return (result.Success ? result.Results?.[0] : null) ?? null;
+        return (result.Success ? result.Results : null) ?? [];
     }
 
     /**
@@ -1238,7 +2577,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         const waiting = await RunView.FromMetadataProvider(provider).RunView<MJTaskEntity>(
             {
                 EntityName: 'MJ: Tasks',
-                ExtraFilter: `ParentID='${graphID}' AND StepType='Human' AND Status='Pending'`,
+                ExtraFilter: `ParentID='${graphID}' AND ${HumanTaskSQL()} AND Status='Pending'`,
                 ResultType: 'entity_object',
                 BypassCache: true,
             },
@@ -1271,6 +2610,88 @@ export class TaskGraphDispatcher implements IShutdownable {
             if (!(await task.Save())) {
                 LogError(
                     `[TaskGraphDispatcher] Could not settle human task ${task.ID}: ` +
+                    `${task.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                );
+                continue;
+            }
+
+            // WITHDRAW EVERY OTHER OPEN ASK FOR THIS STEP (R3-5).
+            //
+            // The step is terminal now, so both human sweeps — which scope to `Pending` tasks — will
+            // never look at it again, and any request still `Requested` is un-answerable and
+            // immortal: the assignee keeps seeing "a workflow is waiting on you" for a step that is
+            // finished. Duplicates only arose from the raise race fixed above, but this also
+            // retroactively cleans the ones already minted, which the raise-side fix cannot reach.
+            await this.withdrawOpenRequests(
+                provider, [task.ID], 'This step has been settled; the request is no longer open.',
+            );
+        }
+    }
+
+    /**
+     * Reconciles the requests behind human steps that are waiting on somebody.
+     *
+     * Two things can be wrong with a waiting step, and both are silent. It can have NO open request
+     * — the cancel case below — or it can have MORE than one, which the raise cannot fix because it
+     * never runs again for a notified task. Both are corrected here, on the only sweep that visits
+     * these tasks every pass.
+     *
+     * **Re-opening a human step whose request was CANCELLED.**
+     *
+     * `answeredRequestFor` deliberately excludes `Canceled`, because cancelling withdraws the ASK
+     * rather than deciding the step — the task is supposed to keep waiting "for whatever replaces
+     * it". Nothing replaced it. `raiseHumanRequest` refuses to raise twice (the notified marker on
+     * `ClaimedBy` is what stops the notification storm), so a cancelled request left the task Pending
+     * with no open request and no path to acquiring one: a workflow waiting forever on a question
+     * nobody is being asked.
+     *
+     * Clearing the marker is the whole fix — the next poll sees an un-notified Pending human task
+     * and raises a fresh request, which is exactly the replacement the design assumed. Bounded by
+     * human action: it takes another person cancelling again to come back here.
+     */
+    private async reconcileWaitingHumanTasks(provider: IMetadataProvider, graphID: string): Promise<void> {
+        const waiting = await RunView.FromMetadataProvider(provider).RunView<MJTaskEntity>(
+            {
+                EntityName: 'MJ: Tasks',
+                // `StepType` is NULLABLE, and rows predating the column exist (4 in the reference
+                // database at the time of writing). None currently carry a UserID, but a human task
+                // written by any path that set the assignee without the discriminator would be
+                // invisible to a `StepType='Human'` filter and stay dead forever after a cancel —
+                // the exact stall this method exists to end. The notified marker already narrows
+                // this to tasks the dispatcher raised a request for, so the widening cannot pull in
+                // unrelated work.
+                ExtraFilter:
+                    `ParentID='${graphID}' AND Status='Pending' ` +
+                    `AND ${HumanTaskSQL()} ` +
+                    `AND ClaimedBy='${HUMAN_TASK_NOTIFIED_MARKER}'`,
+                ResultType: 'entity_object',
+                BypassCache: true,
+            },
+            this.contextUser,
+        );
+        if (!waiting.Success) return;
+
+        for (const task of waiting.Results ?? []) {
+            // Only when there is nothing live AND nothing terminal. A task with an open request is
+            // simply waiting; one with a terminal request is settled on the next pass by
+            // settleAnsweredHumanTasks, and re-raising either would ask the same question twice.
+            const open = await this.findOpenRequests(provider, task.ID);
+            if (open.length > 0) {
+                // Waiting, correctly — but on however many asks happen to exist. Collapse them here
+                // or nothing ever will: the raise is behind the notified marker for good.
+                await this.withdrawDuplicateRequests(provider, task.ID, open, open[0].ID);
+                continue;
+            }
+            if (await this.answeredRequestFor(provider, task.ID)) continue;
+
+            LogStatus(
+                `[TaskGraphDispatcher] The request for '${task.Name}' was cancelled and nothing ` +
+                `replaced it; asking again.`,
+            );
+            task.ClaimedBy = null;
+            if (!(await task.Save())) {
+                LogError(
+                    `[TaskGraphDispatcher] Could not re-open cancelled human task ${task.ID}: ` +
                     `${task.LatestResult?.CompleteMessage ?? 'unknown error'}`,
                 );
             }
@@ -1312,7 +2733,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             {
                 EntityName: 'MJ: Tasks',
                 Fields: ['ID'],
-                ExtraFilter: `ParentID='${graphID}' AND StepType='Human' AND Status='Pending'`,
+                ExtraFilter: `ParentID='${graphID}' AND ${HumanTaskSQL()} AND Status='Pending'`,
                 ResultType: 'simple',
             },
             this.contextUser,
@@ -1354,7 +2775,11 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /** Loads a graph's children and edges in the shapes both the algorithms and mutation need. */
-    private async loadGraphState(provider: IMetadataProvider, parentTaskID: string): Promise<GraphState> {
+    private async loadGraphState(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        debug?: TaskGraphDebugState,
+    ): Promise<GraphState> {
         const rv = RunView.FromMetadataProvider(provider);
         // BypassCache throughout: task status is written by the claim protocol's direct SQL, which
         // fires no cache invalidation. See findActiveGraphIDs.
@@ -1366,7 +2791,8 @@ export class TaskGraphDispatcher implements IShutdownable {
         if (children.length === 0) {
             return {
                 nodes: [], edges: [], entityById: new Map(),
-                unreachableTaskIDs: new Set(), skipSeedTaskIDs: new Set(), holdTaskIDs: new Set(),
+                unreachableTaskIDs: new Set(), cascadeSkipTaskIDs: new Set(),
+                skipSeedTaskIDs: new Set(), holdTaskIDs: new Set(),
                 handledFailureIDs: new Set(),
             };
         }
@@ -1379,6 +2805,20 @@ export class TaskGraphDispatcher implements IShutdownable {
         const deps = (depsResult.Success ? depsResult.Results : []) ?? [];
 
         const entityById = new Map(children.map((c) => [c.ID, c]));
+
+        // Read ONCE, and only when it can change an answer (R2-4). Both consumers below — which
+        // origin statuses may decide an exclusive group, and which failures count as handled — are
+        // no-ops unless something has actually failed, and this runs on every poll for every active
+        // graph, so the parent load stays behind the same cheap exit `computeHandledFailures` used.
+        // One parent read serves both questions this pass asks of the metadata bag.
+        const parentMeta = await this.readParentMetadataFor(provider, parentTaskID);
+        const failureSemantics = parentMeta.failureSemantics;
+        // The invocation's own parameters, carried on the parent so a condition evaluated by any
+        // instance sees what the walker saw (R3-3).
+        const invocation: ConditionInvocation = {
+            Data: parentMeta.invocation?.data,
+            Context: parentMeta.invocation?.context,
+        };
 
         // Conditional edges are resolved HERE, before eligibility runs, by dropping edges whose
         // condition does not hold. Expressing it as edge removal rather than as a second rule inside
@@ -1406,6 +2846,13 @@ export class TaskGraphDispatcher implements IShutdownable {
         const exclusive = deps.filter((d) => !!d.ExclusiveGroup);
         const ordinary = deps.filter((d) => !d.ExclusiveGroup);
 
+        // Named once and consumed twice — by the resolution below and by the `GateDecision` frame
+        // emission further down. Two copies of this rule is how the console starts narrating
+        // decisions the engine no longer makes.
+        const decidingStatuses: ReadonlySet<TaskGraphNodeStatus> = failureSemantics === 'edges'
+            ? new Set<TaskGraphNodeStatus>(['Complete', 'Failed'])
+            : new Set<TaskGraphNodeStatus>(['Complete']);
+
         const resolution = ResolveExclusiveGroups(
             exclusive.map((d) => ({
                 id: d.ID,
@@ -1415,18 +2862,46 @@ export class TaskGraphDispatcher implements IShutdownable {
                 originStatus: (entityById.get(d.DependsOnTaskID)?.Status ?? 'Pending') as TaskGraphNodeStatus,
                 priority: d.Priority ?? 0,
                 sequence: d.Sequence ?? 0,
-                conditionOutcome: this.evaluateExclusiveCondition(d, entityById),
+                conditionOutcome: this.evaluateExclusiveCondition(d, entityById, invocation, debug),
             })),
-            // A flow's failure handling is its outgoing edges, so a Failed origin still decides its
-            // group. For a loop-agent graph the set is Complete-only and nothing changes.
-            new Set<TaskGraphNodeStatus>(['Complete', 'Failed']),
+            // WHICH STATUSES MAY DECIDE — the graph's own failure dialect, not a constant.
+            //
+            // Under `'edges'`, a flow's failure handling IS its outgoing edges, so a Failed origin
+            // decides its group and the drawn recovery path runs. Under `'block'` — the spec's
+            // DEFAULT — a failure is terminal for everything downstream, and letting it decide was
+            // silently catastrophic: the losers were removed and seeded, `ComputeSkipCascade`
+            // confirmed them `Skipped`, `Skipped` satisfies dependents, and because the removed
+            // loser edges also sever `ComputeTasksToBlock`'s forward walk, a join fed by an
+            // independent healthy route EXECUTED downstream of an unhandled failure. The parent
+            // still rolled up Failed, so the verdict looked right while the side effects had fired.
+            //
+            // The old comment claimed a loop-agent graph saw Complete-only. It did not; the same
+            // hardcoded set was passed for every graph.
+            decidingStatuses,
         );
         const loserEdgeIDs = new Set(resolution.loserEdgeIDs);
 
+        // Targets of an edge whose condition could not be evaluated (P2). Neither eligible nor
+        // skipped: the edge stays live so the target is not mistaken for unreachable, and the target
+        // joins the hold set so nothing claims it.
+        const heldByCondition = new Set<string>();
+
+        // Decisions collected for `GateDecision` frames — announced after the state is assembled,
+        // change-only, so a viewer learns WHY a branch ran (or is held) the moment it is decided.
+        const gateDecisions: GateDecisionRecord[] = [];
+
         for (const d of ordinary) {
             if (d.Condition?.trim()) {
-                const outcome = this.evaluateEdgeCondition(d, entityById);
-                if (outcome === 'drop') { droppedInto.add(d.TaskID); continue; }
+                const decision = this.evaluateEdgeCondition(d, entityById, failureSemantics, invocation, debug);
+                if (decision.decided) {
+                    gateDecisions.push({
+                        edge: d,
+                        verdict: decision.outcome === 'keep' ? 'satisfied' : decision.outcome === 'drop' ? 'notTaken' : 'held',
+                        reason: decision.reason,
+                    });
+                }
+                if (decision.outcome === 'drop') { droppedInto.add(d.TaskID); continue; }
+                if (decision.outcome === 'hold') heldByCondition.add(d.TaskID);
             }
             stillReachable.add(d.TaskID);
             liveEdges.push({
@@ -1452,17 +2927,109 @@ export class TaskGraphDispatcher implements IShutdownable {
         // waiting on it, and a node reached by an alternate branch is genuinely reachable.
         const unreachableTaskIDs = new Set([...droppedInto].filter((id) => !stillReachable.has(id)));
 
+        // EXCLUSIVE LOSERS GET THE SAME TEST — they did not, and that is P1.
+        //
+        // A loser's target was seeded and written `Skipped` unconditionally, with no "does another
+        // live route reach it?" check. The shape that breaks: `A →(cond)→ Review → Publish` and
+        // `A →(else)→ Publish`. With the condition true, the losing edge `A→Publish` skipped
+        // **Publish** while Review was still running; Review completed, Publish was already
+        // terminal, and `Skipped` satisfies dependents — so the graph settled Complete with the
+        // publish step never executed. No error and no stall.
+        //
+        // Confirmed against `liveEdges`, which by this point has both losers and definitely-false
+        // edges removed, so "a live gating edge still points here" is exactly the surviving-route
+        // question. A genuine loser has none and is still skipped.
+        const confirmedSkipSeeds = new Set(ConfirmSkipSeeds([...resolution.skipSeedTaskIDs], liveEdges));
+
+        // Exclusive edges get verdicts too, once their origin can decide them: a loser is a branch
+        // not taken, a member of an undecided group is held, a surviving edge is satisfied. Same
+        // vocabulary as ordinary edges so a viewer never needs to know which dialect an edge was.
+        //
+        // GATED ON THE SAME `terminalDecides` SET THE RESOLUTION USED — not on
+        // `TERMINAL_FOR_CONDITIONS`. Since R2-4 a `Failed` origin decides its group only under
+        // `failureSemantics: 'edges'`; announcing from the wider set would tell a viewer the fork
+        // resolved while under `'block'` the engine deliberately left it undecided and let the
+        // ordinary block cascade own everything downstream. A console that narrates decisions the
+        // engine did not make is worse than one that stays quiet.
+        const exclusiveHolds = new Set(resolution.holdTaskIDs);
+        for (const d of exclusive) {
+            const originStatus = entityById.get(d.DependsOnTaskID)?.Status ?? 'Pending';
+            if (!decidingStatuses.has(originStatus as TaskGraphNodeStatus) && !OverrideVerdictFor(debug ?? {}, d.ID)) continue;
+            gateDecisions.push({
+                edge: d,
+                verdict: loserEdgeIDs.has(d.ID)
+                    ? 'notTaken'
+                    : exclusiveHolds.has(d.TaskID) ? 'held' : 'satisfied',
+                reason: exclusiveHolds.has(d.TaskID)
+                    ? 'this fork is undecided — a path in its group cannot be answered yet'
+                    : undefined,
+            });
+        }
+        this.emitGateDecisions(provider, parentTaskID, gateDecisions, entityById);
+
         const nodes: TaskGraphNode[] = children.map((c) => ({ id: c.ID, status: c.Status as TaskGraphNodeStatus }));
+
+        // THE CASCADE IS COMPUTED HERE, NOT ONLY AT SKIP TIME (R2-14).
+        //
+        // The claim filter covered seeds, holds and unreachable targets but not the cascade's
+        // DESCENDANTS, and the skip writes are sequential per-entity saves. Between a seed's
+        // `Skipped` landing and its descendants', another instance's fresh load sees
+        // Skipped-satisfies-prerequisites and finds those descendants eligible — so it claims and
+        // executes a branch that was never taken, irreversibly if the step has side effects.
+        //
+        // The set is already needed by the propagation pass, so computing it once here costs
+        // nothing and closes the window by construction: nothing that is about to be skipped is
+        // claimable, whichever instance is looking.
+        const allSkipSeeds = [...confirmedSkipSeeds, ...unreachableTaskIDs];
+        const cascadeSkipTaskIDs = new Set([
+            ...allSkipSeeds,
+            ...ComputeSkipCascade(nodes, liveEdges, allSkipSeeds),
+        ]);
+
+        // A DECLARED EARLY FINISH MAKES EVERY REMAINING STEP UNCLAIMABLE (R3-1).
+        //
+        // The declaration is durable, so this holds for every instance rather than only the one that
+        // decided it — which is the whole point. Folded into the same set the claim filter already
+        // consults, so nothing about to be skipped can be claimed and started in the window between
+        // the decision and the skip writes.
+        if (parentMeta.earlyFinishedAt) {
+            for (const node of nodes) {
+                if (node.status === 'Pending') cascadeSkipTaskIDs.add(node.id);
+            }
+        }
 
         return {
             nodes,
             edges: liveEdges,
             entityById,
             unreachableTaskIDs,
-            skipSeedTaskIDs: new Set(resolution.skipSeedTaskIDs),
-            holdTaskIDs: new Set(resolution.holdTaskIDs),
-            handledFailureIDs: await this.computeHandledFailures(provider, parentTaskID, nodes, liveEdges),
+            cascadeSkipTaskIDs,
+            skipSeedTaskIDs: confirmedSkipSeeds,
+            // Exclusive holds and ordinary-condition holds are the same state and share one set:
+            // "we cannot tell yet, so nothing may claim this."
+            holdTaskIDs: new Set([...resolution.holdTaskIDs, ...heldByCondition]),
+            handledFailureIDs: this.computeHandledFailures(failureSemantics, nodes, liveEdges),
         };
+    }
+
+    /**
+     * Reports an unevaluable condition ONCE per edge, not once per poll.
+     *
+     * Eligibility is recomputed every cycle, so an unqualified LogError here would repeat every few
+     * seconds for as long as the graph is held — which buries the one line that matters under
+     * thousands of copies of itself. Keyed by edge id plus the failure text, so a condition that
+     * starts failing differently is reported again.
+     */
+    private logUnevaluableConditionOnce(dep: MJTaskDependencyEntity, errorMessage: string | undefined): void {
+        const key = `${dep.ID}:${errorMessage ?? ''}`;
+        if (this.reportedUnevaluableConditions.has(key)) return;
+        this.reportedUnevaluableConditions.add(key);
+        LogError(
+            `[TaskGraphDispatcher] Dependency ${dep.ID} has an unevaluable condition ` +
+            `(${errorMessage}); condition text: ${JSON.stringify(dep.Condition)}. ` +
+            `Task ${dep.TaskID} is HELD — it will not run and will not be skipped until the ` +
+            `condition can be evaluated. The graph reports as stalled while this holds.`,
+        );
     }
 
     /**
@@ -1475,40 +3042,60 @@ export class TaskGraphDispatcher implements IShutdownable {
     private evaluateEdgeCondition(
         dep: MJTaskDependencyEntity,
         entityById: Map<string, MJTaskEntity>,
-    ): 'keep' | 'drop' {
+        failureSemantics: TaskGraphParentMetadata['failureSemantics'],
+        invocation: ConditionInvocation,
+        debug?: TaskGraphDebugState,
+    ): { outcome: 'keep' | 'drop' | 'hold'; reason?: string; decided: boolean } {
+        // An operator's override answers the edge BEFORE the condition is consulted — an override
+        // exists precisely because the condition cannot be answered (or answered wrongly), so
+        // evaluating first would re-produce the hold the override exists to end.
+        const override = OverrideVerdictFor(debug ?? {}, dep.ID);
+        if (override) {
+            return {
+                outcome: override === 'true' ? 'keep' : 'drop',
+                reason: `answered '${override}' by an operator override`,
+                decided: true,
+            };
+        }
+
         const upstream = entityById.get(dep.DependsOnTaskID);
-        if (!upstream) return 'keep';
+        if (!upstream) return { outcome: 'keep', decided: false };
 
-        // TERMINALITY GUARD — fixes a latent bug, not a hypothetical one.
+        // The DECISION lives in `condition-gate`; what stays here is the loading and the logging.
         //
-        // Without it, every conditional edge is evaluated on every poll cycle, including while its
-        // origin is still Pending. A condition like `succeeded` is then a DEFINITE FALSE, the edge
-        // is dropped, and the target is Blocked at wave one — permanently, before the origin ever
-        // ran. That kills any conditioned linear chain, which is the most common flow shape there
-        // is.
-        //
-        // A non-terminal origin is UNDECIDED, and 'keep' is the safe reading of undecided: the
-        // prerequisite gate already prevents the target starting early, so keeping the edge costs
-        // nothing and dropping it is irreversible.
-        if (!TERMINAL_FOR_CONDITIONS.has(upstream.Status)) return 'keep';
-
-        let output: unknown = null;
-        if (upstream.OutputPayload) {
-            try { output = JSON.parse(upstream.OutputPayload); }
-            catch { /* a malformed payload is not grounds to drop a prerequisite */ }
-        }
-
-        const result = this.conditionEvaluator.Evaluate(dep.Condition!, this.buildConditionContext(upstream, output));
-
-        if (!result.Success) {
-            LogError(
-                `[TaskGraphDispatcher] Dependency ${dep.ID} has an unevaluable condition ` +
-                `(${result.ErrorMessage}); keeping the edge so the graph stalls visibly rather than ` +
-                `running ${dep.TaskID} out of order.`,
+        // `DecideGate` takes the evaluation as a thunk rather than a value, and that is the fix, not
+        // a style: the terminality guard has to stop the evaluation happening at all. Evaluating
+        // `succeeded` against a still-Pending origin does not fail — it returns a confident, wrong
+        // `false`, the edge is dropped, and the target is Blocked at wave one before the origin ever
+        // ran. That killed every conditioned linear chain, with no error anywhere.
+        let unevaluableError: string | undefined;
+        let evaluated = false;
+        const outcome = DecideGate(upstream.Status, failureSemantics, () => {
+            evaluated = true;
+            const result = this.conditionEvaluator.Evaluate(
+                dep.Condition!,
+                BuildConditionContext(upstream, ParseConditionOutput(upstream.OutputPayload), invocation),
             );
-            return 'keep';
-        }
-        return result.Value ? 'keep' : 'drop';
+            if (!result.Success) unevaluableError = result.ErrorMessage;
+            return result;
+        });
+        // Reported here rather than inside the decision, so the pure part stays pure and a held edge
+        // is still loud once — see logUnevaluableConditionOnce.
+        if (outcome === 'hold') this.logUnevaluableConditionOnce(dep, unevaluableError);
+        return {
+            outcome,
+            reason: outcome === 'hold'
+                ? (unevaluableError ?? 'the condition cannot be answered yet')
+                : undefined,
+            // A verdict was rendered only when the gate was genuinely ASKED. Terminality alone is
+            // not enough since R3-2: a Failed origin under 'block' (and a Cancelled origin under
+            // either dialect) returns 'keep' WITHOUT evaluating, so the block cascade owns the
+            // target — announcing that as "satisfied" would tell a viewer a gate opened that
+            // DecideGate deliberately never asked. `evaluated` is set by the thunk itself, so this
+            // cannot drift from the gate's own rules; a Skipped origin's unevaluated drop is still
+            // a verdict a viewer needs (the branch was not taken).
+            decided: evaluated || (upstream.Status === 'Skipped' && outcome === 'drop'),
+        };
     }
 
 
@@ -1523,52 +3110,75 @@ export class TaskGraphDispatcher implements IShutdownable {
     private evaluateExclusiveCondition(
         dep: MJTaskDependencyEntity,
         entityById: Map<string, MJTaskEntity>,
+        invocation: ConditionInvocation,
+        debug?: TaskGraphDebugState,
     ): EdgeConditionOutcome {
+        // Same override-first rule as ordinary edges — see evaluateEdgeCondition.
+        const override = OverrideVerdictFor(debug ?? {}, dep.ID);
+        if (override) return override === 'true' ? 'satisfied' : 'unsatisfied';
+
         if (!dep.Condition?.trim()) return 'satisfied';
         const upstream = entityById.get(dep.DependsOnTaskID);
         if (!upstream) return 'unevaluable';
 
-        let output: unknown = null;
-        if (upstream.OutputPayload) {
-            try { output = JSON.parse(upstream.OutputPayload); } catch { /* malformed payload */ }
-        }
-        const result = this.conditionEvaluator.Evaluate(dep.Condition, this.buildConditionContext(upstream, output));
-        if (!result.Success) return 'unevaluable';
+        const result = this.conditionEvaluator.Evaluate(
+            dep.Condition,
+            // The invocation envelope rides the EXCLUSIVE dialect too. R3-3 threaded it into the
+            // ordinary path; a flow's XOR branch reading `data.userApproval` is the same documented
+            // condition on a different edge kind, and `BuildConditionContext`'s defaulted parameter
+            // made omitting it here silently evaluate those roots against nothing.
+            BuildConditionContext(upstream, ParseConditionOutput(upstream.OutputPayload), invocation),
+        );
+        // SAME CLASSIFICATION AS THE ORDINARY DIALECT (R2-3). The null-safe envelope already makes
+        // one level of absence read as false here, but a deeper absent chain still throws — and
+        // calling that 'unevaluable' would hold the whole group forever on a terminal origin, while
+        // `DecideGate` would have dropped the identical condition. Two dialects, one question.
+        if (!result.Success) return IsBrokenGuard(result.ErrorMessage) ? 'unevaluable' : 'unsatisfied';
         return result.Value ? 'satisfied' : 'unsatisfied';
     }
 
     /**
-     * Everything an edge condition can see — the SUPERSET of both dialects.
+     * Announces gate verdicts that CHANGED since this instance last looked.
      *
-     * A flow condition is written against `payload` / `stepResult` / `flowContext` / `data` /
-     * `context`; the dispatcher's own conditions are written against `status` / `succeeded` /
-     * `failed` / `output` / `errorMessage`. Compiling flows onto this engine without the flow
-     * dialect would make every `payload.x` condition evaluate against nothing — silently, since an
-     * undefined property is simply falsy. Both dialects are readable here so a condition means the
-     * same thing on either engine.
-     *
-     * `payload` is the ORIGIN task's post-step snapshot. There is deliberately no "graph-wide
-     * payload": each task's output is its own, and inventing a merged one would give conditions a
-     * value the flow engine never had.
+     * Fire-and-forget by design: `loadGraphState` is synchronous graph assembly, and the owner
+     * lookup the frame needs is async — so the emission floats behind rather than making state
+     * loading wait on observability. Frames are commentary, never a step of the work.
      */
-    private buildConditionContext(upstream: MJTaskEntity, output: unknown): Record<string, unknown> {
-        const envelope = (output && typeof output === 'object' ? output : {}) as Record<string, unknown>;
-        const succeeded = upstream.Status === 'Complete';
-        return {
-            // dispatcher dialect — unchanged
-            status: upstream.Status,
-            succeeded,
-            failed: upstream.Status === 'Failed',
-            output,
-            errorMessage: upstream.ErrorMessage ?? null,
-            // flow dialect
-            payload: envelope.payload ?? output,
-            stepResult: { Success: succeeded, step: upstream.Name, result: envelope.result ?? output },
-            flowContext: { currentStepId: upstream.ID, completedSteps: [], executionPath: [], stepCount: 0 },
-            data: envelope.data ?? {},
-            context: envelope.context ?? {},
-        };
+    private emitGateDecisions(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        decisions: readonly GateDecisionRecord[],
+        entityById: Map<string, MJTaskEntity>,
+    ): void {
+        if (!this.observer || decisions.length === 0) return;
+        let perEdge = this.emittedGateVerdicts.get(parentTaskID);
+        if (!perEdge) { perEdge = new Map<string, string>(); this.emittedGateVerdicts.set(parentTaskID, perEdge); }
+        const changed = decisions.filter((d) => {
+            const key = `${d.verdict}|${d.reason ?? ''}`;
+            if (perEdge!.get(d.edge.ID) === key) return false;
+            perEdge!.set(d.edge.ID, key);
+            return true;
+        });
+        if (changed.length === 0) return;
+
+        void this.resolveOwner(provider, parentTaskID).then((owner) => {
+            for (const d of changed) {
+                this.emit({
+                    Kind: 'GateDecision',
+                    ParentTaskID: parentTaskID,
+                    OwnerUserID: owner,
+                    TaskID: d.edge.TaskID,
+                    TaskName: entityById.get(d.edge.TaskID)?.Name,
+                    EdgeID: d.edge.ID,
+                    DependsOnTaskID: d.edge.DependsOnTaskID,
+                    Verdict: d.verdict,
+                    ConditionText: d.edge.Condition ?? undefined,
+                    Reason: d.reason,
+                });
+            }
+        }).catch(() => { /* owner lookup already logged; a lost frame is acceptable */ });
     }
+
 
     /** Parsed `OutputPayload` of each completed dependency, keyed by that task's ID. */
     private async loadDependencyOutputs(provider: IMetadataProvider, taskID: string): Promise<Map<string, unknown>> {
@@ -1606,6 +3216,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
         inputPayload: unknown,
         dependencyOutputs: Map<string, unknown>,
+        onProgress?: TaskRunProgressCallback,
     ): Promise<TaskBodyOutcome> {
         const payload = this.mergedPayload(inputPayload, dependencyOutputs);
         const config = task.ConfigurationObject;
@@ -1613,12 +3224,25 @@ export class TaskGraphDispatcher implements IShutdownable {
         // A loop's own step type decides how many times its body runs; the body itself is dispatched
         // through the very same runners as a one-shot step.
         if (task.StepType === 'ForEach' || task.StepType === 'While') {
-            return this.runLoopTask(task, provider, payload, dependencyOutputs);
+            return { ...await this.runLoopTask(task, provider, payload, dependencyOutputs), PayloadAtStart: payload };
         }
 
         const { params, errors } = BuildMappedInput(config?.inputMapping, { payload });
         for (const e of errors) LogError(`[TaskGraphDispatcher] Task ${task.ID}: ${e}`);
-        const effectiveInput = Object.keys(params).length > 0 ? params : inputPayload;
+        // `payload`, NOT `inputPayload` — the MERGED value computed above, which includes what every
+        // dependency produced.
+        //
+        // A step with an input mapping got exactly the parameters it declared; a step WITHOUT one
+        // fell back to the raw input and therefore saw nothing any earlier step had produced. For a
+        // Prompt step — which declares no mapping by design, because it reads the whole payload
+        // through `{{ _CURRENT_PAYLOAD }}` — that meant the placeholder rendered `{}` and the model
+        // was asked to write from an empty brief.
+        //
+        // It answered anyway. The Content Pipeline's draft step said "the research data was empty",
+        // which was TRUE of what it had been handed while twenty research results sat in the
+        // dependency outputs beside it, and the reviewer then rejected the draft for saying so.
+        // Every layer looked like it was working.
+        const effectiveInput = Object.keys(params).length > 0 ? params : payload;
 
         if (task.StepType === 'Prompt') {
             if (!this.promptRunner) {
@@ -1633,6 +3257,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 TemplateParameters: config?.prompt?.templateParameters,
                 Provider: provider,
                 ContextUser: this.contextUser,
+                OnProgress: onProgress,
             });
 
             // A prompt's response is DEEP-MERGED into the payload rather than replacing it. A prompt
@@ -1647,6 +3272,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 AgentRunID: null,
                 ErrorMessage: promptResult.ErrorMessage,
                 Output: this.applyStepOutputMapping(task, merged, merged, config?.outputMapping),
+                PayloadAtStart: payload,
                 ChatMessage: promptResult.ChatMessage,
                 // Returned even when the prompt FAILED. A failed prompt still cost tokens, and a
                 // cost rollup that silently omits failures under-reports exactly the runs someone
@@ -1663,10 +3289,15 @@ export class TaskGraphDispatcher implements IShutdownable {
                 DependencyOutputs: dependencyOutputs,
                 Provider: provider,
                 ContextUser: this.contextUser,
+                OnProgress: onProgress,
             }), AgentRunID: null }
-            : await this.runAgentNode(task, provider, effectiveInput, dependencyOutputs);
+            : await this.runAgentNode(task, provider, effectiveInput, dependencyOutputs, onProgress);
 
-        return { ...raw, Output: this.applyStepOutputMapping(task, payload, raw.Output, config?.outputMapping) };
+        return {
+            ...raw,
+            Output: this.applyStepOutputMapping(task, payload, raw.Output, config?.outputMapping),
+            PayloadAtStart: payload,
+        };
     }
 
     /**
@@ -1697,6 +3328,16 @@ export class TaskGraphDispatcher implements IShutdownable {
         // merged in) through the placeholder, so an empty mapping is correct rather than missing.
         const bodyMapping = (op.action?.params ?? {}) as Record<string, unknown>;
 
+        // The BODY's output mapping, applied once per pass — see `foldIterationOutput`.
+        //
+        // It used to be applied a single time after the loop finished, against the accumulated
+        // payload. That is the wrong moment in two ways at once: the mapping names an output
+        // PARAMETER of the body, which no longer exists by then, and a mapping like
+        // `"Items": "results[]"` can only append per pass. So every pass merged its raw result into
+        // the shared payload instead, each overwriting the last, and the mapping matched nothing and
+        // wrote nothing. A ForEach over five items reported five successes and kept item five.
+        const bodyOutputMapping = op.action?.outputMapping ?? op.prompt?.outputMapping;
+
         // Where this step sits in its graph, resolved ONCE rather than per iteration. A loop body is
         // dispatched exactly like a one-shot step and needs the same two things: the run that
         // submitted the graph (so a spawned run gets a ParentRunID and is visible to the tree and to
@@ -1713,17 +3354,61 @@ export class TaskGraphDispatcher implements IShutdownable {
         // success, and its result was predetermined.
         let livePayload: Record<string, unknown> = { ...payload };
 
-        const invokeBody: LoopBodyInvoker = async ({ Bindings }) => {
+        // One entry per pass, so the loop's work exists somewhere the platform can see it. Without
+        // this a loop is a single childless node: the run tree reaches nested work through six links
+        // and an iteration is none of them, so the passes were invisible to the timeline AND their
+        // spend was missing from the settlement rollup. See ITaskStepRuntime.iterations.
+        const iterationTrace: MJTaskEntity_ITaskLoopIteration[] = [];
+
+        // Bounds what the trace's payloads may cost. The pointers are never budgeted — those are the
+        // durable record of the work and must survive whatever the payloads do.
+        const budget = new IterationPayloadBudget();
+
+        const invokeBody: LoopBodyInvoker = async ({ Index, Bindings }) => {
             // Bindings go INTO the payload rather than beside it, so an authored mapping reaches the
             // current item the same way it reaches anything else: `payload.<itemVariable>`.
             const iterationPayload = { ...livePayload, ...Bindings };
             const resolved = ResolveMappedInput(bodyMapping, { payload: iterationPayload }) as Record<string, unknown>;
 
-            /** Folds an iteration's output into the running payload the next pass will see. */
-            const absorb = <T extends { Success: boolean; Output?: unknown }>(outcome: T): T => {
-                if (outcome.Output && typeof outcome.Output === 'object' && !Array.isArray(outcome.Output)) {
-                    livePayload = deepMergePayload(livePayload, outcome.Output as Record<string, unknown>);
-                }
+            /**
+             * Folds an iteration's output into the running payload the next pass will see, and
+             * records what the pass produced.
+             *
+             * The trace is written HERE rather than after the loop because a loop that fails partway
+             * still ran the passes before it, and their runs are real spend that must not vanish
+             * because the loop as a whole did not finish.
+             */
+            const absorb = <T extends { Success: boolean; Output?: unknown; ErrorMessage?: string; PromptRunID?: string; AgentRunID?: string; ActionLogID?: string }>(outcome: T, bodyInput: unknown): T => {
+                livePayload = this.foldIterationOutput(task, livePayload, outcome.Output, bodyOutputMapping);
+                iterationTrace.push({
+                    index: Index,
+                    // What THIS pass was handed and what it gave back — not the loop's running
+                    // payload before and after it.
+                    //
+                    // A pass has no row of its own, so without these there is nowhere its work can be
+                    // recorded: every iteration presented null on both sides and the run view could
+                    // say nothing about any single pass, which for a loop is the only interesting
+                    // question. But recording the RUNNING payload on both sides — the obvious reading
+                    // of "before and after" — is quadratic: each pass would hold a full copy of
+                    // everything every earlier pass accumulated. A five-iteration demo produced a
+                    // 121KB Configuration that way; the same loop over fifty items would produce
+                    // megabytes, in a column every reader of the row pays to load.
+                    //
+                    // The pass's own input and output are what a reader actually wants ("what did
+                    // pass three do?"), and they are constant-sized per pass.
+                    payloadAtStart: budget.Take(bodyInput),
+                    payloadAtEnd: budget.Take(outcome.Output),
+                    promptRunID: outcome.PromptRunID,
+                    agentRunID: outcome.AgentRunID,
+                    // An ACTION body records its log here. Omitting it left an action-bodied pass
+                    // with no pointer at all — no cost, no timing, nothing to open — and the tree,
+                    // seeing neither a prompt run nor an agent run, fell through to its last branch
+                    // and called the pass a Sub-Agent. A loop over a web search then showed five
+                    // sub-agent runs that never existed.
+                    actionLogID: outcome.ActionLogID,
+                    success: outcome.Success,
+                    errorMessage: outcome.ErrorMessage,
+                });
                 return outcome;
             };
 
@@ -1754,7 +3439,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     TemplateParameters: { ...stringifyBindings(Bindings), ...op.prompt?.templateParameters },
                     Provider: provider,
                     ContextUser: this.contextUser,
-                }));
+                }), iterationPayload);
             }
 
             if (task.ActionID) {
@@ -1765,22 +3450,23 @@ export class TaskGraphDispatcher implements IShutdownable {
                     DependencyOutputs: dependencyOutputs,
                     Provider: provider,
                     ContextUser: this.contextUser,
-                }));
+                }), resolved);
             }
 
+            const agentInput = Object.keys(resolved).length > 0 ? resolved : iterationPayload;
             return absorb(await this.agentRunner.RunAgentForTask({
                 TaskID: task.ID,
                 AgentID: task.AgentID!,
                 // The ITERATION payload when the body declares no inputs of its own. A sub-agent
                 // body has no `params`, so the mapped result is `{}` — every iteration was handing
                 // the agent nothing and asking it to work from that.
-                InputPayload: Object.keys(resolved).length > 0 ? resolved : iterationPayload,
+                InputPayload: agentInput,
                 DependencyOutputs: dependencyOutputs,
                 ContinuationDepth: graphContext.Depth,
                 SubmittingAgentRunID: graphContext.SubmittingAgentRunID,
                 Provider: provider,
                 ContextUser: this.contextUser,
-            }));
+            }), agentInput);
         };
 
         const outcome = task.StepType === 'ForEach'
@@ -1804,13 +3490,59 @@ export class TaskGraphDispatcher implements IShutdownable {
             Success: outcome.Success,
             AgentRunID: null,
             ErrorMessage: outcome.ErrorMessage,
+            // Every pass that ran, including those before a failure — see `iterationTrace`.
+            Iterations: iterationTrace.length > 0 ? iterationTrace : undefined,
             // The ACCUMULATED payload — everything the iterations established — not the one the
             // loop started with, which would discard the loop's whole effect on the workflow.
-            Output: this.applyStepOutputMapping(
-                task, livePayload, outcome.Output,
-                op.action?.outputMapping ?? op.prompt?.outputMapping ?? config?.outputMapping,
-            ),
+            //
+            // Only the STEP's own mapping is applied here. The body's mapping already ran once per
+            // pass inside `foldIterationOutput`; applying it again against the accumulated payload
+            // is what used to make it match nothing.
+            Output: this.applyStepOutputMapping(task, livePayload, outcome.Output, config?.outputMapping),
         };
+    }
+
+    /**
+     * Folds one pass's result into the loop's running payload.
+     *
+     * **With a body mapping**, the pass's declared outputs are filed where the author said to put
+     * them — including `name[]`, which appends, so a ForEach can collect one entry per item. That is
+     * the whole point of a loop over a collection, and it is only expressible per pass.
+     *
+     * **Without one**, the raw result is deep-merged, which is the pre-existing behaviour and the
+     * right default for a `While` that converges on a value: each pass refines what the condition
+     * reads. It is the wrong default for a ForEach that collects — hence the mapping.
+     *
+     * An unmapped output is reported per pass rather than swallowed, for the same reason
+     * {@link applyStepOutputMapping} reports it: a mapping that names something the body never
+     * returned means the pass did work that went nowhere, while everything reports success.
+     */
+    private foldIterationOutput(
+        task: MJTaskEntity,
+        livePayload: Record<string, unknown>,
+        output: unknown,
+        bodyOutputMapping: string | undefined,
+    ): Record<string, unknown> {
+        if (!output || typeof output !== 'object' || Array.isArray(output)) return livePayload;
+        const source = output as Record<string, unknown>;
+
+        if (!bodyOutputMapping) return deepMergePayload(livePayload, source);
+
+        // Applied ONTO a deep copy of the running payload, not into a fresh object: `name[]` appends,
+        // and appending is meaningless without the list already there. The copy is deep because the
+        // trace has already recorded earlier passes' payloads — mutating a shared nested array would
+        // retroactively rewrite what those passes are recorded as having seen.
+        const { updates, errors, unmapped } = ApplyOutputMapping(source, bodyOutputMapping, structuredClone(livePayload));
+        for (const e of errors) LogError(`[TaskGraphDispatcher] Task ${task.ID} loop body: ${e}`);
+        if (unmapped?.length) {
+            LogError(
+                `[TaskGraphDispatcher] '${task.Name}' loop body mapped output(s) it did not return: ` +
+                `${unmapped.join(', ')}. The pass returned: ${Object.keys(source).join(', ') || '(nothing)'}. ` +
+                `Those payload values were NOT written, so anything downstream reading them sees nothing.`,
+            );
+        }
+        // `updates` IS the copy that was applied onto, so it is already the complete next payload.
+        return updates;
     }
 
     /**
@@ -1831,11 +3563,40 @@ export class TaskGraphDispatcher implements IShutdownable {
         output: unknown,
         outputMapping: string | undefined,
     ): unknown {
-        if (!outputMapping) return output ?? payload;
+        // No mapping: MERGE the step's output over the payload rather than replacing it.
+        //
+        // Replacing is what made the Content Pipeline's exclusive pair unreachable. A While loop's
+        // own output is a SUMMARY — `{iterations, succeeded, failed, results}` — so returning it
+        // discarded the payload the iterations had built, including the `brandOK` the reviewer had
+        // just set to true. The edges read `payload.brandOK === true` and `!== true`; against a
+        // summary the first is false and the second is true, so the give-up branch won on EVERY run
+        // no matter what the reviewer decided. The approved branch was unreachable in practice while
+        // being perfectly reachable on the canvas.
+        //
+        // This is the same rule the mapped path already follows two lines down, and the same rule
+        // the doc comment above states. The no-mapping branch was simply not following it.
+        if (!outputMapping) {
+            return output && typeof output === 'object' && !Array.isArray(output)
+                ? { ...payload, ...(output as Record<string, unknown>) }
+                : output ?? payload;
+        }
 
         const source = output && typeof output === 'object' ? output as Record<string, unknown> : { value: output };
-        const { updates, errors } = ApplyOutputMapping(source, outputMapping);
+        const { updates, errors, unmapped } = ApplyOutputMapping(source, outputMapping);
         for (const e of errors) LogError(`[TaskGraphDispatcher] Task ${task.ID}: ${e}`);
+
+        // A mapping that names an output the step never produced discards that step's work while
+        // the step reports Complete. It is not fatal — an action may emit a parameter only on some
+        // paths — but it must not be silent, and naming what WAS returned turns a multi-table
+        // forensic exercise into one line. The Content Pipeline demo lost an entire research pass
+        // this way, every run, because its mapping named another action's parameter.
+        if (unmapped?.length) {
+            LogError(
+                `[TaskGraphDispatcher] '${task.Name}' mapped output(s) the step did not return: ` +
+                `${unmapped.join(', ')}. The step returned: ${Object.keys(source).join(', ') || '(nothing)'}. ` +
+                `Those payload values were NOT written, so anything downstream reading them sees nothing.`,
+            );
+        }
 
         return { ...payload, ...updates };
     }
@@ -1851,6 +3612,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
         effectiveInput: unknown,
         dependencyOutputs: Map<string, unknown>,
+        onProgress?: TaskRunProgressCallback,
     ): Promise<TaskBodyOutcome> {
         const context = await this.graphContext(provider, task);
         return this.agentRunner.RunAgentForTask({
@@ -1862,7 +3624,362 @@ export class TaskGraphDispatcher implements IShutdownable {
             SubmittingAgentRunID: context.SubmittingAgentRunID,
             Provider: provider,
             ContextUser: this.contextUser,
+            OnProgress: onProgress,
         });
+    }
+
+    /**
+     * Leaves exactly one open request standing for a task, withdrawing any others.
+     *
+     * The oldest wins — it is the one whose notification the assignee most likely already saw.
+     *
+     * **Called from every path that reads a task's open requests**, not only from the raise. That is
+     * deliberate and it is the half R3-5 first got wrong: a task is notified exactly once, and
+     * `notifyHumanTaskReady` returns at the marker forever after, so a duplicate minted after that
+     * pass — by an instance that crashed between its insert and its de-dup, or by any build older
+     * than this one — was never looked at again by the only code that could have collapsed it. The
+     * waiting-task sweep is what actually reaches those.
+     *
+     * @param open the task's open requests, oldest first
+     * @param keepIfSole the row this caller is responsible for, named only for the log
+     */
+    private async withdrawDuplicateRequests(
+        provider: IMetadataProvider,
+        taskID: string,
+        open: readonly MJAIAgentRequestEntity[],
+        keepIfSole: string,
+    ): Promise<void> {
+        if (open.length <= 1) return;
+        try {
+            LogStatus(
+                `[TaskGraphDispatcher] Task ${taskID} had ${open.length} open requests — keeping the ` +
+                `oldest (${open[0].ID}${UUIDsEqual(open[0].ID, keepIfSole) ? ', this instance\'s' : ''}) and withdrawing the rest.`,
+            );
+            for (const duplicate of open.slice(1)) {
+                duplicate.Status = 'Canceled';
+                duplicate.Comments = 'A duplicate request for the same step; the earlier one stands.';
+                if (!(await duplicate.Save())) {
+                    LogError(
+                        `[TaskGraphDispatcher] Could not withdraw duplicate request ${duplicate.ID}: ` +
+                        `${duplicate.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                    );
+                }
+            }
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not de-duplicate requests for task ${taskID}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /**
+     * Closes the still-open asks raised for tasks that will never be answered.
+     *
+     * `Canceled` rather than `Expired`: nobody ran out of time, the ask was withdrawn — and the two
+     * mean different things downstream, since an expired human step is treated as a FAILURE that a
+     * give-up edge can route around, which would be a lie about a step the workflow decided it no
+     * longer needed.
+     *
+     * Failures are logged and never propagated. The graph's outcome is already decided; refusing to
+     * finish over an inbox row would trade a stale notification for a stalled workflow.
+     */
+    private async withdrawOpenRequests(
+        provider: IMetadataProvider,
+        taskIDs: readonly string[],
+        reason: string,
+    ): Promise<void> {
+        if (taskIDs.length === 0) return;
+        try {
+            const idList = taskIDs.map((id) => `'${id}'`).join(',');
+            const open = await RunView.FromMetadataProvider(provider).RunView<MJAIAgentRequestEntity>(
+                {
+                    EntityName: 'MJ: AI Agent Requests',
+                    ExtraFilter: `Status='Requested' AND OriginatingTaskID IN (${idList})`,
+                    ResultType: 'entity_object',
+                    BypassCache: true,
+                },
+                this.contextUser,
+            );
+            if (!open.Success) {
+                LogError(`[TaskGraphDispatcher] Could not read open requests to withdraw: ${open.ErrorMessage}`);
+                return;
+            }
+            for (const request of open.Results ?? []) {
+                request.Status = 'Canceled';
+                request.Comments = reason;
+                if (!(await request.Save())) {
+                    LogError(
+                        `[TaskGraphDispatcher] Could not withdraw request ${request.ID}: ` +
+                        `${request.LatestResult?.CompleteMessage ?? 'unknown error'}. It will keep showing ` +
+                        `in someone's inbox for a step that will never run.`,
+                    );
+                }
+            }
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not withdraw open requests: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /**
+     * Says once, per graph, that this instance settled work it cannot announce.
+     *
+     * Once because the sweep re-offers the graph every poll for the rest of its window, and a line
+     * per poll would bury the thing it is trying to report — which is a DEPLOYMENT fact, not a graph
+     * fact: if no instance anywhere carries a deliverer, these settlements never reach anyone.
+     */
+    private reportUndeliverableOnce(parentID: string): void {
+        if (this.reportedUndeliverable.has(parentID)) return;
+        this.reportedUndeliverable.add(parentID);
+        LogStatus(
+            `[TaskGraphDispatcher] Graph ${parentID} has settled but this instance has no continuation ` +
+            `deliverer, so it is leaving the announcement to a peer that has one. If no instance in ` +
+            `this deployment can deliver, the settlement will never be announced.`,
+        );
+    }
+
+    /**
+     * Keeps a graph in this instance's sweep regardless of what its row timestamp says.
+     *
+     * Bounded, and the bound is about noise rather than surrender: past the cap the graph has failed
+     * on every attempt for minutes, so another identical attempt will not fix it, and continuing
+     * costs a full graph load per poll forever. It is reported once and left to the startup sweep.
+     */
+    private keepRetryingSettlement(parentID: string): void {
+        const passes = (this.retryingSettlement.get(parentID) ?? 0) + 1;
+        if (passes > MAX_SETTLEMENT_RETRY_PASSES) {
+            this.retryingSettlement.delete(parentID);
+            LogError(
+                `[TaskGraphDispatcher] Graph ${parentID} has failed to settle on ${MAX_SETTLEMENT_RETRY_PASSES} ` +
+                `consecutive passes; this instance will stop re-queueing it. Its submitting run may be ` +
+                `left Paused. A restart's startup sweep will try again.`,
+            );
+            return;
+        }
+        this.retryingSettlement.set(parentID, passes);
+    }
+
+    /**
+     * A graph's durable metadata bag, for the questions a pass asks of it.
+     *
+     * Defaults on any failure to read it, and the defaults are the safe directions: `'block'` means
+     * a failed step decides nothing, so a graph whose metadata we cannot read stalls visibly instead
+     * of resolving forks on the say-so of a failure; and no early-finish declaration means nothing
+     * is removed from the claim filter on the strength of a read that did not work.
+     */
+    private async readParentMetadataFor(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+    ): Promise<TaskGraphParentMetadata> {
+        try {
+            const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+            if (await parent.Load(parentTaskID)) return ParseTaskGraphParentMetadata(parent.InputPayload);
+        } catch { /* fall through to the safe defaults */ }
+        return ParseTaskGraphParentMetadata(null);
+    }
+
+    /**
+     * Whether the submitting run is in a state where this pass's writes to it will mean anything.
+     *
+     * **Read-only on purpose.** The settled branch's write order — layout, frame, cost, lifecycle,
+     * delivery — is load-bearing and documented at each step; this asks the question those writes
+     * depend on without joining them. What it prevents is a pass that goes through the motions and
+     * then claims the delivery marker, making itself the last pass ever to look at the graph.
+     *
+     * Three answers, and the middle one is the bug:
+     *
+     *  - **no run** — a scheduled or remote-triggered graph has nobody waiting. Proceed.
+     *  - **still `Running`** — `finalizeAgentRun` has not parked it yet. The graph beat its own
+     *    submitter to the finish line, which is ordinary for a fast graph and lasts milliseconds.
+     *    Defer: one poll later the run is parked and everything lands.
+     *  - **anything else** — `Paused` (settle it), or already `Completed`/`Failed`/`Cancelled` for
+     *    its own reasons (leave it; the lifecycle write's own guard declines). Proceed.
+     *
+     * **The deferral is bounded**, because "not parked yet" and "the submitting process died before
+     * it could park" look identical from here. Waiting forever on the second would lose the outcome
+     * of work that actually completed — strictly worse than announcing it late — so past the grace
+     * period this proceeds and says why. The run itself stays `Running`, which is visibly wrong and
+     * belongs to whatever reconciles abandoned runs, not to the graph that finished correctly.
+     */
+    private async submittingRunReadiness(
+        provider: IMetadataProvider,
+        parent: MJTaskEntity,
+    ): Promise<SubmittingRunReadiness> {
+        const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
+        if (!meta.submittedByAgentRunID) return { Verdict: 'ready', SubmitterCancelled: false };
+
+        try {
+            const run = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+            if (!(await run.Load(meta.submittedByAgentRunID))) {
+                // Transient, most likely. Deferring costs a poll; proceeding costs the marker.
+                LogError(`[TaskGraphDispatcher] Could not read run ${meta.submittedByAgentRunID} to check whether graph ${parent.ID} may settle it; retrying next pass.`);
+                return { Verdict: 'defer', SubmitterCancelled: false };
+            }
+            // A CANCELLED SUBMITTER HAS NOBODY WAITING (R2-9). Settlement still runs — the graph's
+            // own bookkeeping is owed either way — but announcing it would message a conversation
+            // about a workflow the user stopped, and for `reinvoke` would start a fresh billed turn
+            // for the agent they cancelled.
+            const cancelled = run.Status === 'Cancelled';
+            const settledFor = parent.CompletedAt ? Date.now() - parent.CompletedAt.getTime() : 0;
+            if (!IsSubmittingRunReady(run.Status, settledFor)) {
+                // Still `Running` and inside the grace: `finalizeAgentRun` has not parked it yet.
+                // Defer the whole run-half so nothing claims the marker — see the call site.
+                return { Verdict: 'defer', SubmitterCancelled: cancelled };
+            }
+
+            if (run.Status === 'Running') {
+                // Ready DESPITE being unparked means the grace has expired: the submitting process
+                // most likely died before it could park. Proceeding loses nothing that is still
+                // recoverable and stops a dead submitter holding a finished workflow's outcome.
+                LogError(
+                    `[TaskGraphDispatcher] Run ${run.ID} has been Running for ${Math.round(settledFor / 1000)}s ` +
+                    `since graph ${parent.ID} settled — it never parked, so its submitting process most ` +
+                    `likely died. Settling and delivering the graph anyway; the run needs separate attention.`,
+                );
+            }
+            return { Verdict: 'ready', SubmitterCancelled: cancelled };
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not check the run waiting on graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
+            return { Verdict: 'defer', SubmitterCancelled: false };
+        }
+    }
+
+    /**
+     * Completes the agent run that parked on this graph.
+     *
+     * **This is the other half of submit-and-detach.** A run that dispatches a graph does not
+     * complete at submission — it ends `Paused`, because reporting `Completed` above a workflow
+     * where nothing has happened yet is a claim the row cannot support. The run's lifecycle is
+     * finished HERE, when the graph it was waiting on actually settles, which is the first moment
+     * the answer exists.
+     *
+     * Doing it from the dispatcher rather than by awaiting in the agent is what keeps the properties
+     * that made detach right in the first place: a graph containing a human approval can park for
+     * days without holding a conversation turn open, and a graph reclaimed by another instance after
+     * a crash still settles its submitting run, because the settling happens wherever the graph
+     * finishes rather than wherever it started.
+     *
+     * **Only a parked run is touched.** A run that is already `Completed`, `Failed` or `Cancelled`
+     * reached that state for its own reasons — a second graph settling later, a run the user
+     * cancelled, a run that failed after submitting — and overwriting it would rewrite history from
+     * the outside. The `Paused` predicate is the whole guard.
+     *
+     * @param graphStatus the parent rollup's status: what the workflow as a whole did
+     */
+    private async settleSubmittingRun(
+        provider: IMetadataProvider,
+        parent: MJTaskEntity,
+        graphStatus: TaskGraphNodeStatus,
+    ): Promise<'done' | 'defer'> {
+        const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
+        if (!meta.submittedByAgentRunID) return 'done'; // a scheduled or remote-triggered graph has nobody waiting
+
+        try {
+            const run = await provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+            if (!(await run.Load(meta.submittedByAgentRunID))) {
+                LogError(`[TaskGraphDispatcher] Could not load run ${meta.submittedByAgentRunID} to settle it against graph ${parent.ID}.`);
+                return 'defer';
+            }
+            if (run.Status !== 'Paused') return 'done';
+
+            // The workflow's outcome becomes the run's outcome. A graph that ended any way other than
+            // Complete did not do what the run started it to do, and a run reporting success over it
+            // would be the same untruth in a different place.
+            const succeeded = graphStatus === 'Complete';
+            // COLUMN-SCOPED AND GUARDED ON `Paused` (C4), for the same reason every parent write has
+            // been since Round 1: a full-row save carries a stale snapshot of a row another instance
+            // may have moved, and the predicate makes the transition once-only rather than
+            // last-write-wins.
+            const settled = await this.claims.TrySettleRun(
+                provider, run.ID, succeeded,
+                succeeded ? null : `The workflow "${parent.Name}" ended ${graphStatus}.`,
+                this.contextUser,
+            );
+            if (!settled) {
+                // Left parked rather than forced. A run stuck at Paused is visibly unfinished, which
+                // is a state someone can investigate; a run flipped to Completed by a write that did
+                // not land would be the same lie this whole change removes.
+                // Rowcount 0 is either "a peer settled it first" — fine, and the status read above
+                // would have caught the common case — or a write that did not land. Deferring covers
+                // both: a peer's settle makes the next pass's `Paused` check return `done`.
+                LogError(
+                    `[TaskGraphDispatcher] Could not settle run ${run.ID} against graph ${parent.ID}; ` +
+                    `it is no longer Paused or the write did not land. Retrying next pass.`,
+                );
+                return 'defer';
+            }
+            LogStatus(
+                `[TaskGraphDispatcher] Run ${run.ID} settled ${succeeded ? 'Completed' : 'Failed'} — ` +
+                `workflow "${parent.Name}" ended ${graphStatus}.`,
+            );
+            return 'done';
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not settle the run waiting on graph ${parent.ID}: ${e instanceof Error ? e.message : String(e)}`);
+            return 'defer';
+        }
+    }
+
+    /**
+     * Gives every step that lacks one a position, once the graph has finished.
+     *
+     * **Why the run stores geometry at all.** A `TaskGraphSpec` is a logical structure with no
+     * layout field, so a graph an agent emitted has no opinion about where its boxes go. Every
+     * viewer was therefore laying it out for itself at render time — and a viewer that failed to
+     * (because the canvas measures nodes it has not drawn yet) fell back to every node at the
+     * origin, piled on one another, with the zoom-to-fit that follows fitting a one-node bounding
+     * box. Settling it once, server-side, means the agent-run canvas, the Workflows runs tab and
+     * anything built later all draw the same picture, and none of them has to compute it.
+     *
+     * **An authored position is never overwritten.** A workflow compiled from a Flow agent carries
+     * the arrangement someone dragged into place; replacing it with an algorithm's guess would
+     * discard a deliberate act. Only steps with no geometry get one, so a partially-arranged graph
+     * keeps what it has.
+     *
+     * Failure here is logged and swallowed: this is presentation. A graph whose work completed must
+     * not be reported as failed because its picture could not be saved.
+     */
+    private async persistComputedLayout(graph: GraphState): Promise<void> {
+        try {
+            const needsLayout = [...graph.entityById.values()].filter(
+                (t) => !this.parseConfiguration(t)?.layout,
+            );
+            if (needsLayout.length === 0) return;
+
+            // Laid out over the WHOLE graph, not just the nodes missing geometry: position depends on
+            // where a node sits in the topology, and a layout computed over a subset would place its
+            // nodes as though the rest of the workflow did not exist.
+            const edges: GraphLayoutEdge[] = graph.edges.map((e) => ({ From: e.dependsOnTaskId, To: e.taskId }));
+            const positions = LayoutGraphNodes([...graph.entityById.keys()], edges, { Direction: 'LR' });
+
+            for (const task of needsLayout) {
+                const position = positions.get(task.ID);
+                if (!position) continue;
+                const existing = this.parseConfiguration(task);
+                const merged: MJTaskEntity_ITaskStepConfiguration = {
+                    ...existing,
+                    layout: { x: position.X, y: position.Y },
+                };
+                task.Configuration = JSON.stringify(merged);
+                if (!(await task.Save())) {
+                    LogError(`[TaskGraphDispatcher] Could not save computed layout for ${task.ID}: ${task.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+            }
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not compute a layout for the settled graph: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /**
+     * The earliest moment any step in the graph began, or null when none has.
+     *
+     * Null is a real answer — a graph whose tasks are all still Pending has not started — and is
+     * deliberately not collapsed to "now", which would date the graph from whenever this pass
+     * happened to run.
+     */
+    private earliestStart(entityById: Map<string, MJTaskEntity>): Date | null {
+        let earliest: Date | null = null;
+        for (const entity of entityById.values()) {
+            if (!entity.StartedAt) continue;
+            if (earliest === null || entity.StartedAt < earliest) earliest = entity.StartedAt;
+        }
+        return earliest;
     }
 
     /**
@@ -1877,13 +3994,31 @@ export class TaskGraphDispatcher implements IShutdownable {
      * Returns `undefined` when there is nothing to record, so the guarded write omits the column
      * rather than rewriting it with what it already held.
      */
-    private configurationWithRuntime(task: MJTaskEntity, promptRunID: string | undefined): string | undefined {
-        if (!promptRunID) return undefined;
+    private configurationWithRuntime(
+        task: MJTaskEntity,
+        promptRunID: string | undefined,
+        actionLogID: string | undefined,
+        iterations?: MJTaskEntity_ITaskLoopIteration[],
+        payloadAtStart?: Record<string, unknown>,
+    ): string | undefined {
+        if (!promptRunID && !actionLogID && !iterations?.length && !payloadAtStart) return undefined;
 
         const existing = this.parseConfiguration(task);
         const merged: MJTaskEntity_ITaskStepConfiguration = {
             ...existing,
-            runtime: { ...existing?.runtime, promptRunID },
+            runtime: {
+                ...existing?.runtime,
+                ...(promptRunID ? { promptRunID } : {}),
+                ...(actionLogID ? { actionLogID } : {}),
+                // Replaced wholesale rather than appended: this is the trace of the loop's LAST
+                // execution, and a retried step that concatenated would report a loop that ran twice
+                // as many passes as it did.
+                ...(iterations?.length ? { iterations } : {}),
+                // The resolved before-state, so the run view has something to diff the output
+                // against. NOT written to Task.InputPayload, which holds the AUTHORED input and
+                // round-trips back out as part of the spec.
+                ...(payloadAtStart ? { payloadAtStart } : {}),
+            },
         };
         return JSON.stringify(merged);
     }

@@ -60,6 +60,7 @@ import { PromptComponentResolver, InjectScopedPromptParts } from './prompt-compo
 import { ScopedPromptConfigResolver, ApplyScopedPromptConfig } from './scoped-prompt-config-resolver';
 import { AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
 import {
+    StringifyForPersistence,
     AIPromptParams,
     AIPromptRunResult,
     ChildPromptParam,
@@ -461,6 +462,30 @@ export class BaseAgent {
      * @private
      */
     private _agentRun: MJAIAgentRunEntityExtended | null = null;
+
+    /**
+     * The task graph this run submitted and is now waiting on, or null.
+     *
+     * **Why a run parks instead of completing.** Submitting a graph is submit-and-detach: the run
+     * returns as soon as the graph is durable, and the dispatcher executes it afterwards — possibly
+     * minutes later, possibly on another instance, and for a graph containing a human approval,
+     * possibly days later. That is deliberate and must not change: awaiting would hold a run (and the
+     * conversation turn behind it) open for the length of an approval, and a graph that settles on a
+     * different host could never complete an awaiting run at all.
+     *
+     * But finishing as `Completed` said something untrue. A run that reported success, a duration of
+     * 441ms and a green COMPLETED badge, above a workflow where nothing had happened yet, is not a
+     * display problem — the row itself claimed to be done. So the run ends in `Paused`, which the
+     * conversation UI already reads as in-progress, and the DISPATCHER completes it when the graph
+     * settles (`TaskGraphDispatcher.settleSubmittingRun`). Nothing blocks, and no row claims to be
+     * finished while work it caused is still in flight.
+     *
+     * Set for whichever run submitted — root or sub-agent. A sub-agent that dispatches a graph parks
+     * its own run exactly the same way; its parent is unaffected and completes normally, which is
+     * correct, because the parent's own work IS done. What a viewer of the PARENT sees is covered by
+     * the run tree, which walks into the sub-agent's graph and reports it still running.
+     */
+    private _awaitingWorkflowTaskID: string | null = null;
 
     /**
      * Stores the ID of an AIAgentRequest created when a Chat step fires.
@@ -2242,8 +2267,9 @@ export class BaseAgent {
             .join('\n\n');
 
         // Model-catalog defaults (the AIModelType < AIModel < AIModelVendor ModelConfiguration
-        // cascade) merge as the BASE layer, then the voice settings — the agnostic
-        // `realtime.voice.default.voice` plus any matching `realtime.voice.providers.<provider>` bag —
+        // cascade) merge as the BASE layer, then the voice settings — the persona's agnostic
+        // wire-level slots (see RealtimeVoicePersona) plus any matching
+        // `realtime.voice.providers.<provider>` bag —
         // AND session-tuning knobs (realtime.session) flow into the driver's open Config bag: the same
         // pact every other config entry rides, mirroring the client-direct builder's cascade exactly.
         // Same unmatched-provider diagnosis too, so this surface cannot drift back into dropping
@@ -8015,8 +8041,16 @@ The context is now within limits. Please retry your request with the recovered c
         }
         
         // Set StartingPayload if we have a payload (either from params or auto-populated)
+        //
+        // Sanitized, because this is a CALLER-supplied object going into a database row. The same
+        // write on the task-graph path threw `Converting circular structure to JSON` the first time
+        // a real context held a socket, killing the run before a step executed — and a payload that
+        // happens to serialize is the worse case, since whatever it holds (credentials, endpoints)
+        // then lives in a row that outlives the run. Drops are logged rather than swallowed.
         if (modifiedParams.payload) {
-            this._agentRun.StartingPayload = JSON.stringify(modifiedParams.payload);
+            const sanitized = StringifyForPersistence(modifiedParams.payload, 'payload');
+            this._agentRun.StartingPayload = sanitized.JSON;
+            this.warnAboutDroppedValues('StartingPayload', sanitized.DroppedPaths, params);
         }
         
         // Set new fields from ExecuteAgentParams
@@ -8030,7 +8064,11 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.OverrideVendorID = params.override.vendorId;
         }
         if (params.data) {
-            this._agentRun.Data = JSON.stringify(params.data);
+            // Same hazard, same treatment — `data` is as caller-supplied as `payload`, and this
+            // write is what persists it for anything reading the run afterwards.
+            const sanitized = StringifyForPersistence(params.data, 'data');
+            this._agentRun.Data = sanitized.JSON;
+            this.warnAboutDroppedValues('Data', sanitized.DroppedPaths, params);
         }
         this._agentRun.Verbose = params.verbose || false;
 
@@ -8263,6 +8301,25 @@ The context is now within limits. Please retry your request with the recovered c
      * @param params - Step creation parameters
      * @returns {Promise<MJAIAgentRunStepEntityExtended>} - The created step entity
      */
+    /**
+     * Says out loud what did not make it into a persisted column.
+     *
+     * A silently dropped value is the failure one layer down from the crash this prevents: a
+     * reader hunting a field the writer discarded, or a condition reading absent-data and taking a
+     * branch nobody can explain. Warn, never throw — a value that cannot be written down is not a
+     * reason to fail a run that is otherwise fine.
+     */
+    protected warnAboutDroppedValues(column: string, droppedPaths: string[], params: ExecuteAgentParams): void {
+        if (droppedPaths.length === 0) return;
+        this.logStatus(
+            `⚠️ ${droppedPaths.length} value(s) were not persistable and were left out of ` +
+            `${column}: ${droppedPaths.join(', ')}. Class instances, connections and circular ` +
+            `references are dropped on purpose — pass plain JSON for anything that must be readable later.`,
+            true,
+            params,
+        );
+    }
+
     protected async createStepEntity(params: {
         stepType: MJAIAgentRunStepEntityExtended["StepType"];
         stepName: string;
@@ -11940,6 +11997,12 @@ The context is now within limits. Please retry your request with the recovered c
             // MAX_REINVOKE_DEPTH never fires — a graph reinvoking an agent that emits a graph would
             // run forever.
             ReinvokeDepth: this._agentRun?.ContinuationDepth ?? 0,
+            // The invocation's own parameters, for the flow dialect's `data`/`context` condition
+            // roots (R3-3). The walker read these straight off `ExecuteAgentParams`; the compiled
+            // path carried neither, so every documented `data.x` condition evaluated against the
+            // origin step's output, found nothing, and silently took the other branch.
+            Invocation: { Data: params.data, Context: params.context },
+            Debug: params.taskGraphDebug?.paused ? { paused: true } : undefined,
             ContextUser: params.contextUser,
             Provider: this.ProviderToUse
         });
@@ -11963,6 +12026,15 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Success means "this graph is durable and will run", NOT "this graph has run". Saying
         // otherwise here is the exact lie the old await-everything path told when it returned early.
+        //
+        // The run PARKS on it rather than completing — see `_awaitingWorkflowTaskID`. Recorded only
+        // on a successful submission with a real parent task: a failed submission has nothing to
+        // wait for, and a graph nobody can point at could never be settled by the dispatcher, which
+        // would leave the run parked forever.
+        if (outcome.ParentTaskID) {
+            this._awaitingWorkflowTaskID = outcome.ParentTaskID;
+        }
+
         return {
             step: 'Success',
             terminate: true,
@@ -13414,7 +13486,15 @@ The context is now within limits. Please retry your request with the recovered c
             : finalStep.actionableCommands;
 
         if (this._agentRun) {
-            this._agentRun.CompletedAt = new Date();
+            // A run waiting on a workflow has NOT completed, so it gets no completion time. The
+            // dispatcher stamps this when the graph settles; until then the absence is the honest
+            // record, and a duration computed from it would be the 441ms it took to hand the work
+            // off rather than the time the work took.
+            const parkedOnWorkflow = !!this._awaitingWorkflowTaskID
+                && (finalStep.step === 'Success' || finalStep.step === 'Chat');
+            if (!parkedOnWorkflow) {
+                this._agentRun.CompletedAt = new Date();
+            }
             this._agentRun.Success = finalStep.step === 'Success' || finalStep.step === 'Chat';
             if (!this._agentRun.Success) {
                 // Capture error message from either errorMessage or message field
@@ -13427,6 +13507,17 @@ The context is now within limits. Please retry your request with the recovered c
             if (!this._agentRun.Success) {
                 // set status to Failed
                 this._agentRun.Status = 'Failed';
+            }
+            else if (parkedOnWorkflow) {
+                // Waiting on a task graph the dispatcher is still executing. `Paused` rather than a
+                // new status because it already exists on the entity AND the conversation's process
+                // panel already reads it as in-progress (`Status === 'Running' || === 'Paused'`), so
+                // a parked run presents correctly with no UI change.
+                //
+                // `Success` stays true: the turn genuinely succeeded at what it was asked to do —
+                // start the workflow. Whether the WORKFLOW succeeded is a different question, and
+                // the dispatcher answers it here when the graph settles.
+                this._agentRun.Status = 'Paused';
             }
             else if (finalStep.step === 'Chat') {
                 // Chat steps mean the agent is waiting for human input

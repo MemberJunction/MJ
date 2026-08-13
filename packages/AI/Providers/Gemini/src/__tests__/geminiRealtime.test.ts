@@ -591,6 +591,25 @@ describe('C6: cross-provider config-bag safety (shared-key scrubbing)', () => {
         }
     });
 
+    /**
+     * `firstMessage` (issue #3557) is a neutral persona slot with no Gemini equivalent, filed onto
+     * this driver like any other. The SDK's config converter is a path allowlist, so an unscrubbed
+     * key would be dropped silently before the wire rather than erroring — harmless here, but the
+     * same invisible class as #3721, and it is only harmless by luck of this SDK's behaviour.
+     */
+    it('scrubs the neutral firstMessage key, which Gemini has no equivalent for', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const driver = new TestGeminiRealtime('k');
+            await driver.StartSession(makeParams({ Config: { firstMessage: 'Good morning.', temperature: 0.4 } }));
+            const cfg = driver.LastConnectArgs?.Config as Record<string, unknown>;
+            expect(cfg.firstMessage).toBeUndefined();
+            expect(cfg.temperature).toBe(0.4);
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
     it('a clean Gemini-native bag produces no scrub warning', async () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         try {

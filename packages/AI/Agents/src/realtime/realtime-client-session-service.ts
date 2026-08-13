@@ -1798,7 +1798,8 @@ export class RealtimeClientSessionService {
 
     /**
      * Builds the provider-pact `Config` bag for the session: the effective config's resolved voice
-     * settings (per {@link GetProviderVoiceSettings} — the agnostic `realtime.voice.default.voice`
+     * settings (per {@link GetProviderVoiceSettings} — the persona's agnostic wire-level slots
+     * under `realtime.voice.default`
      * and/or a matching `realtime.voice.providers.<provider>` bag) merged UNDER any caller-supplied
      * {@link PrepareClientSessionInput.Config} (the runtime bag wins per key). The settings objects
      * are OPAQUE driver pacts — each server driver consumes its own keys exactly as it consumes any

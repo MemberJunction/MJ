@@ -35,6 +35,8 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { FlowEditorComponent } from '@memberjunction/ng-flow-editor';
 import type {
+    FlowAfterContextMenuActionEventArgs,
+    FlowBeforeContextMenuEventArgs,
     FlowConnection,
     FlowConnectionCreatedEvent,
     FlowLayoutDirection,
@@ -43,12 +45,15 @@ import type {
     FlowNodeMovedEvent,
     FlowNodeTypeConfig,
     FlowPosition,
+    FlowToolbarAlign,
+    FlowToolbarVisibility,
 } from '@memberjunction/ng-flow-editor';
 import {
     AddDependency,
     AddTask,
     GetDependents,
     GetNodeTypeConfig,
+    IsAuthorableNodeType,
     NewTaskFromNodeType,
     NextTempId,
     RemoveDependency,
@@ -58,6 +63,7 @@ import {
     TASK_GRAPH_NODE_TYPES,
     UpdateTask,
     WouldCreateCycle,
+    type TaskGraphDebugOverlay,
     type TaskGraphRuntimeStatus,
 } from './task-graph-canvas-adapter';
 import type {
@@ -119,12 +125,56 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
         return this.currentRuntime;
     }
 
+    /**
+     * Geometry for the nodes, keyed by `tempId`. Supplying it places the graph instead of laying it
+     * out.
+     *
+     * **Why a host must be able to supply this.** The spec has no layout field, so without it every
+     * node projects to the origin — all of them, stacked in one place — and the canvas is left to
+     * rescue the situation with a deferred Dagre pass. That pass is fine in the editor, where the
+     * author is present and can rearrange. It was not fine in the RUN views, which held the real
+     * geometry (a workflow's authored positions, or a computed layout) and had no way to hand it
+     * over: every run rendered its steps piled on the origin, and the zoom-to-fit that followed
+     * fitted a bounding box one node wide and blew the viewport up past 250%.
+     *
+     * Applied as the starting geometry only. Once the canvas reports positions of its own — a drag,
+     * an arrange — those win, because the person moving a node is the authority on where it goes.
+     */
+    @Input()
+    public set NodePositions(value: ReadonlyMap<string, FlowPosition> | null) {
+        if (!value || value.size === 0) return;
+        const key = [...value.keys()].sort().join(',');
+        const firstForThisGraph = this.fittedGeometryKey !== key;
+        for (const [id, position] of value) this.knownPositions.set(id, { ...position });
+        // Real geometry means the one-time Dagre pass has nothing to rescue.
+        this.hasLaidOut = true;
+        this.project();
+        // Fit once per graph. Live status / poll re-supplies the same positions as a new Map,
+        // and fitting on every write snaps the viewport back while the person is zooming.
+        if (firstForThisGraph) {
+            this.fittedGeometryKey = key;
+            this.zoomToFitSoon();
+        }
+    }
+
     /** Read-only mode. The same component is the viewer — there is no second, weaker renderer. */
     @Input() public ReadOnly: boolean = false;
 
     @Input() public ShowToolbar: boolean = true;
+    /** Full bar / chip / recover tab. Run views default this to minimized. */
+    @Input() public ToolbarVisibility: FlowToolbarVisibility = 'shown';
+    @Input() public ToolbarAlign: FlowToolbarAlign = 'center';
     @Input() public ShowPalette: boolean = true;
     @Input() public ShowMinimap: boolean = true;
+    /**
+     * Whether the legend rides on the canvas.
+     *
+     * On for authoring, off for a run — and the difference is what the legend is FOR. It explains the
+     * authoring vocabulary (what a conditional edge means, what a duplicate default looks like),
+     * which is what someone drawing a graph needs. A run view is answering a different question —
+     * what happened — and the legend answers none of it while occluding a third of the canvas.
+     */
+    @Input() public ShowLegend: boolean = true;
     @Input() public ShowStatusBar: boolean = true;
     @Input() public AutoLayoutDirection: FlowLayoutDirection = 'vertical';
 
@@ -150,6 +200,20 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
     /** Shown when there is nothing to draw yet. */
     @Input() public EmptyStateMessage: string = 'No steps yet. Add one to start building this workflow.';
 
+    /**
+     * Debug overlay for a run. Empty by default so an embed (agent-run timeline, test harness)
+     * never grows breakpoint badges or override styling it did not ask for.
+     */
+    @Input()
+    public set DebugOverlay(value: TaskGraphDebugOverlay | null) {
+        if (this.debugOverlay === value) return;
+        this.debugOverlay = value;
+        this.project();
+    }
+    public get DebugOverlay(): TaskGraphDebugOverlay | null {
+        return this.debugOverlay;
+    }
+
     // ── Outputs ──────────────────────────────────────────────────────────────
 
     @Output() public BeforeTaskAdded = new EventEmitter<BeforeTaskAddedEventArgs>();
@@ -164,6 +228,16 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
     @Output() public AfterDependencyRemoved = new EventEmitter<AfterDependencyRemovedEventArgs>();
 
     /** Informational — no `Before` pair, because these report what already happened. */
+    /**
+     * The legend was shown or hidden from the canvas toolbar.
+     *
+     * Forwarded so a host can PERSIST the choice. Without it the toolbar's toggle mutates the
+     * canvas's own flag and nothing else, so the preference dies with the view — and a host that
+     * wanted it remembered would have to add a second control beside the one that already exists,
+     * which is how a surface ends up with two buttons doing the same thing and disagreeing.
+     */
+    @Output() public LegendToggled = new EventEmitter<boolean>();
+
     @Output() public SpecChanged = new EventEmitter<TaskGraphSpecChangedEventArgs>();
     @Output() public SelectionChanged = new EventEmitter<TaskGraphSelectionChangedEventArgs>();
     @Output() public ValidationChanged = new EventEmitter<TaskGraphValidationChangedEventArgs>();
@@ -171,6 +245,10 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
     /** Intent-only — the host navigates; this widget has no Router and must not acquire one. */
     @Output() public AgentOpenRequested = new EventEmitter<AgentOpenRequestedEventArgs>();
     @Output() public RecordOpenRequested = new EventEmitter<RecordOpenRequestedEventArgs>();
+    /** A connection was clicked. Payload is the canvas connection, or null when cleared. */
+    @Output() public ConnectionSelected = new EventEmitter<FlowConnection | null>();
+    @Output() public BeforeContextMenu = new EventEmitter<FlowBeforeContextMenuEventArgs>();
+    @Output() public AfterContextMenuAction = new EventEmitter<FlowAfterContextMenuActionEventArgs>();
 
     // ── Rendered state ───────────────────────────────────────────────────────
 
@@ -185,6 +263,7 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
 
     private currentSpec: TaskGraphSpec | null = null;
     private currentRuntime: TaskGraphRuntimeStatus | null = null;
+    private debugOverlay: TaskGraphDebugOverlay | null = null;
 
     public get IsEmpty(): boolean {
         return (this.currentSpec?.tasks?.length ?? 0) === 0;
@@ -356,7 +435,9 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
     public OnNodeAdded(event: FlowNodeAddedEvent): void {
         if (this.ReadOnly || !this.currentSpec) return;
         const type = GetNodeTypeConfig(event.Node.Type)?.Type;
-        if (!type) return;
+        // Only an authorable shape can be dropped from the palette. The render set is wider, and a
+        // display-only kind arriving here would mean the palette offered something with no editor.
+        if (!type || !IsAuthorableNodeType(type)) return;
 
         const added = this.AddTask(
             NewTaskFromNodeType(this.currentSpec, type, {
@@ -424,11 +505,21 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
             this.ValidationErrors = [];
             this.IsValid = true;
             this.hasLaidOut = false;
+            this.fittedGeometryKey = null;
             this.knownPositions.clear();
             return;
         }
-        this.Nodes = SpecToNodes(this.currentSpec, this.currentRuntime ?? undefined, this.knownPositions);
-        this.Connections = SpecToConnections(this.currentSpec);
+        this.Nodes = SpecToNodes(
+            this.currentSpec,
+            this.currentRuntime ?? undefined,
+            this.knownPositions,
+            this.debugOverlay ?? undefined,
+        );
+        this.Connections = SpecToConnections(
+            this.currentSpec,
+            this.currentRuntime ?? undefined,
+            this.debugOverlay ?? undefined,
+        );
         this.Validate();
         this.arrangeIfNeverLaidOut();
     }
@@ -467,6 +558,22 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
     }
 
     /**
+     * Fits the viewport to the graph, once the canvas has drawn it.
+     *
+     * Deferred for the same reason the layout pass is: `fitToScreen` measures the rendered nodes, so
+     * calling it in the same turn as the projection fits whatever was on screen a moment ago. With
+     * every node still at the origin that bounding box is a single node wide, and "fit" means zoom
+     * to ~265% — the symptom that made a four-step workflow look like one enormous box.
+     */
+    private zoomToFitSoon(): void {
+        if (this.pendingLayout !== null) clearTimeout(this.pendingLayout);
+        this.pendingLayout = setTimeout(() => {
+            this.pendingLayout = null;
+            this.canvas?.ZoomToFit();
+        });
+    }
+
+    /**
      * The canvas is the authority on geometry, so remember what it reports.
      *
      * Without this the spec — which has no geometry field — is the only survivor of a re-projection,
@@ -475,6 +582,16 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
      */
     public OnNodesChanged(nodes: FlowNode[]): void {
         for (const n of nodes) this.knownPositions.set(n.ID, { ...n.Position });
+    }
+
+    /** The canvas toolbar showed or hid the legend; tell whoever is remembering that choice. */
+    public OnLegendToggled(show: boolean): void {
+        this.ShowLegend = show;
+        this.LegendToggled.emit(show);
+    }
+
+    public OnConnectionSelected(connection: FlowConnection | null): void {
+        this.ConnectionSelected.emit(connection);
     }
 
     /** A single node was dragged. Same authority, narrower event. */
@@ -502,5 +619,7 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
 
     /** Whether the one-time Dagre pass has run (or been made unnecessary by a hand-placed node). */
     private hasLaidOut: boolean = false;
+    /** Task-id set we last fitted. Same ids + a new Map must not re-fit. */
+    private fittedGeometryKey: string | null = null;
     private pendingLayout: ReturnType<typeof setTimeout> | null = null;
 }
