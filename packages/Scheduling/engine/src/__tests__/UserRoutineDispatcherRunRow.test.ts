@@ -38,23 +38,37 @@ vi.mock('@memberjunction/actions', () => ({ ActionEngineServer: { Instance: { Co
 
 import { UserRoutineDispatcherDriver } from '../drivers/UserRoutineDispatcherDriver';
 
-/** A run row that records every save, and can be told to reject specific ones. */
+/**
+ * A run row that records every save, and can be told to reject specific ones.
+ *
+ * The double models `OldValue` because the production code reads it: `BaseEntity.finalizeSave`
+ * runs only on a save that returned a row and calls `SetMany(…, replaceOldValues = true)`, so
+ * `OldValue` advances ONLY when a write lands. A double that ignored this would let a test set
+ * `Status` in memory and call it "committed" — which is exactly the confusion that let the seam
+ * bug through, so the double has to be able to tell the two apart.
+ */
 function makeRun(reject: (attempt: number, row: Record<string, unknown>) => boolean = () => false) {
     const saves: Array<{ Status: unknown; ErrorMessage: unknown; Link: unknown }> = [];
     let attempt = 0;
+    let persistedStatus: unknown = 'Running';
     const run: Record<string, unknown> = {
         ID: 'RUN-1', Status: 'Running', ErrorMessage: null, CompletedAt: null,
         ResultSummary: null, ResultHash: null,
         AgentRunID: null, PromptRunID: null, ActionExecutionLogID: null,
         LatestResult: { CompleteMessage: 'FK violation: FK_UserRoutineRun_ActionExecutionLog' },
+        GetFieldByName: (name: string) =>
+            name === 'Status' ? { get OldValue() { return persistedStatus; } } : undefined,
         Save: async () => {
             attempt++;
             if (reject(attempt, run)) return false;
+            persistedStatus = run.Status;   // the write landed — disk now agrees with memory
             saves.push({ Status: run.Status, ErrorMessage: run.ErrorMessage, Link: run.ActionExecutionLogID });
             return true;
         },
     };
-    return { run, saves, attempts: () => attempt };
+    /** Mark the row as already committed on disk, the way a prior successful save would have. */
+    const commit = (status: string) => { run.Status = status; persistedStatus = status; };
+    return { run, saves, commit, attempts: () => attempt, persisted: () => persistedStatus };
 }
 
 type Driver = UserRoutineDispatcherDriver & {
@@ -115,8 +129,8 @@ describe('UserRoutineDispatcherDriver run-row status', () => {
         // `updateRoutineAfterRun` and the notification save run after the outcome is committed. A
         // throw from there must not rewrite a run that genuinely succeeded — that would put the run
         // and its routine's LastRunStatus into disagreement.
-        const { run, saves } = makeRun();
-        run.Status = 'Success';
+        const { run, saves, commit } = makeRun();
+        commit('Success');   // genuinely on disk, not merely set in memory
         run.ErrorMessage = null;
         driver.createRunRow = async () => run;
         driver.runAndRecord = async () => { throw new Error('routine row update blew up'); };
@@ -126,6 +140,25 @@ describe('UserRoutineDispatcherDriver run-row status', () => {
         expect(run.Status, 'the committed outcome must survive').toBe('Success');
         expect(summary.RunStatus, 'and the summary must report what is on disk').toBe('Success');
         expect(saves.every((s) => s.Status !== 'Failed'), 'no Failed write may be issued').toBe(true);
+    });
+
+    it('does NOT mistake finalizeRunRow\'s in-memory Success for a committed one', async () => {
+        // THE SEAM. Every other test here proves one layer in isolation: the "never reports Success
+        // from memory" case calls `finalizeRunRow` directly and never reaches the catch, and the two
+        // `executeRoutine` cases stub `runAndRecord` so `finalizeRunRow` never runs. Composed, they
+        // reintroduce the defect both were written to fix — `finalizeRunRow` sets Status='Success',
+        // every save is rejected, it throws, and the catch reading the IN-MEMORY value concludes the
+        // outcome was already committed and leaves the row at 'Running' forever while reporting
+        // Success to the sweep.
+        const { run, saves, persisted } = makeRun(() => true);   // nothing can ever be written
+        driver.createRunRow = async () => run;
+        driver.runAndRecord = async (_r, runRow) => driver.finalizeRunRow(runRow, OUTCOME, 'summary', 'hash');
+
+        const summary = await driver.executeRoutine({ ID: 'R-1', Name: 'R' }, { ContextUser: { ID: 'u' } });
+
+        expect(saves.length, 'nothing reached the database').toBe(0);
+        expect(persisted(), 'so the row is still Running on disk').toBe('Running');
+        expect(summary.RunStatus, 'and the sweep must not claim Success for it').not.toBe('Success');
     });
 
     it('DOES drive a still-Running row to Failed when the bookkeeping throws', async () => {

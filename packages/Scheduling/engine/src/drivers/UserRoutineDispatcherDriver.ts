@@ -53,7 +53,6 @@ export interface UserRoutineDispatcherConfiguration extends ScheduledJobConfigur
     MaxConcurrentRoutines?: number;
 }
 
-/** Default bound on concurrent routine executions within a single dispatcher sweep. */
 /**
  * Attempts to re-attach a run's execution linkage after the first save was rejected.
  *
@@ -64,7 +63,36 @@ export interface UserRoutineDispatcherConfiguration extends ScheduledJobConfigur
 const RUN_LINKAGE_ATTEMPTS = 3;
 const RUN_LINKAGE_RETRY_MS = 50;
 
+/** Default bound on concurrent routine executions within a single dispatcher sweep. */
 const DEFAULT_MAX_CONCURRENT_ROUTINES = 3;
+
+/**
+ * The run's status **as last persisted** — never the in-memory value.
+ *
+ * `BaseEntity.finalizeSave` runs only when the save returned a row, and it calls
+ * `SetMany(data, …, replaceOldValues = true)`. So `OldValue` holds the value on disk: it advances
+ * to 'Success'/'Failed' when the write lands, and stays 'Running' when it does not.
+ *
+ * The distinction is the whole point. `finalizeRunRow` assigns `Status = 'Success'` BEFORE its
+ * first save, so after a rejected save the in-memory `Status` says 'Success' while the row still
+ * says 'Running'. A caller that reads `run.Status` to decide "was an outcome already committed?"
+ * gets 'Success' and leaves the row stuck at 'Running' forever — the exact defect this module's
+ * tests were written to eliminate, reintroduced at the seam between the two layers that each fix
+ * one half of it.
+ *
+ * Falls back to the in-memory value only when the field cannot be resolved, which cannot happen
+ * for a real `MJUserRoutineRunEntity` (`Status` is a column); it keeps this total rather than
+ * throwing inside an error handler.
+ */
+function persistedRunStatus(run: MJUserRoutineRunEntity): MJUserRoutineRunEntity['Status'] {
+    const persisted: unknown = run.GetFieldByName?.('Status')?.OldValue;
+    // `OldValue` is untyped on EntityField, so this is the one narrowing boundary. The column is
+    // CHECK-constrained to the same value list as the property, so a string read from it IS that
+    // union — asserting anything wider here would just push the cast to every caller.
+    return typeof persisted === 'string'
+        ? (persisted as MJUserRoutineRunEntity['Status'])
+        : run.Status;
+}
 
 /** Name of the metadata-seeded default notification template (resolved BY NAME, never hardcoded ID). */
 const DEFAULT_NOTIFICATION_TEMPLATE_NAME = 'User Routine Notification - Default';
@@ -309,12 +337,19 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             // agreeing. Overwriting it with `Failed` would rewrite a run that genuinely succeeded
             // and put the run and its routine into disagreement — inventing the very status/disk
             // mismatch this catch was added to eliminate.
-            if (run.Status !== 'Running') {
+            //
+            // ASK THE ROW, NOT THE OBJECT. This must read the PERSISTED status, because the other
+            // way into this catch is `finalizeRunRow` itself throwing — and it throws having
+            // already set `Status = 'Success'` in memory on an object whose saves all failed.
+            // Reading `run.Status` there would report a committed success for a row that is still
+            // 'Running' on disk, which is precisely the bug the throw exists to signal.
+            const committed = persistedRunStatus(run);
+            if (committed !== 'Running') {
                 this.logError(
-                    `Run ${run.ID} already recorded '${run.Status}'; leaving it as-is. The failure above ` +
+                    `Run ${run.ID} already recorded '${committed}'; leaving it as-is. The failure above ` +
                     `happened in the bookkeeping AFTER the outcome was committed.`
                 );
-                return { RoutineID: routine.ID, RunStatus: run.Status, Notified: false };
+                return { RoutineID: routine.ID, RunStatus: committed, Notified: false };
             }
 
             run.Status = 'Failed';
@@ -462,12 +497,11 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         // link is an observability loss, and blocking the sweep on it would be the worse trade.
         run.ErrorMessage = [outcome.ErrorMessage, `execution linkage not attached: ${firstFailure}`]
             .filter(Boolean).join(' | ');
-        await run.Save();
+        const noted = await run.Save();
         this.logError(
-            `Run ${run.ID} finalized WITHOUT execution linkage after ${RUN_LINKAGE_ATTEMPTS} attempt(s): ${firstFailure}`
+            `Run ${run.ID} finalized WITHOUT execution linkage after ${RUN_LINKAGE_ATTEMPTS} attempt(s): ${firstFailure}` +
+            (noted ? '' : ` — and the note could not be written: ${run.LatestResult?.CompleteMessage ?? 'unknown'}`)
         );
-        return;
-
     }
 
     /** Roll the run outcome up onto the routine (LastRunAt / LastRunStatus / LastResultHash). */
