@@ -316,6 +316,7 @@ function buildDispatcher(
     deliverer?: TaskContinuationDeliverer,
     pollIntervalSeconds: number = TEST_POLL_SECONDS,
     promptRunner?: TaskPromptRunner,
+    reconciliationIntervalSeconds: number = 3600,
 ): TaskGraphDispatcher {
     return new TaskGraphDispatcher(
         providerFactory(ctx),
@@ -326,7 +327,9 @@ function buildDispatcher(
             PollIntervalSeconds: pollIntervalSeconds,
             // Long enough that nothing self-reclaims mid-check; TX7 drives reconciliation explicitly.
             ClaimTTLSeconds: 300,
-            ReconciliationIntervalSeconds: 3600,
+            // Default long, for the same reason — TX26 is the one check that wants it short, because
+            // an interval it can outwait is how a timer that should not exist becomes observable.
+            ReconciliationIntervalSeconds: reconciliationIntervalSeconds,
             MaxConcurrentTasks: 5,
         },
         deliverer,  // usually absent: a test has no conversation to post into
@@ -1788,6 +1791,52 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
 
             Assert(!!GetTaskGraphSubmitter(), 'suppression leaked past the check');
             console.log('      → a disabled host hands out no submitter, and says which flag did it');
+        }
+    },
+
+    {
+        Id: 'task-graph-execution.TX26',
+        Name: 'TX26: a dispatcher stopped during boot installs no timers afterwards',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // R3-4. Everything in `Start()` before the timer install is awaited — reconciliation and
+            // the counted startup sweep, which R2-13 makes `Stop()` wait out. So a host shutting down
+            // during boot drained correctly, logged "Stopped.", and returned with both timer fields
+            // null — and then `Start()`'s own continuation resumed and installed both timers on the
+            // stopped instance. `pollOnce` was inert (its own `running` guard), but `Reconcile` had
+            // none: `ReleaseExpiredClaims` — a real UPDATE — ran every interval forever, against a
+            // pool the host may have torn down, with nothing left to call `Stop()` again.
+            //
+            // Observed through that UPDATE, since the timers themselves are private: an expired claim
+            // staged AFTER the race has no legitimate reason to be released by anybody. If it is, a
+            // reconcile timer exists on an instance that reported itself stopped.
+            const agentName = await resolveAgentName(ctx);
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-boot-race (safe to delete)',
+                tasks: [agentTask('a', 'BR One', agentName)],
+            });
+
+            const dispatcher = buildDispatcher(ctx, RUNNER, 'it-tx26', undefined, undefined,
+                TEST_POLL_SECONDS, undefined, 1);
+            const booting = dispatcher.Start();     // deliberately not awaited
+            await dispatcher.Stop();                 // lands inside the boot awaits
+            await booting;                           // let the continuation run
+
+            // The state a crashed peer leaves, staged now so only a live timer could clear it.
+            const child = (await loadChildren(ctx, parentID)).get('BR One')!;
+            child.Status = 'In Progress';
+            child.ClaimedBy = 'it-tx26-dead-peer';
+            child.ClaimExpiresAt = new Date(Date.now() - 60_000);
+            Assert(await child.Save(), `could not stage the orphaned claim: ${child.LatestResult?.CompleteMessage ?? 'unknown'}`);
+
+            await settle(4_000);   // several reconcile intervals, had one been installed
+
+            const after = (await loadChildren(ctx, parentID)).get('BR One')!;
+            AssertEqual(after.ClaimedBy, 'it-tx26-dead-peer',
+                'the claim was released by an instance that reported itself stopped — a reconcile timer is still running');
+            AssertEqual(after.Status, 'In Progress', 'the stopped instance reconciled the task back to Pending');
+
+            console.log('      → a stop during boot stayed stopped; no timer outlived it');
         }
     },
 
