@@ -414,6 +414,13 @@ export type TaskGraphDispatcherConfig = {
      * Identifies this dispatcher instance in `Task.ClaimedBy`. Must be stable for the process
      * lifetime and distinct per instance — it is what lets reconciliation tell "my orphaned work"
      * from "another instance's live work".
+     *
+     * **Distinctness is a correctness requirement, not a nicety** (C2). Every ownership guard in the
+     * claim protocol compares against this value, so two instances sharing one defeats all of them
+     * at once: A's heartbeat renews B's lease, and A's stale terminal write lands over B's live
+     * execution. Host+pid is NOT sufficient — `HOSTNAME` is unexported to child processes under
+     * systemd and pm2, and a containerised process is routinely pid 1 — which is why the server's
+     * default appends real entropy.
      */
     InstanceID: string;
 
