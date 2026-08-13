@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { ReadPaneSizePair, ToPaneSizePair } from './pane-split';
+import { AsPaneSizePair, ReadPaneSizePair, ToPaneSizePair } from './pane-split';
+
+describe('AsPaneSizePair', () => {
+    it('accepts a usable pair and rejects a hidden pane', () => {
+        expect(AsPaneSizePair([22, 78])).toEqual([22, 78]);
+        expect(AsPaneSizePair([0, 100])).toBeNull();
+        expect(AsPaneSizePair('nope')).toBeNull();
+    });
+});
 
 describe('ReadPaneSizePair', () => {
     it('reads a usable pair', () => {

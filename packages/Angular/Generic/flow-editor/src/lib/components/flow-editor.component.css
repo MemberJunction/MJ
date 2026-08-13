@@ -253,18 +253,18 @@ f-line-alignment {
 /* Connection paths — default stroke color prevents invisible connections */
 .f-connection path {
   stroke: var(--mj-text-disabled);
-  stroke-width: 2;
+  stroke-width: var(--connection-width, 2px);
   fill: none;
   transition: stroke 0.15s ease, stroke-width 0.15s ease;
 }
 
 .f-connection:hover path {
-  stroke-width: 3;
+  stroke-width: calc(var(--connection-width, 2px) + 1px);
 }
 
 .f-connection.f-selected path {
   stroke: var(--mj-brand-primary);
-  stroke-width: 3;
+  stroke-width: max(3px, var(--connection-width, 2px));
 }
 
 /* Colored connections use the --connection-color custom property,
@@ -275,7 +275,7 @@ f-line-alignment {
 
 .mj-flow-connection-colored.f-selected path {
   stroke: var(--connection-color, var(--mj-brand-primary));
-  stroke-width: 3;
+  stroke-width: max(3px, var(--connection-width, 2px));
   filter: brightness(0.85);
 }
 
@@ -290,11 +290,14 @@ f-line-alignment {
 }
 
 .mj-flow-connection-animated path {
-  stroke-dasharray: 8 6;
-  animation: mj-flow-dash 0.55s linear infinite;
+  stroke-dasharray: 14 10;
+  stroke-linecap: round;
+  stroke-width: var(--connection-width, 4.5px);
+  animation: mj-flow-dash 0.5s linear infinite;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--connection-color, var(--mj-brand-primary)) 70%, transparent));
 }
 @keyframes mj-flow-dash {
-  to { stroke-dashoffset: -14; }
+  to { stroke-dashoffset: -24; }
 }
 
 /* Connection for create (dragging) */

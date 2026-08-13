@@ -9,16 +9,19 @@ export type PaneSizePair = [number, number];
 
 const MIN_USABLE_PERCENT = 5;
 
+export function AsPaneSizePair(value: unknown): PaneSizePair | null {
+    if (!Array.isArray(value) || value.length !== 2) return null;
+    const [a, b] = value;
+    if (typeof a !== 'number' || typeof b !== 'number') return null;
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+    if (a < MIN_USABLE_PERCENT || b < MIN_USABLE_PERCENT) return null;
+    return [a, b];
+}
+
 export function ReadPaneSizePair(raw: string | undefined): PaneSizePair | null {
     if (!raw) return null;
     try {
-        const parsed: unknown = JSON.parse(raw);
-        if (!Array.isArray(parsed) || parsed.length !== 2) return null;
-        const [a, b] = parsed;
-        if (typeof a !== 'number' || typeof b !== 'number') return null;
-        if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
-        if (a < MIN_USABLE_PERCENT || b < MIN_USABLE_PERCENT) return null;
-        return [a, b];
+        return AsPaneSizePair(JSON.parse(raw));
     } catch {
         return null;
     }

@@ -270,7 +270,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   }
 
   /** Update a connection's visual properties in-place (label, color, style, etc.) */
-  UpdateConnection(connId: string, changes: Partial<Pick<FlowConnection, 'Label' | 'LabelIcon' | 'LabelIconColor' | 'LabelDetail' | 'Color' | 'Style' | 'Animated'>>): void {
+  UpdateConnection(connId: string, changes: Partial<Pick<FlowConnection, 'Label' | 'LabelIcon' | 'LabelIconColor' | 'LabelDetail' | 'Color' | 'StrokeWidth' | 'Style' | 'Animated'>>): void {
     const conn = this.Connections.find(c => UUIDsEqual(c.ID, connId));
     if (!conn) return;
     Object.assign(conn, changes);

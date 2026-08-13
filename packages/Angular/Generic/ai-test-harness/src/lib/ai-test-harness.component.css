@@ -1202,6 +1202,24 @@
   color: var(--mj-text-tertiary);
 }
 
+.workflow-payload-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: var(--mj-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+.workflow-payload-toggle:hover { color: var(--mj-text-primary); }
+.workflow-payload-toggle i { font-size: 9px; width: 10px; }
+
 .workflow-payload { font-family: var(--mj-font-mono, monospace); font-size: var(--mj-font-size-sm); }
 
 .workflow-actions {
@@ -1234,4 +1252,4 @@
   justify-content: space-between;
   gap: var(--mj-space-3);
 }
-.workflow-graph mj-task-graph-run-view { flex: 1 1 auto; min-height: 0; }
+.workflow-graph mj-task-graph-debugger { flex: 1 1 auto; min-height: 0; }

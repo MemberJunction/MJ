@@ -95,6 +95,8 @@ export interface FlowConnection {
   Priority?: number;
   Style?: FlowConnectionStyle;
   Color?: string;
+  /** Stroke width in px. Active/flowing edges use a thicker value so they read at a glance. */
+  StrokeWidth?: number;
   Animated?: boolean;
   Selected?: boolean;
   /** Opaque data payload — consumers store domain-specific data here */

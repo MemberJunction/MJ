@@ -4,8 +4,8 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MJAIAgentEntityExtended, MJAIPromptEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJTemplateParamEntity, MJAIConfigurationEntity, MJTaskEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { Metadata, RunView, CompositeKey, type IRemoteOperationProvider } from '@memberjunction/core';
-import { GraphQLDataProvider, type TaskGraphFrameEvent } from '@memberjunction/graphql-dataprovider';
+import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { ChatMessage } from '@memberjunction/ai';
@@ -13,15 +13,10 @@ import { Subject, Subscription } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ParseJSONRecursive, ParseJSONOptions, UUIDsEqual, EscapeHTML } from '@memberjunction/global';
 import {
-    ComposeBreakpointSet,
     ParentTaskIDFromStepOutput,
-    ParseWorkflowDebugOverlay,
-    ParseWorkflowInvocation,
     ReadPaneSizePair,
     ToPaneSizePair,
     type PaneSizePair,
-    type TaskGraphRunFrame,
-    type WorkflowInvocationRoots,
 } from '@memberjunction/ng-task-graph-editor';
 
 type StreamedStep = {
@@ -41,6 +36,23 @@ function streamedRunID(serialized: unknown): string | undefined {
     if (!serialized || typeof serialized !== 'object') return undefined;
     const id = (serialized as Record<string, unknown>)['ID'];
     return typeof id === 'string' ? id : undefined;
+}
+
+interface AITestHarnessPrefs {
+    StartingPayloadOpen: boolean;
+}
+
+function ReadHarnessPrefs(raw: string | undefined): AITestHarnessPrefs {
+    const defaults: AITestHarnessPrefs = { StartingPayloadOpen: false };
+    if (!raw) return defaults;
+    try {
+        const parsed: unknown = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return defaults;
+        const obj = parsed as Record<string, unknown>;
+        return { StartingPayloadOpen: obj['StartingPayloadOpen'] === true };
+    } catch {
+        return defaults;
+    }
 }
 
 /**
@@ -205,6 +217,9 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         try {
             const saved = ReadPaneSizePair(UserInfoEngine.Instance.GetSetting(AITestHarnessComponent.SPLIT_KEY));
             if (saved) this.HarnessSplitSizes = saved;
+            this.StartingPayloadOpen = ReadHarnessPrefs(
+                UserInfoEngine.Instance.GetSetting(AITestHarnessComponent.PREFS_KEY),
+            ).StartingPayloadOpen;
         } catch {
             // Engine not configured yet (unit tests, pre-bootstrap) — keep the default.
         }
@@ -273,25 +288,28 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     public WorkflowParentTaskID: string | null = null;
     /** True after Debug — chrome, breakpoints, and the start-paused seed stay on for this run. */
     public WorkflowDebuggerActive = false;
-    public WorkflowDebugPaused = false;
     public WorkflowSettled = false;
-    public WorkflowControlBusy = false;
-    public WorkflowControlError: string | null = null;
-    public WorkflowDebugBreakpoints: readonly string[] = [];
-    public WorkflowPausedAtTaskID: string | null = null;
-    public WorkflowEdgeOverrides: Readonly<Record<string, 'true' | 'false'>> = {};
-    public WorkflowLatestFrame: TaskGraphRunFrame | null = null;
-    public WorkflowInvocation: WorkflowInvocationRoots | null = null;
     /** Parsed starting payload, handed to the run as template data on the next send. */
     private workflowStartingData: Record<string, unknown> | null = null;
     /** Consumed by executeAgent; set only by DebugWorkflow so Pause-after-submit cannot race. */
     private startWorkflowPaused = false;
-    private workflowFrameSub: Subscription | null = null;
     private workflowAttachTimer: ReturnType<typeof setInterval> | null = null;
 
     /** [chat, sidebar] percentages. Restored from `MJ: User Settings`. */
     public HarnessSplitSizes: PaneSizePair = [70, 30];
     private static readonly SPLIT_KEY = 'mj.aiTestHarness.splitSizes.v1';
+    private static readonly PREFS_KEY = 'mj.aiTestHarness.prefs.v1';
+    /** Starting-payload editor is collapsed unless the person opens it. */
+    public StartingPayloadOpen = false;
+
+    public OnToggleStartingPayload(): void {
+        this.StartingPayloadOpen = !this.StartingPayloadOpen;
+        UserInfoEngine.Instance.SetSettingDebounced(
+            AITestHarnessComponent.PREFS_KEY,
+            JSON.stringify({ StartingPayloadOpen: this.StartingPayloadOpen } satisfies AITestHarnessPrefs),
+        );
+        this.cdr.markForCheck();
+    }
 
     public OnHarnessSplitDragEnd(sizes: readonly (number | '*')[]): void {
         const pair = ToPaneSizePair(sizes);
@@ -325,11 +343,11 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             }
         }
 
-        this.detachWorkflowFrames();
+        this.stopWorkflowAttachPoll();
         this.WorkflowParentTaskID = null;
         if (!this.startWorkflowPaused) {
             this.WorkflowDebuggerActive = false;
-            this.clearWorkflowDebugChrome();
+            this.WorkflowSettled = false;
         }
         this.workflowStartingData = payload ?? null;
         // Reuse the existing send path: it already owns streaming, the execution monitor, run
@@ -347,56 +365,13 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     public async DebugWorkflow(): Promise<void> {
         this.startWorkflowPaused = true;
         this.WorkflowDebuggerActive = true;
-        this.WorkflowDebugPaused = true;
         this.WorkflowSettled = false;
         await this.RunWorkflow();
     }
 
-    public OnWorkflowPause(): void {
-        void this.executeWorkflowControl('TaskGraph.Pause', { parentTaskID: this.WorkflowParentTaskID });
-    }
-
-    public OnWorkflowResume(): void {
-        void this.executeWorkflowControl('TaskGraph.Resume', { parentTaskID: this.WorkflowParentTaskID });
-    }
-
-    public OnWorkflowStep(target: 'one' | 'wave'): void {
-        void this.executeWorkflowControl('TaskGraph.Step', { parentTaskID: this.WorkflowParentTaskID, target });
-    }
-
-    public OnWorkflowCancel(): void {
-        void this.executeWorkflowControl('TaskGraph.Cancel', { parentTaskID: this.WorkflowParentTaskID });
-    }
-
     public OnWorkflowCanvasSettled(): void {
-        this.markWorkflowSettled();
-    }
-
-    private markWorkflowSettled(): void {
         this.WorkflowSettled = true;
-        this.WorkflowDebugPaused = false;
-        this.WorkflowPausedAtTaskID = null;
-        if (this.WorkflowParentTaskID) void this.loadWorkflowDebugState(this.WorkflowParentTaskID);
         this.cdr.detectChanges();
-    }
-
-    public OnWorkflowEdgeOverride(event: { EdgeID: string; Verdict: 'true' | 'false' | null }): void {
-        if (!this.WorkflowParentTaskID) return;
-        void this.executeWorkflowControl('TaskGraph.OverrideEdge', {
-            parentTaskID: this.WorkflowParentTaskID,
-            edgeID: event.EdgeID,
-            verdict: event.Verdict,
-        });
-    }
-
-    public async OnWorkflowBreakpointToggled(event: { TaskID: string; Enabled: boolean }): Promise<void> {
-        if (!this.WorkflowParentTaskID) return;
-        await this.loadWorkflowDebugState(this.WorkflowParentTaskID);
-        const next = ComposeBreakpointSet(this.WorkflowDebugBreakpoints, event.TaskID, event.Enabled);
-        await this.executeWorkflowControl('TaskGraph.SetBreakpoints', {
-            parentTaskID: this.WorkflowParentTaskID,
-            taskIDs: next,
-        });
     }
 
     private _isVisible: boolean = false;
@@ -688,7 +663,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         if (this._agentStreamSub) {
             this._agentStreamSub.unsubscribe();
         }
-        this.detachWorkflowFrames();
+        this.stopWorkflowAttachPoll();
     }
 
     /**
@@ -1275,11 +1250,11 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             const defaultConfig = this.availableConfigurations.find(c => c.IsDefault);
             this.agentConfigurationId = defaultConfig?.ID || '';
         }
-        this.detachWorkflowFrames();
+        this.stopWorkflowAttachPoll();
         this.WorkflowParentTaskID = null;
         this.WorkflowDebuggerActive = false;
         this.startWorkflowPaused = false;
-        this.clearWorkflowDebugChrome();
+        this.WorkflowSettled = false;
     }
     
     /**
@@ -1541,8 +1516,6 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     private attachWorkflowCanvas(parentTaskID: string): void {
         this.stopWorkflowAttachPoll();
         this.WorkflowParentTaskID = parentTaskID;
-        this.attachWorkflowFrames(parentTaskID);
-        void this.loadWorkflowDebugState(parentTaskID);
         this.cdr.detectChanges();
     }
 
@@ -1578,109 +1551,6 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             clearInterval(this.workflowAttachTimer);
             this.workflowAttachTimer = null;
         }
-    }
-
-    private async executeWorkflowControl(
-        operationKey: string,
-        input: Record<string, unknown>,
-    ): Promise<void> {
-        if (!this.WorkflowParentTaskID) return;
-        const provider = this.ProviderToUse as unknown as Partial<IRemoteOperationProvider>;
-        if (typeof provider.RouteOperation !== 'function') {
-            this.WorkflowControlError = 'This connection cannot send workflow controls.';
-            this.cdr.detectChanges();
-            return;
-        }
-        this.WorkflowControlBusy = true;
-        this.WorkflowControlError = null;
-        this.cdr.detectChanges();
-        try {
-            const result = await provider.RouteOperation(operationKey, input, {});
-            const output = result?.Output as { success?: boolean; errorMessage?: string } | undefined;
-            if (!result?.Success || output?.success === false) {
-                this.WorkflowControlError = output?.errorMessage ?? result?.ErrorMessage ?? 'The control could not be applied.';
-                return;
-            }
-            if (operationKey === 'TaskGraph.Pause') this.WorkflowDebugPaused = true;
-            if (operationKey === 'TaskGraph.Resume') this.WorkflowDebugPaused = false;
-            await this.loadWorkflowDebugState(this.WorkflowParentTaskID);
-        } catch (e) {
-            this.WorkflowControlError = e instanceof Error ? e.message : String(e);
-        } finally {
-            this.WorkflowControlBusy = false;
-            this.cdr.detectChanges();
-        }
-    }
-
-    private async loadWorkflowDebugState(parentTaskID: string): Promise<void> {
-        const result = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJTaskEntity>({
-            EntityName: 'MJ: Tasks',
-            ExtraFilter: `ID='${parentTaskID}'`,
-            ResultType: 'entity_object',
-            BypassCache: true,
-        });
-        if (this.WorkflowParentTaskID !== parentTaskID) return;
-        const parent = result.Success ? result.Results?.[0] : undefined;
-        const overlay = ParseWorkflowDebugOverlay(parent?.InputPayload);
-        this.WorkflowDebugBreakpoints = overlay.breakpoints;
-        this.WorkflowEdgeOverrides = overlay.edgeOverrides;
-        this.WorkflowInvocation = ParseWorkflowInvocation(parent?.InputPayload);
-        // Settled trumps the durable bag: $.debug.paused can still be true after the last step
-        // finishes, and painting that as "paused here" hides that the run is over.
-        if (!this.WorkflowSettled) {
-            this.WorkflowDebugPaused = overlay.paused;
-            this.WorkflowPausedAtTaskID = overlay.pausedAtTaskID;
-        }
-        this.cdr.detectChanges();
-    }
-
-    private attachWorkflowFrames(parentTaskID: string): void {
-        this.detachWorkflowFrames();
-        const provider = this.ProviderToUse;
-        if (!(provider instanceof GraphQLDataProvider)) return;
-        this.workflowFrameSub = provider.TaskGraphFrames(parentTaskID).subscribe({
-            next: (frame: TaskGraphFrameEvent) => this.onWorkflowFrame(frame),
-            error: () => { this.workflowFrameSub = null; },
-            complete: () => { this.workflowFrameSub = null; },
-        });
-    }
-
-    private onWorkflowFrame(frame: TaskGraphFrameEvent): void {
-        this.WorkflowLatestFrame = frame;
-        if (this.WorkflowSettled && (frame.kind === 'GraphPaused' || frame.kind === 'BreakpointHit')) {
-            // The bag can still say paused after the last step finishes. Do not walk Finished back.
-            return;
-        }
-        if (frame.kind === 'GraphPaused' || frame.kind === 'BreakpointHit') {
-            this.WorkflowSettled = false;
-            this.WorkflowDebugPaused = true;
-            if (this.WorkflowParentTaskID) void this.loadWorkflowDebugState(this.WorkflowParentTaskID);
-        } else if (frame.kind === 'GraphResumed' || frame.kind === 'TaskStarted') {
-            this.WorkflowSettled = false;
-            this.WorkflowDebugPaused = false;
-        } else if (frame.kind === 'GraphSettled') {
-            this.markWorkflowSettled();
-        }
-        this.cdr.detectChanges();
-    }
-
-    private detachWorkflowFrames(): void {
-        this.stopWorkflowAttachPoll();
-        this.workflowFrameSub?.unsubscribe();
-        this.workflowFrameSub = null;
-        this.WorkflowLatestFrame = null;
-    }
-
-    private clearWorkflowDebugChrome(): void {
-        this.WorkflowDebugPaused = false;
-        this.WorkflowSettled = false;
-        this.WorkflowControlBusy = false;
-        this.WorkflowControlError = null;
-        this.WorkflowDebugBreakpoints = [];
-        this.WorkflowPausedAtTaskID = null;
-        this.WorkflowEdgeOverrides = {};
-        this.WorkflowLatestFrame = null;
-        this.WorkflowInvocation = null;
     }
 
     public async sendMessage() {

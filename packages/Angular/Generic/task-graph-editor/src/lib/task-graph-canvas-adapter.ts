@@ -333,13 +333,15 @@ export function SpecToNodes(
         const type = GetTaskNodeType(task);
         const known = positions?.get(task.tempId);
         const awaiting = isAwaitingUser(task.tempId, entryIds, runtime, debug);
+        const nextToRun = isNextToRun(task, runtime, debug, entryIds);
+        const running = runtime?.[task.tempId] === 'In Progress';
         return {
             ID: task.tempId,
             Type: type,
             Label: task.name,
             Subtitle: TaskSubtitle(task, type),
             Icon: GetNodeTypeConfig(type)?.Icon ?? 'fa-circle-nodes',
-            IconColor: awaiting ? 'var(--mj-brand-primary)' : undefined,
+            IconColor: awaiting || nextToRun || running ? 'var(--mj-brand-primary)' : undefined,
             // Keep the real runtime status. Mapping "paused here" to `running` drew a spinner
             // on a step that is waiting for the operator — it read as "this is executing".
             Status: RuntimeStateToNodeStatus(runtime?.[task.tempId]),
@@ -351,7 +353,7 @@ export function SpecToNodes(
                 { ID: InputPortID(task.tempId), Direction: 'input', Side: 'top', Multiple: true },
                 { ID: OutputPortID(task.tempId), Direction: 'output', Side: 'bottom', Multiple: true },
             ],
-            Data: { TempId: task.tempId, AwaitingUser: awaiting },
+            Data: { TempId: task.tempId, AwaitingUser: awaiting, NextToRun: nextToRun },
         };
     });
 }
@@ -432,6 +434,7 @@ export function SpecToConnections(
     debug?: TaskGraphDebugOverlay,
 ): FlowConnection[] {
     const known = new Set((spec.tasks ?? []).map((t) => t.tempId));
+    const entryIds = new Set(GetEntryTempIds(spec));
     const connections: FlowConnection[] = [];
 
     for (const task of spec.tasks ?? []) {
@@ -445,12 +448,15 @@ export function SpecToConnections(
             // visible or the history lies about why a branch ran (or did not).
             if (eitherSkipped && !override) continue;
 
+            const destQueued = isNextToRun(task, runtime, debug, entryIds);
+            const flowing = destQueued || isFlowingEdge(dep.tempId, task.tempId, runtime, debug);
             connections.push(ProjectConnection(
                 dep,
                 task.tempId,
                 override,
                 debug?.showConditions === true,
-                isFlowingEdge(dep.tempId, task.tempId, runtime, debug),
+                flowing,
+                !flowing && isTraveledEdge(dep.tempId, task.tempId, runtime),
             ));
         }
     }
@@ -464,6 +470,7 @@ export function ProjectConnection(
     override?: 'true' | 'false',
     showConditions: boolean = false,
     flowing: boolean = false,
+    traveled: boolean = false,
 ): FlowConnection {
     const conditional = !!dep.condition?.trim();
     const forced = override === 'true' || override === 'false';
@@ -486,11 +493,14 @@ export function ProjectConnection(
         LabelIcon: forced ? 'fa-hand' : (conditional ? 'fa-code-branch' : undefined),
         LabelIconColor: forced ? 'var(--mj-status-warning)' : undefined,
         Condition: dep.condition ?? undefined,
-        // Dotted is the override; dashed is already "this edge is conditional".
-        Style: forced ? 'dotted' : (conditional ? 'dashed' : 'solid'),
+        // Dotted is the override. Dashed means "only sometimes" until the path is taken —
+        // after that the condition stays on the label, but the stroke is solid so a finished
+        // branch does not still look tentative.
+        Style: forced ? 'dotted' : (conditional && !traveled ? 'dashed' : 'solid'),
         Color: flowing
             ? 'var(--mj-brand-primary)'
-            : (forced ? 'var(--mj-status-warning)' : undefined),
+            : (forced ? 'var(--mj-status-warning)' : (traveled ? 'var(--mj-status-success)' : undefined)),
+        StrokeWidth: flowing ? 4.5 : (traveled || forced ? 3 : undefined),
         Animated: flowing,
         Data: { FromTempId: dep.tempId, ToTempId: toTempId, EdgeID: dep.id },
     };
@@ -525,6 +535,26 @@ function isAwaitingUser(
     return !state || !TERMINAL_RUNTIME.has(state);
 }
 
+/**
+ * The next claimable step: prerequisites are done (or it is an entry) and the engine has not
+ * started it. Distinct from "waiting on you" — this one is waiting on the dispatcher.
+ */
+function isNextToRun(
+    task: TaskGraphSpecNode,
+    runtime?: TaskGraphRuntimeStatus,
+    debug?: TaskGraphDebugOverlay,
+    entryIds?: ReadonlySet<string>,
+): boolean {
+    if (isAwaitingUser(task.tempId, entryIds ?? new Set(), runtime, debug)) return false;
+    const state = runtime?.[task.tempId];
+    if (state === 'In Progress' || (state && TERMINAL_RUNTIME.has(state))) return false;
+    const incoming = GetDependencies(task);
+    if (incoming.length === 0) return true;
+    const live = incoming.filter((d) => runtime?.[d.tempId] !== 'Skipped');
+    if (live.length === 0) return false;
+    return live.every((d) => runtime?.[d.tempId] === 'Complete');
+}
+
 function isFlowingEdge(
     fromTempId: string,
     toTempId: string,
@@ -535,6 +565,26 @@ function isFlowingEdge(
     if (debug?.activeEdgeIDs?.includes(edgeId(fromTempId, toTempId))) return true;
     if (!runtime) return false;
     return runtime[fromTempId] === 'Complete' && runtime[toTempId] === 'In Progress';
+}
+
+const TAKEN_ORIGIN = new Set<TaskGraphRuntimeState>(['Complete', 'Failed', 'Cancelled']);
+const TAKEN_DEST = new Set<TaskGraphRuntimeState>(['In Progress', 'Complete', 'Failed', 'Cancelled']);
+
+/**
+ * Path already taken — origin finished AND dest has actually started. Pending dests are still
+ * candidates (a gate has not fired), so they stay dashed until one is claimed and the rest skip.
+ */
+function isTraveledEdge(
+    fromTempId: string,
+    toTempId: string,
+    runtime?: TaskGraphRuntimeStatus,
+): boolean {
+    if (!runtime) return false;
+    const fromState = runtime[fromTempId];
+    const toState = runtime[toTempId];
+    if (!fromState || !TAKEN_ORIGIN.has(fromState)) return false;
+    if (!toState || !TAKEN_DEST.has(toState)) return false;
+    return true;
 }
 
 function TruncateCondition(text: string, max: number = 28): string {

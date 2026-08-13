@@ -27,9 +27,45 @@
 .run-view-waiting { color: var(--mj-brand-primary); font-weight: 700; }
 .run-view-done { color: var(--mj-status-success); font-weight: 600; }
 
+.run-view-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.run-view-vars-rail {
+  flex: 0 0 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-3) 0;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+}
+.run-view-vars-rail:hover {
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-hover);
+}
+.run-view-vars-rail span {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: var(--mj-font-size-xs);
+  font-weight: 700;
+}
+.run-view-vars-rail i { font-size: 11px; }
+
 .run-view-split {
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
 }
 
 :host ::ng-deep .run-view-split > .as-split-gutter {
@@ -42,12 +78,15 @@
   background: var(--mj-border-default);
   border-radius: 1px;
 }
-:host ::ng-deep .run-view-split.as-vertical > .as-split-gutter::after {
-  width: 32px;
-  height: 3px;
+:host ::ng-deep .run-view-split.as-horizontal > .as-split-gutter::after {
+  width: 3px;
+  height: 32px;
 }
 :host ::ng-deep .run-view-split > .as-split-gutter:hover::after {
   background: var(--mj-brand-primary);
+}
+:host ::ng-deep .run-view-split > .as-split-area {
+  overflow: hidden;
 }
 
 /* Takes what the summary line leaves, rather than a percentage of an ancestor that may not have a
@@ -63,11 +102,50 @@
 }
 
 .run-view-vars {
+  display: flex;
+  flex-direction: column;
   height: 100%;
   min-height: 0;
+  min-width: 0;
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-md);
   overflow: hidden;
+  background: var(--mj-bg-surface);
+}
+.run-view-vars-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mj-space-2);
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--mj-border-default);
+  color: var(--mj-text-secondary);
+  font-size: var(--mj-font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.run-view-vars-min {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--mj-radius-sm);
+  background: transparent;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+}
+.run-view-vars-min:hover {
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-hover);
+}
+.run-view-vars mj-task-graph-variables {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .run-view-loading {

@@ -40,41 +40,61 @@
       }
     </div>
 
-    <as-split class="run-view-split" direction="vertical" unit="percent"
-              [gutterSize]="8" (dragEnd)="OnVarsSplitDragEnd($event.sizes)">
-      <as-split-area [size]="ShowVariables ? VarsSplitSizes[0] : 100" [minSize]="30">
-        <div class="run-view-canvas">
-          <mj-task-graph-editor
-            [Spec]="Spec"
-            [RuntimeStatus]="RuntimeStatus"
-            [NodePositions]="Positions"
-            [DebugOverlay]="Overlay"
-            [ReadOnly]="true"
-            [ShowToolbar]="ShowToolbar"
-            [ToolbarVisibility]="ToolbarVisibility"
-            [ToolbarAlign]="ToolbarAlign"
-            [ShowPalette]="false"
-            [ShowProperties]="false"
-            [ShowMinimap]="false"
-            [ShowStatusBar]="false"
-            [ShowLegend]="ShowLegend"
-            (SelectionChanged)="OnSelectionChanged($event)"
-            (ConnectionSelected)="OnConnectionSelected($event)"
-            (LegendToggled)="LegendToggled.emit($event)"
-            (BeforeContextMenu)="OnBeforeContextMenu($event)"
-            (AfterContextMenuAction)="OnAfterContextMenuAction($event)">
-          </mj-task-graph-editor>
-        </div>
-      </as-split-area>
-      <as-split-area [size]="ShowVariables ? VarsSplitSizes[1] : 0" [minSize]="15" [visible]="ShowVariables">
-        <div class="run-view-vars">
-          <mj-task-graph-variables
-            [InputPayload]="SelectedTask?.InputPayload"
-            [OutputPayload]="SelectedTask?.OutputPayload"
-            [Invocation]="Invocation">
-          </mj-task-graph-variables>
-        </div>
-      </as-split-area>
-    </as-split>
+    <div class="run-view-body">
+      @if (ShowVariables && !Prefs.InvocationOpen) {
+        <button type="button" class="run-view-vars-rail"
+                (click)="OnToggleInvocation()"
+                title="Show invocation and output"
+                aria-label="Show invocation and output">
+          <i class="fa-solid fa-code" aria-hidden="true"></i>
+          <span>Data</span>
+        </button>
+      }
+      <as-split class="run-view-split" direction="horizontal" unit="percent"
+                [gutterSize]="8" (dragEnd)="OnInvocationSplitDragEnd($event.sizes)">
+        <as-split-area [size]="InvocationPaneSize" [minSize]="14" [visible]="InvocationPaneOpen">
+          <div class="run-view-vars">
+            <div class="run-view-vars-bar">
+              <span>Data</span>
+              <button type="button" class="run-view-vars-min"
+                      (click)="OnToggleInvocation()"
+                      title="Minimize"
+                      aria-label="Minimize invocation and output">
+                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+              </button>
+            </div>
+            <mj-task-graph-variables
+              [InputPayload]="SelectedTask?.InputPayload"
+              [OutputPayload]="SelectedTask?.OutputPayload"
+              [Invocation]="Invocation">
+            </mj-task-graph-variables>
+          </div>
+        </as-split-area>
+        <as-split-area [size]="CanvasPaneSize" [minSize]="40">
+          <div class="run-view-canvas">
+            <mj-task-graph-editor
+              [Spec]="Spec"
+              [RuntimeStatus]="RuntimeStatus"
+              [NodePositions]="Positions"
+              [DebugOverlay]="Overlay"
+              [ReadOnly]="true"
+              [ShowToolbar]="ShowToolbar"
+              [ToolbarVisibility]="ToolbarVisibility"
+              [ToolbarAlign]="ToolbarAlign"
+              [ShowPalette]="false"
+              [ShowProperties]="false"
+              [ShowMinimap]="false"
+              [ShowStatusBar]="false"
+              [ShowLegend]="ShowLegend"
+              (SelectionChanged)="OnSelectionChanged($event)"
+              (ConnectionSelected)="OnConnectionSelected($event)"
+              (LegendToggled)="LegendToggled.emit($event)"
+              (BeforeContextMenu)="OnBeforeContextMenu($event)"
+              (AfterContextMenuAction)="OnAfterContextMenuAction($event)">
+            </mj-task-graph-editor>
+          </div>
+        </as-split-area>
+      </as-split>
+    </div>
   </div>
 }

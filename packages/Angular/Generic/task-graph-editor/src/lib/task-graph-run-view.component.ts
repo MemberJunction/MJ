@@ -28,8 +28,10 @@ import {
 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { LogError, RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { ReadPaneSizePair, ToPaneSizePair, type PaneSizePair } from './pane-split';
+import { ToPaneSizePair } from './pane-split';
+import { TaskGraphRunPrefsStore, type TaskGraphRunPrefs } from './task-graph-run-prefs';
 import {
     GraphLayoutBounds,
     LayoutGraphNodes,
@@ -76,9 +78,21 @@ export type TaskGraphRunConnectionSelectedEvent = {
 export type TaskGraphRunFrame = {
     kind: string;
     taskId?: string;
+    taskName?: string;
     status?: string;
     progressMessage?: string;
     progressPercent?: number;
+    reason?: string;
+    edgeId?: string;
+    dependsOnTaskId?: string;
+    conditionText?: string;
+    claimEvent?: string;
+    claimedBy?: string;
+    verdict?: string;
+    passNumber?: number;
+    eligibleCount?: number;
+    heldCount?: number;
+    claimedCount?: number;
 };
 
 /** Statuses at which a graph has stopped moving, so polling can stop with it. */
@@ -228,7 +242,7 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     @Input() public AllowBreakpointEditing: boolean = false;
     /** Compact debug key under the summary line. Off unless the host is a debugger. */
     @Input() public ShowDebugLegend: boolean = false;
-    /** VS Code VARIABLES pane under the canvas. Off unless the host is debugging. */
+    /** VS Code VARIABLES pane to the left of the canvas. Off unless the host is debugging. */
     @Input() public ShowVariables: boolean = false;
     /** The parent bag's `data` / `context` roots, for the Invocation scope. */
     @Input() public Invocation: { data?: unknown; context?: unknown } | null = null;
@@ -263,9 +277,14 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     /** `Settled` is once-per-parent — a finished poll must not re-fire the host. */
     private settledEmitted = false;
 
-    /** [canvas, variables] percentages. Restored from `MJ: User Settings`. */
-    public VarsSplitSizes: PaneSizePair = [72, 28];
-    private static readonly VARS_SPLIT_KEY = 'mj.taskGraphRun.varsSplit.v1';
+    /** Left data pane + split sizes. One JSON bag in `MJ: User Settings`. */
+    public get Prefs(): TaskGraphRunPrefs {
+        return this.prefsStore.Value;
+    }
+    private prefsStore = new TaskGraphRunPrefsStore({
+        Get: () => undefined,
+        Set: () => { /* unit tests / pre-bootstrap */ },
+    });
 
     public Spec: TaskGraphSpec | null = null;
     public RuntimeStatus: TaskGraphRuntimeStatus | null = null;
@@ -284,21 +303,38 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     constructor(private cdr: ChangeDetectorRef) {
         super();
         try {
-            const saved = ReadPaneSizePair(UserInfoEngine.Instance.GetSetting(TaskGraphRunViewComponent.VARS_SPLIT_KEY));
-            if (saved) this.VarsSplitSizes = saved;
+            this.prefsStore = new TaskGraphRunPrefsStore({
+                Get: (key) => UserInfoEngine.Instance.GetSetting(key),
+                Set: (key, value) => UserInfoEngine.Instance.SetSettingDebounced(key, value),
+            });
+            this.prefsStore.Restore();
         } catch {
             // Engine not configured yet (unit tests, pre-bootstrap) — keep the default.
         }
     }
 
-    public OnVarsSplitDragEnd(sizes: readonly (number | '*')[]): void {
+    public get InvocationPaneOpen(): boolean {
+        return this.ShowVariables && this.Prefs.InvocationOpen;
+    }
+
+    public get InvocationPaneSize(): number {
+        return this.InvocationPaneOpen ? this.Prefs.InvocationSplit[0] : 0;
+    }
+
+    public get CanvasPaneSize(): number {
+        return this.InvocationPaneOpen ? this.Prefs.InvocationSplit[1] : 100;
+    }
+
+    public OnToggleInvocation(): void {
+        this.prefsStore.SetInvocationOpen(!this.Prefs.InvocationOpen);
+        this.cdr.markForCheck();
+    }
+
+    public OnInvocationSplitDragEnd(sizes: readonly (number | '*')[]): void {
         const pair = ToPaneSizePair(sizes);
         if (!pair) return;
-        this.VarsSplitSizes = pair;
-        UserInfoEngine.Instance.SetSettingDebounced(
-            TaskGraphRunViewComponent.VARS_SPLIT_KEY,
-            JSON.stringify(pair),
-        );
+        this.prefsStore.SetInvocationSplit(pair);
+        this.cdr.markForCheck();
     }
 
     public ngOnDestroy(): void {
@@ -372,7 +408,7 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     }
 
     public get HasSelectedBreakpoint(): boolean {
-        return !!this.SelectedTaskID && this.breakpoints.includes(this.SelectedTaskID);
+        return !!this.SelectedTaskID && this.hasBreakpoint(this.SelectedTaskID);
     }
 
     public get SelectedTaskName(): string {
@@ -409,7 +445,7 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
             return;
         }
         if (event.Target === 'node' && event.Node) {
-            const on = this.breakpoints.includes(event.Node.ID);
+            const on = this.hasBreakpoint(event.Node.ID);
             event.Items = [{
                 ID: 'toggle-breakpoint',
                 Label: on ? 'Remove Breakpoint' : 'Add Breakpoint',
@@ -440,7 +476,7 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
         if (event.ActionID === 'toggle-breakpoint' && event.Node) {
             this.BreakpointToggled.emit({
                 TaskID: event.Node.ID,
-                Enabled: !this.breakpoints.includes(event.Node.ID),
+                Enabled: !this.hasBreakpoint(event.Node.ID),
             });
             return;
         }
@@ -451,6 +487,10 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
         if (event.ActionID === 'force-true') this.EdgeOverrideRequested.emit({ EdgeID: edgeID, Verdict: 'true' });
         if (event.ActionID === 'force-false') this.EdgeOverrideRequested.emit({ EdgeID: edgeID, Verdict: 'false' });
         if (event.ActionID === 'force-clear') this.EdgeOverrideRequested.emit({ EdgeID: edgeID, Verdict: null });
+    }
+
+    private hasBreakpoint(taskID: string): boolean {
+        return this.breakpoints.some((id) => UUIDsEqual(id, taskID));
     }
 
     @HostListener('document:keydown', ['$event'])

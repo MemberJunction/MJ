@@ -109,6 +109,7 @@
               [fSelectionDisabled]="false"
               [fReassignDisabled]="ReadOnly"
               [style.--connection-color]="conn.Color || '#94a3b8'"
+              [style.--connection-width.px]="conn.StrokeWidth || 2"
               [class.mj-flow-connection-colored]="!!conn.Color"
               [class.mj-flow-connection-dashed]="conn.Style === 'dashed'"
               [class.mj-flow-connection-dotted]="conn.Style === 'dotted'"
@@ -117,7 +118,9 @@
               (contextmenu)="onConnectionContextMenu($event, conn)">
               <!-- Arrow marker -->
               <svg viewBox="0 0 10 10" fMarker type="end"
-                orient="auto" [refX]="9" [refY]="5" [height]="10" [width]="10">
+                orient="auto" [refX]="9" [refY]="5"
+                [height]="conn.Animated ? 16 : 10"
+                [width]="conn.Animated ? 16 : 10">
                 <path d="M0 0L10 5L0 10Z" [attr.fill]="conn.Color || '#94a3b8'"/>
               </svg>
               <!-- Connection label -->

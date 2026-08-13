@@ -83,22 +83,32 @@
                      a composer here would discard whatever was typed and reply with a sentence that
                      is not an answer to it. Start it, optionally with input, and watch it run. -->
                 <div class="workflow-pane">
-                  <div class="workflow-section">
-                    <label class="workflow-label" for="workflowPayload">
-                      Starting payload <span class="workflow-optional">&mdash; optional</span>
-                    </label>
-                    <textarea
-                      id="workflowPayload"
-                      class="mj-textarea workflow-payload"
-                      [(ngModel)]="WorkflowStartingPayload"
-                      [rows]="WorkflowParentTaskID ? 2 : 4"
-                      spellcheck="false"
-                      placeholder='{ "ticker": "NVDA" }'
-                      [disabled]="isExecuting && !WorkflowParentTaskID"></textarea>
-                    @if (WorkflowPayloadError) {
-                      <mj-alert Variant="error" [Message]="WorkflowPayloadError"></mj-alert>
-                    }
-                  </div>
+                  @if (!WorkflowParentTaskID && !isExecuting && !WorkflowDebuggerActive) {
+                    <div class="workflow-section">
+                      <button type="button" class="workflow-payload-toggle"
+                              (click)="OnToggleStartingPayload()"
+                              [attr.aria-expanded]="StartingPayloadOpen">
+                        <i class="fa-solid"
+                           [class.fa-chevron-right]="!StartingPayloadOpen"
+                           [class.fa-chevron-down]="StartingPayloadOpen"
+                           aria-hidden="true"></i>
+                        Starting payload
+                        <span class="workflow-optional">&mdash; optional</span>
+                      </button>
+                      @if (StartingPayloadOpen) {
+                        <textarea
+                          id="workflowPayload"
+                          class="mj-textarea workflow-payload"
+                          [(ngModel)]="WorkflowStartingPayload"
+                          rows="4"
+                          spellcheck="false"
+                          placeholder='{ "ticker": "NVDA" }'></textarea>
+                        @if (WorkflowPayloadError) {
+                          <mj-alert Variant="error" [Message]="WorkflowPayloadError"></mj-alert>
+                        }
+                      }
+                    </div>
+                  }
 
                   <div class="workflow-actions">
                     @if (!WorkflowDebuggerActive || WorkflowSettled) {
@@ -122,19 +132,6 @@
                         Starting debugger&hellip;
                       </span>
                     }
-                    @if (WorkflowDebuggerActive && WorkflowParentTaskID) {
-                      <mj-task-graph-debug-toolbar
-                        [Paused]="WorkflowDebugPaused"
-                        [Busy]="WorkflowControlBusy"
-                        [Settled]="WorkflowSettled"
-                        [Enabled]="true"
-                        (Pause)="OnWorkflowPause()"
-                        (Resume)="OnWorkflowResume()"
-                        (Step)="OnWorkflowStep('one')"
-                        (StepWave)="OnWorkflowStep('wave')"
-                        (Cancel)="OnWorkflowCancel()">
-                      </mj-task-graph-debug-toolbar>
-                    }
                     <span class="workflow-hint">
                       Runs on the dispatcher &mdash; you can close this and it keeps running.
                     </span>
@@ -142,26 +139,15 @@
 
                   @if (WorkflowParentTaskID) {
                     <div class="workflow-section workflow-graph">
-                      @if (WorkflowControlError) {
-                        <mj-alert Variant="error" [Message]="WorkflowControlError"></mj-alert>
-                      }
-                      <mj-task-graph-run-view
+                      <mj-task-graph-debugger
+                        [Provider]="ProviderToUse"
                         [ParentTaskID]="WorkflowParentTaskID"
                         [WorkflowName]="entity?.Name || 'Workflow'"
-                        [LiveUpdates]="true"
-                        [LiveFrame]="WorkflowLatestFrame"
-                        [Breakpoints]="WorkflowDebugBreakpoints"
-                        [PausedAtTaskID]="WorkflowPausedAtTaskID"
-                        [GraphPaused]="WorkflowDebugPaused"
-                        [EdgeOverrides]="WorkflowEdgeOverrides"
-                        [Invocation]="WorkflowInvocation"
-                        [AllowBreakpointEditing]="WorkflowDebuggerActive"
-                        [ShowVariables]="true"
+                        [AllowBreakpointEditing]="true"
+                        [ShowChrome]="WorkflowDebuggerActive"
                         Height="100%"
-                        (BreakpointToggled)="OnWorkflowBreakpointToggled($event)"
-                        (EdgeOverrideRequested)="OnWorkflowEdgeOverride($event)"
                         (Settled)="OnWorkflowCanvasSettled()">
-                      </mj-task-graph-run-view>
+                      </mj-task-graph-debugger>
                     </div>
                   } @else if (isExecuting) {
                     <mj-loading text="Submitting the graph…"></mj-loading>

@@ -10,9 +10,15 @@ import { TaskGraphPropertiesPanelComponent } from './task-graph-properties-panel
 import { TaskGraphRunViewComponent } from './task-graph-run-view.component';
 import { TaskGraphDebugToolbarComponent } from './task-graph-debug-toolbar.component';
 import { TaskGraphVariablesComponent } from './task-graph-variables.component';
+import { TaskGraphDebuggerComponent } from './task-graph-debugger.component';
 
 @NgModule({
-  declarations: [TaskGraphEditorComponent, TaskGraphPropertiesPanelComponent, TaskGraphRunViewComponent],
+  declarations: [
+    TaskGraphEditorComponent,
+    TaskGraphPropertiesPanelComponent,
+    TaskGraphRunViewComponent,
+    TaskGraphDebuggerComponent,
+  ],
   imports: [
     CommonModule,
     FormsModule,
@@ -30,6 +36,7 @@ import { TaskGraphVariablesComponent } from './task-graph-variables.component';
     TaskGraphRunViewComponent,
     TaskGraphDebugToolbarComponent,
     TaskGraphVariablesComponent,
+    TaskGraphDebuggerComponent,
   ],
 })
 export class TaskGraphEditorModule {}

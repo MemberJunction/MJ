@@ -47,6 +47,7 @@ import {
 import { UUIDsEqual } from '@memberjunction/global';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
 import { ParseTaskGraphDebugState, type EdgeOverrideVerdict, type StepTarget, type TaskGraphDebugState } from './debug-state';
+import { KickTaskGraphDispatchers } from './task-graph-kick';
 
 /**
  * Normalizes a caller-supplied reinvoke depth to a safe cap seed.
@@ -614,6 +615,7 @@ export class TaskGraphService {
                 `[TaskGraphService] Submitted "${spec.workflowName}": parent ${parentTaskID}, ${taskIDMap.size} task(s). ` +
                 `Awaiting dispatcher pickup.`,
             );
+            KickTaskGraphDispatchers();
             return { Success: true, ParentTaskID: parentTaskID, TaskIDMap: taskIDMap };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
@@ -1009,8 +1011,9 @@ export class TaskGraphService {
                 TaskClaimStore.DebugField('$.debug.pausedBy', pausedBy ? { Kind: 'string', Value: pausedBy } : { Kind: 'null' }),
                 TaskClaimStore.DebugField('$.debug.pausedAtTaskID', { Kind: 'null' }),
                 TaskClaimStore.DebugField('$.debug.step', { Kind: 'null' }),
+                TaskClaimStore.DebugField('$.debug.skipBreakpointTaskID', { Kind: 'null' }),
             ],
-            Next: { ...current, paused: true, pausedBy, pausedReason: 'user', pausedAtTaskID: null, step: undefined },
+            Next: { ...current, paused: true, pausedBy, pausedReason: 'user', pausedAtTaskID: null, step: undefined, skipBreakpointTaskID: undefined },
         }));
     }
 
@@ -1018,11 +1021,16 @@ export class TaskGraphService {
     public async ResumeGraph(parentTaskID: string, context: TaskGraphSubmitContext) {
         return this.writeDebugFields(parentTaskID, context, (current) => {
             const next: TaskGraphDebugState = { ...current };
+            // Continue from a breakpoint must run the stopped task. Stamping it here so the next
+            // poll does not re-hit the same still-eligible breakpoint without claiming.
+            const skip = current.pausedReason === 'breakpoint' ? current.pausedAtTaskID : null;
             delete next.paused;
             delete next.pausedBy;
             delete next.pausedReason;
             delete next.pausedAtTaskID;
             delete next.step;
+            if (skip) next.skipBreakpointTaskID = skip;
+            else delete next.skipBreakpointTaskID;
             return {
                 Fields: [
                     TaskClaimStore.DebugField('$.debug.paused', { Kind: 'null' }),
@@ -1030,6 +1038,9 @@ export class TaskGraphService {
                     TaskClaimStore.DebugField('$.debug.pausedBy', { Kind: 'null' }),
                     TaskClaimStore.DebugField('$.debug.pausedAtTaskID', { Kind: 'null' }),
                     TaskClaimStore.DebugField('$.debug.step', { Kind: 'null' }),
+                    skip
+                        ? TaskClaimStore.DebugField('$.debug.skipBreakpointTaskID', { Kind: 'string', Value: skip })
+                        : TaskClaimStore.DebugField('$.debug.skipBreakpointTaskID', { Kind: 'null' }),
                 ],
                 Next: next,
             };

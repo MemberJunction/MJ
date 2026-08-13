@@ -17,7 +17,8 @@
   [class.mj-flow-node-body--disabled]="Node.Status === 'disabled'"
   [class.mj-flow-node-body--pending]="Node.Status === 'pending'"
   [class.mj-flow-node-body--skipped]="Node.Status === 'skipped'"
-  [class.mj-flow-node-body--running]="Node.Status === 'running'"
+  [class.mj-flow-node-body--running]="isExecuting"
+  [class.mj-flow-node-body--queued]="isQueued"
   [class.mj-flow-node-body--awaiting]="isAwaitingUser"
   [class.mj-flow-node-body--warning]="Node.Status === 'warning'"
   [class.mj-flow-node-body--error]="Node.Status === 'error'"
@@ -118,6 +119,16 @@
     <div class="mj-flow-node-awaiting-banner">
       <i class="fa-solid fa-pause" aria-hidden="true"></i>
       <span>Waiting on you — Continue or Step</span>
+    </div>
+  } @else if (isExecuting) {
+    <div class="mj-flow-node-running-banner">
+      <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+      <span>Running</span>
+    </div>
+  } @else if (isQueued) {
+    <div class="mj-flow-node-queued-banner">
+      <i class="fa-solid fa-hourglass-start" aria-hidden="true"></i>
+      <span>Next — waiting for the engine</span>
     </div>
   }
 

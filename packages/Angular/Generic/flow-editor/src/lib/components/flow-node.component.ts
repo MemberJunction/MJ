@@ -57,6 +57,15 @@ export class FlowNodeComponent {
     return this.Node?.Data?.['AwaitingUser'] === true;
   }
 
+  /** Prerequisites are done; the dispatcher has not claimed it yet. */
+  get isQueued(): boolean {
+    return !this.isAwaitingUser && this.Node?.Data?.['NextToRun'] === true;
+  }
+
+  get isExecuting(): boolean {
+    return !this.isAwaitingUser && this.Node?.Status === 'running';
+  }
+
   get inputPort(): { ID: string; Side: string; Multiple: boolean; Disabled: boolean } | null {
     const port = this.Node?.Ports?.find(p => p.Direction === 'input');
     if (!port) return null;

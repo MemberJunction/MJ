@@ -111,20 +111,6 @@
                 <span class="wfr-row-status" [attr.data-status]="selected.Status">{{ selected.Status }}</span>
               </div>
               <div class="wfr-detail-actions">
-                @if (CanDriveRun(selected) || IsRunSettled(selected)) {
-                  <!-- Icon-only, like VS Code's debug bar. Pause/Step gate claiming, not running. -->
-                  <mj-task-graph-debug-toolbar
-                    [Paused]="DebugPaused"
-                    [Busy]="ControlBusy"
-                    [Settled]="GraphSettled || IsRunSettled(selected)"
-                    [Enabled]="!ControlBusy"
-                    (Pause)="OnPauseRun()"
-                    (Resume)="OnResumeRun()"
-                    (Step)="OnStepRun('one')"
-                    (StepWave)="OnStepRun('wave')"
-                    (Cancel)="OnCancelRun()">
-                  </mj-task-graph-debug-toolbar>
-                }
                 @if (selected.AgentRunID) {
                   <button mjButton variant="flat" size="sm" (click)="OnOpenAgentRun(selected)">
                     <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
@@ -196,29 +182,22 @@
                         [gutterSize]="8" (dragEnd)="OnStepSplitDragEnd($event.sizes)">
                 <as-split-area [size]="Layout.StepPanelOpen ? Layout.StepSplitSizes[0] : 100" [minSize]="25">
                   <div class="wfr-graph-pane">
-                    <mj-task-graph-run-view
+                    <mj-task-graph-debugger
+                      #GraphDebug
                       [Provider]="ProviderToUse"
                       [ParentTaskID]="selected.ID"
                       [WorkflowName]="selected.Name"
                       [LiveUpdates]="selected.Status === 'Running' || selected.Status === 'In Progress'"
-                      [LiveFrame]="LatestFrame"
                       [ReplayAt]="ReplayAt"
                       [ShowLegend]="Layout.ShowLegend"
-                      [Breakpoints]="DebugState.breakpoints"
-                      [PausedAtTaskID]="DebugState.pausedAtTaskID"
-                      [GraphPaused]="DebugPaused"
-                      [EdgeOverrides]="DebugState.edgeOverrides"
-                      [AllowBreakpointEditing]="true"
-                      [ShowVariables]="true"
-                      [Invocation]="Invocation"
                       Height="100%"
                       (NodeSelected)="OnGraphNodeSelected($event)"
                       (ConnectionSelected)="OnGraphConnectionSelected($event)"
-                      (BreakpointToggled)="OnBreakpointToggled($event)"
-                      (EdgeOverrideRequested)="OnOverrideEdge($event.EdgeID, $event.Verdict)"
                       (LegendToggled)="OnLegendToggled($event)"
-                      (Settled)="OnCanvasSettled()">
-                    </mj-task-graph-run-view>
+                      (Settled)="OnCanvasSettled()"
+                      (Frame)="OnFrame($event)"
+                      (PausedChange)="DebugPaused = $event">
+                    </mj-task-graph-debugger>
 
                     @if (CanReplay) {
                       <!-- Replay: scrub through the settled run on the same canvas, reconstructed
@@ -235,15 +214,15 @@
                       </div>
                     }
 
-                    @if (DebugState.breakpoints.length > 0 || DebugState.pausedAtTaskID) {
+                    @if (GraphDebug.Breakpoints.length > 0 || GraphDebug.PausedAtTaskID) {
                       <div class="wfr-bp-bar" aria-label="Armed breakpoints">
-                        @if (DebugState.pausedAtTaskID) {
+                        @if (GraphDebug.PausedAtTaskID) {
                           <span class="wfr-chip wfr-chip-paused">
                             <i class="fa-solid fa-pause" aria-hidden="true"></i>
-                            Paused at {{ StepName(DebugState.pausedAtTaskID) }}
+                            Paused at {{ StepName(GraphDebug.PausedAtTaskID) }}
                           </span>
                         }
-                        @for (id of DebugState.breakpoints; track id) {
+                        @for (id of GraphDebug.Breakpoints; track id) {
                           <button type="button" class="wfr-chip wfr-chip-break" (click)="OnSelectBreakpoint(id)">
                             <i class="fa-solid fa-circle" aria-hidden="true"></i>
                             {{ StepName(id) }}
@@ -264,7 +243,7 @@
                             · held {{ tick.heldCount ?? 0 }} · took {{ tick.claimedCount ?? 0 }}
                           </span>
                         }
-                        @if (DebugPaused) {
+                        @if (GraphDebug.Paused) {
                           <span class="wfr-tick wfr-tick-paused">⏸ paused — nothing new starts</span>
                         }
                       </div>
