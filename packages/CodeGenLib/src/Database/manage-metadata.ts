@@ -6467,7 +6467,10 @@ export class ManageMetadataBase {
                const r = row as CodeGenQueryRow;
                const pattern = ((r.ResourcePattern ?? r.resourcepattern) as string | null) ?? '';
                const trimmed = pattern.trim();
-               if (trimmed.length === 0 || /[*%,]/.test(trimmed)) {
+               // Superset of what IsExactResourceName (rowFilterValidation.ts) rejects at save time — `*`, `?`,
+               // `,` — plus `%` as an extra fail-closed. Omitting `?` would fail OPEN: `Sk?p` would be stored as
+               // a literal target name, match no entity, and the entity it fences would read as unrestricted.
+               if (trimmed.length === 0 || /[*%,?]/.test(trimmed)) {
                   logError(
                      `    > API-key row-filter enumeration: a filtered scope rule in ${table} has an unmappable ResourcePattern ` +
                      `("${trimmed}") — it cannot be resolved to a single entity, so EVERY entity is treated as row-restricted ` +

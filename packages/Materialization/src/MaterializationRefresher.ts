@@ -468,9 +468,12 @@ export class MaterializationRefresher {
             // shadow is renamed INTO the canonical name, so there's nothing to drop.) Never let a cleanup error
             // mask the original failure. `exec`/`isPostgres` are re-derived because they're scoped to the try.
             await this.dropShadowTableBestEffort(provider, matResult.SchemaName, runShadowName);
-            // A batch that aborted mid-swap never reached its trailing `SET XACT_ABORT OFF`, so the pooled
-            // connection would go back to the pool still carrying ON. Reset it best-effort here (no-op on PG,
-            // which has no such setting) so the leak cannot outlive the failed refresh.
+            // A batch that aborted mid-swap never reached its trailing `SET XACT_ABORT OFF`. Best-effort reset
+            // (no-op on PG, which has no such setting). Note this is a genuine BEST effort, not a guarantee:
+            // the pool hands out any idle connection, so this may well reset a different one than the batch
+            // poisoned. Harmless either way — OFF is the connection default, so resetting an innocent
+            // connection is a no-op. The trailing OFF inside each batch is the load-bearing half, since only
+            // that one is guaranteed to run on the same connection.
             await this.resetXactAbortBestEffort(provider);
             return await this.failRefresh(matResult, provider, options, msg);
         }
@@ -866,6 +869,14 @@ export class MaterializationRefresher {
             const targets = new Set<string>();
             const rv = RunView.FromMetadataProvider(provider);
             for (const entityName of ['MJ: API Key Scopes', 'MJ: API Application Scopes']) {
+                // Skip a scope entity that has no RowFilterID field — the same guard CodeGen's enumeration
+                // makes with an INFORMATION_SCHEMA probe, expressed here in the metadata the refresher already
+                // has. Without it, a database predating that column fails the filtered read, which collapses
+                // the set to 'unknown' and stops EVERY external base-view refresh until someone migrates. The
+                // column's absence means the key-filter layer cannot exist there, so contributing nothing is
+                // correct rather than fail-open.
+                const scopeEntity = provider.EntityByName(entityName);
+                if (!scopeEntity || !scopeEntity.Fields.some((f) => f.Name === 'RowFilterID')) continue;
                 const res = await rv.RunView<{ ResourcePattern: string | null }>(
                     { EntityName: entityName, Fields: ['ResourcePattern'], ExtraFilter: 'RowFilterID IS NOT NULL', ResultType: 'simple' },
                     contextUser,
@@ -873,7 +884,11 @@ export class MaterializationRefresher {
                 if (!res.Success) throw new Error(`${entityName}: ${res.ErrorMessage}`);
                 for (const row of res.Results ?? []) {
                     const pattern = (row.ResourcePattern ?? '').trim();
-                    if (pattern.length === 0 || /[*%,]/.test(pattern)) {
+                    // Superset of what IsExactResourceName (rowFilterValidation.ts) rejects at save time — `*`,
+                    // `?`, `,` — plus `%` as an extra fail-closed. Omitting `?` would fail OPEN: `Sk?p` would be
+                    // stored as a literal target name, match no entity, and the entity it fences would read as
+                    // unrestricted. Kept character-identical to CodeGen's copy in manage-metadata.ts.
+                    if (pattern.length === 0 || /[*%,?]/.test(pattern)) {
                         LogError(`MaterializationRefresher: an API-key scope rule with a row filter has an unmappable ResourcePattern ("${pattern}") — it cannot be resolved to one entity, so EVERY entity is treated as row-restricted for refresh (fail closed). Fix the rule to name one exact entity.`);
                         this._apiKeyRowFilterTargets = 'unknown';
                         return this._apiKeyRowFilterTargets;
