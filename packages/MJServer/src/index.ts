@@ -204,6 +204,7 @@ import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';
 import { BaseServerMiddleware } from './middleware/BaseServerMiddleware.js';
+import { SuppressTaskGraphSubmission } from '@memberjunction/ai-core-plus';
 
 export type MJServerOptions = {
   onBeforeServe?: () => void | Promise<void>;
@@ -1425,7 +1426,15 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   const taskGraphPool = dataSources[0]?.dataSource;
   const taskGraphDispatcherDisabled = process.env.MJ_DISABLE_TASK_GRAPH_DISPATCHER === '1';
   if (taskGraphDispatcherDisabled) {
-    LogStatus('[TaskGraphDispatcher] Disabled by MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 — submitted graphs will not be executed by this process.');
+    // AND REFUSE SUBMISSIONS, not just execution (R3-11). The durable submitter registers through
+    // the generated manifest unconditionally, so without this the host went on ACCEPTING graphs it
+    // had no intention of running: the agent submitted, promised the user a follow-up, and parked
+    // its run `Paused` — with the graph `Pending` and the run parked forever, no per-submission
+    // diagnostics anywhere, and the stale graph executing hours later if anyone unset the flag.
+    // The entity-action seam already had this treatment (its submitter registers inside
+    // StartTaskGraphDispatcher); this gives the agent seam the same.
+    SuppressTaskGraphSubmission('MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 is set on this host');
+    LogStatus('[TaskGraphDispatcher] Disabled by MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 — this process will neither accept nor execute task graphs.');
   } else if (resumeUser && taskGraphPool instanceof sql.ConnectionPool) {
     StartTaskGraphDispatcher(taskGraphPool, resumeUser)
       .catch(err => console.warn(`[TaskGraphDispatcher] Startup failed: ${err}`));
