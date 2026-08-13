@@ -179,9 +179,21 @@ describe('AutoQuotePostgreSQLIdentifiers', () => {
             );
         });
 
-        it('leaves __mj_ internal columns untouched', () => {
-            const sql = 'SELECT 1 FROM t WHERE __mj_CreatedAt > now()';
-            expect(AutoQuotePostgreSQLIdentifiers(sql)).toBe(sql);
+        it('QUOTES the mixed-case framework columns, and leaves the lowercase internals bare', () => {
+            // This assertion used to run the other way, pinning the `__mj_` carve-out that made
+            // the five mixed-case framework columns fold to lowercase and fail — the exact defect
+            // this module exists to fix, left standing under a heading about words left alone.
+            expect(AutoQuotePostgreSQLIdentifiers('SELECT 1 FROM t WHERE __mj_CreatedAt > now()'))
+                .toBe('SELECT 1 FROM t WHERE "__mj_CreatedAt" > now()');
+            // Unqualified, which is the shape the Query entity's CacheValidationSQL documents.
+            expect(AutoQuotePostgreSQLIdentifiers('SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt FROM t'))
+                .toBe('SELECT MAX("__mj_UpdatedAt") AS "MaxUpdatedAt" FROM t');
+            // Dot-qualified, which the carve-out also escaped because it ran before the dot rule.
+            expect(AutoQuotePostgreSQLIdentifiers('SELECT t.__mj_UpdatedAt FROM __mj.Entity t'))
+                .toBe('SELECT t."__mj_UpdatedAt" FROM __mj."Entity" t');
+            // All-lowercase internals are untouched by the ordinary lowercase rule, as before.
+            const lower = 'SELECT 1 FROM t WHERE __mj_deleted_at IS NULL';
+            expect(AutoQuotePostgreSQLIdentifiers(lower)).toBe(lower);
         });
 
         it('leaves the __mj schema name untouched while quoting the object', () => {

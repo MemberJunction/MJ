@@ -27,6 +27,25 @@ const pgDialect = new PostgreSQLDialect();
  * is also an MJ column name (`NAME`, `TEXT`, `VALUES`, `LENGTH`, …) is safe to include:
  * the mixed-case column form still quotes.
  */
+/**
+ * Known tokenization limitations (comments containing an apostrophe, and `E'...'` escape
+ * strings) are tracked as **MJ #3775** — pre-existing, unchanged by the consolidation, and now
+ * fixable in one place rather than two.
+ */
+
+/**
+ * NOT the only identifier quoter in MJ, and deliberately so.
+ *
+ * `PostgreSQLDataProvider` carries a separate, METADATA-DRIVEN quoter
+ * (`quoteIdentifiersInSQL` / `quoteFieldNamesInToken`, used by `TransformExternalSQLClause`) which
+ * knows the entity's actual field list and can therefore quote precisely, without any keyword
+ * heuristic. This module is the fallback for SQL where no entity context exists — hand-authored
+ * and stored SQL reaching `ExecuteSQL`.
+ *
+ * They are not duplicates and this is not an unfinished consolidation: a metadata-driven quoter
+ * cannot serve arbitrary SQL, and a heuristic one should not be used where the field list is
+ * known. Do not merge them.
+ */
 export const PostgreSQLQuotingKeywords: ReadonlySet<string> = new Set([
     // DML/DDL keywords
     'SELECT', 'INSERT', 'INTO', 'UPDATE', 'DELETE', 'FROM', 'WHERE', 'AND', 'OR', 'NOT',
@@ -97,6 +116,12 @@ export const PostgreSQLQuotingKeywords: ReadonlySet<string> = new Set([
     'NUMERIC_SCALE', 'ORDINAL_POSITION', 'COLUMN_COMMENT',
     // MJ SQL constructs
     'INFORMATION_SCHEMA', 'COLUMNS', 'TABLES', 'ROUTINES',
+    // PostgreSQL reserved words the shipped baseline emits that were absent from this set.
+    // None is an MJ column name, so adding them costs nothing and closes the gap the reverse
+    // guard below measures. `SYSTEM` is the `TABLESAMPLE SYSTEM` sampling method; `VALID` and
+    // `DEFERRABLE`/`INITIALLY` are constraint attributes; `CURRENT_USER`/`SESSION_USER` are
+    // niladic functions written without parentheses, so rule 3 (word before `(`) never sees them.
+    'BOTH', 'CURRENT_USER', 'SESSION_USER', 'DEFERRABLE', 'INITIALLY', 'EXTENSION', 'VALID', 'SYSTEM',
 ]);
 
 /**
@@ -622,10 +647,34 @@ function isBareWord(word: string, sql: string, start: number, end: number): bool
     if (sql[end] === '(' && !precededByDot) {
         return true;
     }
-    // 4/5. Anything all-lowercase or MJ-internal is left alone; otherwise a word is an
-    //      identifier if it starts uppercase or is a member reference after a `.`.
+    // 4. Anything all-lowercase is left alone; otherwise a word is an identifier if it starts
+    //    uppercase or is a member reference after a `.`.
+    //
+    //    There is NO `__mj_` carve-out here, and its removal is the point. Both prior tokenizer
+    //    copies returned bare for any word starting `__mj_`, evaluated ahead of the dot rule, so
+    //    even the qualified form escaped:
+    //
+    //        SELECT t.__mj_UpdatedAt FROM __mj.Entity t   =>   ... t.__mj_UpdatedAt ...
+    //
+    //    which folds to `__mj_updatedat` and fails with `column "__mj_updatedat" does not exist`
+    //    — verbatim the defect this module exists to fix. The clause was also redundant for the
+    //    purpose it was written for: all-lowercase `__mj_*` names are already covered by
+    //    `isAllLower` on the line below, so the ONLY words it ever affected were the mixed-case
+    //    real columns — `__mj_CreatedAt`, `__mj_UpdatedAt`, `__mj_Latitude`, `__mj_Longitude`,
+    //    `__mj_UDT` — i.e. exactly the five it broke. Do not reintroduce it.
+    //    The framework columns need one positive rule rather than merely the absence of the old
+    //    carve-out. Dropping the exemption alone fixes only the dot-qualified form, because
+    //    `__mj_UpdatedAt` does not START with an uppercase letter — so a bare
+    //    `SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt` (the shape the Query entity's own
+    //    CacheValidationSQL field description documents) would still fold and fail. A `__mj_` word
+    //    carrying any uppercase is unambiguously one of MJ's five framework columns: the prefix is
+    //    MJ's namespace and no SQL keyword lives there, so there is nothing for this to collide
+    //    with. All-lowercase `__mj_*` names remain bare via `isAllLower` below, unchanged.
+    const isFrameworkColumn = word.startsWith('__mj_') && word !== word.toLowerCase();
+    if (isFrameworkColumn) {
+        return false;
+    }
     const isAllLower = word === word.toLowerCase();
-    const isMJInternal = word.startsWith('__mj_');
     const startsUpper = /^[A-Z]/.test(word);
-    return isAllLower || isMJInternal || !(startsUpper || precededByDot);
+    return isAllLower || !(startsUpper || precededByDot);
 }
