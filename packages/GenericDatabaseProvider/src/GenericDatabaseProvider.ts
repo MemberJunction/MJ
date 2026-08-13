@@ -33,6 +33,7 @@ import {
     Metadata,
     RunView,
     RunViewParams,
+    IsMaterializedDataSource,
     RunViewResult,
     RunViewWithCacheCheckParams,
     RunViewsWithCacheCheckResponse,
@@ -78,7 +79,8 @@ import { QueryPagingEngine } from './queryPagingEngine.js';
 import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
-import { SQLDialect } from '@memberjunction/sql-dialect';
+import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
+import { SQLParser } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, useJsonArgShape } from './crudSprocFieldRules.js';
@@ -1250,11 +1252,78 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     protected BuildTotalRowCountSQL(
         entityInfo: EntityInfo,
         usingPagination: boolean,
-        maxRowsForQuery: number
+        maxRowsForQuery: number,
+        baseViewOverride?: string
     ): string | null {
         const rowsAreLimited = usingPagination || maxRowsForQuery > 0;
         if (!rowsAreLimited) return null;
-        return `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`;
+        return `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, baseViewOverride ?? entityInfo.BaseView)}`;
+    }
+
+    /**
+     * Resolves the view a RunView reads from: the entity's live base view by default, or its materialized
+     * wrapper view when the caller opts into the snapshot via `DataSource: 'Materialized'` (plan §7). The
+     * choice is explicit (never silent), so the same RLS/paging/field-selection apply against the identical shape.
+     *
+     * Two materialization shapes:
+     *  - **Base-view materialization** reuses the SOURCE entity, whose `BaseView` stays the LIVE view; the
+     *    snapshot lives beside it as `materialized_vw<CodeName>` (the name CodeGen's base-view path emits).
+     *    `'Materialized'` swaps the live view for that snapshot.
+     *  - **Query materialization** mints a NEW entity whose `BaseView` ALREADY IS the materialized wrapper
+     *    view (`materialized_vw<...>`), so there is no separate live source to swap — `'Materialized'` is a
+     *    no-op and we return the entity's own base view. (Deriving `materialized_vw<CodeName>` here would be
+     *    wrong: the minted entity's CodeName need not match the query-derived view name.)
+     *
+     * Convention-based for the base-view case: if the entity has no such materialization the wrapper view
+     * won't exist and the read will error — opting into `'Materialized'` asserts the snapshot exists.
+     */
+    protected GetEffectiveBaseView(entityInfo: EntityInfo, params: RunViewParams): string {
+        // Case-INSENSITIVE prefix test (matches the sibling guard in providerBase.IsServerCacheAllowedForEntity):
+        // a BaseView returned with non-lowercase casing (e.g. 'Materialized_vwFoo' from a case-insensitive SQL
+        // Server, or a hand-authored entity) is still an already-materialized view — a case-sensitive check
+        // would miss it and wrongly derive materialized_vw<CodeName>, targeting a non-existent object.
+        if (IsMaterializedDataSource(params.DataSource) && !entityInfo.BaseView?.toLowerCase().startsWith('materialized_vw')) {
+            return `materialized_vw${entityInfo.CodeName}`;
+        }
+        return entityInfo.BaseView;
+    }
+
+    /**
+     * Async status-aware wrapper around {@link GetEffectiveBaseView} for the BASE-VIEW materialization case.
+     * `GetEffectiveBaseView` name-swaps unconditionally, which (a) serves a `Building`/`DriftHold`/`Disabled`
+     * snapshot — defeating "flag and hold" (§13/§17.2), since a base-view materialization reuses the source
+     * entity and thus has no read-permission revoke to fall back on the way a minted query entity does — and
+     * (b) hard-errors on a `Materialized` read of a non-materialized entity (missing view). This gates the swap
+     * on an ACTIVE `MaterializedResult` and otherwise returns the LIVE base view (graceful fallback). The status
+     * read uses `BypassCache` because DriftHold/Disabled are written by CodeGen via direct SQL (no BaseEntity
+     * cache-invalidation event), so a cached status could otherwise be stale. Non-materialized reads and minted
+     * query virtual entities (BaseView already `materialized_vw…`) skip the lookup entirely (no extra query).
+     */
+    protected async resolveEffectiveBaseView(entityInfo: EntityInfo, params: RunViewParams, contextUser?: UserInfo): Promise<string> {
+        if (!IsMaterializedDataSource(params.DataSource) || entityInfo.BaseView?.toLowerCase().startsWith('materialized_vw')) {
+            return this.GetEffectiveBaseView(entityInfo, params);
+        }
+        const rv = new RunView(this);
+        const res = await rv.RunView<{ Status: string; ViewName: string | null }>(
+            {
+                EntityName: 'MJ: Materialized Results',
+                ExtraFilter: `SourceType='EntityBaseView' AND SourceEntityID='${entityInfo.ID}'`, // entityInfo.ID: trusted metadata PK
+                Fields: ['Status', 'ViewName'],
+                ResultType: 'simple',
+                MaxRows: 1,
+                BypassCache: true,
+            },
+            contextUser,
+        );
+        const row = res.Success && res.Results?.length > 0 ? res.Results[0] : null;
+        if (row?.Status !== 'Active') return entityInfo.BaseView;
+        // Use the AUTHORITATIVE wrapper-view name persisted on the row rather than re-deriving
+        // materialized_vw<CodeName>: the row's ViewName is what the mint/migration actually created, so it stays
+        // correct for a migration-provided (non-conventionally-named) view or an entity renamed since mint (whose
+        // current CodeName no longer matches the view). Matches how the query path reads ViewName from the row.
+        // Fall back to the convention only if the row somehow lacks a ViewName. (SchemaName stays the entity's —
+        // base-view materialization always mints into the source entity's own schema.)
+        return row.ViewName?.trim() || `materialized_vw${entityInfo.CodeName}`;
     }
 
     /**
@@ -1460,7 +1529,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     protected async executeSQLForUserViewRunLogging(
         _viewId: number,
-        _entityBaseView: string,
+        _entityInfo: EntityInfo,
+        _effectiveBaseView: string,
         _whereSQL: string,
         _orderBySQL: string,
         _user: UserInfo,
@@ -1582,14 +1652,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const fields: string = this.getRunTimeViewFieldString(params, viewEntity);
 
             // ── Build SELECT and COUNT SQL ──
+            // DataSource:'Materialized' routes the read to the entity's materialized wrapper view
+            // (same shape, so RLS/paging/fields all apply identically); default stays the live base view.
+            const effectiveBaseView = await this.resolveEffectiveBaseView(entityInfo, params, contextUser);
             const topFragment = topSQL ? topSQL + ' ' : '';
-            let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`;
+            let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveBaseView)}`;
             // count_only ALWAYS needs the count query — BuildTotalRowCountSQL only emits
             // it when rows are limited (its pagination purpose), which previously left
             // count_only with no COUNT at all (silently returned TotalRowCount 0).
             let countSQL: string | null = params.ResultType === 'count_only'
-                ? `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`
-                : this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery);
+                ? `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveBaseView)}`
+                : this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery, effectiveBaseView);
 
             // ── WHERE clause assembly ──
             let whereSQL = '';
@@ -1704,8 +1777,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // View run logging (SQL Server-specific, others return null)
             let userViewRunID = '';
             if (viewEntity?.ID && String(viewEntity.ID).length > 0 && saveViewResults && user) {
+                // Pass entityInfo + effectiveBaseView so the logged read honors DataSource:'Materialized'
+                // (reads the snapshot). effectiveBaseView === entityInfo.BaseView on the default live path,
+                // so non-materialized reads are unchanged.
                 const logResult = await this.executeSQLForUserViewRunLogging(
-                    Number(viewEntity.ID), viewEntity.EntityBaseView, whereSQL, orderBy, user,
+                    Number(viewEntity.ID), entityInfo, effectiveBaseView, whereSQL, orderBy, user,
                 );
                 if (logResult) {
                     viewSQL = logResult.executeViewSQL;
@@ -1741,8 +1817,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             let aggregateSQL: string | null = null;
             let aggregateValidationErrors: AggregateResult[] = [];
             if (params.Aggregates && params.Aggregates.length > 0) {
+                // Aggregate over the SAME source the rows/count came from — effectiveBaseView, so a caller
+                // asking for DataSource:'Materialized' gets aggregates over the snapshot, not the live view.
                 const aggregateBuild = this.BuildAggregateSQL(
-                    params.Aggregates, entityInfo, entityInfo.SchemaName, entityInfo.BaseView, whereSQL,
+                    params.Aggregates, entityInfo, entityInfo.SchemaName, effectiveBaseView, whereSQL,
                 );
                 aggregateSQL = aggregateBuild.aggregateSQL;
                 aggregateValidationErrors = aggregateBuild.validationErrors;
@@ -2463,9 +2541,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
         if (items.length === 0) return results;
 
-        const promises = items.map(async ({ index, entityInfo, whereSQL }) => {
+        const promises = items.map(async ({ index, item, entityInfo, whereSQL }) => {
             try {
-                const statusSQL = `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRows')}, MAX(${this.QuoteIdentifier('__mj_UpdatedAt')}) AS ${this.QuoteIdentifier('MaxUpdatedAt')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+                // Probe the SAME physical view the read targets — for a DataSource:'Materialized' read that's
+                // the materialized_vw<CodeName> snapshot (a full SELECT * of the base view, so it carries
+                // __mj_UpdatedAt), NOT the live base view. Probing the live view would compare the client's
+                // snapshot cache against an unrelated source, yielding a meaningless current/stale verdict.
+                // (Materialized reads are normally kept out of the client cache by runViewCacheEligible; this
+                // matches the SQL Server override and is defense-in-depth on the PG/default path.)
+                const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
+                const statusSQL = `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRows')}, MAX(${this.QuoteIdentifier('__mj_UpdatedAt')}) AS ${this.QuoteIdentifier('MaxUpdatedAt')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveView)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
                 const rows = await this.ExecuteSQL<Record<string, unknown>>(statusSQL, undefined, undefined, contextUser);
                 if (rows && rows.length > 0) {
                     const row = rows[0];
@@ -3143,7 +3228,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     const row = rows[0];
                     results.set(index, {
                         success: true,
-                        rowCount: Number(row['RowCount']),
+                        // Both spellings accepted. The shipped `CacheValidationSQL` field description tells authors
+                        // to return `TotalRows`, while this has only ever read `RowCount` — so a query written
+                        // from the documentation yields `Number(undefined)` = NaN, `NaN !== NaN` makes the slot
+                        // never validate, and NaN is then written back into the client's cache entry where `??`
+                        // cannot clear it. Silent, permanent degradation to always-refetch, with no error.
+                        rowCount: Number(row['RowCount'] ?? row['TotalRows']),
                         maxUpdatedAt: row['MaxUpdatedAt'] ? new Date(String(row['MaxUpdatedAt'])).toISOString() : undefined,
                     });
                 } else {
@@ -3206,6 +3296,284 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * execute → paginate → audit → cache store. Platform providers inherit this; only
      * `ExecuteSQL()` is platform-specific.
      */
+    /**
+     * Phase 2 read-time filter predicate — the runtime mirror of CodeGen's persisted `ReadFilterSpec`
+     * entry. Duplicated here (not imported) because the provider must not depend on the dev-time
+     * CodeGenLib; the JSON shape is the contract (plan §4).
+     */
+    private static readonly RUNTIME_SAFE_READ_FILTER_OPERATORS: ReadonlySet<string> = new Set<string>([
+        '=', '!=', '<>', '<', '>', '<=', '>=', 'IN', 'NOT IN',
+    ]);
+
+    /**
+     * The stable surrogate row-id column every materialized snapshot table carries (CodeGenLib's
+     * `MATERIALIZATION_SURROGATE_COLUMN`). Duplicated here (not imported) for the same reason as the operator
+     * set above — the provider must not depend on dev-time CodeGenLib. The wrapper view exposes it (`SELECT *`),
+     * so ordering by it gives paged materialized reads a deterministic, refresh-stable order (see
+     * {@link buildMaterializedReadQuery}).
+     */
+    private static readonly MATERIALIZED_SURROGATE_ORDER_COLUMN = '__mj_MaterializedRowID';
+
+    /** Quotes a SQL identifier for the target engine (SQL Server `[x]`, PostgreSQL `"x"`), escaping the closer. */
+    private static quoteMaterializedIdentifier(name: string, isPostgres: boolean): string {
+        return isPostgres ? `"${name.replace(/"/g, '""')}"` : `[${name.replace(/]/g, ']]')}]`;
+    }
+
+    /**
+     * PURE, dialect-aware builder for the Phase-2 materialized read query (plan §5). Given the query's
+     * output columns, the materialized view (schema + name), the persisted read-filter spec, the caller's
+     * parameter values, and the platform, returns `{ sql, parameters }` whose WHERE injects each spec
+     * predicate as `column <op> <placeholder>` with the value **bound** (SQL Server `?`, PostgreSQL `$n`) —
+     * never interpolating a caller value (SQL-injection-safe by construction).
+     *
+     * Returns null on ANY condition that would make the materialized read UNFAITHFUL to the live query, so
+     * the caller falls back to running live (always correct): an operator outside the safe set, a spec
+     * parameter the caller did not supply (the live query would apply the param's default), a null value,
+     * or an empty/non-array value for a list (`IN`/`NOT IN`) predicate. No IO — fully unit-testable.
+     */
+    /**
+     * True if `sql`'s top-level SELECT carries an ORDER BY. Used to refuse a materialized RowFilterBroad read:
+     * {@link buildMaterializedReadQuery} emits no ORDER BY and the snapshot is built with the source's top-level
+     * ORDER BY stripped, so an ordered query must be served LIVE (where its ordering — and therefore its
+     * pagination under StartRow/MaxRows — is preserved) rather than from the unordered snapshot. Parse failure or
+     * an un-reasoned statement shape returns `true` (refuse-to-live: treat unknown as ordered rather than risk
+     * serving mis-ordered pages). Mirrors MaterializationRefresher.stripTopLevelOrderBy's AST detection.
+     *
+     * @internal Materialized-read ordering-fidelity gate — NOT part of this package's supported public API;
+     * `static` only so it can be unit-tested. Do not call from outside `@memberjunction/generic-database-provider`.
+     */
+    public static queryHasTopLevelOrderBy(sql: string, platformKey: string | undefined): boolean {
+        if (!sql || sql.trim().length === 0) return false;
+        try {
+            const parsed = SQLParser.Astify(sql, GetDialect(platformKey ?? 'sqlserver'));
+            if (!parsed.astParsed || parsed.ast == null) return true; // unparseable → refuse to live
+            const stmtNode: unknown = Array.isArray(parsed.ast) ? (parsed.ast.length === 1 ? parsed.ast[0] : null) : parsed.ast;
+            if (stmtNode == null || typeof stmtNode !== 'object') return true;
+            const s = stmtNode as Record<string, unknown>;
+            if (s.type !== 'select') return true; // not a simple SELECT we can reason about → refuse to live
+            return s.orderby != null;
+        } catch {
+            return true; // parser threw → refuse to live (safe: served correctly by the live path)
+        }
+    }
+
+    public static buildMaterializedReadQuery(opts: {
+        outputColumns: string[];
+        schemaName: string;
+        viewName: string;
+        spec: Array<{ column: string; operator: string; paramName: string; kind: 'scalar' | 'list' }>;
+        paramValues: Record<string, unknown> | undefined;
+        /** Declared parameter type per paramName (from MJ: Query Parameters). Drives type-faithful binding so a
+         *  scalar value matches the live path's typed literal instead of a raw string the DB implicitly coerces. */
+        paramTypes?: Record<string, string>;
+        isPostgres: boolean;
+    }): { sql: string; parameters: unknown[] } | null {
+        const { outputColumns, schemaName, viewName, spec, paramValues, paramTypes, isPostgres } = opts;
+        if (!outputColumns || outputColumns.length === 0) return null;
+        if (!spec || spec.length === 0) return null;
+
+        const q = (name: string) => GenericDatabaseProvider.quoteMaterializedIdentifier(name, isPostgres);
+        const parameters: unknown[] = [];
+        const predicates: string[] = [];
+        // Placeholder for the NEXT bound value: SQL Server uses positional `?`; PostgreSQL uses `$n` (1-based,
+        // computed BEFORE the value is pushed so the index aligns with the array position).
+        const nextPlaceholder = () => (isPostgres ? `$${parameters.length + 1}` : '?');
+
+        for (const e of spec) {
+            // Defensive: the spec is parsed from a persisted JSON string, so validate each element's shape
+            // before use — a malformed element (missing/non-string column/operator/paramName) returns null
+            // (→ caller falls back to live), never throws mid-build (Phase 2 §2: any uncertainty → live).
+            if (!e || typeof e.column !== 'string' || typeof e.operator !== 'string' || typeof e.paramName !== 'string') return null;
+            if (!GenericDatabaseProvider.RUNTIME_SAFE_READ_FILTER_OPERATORS.has(e.operator)) return null;
+            const val = paramValues ? paramValues[e.paramName] : undefined;
+            if (val === undefined || val === null) return null; // caller omitted it → live applies the default
+            const col = q(e.column);
+            const isListOp = e.operator === 'IN' || e.operator === 'NOT IN';
+            if (isListOp) {
+                if (!Array.isArray(val) || val.length === 0) return null; // empty/non-array IN → live
+                const phs = val.map((item) => {
+                    const ph = nextPlaceholder();
+                    parameters.push(item); // list elements bound as-is (array element type is not declared)
+                    return ph;
+                });
+                predicates.push(`${col} ${e.operator} (${phs.join(', ')})`);
+            } else {
+                // Bind the value AS ITS DECLARED TYPE. The live path renders params as typed SQL literals via the
+                // Nunjucks pipeline; binding the raw string here would instead make the DB implicitly coerce it,
+                // which can (a) error on PostgreSQL (text vs numeric/date) and (b) silently match DIFFERENT rows
+                // than live on SQL Server for format/whitespace-sensitive values. Coercing to the declared type
+                // aligns the two; an unconvertible value fails closed → live (never a wrong-rows materialized read).
+                const coerced = GenericDatabaseProvider.coerceMaterializedScalarValue(val, paramTypes?.[e.paramName], isPostgres);
+                if (!coerced.ok) return null;
+                const ph = nextPlaceholder();
+                parameters.push(coerced.value);
+                predicates.push(`${col} ${e.operator} ${ph}`);
+            }
+        }
+
+        const cols = outputColumns.map((c) => q(c)).join(', ');
+        // Deterministic page order. A materialized read carries no user ORDER BY (an ordered source query falls
+        // back to live), so without an explicit order the paging engine would append `ORDER BY (SELECT NULL)` and
+        // successive pages could skip or duplicate rows whenever the execution plan differs between calls. The
+        // snapshot's stable surrogate row-id — exposed by the wrapper view and unchanged between refreshes — gives
+        // a total, refresh-stable order; it need not appear in the SELECT list to be an ORDER BY target, and
+        // buildDataSQL detects this ORDER BY and pages against it instead of the dialect default.
+        const orderBy = q(GenericDatabaseProvider.MATERIALIZED_SURROGATE_ORDER_COLUMN);
+        const sql = `SELECT ${cols} FROM ${q(schemaName)}.${q(viewName)} WHERE ${predicates.join(' AND ')} ORDER BY ${orderBy}`;
+        return { sql, parameters };
+    }
+
+    /**
+     * Coerces a scalar row-filter value to its declared `MJ: Query Parameters`.Type for type-faithful binding
+     * (see {@link buildMaterializedReadQuery}). This mirrors the TYPE-CONVERSION SWITCH of the live path's
+     * `@memberjunction/queryprocessor` `QueryParameterProcessor.validateParameters` (number/boolean/date/string),
+     * so the materialized read binds the same value the live query renders. Keep in sync with that switch. It does
+     * NOT replay the subsequent ValidationFilters chain: value-TRANSFORMING filters (trim/upper/lower/etc.) are
+     * already excluded from RowFilterBroad materialization at classify time (materializationParamClassifier's
+     * `isValuePassthrough`), so they never reach here. Pure VALIDATORS (min/max/email/...) are a documented low
+     * residual — they reject invalid input at runtime on the live path only, so an invalid caller value can make
+     * live error while the materialized read returns rows (divergence on the error path only; tracked as a
+     * follow-up to refuse validator-bearing row-filter params at classify time). Returns `{ok:false}` only where
+     * the live TYPE conversion would ALSO reject the value (→ caller falls back to live).
+     *   - `number`  → `Number(value)` (JS trims); non-finite → refuse (live pushes a validation error → live).
+     *   - `boolean` → live truthiness: ONLY 'true' (case-insensitive) or a real boolean `true` is true; everything
+     *                 else is false (live never refuses a boolean). SQL Server binds BIT 1/0; PostgreSQL binds bool.
+     *   - `date`    → `new Date(value).toISOString()` — the UTC ISO string, exactly what live stores/renders. NOT
+     *                 the naive input string: live applies the local→UTC shift, so binding the raw string would
+     *                 diverge for any timed value. Invalid date → refuse.
+     *   - `string`  → `String(value)` (matches live); `array`-element / unspecified → bound as-is.
+     */
+    private static coerceMaterializedScalarValue(value: unknown, type: string | undefined, isPostgres: boolean): { ok: true; value: unknown } | { ok: false } {
+        switch (type) {
+            case 'number': {
+                const n = Number(typeof value === 'string' ? value.trim() : value);
+                return Number.isFinite(n) ? { ok: true, value: n } : { ok: false };
+            }
+            case 'boolean': {
+                const b = typeof value === 'boolean' ? value : String(value).toLowerCase() === 'true';
+                return { ok: true, value: isPostgres ? b : b ? 1 : 0 };
+            }
+            case 'date': {
+                const d = value instanceof Date ? value : new Date(String(value));
+                if (Number.isNaN(d.getTime())) return { ok: false };
+                const iso = d.toISOString();
+                // SQL Server rejects the ISO 'Z' zone suffix for datetime2/datetime (error 241 — 'Z' is valid only
+                // for datetimeoffset), so binding it would throw and force a fallback to live. Strip it for SS: the
+                // value is already the UTC moment and a zone-less ISO string binds as that same datetime2 wall-clock,
+                // matching the live path's rendered literal (no row divergence). PostgreSQL's timestamptz accepts
+                // 'Z', so keep it there.
+                return { ok: true, value: isPostgres ? iso : iso.replace(/Z$/, '') };
+            }
+            case 'string':
+                return { ok: true, value: String(value) };
+            default: // 'array' (element-wise, no declared element type) or unknown → bind verbatim
+                return { ok: true, value };
+        }
+    }
+
+    /**
+     * Phase 2 (plan §5): resolve a materialized read plan for a query IF the caller opted into
+     * `DataSource:'Materialized'` AND the query has a fresh, Active `RowFilterBroad` materialization whose
+     * persisted spec fully covers the query's parameters. Returns null on ANY uncertainty → the caller runs
+     * the live query (serving live is always correct — this is a transparent optimization, never a
+     * correctness dependency).
+     */
+    protected async tryBuildMaterializedQueryPlan(
+        query: MJQueryEntityExtended,
+        params: RunQueryParams,
+        contextUser?: UserInfo,
+    ): Promise<{ sql: string; parameters: unknown[] } | null> {
+        if (!IsMaterializedDataSource(params.DataSource)) return null; // not opted in → live
+        if (query.ExternalDataSourceID) return null;                   // external source → materialized table is local; live
+        // The query<->materialization link lives in the MaterializedResultQuery join table — there is no
+        // Query.MaterializedResultID column (that direct FK, paired with MaterializedResult.SourceQueryID,
+        // formed a circular dependency). Resolve this query's materialization via the join; absent → live.
+        // query.ID is our own metadata UUID (never caller input), so it is safe to interpolate.
+        const linkRv = new RunView(this);
+        const linkRes = await linkRv.RunView<{ MaterializedResultID: string }>(
+            {
+                EntityName: 'MJ: Materialized Result Queries',
+                ExtraFilter: `QueryID='${query.ID}'`,
+                Fields: ['MaterializedResultID'],
+                ResultType: 'simple',
+                MaxRows: 1,
+            },
+            contextUser,
+        );
+        if (!linkRes.Success || !linkRes.Results || linkRes.Results.length === 0) return null; // query not materialized → live
+        const matId = linkRes.Results[0].MaterializedResultID;
+        if (!matId) return null;                                       // query not materialized → live
+        // Ordering fidelity: buildMaterializedReadQuery emits no ORDER BY, and the snapshot was built with the
+        // source's top-level ORDER BY stripped (it has no inherent order). A query that carries a top-level ORDER
+        // BY would therefore page differently from the live query. Refuse → live (which preserves the ordering)
+        // rather than serve a divergent page order — consistent with this method's "any uncertainty → live".
+        // Check the PLATFORM-resolved SQL (the exact SQL the live path executes — GetPlatformSQL, line ~3642),
+        // not the base query.SQL: a per-platform QuerySQL variant (e.g. a PostgreSQL variant) may add a top-level
+        // ORDER BY the base SQL lacks, and parsing the base SQL would miss it and serve mis-ordered snapshot pages.
+        if (GenericDatabaseProvider.queryHasTopLevelOrderBy(query.GetPlatformSQL(this.PlatformKey) ?? '', this.PlatformKey)) return null;
+
+        // Load the materialization metadata. matId is our own UUID (from committed metadata), so it is safe
+        // to interpolate into ExtraFilter — it never carries caller input.
+        const rv = new RunView(this);
+        // BypassCache is REQUIRED here (H6): this read gates whether we route to the materialized table, and the
+        // decisive column is Status. A refresher/CodeGen run can flip Status to 'DriftHold' or 'Disabled' out of
+        // band, but a cached 'Active' row would let this plan keep serving the held/disabled snapshot — the exact
+        // stale-serve the DriftHold mechanism exists to prevent. Reading straight from the DB guarantees we see
+        // the current terminal status. This is a single-row point lookup, so the bypass cost is negligible.
+        const res = await rv.RunView<{ Status: string; ParamMode: string; ReadFilterSpec: string | null; SchemaName: string; ViewName: string }>(
+            {
+                EntityName: 'MJ: Materialized Results',
+                ExtraFilter: `ID='${matId}'`,
+                Fields: ['Status', 'ParamMode', 'ReadFilterSpec', 'SchemaName', 'ViewName'],
+                ResultType: 'simple',
+                MaxRows: 1,
+                BypassCache: true,
+            },
+            contextUser,
+        );
+        if (!res.Success || !res.Results || res.Results.length === 0) return null;
+        const mat = res.Results[0];
+        if (mat.Status !== 'Active') return null;                 // Building / DriftHold / stale → live
+        if (mat.ParamMode !== 'RowFilterBroad') return null;      // None / PerValueCache → live (this path only serves Bucket 1)
+        if (!mat.ReadFilterSpec) return null;
+
+        let spec: Array<{ column: string; operator: string; paramName: string; kind: 'scalar' | 'list' }>;
+        try {
+            spec = JSON.parse(mat.ReadFilterSpec);
+        } catch {
+            return null; // malformed spec → live
+        }
+        if (!Array.isArray(spec) || spec.length === 0) return null;
+
+        // Coverage invariant (BOTH directions): a RowFilterBroad query's parameters are ALL row-filters (a mix
+        // refuses at classify time), so the query's parameter set and the persisted spec's parameter set MUST be
+        // identical. A query param missing from the spec → we would UNDER-filter; a spec param the query no longer
+        // has (stale metadata after an out-of-band edit — the same window H6 guards against) → we would OVER-filter
+        // vs. live, silently returning fewer rows. Either mismatch means the spec is inconsistent → refuse to live.
+        const specNames = new Set(spec.map((s) => s.paramName));
+        const queryParamNames = (query.QueryParameters ?? []).map((p) => p.Name);
+        const queryParamNameSet = new Set(queryParamNames);
+        if (queryParamNames.some((n) => !specNames.has(n))) return null;        // query param not in spec → under-filter
+        if (spec.some((s) => !queryParamNameSet.has(s.paramName))) return null;  // spec param not in query → over-filter
+
+        const outputColumns = (query.QueryFields ?? []).map((f) => f.Name).filter((n): n is string => !!n);
+        if (outputColumns.length === 0) return null;
+
+        // Declared parameter types (name → Type) so the row-filter values bind type-faithfully (see
+        // buildMaterializedReadQuery / coerceMaterializedScalarValue), matching the live path's typed literals.
+        const paramTypes: Record<string, string> = {};
+        for (const p of query.QueryParameters ?? []) paramTypes[p.Name] = p.Type;
+
+        return GenericDatabaseProvider.buildMaterializedReadQuery({
+            outputColumns,
+            schemaName: mat.SchemaName,
+            viewName: mat.ViewName,
+            spec,
+            paramValues: params.Parameters,
+            paramTypes,
+            isPostgres: this.PlatformKey === 'postgresql',
+        });
+    }
 
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // Route ad-hoc SQL queries to dedicated handler
@@ -3222,6 +3590,79 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const resolved = this.processQueryParameters(query, params.Parameters, contextUser);
             finalSQL = resolved.finalSQL;
             const appliedParameters = resolved.appliedParameters;
+
+            // ── Phase 2: materialized read redirect (plan §5) ──
+            // If the caller opted into DataSource:'Materialized' and this query has a fresh, Active
+            // RowFilterBroad materialization, serve from the materialized table with the row-filter params
+            // injected as BOUND predicates. On ANY uncertainty tryBuildMaterializedQueryPlan returns null and
+            // we fall through to the live execution below — a materialized read can never diverge from live.
+            const matPlan = await this.tryBuildMaterializedQueryPlan(query, params, contextUser);
+            if (matPlan) {
+                // Use a LOCAL for the materialized SQL — never overwrite `finalSQL` (which stays the
+                // live-rendered SQL), so a fallback below runs the live path unchanged.
+                try {
+                    const materializedSQL = matPlan.sql;
+                    // SQL-level paging parity with the live path: when the caller requested a page, wrap the
+                    // materialized read with OFFSET/FETCH (SQL Server) / LIMIT-OFFSET (PostgreSQL) plus a parallel
+                    // COUNT — via the same QueryPagingEngine the live path uses — so only the requested page is
+                    // pulled from the snapshot. Without this the whole (potentially multi-million-row) filtered
+                    // snapshot was loaded into Node and sliced in memory, defeating the large-dataset case
+                    // materialization targets. The bound row-filter parameters (matPlan.parameters) are preserved
+                    // in both the data and count SQL; StartRow/MaxRows are inlined by WrapWithPaging. The materialized
+                    // read carries an explicit `ORDER BY <surrogate row-id>` (buildMaterializedReadQuery), so paging
+                    // is deterministic and refresh-stable across pages rather than relying on the dialect default
+                    // order. No cache layer — materialized reads bypass the query cache by design. When no page is
+                    // requested, keep the full-load path.
+                    const matUseSQLPaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
+                    let rows: Record<string, unknown>[];
+                    let matTotalRowCount: number;
+                    let matExecutionTime: number;
+                    if (matUseSQLPaging) {
+                        const paging = QueryPagingEngine.WrapWithPaging(materializedSQL, params.StartRow!, params.MaxRows!, this.PlatformKey as DatabasePlatform);
+                        const start = Date.now();
+                        const [dataResult, countResult] = await Promise.all([
+                            this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, matPlan.parameters, undefined, contextUser),
+                            this.ExecuteSQL<{ TotalRowCount: number }>(paging.CountSQL, matPlan.parameters, undefined, contextUser),
+                        ]);
+                        matExecutionTime = Date.now() - start;
+                        rows = dataResult ?? [];
+                        matTotalRowCount = countResult?.[0]?.TotalRowCount != null ? Number(countResult[0].TotalRowCount) : rows.length;
+                    } else {
+                        const timing = await this.executeQueryWithTiming(materializedSQL, contextUser, matPlan.parameters);
+                        matExecutionTime = timing.executionTime;
+                        const paginated = this.applyQueryPagination(timing.result, params);
+                        rows = paginated.paginatedResult;
+                        matTotalRowCount = paginated.totalRowCount;
+                    }
+                    if (params.Enrichment?.EnricherKey) {
+                        rows = await this.enrichQueryResults(rows, params, query, contextUser);
+                    }
+                    this.auditQueryExecution(query, params, materializedSQL, rows.length, matTotalRowCount, matExecutionTime, contextUser);
+                    return {
+                        Success: true,
+                        QueryID: query.ID,
+                        QueryName: query.Name,
+                        Results: rows,
+                        RowCount: rows.length,
+                        TotalRowCount: matTotalRowCount,
+                        PageNumber: matUseSQLPaging ? Math.floor(params.StartRow! / params.MaxRows!) + 1 : undefined,
+                        PageSize: matUseSQLPaging ? params.MaxRows! : undefined,
+                        ExecutionTime: matExecutionTime,
+                        ErrorMessage: '',
+                        AppliedParameters: appliedParameters,
+                        RenderedSQL: materializedSQL,
+                        CacheHit: false,
+                    };
+                } catch (matErr) {
+                    // A connection error is fatal for the live path too — let the outer handler surface it.
+                    if (this.isConnectionError(matErr)) throw matErr;
+                    // Any other materialized-read failure (e.g. the wrapper view was rebuilt/dropped between the
+                    // freshness check and execution, or a column/grant mismatch) FALLS BACK to the live query.
+                    // Serving live is always correct, so a materialized-read failure must never fail a request
+                    // that would otherwise succeed (Phase 2 §2 safety model). `finalSQL` is still the live SQL.
+                    LogError(`Materialized read failed for query '${query.Name}' — falling back to live: ${matErr instanceof Error ? matErr.message : String(matErr)}`);
+                }
+            }
 
             // ── External data source dispatch ──
             // Queries bound to an external data source execute their (now fully-rendered)
@@ -3697,9 +4138,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     protected async executeQueryWithTiming(
         sql: string,
         contextUser?: UserInfo,
+        parameters?: unknown[],
     ): Promise<{ result: Record<string, unknown>[]; executionTime: number }> {
         const start = Date.now();
-        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
+        const result = await this.ExecuteSQL<Record<string, unknown>>(sql, parameters, undefined, contextUser);
         const executionTime = Date.now() - start;
 
         if (!result) {
@@ -4123,13 +4565,42 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     private renderRLSProjectionValue(field: EntityFieldInfo, val: unknown): string {
         if (val == null) {
-            const sqlType = field.SQLFullType;
-            if (!sqlType || sqlType.trim().length === 0) {
+            // Metadata records field types in SQL Server's vocabulary, so interpolating one raw
+            // emits `CAST(NULL AS uniqueidentifier)` on PostgreSQL, where that type does not exist.
+            // The statement throws — and because this is the RLS post-image gate, the caller gets a
+            // type error in place of the row-scope rejection it was testing for: an authorization
+            // decision surfacing as a SQL fault. Translate through the dialect, the same mapping
+            // CodeGen and the converter use.
+            //
+            // Map from `field.Type` (the BASE type), NOT `field.SQLFullType`, which already has the
+            // length formatted in as `nvarchar(50)`. `MapDataTypeToString` looks the base type up
+            // and returns anything unrecognized UNCHANGED, so a full type string maps to itself and
+            // the translation silently no-ops. `uniqueidentifier` carries no length and so maps
+            // correctly either way — which is precisely how a half-fixed version of this passes a
+            // spot check and still emits `CAST(NULL AS nvarchar(50))` on the very next field.
+            const baseType = field.Type;
+            if (!baseType || baseType.trim().length === 0) {
                 throw new Error(
                     `Cannot build RLS post-image projection: field ${field.Name} has no resolvable SQL type for a typed NULL`
                 );
             }
-            return `CAST(NULL AS ${sqlType})`;
+            // `field.Length` is the SYSTEM (byte) length from `sys.columns`, but
+            // `MapDataTypeToString` takes a CHARACTER count — `RuntimeSchemaManager` calls it as
+            // `('NVARCHAR', 200)` meaning 200 characters. `SQLFullType` knows the difference and
+            // halves it for the n-types; passing the raw byte length instead DOUBLES every
+            // `nvarchar`/`nchar` width. That is not cosmetic: SQL Server caps `NVARCHAR` at 4000,
+            // and 119 fields in a stock database — including the shipped
+            // `MJ: Conversation Detail Attachments.FileName` at 8000 — exceed it once doubled, so
+            // the CAST becomes illegal and the RLS post-image gate throws on SQL SERVER: the exact
+            // failure this change set out to remove from PostgreSQL, relocated to the primary
+            // platform. `MaxLength` does the halving, but flattens the `-1` MAX sentinel to 0, so
+            // the sentinel is passed through explicitly.
+            const charLength = field.Length === -1 ? -1 : field.MaxLength;
+            // `getDialect()` is nullable on this base. Falling back to `SQLFullType` — the exact
+            // string this used to emit — keeps SQL Server, whose vocabulary that already is,
+            // byte-identical to its previous behaviour.
+            const mapped = this.getDialect()?.MapDataTypeToString(baseType, charLength, field.Precision, field.Scale);
+            return `CAST(NULL AS ${mapped ?? field.SQLFullType})`;
         }
         if (typeof val === 'boolean') {
             return val ? '1' : '0';
