@@ -223,6 +223,25 @@ const FLOWS: Record<string, Flow> = {
             path({ ID: 'p2', OriginStepID: 'a', DestinationStepID: 'p', Priority: 1 }),
         ],
     },
+    // The failure family, under `failureSemantics: 'edges'` — the dialect where a flow HANDLES its
+    // own failures by routing around them, and the one the differential suite has never had an
+    // oracle for. `risky` fails; `onError` routes to recovery, `ok` to the happy path. Both engines
+    // must agree that recovery runs and that the join beneath it is reached, not blocked.
+    'a failure the flow handles with a recovery route': {
+        steps: [
+            step({ ID: 'a', Name: 'A', StartingStep: true }),
+            step({ ID: 'risky', Name: 'Risky' }),
+            step({ ID: 'recover', Name: 'Recover' }),
+            step({ ID: 'happy', Name: 'Happy' }),
+            step({ ID: 'j', Name: 'Join' }),
+        ],
+        paths: [
+            path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'risky' }),
+            path({ ID: 'p2', OriginStepID: 'risky', DestinationStepID: 'recover', Condition: 'onError', Priority: 10 }),
+            path({ ID: 'p3', OriginStepID: 'risky', DestinationStepID: 'happy', Condition: 'onSuccess', Priority: 1 }),
+            path({ ID: 'p4', OriginStepID: 'recover', DestinationStepID: 'j' }),
+        ],
+    },
     'no path matches — the walk ends': {
         steps: [step({ ID: 'a', Name: 'A', StartingStep: true }), step({ ID: 'b', Name: 'B' })],
         paths: [path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'b', Condition: 'never' })],
@@ -231,6 +250,28 @@ const FLOWS: Record<string, Flow> = {
 
 /** Condition truthiness, shared by both engines so the comparison isolates TRAVERSAL. */
 const CONTEXT: Record<string, boolean> = { ok: true, never: false };
+
+/**
+ * Steps that FAIL when executed, by flow name.
+ *
+ * Failure is a property of the run, not of the graph, so it is declared beside the fixtures rather
+ * than inside them — the same flow with nothing failing is a different (and also valid) comparison.
+ */
+const FAILING_STEPS: Record<string, ReadonlySet<string>> = {
+    'a failure the flow handles with a recovery route': new Set(['risky']),
+};
+
+/**
+ * `onError` / `onSuccess` — the vocabulary a flow uses to route around its own failures.
+ *
+ * Resolved against the ORIGIN's outcome rather than a static table, because that is the whole point
+ * of the dialect: the same edge is satisfied or not depending on whether the step before it blew up.
+ */
+function outcomeCondition(condition: string, originFailed: boolean): boolean | null {
+    if (condition === 'onError') return originFailed;
+    if (condition === 'onSuccess') return !originFailed;
+    return null;
+}
 
 /**
  * Conditions whose DATA IS ABSENT — the R2-3 class, which this simulator could not express at all.
@@ -336,7 +377,7 @@ function repoFor(flow: Flow): IGraphRepository {
  * This IS the old behaviour: one entry (Name-sorted, first), then repeatedly take the single
  * highest-priority satisfied edge. It never backtracks to a discarded branch.
  */
-function oracleOrder(flow: Flow): string[] {
+function oracleOrder(flow: Flow, failing: ReadonlySet<string> = new Set()): string[] {
     const repo = repoFor(flow);
     const start = [...repo.GetStartNodes()].sort((a, b) => a.name.localeCompare(b.name))[0];
     if (!start) return [];
@@ -347,10 +388,41 @@ function oracleOrder(flow: Flow): string[] {
     while (current && !guard.has(current)) {
         guard.add(current);
         visited.push(current);
-        const selection = SelectOutgoingEdges(current, repo, evaluator, INVOCATION);
+        // The walker asks its evaluator with the CURRENT step's outcome in context — that is how a
+        // flow routes around its own failure, and it is why `onError` is an ordinary conditional
+        // edge rather than a special case in the engine.
+        const originFailed = failing.has(current);
+        const outcomeAware: IConditionEvaluator = {
+            Evaluate: (expression, context) => {
+                const outcome = outcomeCondition(expression, originFailed);
+                return outcome === null ? evaluator.Evaluate(expression, context) : { Success: true, Value: outcome };
+            },
+        };
+        const selection = SelectOutgoingEdges(current, repo, outcomeAware, INVOCATION);
         current = selection.Edges[0]?.destinationNodeId ?? null;
     }
     return visited;
+}
+
+/**
+ * Which origin statuses may decide an exclusive group — the graph's failure dialect, not a constant.
+ * The dispatcher computes exactly this ("the graph's own failure dialect").
+ *
+ * **Any fixture with a failing step is compared under `'edges'`, and that is forced rather than
+ * chosen.** The oracle in this suite IS the legacy walker, and the walker routes on outcome: it
+ * evaluates a failed step's outgoing paths and takes one. That behaviour is the `'edges'` dialect.
+ * `'block'` — where a failure blocks everything downstream instead of routing — has no walker
+ * equivalent, so there is nothing to compare a compiled `'block'` graph AGAINST. The dialect is a
+ * property of the comparison being possible, which is why this suite had no failure oracle until
+ * the simulator could express it.
+ *
+ * `'block'` is pinned instead by the dispatcher's own tests and by IT74's TX19, where the assertion
+ * is against the engine rather than against another engine.
+ */
+function decidingStatuses(failing: ReadonlySet<string>): ReadonlySet<TaskGraphNodeStatus> {
+    return failing.size > 0
+        ? new Set<TaskGraphNodeStatus>(['Complete', 'Failed'])
+        : new Set<TaskGraphNodeStatus>(['Complete']);
 }
 
 // ── side B: the compiled graph, executed by the dispatcher's pure rules ──────
@@ -363,7 +435,7 @@ function oracleOrder(flow: Flow): string[] {
  * predecessors are all Skipped is simultaneously eligible and to-be-skipped; running eligibility
  * first would dispatch the loser branch.
  */
-function compiledOrder(flow: Flow): string[] {
+function compiledOrder(flow: Flow, failing: ReadonlySet<string> = new Set()): string[] {
     const compiled = CompileFlowToTaskGraph(flow.steps, flow.paths, {
         WorkflowName: 'W',
         ResolveAgentName: (id) => `Agent ${id}`,
@@ -404,10 +476,21 @@ function compiledOrder(flow: Flow): string[] {
                     // One classifier for both dialects (R3-6). Absent data is the data answering
                     // NO (R2-3) here too — the dispatcher classifies the throw rather than calling
                     // the group undecided — and `data.*` resolves from the invocation (R3-3).
-                    conditionOutcome: !d.condition ? 'satisfied' : classify(d.condition, INVOCATION),
+                    conditionOutcome: !d.condition
+                        ? 'satisfied'
+                        : (outcomeCondition(d.condition, status.get(d.tempId) === 'Failed') ??
+                            null) !== null
+                            ? (outcomeCondition(d.condition, status.get(d.tempId) === 'Failed')! ? 'satisfied' : 'unsatisfied')
+                            : classify(d.condition, INVOCATION),
                 } as EvaluatedEdge)),
         );
-        const xor = ResolveExclusiveGroups(evaluated);
+        // WHICH STATUSES MAY DECIDE a group is the graph's failure dialect, not a constant — the
+        // dispatcher passes exactly this (`TaskGraphDispatcher`, "the graph's own failure dialect").
+        // Under `'block'` only a Complete origin decides, so a failure blocks everything downstream.
+        // Under `'edges'` a Failed origin decides too, which is what lets a flow route around its
+        // own failure — and modelling it as a constant is why this suite had no failure oracle: the
+        // simulator could not express the dialect the fixture is written in.
+        const xor = ResolveExclusiveGroups(evaluated, decidingStatuses(failing));
 
         // A losing edge must not gate its target — it is removed, not left to block.
         const loserEdgeIDs = new Set(xor.loserEdgeIDs);
@@ -461,7 +544,12 @@ function compiledOrder(flow: Flow): string[] {
                         // them as one is what once let broken guards through. Absent data drops the
                         // edge exactly as `DecideGate` does; before R2-3 it was a hold, stalling the
                         // graph forever on a terminal origin whose output could never change.
-                        const verdict = classify(d.condition, INVOCATION);
+                        // Outcome conditions first: they are answered by the origin's fate, which a
+                        // static classifier cannot see.
+                        const outcome = outcomeCondition(d.condition, originStatus === 'Failed');
+                        const verdict = outcome !== null
+                            ? (outcome ? 'satisfied' : 'unsatisfied')
+                            : classify(d.condition, INVOCATION);
                         if (verdict === 'unevaluable') { unevaluableHolds.add(t.tempId); continue; }
                         if (verdict === 'unsatisfied') { droppedInto.add(t.tempId); continue; }
                     }
@@ -476,13 +564,24 @@ function compiledOrder(flow: Flow): string[] {
         }
 
         // 3. eligibility, last.
+        // Under `'edges'`, a Failed origin whose outgoing paths produced a satisfied edge is a
+        // HANDLED failure: the flow's recovery route ran, so its dependents must not be held. Without
+        // this the graph sits In Progress forever — a wrong answer replaced by no answer.
+        const handledFailures = new Set(
+            [...status].filter(([id, st]) => st === 'Failed' && liveEdges.some((e) => e.dependsOnTaskId === id))
+                .map(([id]) => id),
+        );
         const eligible = ComputeEligibleTasks(
             [...status].map(([i, s]) => ({ id: i, status: s })),
             liveEdges,
+            handledFailures,
         ).filter((n) => !xor.holdTaskIDs.includes(n.id) && !unevaluableHolds.has(n.id));
         if (eligible.length === 0) break;
 
-        for (const n of eligible) { order.push(n.id); status.set(n.id, 'Complete'); }
+        for (const n of eligible) {
+            order.push(n.id);
+            status.set(n.id, failing.has(n.id) ? 'Failed' : 'Complete');
+        }
     }
     return order;
 }
@@ -492,8 +591,9 @@ function compiledOrder(flow: Flow): string[] {
 describe('differential: compiled graph vs the engine it replaces', () => {
     for (const [name, flow] of Object.entries(FLOWS)) {
         it(`visits the same steps in the same order — ${name}`, () => {
-            const oracle = oracleOrder(flow);
-            const compiled = compiledOrder(flow);
+            const failing = FAILING_STEPS[name] ?? new Set<string>();
+            const oracle = oracleOrder(flow, failing);
+            const compiled = compiledOrder(flow, failing);
             // Teeth: two empty lists are equal, and a comparison that can pass vacuously is not a
             // guard. Every fixture must actually walk somewhere.
             expect(oracle.length, `oracle walked nothing for "${name}"`).toBeGreaterThan(0);
