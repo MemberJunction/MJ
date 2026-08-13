@@ -23,6 +23,7 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   'usage',
   'sync usage',
   'codegen usage',
+  'dev usage',
 
   // Plugin registry editing — just writes mj-cli-plugins.json
   'plugin add',
@@ -50,6 +51,12 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   'ai audit',
   'test',
   'dbdoc',
+  'dev',
+
+  // Dev workspace generator - node stdlib + chalk only, no bootstrap
+  'dev workspace',
+  'dev workspace status',
+  'dev workspace clean',
 
   // SQL conversion commands - use @memberjunction/sql-converter + sqlglot-ts only
   'sql-convert',
