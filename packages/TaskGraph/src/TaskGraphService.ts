@@ -35,6 +35,7 @@ import {
     FormatValidationErrors,
     NormalizeDependency,
     RankGraphNodes,
+    SanitizeInvocationEnvelope,
     ValidateTaskGraphSpec,
     type TaskGraphInvocationEnvelope,
     type TaskGraphSpec,
@@ -1365,15 +1366,30 @@ export class TaskGraphService {
         // dispatcher memory because the dispatcher that finishes a graph is frequently not the
         // process that accepted it — a restart, a second instance, or simply a long-running graph
         // all break that assumption. Anything the completion path needs has to be durable too.
+        // Done before the write, and reported: a value that silently left the envelope becomes a
+        // condition reading absent-data and taking the other branch, with nothing saying why.
+        const sanitized = SanitizeInvocationEnvelope(context.Invocation);
+        if (sanitized.DroppedPaths.length > 0) {
+            LogStatus(
+                `[TaskGraphService] Invocation envelope for '${spec.workflowName}' dropped ` +
+                `${sanitized.DroppedPaths.length} non-persistable value(s): ` +
+                `${sanitized.DroppedPaths.join(', ')}. Conditions referencing them will read as ` +
+                `absent data. Pass plain JSON values for anything a condition needs.`,
+            );
+        }
         parent.InputPayload = JSON.stringify({
             continuation: spec.continuation ?? 'message',
             reinvokeDepth: context.ReinvokeDepth ?? 0,
             failureSemantics: spec.failureSemantics ?? 'block',
             submittedByAgentRunID: context.AgentRunID ?? null,
             // Only written when the caller supplied one, so a graph with no invocation envelope
-            // carries no key at all rather than a misleading empty object.
-            ...(context.Invocation
-                ? { invocation: { data: context.Invocation.Data, context: context.Invocation.Context } }
+            // carries no key at all rather than a misleading empty object. SANITIZED first: the
+            // agent's `context` is documented as possibly a class instance holding connections and
+            // credentials, and carrying it verbatim threw `Converting circular structure to JSON`
+            // on any context with a socket in it — killing the run at submit time — while a context
+            // that happened to serialize would have written its credentials to this row.
+            ...(sanitized.Envelope
+                ? { invocation: { data: sanitized.Envelope.Data, context: sanitized.Envelope.Context } }
                 : {}),
             submittedByUserID: context.ContextUser?.ID ?? null,
         } satisfies TaskGraphParentMetadata);
