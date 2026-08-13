@@ -137,7 +137,12 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
         ['task-graph-orchestration', TaskGraphOrchestrationChecks, 18], // TG1-TG18 submission, validation and trigger bindings (IT71)
-        ['task-graph-execution', TaskGraphExecutionChecks, 7], // TX1-TX7 the dispatcher actually running graphs (IT74)
+        // TX1-TX17, the dispatcher actually running graphs (IT74). TX8-TX11 landed with Round 1
+        // (#3745), TX12-TX17 with Round 2. TX14 arrived last and in a substituted shape: the plan
+        // named an injected `Save()` failure, which is unreachable from the bundle, so it triggers
+        // the same run-half `defer` verdict through an unreadable run instead. The count moved
+        // deliberately, which is what this guard is for.
+        ['task-graph-execution', TaskGraphExecutionChecks, 17],
         ['entity-actions', EntityActionChecks, 8], // EA1-EA8 the entity-action substrate end to end (IT75)
     ];
 
