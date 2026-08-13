@@ -1,8 +1,15 @@
 import { AppContext, Arg, Ctx, Field, Int, ObjectType, PubSub, PubSubEngine, Query, Resolver } from '@memberjunction/server';
-import { RunView } from '@memberjunction/core';
+import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJUser_, MJUserRole_, MJUserResolverBase } from '../generated/generated.js';
 import { GetReadOnlyProvider } from '../util.js';
+import {
+  AssertRoleLoadSucceeded,
+  RequireContextUser,
+  RequireLoadedUser,
+  RequireRoleProvider,
+  UserIdExtraFilter,
+} from './currentUserRoles.js';
 
 /**
  * CurrentUser payload. Extends the generated user type with a first-class `Roles`
@@ -52,19 +59,22 @@ export class UserResolver extends MJUserResolverBase {
         __mj_UpdatedAt: userRecord.__mj_UpdatedAt,
       };
       console.log('CurrentUser (from userRecord)', userData.Email);
-      const mapped = await this.MapFieldNamesToCodeNames('MJ: Users', userData) as MJUser_;
+      const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+      const mapped = await this.MapFieldNamesToCodeNames('MJ: Users', userData, userRecord, provider) as MJUser_;
       return {
         ...mapped,
-        Roles: await this.mapRolesFromUserInfo(userRecord.UserRoles ?? [], userRecord),
+        Roles: await this.mapRolesFromUserInfo(userRecord.UserRoles ?? [], userRecord, userRecord, provider),
       };
     }
 
-    const result = await this.UserByEmail(context.userPayload.email, context);
-    console.log('CurrentUser (from email lookup)', result?.Email);
-    const roles = await this.loadRolesForUser(result, context);
+    const result = RequireLoadedUser(
+      await this.UserByEmail(context.userPayload.email, context),
+      context.userPayload.email,
+    );
+    console.log('CurrentUser (from email lookup)', result.Email);
     return {
-      ...(result as MJUser_),
-      Roles: roles,
+      ...result,
+      Roles: await this.loadRolesForUser(result, context),
     };
   }
 
@@ -101,30 +111,39 @@ export class UserResolver extends MJUserResolverBase {
    * not persisted. Always prefer those when the requested row is the session
    * user. Everyone else loads `MJ: User Roles` via RunView.
    */
-  private async loadRolesForUser(user: MJUser_ | null, context: AppContext): Promise<MJUserRole_[]> {
-    if (!user?.ID) {
-      return [];
-    }
-    const sessionUser = context.userPayload?.userRecord;
-    if (sessionUser?.IsMagicLinkAnonymous && UUIDsEqual(user.ID, sessionUser.ID)) {
-      return await this.mapRolesFromUserInfo(sessionUser.UserRoles ?? [], sessionUser);
+  private async loadRolesForUser(user: MJUser_, context: AppContext): Promise<MJUserRole_[]> {
+    const contextUser = RequireContextUser(this.GetUserFromPayload(context.userPayload));
+
+    if (contextUser.IsMagicLinkAnonymous && UUIDsEqual(user.ID, contextUser.ID)) {
+      const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+      return await this.mapRolesFromUserInfo(contextUser.UserRoles ?? [], contextUser, contextUser, provider);
     }
 
-    const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+    const provider = RequireRoleProvider(
+      GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true }),
+    );
     const rv = RunView.FromMetadataProvider(provider);
     const result = await rv.RunView<RoleSource>({
       EntityName: 'MJ: User Roles',
-      ExtraFilter: `UserID='${user.ID}'`,
+      ExtraFilter: UserIdExtraFilter(user.ID),
       ResultType: 'simple',
-    }, sessionUser);
+    }, contextUser);
 
-    if (!result.Success || !result.Results) {
-      return [];
-    }
-    return await this.ArrayMapFieldNamesToCodeNames('MJ: User Roles', result.Results, sessionUser) as MJUserRole_[];
+    AssertRoleLoadSucceeded(result, user.ID);
+    return await this.ArrayMapFieldNamesToCodeNames(
+      'MJ: User Roles',
+      result.Results ?? [],
+      contextUser,
+      provider,
+    ) as MJUserRole_[];
   }
 
-  private async mapRolesFromUserInfo(roles: RoleSource[], user: { ID: string; Name?: string }): Promise<MJUserRole_[]> {
+  private async mapRolesFromUserInfo(
+    roles: RoleSource[],
+    user: { ID: string; Name?: string },
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<MJUserRole_[]> {
     const now = new Date();
     const rows = roles.map((r) => ({
       ID: r.ID ?? user.ID,
@@ -135,7 +154,7 @@ export class UserResolver extends MJUserResolverBase {
       __mj_CreatedAt: r.__mj_CreatedAt ?? now,
       __mj_UpdatedAt: r.__mj_UpdatedAt ?? now,
     }));
-    return await this.ArrayMapFieldNamesToCodeNames('MJ: User Roles', rows) as MJUserRole_[];
+    return await this.ArrayMapFieldNamesToCodeNames('MJ: User Roles', rows, contextUser, provider) as MJUserRole_[];
   }
 }
 export default UserResolver;

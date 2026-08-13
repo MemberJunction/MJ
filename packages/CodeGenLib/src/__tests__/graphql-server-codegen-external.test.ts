@@ -64,8 +64,7 @@ import { GraphQLServerGeneratorBase } from '../Misc/graphql_server_codegen';
 
 class TestableGenerator extends GraphQLServerGeneratorBase {
   public resolver(entity: unknown, typeName: string) {
-    // (entity, serverGraphQLTypeName, excludeRelatedEntitiesExternalToSchema, isInternal)
-    return this.generateServerGraphQLResolver(entity as never, typeName, false, true);
+    return this.generateServerGraphQLResolver(entity as never, typeName);
   }
 }
 

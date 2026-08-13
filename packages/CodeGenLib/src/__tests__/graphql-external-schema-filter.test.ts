@@ -1,18 +1,8 @@
 /**
  * MJ#3279 — externally-owned entity schemas must not be emitted into a package's generated
- * GraphQL server code, AND nothing that IS emitted may reference the types that were withheld.
- *
- * The bug: `generateGraphQLServerCode` received the unfiltered non-core entity list, so a package
- * configured with external schemas (`entityPackageName` as a schema→package map) emitted its own
- * `@ObjectType` for entities another package also owns. Loading both packages made
- * `buildSchemaSync` throw "Schema must contain uniquely named types but contains multiple types
- * named ..." and the API crash-looped at boot.
- *
- * The second half — covered by `isRelatedTypeOutOfScope` here — is what makes the filter safe:
- * withholding an entity also withholds its `@ObjectType` class declaration, so any `@Field` or
- * `@FieldResolver` on a LOCAL entity that names that class would be a dangling identifier and the
- * generated file would not compile. MJ-core related entities are exempt because they resolve
- * through the `mj_core_schema_server_object_types` namespace import rather than a local class.
+ * GraphQL server code. Child-array `@Field` / `@FieldResolver` members are no longer
+ * emitted at all, so an externally-owned related type cannot appear as a dangling
+ * identifier. These tests lock that policy and that the local entity still generates.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -28,14 +18,11 @@ vi.mock('../Config/config', () => ({
         const hit = Object.keys(epn).find((k) => k.toLowerCase() === schema.toLowerCase());
         return hit ? epn[hit] : 'mj_generatedentities';
     },
-    getExternalEntitySchemas: () =>
-        typeof configState.entityPackageName === 'string' ? [] : Object.keys(configState.entityPackageName),
 }));
 
 import { GraphQLServerGeneratorBase } from '../Misc/graphql_server_codegen';
 import { Metadata } from '@memberjunction/core';
 
-/** Minimal field shape the generator reads. */
 function field(name: string, type = 'uniqueidentifier') {
     return {
         Name: name,
@@ -50,7 +37,6 @@ function field(name: string, type = 'uniqueidentifier') {
     };
 }
 
-/** Minimal entity shape the generator reads. */
 function entity(opts: { name: string; schema: string; related?: object[] }) {
     const codeName = opts.name.replace(/ /g, '');
     const fields = [field('ID'), field('Name', 'nvarchar')];
@@ -75,7 +61,6 @@ function entity(opts: { name: string; schema: string; related?: object[] }) {
     };
 }
 
-/** Minimal one-to-many relationship shape the generator reads. */
 function oneToMany(relatedName: string) {
     const codeName = relatedName.replace(/ /g, '');
     return {
@@ -109,8 +94,6 @@ function generate(e: object): string {
 
 describe('GraphQL codegen: externally-owned schemas (MJ#3279)', () => {
     beforeEach(() => {
-        // `generateServerEntityString` resolves related entities through `new Metadata().Entities`.
-        vi.mocked(Metadata as unknown as () => void).mockReset?.();
         vi.spyOn(Metadata.prototype, 'Entities', 'get').mockReturnValue(
             [HOST, EXTERNAL, CORE, HOST_TO_CORE] as never,
         );
@@ -123,28 +106,24 @@ describe('GraphQL codegen: externally-owned schemas (MJ#3279)', () => {
         configState.entityPackageName = 'mj_generatedentities';
     });
 
-    it('single-package config: child-array relationship members are not emitted', () => {
+    it('does not emit @FieldResolver or *Array members for a local related entity', () => {
         const out = generate(HOST);
         expect(out).not.toMatch(/AppMembers_\w*Array/);
         expect(out).not.toContain('@FieldResolver');
         expect(out).toContain('export class hostHostWidgets_');
     });
 
-    it('multi-package config: the relationship to an externally-owned entity is skipped, not dangling', () => {
+    it('does not emit a dangling child-array field when the related type is externally owned', () => {
         configState.entityPackageName = { appschema: '@acme/app-entities' };
 
         const out = generate(HOST);
 
-        // Child-array members are no longer emitted at all, so an externally-owned
-        // related type cannot appear as a dangling `@Field(() => [AppMembers_])`.
         expect(out).not.toMatch(/AppMembers_\w*Array/);
         expect(out).not.toContain('@FieldResolver');
-        // The local entity itself is unaffected (type names are schema-prefixed — see
-        // getGraphQLTypeNameBase — so "host" + "HostWidgets").
         expect(out).toContain('export class hostHostWidgets_');
     });
 
-    it('MJ-core related entities also get no child-array member (load via RunView)', () => {
+    it('does not emit a child-array member for an MJ-core related entity', () => {
         configState.entityPackageName = { appschema: '@acme/app-entities' };
 
         const out = generate(HOST_TO_CORE);
