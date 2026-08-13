@@ -237,6 +237,8 @@ AFTER commands in this repo are `pnpm run build` in the packages CodeGen just wr
 
 For a 2,880-entity first discovery, set `advancedGeneration.enableAdvancedGeneration: false` for that run only. The LLM pass is per-new-entity and is not what this guide is measuring.
 
+Dropping and recreating `bsd_*` schemas (the demo `00_drop.sql`) deletes the stored procedures but leaves the `MJ: Entities` rows. Those entities are not in `newEntityList` / `modifiedEntityList`, so incremental SQL execution would skip them. CodeGen now snapshots `sys.procedures` at the start of the SQL pass and force-emits `CREATE PROC` for any missing routine. The SQL Server CRUD validator also implements `getRoutineNamesBySchemaSQL` — without that override the validator returned an empty "missing" list and reported a green pass over holes.
+
 ---
 
 ## Related
