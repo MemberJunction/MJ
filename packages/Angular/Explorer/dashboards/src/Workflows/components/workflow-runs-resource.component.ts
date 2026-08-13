@@ -1,6 +1,9 @@
-import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, HostListener } from '@angular/core';
-import { CompositeKey, RunView } from '@memberjunction/core';
-import { MJTaskEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
+import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, HostListener, OnDestroy } from '@angular/core';
+import { Subscription } from 'rxjs';
+import { CompositeKey, RunView, type IRemoteOperationProvider } from '@memberjunction/core';
+import { MJTaskDependencyEntity, MJTaskEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
+import { ComputeTasksToBlock, type TaskGraphNode, type TaskGraphEdge } from '@memberjunction/ai-core-plus';
+import { GraphQLDataProvider, type TaskGraphFrameEvent } from '@memberjunction/graphql-dataprovider';
 import { ParseJSONOptions, ParseJSONRecursive, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseDashboard, BaseResourceComponent } from '@memberjunction/ng-shared';
 import { SortWorkflowRuns, type WorkflowRunSortColumn } from './workflow-run-sorting';
@@ -88,7 +91,7 @@ export type WorkflowRunStep = {
 // WorkflowRunsResource", which reads as a packaging problem and is really a one-word mismatch.
 // Its sibling WorkflowsResourceComponent had it right, which is what made the difference visible.
 @RegisterClass(BaseResourceComponent, 'WorkflowRunsResource')
-export class WorkflowRunsResourceComponent extends BaseDashboard implements AfterViewInit {
+export class WorkflowRunsResourceComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
     public IsLoading = false;
     public LoadError: string | null = null;
 
@@ -298,9 +301,262 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
         this.SelectedRunID = closing ? null : run.ID;
         this.SelectedStepID = null;
         this.SelectedSteps = [];
+        this.SelectedDeps = [];
+        this.detachFrames();
+        this.ReplayPercent = null;
+        if (!closing && this.isLiveStatus(run.Status)) this.attachFrames(run.ID);
         this.publishAgentContext();
         this.cdr.markForCheck();
         if (!closing) void this.loadSteps(run.ID);
+    }
+
+    // ─── live console: frames ────────────────────────────────────────────────
+    //
+    // The Explorer host owns the subscription — the widgets-layer run view only renders what it is
+    // handed, per the UI layering rule. Frames are ADVISORY: they trigger renders and reveal engine
+    // state (claims, gate verdicts, passes) that rows cannot; the widget's own row reads remain the
+    // truth, reconciled on attach and on settlement.
+
+    /** The newest frame, bound straight into the run view for sub-second canvas updates. */
+    public LatestFrame: TaskGraphFrameEvent | null = null;
+    /** The engine's recent heartbeat ticks (`PassCompleted`), newest last. Bounded. */
+    public EngineTicks: TaskGraphFrameEvent[] = [];
+    /** Everything seen this session for the selected run, newest first. Bounded. */
+    public FrameLog: TaskGraphFrameEvent[] = [];
+    /** Whether the selected run is paused (from `GraphPaused`/`GraphResumed` frames + verbs). */
+    public DebugPaused = false;
+    /** A one-line diagnosis when the engine reports trouble — a lost worker, a held path. */
+    public StallNotice: string | null = null;
+    /** True while a control verb round-trips, so the toolbar cannot double-fire. */
+    public ControlBusy = false;
+    /** Replay position for a settled run: 0–100 along its wall-clock span, or null for "now". */
+    public ReplayPercent: number | null = null;
+
+    /** Dependencies of the selected run's steps, for the what-if preview. */
+    public SelectedDeps: MJTaskDependencyEntity[] = [];
+
+    private frameSub: Subscription | null = null;
+    private static readonly FRAME_LOG_LIMIT = 250;
+    private static readonly ENGINE_TICK_LIMIT = 10;
+
+    public override ngOnDestroy(): void {
+        this.detachFrames();
+        super.ngOnDestroy();
+    }
+
+    private isLiveStatus(status: string): boolean {
+        return status === 'In Progress' || status === 'Running' || status === 'Pending';
+    }
+
+    private attachFrames(parentTaskID: string): void {
+        const provider = this.ProviderToUse;
+        if (!(provider instanceof GraphQLDataProvider)) return; // frames are a GraphQL-transport capability
+        this.FrameLog = [];
+        this.EngineTicks = [];
+        this.StallNotice = null;
+        this.frameSub = provider.TaskGraphFrames(parentTaskID).subscribe({
+            next: (frame) => this.onFrame(frame),
+            // A dropped stream is not an error state for the console — the run view's poll is the
+            // safety net, and re-selecting the run re-subscribes.
+            error: () => { this.frameSub = null; },
+            complete: () => { this.frameSub = null; },
+        });
+    }
+
+    private detachFrames(): void {
+        this.frameSub?.unsubscribe();
+        this.frameSub = null;
+        this.LatestFrame = null;
+        this.DebugPaused = false;
+        this.StallNotice = null;
+    }
+
+    private onFrame(frame: TaskGraphFrameEvent): void {
+        this.LatestFrame = frame;
+        this.FrameLog = [frame, ...this.FrameLog].slice(0, WorkflowRunsResourceComponent.FRAME_LOG_LIMIT);
+
+        switch (frame.kind) {
+            case 'PassCompleted':
+                this.EngineTicks = [...this.EngineTicks, frame].slice(-WorkflowRunsResourceComponent.ENGINE_TICK_LIMIT);
+                break;
+            case 'GraphPaused':
+            case 'BreakpointHit':
+                this.DebugPaused = true;
+                break;
+            case 'GraphResumed':
+                this.DebugPaused = false;
+                break;
+            case 'ClaimChanged':
+                if (frame.claimEvent === 'heartbeat-lost') {
+                    this.StallNotice = `"${frame.taskName ?? 'A step'}" lost its worker — the engine will requeue it.`;
+                } else if (frame.claimEvent === 'reclaimed') {
+                    this.StallNotice = null; // the engine recovered it
+                }
+                break;
+            case 'GateDecision':
+                if (frame.verdict === 'held') {
+                    this.StallNotice = `"${frame.taskName ?? 'A step'}" is waiting on a path that can't be answered${frame.reason ? ` — ${frame.reason}` : ''}.`;
+                }
+                break;
+            case 'StepRefused':
+                // The step press could not release anything yet. Said out loud rather than left as
+                // a button that appeared to do nothing — the allowance is still armed.
+                this.StallNotice = frame.reason ?? 'The step could not start yet; it stays queued.';
+                break;
+            case 'GraphSettled':
+                this.StallNotice = null;
+                void this.loadData(); // the list row's status/duration just changed
+                if (this.SelectedRunID) void this.loadSteps(this.SelectedRunID);
+                break;
+            case 'TaskCompleted':
+            case 'TaskFailed':
+            case 'TaskSkipped':
+            case 'TaskBlocked':
+                // Keep the step list in agreement with the canvas the frame just updated.
+                if (this.SelectedRunID) void this.loadSteps(this.SelectedRunID);
+                break;
+        }
+        this.cdr.markForCheck();
+    }
+
+    // ─── live console: control verbs ────────────────────────────────────────
+    //
+    // Every verb is a Remote Operation — the typed control plane, same call an MCP caller or an
+    // Action would make. Pause/step are durable claim-gating state, so the effect lands within one
+    // dispatcher poll (~5s), announced back to us by `GraphPaused`/`GraphResumed` frames.
+
+    private async executeControl(operationKey: string, input: Record<string, unknown>): Promise<void> {
+        const provider = this.ProviderToUse as unknown as Partial<IRemoteOperationProvider>;
+        if (typeof provider.RouteOperation !== 'function') {
+            this.StallNotice = 'This connection cannot send workflow controls.';
+            this.cdr.markForCheck();
+            return;
+        }
+        this.ControlBusy = true;
+        this.cdr.markForCheck();
+        try {
+            const result = await provider.RouteOperation(operationKey, input, {});
+            const output = result?.Output as { success?: boolean; errorMessage?: string } | undefined;
+            if (!result?.Success || output?.success === false) {
+                this.StallNotice = output?.errorMessage ?? result?.ErrorMessage ?? 'The control could not be applied.';
+            }
+        } catch (e) {
+            this.StallNotice = e instanceof Error ? e.message : String(e);
+        } finally {
+            this.ControlBusy = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    public async OnPauseRun(): Promise<void> {
+        if (!this.SelectedRunID) return;
+        await this.executeControl('TaskGraph.Pause', { parentTaskID: this.SelectedRunID });
+        this.DebugPaused = true; // optimistic; the GraphPaused frame confirms within a poll
+        this.cdr.markForCheck();
+    }
+
+    public async OnResumeRun(): Promise<void> {
+        if (!this.SelectedRunID) return;
+        await this.executeControl('TaskGraph.Resume', { parentTaskID: this.SelectedRunID });
+        this.DebugPaused = false;
+        this.cdr.markForCheck();
+    }
+
+    public async OnStepRun(target: 'one' | 'wave'): Promise<void> {
+        if (!this.SelectedRunID) return;
+        await this.executeControl('TaskGraph.Step', { parentTaskID: this.SelectedRunID, target });
+    }
+
+    public async OnCancelRun(): Promise<void> {
+        if (!this.SelectedRunID) return;
+        await this.executeControl('TaskGraph.Cancel', { parentTaskID: this.SelectedRunID });
+        await this.loadData();
+    }
+
+    public async OnSkipStep(step: WorkflowRunStep): Promise<void> {
+        await this.executeControl('TaskGraph.SkipTask', { taskID: step.ID });
+        if (this.SelectedRunID) void this.loadSteps(this.SelectedRunID);
+    }
+
+    public async OnRetryStep(step: WorkflowRunStep): Promise<void> {
+        await this.executeControl('TaskGraph.RetryTask', { taskID: step.ID });
+        if (this.SelectedRunID) void this.loadSteps(this.SelectedRunID);
+    }
+
+    // ─── live console: inspector data ───────────────────────────────────────
+
+    /** The newest claim event seen for the selected step, if any. */
+    public get SelectedStepClaim(): TaskGraphFrameEvent | null {
+        if (!this.SelectedStepID) return null;
+        return this.FrameLog.find((f) => f.kind === 'ClaimChanged' && UUIDsEqual(f.taskId ?? '', this.SelectedStepID!)) ?? null;
+    }
+
+    /** Latest verdict per path into/out of the selected step — "why did this branch run". */
+    public get SelectedStepVerdicts(): TaskGraphFrameEvent[] {
+        if (!this.SelectedStepID) return [];
+        const byEdge = new Map<string, TaskGraphFrameEvent>();
+        // FrameLog is newest-first, so the first sighting per edge is the latest verdict.
+        for (const f of this.FrameLog) {
+            if (f.kind !== 'GateDecision' || !f.edgeId) continue;
+            const touches = UUIDsEqual(f.taskId ?? '', this.SelectedStepID) || UUIDsEqual(f.dependsOnTaskId ?? '', this.SelectedStepID);
+            if (touches && !byEdge.has(f.edgeId)) byEdge.set(f.edgeId, f);
+        }
+        return [...byEdge.values()];
+    }
+
+    /** What the selected step's runner last said it was doing. */
+    public get SelectedStepProgress(): TaskGraphFrameEvent | null {
+        if (!this.SelectedStepID) return null;
+        return this.FrameLog.find((f) => f.kind === 'NodeProgress' && UUIDsEqual(f.taskId ?? '', this.SelectedStepID!)) ?? null;
+    }
+
+    /**
+     * What-if: how many steps would be cut off if the selected step failed — computed with the
+     * engine's OWN blocking algorithm over the loaded rows, so the preview cannot disagree with
+     * what the dispatcher would actually do.
+     */
+    public get SelectedStepWhatIf(): { BlockedCount: number } | null {
+        const step = this.SelectedStep;
+        if (!step || this.SelectedSteps.length === 0) return null;
+        const nodes: TaskGraphNode[] = this.SelectedSteps.map((s) => ({
+            id: s.ID,
+            status: (UUIDsEqual(s.ID, step.ID) ? 'Failed' : s.Status) as TaskGraphNode['status'],
+        }));
+        const edges: TaskGraphEdge[] = this.SelectedDeps.map((d) => ({
+            taskId: d.TaskID,
+            dependsOnTaskId: d.DependsOnTaskID,
+            dependencyType: d.DependencyType as TaskGraphEdge['dependencyType'],
+        }));
+        const blocked = ComputeTasksToBlock(nodes, edges, new Set());
+        return { BlockedCount: [...blocked].filter((id) => !UUIDsEqual(id, step.ID)).length };
+    }
+
+    // ─── live console: replay ───────────────────────────────────────────────
+
+    /** Whether the selected run can be scrubbed — it has settled and has a wall-clock span. */
+    public get CanReplay(): boolean {
+        const run = this.SelectedRun;
+        return !!run && !this.isLiveStatus(run.Status) && !!run.StartedAt && !!run.CompletedAt;
+    }
+
+    /** The scrub position as a timestamp inside the run's span, or null when showing the present. */
+    public get ReplayAt(): Date | null {
+        const run = this.SelectedRun;
+        if (this.ReplayPercent == null || !run?.StartedAt || !run?.CompletedAt) return null;
+        const start = run.StartedAt.getTime();
+        const end = run.CompletedAt.getTime();
+        return new Date(start + (end - start) * (this.ReplayPercent / 100));
+    }
+
+    public OnReplayScrub(value: string | number): void {
+        const pct = Math.max(0, Math.min(100, Number(value)));
+        this.ReplayPercent = Number.isFinite(pct) ? pct : null;
+        this.cdr.markForCheck();
+    }
+
+    public OnReplayReset(): void {
+        this.ReplayPercent = null;
+        this.cdr.markForCheck();
     }
 
     /**
@@ -325,7 +581,15 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
                 ResultType: 'entity_object',
                 BypassCache: true,
             });
+            // The edges too, for the what-if preview — same rows the run view reads for the canvas.
+            const deps = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJTaskDependencyEntity>({
+                EntityName: 'MJ: Task Dependencies',
+                ExtraFilter: `TaskID IN (SELECT ID FROM __mj.Task WHERE ParentID='${parentTaskID}')`,
+                ResultType: 'entity_object',
+                BypassCache: true,
+            });
             if (!UUIDsEqual(this.SelectedRunID ?? '', parentTaskID)) return; // selection moved on
+            this.SelectedDeps = (deps.Success ? (deps.Results ?? []) : []);
             this.SelectedSteps = (result.Success ? (result.Results ?? []) : []).map((t) => ({
                 ID: t.ID,
                 Name: t.Name ?? '(unnamed step)',
