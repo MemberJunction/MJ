@@ -1,7 +1,7 @@
 -- =====================================================================================
 -- Pluggable Authentication Providers
 -- =====================================================================================
--- Introduces __mj.AuthenticationProvider, the metadata catalog of authentication
+-- Introduces the AuthenticationProvider table, the metadata catalog of authentication
 -- providers (Auth0, Okta, MSAL, Cognito, Google, WorkOS, or any third-party driver).
 --
 -- This makes auth providers METADATA-DRIVEN like the rest of MemberJunction: a row names
@@ -38,7 +38,7 @@
 -- Most providers validate via PUBLIC JWKS and need NO secret (CredentialID null, which
 -- is the case for every provider MJ ships today -- Auth0, Okta, MSAL, Cognito, Google,
 -- WorkOS). Providers that DO need server-side secret material (confidential-client
--- OAuth, management APIs, SCIM) reference the existing __mj.Credential table via
+-- OAuth, management APIs, SCIM) reference the existing Credential table via
 -- CredentialID and are decrypted at runtime by CredentialEngine -- mirroring the File
 -- Storage credential model. Secrets are never stored on this table.
 --
@@ -278,7 +278,7 @@ EXEC sp_addextendedproperty
    ==                                                                                        ==
    ==   It contains the Entity / EntityField metadata inserts, the generated base view, the  ==
    ==   spCreate / spUpdate / spDelete procedures, permission grants, and extended-property   ==
-   ==   descriptions for __mj.AuthenticationProvider.                                        ==
+   ==   descriptions for the AuthenticationProvider table.                                   ==
    ==                                                                                        ==
    ==   If the hand-written DDL above changes, DO NOT patch this section: re-run              ==
    ==   `mj codegen` and replace this entire block with the new output.                       ==
