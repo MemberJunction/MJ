@@ -2,9 +2,9 @@ import { Command, Flags } from '@oclif/core';
 import chalk from 'chalk';
 import path from 'node:path';
 import {
-  BuildHoistEntries,
   BuildNpmrc,
   BuildRootPackageJson,
+  BuildShellPeerGuidance,
   BuildWorkspaceYaml,
   PickTurboJson,
 } from '../../../lib/dev-workspace/build.js';
@@ -31,7 +31,6 @@ export default class DevWorkspace extends Command {
     '<%= config.bin %> dev workspace --dir ~/code/bluecypress --exclude bizapps-sonar',
     '<%= config.bin %> dev workspace --dir ~/code/bluecypress --include bizapps-common --include bizapps-tasks',
     '<%= config.bin %> dev workspace --dir ~/code/bluecypress --no-install --force',
-    '<%= config.bin %> dev workspace --dir ~/code/bluecypress --hoist-block',
   ];
 
   static flags = {
@@ -56,10 +55,6 @@ export default class DevWorkspace extends Command {
       description: 'Overwrite existing workspace files at the parent (a .bak copy of each is kept)',
       default: false,
     }),
-    'hoist-block': Flags.boolean({
-      description: 'Include the enumerated Angular dev-server hoist block in .npmrc (only needed when serving an app shell from INSIDE the workspace)',
-      default: false,
-    }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed output' }),
   };
 
@@ -70,12 +65,15 @@ export default class DevWorkspace extends Command {
     try {
       AssertParentDirSafe(parentDir);
       const members = this.selectMembers(parentDir, flags.include ?? [], flags.exclude ?? []);
-      const files = this.buildFiles(parentDir, members, flags['hoist-block']);
+      const files = this.buildFiles(parentDir, members);
       const result = WriteWorkspaceFiles(parentDir, files, flags.force);
       for (const backup of result.BackedUp) {
         this.log(chalk.yellow(`Backed up existing file to ${backup}`));
       }
       this.log(chalk.green(`Wrote ${result.Written.join(', ')} at ${parentDir}`));
+      for (const line of BuildShellPeerGuidance()) {
+        this.log(chalk.dim(line));
+      }
 
       if (flags.install) {
         this.log(chalk.bold('\nRunning pnpm install...'));
@@ -121,7 +119,7 @@ export default class DevWorkspace extends Command {
   }
 
   /** Builds the four file contents (pure builders) and logs every resolution decision. */
-  private buildFiles(parentDir: string, members: CandidateRepo[], hoistBlock: boolean): GeneratedFile[] {
+  private buildFiles(parentDir: string, members: CandidateRepo[]): GeneratedFile[] {
     const memberNames = members.map((m) => m.Name);
     const rootPkg = BuildRootPackageJson(path.basename(parentDir), members);
     for (const conflict of rootPkg.Conflicts) {
@@ -131,13 +129,9 @@ export default class DevWorkspace extends Command {
     this.log(chalk.dim(`packageManager pin ${rootPkg.Pin} from ${rootPkg.PinSource}`));
     const turbo = PickTurboJson(members);
     this.log(chalk.dim(`turbo.json copied from ${turbo.Source}`));
-    const hoistEntries = hoistBlock ? BuildHoistEntries(members) : null;
-    if (hoistEntries !== null) {
-      this.log(chalk.dim(`.npmrc hoist block: ${hoistEntries.length} enumerated entries`));
-    }
     return [
       { Name: 'pnpm-workspace.yaml', Content: BuildWorkspaceYaml(memberNames) },
-      { Name: '.npmrc', Content: BuildNpmrc(hoistEntries) },
+      { Name: '.npmrc', Content: BuildNpmrc() },
       { Name: 'package.json', Content: rootPkg.Content },
       { Name: 'turbo.json', Content: turbo.Content },
     ];

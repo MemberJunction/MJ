@@ -10,13 +10,27 @@
  *    allowlist, and per member ONLY the repo root + `packages/*` globs (producer
  *    packages only — `apps/*` globs collide because every repo names its apps
  *    `mj_api`/`mj_explorer`).
- *  - .npmrc: exactly three settings lines; the Angular dev-server hoist block is
- *    opt-in (only needed when an app shell is served from INSIDE the workspace)
- *    and always enumerated, never wildcarded.
+ *  - .npmrc: exactly three settings lines. There is deliberately no
+ *    `public-hoist-pattern[]` block — see "Why no hoist block" below.
  *  - package.json: private root manifest, pnpm `packageManager` pin, the
  *    devDependency union of member roots (highest version wins, every conflict
  *    reported), and the proven peerDependencyRules bridge block.
  *  - turbo.json: copied verbatim from a member, with a minimal fallback.
+ *
+ * Why no hoist block: the quickstart's 78-entry `public-hoist-pattern[]` set was
+ * written for the npm-hoisted era, when a library could import a package it never
+ * declared and hoisting silently covered for it. An attribution audit of all 78
+ * entries against the MJ monorepo (2026-08-13) found no entry that still needs
+ * hoisting: every package an MJ library imports is declared by that library, and
+ * every third-party peer relationship in the set (`@foblex/flow`'s siblings,
+ * `rete-*-plugin` -> `rete`, `marked-*` -> `marked`, `date-fns-tz` -> `date-fns`,
+ * `ajv-formats` -> `ajv`, radix/expo -> `react`) is satisfied by a real
+ * declaration. pnpm's strict layout is what forced that: a package that imports
+ * what it does not declare fails to resolve rather than falling through to a
+ * hoisted copy, so the pnpm conversion had to fix them all.
+ *
+ * The one residual class is genuinely the shell's own choice rather than a layout
+ * problem — see {@link SHELL_PROVIDED_PEERS}.
  *
  * @module lib/dev-workspace/build
  */
@@ -55,90 +69,32 @@ export const NPMRC_BASE_LINES: readonly string[] = [
 ];
 
 /**
- * The proven Angular dev-server hoist set (quickstart appendix, verbatim order).
- * First 9 entries are the auth family + diff; the rest is the mechanically
- * enumerated MJ-closure externalization set. Transitional debt with a named
- * sunset — never widen to a wildcard.
+ * Packages an MJ library declares as a `peerDependency` because the choice belongs
+ * to the app shell, not the library — the auth SDK family especially, where a shell
+ * picks exactly one provider out of five. These are NOT a layout problem and no
+ * pnpm setting fixes them: a shell that serves one of these features declares the
+ * package in its own `package.json`, the same as any other direct dependency.
+ *
+ * Kept here (rather than as prose) so the command's guidance text has one source of
+ * truth. Grouped by the MJ package whose peer declaration creates the requirement.
  */
-export const PROVEN_HOIST_SET: readonly string[] = [
-  'diff',
-  '@auth0/auth0-angular',
-  '@auth0/auth0-spa-js',
-  '@azure/msal-angular',
-  '@azure/msal-browser',
-  '@azure/msal-common',
-  '@okta/okta-auth-js',
-  '@workos-inc/authkit-js',
-  'aws-amplify',
-  '@angular/service-worker',
-  '@babel/standalone',
-  '@codemirror/autocomplete',
-  '@codemirror/commands',
-  '@codemirror/lang-javascript',
-  '@codemirror/lang-json',
-  '@codemirror/lang-python',
-  '@codemirror/lang-sql',
-  '@codemirror/language',
-  '@codemirror/language-data',
-  '@codemirror/merge',
-  '@codemirror/state',
-  '@codemirror/view',
-  '@foblex/2d',
-  '@foblex/flow',
-  '@foblex/mediator',
-  '@foblex/platform',
-  '@foblex/utils',
-  '@google/genai',
-  '@lezer/highlight',
-  '@livekit/krisp-noise-filter',
-  '@livekit/track-processors',
-  '@tempfix/idb',
-  '@types/d3',
-  '@types/leaflet',
-  '@types/react',
-  '@types/react-dom',
-  'ajv',
-  'ajv-formats',
-  'angular-split',
-  'codemirror',
-  'd3',
-  'date-fns',
-  'date-fns-tz',
-  'debug',
-  'dompurify',
-  'dotenv',
-  'exceljs',
-  'graphql',
-  'graphql-request',
-  'graphql-ws',
-  'html-to-image',
-  'isolated-vm',
-  'leaflet',
-  'livekit-client',
-  'lodash',
-  'mammoth',
-  'marked',
-  'marked-alert',
-  'marked-gfm-heading-id',
-  'marked-highlight',
-  'marked-smartypants',
-  'mathjs',
-  'mermaid',
-  'papaparse',
-  'pdfjs-dist',
-  'primeng',
-  'prismjs',
-  'react',
-  'react-dom',
-  'rete',
-  'rete-area-plugin',
-  'rete-connection-plugin',
-  'rete-render-utils',
-  'umap-js',
-  'uuid',
-  'validator',
-  'xlsx',
-  'zod',
+export const SHELL_PROVIDED_PEERS: ReadonlyArray<{ Library: string; Peers: readonly string[] }> = [
+  {
+    Library: '@memberjunction/ng-auth-services',
+    Peers: [
+      '@auth0/auth0-angular',
+      '@azure/msal-angular',
+      '@azure/msal-browser',
+      '@azure/msal-common',
+      '@okta/okta-auth-js',
+      '@workos-inc/authkit-js',
+      'aws-amplify',
+    ],
+  },
+  {
+    Library: '@memberjunction/ng-explorer-service-worker',
+    Peers: ['@angular/service-worker'],
+  },
 ];
 
 /** Peer bridge block for older published MJ copies still in the tree (quickstart §2). */
@@ -200,62 +156,28 @@ export function BuildWorkspaceYaml(memberNames: readonly string[]): string {
   return `${lines.join('\n')}\n`;
 }
 
-/** True for dependency names the hoist block must not enumerate (workspace-internal scopes). */
-function isHoistExcluded(name: string, workspacePackageNames: ReadonlySet<string>): boolean {
-  if (name.startsWith('@memberjunction/')) return true; // covered by the proven MJ-closure set
-  if (name.startsWith('@mj-biz-apps/')) return true; // workspace members / app-level deps
-  return workspacePackageNames.has(name);
+/**
+ * Renders the shell-dependency guidance the command prints — the replacement for
+ * the deleted hoist block. Derived from {@link SHELL_PROVIDED_PEERS} so the advice
+ * and the data cannot drift apart.
+ */
+export function BuildShellPeerGuidance(): string[] {
+  const lines = ['Serving an app shell from inside the workspace? Declare its own runtime picks in the shell\'s package.json:'];
+  for (const { Library, Peers } of SHELL_PROVIDED_PEERS) {
+    lines.push(`  ${Library} peers -> ${Peers.join(', ')}`);
+  }
+  lines.push('  (only the ones your shell actually uses — these are choices, not a layout fix)');
+  return lines;
 }
 
 /**
- * Enumerates the Angular dev-server hoist entries: the proven MJ-closure set plus
- * the direct third-party runtime deps (dependencies + peerDependencies) of every
- * member library package. Always concrete names — never a wildcard pattern.
+ * Builds `.npmrc`: exactly the three proven settings lines.
  *
- * Faithfulness note: the proven set was produced by a full transitive closure walk
- * of the MJ registry packages; that closure cannot be recomputed locally (the MJ
- * host packages come from the registry), so it is carried as the quickstart's
- * literal list. The member walk covers the locally walkable half at direct-dep
- * depth.
+ * No `public-hoist-pattern[]` block by design — see the "Why no hoist block" note
+ * at the top of this module.
  */
-export function BuildHoistEntries(members: readonly CandidateRepo[]): string[] {
-  const workspacePackageNames = new Set<string>();
-  for (const member of members) {
-    for (const pkg of member.Packages) {
-      if (pkg.PackageJson.name) workspacePackageNames.add(pkg.PackageJson.name);
-    }
-  }
-  const walked = new Set<string>();
-  for (const member of members) {
-    for (const pkg of member.Packages) {
-      const deps = { ...pkg.PackageJson.dependencies, ...pkg.PackageJson.peerDependencies };
-      for (const name of Object.keys(deps)) {
-        if (!isHoistExcluded(name, workspacePackageNames)) walked.add(name);
-      }
-    }
-  }
-  const proven = new Set(PROVEN_HOIST_SET);
-  const additions = [...walked].filter((name) => !proven.has(name)).sort();
-  return [...PROVEN_HOIST_SET, ...additions];
-}
-
-/**
- * Builds `.npmrc`: the three proven settings lines, plus (opt-in) the enumerated
- * Angular dev-server hoist block — needed only when an app shell is served from
- * inside the workspace.
- */
-export function BuildNpmrc(hoistEntries: readonly string[] | null): string {
-  const lines: string[] = [`# ${GENERATED_HEADER}`, ...NPMRC_BASE_LINES];
-  if (hoistEntries !== null) {
-    if (hoistEntries.length === 0) {
-      throw new Error('BuildNpmrc: hoist block requested but no entries were enumerated');
-    }
-    lines.push('# --- Angular dev-server hoist block (transitional; enumerated, never wildcarded) ---');
-    for (const entry of hoistEntries) {
-      lines.push(`public-hoist-pattern[]=${entry}`);
-    }
-  }
-  return `${lines.join('\n')}\n`;
+export function BuildNpmrc(): string {
+  return `${[`# ${GENERATED_HEADER}`, ...NPMRC_BASE_LINES].join('\n')}\n`;
 }
 
 /** Parses the leading numeric triple out of a version/range string, or null. */

@@ -1,25 +1,25 @@
 /**
  * Tests for the pure content builders behind `mj dev workspace`
  * (src/lib/dev-workspace/build.ts). Content rules come from the quickstart:
- * producer packages-only globs, the three .npmrc lines, the enumerated hoist
- * block, the devDependency union with highest-version-wins conflict logging,
- * and the pnpm packageManager pin.
+ * producer packages-only globs, the three .npmrc lines (and NO hoist block), the
+ * devDependency union with highest-version-wins conflict logging, and the pnpm
+ * packageManager pin.
  */
 import { describe, expect, it } from 'vitest';
 import {
   BASELINE_DEV_DEPENDENCIES,
-  BuildHoistEntries,
   BuildNpmrc,
   BuildRootPackageJson,
+  BuildShellPeerGuidance,
   BuildWorkspaceYaml,
   CompareVersionStrings,
   FALLBACK_PNPM_PIN,
   NPMRC_BASE_LINES,
   ONLY_BUILT_DEPENDENCIES,
-  PROVEN_HOIST_SET,
   PickTurboJson,
   ResolveDevDependencyUnion,
   ResolvePnpmPin,
+  SHELL_PROVIDED_PEERS,
 } from '../lib/dev-workspace/build.js';
 import type { CandidateRepo } from '../lib/dev-workspace/types.js';
 
@@ -68,8 +68,8 @@ describe('BuildWorkspaceYaml', () => {
 });
 
 describe('BuildNpmrc', () => {
-  it('emits exactly the three proven settings lines when no hoist block is requested', () => {
-    const lines = BuildNpmrc(null).trimEnd().split('\n');
+  it('emits exactly the three proven settings lines', () => {
+    const lines = BuildNpmrc().trimEnd().split('\n');
     expect(lines[0].startsWith('#')).toBe(true);
     expect(lines.slice(1)).toEqual([...NPMRC_BASE_LINES]);
     expect(NPMRC_BASE_LINES).toEqual([
@@ -79,63 +79,58 @@ describe('BuildNpmrc', () => {
     ]);
   });
 
-  it('emits one public-hoist-pattern line per enumerated entry, never a wildcard', () => {
-    const npmrc = BuildNpmrc(['diff', 'zod']);
-    expect(npmrc).toContain('public-hoist-pattern[]=diff');
-    expect(npmrc).toContain('public-hoist-pattern[]=zod');
-    expect(npmrc).not.toContain('public-hoist-pattern[]=*');
-  });
-
-  it('throws when the hoist block is requested with zero entries', () => {
-    expect(() => BuildNpmrc([])).toThrow(/no entries/);
+  // The 78-entry public-hoist-pattern block was deleted after an attribution audit
+  // found every entry already declared by its importer. Hoisting must not come back
+  // in any form — a wildcard least of all.
+  it('never emits a hoist pattern of any kind', () => {
+    const npmrc = BuildNpmrc();
+    expect(npmrc).not.toContain('public-hoist-pattern');
+    expect(npmrc).not.toContain('hoist-pattern');
+    expect(npmrc).not.toContain('shamefully-hoist');
   });
 });
 
-describe('BuildHoistEntries', () => {
-  const commonEntities = {
-    DirName: 'Entities',
-    PackageJson: {
-      name: '@mj-biz-apps/common-entities',
-      dependencies: { '@memberjunction/core': '^5.44.0', 'left-pad': '^1.3.0' },
-      peerDependencies: { rxjs: '^7.8.0' },
-    },
-  };
-  const commonServer = {
-    DirName: 'Server',
-    PackageJson: {
-      name: '@mj-biz-apps/common-server',
-      dependencies: { '@mj-biz-apps/common-entities': '^1.0.0', zod: '^3.24.0' },
-    },
-  };
-
-  it('starts with the proven quickstart set, in order', () => {
-    const entries = BuildHoistEntries([repo('a')]);
-    expect(entries.slice(0, PROVEN_HOIST_SET.length)).toEqual([...PROVEN_HOIST_SET]);
-    expect(PROVEN_HOIST_SET[0]).toBe('diff');
-    expect(PROVEN_HOIST_SET.length).toBeGreaterThanOrEqual(78);
+describe('SHELL_PROVIDED_PEERS', () => {
+  // The residue of the hoist audit: entries no declaration fix can retire, because
+  // WHICH auth SDK a shell needs is the shell's choice. Everything else in the old
+  // block was already declared by the MJ library that imports it.
+  it('covers the five auth providers a shell picks between', () => {
+    const authGroup = SHELL_PROVIDED_PEERS.find((g) => g.Library === '@memberjunction/ng-auth-services');
+    expect(authGroup).toBeDefined();
+    expect(authGroup?.Peers).toEqual([
+      '@auth0/auth0-angular',
+      '@azure/msal-angular',
+      '@azure/msal-browser',
+      '@azure/msal-common',
+      '@okta/okta-auth-js',
+      '@workos-inc/authkit-js',
+      'aws-amplify',
+    ]);
   });
 
-  it('walks member packages and appends their third-party runtime deps, sorted', () => {
-    const entries = BuildHoistEntries([repo('bizapps-common', { Packages: [commonEntities, commonServer] })]);
-    const additions = entries.slice(PROVEN_HOIST_SET.length);
-    expect(additions).toEqual(['left-pad', 'rxjs']); // sorted; zod already proven
+  it('lists only packages an MJ library declares as a peer, never a bare dependency', () => {
+    // date-fns / uuid / marked etc. are plain dependencies of their importers — a
+    // shell never has to restate them, so they must not appear here.
+    const all = SHELL_PROVIDED_PEERS.flatMap((g) => g.Peers);
+    for (const declared of ['date-fns', 'uuid', 'marked', 'zod', 'react', 'rete', '@foblex/flow']) {
+      expect(all).not.toContain(declared);
+    }
+  });
+});
+
+describe('BuildShellPeerGuidance', () => {
+  it('names every shell-provided peer group so the advice cannot drift from the data', () => {
+    const text = BuildShellPeerGuidance().join('\n');
+    for (const group of SHELL_PROVIDED_PEERS) {
+      expect(text).toContain(group.Library);
+      for (const peer of group.Peers) {
+        expect(text).toContain(peer);
+      }
+    }
   });
 
-  it('never duplicates a proven entry', () => {
-    const entries = BuildHoistEntries([repo('bizapps-common', { Packages: [commonServer] })]);
-    expect(entries.filter((e) => e === 'zod')).toHaveLength(1);
-  });
-
-  it('excludes @memberjunction, @mj-biz-apps, and workspace member package names', () => {
-    const localLib = { DirName: 'Lib', PackageJson: { name: 'my-local-lib' } };
-    const consumer = {
-      DirName: 'Consumer',
-      PackageJson: { name: '@mj-biz-apps/x-consumer', dependencies: { 'my-local-lib': '1.0.0' } },
-    };
-    const entries = BuildHoistEntries([repo('bizapps-x', { Packages: [localLib, consumer, commonEntities] })]);
-    expect(entries).not.toContain('@memberjunction/core');
-    expect(entries).not.toContain('@mj-biz-apps/common-entities');
-    expect(entries).not.toContain('my-local-lib');
+  it('frames the peers as a choice rather than a layout fix', () => {
+    expect(BuildShellPeerGuidance().join('\n')).toMatch(/choices, not a layout fix/);
   });
 });
 

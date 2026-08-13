@@ -30,10 +30,15 @@ describe('dev workspace flag defaults', () => {
     expect(flag.allowNo).toBe(true);
   });
 
-  it('force and hoist-block default to false (never overwrite / no hoist silently)', async () => {
+  it('force defaults to false (never overwrite silently)', async () => {
     const { default: DevWorkspace } = await import('../commands/dev/workspace/index.js');
     expect(DevWorkspace.flags.force.default).toBe(false);
-    expect(DevWorkspace.flags['hoist-block'].default).toBe(false);
+  });
+
+  it('offers no hoist-block flag — the hoist block was retired, not made opt-in', async () => {
+    const { default: DevWorkspace } = await import('../commands/dev/workspace/index.js');
+    expect(DevWorkspace.flags['hoist-block']).toBeUndefined();
+    expect(DevWorkspace.examples.join('\n')).not.toContain('hoist');
   });
 
   it('dir defaults to the current directory on both commands', async () => {
