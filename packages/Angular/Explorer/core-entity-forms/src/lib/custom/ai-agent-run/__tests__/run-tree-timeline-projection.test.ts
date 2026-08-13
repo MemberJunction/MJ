@@ -457,3 +457,34 @@ describe('a dispatched workflow is one row, not two', () => {
         expect(items.map((i) => i.id)).toEqual(['run', 'step', 'graph', 'task-a', 'task-b', 'subrun']);
     });
 });
+
+describe('the expand path the run timeline actually uses', () => {
+    // The timeline builds the submit-step row from the run's own step rows and calls the projection
+    // with skipRoot on that step to fill in what is underneath. The first fix only handled the
+    // whole-tree path, so on screen the graph still appeared as a child of the step — the duplicate,
+    // one indent deeper. These pin the call the UI makes.
+    it('projects the workflow STEPS under the step row, not the graph again', () => {
+        const step = dispatchedWorkflow().Children[0];
+        const rows = flatten(ProjectRunTreeToTimeline(step, 1, true));
+
+        expect(rows.map((r) => r.id)).toEqual(['step-1', 'step-2']);
+        expect(rows.every((r) => r.level === 1)).toBe(true);
+    });
+
+    it('still emits the graph when the submission failed', () => {
+        const step = dispatchedWorkflow({ stepStatus: 'Failed' }).Children[0];
+        const rows = flatten(ProjectRunTreeToTimeline(step, 1, true));
+
+        expect(rows.map((r) => r.id)).toEqual(['graph', 'step-1', 'step-2']);
+    });
+
+    it('leaves an ordinary step-with-children alone', () => {
+        const parent = node({
+            NodeID: 'sub-agent-step',
+            NodeType: 'Step',
+            Children: [node({ NodeID: 'nested-run', NodeType: 'Run' })],
+        });
+
+        expect(flatten(ProjectRunTreeToTimeline(parent, 1, true)).map((r) => r.id)).toEqual(['nested-run']);
+    });
+});

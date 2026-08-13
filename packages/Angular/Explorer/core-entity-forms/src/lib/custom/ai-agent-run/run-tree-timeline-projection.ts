@@ -346,9 +346,17 @@ export function ProjectRunTreeToTimeline(
         return item;
     };
 
-    return skipRoot
-        ? root.Children.map((child, index) => build(child, baseLevel, root.NodeID, index + 1))
-        : [build(root, baseLevel, undefined, 1)];
+    // `skipRoot` is how the run timeline actually calls this: the submit step is ALREADY on screen
+    // (built from the run's own step rows) and this fills in what is underneath it. Without the
+    // collapse here the graph is emitted as a child of the step — the duplicate row, one indent
+    // deeper, which is exactly what the screen showed. The step is the workflow's row; the rows
+    // below it should be the workflow's STEPS.
+    if (skipRoot) {
+        const graph = collapsibleGraphChild(root);
+        const children = graph ? graph.Children : root.Children;
+        return children.map((child, index) => build(child, baseLevel, root.NodeID, index + 1));
+    }
+    return [build(root, baseLevel, undefined, 1)];
 }
 
 

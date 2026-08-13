@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
-import { Subject, Observable, combineLatest } from 'rxjs';
+import { Subject, Observable, combineLatest, BehaviorSubject } from 'rxjs';
 import { takeUntil, map, shareReplay, filter } from 'rxjs/operators';
 import { MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJActionExecutionLogEntity, MJAIPromptRunEntity, MJTaskEntity } from '@memberjunction/core-entities';
 import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
@@ -8,7 +8,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FindAgentRunTreeNodes, type AgentRunTreeNode } from '@memberjunction/ai-core-plus';
-import { ProjectRunTreeToTimeline } from './run-tree-timeline-projection';
+import { NormalizeStatus, ProjectRunTreeToTimeline } from './run-tree-timeline-projection';
 export interface TimelineItem {
   id: string;
   /**
@@ -70,7 +70,22 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
    * issues the same recursive query three times AND lets the tabs disagree — a tab that loaded a
    * second earlier shows a different run than the one beside it.
    */
-  @Input() RunTree: AgentRunTreeNode | null = null;
+  /**
+   * Setter, not a plain field: a TaskGraph step's row takes its STATUS from the graph (see
+   * `graphNodeForStep`), and the tree usually arrives after the step rows have already been built.
+   * Republishing rebuilds them, so a dispatched workflow stops reading Completed the moment the
+   * tree says it is still running.
+   */
+  @Input()
+  public set RunTree(value: AgentRunTreeNode | null) {
+    this.runTree = value;
+    this.runTree$.next(value);
+  }
+  public get RunTree(): AgentRunTreeNode | null {
+    return this.runTree;
+  }
+  private runTree: AgentRunTreeNode | null = null;
+  private runTree$ = new BehaviorSubject<AgentRunTreeNode | null>(null);
   @Input() dataHelper!: AIAgentRunDataHelper; // Data helper passed from parent
   @Output() itemSelected = new EventEmitter<TimelineItem>();
   @Output() navigateToEntity = new EventEmitter<{ entityName: string; recordId: string }>();
@@ -117,7 +132,8 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
       this.subRuns$,
       this.actionLogs$,
       this.promptRuns$,
-      this.dataHelper.loading$
+      this.dataHelper.loading$,
+      this.runTree$
     ]).pipe(
       filter(([steps, _subRuns, _actionLogs, _promptRuns, isLoading]) => {
         // While loading, suppress the empty-array emission so the
@@ -213,6 +229,18 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
     return rootItems;
   }
   
+  /**
+   * The graph a TaskGraph step dispatched, from the run tree.
+   *
+   * Null until the tree arrives (the setter above republishes then) and null for a submission that
+   * produced no graph — a failed submit, where the step's own status IS the story.
+   */
+  private graphNodeForStep(stepID: string): AgentRunTreeNode | null {
+    if (!this.runTree) return null;
+    const stepNode = FindAgentRunTreeNodes(this.runTree, (n) => UUIDsEqual(n.NodeID, stepID))[0] ?? null;
+    return stepNode?.Children.find((c) => c.NodeType === 'TaskGraph') ?? null;
+  }
+
   private createTimelineItemFromStep(step: MJAIAgentRunStepEntity, level: number, promptRuns?: MJAIPromptRunEntity[]): TimelineItem {
     let subtitle = `Type: ${step.StepType}`;
 
@@ -227,18 +255,31 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
     // Get icon and logoUrl based on step type
     const iconInfo = this.getStepIconInfo(step);
 
+    // A dispatched workflow's row describes the WORKFLOW, not the handoff that started it. The
+    // step's own status is about submission — Completed in ~300ms, correctly — and showing that
+    // under a title naming the workflow is how the timeline came to report a running graph as
+    // finished while the page header said "Workflow still running".
+    const graph = step.StepType === 'TaskGraph' ? this.graphNodeForStep(step.ID) : null;
+    if (graph) {
+      subtitle = `${subtitle} · dispatched in ${this.calculateDuration(step.StartedAt, step.CompletedAt)}`;
+    }
+
     return {
       id: step.ID,
       type: 'step',
       title: step.StepName || `Step ${step.StepNumber}`,
       subtitle: subtitle,
-      status: step.Status,
+      status: graph ? NormalizeStatus(graph.Status) : step.Status,
       startTime: step.StartedAt,
-      endTime: step.CompletedAt || undefined,
-      duration: this.calculateDuration(step.StartedAt, step.CompletedAt),
+      endTime: (graph ? graph.CompletedAt : step.CompletedAt) || undefined,
+      // A graph that has not started yet has no duration of its own — the submission's stands in,
+      // and the subtitle says which it is either way.
+      duration: graph?.StartedAt
+        ? this.calculateDuration(graph.StartedAt, graph.CompletedAt)
+        : this.calculateDuration(step.StartedAt, step.CompletedAt),
       icon: iconInfo.icon,
       logoUrl: iconInfo.logoUrl,
-      color: this.getStatusColor(step.Status),
+      color: this.getStatusColor(graph ? NormalizeStatus(graph.Status) : step.Status),
       data: step,
       children: [],
       level,
