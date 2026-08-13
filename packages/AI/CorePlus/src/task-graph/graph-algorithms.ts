@@ -526,6 +526,39 @@ export type ExclusiveGroupResolution = {
  *                       under `failureSemantics: 'edges'`, where a failed step's outgoing paths are
  *                       its recovery paths.
  */
+/**
+ * Which of two competing edges wins: higher priority, then lower sequence, then edge id.
+ *
+ * **The id is a tiebreak, not a preference** — and without it this ordering is not total. Priority
+ * and sequence both default to 0 and `Submit` persists those defaults, so a hand-authored or
+ * LLM-authored spec routinely produces a genuine tie; dependencies load with no `ORDER BY`, so the
+ * winner was decided by row order, which can differ between polls of the same graph. The worst
+ * interleaving is not a wrong branch but NO branch: poll 1 picks `X→B` and skips C; poll 2's row
+ * order flips, picks `Y→C` — already Skipped — and skips B. Both branches Skipped, and the graph
+ * settles Complete having executed neither.
+ *
+ * Also used to ask whether an unevaluable edge could have beaten the winner, so the two questions
+ * cannot disagree about what "beats" means.
+ */
+export function CompareEdgePrecedence(a: EvaluatedEdge, b: EvaluatedEdge): number {
+    // ORDINAL, NOT COLLATED (R3-7). `localeCompare` with no arguments sorts under the host's ICU
+    // locale, and the sign genuinely flips: `'aa070000'` vs `'ab070000'` compares one way under
+    // `en` and the other under `da`, where the `aa` digraph collates as `å`. Dependency IDs are
+    // UUIDs, so `aa` sequences are routine.
+    //
+    // Two instances with different `LANG` would then resolve the same `(priority=0, sequence=0)`
+    // tie — the persisted default for hand- and LLM-authored specs — DIFFERENTLY, and since this
+    // same comparator decides the unevaluable-dominance test, hold-versus-resolve diverges with it.
+    // The worst interleaving is R2-5's own catastrophe across instances rather than across polls:
+    // both XOR branches Skipped, graph settles Complete having executed neither.
+    //
+    // R2-5's shipped test runs both input orders in ONE process and cannot see this; Round 2's plan
+    // prescribed `localeCompare`, so this corrects the prescription rather than a slip.
+    if (b.priority !== a.priority) return b.priority - a.priority;
+    if (a.sequence !== b.sequence) return a.sequence - b.sequence;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
 export function ResolveExclusiveGroups(
     edges: readonly EvaluatedEdge[],
     terminalDecides: ReadonlySet<TaskGraphNodeStatus> = new Set<TaskGraphNodeStatus>(['Complete']),
@@ -543,25 +576,48 @@ export function ResolveExclusiveGroups(
     /** Targets a kept edge points at, anywhere in this resolution. */
     const keptTargets = new Set<string>();
 
+    const loseWholeGroup = (group: readonly EvaluatedEdge[]): void => {
+        for (const e of group) { loserEdgeIDs.push(e.id); candidateSeeds.push(e.taskId); }
+    };
+
     for (const group of byGroup.values()) {
         // Every edge in a group leaves the same origin (the validator enforces it), so any member
         // answers "has the origin finished?".
-        if (!terminalDecides.has(group[0].originStatus)) continue;
+        const originStatus = group[0].originStatus;
 
-        if (group.some((e) => e.conditionOutcome === 'unevaluable')) {
+        // A FORK ON A STEP THAT WAS ITSELF SKIPPED TAKES NO BRANCH (R2-8).
+        //
+        // `Skipped` is not in `terminalDecides`, so this group used to fall through as undecided and
+        // every edge stayed live — and `Skipped` satisfies prerequisites, so whichever target had
+        // its OTHER prerequisites healthy simply ran, chosen by graph accident with its guard never
+        // consulted. Ordinary conditional edges out of the same origin ARE decided (`DecideGate`
+        // drops them); the exclusive dialect was the one that bypassed the guard.
+        //
+        // Every branch loses. Join survival already protects a target another live route reaches, so
+        // this removes only the routes that genuinely were not taken — which is what the walker
+        // concluded by never standing at the origin in the first place.
+        if (originStatus === 'Skipped') { loseWholeGroup(group); continue; }
+
+        if (!terminalDecides.has(originStatus)) continue;
+
+        const satisfied = group.filter((e) => e.conditionOutcome === 'satisfied');
+        const unevaluable = group.filter((e) => e.conditionOutcome === 'unevaluable');
+        const winner = satisfied.length > 0 ? [...satisfied].sort(CompareEdgePrecedence)[0] : null;
+
+        // HOLD ONLY IF A BROKEN GUARD COULD HAVE CHANGED THE ANSWER (R2-3 refinement).
+        //
+        // Holding on ANY unevaluable member is too blunt: an edge that could never have won tells us
+        // nothing about the outcome, and stalling a fork whose winner is already known trades a
+        // decided branch for a permanent wait. With nothing satisfied at all, any unevaluable edge
+        // could have been the winner, so there is nothing to dominate it and the hold stands.
+        if (unevaluable.length > 0 &&
+            (!winner || unevaluable.some((u) => CompareEdgePrecedence(u, winner) < 0))) {
             for (const e of group) holdTaskIDs.push(e.taskId);
             continue;
         }
 
-        const satisfied = group.filter((e) => e.conditionOutcome === 'satisfied');
-        if (satisfied.length === 0) {
-            for (const e of group) { loserEdgeIDs.push(e.id); candidateSeeds.push(e.taskId); }
-            continue;
-        }
+        if (!winner) { loseWholeGroup(group); continue; }
 
-        const winner = [...satisfied].sort(
-            (a, b) => (b.priority - a.priority) || (a.sequence - b.sequence),
-        )[0];
         for (const e of group) {
             if (e.id === winner.id) { keptEdgeIDs.push(e.id); keptTargets.add(e.taskId); }
             else { loserEdgeIDs.push(e.id); candidateSeeds.push(e.taskId); }

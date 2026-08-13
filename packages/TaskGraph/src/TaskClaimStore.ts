@@ -23,6 +23,7 @@
  */
 import { IMetadataProvider, DatabaseProviderBase, LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { TERMINAL_TASK_GRAPH_STATUSES, type TerminalTaskGraphStatus } from '@memberjunction/ai-core-plus';
+import { MachineTaskSQL } from './task-predicates';
 import { ReconciliationEvent } from './types';
 
 /** Fields the claim protocol needs from a candidate task. */
@@ -86,6 +87,66 @@ export class TaskClaimStore {
         return `${db.QuoteIdentifier(db.MJCoreSchemaName)}.${db.QuoteIdentifier('Task')}`;
     }
 
+    private agentRunTable(provider: IMetadataProvider): string {
+        const db = this.sql(provider);
+        return `${db.QuoteIdentifier(db.MJCoreSchemaName)}.${db.QuoteIdentifier('AIAgentRun')}`;
+    }
+
+    /**
+     * Writes a graph's cost rollup onto the submitting run, those four columns and no others.
+     *
+     * **The full-row `Save()` this replaces could revert a peer's settle** (C4). Two instances
+     * entering the settled branch for one graph is by design, so instance B's rollup — loaded before
+     * A settled the run — would write back `Paused` over A's `Completed`, along with every other
+     * column it had read. And a crash between this write and the same pass's lifecycle write left
+     * the run `Paused` under a claimed marker, which no sweep re-enters.
+     */
+    public async TrySetRunCostRollup(
+        provider: IMetadataProvider,
+        runID: string,
+        totals: { Cost: number | null; Tokens: number | null; PromptTokens: number | null; CompletionTokens: number | null },
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const num = (v: number | null): string => (v == null ? 'NULL' : String(v));
+        const sql = `
+            UPDATE ${this.agentRunTable(provider)}
+            SET ${db.QuoteIdentifier('TotalCostRollup')} = ${num(totals.Cost)},
+                ${db.QuoteIdentifier('TotalTokensUsedRollup')} = ${num(totals.Tokens)},
+                ${db.QuoteIdentifier('TotalPromptTokensUsedRollup')} = ${num(totals.PromptTokens)},
+                ${db.QuoteIdentifier('TotalCompletionTokensUsedRollup')} = ${num(totals.CompletionTokens)}
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(runID)}'`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
+     * Settles a parked agent run, guarded on it still being parked.
+     *
+     * Same reasoning as the rollup above and as every parent write since Round 1: a full-row save
+     * carries a whole stale snapshot, and the `Paused` predicate makes the transition once-only
+     * across instances rather than last-write-wins.
+     */
+    public async TrySettleRun(
+        provider: IMetadataProvider,
+        runID: string,
+        succeeded: boolean,
+        errorMessage: string | null,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const errorClause = errorMessage == null
+            ? ''
+            : `, ${db.QuoteIdentifier('ErrorMessage')} = CONCAT(COALESCE(${db.QuoteIdentifier('ErrorMessage')} + CHAR(10) + CHAR(10), ''), '${this.escape(errorMessage)}')`;
+        const sql = `
+            UPDATE ${this.agentRunTable(provider)}
+            SET ${db.QuoteIdentifier('Status')} = '${succeeded ? 'Completed' : 'Failed'}',
+                ${db.QuoteIdentifier('Success')} = ${succeeded ? 1 : 0},
+                ${db.QuoteIdentifier('CompletedAt')} = SYSUTCDATETIME()${errorClause}
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(runID)}'
+              AND ${db.QuoteIdentifier('Status')} = 'Paused'`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
     /**
      * Attempts to claim one task.
      *
@@ -98,18 +159,22 @@ export class TaskClaimStore {
      */
     public async TryClaim(provider: IMetadataProvider, taskID: string, contextUser: UserInfo): Promise<boolean> {
         const db = this.sql(provider);
-        const expires = new Date(Date.now() + this.claimTTLSeconds * 1000);
+        // The lease is written AND compared on the database's clock (SYSUTCDATETIME), never this
+        // process's. The claim protocol is multi-instance: a lease written from one host's clock and
+        // judged expired against another's turns ordinary NTP skew into premature reclamation — the
+        // task runs twice — or into a lease that outlives its worker. One clock, the only shared one.
+        const ttlSeconds = Math.max(0, Math.round(this.claimTTLSeconds));
         const sql = `
             UPDATE ${this.taskTable(provider)}
             SET ${db.QuoteIdentifier('Status')} = 'In Progress',
                 ${db.QuoteIdentifier('ClaimedBy')} = '${this.escape(this.instanceID)}',
-                ${db.QuoteIdentifier('ClaimExpiresAt')} = '${expires.toISOString()}',
-                ${db.QuoteIdentifier('StartedAt')} = '${new Date().toISOString()}'
+                ${db.QuoteIdentifier('ClaimExpiresAt')} = DATEADD(SECOND, ${ttlSeconds}, SYSUTCDATETIME()),
+                ${db.QuoteIdentifier('StartedAt')} = SYSUTCDATETIME()
             WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
               AND ${db.QuoteIdentifier('Status')} = 'Pending'
               AND (${db.QuoteIdentifier('ClaimedBy')} IS NULL
                    OR ${db.QuoteIdentifier('ClaimExpiresAt')} IS NULL
-                   OR ${db.QuoteIdentifier('ClaimExpiresAt')} < '${new Date().toISOString()}')`;
+                   OR ${db.QuoteIdentifier('ClaimExpiresAt')} < SYSUTCDATETIME())`;
         return (await this.affectedRows(db, sql, contextUser)) === 1;
     }
 
@@ -124,10 +189,11 @@ export class TaskClaimStore {
      */
     public async Heartbeat(provider: IMetadataProvider, taskID: string, contextUser: UserInfo): Promise<boolean> {
         const db = this.sql(provider);
-        const expires = new Date(Date.now() + this.claimTTLSeconds * 1000);
+        // Same single-clock rule as TryClaim: the renewal is computed on the database's clock.
+        const ttlSeconds = Math.max(0, Math.round(this.claimTTLSeconds));
         const sql = `
             UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('ClaimExpiresAt')} = '${expires.toISOString()}'
+            SET ${db.QuoteIdentifier('ClaimExpiresAt')} = DATEADD(SECOND, ${ttlSeconds}, SYSUTCDATETIME())
             WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
               AND ${db.QuoteIdentifier('ClaimedBy')} = '${this.escape(this.instanceID)}'
               AND ${db.QuoteIdentifier('Status')} = 'In Progress'`;
@@ -168,7 +234,7 @@ export class TaskClaimStore {
         const db = this.sql(provider);
         const sets: string[] = [
             `${db.QuoteIdentifier('Status')} = '${outcome.Status}'`,
-            `${db.QuoteIdentifier('CompletedAt')} = '${new Date().toISOString()}'`,
+            `${db.QuoteIdentifier('CompletedAt')} = SYSUTCDATETIME()`,
             `${db.QuoteIdentifier('PercentComplete')} = ${outcome.Status === 'Complete' ? 100 : 0}`,
             // Release the claim as part of the same atomic write — a separate release could be
             // interrupted, leaving a terminal task holding a claim that the sweep would then flag.
@@ -197,17 +263,21 @@ export class TaskClaimStore {
      * Reclaims tasks whose claims have lapsed, returning them to `Pending` so any instance can pick
      * them up.
      *
-     * **Human tasks are exempt** (review round 2). A task assigned to a person (`UserID` set) never
-     * carries a claim, so `In Progress` with no claim is its *legitimate* parked shape — an approval
-     * waiting on someone. Normalizing it would reset that approval out from under the user. Their
-     * lifecycle is driven by `DueAt` notification and escalation, never by claim expiry.
+     * **Scoped to tasks a dispatcher executes**, via the one shared predicate — see `task-predicates`.
+     * Expressed that way rather than as a list of the runner columns that happened to exist when this
+     * was written: the earlier form named `AgentID` and `ActionID` only, and the day `PromptID`
+     * arrived, a crashed prompt task became unrecoverable and undiagnosable in the same stroke.
+     *
+     * **Tasks a person completes are exempt.** One never carries a claim, so `In Progress` with no
+     * claim is its *legitimate* parked shape — an approval waiting on someone. Normalizing it would
+     * reset that approval out from under the user. Their lifecycle is driven by `DueAt` notification
+     * and escalation, never by claim expiry.
      *
      * Only expired claims are reclaimed; a live claim is left strictly alone, which is what keeps a
      * slow-but-healthy task from being executed twice.
      */
     public async ReleaseExpiredClaims(provider: IMetadataProvider, contextUser: UserInfo): Promise<ReconciliationEvent[]> {
         const db = this.sql(provider);
-        const now = new Date().toISOString();
 
         // Capture what will be reclaimed BEFORE reclaiming, so the log names the tasks. The
         // subsequent UPDATE re-states the same predicate, so a task whose claim was refreshed in
@@ -216,10 +286,10 @@ export class TaskClaimStore {
             `SELECT ${db.QuoteIdentifier('ID')}, ${db.QuoteIdentifier('Name')}, ${db.QuoteIdentifier('ClaimedBy')}
              FROM ${this.taskTable(provider)}
              WHERE ${db.QuoteIdentifier('Status')} = 'In Progress'
-               AND (${db.QuoteIdentifier('AgentID')} IS NOT NULL OR ${db.QuoteIdentifier('ActionID')} IS NOT NULL)
+               AND ${MachineTaskSQL(db.QuoteIdentifier.bind(db))}
                AND ${db.QuoteIdentifier('ClaimedBy')} IS NOT NULL
                AND ${db.QuoteIdentifier('ClaimExpiresAt')} IS NOT NULL
-               AND ${db.QuoteIdentifier('ClaimExpiresAt')} < '${now}'`,
+               AND ${db.QuoteIdentifier('ClaimExpiresAt')} < SYSUTCDATETIME()`,
             undefined, undefined, contextUser,
         );
 
@@ -231,10 +301,10 @@ export class TaskClaimStore {
                 ${db.QuoteIdentifier('ClaimedBy')} = NULL,
                 ${db.QuoteIdentifier('ClaimExpiresAt')} = NULL
             WHERE ${db.QuoteIdentifier('Status')} = 'In Progress'
-              AND (${db.QuoteIdentifier('AgentID')} IS NOT NULL OR ${db.QuoteIdentifier('ActionID')} IS NOT NULL)
+              AND ${MachineTaskSQL(db.QuoteIdentifier.bind(db))}
               AND ${db.QuoteIdentifier('ClaimedBy')} IS NOT NULL
               AND ${db.QuoteIdentifier('ClaimExpiresAt')} IS NOT NULL
-              AND ${db.QuoteIdentifier('ClaimExpiresAt')} < '${now}'`;
+              AND ${db.QuoteIdentifier('ClaimExpiresAt')} < SYSUTCDATETIME()`;
         const released = await this.affectedRows(db, sql, contextUser);
 
         const events: ReconciliationEvent[] = candidates.slice(0, released).map((c) => ({
@@ -262,7 +332,7 @@ export class TaskClaimStore {
             `SELECT ${db.QuoteIdentifier('ID')}, ${db.QuoteIdentifier('Name')}
              FROM ${this.taskTable(provider)}
              WHERE ${db.QuoteIdentifier('Status')} = 'In Progress'
-               AND (${db.QuoteIdentifier('AgentID')} IS NOT NULL OR ${db.QuoteIdentifier('ActionID')} IS NOT NULL)
+               AND ${MachineTaskSQL(db.QuoteIdentifier.bind(db))}
                AND ${db.QuoteIdentifier('ClaimedBy')} IS NULL`,
             undefined, undefined, contextUser,
         );
@@ -308,7 +378,7 @@ export class TaskClaimStore {
             UPDATE ${this.taskTable(provider)}
             SET ${db.QuoteIdentifier('Status')} = '${this.escape(status)}',
                 ${db.QuoteIdentifier('PercentComplete')} = ${Number.isFinite(percentComplete) ? Math.round(percentComplete) : 0},
-                ${db.QuoteIdentifier('CompletedAt')} = '${new Date().toISOString()}'
+                ${db.QuoteIdentifier('CompletedAt')} = SYSUTCDATETIME()
             WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
               AND ${db.QuoteIdentifier('Status')} NOT IN (${TERMINAL_PARENT_STATUS_SQL})`;
         return (await this.affectedRows(db, sql, contextUser)) === 1;
@@ -401,7 +471,7 @@ export class TaskClaimStore {
     public async TryClaimContinuation(
         provider: IMetadataProvider,
         parentTaskID: string,
-        deliveredAs: 'delivered' | 'expired',
+        deliveredAs: 'delivered' | 'expired' | 'cancelled',
         workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
@@ -417,6 +487,134 @@ export class TaskClaimStore {
               AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
               AND ISJSON(${payload}) = 1
               AND JSON_VALUE(${payload}, '$.continuationDeliveredAt') IS NULL`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
+     * Skips one task, refusing if anything has taken it since the caller looked.
+     *
+     * **Why this cannot be a `Save()`** — and R3-1 is the proof that the earlier reasoning was wrong.
+     * The early-finish path skipped siblings with a full-row `BaseEntity.Save()` against a snapshot
+     * taken before the loop began, justified by "the siblings are Pending and unclaimed until the
+     * skip lands". They are not: `executeClaimed` is not awaited, so this instance's own next poll
+     * tick runs concurrently with the loop, and a sibling can be claimed and STARTED between the
+     * snapshot and its own write. The full-row save then overwrote `In Progress` back to `Skipped`
+     * and cleared `ClaimedBy` mid-execution — the agent's real side effects had already fired, its
+     * completion was refused by the claim guard, and its output was discarded. The graph settled
+     * `Complete` with no record anywhere that the step ran.
+     *
+     * **The predicate is `Status='Pending'` alone, deliberately.** `TryClaim` moves a task to
+     * `In Progress` in the same statement that stamps `ClaimedBy`, so a task an executor holds is
+     * never `Pending` — the status IS the claim test. Adding `ClaimedBy IS NULL` would look like
+     * defence in depth and would instead break a real case: a notified human task carries a marker
+     * in `ClaimedBy` while still `Pending`, and those must stay skippable.
+     *
+     * @returns true when this call is the one that skipped it; false means something else got there
+     */
+    public async TrySkipPending(
+        provider: IMetadataProvider,
+        taskID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${db.QuoteIdentifier('Status')} = 'Skipped'
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
+              AND ${db.QuoteIdentifier('Status')} = 'Pending'`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
+     * Stamps the human-notified marker, once, without touching anything else.
+     *
+     * The marker lives in `ClaimedBy` because a human task has no executor claim, and it exists to
+     * stop the notify path re-raising on every poll. It was written with a full-row `Save()` against
+     * a snapshot — so it could revert a status the row had reached since, and two instances could
+     * both write it after both having seen it absent. Guarded on the marker being unset, it is
+     * naturally once-only and the rowcount says which instance did it.
+     */
+    public async TryMarkHumanNotified(
+        provider: IMetadataProvider,
+        taskID: string,
+        marker: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${db.QuoteIdentifier('ClaimedBy')} = '${this.escape(marker)}'
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
+              AND ${db.QuoteIdentifier('Status')} = 'Pending'
+              AND ${db.QuoteIdentifier('ClaimedBy')} IS NULL`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
+     * Cancels one task, refusing if it settled while the caller was looking elsewhere.
+     *
+     * **The terminal check has to be IN the statement.** `Cancel` loaded every child, tested the
+     * terminal set against that in-memory snapshot, and wrote `Status='Cancelled'` with a full-row
+     * `BaseEntity.Save()` — an unconditional UPDATE sending every updateable column against a
+     * PK-only predicate. A child whose executor's guarded `CompleteClaimed` landed between the load
+     * and its save had its entire outcome overwritten: `Complete` back to `Cancelled`,
+     * `OutputPayload` to NULL (the null-clear companions make those explicit clears),
+     * `AgentRunID`/`CompletedAt`/runtime `Configuration` reverted, and stale claim columns
+     * re-instated on a terminal row.
+     *
+     * The moment users cancel is exactly the moment tasks are running, so this is not a narrow
+     * window. The reverse ordering was always safe — `CompleteClaimed`'s own predicate refuses a
+     * cancelled row — so the hazard lived entirely in this write.
+     *
+     * @returns true when this call cancelled it; false means it had already settled
+     */
+    public async TryCancelTask(
+        provider: IMetadataProvider,
+        taskID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${db.QuoteIdentifier('Status')} = 'Cancelled'
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
+              AND ${db.QuoteIdentifier('Status')} NOT IN (${TERMINAL_PARENT_STATUS_SQL})`;
+        return (await this.affectedRows(db, sql, contextUser)) === 1;
+    }
+
+    /**
+     * Records, durably and once, that a graph is finishing early.
+     *
+     * **The declaration has to outlive the deciding instance's memory.** An early finish is decided
+     * by one task's result (`result.ChatMessage`) and nothing else in the system knows: skip seeds
+     * are derived from durable condition and exclusive-group state, so no claim filter on any
+     * instance — including the deciding one, whose poll loop runs concurrently — can tell that the
+     * remaining steps are about to be skipped. Writing it here first is what lets
+     * `loadGraphState` fold those steps into the claim filter, closing the window for everyone
+     * rather than narrowing it for one.
+     *
+     * Guarded and once-only for the same reason the continuation marker is: two tasks can end the
+     * same flow, and the first declaration is the one that counts. Type-scoped like every other
+     * statement here that writes into a payload column.
+     *
+     * @returns true when this call is the one that declared it
+     */
+    public async TryDeclareEarlyFinish(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const db = this.sql(provider);
+        const payload = db.QuoteIdentifier('InputPayload');
+        const nowIso = new Date().toISOString();
+        const sql = `
+            UPDATE ${this.taskTable(provider)}
+            SET ${payload} = JSON_MODIFY(${payload}, '$.earlyFinishedAt', '${this.escape(nowIso)}')
+            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
+              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
+              AND ISJSON(${payload}) = 1
+              AND JSON_VALUE(${payload}, '$.earlyFinishedAt') IS NULL`;
         return (await this.affectedRows(db, sql, contextUser)) === 1;
     }
 

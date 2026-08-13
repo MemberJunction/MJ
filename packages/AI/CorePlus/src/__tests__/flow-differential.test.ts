@@ -140,6 +140,89 @@ const FLOWS: Record<string, Flow> = {
         ],
         paths: [path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'g', Condition: 'typo(' })],
     },
+    // R2-3 — a guard reaching through output a step never produced.
+    //
+    // Two details give this fixture its teeth, and both were needed. The JOIN means a held branch
+    // stops the walk one step short of the oracle's rather than merely omitting a leaf. And the
+    // absent-data edge carries the HIGHER priority, so it could have won: the dominated case is
+    // already handled by the group-resolution refinement, and a fixture built on it would pass
+    // whatever the classification said. Here the answer genuinely depends on reading absent data as
+    // false rather than as undecided.
+    'a guard on data the step never produced': {
+        steps: [
+            step({ ID: 'a', Name: 'A', StartingStep: true }),
+            step({ ID: 'g', Name: 'Guarded' }),
+            step({ ID: 'p', Name: 'Plain' }),
+            step({ ID: 'j', Name: 'Join' }),
+        ],
+        paths: [
+            path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'g', Condition: 'absentData', Priority: 10 }),
+            path({ ID: 'p2', OriginStepID: 'a', DestinationStepID: 'p', Priority: 1 }),
+            path({ ID: 'p3', OriginStepID: 'g', DestinationStepID: 'j' }),
+            path({ ID: 'p4', OriginStepID: 'p', DestinationStepID: 'j' }),
+        ],
+    },
+    // C3's fidelity fix is what makes this expressible: a reconvergence shape where the guarded
+    // branch is cut but the join is still fed by a live route. Before the fix the simulator skipped
+    // the join too (no `stillReachable` equivalent) and the fixture would have false-failed a
+    // correct dispatcher.
+    'a cut branch must not take the join down with it': {
+        steps: [
+            step({ ID: 'a', Name: 'A', StartingStep: true }),
+            step({ ID: 'g', Name: 'Guarded' }),
+            step({ ID: 'p', Name: 'Plain' }),
+            step({ ID: 'j', Name: 'Join' }),
+        ],
+        paths: [
+            path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'p', Priority: 10 }),
+            path({ ID: 'p2', OriginStepID: 'a', DestinationStepID: 'g', Condition: 'never', Priority: 1 }),
+            path({ ID: 'p3', OriginStepID: 'g', DestinationStepID: 'j' }),
+            path({ ID: 'p4', OriginStepID: 'p', DestinationStepID: 'j' }),
+        ],
+    },
+    // R3-3 — the flow dialect's OWN roots. `data.*` and `context.*` are documented condition
+    // vocabulary and the compiler passes them through untouched, but the dispatcher resolved them
+    // against the origin STEP's output, where they do not live: every `data.x` read `undefined`,
+    // came out false, and the graph silently took the branch the walker never takes. The guarded
+    // edge carries the higher priority so the divergence is a different WALK, not a missing leaf.
+    //
+    // What this fixture pins is the equivalence — both engines answer a `data.*` guard from the
+    // invocation. That the DISPATCHER is the engine reading that envelope is wiring, which a model
+    // cannot prove: IT74 TX20 is the evidence for it, and it runs a real graph end to end.
+    'a guard on the invocation\'s own data, not the step\'s output': {
+        steps: [
+            step({ ID: 'a', Name: 'A', StartingStep: true }),
+            step({ ID: 'g', Name: 'Guarded' }),
+            step({ ID: 'p', Name: 'Plain' }),
+            step({ ID: 'j', Name: 'Join' }),
+        ],
+        paths: [
+            path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'g', Condition: 'data.approved', Priority: 10 }),
+            path({ ID: 'p2', OriginStepID: 'a', DestinationStepID: 'p', Priority: 1 }),
+            path({ ID: 'p3', OriginStepID: 'g', DestinationStepID: 'j' }),
+            path({ ID: 'p4', OriginStepID: 'p', DestinationStepID: 'j' }),
+        ],
+    },
+    // R3-6 — a guard that fails on the SHAPE of absent data rather than on a missing name. The
+    // classifier used to enumerate the ways data can be absent and hold on everything else, so a
+    // `TypeError` — the commonest failure there is, since the whole class of missing output produces
+    // one — was read as a broken guard and held the branch forever. Inverted, only a ReferenceError
+    // (a name that cannot resolve, i.e. an authoring mistake) holds.
+    //
+    // The walker rejects the edge and falls through to the lower-priority route; the dispatcher must
+    // reach the same place by DROPPING rather than holding. Under the old classifier the compiled
+    // side stalls at 'a' and the walk diverges on its second step.
+    'a guard that fails on the shape of what is missing': {
+        steps: [
+            step({ ID: 'a', Name: 'A', StartingStep: true }),
+            step({ ID: 'g', Name: 'Guarded' }),
+            step({ ID: 'p', Name: 'Plain' }),
+        ],
+        paths: [
+            path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'g', Condition: 'typeErrorGuard', Priority: 10 }),
+            path({ ID: 'p2', OriginStepID: 'a', DestinationStepID: 'p', Priority: 1 }),
+        ],
+    },
     'no path matches — the walk ends': {
         steps: [step({ ID: 'a', Name: 'A', StartingStep: true }), step({ ID: 'b', Name: 'B' })],
         paths: [path({ ID: 'p1', OriginStepID: 'a', DestinationStepID: 'b', Condition: 'never' })],
@@ -149,12 +232,85 @@ const FLOWS: Record<string, Flow> = {
 /** Condition truthiness, shared by both engines so the comparison isolates TRAVERSAL. */
 const CONTEXT: Record<string, boolean> = { ok: true, never: false };
 
+/**
+ * Conditions whose DATA IS ABSENT — the R2-3 class, which this simulator could not express at all.
+ *
+ * The old model had two states: a name in `CONTEXT` (true or false) or not in it (unevaluable). A
+ * condition that reaches through a step's missing output is neither. On the walker it is simply
+ * falsy — `payload` there is the agent's accumulated payload, an object, so `payload.approved` on a
+ * step that produced nothing is `undefined`. On the dispatcher it THREW, and every throw was a hold.
+ * Without a third state the fixture below cannot be written, and the divergence stays invisible.
+ */
+const ABSENT_DATA = new Set(['absentData']);
+
+/**
+ * A guard that fails on the SHAPE of what is missing rather than on a name (R3-6).
+ *
+ * `TypeError` is what absent data actually produces most of the time — `x.y` where `x` is
+ * undefined, `'k' in undefined`, calling a method on nothing. The old classifier enumerated
+ * absence and held on everything else, so this whole class held. The message is the real one V8
+ * emits, because the classification is a regex over exactly this string.
+ */
+const TYPE_ERROR_GUARDS = new Map([
+    ['typeErrorGuard', "Cannot read properties of undefined (reading 'approved')"],
+]);
+
+/**
+ * What the invocation carries — the flow dialect's `data` and `context` roots (R3-3).
+ *
+ * Both engines are handed this same envelope, which is the equivalence under test. Where it comes
+ * from on each side is not: the walker gets it as its traversal context (real code, called below),
+ * the dispatcher has to carry it in the parent's metadata because the graph outlives the run that
+ * submitted it, and only IT74 TX20 can prove that half.
+ */
+const INVOCATION: Record<string, unknown> = { data: { approved: true }, context: { tier: 'gold' } };
+
+/** Resolves a dotted path, or `undefined` — one missing hop, not a throw. */
+function resolvePath(expression: string, envelope: Record<string, unknown>): unknown {
+    return expression.split('.').reduce<unknown>(
+        (at, key) => (at && typeof at === 'object' ? (at as Record<string, unknown>)[key] : undefined),
+        envelope,
+    );
+}
+
 const evaluator: IConditionEvaluator = {
-    Evaluate: (expression) =>
-        expression in CONTEXT
+    Evaluate: (expression, context) => {
+        // The oracle's reading: property access through a missing key is falsy, not an error.
+        if (ABSENT_DATA.has(expression)) return { Success: true, Value: false };
+        const typeError = TYPE_ERROR_GUARDS.get(expression);
+        if (typeError) return { Success: false, ErrorMessage: typeError };
+        if (expression.startsWith('data.') || expression.startsWith('context.')) {
+            return { Success: true, Value: !!resolvePath(expression, context) };
+        }
+        return expression in CONTEXT
             ? { Success: true, Value: CONTEXT[expression] }
-            : { Success: false, ErrorMessage: `unknown: ${expression}` },
+            : { Success: false, ErrorMessage: `unknown: ${expression}` };
+    },
 };
+
+/** How the dispatcher decides ONE condition, in the vocabulary the pure layer speaks. */
+type ConditionVerdict = 'satisfied' | 'unsatisfied' | 'unevaluable';
+
+/**
+ * The model of `DecideGate` + `IsBrokenGuard`, which live in `@memberjunction/task-graph` and
+ * therefore cannot be imported here — that package depends on this one, not the reverse.
+ *
+ * Modelled, so it is stated plainly: this is the one place the suite asserts against a
+ * reimplementation rather than the code that ships. The real functions have their own unit tests
+ * next to them; what this adds is what those cannot see — that the RESULT agrees with the engine
+ * being replaced, over whole graphs.
+ */
+function classify(condition: string, envelope: Record<string, unknown>): ConditionVerdict {
+    const result = evaluator.Evaluate(condition, envelope);
+    if (result.Success) return result.Value ? 'satisfied' : 'unsatisfied';
+    // R3-6, inverted: only a name that cannot resolve is a broken guard and holds. Everything else
+    // — TypeError above all — is data that is not there, which is the data answering no.
+    return /is not defined|reference ?error|can't find variable/i.test(result.ErrorMessage ?? '')
+        ? 'unevaluable'
+        : ABSENT_DATA.has(condition) || TYPE_ERROR_GUARDS.has(condition)
+            ? 'unsatisfied'
+            : 'unevaluable';
+}
 
 // ── side A: the oracle ──────────────────────────────────────────────────────
 
@@ -191,7 +347,7 @@ function oracleOrder(flow: Flow): string[] {
     while (current && !guard.has(current)) {
         guard.add(current);
         visited.push(current);
-        const selection = SelectOutgoingEdges(current, repo, evaluator, {});
+        const selection = SelectOutgoingEdges(current, repo, evaluator, INVOCATION);
         current = selection.Edges[0]?.destinationNodeId ?? null;
     }
     return visited;
@@ -245,11 +401,10 @@ function compiledOrder(flow: Flow): string[] {
                     originStatus: status.get(d.tempId) ?? 'Pending',
                     priority: d.priority ?? 0,
                     sequence: d.sequence ?? 0,
-                    conditionOutcome: !d.condition
-                        ? 'satisfied'
-                        : d.condition in CONTEXT
-                            ? (CONTEXT[d.condition] ? 'satisfied' : 'unsatisfied')
-                            : 'unevaluable',
+                    // One classifier for both dialects (R3-6). Absent data is the data answering
+                    // NO (R2-3) here too — the dispatcher classifies the throw rather than calling
+                    // the group undecided — and `data.*` resolves from the invocation (R3-3).
+                    conditionOutcome: !d.condition ? 'satisfied' : classify(d.condition, INVOCATION),
                 } as EvaluatedEdge)),
         );
         const xor = ResolveExclusiveGroups(evaluated);
@@ -276,24 +431,48 @@ function compiledOrder(flow: Flow): string[] {
         }
 
         // A non-exclusive conditional edge that is false blocks its target the ordinary way.
+        // ── ordinary conditional edges, modelled the way the dispatcher actually decides them ──
+        //
+        // C3: this used to skip a target the moment ANY of its conditional edges read false, which
+        // was unfaithful three ways and made it useless on exactly the reconvergence shapes R3-2
+        // needs. It (a) evaluated edges whose origin had not finished, so it skipped at cycle 1
+        // while the origin was still Pending; (b) had no `stillReachable` equivalent, so it skipped
+        // a target another LIVE route still fed; and (c) evaluated edges out of a Skipped origin,
+        // which the dispatcher drops unevaluated. Each of those either false-fails a correct
+        // dispatcher or goes blind on the divergence it exists to catch.
         const unevaluableHolds = new Set<string>();
+        const droppedInto = new Set<string>();
+        const stillReachable = new Set<string>();
         for (const t of spec.tasks) {
             for (const d of (t.dependsOn ?? []).map(NormalizeDependency)) {
-                if (d.exclusiveGroup || !d.condition) continue;
-                // An ordinary conditional edge that is definitely false skips its target, exactly
-                // like an XOR loser. This simulator modelled that from the start; the real dispatcher
-                // used to write Blocked here, and because nothing pinned the two together the
-                // divergence sat hidden behind a green differential suite. Both now Skip (R6), and
-                // Blocked is reserved for failure-driven unsatisfiability.
-                //
-                // THREE outcomes, not two. `CONTEXT[cond] === false` is false for an UNEVALUABLE
-                // condition as well as for a satisfied one, so the simulator let unevaluable
-                // guards through — reproducing the production bug rather than testing against it,
-                // and agreeing with a wrong answer. Unevaluable now HOLDS: neither skipped here nor
-                // eligible below.
-                if (!(d.condition in CONTEXT)) { unevaluableHolds.add(t.tempId); continue; }
-                if (CONTEXT[d.condition] === false && status.get(t.tempId) === 'Pending') status.set(t.tempId, 'Skipped');
+                if (d.exclusiveGroup) continue;
+                const originStatus = status.get(d.tempId) ?? 'Pending';
+
+                if (d.condition) {
+                    // A branch that was not taken does not get a vote: the edge drops, unevaluated.
+                    if (originStatus === 'Skipped') { droppedInto.add(t.tempId); continue; }
+
+                    // TERMINALITY GUARD. An undecided origin is never asked — `succeeded` against a
+                    // still-Pending step is a confident, wrong `false`. Keeping the edge costs
+                    // nothing; the prerequisite gate already holds the target.
+                    if (originStatus === 'Complete' || originStatus === 'Failed' || originStatus === 'Cancelled') {
+                        // THREE outcomes, not two, and the same three the XOR dialect gets — a
+                        // false condition and an unevaluable one are different answers, and reading
+                        // them as one is what once let broken guards through. Absent data drops the
+                        // edge exactly as `DecideGate` does; before R2-3 it was a hold, stalling the
+                        // graph forever on a terminal origin whose output could never change.
+                        const verdict = classify(d.condition, INVOCATION);
+                        if (verdict === 'unevaluable') { unevaluableHolds.add(t.tempId); continue; }
+                        if (verdict === 'unsatisfied') { droppedInto.add(t.tempId); continue; }
+                    }
+                }
+                stillReachable.add(t.tempId);
             }
+        }
+        // Only unreachable when EVERY route in was cut — a target another live branch still feeds is
+        // reachable, which is the whole point of reconvergence.
+        for (const id of droppedInto) {
+            if (!stillReachable.has(id) && status.get(id) === 'Pending') status.set(id, 'Skipped');
         }
 
         // 3. eligibility, last.
@@ -328,7 +507,7 @@ describe('the properties the differential comparison depends on', () => {
         // If this ever fails, the oracle is not what the plan says it is and every comparison above
         // is meaningless — so it is asserted rather than assumed.
         const repo = repoFor(FLOWS['fork by priority']);
-        expect(SelectOutgoingEdges('a', repo, evaluator, {}).Edges).toHaveLength(2);
+        expect(SelectOutgoingEdges('a', repo, evaluator, INVOCATION).Edges).toHaveLength(2);
         expect(oracleOrder(FLOWS['fork by priority'])).toEqual(['a', 'hi']);
     });
 
