@@ -2,6 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
 
 /**
+ * The `spec` shape `buildMaterializedReadQuery` declares, derived from the real signature so it cannot drift.
+ * Lets the malformed-input tests double-cast deliberately-bad fixtures against the true parameter type instead
+ * of reaching for `any`.
+ */
+type MaterializedReadSpec = Parameters<typeof GenericDatabaseProvider.buildMaterializedReadQuery>[0]['spec'];
+
+/**
  * Phase 2 (plan §5): the PURE materialized-read query builder — the injection-safe, faithfulness-critical
  * core of parameterized RowFilterBroad read-time injection. Every caller value is BOUND (never in the SQL
  * string); ANY condition that would diverge from the live query returns null (→ caller runs live).
@@ -197,7 +204,11 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
         });
 
         it('a malformed spec element (missing/non-string column, operator, or paramName) → null, never throws', () => {
-            const bad = [
+            // Deliberately malformed specs — the whole point is that they VIOLATE the declared spec shape, so
+            // they are typed as `unknown[][]` and reach the call through the sanctioned double-cast. That keeps
+            // the call typed against the real signature while still exercising the runtime guard that must
+            // reject bad persisted metadata rather than throw.
+            const bad: unknown[][] = [
                 [{ operator: '=', paramName: 'status', kind: 'scalar' }],            // missing column
                 [{ column: 'Status', paramName: 'status', kind: 'scalar' }],         // missing operator
                 [{ column: 'Status', operator: '=', kind: 'scalar' }],               // missing paramName
@@ -205,8 +216,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 [null],                                                              // null element
             ];
             for (const s of bad) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                expect(build({ ...base, spec: s as any, paramValues: { status: 'x' }, isPostgres: false })).toBeNull();
+                expect(build({ ...base, spec: s as unknown as MaterializedReadSpec, paramValues: { status: 'x' }, isPostgres: false })).toBeNull();
             }
         });
     });
