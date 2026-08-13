@@ -56,7 +56,9 @@
         Message="Nothing matches the current filter. Clear it to see everything that has run.">
       </mj-empty-state>
     } @else {
-      <div class="wfr-split" [class.wfr-split-open]="SelectedRun">
+      <as-split class="wfr-split" direction="horizontal" unit="percent"
+                [gutterSize]="8" [disabled]="!SelectedRun" (dragEnd)="OnSplitDragEnd($event.sizes)">
+        <as-split-area [size]="SelectedRun ? Layout.SplitSizes[0] : 100" [minSize]="20">
         <div class="wfr-list">
           <!-- A header row that sorts. Every column a person scans by is sortable, because "the
                longest run" and "the one that failed this morning" are the two questions this list
@@ -95,7 +97,9 @@
             </button>
           }
         </div>
+        </as-split-area>
 
+        <as-split-area [size]="SelectedRun ? Layout.SplitSizes[1] : 0" [minSize]="25" [visible]="!!SelectedRun">
         @if (SelectedRun; as selected) {
           <!-- The canvas lives in the RIGHT PANEL on selection, not nested inside the list row.
                A graph needs room to be read; inlining one per row turns a scannable list into a
@@ -111,6 +115,13 @@
                   <button mjButton variant="flat" size="sm" (click)="OnOpenAgentRun(selected)">
                     <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
                     Agent run
+                  </button>
+                }
+                @if (DetailTab === 'graph') {
+                  <button mjButton variant="flat" size="sm" (click)="ToggleStepPanel()"
+                          [title]="Layout.StepPanelOpen ? 'Hide step details' : 'Show step details'">
+                    <i class="fa-solid" [class.fa-square-caret-right]="Layout.StepPanelOpen"
+                       [class.fa-square-caret-left]="!Layout.StepPanelOpen" aria-hidden="true"></i>
                   </button>
                 }
                 <button mjButton variant="flat" size="sm" (click)="OnSelectRun(selected)" aria-label="Close">
@@ -130,58 +141,314 @@
               </button>
             </div>
 
-            @if (DetailTab === 'graph') {
-              <!-- The canvas, then whatever step is selected on it. Clicking a node shows that
-                   step's record — the same move the agent-run timeline offers, so a workflow reads
-                   the same way wherever it is opened from. -->
-              <div class="wfr-graph-pane">
-                <mj-task-graph-run-view
-                  [Provider]="ProviderToUse"
-                  [ParentTaskID]="selected.ID"
-                  [WorkflowName]="selected.Name"
-                  [LiveUpdates]="selected.Status === 'Running' || selected.Status === 'In Progress'"
-                  Height="100%"
-                  (NodeSelected)="OnGraphNodeSelected($event)">
-                </mj-task-graph-run-view>
-              </div>
-
-              <div class="wfr-steps-pane">
-                @if (StepsLoading) {
-                  <mj-loading text="Loading steps..."></mj-loading>
-                } @else {
-                  <div class="wfr-step-list">
-                    @for (step of SelectedSteps; track step.ID) {
-                      <button type="button" class="wfr-step"
-                              [class.wfr-step-selected]="step.ID === SelectedStepID"
-                              [attr.data-status]="step.Status"
-                              (click)="OnSelectStep(step)">
-                        <span class="wfr-step-name">{{ step.Name }}</span>
-                        <span class="wfr-step-meta">{{ step.StepType || 'Step' }}</span>
-                        <span class="wfr-row-status" [attr.data-status]="step.Status">{{ step.Status }}</span>
-                      </button>
+            @if (Stall) {
+              <!-- The hardening review's signature failure — "the run strands silently" — made
+                   loud. A held path is now something the operator can answer, not just read. -->
+              <div class="wfr-stall" role="status" [attr.data-kind]="Stall.kind">
+                <div class="wfr-stall-body">
+                  <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+                  <div class="wfr-stall-copy">
+                    <span>{{ Stall.message }}</span>
+                    @if (Stall.conditionText) {
+                      <code>{{ Stall.conditionText }}</code>
+                    }
+                    @if (Stall.reason) {
+                      <span class="wfr-stall-reason">{{ Stall.reason }}</span>
                     }
                   </div>
-
-                  @if (SelectedStep; as step) {
-                    <div class="wfr-step-json">
-                      <div class="wfr-step-json-head">{{ step.Name }}</div>
-                      <mj-code-editor
-                        [ngModel]="SelectedStepJson"
-                        [language]="'json'"
-                        [readonly]="true"
-                        style="width: 100%;">
-                      </mj-code-editor>
-                    </div>
-                  } @else {
-                    <mj-empty-state
-                      Size="compact"
-                      Icon="fa-solid fa-hand-pointer"
-                      Title="Select a step"
-                      Message="Click a step on the canvas or in the list to see everything it recorded.">
-                    </mj-empty-state>
-                  }
+                </div>
+                @if (Stall.kind === 'held' && Stall.edgeID) {
+                  <div class="wfr-stall-actions">
+                    <button mjButton variant="primary" size="sm" [disabled]="ControlBusy"
+                            (click)="OnOverrideEdge(Stall.edgeID!, 'true')">
+                      Answer true
+                    </button>
+                    <button mjButton variant="secondary" size="sm" [disabled]="ControlBusy"
+                            (click)="OnOverrideEdge(Stall.edgeID!, 'false')">
+                      Answer false
+                    </button>
+                    <button mjButton variant="flat" size="sm" (click)="OnDismissStall()">
+                      Leave held
+                    </button>
+                  </div>
                 }
               </div>
+            }
+
+            @if (DetailTab === 'graph') {
+              <!-- Canvas BESIDE the step it opened, not above it. A JSON record in a strip along the
+                   bottom shows about ten lines, which is not enough of a record to read. -->
+              <as-split class="wfr-graph-split" [direction]="InnerSplitDirection" unit="percent"
+                        [gutterSize]="8" (dragEnd)="OnStepSplitDragEnd($event.sizes)">
+                <as-split-area [size]="Layout.StepPanelOpen ? Layout.StepSplitSizes[0] : 100" [minSize]="25">
+                  <div class="wfr-graph-pane">
+                    <mj-task-graph-debugger
+                      #GraphDebug
+                      [Provider]="ProviderToUse"
+                      [ParentTaskID]="selected.ID"
+                      [WorkflowName]="selected.Name"
+                      [LiveUpdates]="selected.Status === 'Running' || selected.Status === 'In Progress'"
+                      [ReplayAt]="ReplayAt"
+                      [ShowLegend]="Layout.ShowLegend"
+                      Height="100%"
+                      (NodeSelected)="OnGraphNodeSelected($event)"
+                      (ConnectionSelected)="OnGraphConnectionSelected($event)"
+                      (LegendToggled)="OnLegendToggled($event)"
+                      (Settled)="OnCanvasSettled()"
+                      (Frame)="OnFrame($event)"
+                      (PausedChange)="DebugPaused = $event">
+                    </mj-task-graph-debugger>
+
+                    @if (CanReplay) {
+                      <!-- Replay: scrub through the settled run on the same canvas, reconstructed
+                           from each step's own timestamps. Read-only by construction. -->
+                      <div class="wfr-replay">
+                        <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                        <input type="range" min="0" max="100" step="1"
+                               [value]="ReplayPercent ?? 100"
+                               (input)="OnReplayScrub($any($event.target).value)"
+                               aria-label="Replay position" />
+                        @if (ReplayPercent !== null) {
+                          <button mjButton variant="flat" size="sm" (click)="OnReplayReset()">Now</button>
+                        }
+                      </div>
+                    }
+
+                    @if (GraphDebug.Breakpoints.length > 0 || GraphDebug.PausedAtTaskID) {
+                      <div class="wfr-bp-bar" aria-label="Armed breakpoints">
+                        @if (GraphDebug.PausedAtTaskID) {
+                          <span class="wfr-chip wfr-chip-paused">
+                            <i class="fa-solid fa-pause" aria-hidden="true"></i>
+                            Paused at {{ StepName(GraphDebug.PausedAtTaskID) }}
+                          </span>
+                        }
+                        @for (id of GraphDebug.Breakpoints; track id) {
+                          <button type="button" class="wfr-chip wfr-chip-break" (click)="OnSelectBreakpoint(id)">
+                            <i class="fa-solid fa-circle" aria-hidden="true"></i>
+                            {{ StepName(id) }}
+                            <span class="wfr-chip-x" (click)="OnRemoveBreakpoint(id); $event.stopPropagation()"
+                                  role="button" tabindex="0" aria-label="Remove breakpoint">×</span>
+                          </button>
+                        }
+                      </div>
+                    }
+
+                    @if (EngineTicks.length > 0) {
+                      <!-- The engine strip: one tick per dispatcher pass. A stuck run is a strip
+                           that keeps ticking with nothing moving — the honest visual of a stall. -->
+                      <div class="wfr-engine" aria-label="Engine activity">
+                        @for (tick of EngineTicks; track tick.passNumber) {
+                          <span class="wfr-tick" [class.wfr-tick-held]="(tick.heldCount ?? 0) > 0">
+                            #{{ tick.passNumber }} · ready {{ tick.eligibleCount ?? 0 }}
+                            · held {{ tick.heldCount ?? 0 }} · took {{ tick.claimedCount ?? 0 }}
+                          </span>
+                        }
+                        @if (GraphDebug.Paused) {
+                          <span class="wfr-tick wfr-tick-paused">⏸ paused — nothing new starts</span>
+                        }
+                      </div>
+                    }
+                  </div>
+                </as-split-area>
+
+                <as-split-area [size]="Layout.StepPanelOpen ? Layout.StepSplitSizes[1] : 0" [minSize]="20"
+                               [visible]="Layout.StepPanelOpen">
+                  <div class="wfr-steps-pane">
+                    @if (StepsLoading) {
+                      <mj-loading text="Loading steps..."></mj-loading>
+                    } @else {
+                      <div class="wfr-step-list">
+                        @for (step of SelectedSteps; track step.ID) {
+                          <button type="button" class="wfr-step"
+                                  [class.wfr-step-selected]="step.ID === SelectedStepID"
+                                  [attr.data-status]="step.Status"
+                                  (click)="OnSelectStep(step)">
+                            <span class="wfr-step-name">{{ step.Name }}</span>
+                            <span class="wfr-step-meta">{{ step.StepType || 'Step' }}</span>
+                          </button>
+                        }
+                      </div>
+
+                      @if (InspectorMode === 'edge' && SelectedEdge; as edge) {
+                        <div class="wfr-step-json">
+                          <div class="wfr-step-json-head">
+                            <span>{{ SelectedEdgeFromName }} → {{ SelectedEdgeToName }}</span>
+                            @if (SelectedEdgeOverride) {
+                              <span class="wfr-chip wfr-chip-forced">forced {{ SelectedEdgeOverride }}</span>
+                            }
+                          </div>
+                          <div class="wfr-insp-card">
+                            <span class="wfr-insp-label">Condition</span>
+                            @if (edge.Condition?.trim()) {
+                              <code>{{ edge.Condition }}</code>
+                            } @else {
+                              <span>Unconditional — this path always runs.</span>
+                            }
+                          </div>
+                          @if (SelectedEdgeIsConditional) {
+                            <div class="wfr-insp-actions">
+                              <button mjButton variant="primary" size="sm" [disabled]="ControlBusy"
+                                      (click)="OnOverrideEdge(edge.ID, 'true')">Answer true</button>
+                              <button mjButton variant="secondary" size="sm" [disabled]="ControlBusy"
+                                      (click)="OnOverrideEdge(edge.ID, 'false')">Answer false</button>
+                              @if (SelectedEdgeOverride) {
+                                <button mjButton variant="flat" size="sm" [disabled]="ControlBusy"
+                                        (click)="OnOverrideEdge(edge.ID, null)">Clear override</button>
+                              }
+                            </div>
+                          } @else {
+                            <p class="wfr-insp-hint">Skip the target step instead of overriding an unconditional path.</p>
+                          }
+                        </div>
+                      } @else if (SelectedStep; as step) {
+                        <div class="wfr-step-json">
+                          <div class="wfr-step-json-head">
+                            <span>{{ step.Name }}</span>
+                            <span class="wfr-row-status" [attr.data-status]="step.Status">{{ step.Status }}</span>
+                          </div>
+
+                          <button type="button" class="wfr-bp"
+                                  [class.wfr-bp-on]="HasBreakpoint(step.ID)"
+                                  [disabled]="ControlBusy"
+                                  (click)="OnBreakpointToggled({ TaskID: step.ID, Enabled: !HasBreakpoint(step.ID) })"
+                                  [attr.aria-pressed]="HasBreakpoint(step.ID)"
+                                  [title]="HasBreakpoint(step.ID) ? 'Remove breakpoint' : 'Break before this step'">
+                            <i class="fa-circle"
+                               [class.fa-solid]="HasBreakpoint(step.ID)"
+                               [class.fa-regular]="!HasBreakpoint(step.ID)"
+                               aria-hidden="true"></i>
+                          </button>
+
+                          <!-- The inspector: live engine facts about this step, from the frame
+                               stream — claim, path verdicts, runner progress, what-if. -->
+                          @if (SelectedStepProgress; as progress) {
+                            <div class="wfr-insp-card">
+                              <span class="wfr-insp-label">Doing now</span>
+                              <span>{{ progress.progressMessage }}
+                                @if (progress.progressPercent != null) { ({{ progress.progressPercent }}%) }
+                              </span>
+                            </div>
+                          }
+                          @if (SelectedStepClaim; as claim) {
+                            <div class="wfr-insp-card" [class.wfr-insp-bad]="claim.claimEvent === 'heartbeat-lost'">
+                              <span class="wfr-insp-label">Worker</span>
+                              <span>
+                                @switch (claim.claimEvent) {
+                                  @case ('claimed') { {{ claim.claimedBy }} — working }
+                                  @case ('heartbeat-lost') { {{ claim.claimedBy }} — lost, will be requeued }
+                                  @case ('reclaimed') { requeued by the engine }
+                                }
+                              </span>
+                            </div>
+                          }
+                          @for (verdict of SelectedStepVerdicts; track verdict.edgeId) {
+                            <div class="wfr-insp-card" [attr.data-verdict]="verdict.verdict">
+                              <span class="wfr-insp-label">
+                                @switch (verdict.verdict) {
+                                  @case ('satisfied') { Path taken }
+                                  @case ('notTaken') { Path not taken }
+                                  @case ('held') { Path can't be answered }
+                                }
+                              </span>
+                              <span>
+                                @if (verdict.conditionText) { <code>{{ verdict.conditionText }}</code> }
+                                @if (verdict.reason) { — {{ verdict.reason }} }
+                              </span>
+                            </div>
+                          }
+                          @if (SelectedStepWhatIf; as whatIf) {
+                            <div class="wfr-insp-card">
+                              <span class="wfr-insp-label">If this step fails</span>
+                              <span>{{ whatIf.BlockedCount }} step{{ whatIf.BlockedCount === 1 ? '' : 's' }} can no longer run</span>
+                            </div>
+                          }
+                          @if (step.Status === 'Pending' || step.Status === 'Failed' || CanForceComplete(step)) {
+                            <div class="wfr-insp-actions">
+                              @if (step.Status === 'Pending') {
+                                <button mjButton variant="secondary" size="sm" [disabled]="ControlBusy"
+                                        (click)="OnSkipStep(step)"
+                                        title="Declare this step not-taken; later steps proceed">
+                                  <i class="fa-solid fa-forward" aria-hidden="true"></i> Skip step
+                                </button>
+                              }
+                              @if (CanEditInput(step)) {
+                                <button mjButton variant="secondary" size="sm" [disabled]="ControlBusy"
+                                        (click)="OpenEditInput(step)">
+                                  <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                                  {{ step.Status === 'Failed' ? 'Edit input & retry' : 'Edit input' }}
+                                </button>
+                              }
+                              @if (step.Status === 'Failed') {
+                                <button mjButton variant="secondary" size="sm" [disabled]="ControlBusy"
+                                        (click)="OnRetryStep(step)">
+                                  <i class="fa-solid fa-rotate-right" aria-hidden="true"></i> Retry
+                                </button>
+                              }
+                              @if (CanForceComplete(step)) {
+                                <button mjButton variant="danger" size="sm" [disabled]="ControlBusy"
+                                        (click)="OpenForceComplete(step)">
+                                  <i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> Force complete
+                                </button>
+                              }
+                            </div>
+                          }
+
+                          @if (EditInputOpen) {
+                            <div class="wfr-editor-card">
+                              <span class="wfr-insp-label">{{ step.Status === 'Failed' ? 'Edit input and retry' : 'Edit input' }}</span>
+                              <p class="wfr-insp-hint">Applies to this run only. Invalid JSON is refused here.</p>
+                              <textarea class="mj-textarea wfr-json-edit" [(ngModel)]="EditInputJson"
+                                        rows="8" spellcheck="false"></textarea>
+                              @if (EditInputError) {
+                                <span class="wfr-editor-error">{{ EditInputError }}</span>
+                              }
+                              <div class="wfr-insp-actions">
+                                <button mjButton variant="primary" size="sm" [disabled]="ControlBusy"
+                                        (click)="SubmitEditInput(step)">
+                                  {{ step.Status === 'Failed' ? 'Apply & retry' : 'Apply' }}
+                                </button>
+                                <button mjButton variant="flat" size="sm" (click)="EditInputOpen = false">Cancel</button>
+                              </div>
+                            </div>
+                          }
+
+                          @if (ForceCompleteOpen) {
+                            <div class="wfr-editor-card wfr-editor-danger">
+                              <span class="wfr-insp-label">Force complete</span>
+                              <p class="wfr-insp-hint">Downstream conditions will evaluate against this output as if the step had produced it. Type the step name to confirm.</p>
+                              <textarea class="mj-textarea wfr-json-edit" [(ngModel)]="ForceCompleteJson"
+                                        rows="6" spellcheck="false"></textarea>
+                              <input class="mj-input" type="text" [(ngModel)]="ForceCompleteName"
+                                     [placeholder]="'Type “' + step.Name + '” to confirm'" />
+                              @if (ForceCompleteError) {
+                                <span class="wfr-editor-error">{{ ForceCompleteError }}</span>
+                              }
+                              <div class="wfr-insp-actions">
+                                <button mjButton variant="danger" size="sm" [disabled]="ControlBusy"
+                                        (click)="SubmitForceComplete(step)">Force complete</button>
+                                <button mjButton variant="flat" size="sm" (click)="ForceCompleteOpen = false">Cancel</button>
+                              </div>
+                            </div>
+                          }
+
+                          <mj-task-graph-variables
+                            [InputPayload]="StepPayload(step, 'InputPayload')"
+                            [OutputPayload]="StepPayload(step, 'OutputPayload')"
+                            [Invocation]="Invocation">
+                          </mj-task-graph-variables>
+                        </div>
+                      } @else {
+                        <mj-empty-state
+                          Size="compact"
+                          Icon="fa-solid fa-hand-pointer"
+                          Title="Select a step"
+                          Message="Click a step on the canvas or in the list to see everything it recorded.">
+                        </mj-empty-state>
+                      }
+                    }
+                  </div>
+                </as-split-area>
+              </as-split>
             } @else {
               <div class="wfr-json-pane">
                 <mj-code-editor
@@ -194,7 +461,8 @@
             }
           </aside>
         }
-      </div>
+        </as-split-area>
+      </as-split>
     }
   </mj-page-body>
 </mj-page-layout>

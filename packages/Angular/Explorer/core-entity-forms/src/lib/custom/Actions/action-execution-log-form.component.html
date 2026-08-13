@@ -5,7 +5,15 @@
             <div class="header-content">
                 <div class="header-left">
                     <div class="icon-wrapper">
-                        <i class="fas fa-terminal"></i>
+                        <!-- The action's own icon when it has one, matching how the same action is
+                             drawn in the run timeline. `fa-terminal` stays as the fallback: it is
+                             what this form has always shown, and it is the honest answer for an
+                             action whose metadata names no icon. -->
+                        @if (action && action.IconClass) {
+                            <i [ngClass]="action.IconClass"></i>
+                        } @else {
+                            <i class="fas fa-terminal"></i>
+                        }
                     </div>
                     <div class="header-info">
                         <h2>Action Execution Log</h2>

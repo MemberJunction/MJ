@@ -77,6 +77,16 @@ describe('TaskGraphRunViewComponent (DOM)', () => {
 
     const host = (f: ComponentFixture<TaskGraphRunViewComponent>) => f.nativeElement as HTMLElement;
 
+    it('does not paint the debug key strip — badges on the nodes carry that information', async () => {
+        const { provider } = graphProvider();
+        const fixture = render(provider, 'parent-1');
+        await settle(fixture);
+        expect(host(fixture).querySelector('.run-view-legend')).toBeNull();
+        fixture.componentRef.setInput('ShowDebugLegend', true);
+        fixture.detectChanges();
+        expect(host(fixture).querySelector('.run-view-legend')).toBeNull();
+    });
+
     it('shows the empty state and asks the database NOTHING when there is no parent task', () => {
         const { provider, queried } = graphProvider();
         const f = render(provider, null);
@@ -120,6 +130,25 @@ describe('TaskGraphRunViewComponent (DOM)', () => {
         expect(host(f).querySelector('mj-task-graph-editor')).toBeNull();
     });
 
+    it('shows a red-circle breakpoint toggle for the selected step when the host allows editing', async () => {
+        const { provider } = graphProvider();
+        const f = render(provider, 'parent-1');
+        await settle(f);
+        f.componentRef.setInput('AllowBreakpointEditing', true);
+        f.detectChanges();
+        expect(host(f).querySelector('.run-view-bp')).toBeNull();
+
+        const node = f.componentInstance.Spec!.tasks.find((t) => t.tempId === 't2')!;
+        f.componentInstance.OnSelectionChanged(new TaskGraphSelectionChangedEventArgs(node));
+        f.detectChanges();
+
+        const toggle = host(f).querySelector('.run-view-bp') as HTMLButtonElement | null;
+        expect(toggle).toBeTruthy();
+        expect(toggle?.getAttribute('aria-pressed')).toBe('false');
+        expect(host(f).querySelector('.run-view-bp-name')?.textContent).toContain('Summarize');
+        expect(host(f).textContent).not.toContain('Break on');
+    });
+
     it('hands the host the WHOLE task row on selection, so no host re-reads a row this component holds', async () => {
         const { provider } = graphProvider();
         const f = render(provider, 'parent-1');
@@ -138,13 +167,49 @@ describe('TaskGraphRunViewComponent (DOM)', () => {
         expect(events).toHaveLength(1);
     });
 
-    it('emits Settled after a static load — without live updates the view will never change again', async () => {
+    it('does not tell the host the run is over just because the first paint finished', async () => {
         const { provider } = graphProvider();
         let settled = 0;
         const f = render(provider, 'parent-1', (component) => {
             component.Settled.subscribe(() => settled++);
         });
         await settle(f);
+        expect(settled).toBe(0);
+        expect(host(f).textContent).toContain('1 of 3 complete');
+    });
+
+    it('emits Settled once every step is terminal, including from the last TaskCompleted frame', async () => {
+        const done = [
+            row('t1', 'Gather', 'Complete'),
+            row('t2', 'Summarize', 'Complete'),
+            row('t3', 'Escalate', 'Skipped'),
+        ];
+        const { provider } = graphProvider(done);
+        let settled = 0;
+        const f = render(provider, 'parent-1', (component) => {
+            component.Settled.subscribe(() => settled++);
+        });
+        await settle(f);
+        expect(settled).toBe(1);
+        expect(host(f).textContent).toContain('Finished');
+
+        f.componentInstance.LiveFrame = { kind: 'TaskCompleted', taskId: 't2', status: 'Complete' };
+        f.detectChanges();
+        expect(settled).toBe(1);
+    });
+
+    it('emits Settled when the engine says GraphSettled, even before the row reload', async () => {
+        const { provider } = graphProvider();
+        let settled = 0;
+        const f = render(provider, 'parent-1', (component) => {
+            component.LiveUpdates = true;
+            component.Settled.subscribe(() => settled++);
+        });
+        await settle(f);
+        expect(settled).toBe(0);
+
+        f.componentInstance.LiveFrame = { kind: 'GraphSettled' };
+        f.detectChanges();
         expect(settled).toBe(1);
     });
 });
