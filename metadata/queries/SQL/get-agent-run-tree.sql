@@ -19,9 +19,16 @@
 
   COST IS PER-NODE AND NEVER A ROLLUP
   -----------------------------------
-  Each Run row reports TotalCost / TotalTokensUsed — its OWN spend, deliberately NOT
-  TotalCostRollup. The rollup already includes descendants, so summing rollups across a tree
-  double-counts every nested run. With own-cost, a total is an honest SUM over the returned rows.
+  Each Run row reports TotalCost / TotalTokensUsed (and the prompt/completion split) — its OWN
+  spend, deliberately NOT TotalCostRollup. The rollup already includes descendants, so summing
+  rollups across a tree double-counts every nested run. With own-cost, a total is an honest SUM
+  over the returned rows.
+
+  🚨 DO NOT "improve" this to read the …Rollup columns. Since v6.1 the settlement-time cost rollup
+  on AIAgentRun is WRITTEN FROM this query (TaskGraphDispatcher.rollUpCostToSubmittingRun sums the
+  tree). Reading a rollup here would make the column an input to its own computation: every
+  re-settlement would fold the previous total back in and inflate it, compounding, with no error and
+  no visible symptom until someone questions a bill. Own-cost is what keeps the write-back idempotent.
 
   Prompt steps get their cost by joining through Configuration.runtime.promptRunID: a Prompt task
   has no agent run, so without that join its spend is invisible and a total silently under-reports.
@@ -54,14 +61,28 @@ WITH Tree AS (
         r.CompletedAt                                        AS CompletedAt,
         r.TotalCost                                          AS Cost,
         r.TotalTokensUsed                                    AS Tokens,
+        r.TotalPromptTokensUsed                              AS PromptTokens,
+        r.TotalCompletionTokensUsed                          AS CompletionTokens,
         CAST('MJ: AI Agent Runs' AS NVARCHAR(100))           AS SourceEntity,
         CAST(NULL AS NVARCHAR(50))                           AS PromptRunID,
+        -- The action equivalent, so an Action task can point at its execution log.
+        CAST(NULL AS NVARCHAR(50))                           AS ActionLogID,
+        -- A task's payloads, so a workflow step can present the same before/after diff an agent
+        -- run step does. Without them the shared detail panel has nothing to compare and falls
+        -- back to a raw dump, which is the difference someone notices immediately.
+        CAST(NULL AS NVARCHAR(MAX))                          AS InputPayload,
+        CAST(NULL AS NVARCHAR(MAX))                          AS OutputPayload,
+        -- A loop step's per-pass trace, carried through the recursion and expanded into nodes in a
+        -- second SELECT below (APPLY is illegal inside a recursive member).
+        CAST(NULL AS NVARCHAR(MAX))                          AS Iterations,
         -- What KIND of work this node is, in its own vocabulary: a run step's StepType
         -- ('Prompt', 'Actions', 'Sub-Agent', 'Validation', …) or a task's ('Agent', 'Action',
         -- 'ForEach', 'While', 'Human', …). Carried because every visual consumer colours and
         -- icons by kind — without it a renderer can only draw undifferentiated boxes, which is
         -- what forced the visualizations to keep reading raw step rows.
-        CAST(NULL AS NVARCHAR(50))                           AS SourceKind
+        CAST(NULL AS NVARCHAR(50))                           AS SourceKind,
+        -- Authoring order, used as the sort tiebreak. See the ORDER BY at the bottom.
+        r.__mj_CreatedAt                                     AS CreatedAt
     FROM [__mj].[vwAIAgentRuns] r
     WHERE r.ID = '{{ agentRunID }}'
 
@@ -83,9 +104,16 @@ WITH Tree AS (
         -- free one.
         CAST(NULL AS DECIMAL(18, 6)),
         CAST(NULL AS INT),
+        CAST(NULL AS INT),
+        CAST(NULL AS INT),
         CAST('MJ: AI Agent Run Steps' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
-        CAST(s.StepType AS NVARCHAR(50))
+        CAST(NULL AS NVARCHAR(50)),
+        CAST(NULL AS NVARCHAR(MAX)),
+        CAST(NULL AS NVARCHAR(MAX)),
+        CAST(NULL AS NVARCHAR(MAX)),
+        CAST(s.StepType AS NVARCHAR(50)),
+        s.__mj_CreatedAt
     FROM Tree t
     INNER JOIN [__mj].[vwAIAgentRunSteps] s
         ON s.AgentRunID = t.NodeID
@@ -109,9 +137,16 @@ WITH Tree AS (
         tk.CompletedAt,
         CAST(NULL AS DECIMAL(18, 6)),
         CAST(NULL AS INT),
+        CAST(NULL AS INT),
+        CAST(NULL AS INT),
         CAST('MJ: Tasks' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
-        CAST('TaskGraph' AS NVARCHAR(50))
+        CAST(NULL AS NVARCHAR(50)),
+        CAST(NULL AS NVARCHAR(MAX)),
+        CAST(NULL AS NVARCHAR(MAX)),
+        CAST(NULL AS NVARCHAR(MAX)),
+        CAST('TaskGraph' AS NVARCHAR(50)),
+        tk.__mj_CreatedAt
     FROM Tree t
     INNER JOIN [__mj].[vwAIAgentRunSteps] s
         ON s.ID = t.NodeID
@@ -127,7 +162,17 @@ WITH Tree AS (
         CAST(tk.ID AS NVARCHAR(50)),
         t.NodeID,
         t.Depth + 1,
-        0,
+        -- The step's rank in the graph's own topological order, written at submission.
+        --
+        -- Every task used to carry 0 here, which made Sequence useless as an ordering key and left
+        -- siblings to be separated by whatever came next — start time in this query, and (until it
+        -- was fixed) the node's GUID in the client's tree assembly. A graph that had not started yet
+        -- had no start times either, so it listed its steps in creation order: the compiler's walk,
+        -- with step three above the steps it depends on.
+        --
+        -- ISNULL for graphs submitted before this was recorded: they collapse to 0 and fall through
+        -- to the start-time ordering, exactly as they did before.
+        ISNULL(TRY_CAST(JSON_VALUE(tk.Configuration, '$.sequence') AS INT), 0),
         CAST('Task' AS NVARCHAR(20)),
         CAST(COALESCE(tk.Name, 'Step') AS NVARCHAR(500)),
         CAST(tk.Status AS NVARCHAR(50)),
@@ -138,9 +183,28 @@ WITH Tree AS (
         -- the id is carried here and joined once in the final SELECT.
         CAST(NULL AS DECIMAL(18, 6)),
         CAST(NULL AS INT),
+        CAST(NULL AS INT),
+        CAST(NULL AS INT),
         CAST('MJ: Tasks' AS NVARCHAR(100)),
         CAST(JSON_VALUE(tk.Configuration, '$.runtime.promptRunID') AS NVARCHAR(50)),
-        CAST(tk.StepType AS NVARCHAR(50))
+        CAST(JSON_VALUE(tk.Configuration, '$.runtime.actionLogID') AS NVARCHAR(50)),
+        -- The RESOLVED payload the step began from, falling back to the AUTHORED input.
+        --
+        -- These are different things and the fallback is not a preference between them: a step's
+        -- authored input is what its designer declared, while `runtime.payloadAtStart` is what it
+        -- actually received once its dependencies had run. The run view diffs against this, and with
+        -- only the authored value — NULL for every compiled step — every step reported itself as
+        -- having created the entire payload from nothing. The fallback keeps runs recorded before
+        -- the dispatcher wrote this readable rather than blank.
+        CAST(COALESCE(
+            JSON_QUERY(tk.Configuration, '$.runtime.payloadAtStart'),
+            tk.InputPayload
+        ) AS NVARCHAR(MAX)),
+        CAST(tk.OutputPayload AS NVARCHAR(MAX)),
+        -- JSON_QUERY, not JSON_VALUE: this is an ARRAY, and JSON_VALUE returns NULL for one.
+        CAST(JSON_QUERY(tk.Configuration, '$.runtime.iterations') AS NVARCHAR(MAX)),
+        CAST(tk.StepType AS NVARCHAR(50)),
+        tk.__mj_CreatedAt
     FROM Tree t
     INNER JOIN [__mj].[vwTasks] tk
         ON tk.ParentID = t.NodeID
@@ -168,9 +232,16 @@ WITH Tree AS (
         r.CompletedAt,
         r.TotalCost,
         r.TotalTokensUsed,
+        r.TotalPromptTokensUsed,
+        r.TotalCompletionTokensUsed,
         CAST('MJ: AI Agent Runs' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
-        CAST(NULL AS NVARCHAR(50))
+        CAST(NULL AS NVARCHAR(50)),
+        CAST(NULL AS NVARCHAR(MAX)),
+        CAST(NULL AS NVARCHAR(MAX)),
+        CAST(NULL AS NVARCHAR(MAX)),
+        CAST(NULL AS NVARCHAR(50)),
+        r.__mj_CreatedAt
     FROM Tree t
     INNER JOIN [__mj].[vwAIAgentRunSteps] s
         ON s.ID = t.NodeID
@@ -197,9 +268,16 @@ WITH Tree AS (
         r.CompletedAt,
         r.TotalCost,
         r.TotalTokensUsed,
+        r.TotalPromptTokensUsed,
+        r.TotalCompletionTokensUsed,
         CAST('MJ: AI Agent Runs' AS NVARCHAR(100)),
         CAST(NULL AS NVARCHAR(50)),
-        CAST(NULL AS NVARCHAR(50))
+        CAST(NULL AS NVARCHAR(50)),
+        CAST(NULL AS NVARCHAR(MAX)),
+        CAST(NULL AS NVARCHAR(MAX)),
+        CAST(NULL AS NVARCHAR(MAX)),
+        CAST(NULL AS NVARCHAR(50)),
+        r.__mj_CreatedAt
     FROM Tree t
     INNER JOIN [__mj].[vwTasks] tk
         ON tk.ID = t.NodeID
@@ -236,11 +314,210 @@ SELECT
     -- whichever kind it is.
     COALESCE(t.Cost, pr.Cost)                               AS Cost,
     COALESCE(t.Tokens, pr.TokensUsed)                       AS Tokens,
-    t.SourceEntity,
+    -- The prompt/completion split, on the SAME basis as Tokens. Carried rather than left to the
+    -- caller because the settlement-time cost rollup writes four columns on AIAgentRun, and a tree
+    -- that answered only two of them would force the other two back onto a second, differently-based
+    -- computation — which is exactly the mixed-basis arithmetic this query exists to replace.
+    COALESCE(t.PromptTokens, pr.TokensPrompt)               AS PromptTokens,
+    COALESCE(t.CompletionTokens, pr.TokensCompletion)       AS CompletionTokens,
+    -- Where clicking this node should GO. For a Prompt task that is the prompt run, not the Task
+    -- row: the run carries the messages, the model, the tokens and the result, which is the whole
+    -- reason someone clicks a prompt step. Pointing at the Task instead showed a row whose only
+    -- interesting content was a foreign key to the thing they wanted. Every other node keeps its own
+    -- record, and a prompt task whose run is missing falls back to its Task rather than to nothing.
+    CASE
+        WHEN pr.ID IS NOT NULL  THEN 'MJ: AI Prompt Runs'
+        WHEN al.ID IS NOT NULL  THEN 'MJ: Action Execution Logs'
+        ELSE t.SourceEntity
+    END                                                     AS SourceEntity,
     t.SourceKind,
-    t.NodeID                                                AS SourceID
+    CASE
+        WHEN pr.ID IS NOT NULL  THEN CAST(pr.ID AS NVARCHAR(50))
+        WHEN al.ID IS NOT NULL  THEN CAST(al.ID AS NVARCHAR(50))
+        ELSE t.NodeID
+    END                                                     AS SourceID,
+    -- Model and vendor of the prompt behind this node, when there is one.
+    -- An agent run STEP subtitles a prompt with "Model: X | Vendor: Y" because its data service
+    -- preloads the prompt run. A workflow step had no way to say the same thing, so the same work
+    -- described itself two different ways depending on which timeline you opened it from.
+    pr.Model                                                AS Model,
+    pr.Vendor                                               AS Vendor,
+    t.InputPayload                                          AS InputPayload,
+    t.OutputPayload                                         AS OutputPayload,
+    -- How a ForEach ran its iterations: 'parallel' or 'sequential'.
+    --
+    -- Read by joining BACK to the Task row rather than carried through the recursion. Every column
+    -- in the CTE has to be declared in all six of its members, and this is needed by exactly one of
+    -- them — so a join here costs one lookup against rows already being read, where threading it
+    -- through would be six edits and six chances to shift a UNION's column list.
+    --
+    -- It matters to a reader because the passes look identical either way: five rows with five
+    -- durations. Whether they ran one after another or all at once is the difference between a loop
+    -- that took the sum of its parts and one that took the longest of them.
+    CAST(JSON_VALUE(ltk.Configuration, '$.forEach.executionMode') AS NVARCHAR(20)) AS LoopMode,
+    -- WHAT this node runs, as ids a consumer can resolve from a cache instead of another query.
+    --
+    -- Read by joining back, exactly like LoopMode above and for the same reason: every column in
+    -- the CTE must be declared in all six of its members, and these are needed by two of them.
+    --
+    -- `Task.ActionID` beats the execution log for a reason worth keeping: a task carries it whether
+    -- or not the step ever RAN, so a skipped branch can still say which action it would have run.
+    -- The log only exists for work that happened. `al.ActionID` covers the rows whose identity IS a
+    -- log — a loop's passes — which have no task of their own.
+    CAST(COALESCE(ltk.ActionID, al.ActionID) AS NVARCHAR(50)) AS ActionID,
+    CAST(ltk.AgentID AS NVARCHAR(50))                       AS AgentID,
+    t.CreatedAt                                             AS CreatedAt,
+    -- Sort helper only. A UNION forbids an expression in ORDER BY, so "has this started?" has to be
+    -- a real column. Consumers ignore it; the loader projects by name.
+    CASE WHEN t.StartedAt IS NULL THEN 1 ELSE 0 END          AS NotStarted
 FROM Tree t
 LEFT JOIN [__mj].[vwAIPromptRuns] pr
     ON pr.ID = t.PromptRunID
-ORDER BY t.Depth, t.Sequence, t.StartedAt, t.NodeID
+LEFT JOIN [__mj].[vwActionExecutionLogs] al
+    ON al.ID = t.ActionLogID
+-- Only Task nodes carry step configuration; the predicate keeps a run or step id from matching a
+-- Task by coincidence and reading a foreign row's settings.
+LEFT JOIN [__mj].[vwTasks] ltk
+    ON ltk.ID = t.NodeID AND t.NodeType IN ('Task', 'TaskGraph')
+
+UNION ALL
+
+-- ── A loop step's individual passes ───────────────────────────────────────────────────────────
+-- Emitted OUTSIDE the recursion on purpose: an iteration is always a leaf (a pass cannot itself
+-- contain the loop), and T-SQL forbids APPLY inside a recursive member, so reading the JSON array
+-- there is not an option. Producing them here costs one pass over the tasks already returned.
+--
+-- Without this a loop is a single childless node. The six recursive members reach nested work
+-- through a run's steps, a task-graph step's graph, a graph's tasks, a Sub-Agent step's run, and a
+-- task's own AgentRunID — a loop iteration is none of them, and AIAgentRun.ParentRunID records
+-- parentage without being a link this query follows. So a While that spent real money over three
+-- passes reported no children and no cost: the timeline had nothing to expand, and the settlement
+-- rollup under-counted every loop-bearing workflow.
+--
+-- 🚧 KNOWN BOUNDARY: a pass is a LEAF. Being emitted after the CTE, it cannot recurse — so if a
+-- loop body is a sub-agent that dispatches a graph of its OWN, this counts that agent run's own
+-- spend and stops. The nested graph's tasks are not reached, and the rollup under-reports by
+-- exactly that subtree.
+--
+-- Deliberately not "fixed" by adding a `r.ParentRunID = t.NodeID` recursive member: a sub-agent run
+-- is already reachable through its Sub-Agent step's TargetLogID, so a parentage member would return
+-- the same run twice and the SUM would double-count it — reintroducing precisely the compounding
+-- this file's header warns about, in exchange for a subtree that is rare today. Nor by refusing
+-- graph-capable agents as loop bodies at submission, which would ban a legitimate composition to
+-- protect a number.
+--
+-- The honest fix is to make an iteration's run a first-class node the recursion can descend from,
+-- which needs the pass to exist as a row rather than a JSON entry. Until then this limit is stated
+-- rather than hidden, because a total that is quietly short is the failure mode this whole area has
+-- been fixing.
+SELECT
+    CAST(t.NodeID + ':' + CAST(it.[index] AS NVARCHAR(10)) AS NVARCHAR(50)) AS NodeID,
+    t.NodeID                                                AS ParentNodeID,
+    t.Depth + 1                                             AS Depth,
+    it.[index]                                              AS Sequence,
+    CAST('Step' AS NVARCHAR(20))                            AS NodeType,
+    -- "1: Google Custom Search" — the pass number, then WHAT IT RAN.
+    --
+    -- "Pass 1" alone described the loop's bookkeeping rather than the work: five identical rows
+    -- telling a reader nothing about what the loop was doing, in a list where every other row names
+    -- its action, prompt or agent. The name comes from whichever record the pass produced, so it
+    -- cannot disagree with the row it links to. A pass that produced nothing keeps the bare number,
+    -- which is the honest form of "we do not know what this ran".
+    CAST(CAST(it.[index] + 1 AS NVARCHAR(10))
+         + COALESCE(': ' + ial.Action, ': ' + iar.Agent, ': ' + ipr.Prompt, '')
+         AS NVARCHAR(500))                                  AS Name,
+    CAST(CASE WHEN it.success = 1 THEN 'Complete' ELSE 'Failed' END AS NVARCHAR(50)) AS Status,
+    COALESCE(ipr.RunAt, iar.StartedAt, ial.StartedAt)       AS StartedAt,
+    COALESCE(ipr.CompletedAt, iar.CompletedAt, ial.EndedAt)  AS CompletedAt,
+    CASE
+        WHEN COALESCE(ipr.RunAt, iar.StartedAt, ial.StartedAt) IS NOT NULL
+         AND COALESCE(ipr.CompletedAt, iar.CompletedAt, ial.EndedAt) IS NOT NULL
+        THEN DATEDIFF(MILLISECOND,
+                COALESCE(ipr.RunAt, iar.StartedAt, ial.StartedAt),
+                COALESCE(ipr.CompletedAt, iar.CompletedAt, ial.EndedAt))
+        ELSE NULL
+    END                                                     AS DurationMs,
+    -- Own cost of whichever run the pass produced. A pass has exactly one of the two.
+    COALESCE(ipr.Cost, iar.TotalCost)                       AS Cost,
+    COALESCE(ipr.TokensUsed, iar.TotalTokensUsed)           AS Tokens,
+    COALESCE(ipr.TokensPrompt, iar.TotalPromptTokensUsed)   AS PromptTokens,
+    COALESCE(ipr.TokensCompletion, iar.TotalCompletionTokensUsed) AS CompletionTokens,
+    -- Whatever the pass ACTUALLY produced. The previous form was a two-way guess — prompt run, else
+    -- Sub-Agent — so a pass with no record at all (an action body, which recorded nothing) was
+    -- confidently labelled a sub-agent run that never happened. A kind is derived from evidence or
+    -- it is left as a plain step.
+    CAST(CASE
+        WHEN ipr.ID IS NOT NULL THEN 'MJ: AI Prompt Runs'
+        WHEN iar.ID IS NOT NULL THEN 'MJ: AI Agent Runs'
+        WHEN ial.ID IS NOT NULL THEN 'MJ: Action Execution Logs'
+        ELSE 'MJ: Tasks'
+    END AS NVARCHAR(100))                                   AS SourceEntity,
+    CAST(CASE
+        WHEN ipr.ID IS NOT NULL THEN 'Prompt'
+        WHEN iar.ID IS NOT NULL THEN 'Sub-Agent'
+        WHEN ial.ID IS NOT NULL THEN 'Actions'
+        ELSE NULL
+    END AS NVARCHAR(50))                                    AS SourceKind,
+    CAST(COALESCE(CAST(ipr.ID AS NVARCHAR(50)), CAST(iar.ID AS NVARCHAR(50)), CAST(ial.ID AS NVARCHAR(50)), t.NodeID) AS NVARCHAR(50)) AS SourceID,
+    ipr.Model                                               AS Model,
+    ipr.Vendor                                              AS Vendor,
+    -- The pass's own before/after. A pass has no row of its own, so these live in the trace entry;
+    -- without them every iteration showed null on both sides and the detail panel could say nothing
+    -- about what any single pass did — which for a loop is the only question worth asking, since the
+    -- step's own payload shows only the final accumulated state.
+    CAST(it.payloadAtStart AS NVARCHAR(MAX))                AS InputPayload,
+    CAST(it.payloadAtEnd AS NVARCHAR(MAX))                  AS OutputPayload,
+    CAST(NULL AS NVARCHAR(20))                              AS LoopMode,
+    -- A pass IS its log (or its run), so the action comes from the log it expanded from and the
+    -- agent from the run. Same two columns as the branch above, so both halves of a loop — the
+    -- loop row and its passes — answer "what does this run" the same way.
+    CAST(ial.ActionID AS NVARCHAR(50))                      AS ActionID,
+    CAST(iar.AgentID AS NVARCHAR(50))                       AS AgentID,
+    t.CreatedAt                                             AS CreatedAt,
+    CASE WHEN COALESCE(ipr.RunAt, iar.StartedAt, ial.StartedAt) IS NULL THEN 1 ELSE 0 END AS NotStarted
+FROM Tree t
+CROSS APPLY OPENJSON(t.Iterations)
+    WITH (
+        [index]      INT            '$.index',
+        promptRunID  NVARCHAR(50)   '$.promptRunID',
+        agentRunID   NVARCHAR(50)   '$.agentRunID',
+        actionLogID  NVARCHAR(50)   '$.actionLogID',
+        success      BIT            '$.success',
+        -- AS JSON, because these are OBJECTS. Without it OPENJSON returns NULL for a non-scalar and
+        -- the payloads would silently read as absent — indistinguishable from a pass that recorded
+        -- none.
+        payloadAtStart NVARCHAR(MAX) '$.payloadAtStart' AS JSON,
+        payloadAtEnd   NVARCHAR(MAX) '$.payloadAtEnd'   AS JSON
+    ) AS it
+LEFT JOIN [__mj].[vwAIPromptRuns] ipr ON ipr.ID = it.promptRunID
+LEFT JOIN [__mj].[vwAIAgentRuns]  iar ON iar.ID = it.agentRunID
+LEFT JOIN [__mj].[vwActionExecutionLogs] ial ON ial.ID = it.actionLogID
+WHERE t.Iterations IS NOT NULL
+
+-- Ordering, and the two things that were wrong with it.
+--
+-- 1. NULLS SORT FIRST in T-SQL, so `ORDER BY StartedAt` put every task that had NOT started ABOVE
+--    the work that ran. On a settled Content Pipeline the skipped `Close out: gave up` led the
+--    list, above the research that actually executed. The CASE pins unstarted work to the bottom,
+--    where "hasn't happened" belongs.
+--
+-- 2. Every task in a graph carries Sequence 0 (a Task row has no ordering column), so with no
+--    StartedAt the sort fell through to NodeID — a GUID. That is why a Pending graph listed its
+--    steps in random order, "Step 3" above "Step 2" on a workflow whose author numbered them.
+--    CreatedAt is persist order, which is at least stable and reproducible.
+--
+-- ⚠️ Persist order is NOT the author's numbering. The compiler emits tasks in its own walk order
+-- (the Demo Flow Agent persists 2(a), 2(b), 1, 3), so a graph that has not started yet reads in a
+-- deterministic order that is nobody's intent. Genuine ordering for an unstarted graph is
+-- TOPOLOGICAL — dependency order, which is the order it will actually run in — and that needs the
+-- dependency edges, which this query does not carry. Stated rather than papered over: today the
+-- order is stable and honest about execution once work begins, and arbitrary-but-deterministic
+-- before it does.
+ORDER BY
+    Depth,
+    Sequence,
+    NotStarted,
+    StartedAt,
+    CreatedAt,
+    NodeID
 OPTION (MAXRECURSION 0);

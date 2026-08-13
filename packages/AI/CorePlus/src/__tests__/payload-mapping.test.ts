@@ -167,11 +167,76 @@ describe('ApplyOutputMapping', () => {
         expect('y' in updates).toBe(false);
     });
 
+    it('REPORTS what it skipped, so a step cannot contribute nothing in silence', () => {
+        // Skipping is right — an absent output must not overwrite the payload with undefined, and an
+        // action may emit a parameter only on some paths, so this must not fail the step. Skipping
+        // SILENTLY is what cost a whole research pass on every Content Pipeline run: the step was
+        // pointed at Google Custom Search while its mapping still named Web Search's `SearchResults`,
+        // so it ran, cost money, reported Complete, and wrote nothing.
+        const { updates, unmapped } = ApplyOutputMapping({ Items: [1, 2] }, '{"SearchResults":"research"}');
+
+        expect(updates).toEqual({});
+        expect(unmapped).toEqual(['SearchResults']);
+    });
+
+    it('leaves `unmapped` absent when every mapped output was present', () => {
+        // Absent rather than empty-array, so `if (unmapped?.length)` at the call site reads as
+        // "something to say" instead of always being truthy.
+        expect(ApplyOutputMapping({ a: 1 }, '{"a":"x"}').unmapped).toBeUndefined();
+    });
+
+    it('names every missing output, not just the first', () => {
+        const { unmapped } = ApplyOutputMapping({ a: 1 }, '{"a":"x","p":"y","q":"z"}');
+        expect(unmapped).toEqual(['p', 'q']);
+    });
+
     it('treats an absent mapping as no updates', () => {
         expect(ApplyOutputMapping({ a: 1 }, null).updates).toEqual({});
     });
 
     it('reports malformed JSON instead of throwing', () => {
         expect(ApplyOutputMapping({ a: 1 }, '{oops').errors[0]).toContain('not valid JSON');
+    });
+});
+
+/**
+ * The `into` parameter, and why a loop cannot work without it.
+ *
+ * A ForEach body's mapping is applied once per pass. `name[]` appends, and appending is defined
+ * relative to a list that is already there — so applying each pass into a FRESH object produces a
+ * new one-element array every time, each replacing the last, and the loop keeps only its final
+ * iteration while reporting every pass a success. That is the shape of the bug this parameter fixes.
+ */
+describe('ApplyOutputMapping — applying onto an existing payload', () => {
+    it('appends across successive calls when given the running payload', () => {
+        let payload: Record<string, unknown> = {};
+        for (const item of ['a', 'b', 'c']) {
+            payload = ApplyOutputMapping({ Items: item }, '{"Items":"collected[]"}', payload).updates;
+        }
+        expect(payload).toEqual({ collected: ['a', 'b', 'c'] });
+    });
+
+    it('keeps only the last value when each call starts fresh — the defect being fixed', () => {
+        let last: Record<string, unknown> = {};
+        for (const item of ['a', 'b', 'c']) {
+            last = ApplyOutputMapping({ Items: item }, '{"Items":"collected[]"}').updates;
+        }
+        expect(last).toEqual({ collected: ['c'] });
+    });
+
+    it('preserves what the incoming payload already held', () => {
+        const { updates } = ApplyOutputMapping({ a: 1 }, '{"a":"x"}', { existing: true });
+        expect(updates).toEqual({ existing: true, x: 1 });
+    });
+
+    it('returns the payload UNCHANGED when the mapping is malformed', () => {
+        // Not an empty object: the caller uses the return value AS the next payload, so handing back
+        // `{}` on a typo would wipe everything the loop had accumulated.
+        const { updates } = ApplyOutputMapping({ a: 1 }, '{oops', { keep: 'me' });
+        expect(updates).toEqual({ keep: 'me' });
+    });
+
+    it('defaults to a fresh object, so existing callers are unaffected', () => {
+        expect(ApplyOutputMapping({ a: 1 }, '{"a":"x"}').updates).toEqual({ x: 1 });
     });
 });

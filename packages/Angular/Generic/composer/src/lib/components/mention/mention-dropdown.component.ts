@@ -37,6 +37,8 @@ export class MentionDropdownComponent implements OnInit, OnDestroy {
 
   @Input() position: { top: number; left: number } = { top: 0, left: 0 };
   @Input() visible: boolean = false;
+  /** Right-align against the anchor (button-opened triggers). Composes with showAbove in CSS. */
+  @Input() alignRight = false;
   @Input() showAbove: boolean = false; // Controls whether dropdown grows upward
   @Input() useFixedPositioning: boolean = false; // Use fixed positioning to escape parent containers
 
@@ -56,7 +58,16 @@ export class MentionDropdownComponent implements OnInit, OnDestroy {
    */
   @HostListener('document:keydown', ['$event'])
   handleKeyDown(event: KeyboardEvent): void {
-    if (!this.visible || this.suggestions.length === 0) return;
+    if (!this.visible) return;
+    // Escape is handled before the emptiness guard. A button-opened dropdown stays open on an empty
+    // result set, and in that state every key below was dead — leaving the button press or a click
+    // away as the only exits, neither of which a user has reason to guess.
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.close();
+      return;
+    }
+    if (this.suggestions.length === 0) return;
 
     switch (event.key) {
       case 'ArrowDown':
@@ -91,7 +102,7 @@ export class MentionDropdownComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Close the dropdown
+   * close the dropdown
    */
   close(): void {
     this.closed.emit();

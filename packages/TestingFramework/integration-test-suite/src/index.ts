@@ -14,6 +14,7 @@ export * from './checks/ai-skills.checks';
 export * from './checks/api-keys.checks';
 export * from './checks/app-wiring.checks';
 export * from './checks/cache-gauntlet.checks';
+export * from './checks/cache-immutability.checks';
 export * from './checks/client-cache.checks';
 export * from './checks/concurrent.checks';
 export * from './checks/conversation-compaction.checks';
