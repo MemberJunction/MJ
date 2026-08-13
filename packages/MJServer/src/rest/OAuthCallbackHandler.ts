@@ -41,13 +41,20 @@ export interface OAuthCallbackHandlerOptions {
     /**
      * Origins a caller-supplied `frontendReturnUrl` is allowed to point at, so the OAuth callback
      * cannot be turned into an open redirect from the trusted MJAPI origin. Normally wired to
-     * `cors.allowedOrigins`; `['*']` (the backward-compatible default) allows any origin.
+     * `cors.allowedOrigins`. Pass `['*']` to allow any origin — MJ's backward-compatible default
+     * CORS posture, and what a deployment that has not narrowed `cors.allowedOrigins` gets.
+     *
+     * REQUIRED on purpose. An optional field defaulting to allow-all is fail-open: a construction
+     * site that forgets it loses the open-redirect protection silently, with nothing to notice.
+     * Being required makes that a compile error instead. The handler is not exported from this
+     * package's barrel and the package declares no subpath exports, so no consumer outside MJServer
+     * can construct it — revisit this if it is ever added to the public API.
      *
      * Injected rather than read from `configInfo` directly so this module has no import-time
      * dependency on configuration loading — importing the config module validates the whole config
      * as a side effect, which makes this handler unimportable in any context without one.
      */
-    allowedFrontendOrigins?: string[];
+    allowedFrontendOrigins: string[];
 }
 
 /**
@@ -56,10 +63,15 @@ export interface OAuthCallbackHandlerOptions {
  * The callback endpoint is unauthenticated because it's called by external auth servers.
  * It uses the state parameter to look up the authorization context and validate the flow.
  *
+ * NOTE: `allowedFrontendOrigins` is what prevents the callback becoming an open redirect, and is
+ * required so it cannot be forgotten. Wire it to `configInfo.cors?.allowedOrigins`; `['*']` allows
+ * any origin, matching MJ's default CORS posture.
+ *
  * @example
  * ```typescript
  * const oauthHandler = new OAuthCallbackHandler({
- *     publicUrl: 'https://api.example.com'
+ *     publicUrl: 'https://api.example.com',
+ *     allowedFrontendOrigins: configInfo.cors?.allowedOrigins ?? ['*']
  * });
  *
  * // Mount unauthenticated callback route
@@ -394,7 +406,8 @@ export class OAuthCallbackHandler {
 
         // Reject a disallowed return URL here rather than at the callback. Otherwise the caller only
         // finds out after the whole OAuth round trip, by being silently sent to the default page.
-        if (frontendReturnUrl !== undefined && !this.isFrontendReturnUrlAcceptable(frontendReturnUrl)) {
+        // An absent value is acceptable — see isFrontendReturnUrlAcceptable.
+        if (!this.isFrontendReturnUrlAcceptable(frontendReturnUrl)) {
             res.status(400).json({
                 success: false,
                 errorCode: 'invalid_request',
@@ -744,7 +757,7 @@ export class OAuthCallbackHandler {
      * the default redirect page.
      */
     private isFrontendReturnUrlAllowed(url: URL): boolean {
-        const allowed = this.options.allowedFrontendOrigins ?? ['*'];
+        const allowed = this.options.allowedFrontendOrigins;
         if (allowed.includes('*')) {
             return true;
         }
@@ -786,8 +799,16 @@ export class OAuthCallbackHandler {
     /**
      * Boundary check for `/oauth/initiate` — validates the return URL before it is persisted onto
      * the authorization state, so a caller gets a 400 instead of a silent fallback later.
+     *
+     * An ABSENT value (undefined / null / empty string) is acceptable: it means "no return URL", and
+     * every downstream consumer treats it that way via a truthiness check. Only a value the caller
+     * actually supplied is validated — otherwise omitting the field, or sending an empty one, would
+     * newly fail a request that has always worked.
      */
     private isFrontendReturnUrlAcceptable(frontendReturnUrl: unknown): boolean {
+        if (!frontendReturnUrl) {
+            return true;
+        }
         return typeof frontendReturnUrl === 'string' && this.parseAllowedFrontendReturnUrl(frontendReturnUrl) !== null;
     }
 

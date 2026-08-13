@@ -15,13 +15,13 @@ interface RedirectGuard {
     isFrontendReturnUrlAcceptable(frontendReturnUrl: unknown): boolean;
 }
 
-const BASE_OPTIONS: OAuthCallbackHandlerOptions = {
+const BASE_OPTIONS: Omit<OAuthCallbackHandlerOptions, 'allowedFrontendOrigins'> = {
     publicUrl: 'https://api.example.test',
     successRedirectUrl: 'https://api.example.test/oauth/success',
     errorRedirectUrl: 'https://api.example.test/oauth/error',
 };
 
-function makeGuard(allowedFrontendOrigins?: string[]): RedirectGuard {
+function makeGuard(allowedFrontendOrigins: string[]): RedirectGuard {
     const handler = new OAuthCallbackHandler({ ...BASE_OPTIONS, allowedFrontendOrigins });
     return handler as unknown as RedirectGuard;
 }
@@ -63,13 +63,20 @@ describe('OAuthCallbackHandler open-redirect protection', () => {
         });
     });
 
-    describe('backward-compatible default', () => {
-        it("allows any origin when the allowlist is ['*']", () => {
+    describe('allowlist edge values', () => {
+        it("allows any origin when the allowlist is ['*'] (MJ's default CORS posture)", () => {
             expect(makeGuard(['*']).parseAllowedFrontendReturnUrl('https://evil.test/steal')).not.toBeNull();
         });
 
-        it('allows any origin when no allowlist is configured at all', () => {
-            expect(makeGuard(undefined).parseAllowedFrontendReturnUrl('https://evil.test/steal')).not.toBeNull();
+        it('an empty allowlist denies every external origin (fails closed)', () => {
+            expect(makeGuard([]).parseAllowedFrontendReturnUrl('https://app.example.test/done')).toBeNull();
+        });
+
+        it('an empty allowlist still permits the built-in redirect origin', () => {
+            // Otherwise MJAPI could not reach its own success/error pages.
+            expect(
+                makeGuard([]).parseAllowedFrontendReturnUrl('https://api.example.test/oauth/success')
+            ).not.toBeNull();
         });
     });
 
@@ -88,9 +95,23 @@ describe('OAuthCallbackHandler open-redirect protection', () => {
             ['an array', ['https://app.example.test/done']],
             ['an object', { url: 'https://app.example.test/done' }],
             ['a number', 42],
-            ['null', null],
         ])('rejects %s rather than coercing it', (_label, value) => {
             expect(guard().isFrontendReturnUrlAcceptable(value)).toBe(false);
+        });
+
+        /**
+         * REGRESSION GUARD: frontendReturnUrl is optional, and every downstream consumer decides
+         * whether to use it with a truthiness check. If this boundary check rejected absent values,
+         * a client that omits the field — or sends null / "" for it, which is what an unset form
+         * field and most serializers produce — would start getting a 400 on a request that has
+         * always worked. Absent means "no return URL", not "invalid return URL".
+         */
+        it.each([
+            ['undefined', undefined],
+            ['null', null],
+            ['an empty string', ''],
+        ])('accepts %s — an absent return URL is not an invalid one', (_label, value) => {
+            expect(guard().isFrontendReturnUrlAcceptable(value)).toBe(true);
         });
     });
 });
