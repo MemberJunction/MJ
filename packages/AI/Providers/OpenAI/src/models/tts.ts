@@ -20,6 +20,19 @@ const SPLIT_TARGET_BYTES = 24 * 1024 * 1024;
  */
 const DEFAULT_TRANSCRIPTION_MODEL = "whisper-1";
 
+/**
+ * Whether a transcription model accepts `response_format: 'verbose_json'`.
+ *
+ * Only the Whisper endpoint does. OpenAI's GPT-4o transcription models accept `json` and `text`
+ * ONLY and reject `verbose_json` outright, so asking for it unconditionally would turn a working
+ * transcription into a 400 for anyone passing one of those model names. They report no duration
+ * either way, so those runs stay uncosted — which is the honest outcome, and far better than
+ * failing the transcription to chase a number the endpoint never returns.
+ */
+function supportsVerboseJson(model: string): boolean {
+    return model.toLowerCase().startsWith("whisper");
+}
+
 @RegisterClass(BaseAudioGenerator, "OpenAIAudioGenerator")
 export class OpenAIAudioGenerator extends BaseAudioGenerator {
     private _openAI: OpenAI;
@@ -120,18 +133,20 @@ export class OpenAIAudioGenerator extends BaseAudioGenerator {
 
     private async transcribeOne(audio: Buffer, model: string, params: SpeechToTextParams): Promise<TranscriptionPiece> {
         // `verbose_json` rather than `json` purely for the `duration` field — the quantity OpenAI
-        // bills by. The transcript text is identical between the two formats.
+        // bills by. The transcript text is identical between the two formats. Models that reject
+        // verbose_json fall back to `json` and simply report no duration.
         const response = await this._openAI.audio.transcriptions.create({
             file: await toFile(audio, params.fileName || 'audio.mp3'),
             model,
-            response_format: 'verbose_json',
+            response_format: supportsVerboseJson(model) ? 'verbose_json' : 'json',
             language: params.language,
             prompt: params.prompt,
             temperature: params.temperature
         });
 
-        const duration = typeof response.duration === 'number' && isFinite(response.duration) && response.duration >= 0
-            ? response.duration
+        const reported = (response as { duration?: number }).duration;
+        const duration = typeof reported === 'number' && isFinite(reported) && reported >= 0
+            ? reported
             : undefined;
 
         return { text: response.text ?? '', durationSeconds: duration };

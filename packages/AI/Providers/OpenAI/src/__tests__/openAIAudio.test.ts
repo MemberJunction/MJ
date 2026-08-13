@@ -103,6 +103,22 @@ describe('OpenAIAudioGenerator — single-pass transcription', () => {
         expect(transcribe.mock.calls[0][0].response_format).toBe('verbose_json');
     });
 
+    it('falls back to json for models that reject verbose_json', async () => {
+        // The GPT-4o transcription models accept json/text ONLY and 400 on verbose_json. Asking for
+        // it unconditionally would fail the transcription outright to chase a duration those models
+        // never report anyway.
+        await makeGenerator().SpeechToText({ model: 'gpt-4o-transcribe', audioData: audio(64) });
+        expect(transcribe.mock.calls[0][0].response_format).toBe('json');
+    });
+
+    it('still transcribes successfully on a model that reports no duration, leaving usage unset', async () => {
+        transcribe.mockResolvedValueOnce({ text: 'no duration here' });
+        const result = await makeGenerator().SpeechToText({ model: 'gpt-4o-transcribe', audioData: audio(64) });
+        expect(result.success).toBe(true);
+        expect(result.content).toBe('no duration here');
+        expect(result.usage).toBeUndefined();
+    });
+
     it('uses the supplied file name so the container format can be inferred', async () => {
         await makeGenerator().SpeechToText({ model: '', audioData: audio(64), fileName: 'episode-104.m4a' });
         expect(toFileCalls[0].name).toBe('episode-104.m4a');

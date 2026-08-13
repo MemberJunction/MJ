@@ -52,11 +52,40 @@ export function normalizeRecordedUsage(
     recorded: RecordedRunUsage,
     driverUnitKind: ModelUsageUnitKind
 ): NormalizeUsageResult {
+    // Units without a kind name nothing: nothing says what measure they are in, so there is no
+    // driver they can honestly be handed to. Falling through would treat them as Tokens and price
+    // the run's (zero) token counts — writing Cost = 0 for work that was actually billed. Refusing
+    // surfaces the producer that forgot to set UnitsKind instead of reporting paid work as free.
+    if (recorded.unitsKind == null && (recorded.inputUnits > 0 || recorded.outputUnits > 0)) {
+        return {
+            ok: false,
+            reason: `run recorded ${recorded.inputUnits} input / ${recorded.outputUnits} output units but no UnitsKind, ` +
+                `so there is no measure to price them in`
+        };
+    }
+
     const recordedKind: ModelUsageUnitKind = recorded.unitsKind ?? 'Tokens';
+
+    // The mirror of the check above, and the same defect through the other side: a kind with no
+    // quantity. `hasRecordedUsage` is satisfied by token counts alone, so a run naming `Seconds`
+    // that reports zero seconds reaches here, normalizes to {input: 0, output: 0}, and persists
+    // `Cost = 0` — "free" written against work that was billed. This is the path that actually
+    // WRITES the column, so the guard has to be here and not only on the standalone costing
+    // surface; a run that gets this far has already declared a non-token measure, so a zero
+    // quantity is a producer that set the kind and forgot the amount.
+    if (recordedKind !== 'Tokens' && recorded.inputUnits === 0 && recorded.outputUnits === 0) {
+        return {
+            ok: false,
+            reason: `run recorded usage in ${recordedKind} but no unit quantity, so there is nothing to ` +
+                `price; refusing rather than recording a cost of 0`
+        };
+    }
+
     if (driverUnitKind !== recordedKind) {
         return {
             ok: false,
-            reason: `run recorded usage in ${recordedKind} but its cost row is priced in ${driverUnitKind}`
+            reason: `run recorded usage in ${recordedKind} but its cost row is priced in ${driverUnitKind}` +
+                `; correct the cost row's unit type`
         };
     }
 
@@ -233,7 +262,7 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
     protected BuildNormalizedUsage(priceCalculator: BasePriceUnitType): NormalizedUsage | null {
         const result = normalizeRecordedUsage(this.RecordedUsage(), priceCalculator.UnitKind);
         if (result.ok === false) {
-            LogError(`Cannot cost AIPromptRun ${this.ID}: ${result.reason}. Correct the cost row's unit type.`);
+            LogError(`Cannot cost AIPromptRun ${this.ID}: ${result.reason}.`);
             return null;
         }
         return result.usage;

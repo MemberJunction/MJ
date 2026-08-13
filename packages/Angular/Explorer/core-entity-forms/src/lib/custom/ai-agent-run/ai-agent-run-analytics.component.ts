@@ -5,6 +5,7 @@ import { RunView } from '@memberjunction/core';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { WalkAgentRunTree, type AgentRunTreeNode } from '@memberjunction/ai-core-plus';
+import { TOKEN_PRICE_UNIT_TYPE_DIVISORS } from '@memberjunction/ai-engine-base';
 import * as d3 from 'd3';
 import { AIAgentRunCostService } from './ai-agent-run-cost.service';
 
@@ -174,11 +175,6 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
 
   // Per model+vendor cache pricing (currency-per-token), loaded from AIModelCost for the cost split.
   private cacheRates = new Map<string, { inputRate: number; outputRate: number; cacheReadRate: number; cacheWriteRate: number }>();
-  // Token unit types only. Non-token unit types (Per Minute, Per Hour, Per Image) are deliberately
-  // absent — this map drives token-rate math, which has no meaning for duration- or image-billed models.
-  private static readonly UNIT_DIVISORS: Record<string, number> = {
-    'Per Million Tokens': 1_000_000, 'Per Hundred Thousand Tokens': 100_000, 'Per Thousand Tokens': 1_000
-  };
   allActionLogs: SimpleActionLog[] = [];
   allSteps: SimpleAgentRunStep[] = [];
   subAgentRuns: SimpleAgentRun[] = [];
@@ -468,22 +464,48 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
     return `${NormalizeUUID(modelID ?? '')}|${NormalizeUUID(vendorID ?? '')}`;
   }
 
-  /** Load active realtime AIModelCost rates and normalize each to currency-per-token. */
+  /**
+   * Load active realtime AIModelCost rates and normalize each to currency-per-token.
+   *
+   * The scale comes from the unit type's DriverClass, not its display name — the name is editable
+   * metadata (`Per 1M Tokens`) while the driver class is the contract the pricing drivers register
+   * under, so this cannot drift the way a hardcoded name table does.
+   */
   private async loadCacheRates() {
     this.cacheRates.clear();
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-    const res = await rv.RunView({
-      EntityName: 'MJ: AI Model Costs',
-      ExtraFilter: `Status='Active' AND ProcessingType='Realtime'`,
-      Fields: ['ModelID', 'VendorID', 'InputPricePerUnit', 'OutputPricePerUnit', 'CacheReadPricePerUnit', 'CacheWritePricePerUnit', 'UnitType'],
-      ResultType: 'simple'
-    });
+    const [res, unitTypeRes] = await rv.RunViews([
+      {
+        EntityName: 'MJ: AI Model Costs',
+        ExtraFilter: `Status='Active' AND ProcessingType='Realtime'`,
+        Fields: ['ModelID', 'VendorID', 'InputPricePerUnit', 'OutputPricePerUnit', 'CacheReadPricePerUnit', 'CacheWritePricePerUnit', 'UnitTypeID'],
+        ResultType: 'simple'
+      },
+      {
+        EntityName: 'MJ: AI Model Price Unit Types',
+        Fields: ['ID', 'DriverClass'],
+        ResultType: 'simple'
+      }
+    ]);
     if (!res.Success) return;
+    // The sibling view gets the same treatment for the same reason. Without the driver classes
+    // every rate row hits the `continue` below and the panel shows a confident zero rather than an
+    // error — the failure mode most likely to be believed.
+    if (unitTypeRes && !unitTypeRes.Success) {
+      console.error('AI Agent Run analytics: price unit types failed to load; token rates will be empty. ' +
+        unitTypeRes.ErrorMessage);
+      return;
+    }
+    const driverClassByUnitType = new Map<string, string>(
+      (unitTypeRes?.Results || []).filter(u => u.DriverClass).map(u => [NormalizeUUID(u.ID), u.DriverClass as string])
+    );
     for (const row of res.Results || []) {
-      const divisor = AIAgentRunAnalyticsComponent.UNIT_DIVISORS[row.UnitType ?? ''];
+      const driverClass = driverClassByUnitType.get(NormalizeUUID(row.UnitTypeID ?? ''));
+      const divisor = TOKEN_PRICE_UNIT_TYPE_DIVISORS[driverClass ?? ''];
       if (divisor === undefined) {
-        // A non-token unit type (per minute/hour/image). Defaulting to the per-1M-token divisor
-        // would divide an hourly audio rate by a million and report token rates that are noise.
+        // A non-token unit type (per minute/hour/image), or one this build has no driver for.
+        // Defaulting to the per-1M-token divisor would divide an hourly audio rate by a million
+        // and report token rates that are noise.
         continue;
       }
       const input = (row.InputPricePerUnit ?? 0) / divisor;

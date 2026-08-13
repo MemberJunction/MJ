@@ -623,7 +623,31 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             return null;
         }
 
+        // Units without a kind name nothing to price them in. Falling through would treat them as
+        // Tokens and price the (zero) token counts, returning a cost of 0 for work that was billed.
+        if (usage.unitKind == null && ((usage.inputUnits ?? 0) > 0 || (usage.outputUnits ?? 0) > 0)) {
+            LogError(
+                `Model ${modelID} / Vendor ${vendorID} reported continuous units with no unitKind; refusing to price ` +
+                `them. Build usage with ModelUsage.ForMedia(), which always sets it.`
+            );
+            return null;
+        }
+
         const usageKind = usage.unitKind ?? 'Tokens';
+
+        // The mirror of the check above, and the same defect through the other side: a kind with
+        // no quantity. `ShouldCalculateCost` is satisfied by token counts alone, so a run that
+        // names `Seconds` but reports zero seconds passes every check above, normalizes to
+        // {input: 0, output: 0}, and persists Cost = 0 — writing "free" for work that was billed,
+        // which is exactly what the units-without-a-kind guard exists to prevent.
+        if (usageKind !== 'Tokens' && (usage.inputUnits ?? 0) === 0 && (usage.outputUnits ?? 0) === 0) {
+            LogError(
+                `Model ${modelID} / Vendor ${vendorID} reported usage in ${usageKind} but no unit quantity; refusing ` +
+                `to price it rather than record a cost of 0. Set inputUnits/outputUnits, or leave unitKind unset.`
+            );
+            return null;
+        }
+
         if (calculator.UnitKind !== usageKind) {
             LogError(
                 `Cost row for Model ${modelID} / Vendor ${vendorID} is priced in ${calculator.UnitKind} but the run ` +

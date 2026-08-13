@@ -12,7 +12,8 @@
     "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json"
   },
   "author": "MemberJunction.com",
   "license": "ISC",

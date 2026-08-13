@@ -22,6 +22,23 @@ export interface NormalizedUsage {
 }
 
 /**
+ * The divisor each TOKEN-measured price unit type normalizes by, keyed by DriverClass.
+ *
+ * Split out from the full table below because token-rate math — cache-savings figures, per-token
+ * cost splits — is meaningful only for these. A consumer doing that math must skip a cost row
+ * priced by audio duration or by the image rather than fall back to a token divisor, which would
+ * divide an hourly rate by a million and report noise.
+ *
+ * Keyed by **DriverClass**, never by the unit type's display name: the names are editable metadata
+ * (`Per 1M Tokens` today) while the driver class is the contract the ClassFactory resolves.
+ */
+export const TOKEN_PRICE_UNIT_TYPE_DIVISORS: Readonly<Record<string, number>> = {
+    PerMillionTokens: 1_000_000,
+    PerHundredThousandTokens: 100_000,
+    PerThousandTokens: 1_000
+};
+
+/**
  * The divisor each built-in price unit type normalizes by, keyed by DriverClass.
  *
  * Exported so consumers that need the scale of a cost row without instantiating a driver — the
@@ -29,9 +46,7 @@ export interface NormalizedUsage {
  * than restating the table and drifting from it.
  */
 export const PRICE_UNIT_TYPE_DIVISORS: Readonly<Record<string, number>> = {
-    PerMillionTokens: 1_000_000,
-    PerHundredThousandTokens: 100_000,
-    PerThousandTokens: 1_000,
+    ...TOKEN_PRICE_UNIT_TYPE_DIVISORS,
     TimePerHour: 3_600,
     TimePerMinute: 60,
     PerImage: 1
