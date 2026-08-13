@@ -127,7 +127,10 @@ export const MaterializedEntityReadChecks: NamedCheck[] = [
             const res = await readSentinel(ctx, 'Materialized');
             Assert(res.Success, `materialized RunView must succeed: ${res.ErrorMessage}`);
             Assert((res.Results?.length ?? 0) === 1, `EMR1: exactly the sentinel row must come back from the snapshot, got ${res.Results?.length}`);
-            Assert(UUIDsEqual(String(res.Results?.[0]?.ID ?? ''), SentinelID), 'EMR1: the returned row is the snapshot-only sentinel — proof the read hit the materialized view, not the live base view');
+            // UUIDsEqual (not AssertEqual) because the two sides can differ in casing across platforms; the
+            // expected/got detail AssertEqual would have appended is restated here so a failure stays diagnosable.
+            const returnedID = String(res.Results?.[0]?.ID ?? '');
+            Assert(UUIDsEqual(returnedID, SentinelID), `EMR1: the returned row is the snapshot-only sentinel — proof the read hit the materialized view, not the live base view — expected ${SentinelID}, got ${returnedID}`);
         },
     },
     {
