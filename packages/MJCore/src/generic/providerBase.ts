@@ -216,7 +216,16 @@ export function ProjectRowsToFields<T = Record<string, unknown>>(
             }
         }
         if (allKept) {
-            return rows;
+            // ...but only when handing the input back is safe. A `Fields` request is documented
+            // to yield a per-caller row set the caller may mutate, and full coverage is not a
+            // narrower promise than partial coverage — it just happens to project to the same
+            // shape. Frozen input means `rows` is the cache's shared array, so returning it here
+            // would quietly hand a Fields caller immutable rows and break that contract for the
+            // one field list that covers everything. Fall through to the copy path in that case;
+            // unfrozen input (the DB-miss path) keeps the allocation-free fast path.
+            if (!Object.isFrozen(rows)) {
+                return rows;
+            }
         }
     }
 
@@ -756,6 +765,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // Cache hit — transform and return directly
                 LogStatusEx({ message: `  ✅ [Cache HIT] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${preResult.cachedResult.Results?.length ?? 0} rows from cache, no DB query`, verboseOnly: true });
                 await this.TransformSimpleObjectToEntityObject(params, preResult.cachedResult, contextUser);
+                await this.ApplyPostRunViewHooksToCacheHit(params, preResult.cachedResult, contextUser);
                 TelemetryManager.Instance.EndEvent(preResult.telemetryEventId, {
                     cacheHit: true,
                     cacheStatus: preResult.cacheStatus,
@@ -773,6 +783,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Cache miss — execute query, then post-process (stores in cache)
             LogStatusEx({ message: `  🔍 [Cache MISS] RunView "${params.EntityName || params.ViewName || 'unknown'}" — querying database`, verboseOnly: true });
             const result = await this.InternalRunView<T>(params, contextUser);
+            // PostRunView copies any hook-supplied replacement onto `result` in place, so this
+            // reference reflects the hook chain's output.
             await this.PostRunView(result, params, preResult, contextUser);
             return result;
         }
@@ -915,6 +927,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 batchSize: params.length,
                 totalResultCount: totalResults
             });
+            // allCached ⇒ every param produced a hit and was pushed in order (PreRunViews only
+            // pushes a null placeholder on the path that clears allCached), so index i of
+            // cachedResults corresponds to params[i].
+            for (let i = 0; i < preResult.cachedResults.length; i++) {
+                await this.ApplyPostRunViewHooksToCacheHit(params[i], preResult.cachedResults[i], contextUser);
+            }
             return preResult.cachedResults as RunViewResult<T>[];
         }
 
@@ -1868,6 +1886,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     QueryID: cached.queryId ?? params.QueryID ?? '',
                     QueryName: params.QueryName ?? '',
                     Success: true,
+                    // Transport boundary: `cached.results` is readonly (shared, deep-frozen cache
+                    // rows) while the outbound Results is mutable — the runtime freeze is the
+                    // enforcement. Same cast as the RunView hit paths above.
                     Results: cached.results as RunQueryResult['Results'],
                     RowCount: cached.results.length,
                     TotalRowCount: cached.rowCount ?? cached.results.length,
@@ -2316,7 +2337,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
             const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
             if (cached) {
-                // Filter cached results to only the caller's requested fields (if specified)
+                // These rows are the cache's shared, deep-frozen objects — the runtime freeze is
+                // what stops a consumer from corrupting the cache. Anything that needs to
+                // transform them must map onto copies.
                 let results = cached.results;
                 if (callerRequestedFields && params.ResultType !== 'entity_object') {
                     results = ProjectRowsToFields(results, callerRequestedFields);
@@ -2484,7 +2507,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 fingerprintMap.set(i, fingerprint);
                 const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                 if (cached) {
-                    // Filter cached results to caller's requested fields (if specified and not entity_object)
+                    // Shared, deep-frozen cache rows — same contract as the single-view hit path.
                     let results = cached.results;
                     if (callerFields && param.ResultType !== 'entity_object') {
                         results = ProjectRowsToFields(results, callerFields);
@@ -3010,8 +3033,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Transform the result set into BaseEntity-derived objects, if needed
         await this.TransformSimpleObjectToEntityObject(params, result, contextUser);
 
-        // Run registered PostRunView hooks (e.g., data masking, audit logging)
-        result = await this.RunPostRunViewHooks(params, result, contextUser);
+        // Run registered PostRunView hooks (e.g., data masking, audit logging).
+        //
+        // A hook may RETURN a replacement result rather than mutating the one it was handed —
+        // that is what `PostRunViewHook`'s signature promises, and it is the only option left
+        // now that cached rows are frozen. Reassigning the local `result` would drop it on the
+        // floor, because RunView returns the reference IT holds. Copy the replacement's fields
+        // onto that reference instead, so the caller observes the hook's changes without
+        // PostRunView having to change its return type (which would break external
+        // subclasses that override it).
+        const hooked = await this.RunPostRunViewHooks(params, result, contextUser);
+        if (hooked && hooked !== result) {
+            Object.assign(result, hooked);
+        }
 
         // Register OnDataChanged callback if provided and we have a fingerprint
         if (params.OnDataChanged && preResult.fingerprint) {
@@ -3192,6 +3226,44 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             result = await hook(params, result, contextUser);
         }
         return result;
+    }
+
+    /**
+     * Applies the PostRunView hook chain to a result that was served from cache, mutating
+     * `result` in place so the caller's reference reflects the chain's output.
+     *
+     * ## Why cache hits must run the hooks
+     * PostRunView is the OUTPUT half of the enforcement seam (data masking / audit). Hooks
+     * receive `contextUser`, so masking is PER-USER, while the cache slot is shared across
+     * users — there is no correct way to apply masking once at write time on behalf of a
+     * reader who has not arrived yet. A hit that skips the chain therefore returns rows the
+     * miss path would have masked.
+     *
+     * This previously appeared to work by accident: PostRunView writes the cache BEFORE
+     * running the hooks, so a hook that masked rows in place was writing through into the
+     * cached objects — which both made later hits look masked and baked one user's masking
+     * decision into a shared slot. Freeze-on-write removes that write-through, which is what
+     * makes running the chain here necessary rather than merely tidier.
+     *
+     * ## Why mutating `result` in place is safe
+     * Cache-hit results are FRESH wrapper objects built per hit by PreRunView/PreRunViews —
+     * only `.Results` points at shared cache state. A hook that returns a replacement (the
+     * required pattern now that rows are frozen) is copied onto that per-hit wrapper, so it
+     * can never write back into the cache.
+     *
+     * ## Why the guard
+     * `GetDataHooks` is a memoized store read (~30ns), but `await`-ing the async chain costs
+     * a microtask (~750ns) — comparable to the entire cache lookup this rides on. The
+     * overwhelmingly common case is zero registered hooks, so check first and skip the await.
+     */
+    protected async ApplyPostRunViewHooksToCacheHit(params: RunViewParams, result: RunViewResult, contextUser?: UserInfo): Promise<void> {
+        if (GetDataHooks<PostRunViewHook>('PostRunView').length === 0) {
+            return;
+        }
+        const hooked = await this.RunPostRunViewHooks(params, result, contextUser);
+        if (hooked && hooked !== result) {
+            Object.assign(result, hooked);
+        }
     }
 
     /**

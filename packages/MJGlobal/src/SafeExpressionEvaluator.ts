@@ -375,6 +375,61 @@ export class SafeExpressionEvaluator {
     }
 
     /**
+     * Checks whether an expression *could* be evaluated, without evaluating it.
+     *
+     * The difference matters because `evaluate` reports two unrelated problems the same way. Given
+     * a condition authored against a runtime envelope, an empty context makes `payload.x > 1` fail
+     * with `payload is not defined` — indistinguishable, by result shape, from `payload.x >` failing
+     * with `Unexpected token`. One is a typo the author should be told about at the door; the other
+     * is a perfectly good condition that simply has no data yet. A submit-time check built on
+     * `evaluate` therefore refuses every legitimate condition.
+     *
+     * Nor can a permissive context fix that: `createSafeContext` deep-clones what it is handed, so a
+     * chainable Proxy standing in for "any shape resolves" does not survive into the compiled
+     * function — it arrives as a string, and `payload.x.y` fails on it exactly as it would have
+     * against `undefined`.
+     *
+     * So this compiles and never runs. The expression is placed in the same function body `evaluate`
+     * builds, with the same policy checks applied first; the parse either succeeds or it does not.
+     * Values are never consulted, which is precisely the property wanted: unknown identifiers,
+     * absent properties and undefined chains all PASS, because none of them is a syntax error and
+     * whether they resolve is a question about a run that has not happened yet.
+     *
+     * **Compilation is not evaluation**, and the distinction is load-bearing for safety: `Function`
+     * parses the body and returns; nothing in the expression executes. The policy screen still runs
+     * first, so the constructs `evaluate` refuses are refused here too — those produce a permanent
+     * runtime refusal, and an author is better told now.
+     *
+     * `Undecidable` is the honest third answer. A host that forbids dynamic compilation (a strict
+     * CSP without `unsafe-eval`) cannot answer the question at all, and a validator that read that
+     * as "invalid" would refuse every condition in the browser. Callers should treat it as a pass.
+     *
+     * @param expression the expression to check
+     * @returns `Valid: true` when it parses; `Valid: false` with `Error` when it definitely does
+     *          not; `Valid: true` with `Undecidable: true` when this environment cannot compile
+     */
+    public validateSyntax(expression: string): { Valid: boolean; Error?: string; Undecidable?: boolean } {
+        const policyError = this.validateExpression(expression);
+        if (policyError) {
+            return { Valid: false, Error: policyError };
+        }
+
+        try {
+            // Same wrapper `evaluate` compiles, so anything that parses here parses there. Built and
+            // discarded — never invoked.
+            new Function(`"use strict"; return Boolean(${expression});`);
+            return { Valid: true };
+        } catch (e) {
+            if (e instanceof SyntaxError) {
+                return { Valid: false, Error: e.message };
+            }
+            // Anything else — an EvalError from a CSP, a host without `Function` — means this
+            // environment cannot judge, not that the expression is wrong.
+            return { Valid: true, Undecidable: true };
+        }
+    }
+
+    /**
      * Evaluates multiple expressions and returns all results
      * 
      * @param {Array<{expression: string, name?: string}>} expressions - Array of expressions to evaluate

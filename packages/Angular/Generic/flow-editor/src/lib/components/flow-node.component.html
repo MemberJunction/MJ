@@ -16,6 +16,7 @@
   [class.mj-flow-node-body--loop]="isLoopNode"
   [class.mj-flow-node-body--disabled]="Node.Status === 'disabled'"
   [class.mj-flow-node-body--pending]="Node.Status === 'pending'"
+  [class.mj-flow-node-body--skipped]="Node.Status === 'skipped'"
   [class.mj-flow-node-body--running]="Node.Status === 'running'"
   [class.mj-flow-node-body--warning]="Node.Status === 'warning'"
   [class.mj-flow-node-body--error]="Node.Status === 'error'"

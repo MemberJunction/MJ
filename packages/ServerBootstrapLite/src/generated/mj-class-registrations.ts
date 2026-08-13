@@ -947,13 +947,21 @@ import {
     PredictiveStudioTrainModelServerOperation,
 } from '@memberjunction/predictive-studio';
 
-// @memberjunction/task-graph (8 classes)
+// @memberjunction/task-graph (16 classes)
 import {
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
+    TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
+    TaskGraphOverrideEdgeServerOperation,
+    TaskGraphPauseServerOperation,
+    TaskGraphResumeServerOperation,
     TaskGraphRetryTaskServerOperation,
+    TaskGraphSetBreakpointsServerOperation,
+    TaskGraphSkipTaskServerOperation,
+    TaskGraphStepServerOperation,
     TaskGraphSubmitServerOperation,
+    TaskGraphUpdateTaskInputServerOperation,
     WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
@@ -1876,9 +1884,17 @@ export const CLASS_REGISTRATIONS: any[] = [
     PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
+    TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
+    TaskGraphOverrideEdgeServerOperation,
+    TaskGraphPauseServerOperation,
+    TaskGraphResumeServerOperation,
     TaskGraphRetryTaskServerOperation,
+    TaskGraphSetBreakpointsServerOperation,
+    TaskGraphSkipTaskServerOperation,
+    TaskGraphStepServerOperation,
     TaskGraphSubmitServerOperation,
+    TaskGraphUpdateTaskInputServerOperation,
     WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
@@ -2089,7 +2105,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 897;
+export const CLASS_REGISTRATIONS_COUNT = 905;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

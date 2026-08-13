@@ -14,6 +14,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
+    ClampReinvokeDepth,
     ParseTaskGraphParentMetadata,
     IsReinvokeCapReached,
     MAX_REINVOKE_DEPTH,
@@ -114,6 +115,36 @@ describe('ParseTaskGraphParentMetadata', () => {
     });
 });
 
+describe('continuationDeliveredAs — how a settlement ended, kept in the row', () => {
+    // Written by the same compare-and-swap that sets the timestamp, and read afterwards to tell a
+    // settlement that was ANNOUNCED from one that was found too late to announce. Untyped, that
+    // distinction survived only in whatever string happened to be in the JSON.
+    it('reads the values the claim statement writes', () => {
+        // `cancelled` joins them in R2-9: a settlement whose submitting run was cancelled completes
+        // its own bookkeeping and deliberately announces nothing. "We chose not to" and "we found it
+        // too late" are different facts, and a reader afterwards has to be able to tell them apart.
+        for (const outcome of ['delivered', 'expired', 'cancelled']) {
+            expect(ParseTaskGraphParentMetadata(`{"continuationDeliveredAs":"${outcome}"}`).continuationDeliveredAs)
+                .toBe(outcome);
+        }
+    });
+
+    it('reads anything else as unknown rather than echoing it', () => {
+        // Guarded like `continuation` and `reinvokeDepth`: a hand edit or a future producer can put
+        // anything here, and a caller branching on it should see "we do not know" instead of a
+        // string that merely is not one of the two it tests for.
+        expect(ParseTaskGraphParentMetadata('{"continuationDeliveredAs":"sent"}').continuationDeliveredAs)
+            .toBeUndefined();
+        expect(ParseTaskGraphParentMetadata('{"continuationDeliveredAs":7}').continuationDeliveredAs)
+            .toBeUndefined();
+    });
+
+    it('is absent on a graph that has not been delivered', () => {
+        expect(ParseTaskGraphParentMetadata('{"continuation":"message"}').continuationDeliveredAs).toBeUndefined();
+        expect(ParseTaskGraphParentMetadata(null).continuationDeliveredAs).toBeUndefined();
+    });
+});
+
 describe('IsReinvokeCapReached', () => {
     const at = (reinvokeDepth: number): TaskGraphParentMetadata =>
         ({ continuation: 'reinvoke', reinvokeDepth, submittedByAgentRunID: null });
@@ -134,5 +165,29 @@ describe('IsReinvokeCapReached', () => {
 
     it('treats a defaulted depth as uncapped', () => {
         expect(IsReinvokeCapReached(ParseTaskGraphParentMetadata(null))).toBe(false);
+    });
+});
+
+describe('ClampReinvokeDepth — the remote seam cannot buy hops (review finding on the C5 closure)', () => {
+    // The cap's entry check is signed and the seed persists verbatim; the remote Submit operation
+    // is the one place the seed is caller-supplied. A negative value must clamp to zero, never ride.
+    it('clamps negatives to zero — reinvokeDepth: -1000 must not turn a 5-hop cap into 1005', () => {
+        expect(ClampReinvokeDepth(-1000)).toBe(0);
+        expect(ClampReinvokeDepth(-1)).toBe(0);
+        expect(ClampReinvokeDepth(-0)).toBe(0);
+    });
+
+    it('floors fractional depths and passes legitimate ones through', () => {
+        expect(ClampReinvokeDepth(0)).toBe(0);
+        expect(ClampReinvokeDepth(3)).toBe(3);
+        expect(ClampReinvokeDepth(2.9)).toBe(2);
+    });
+
+    it('treats absent and non-numeric values as "no seed", not zero', () => {
+        expect(ClampReinvokeDepth(undefined)).toBeUndefined();
+        expect(ClampReinvokeDepth(null)).toBeUndefined();
+        expect(ClampReinvokeDepth('7')).toBeUndefined();
+        expect(ClampReinvokeDepth(Number.NaN)).toBeUndefined();
+        expect(ClampReinvokeDepth(Number.POSITIVE_INFINITY)).toBeUndefined();
     });
 });

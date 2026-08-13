@@ -656,8 +656,19 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT03 - Client GraphQL Cache Integrity",
+            "TestID": "@lookup:MJ: Tests.Name=IT81 - Cache Immutability (freeze-on-write)",
             "Sequence": 46,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CB7AAFCA-4913-4DCF-9D36-B6CD50E5BE96"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT03 - Client GraphQL Cache Integrity",
+            "Sequence": 47,
             "Status": "Active"
           },
           "primaryKey": {
@@ -672,7 +683,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT15 - Remote Operations Over-The-Wire Progress",
-            "Sequence": 47,
+            "Sequence": 48,
             "Status": "Active"
           },
           "primaryKey": {
@@ -687,7 +698,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT23 - RLS Client Smart-Cache Isolation",
-            "Sequence": 48,
+            "Sequence": 49,
             "Status": "Active"
           },
           "primaryKey": {
@@ -702,7 +713,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT25 - View Execution (client-first)",
-            "Sequence": 49,
+            "Sequence": 50,
             "Status": "Active"
           },
           "primaryKey": {
@@ -717,7 +728,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT26 - Application Wiring (all shipped apps)",
-            "Sequence": 50,
+            "Sequence": 51,
             "Status": "Active"
           },
           "primaryKey": {
@@ -732,7 +743,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT27 - Core Entity Write-Side",
-            "Sequence": 51,
+            "Sequence": 52,
             "Status": "Active"
           },
           "primaryKey": {
@@ -747,7 +758,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT28 - Permission Engine and Scope Enforcement",
-            "Sequence": 52,
+            "Sequence": 53,
             "Status": "Active"
           },
           "primaryKey": {
@@ -762,7 +773,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT31 - RunView Feature Matrix",
-            "Sequence": 53,
+            "Sequence": 54,
             "Status": "Active"
           },
           "primaryKey": {
@@ -777,7 +788,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT32 - RunView Cross-Feature Edges",
-            "Sequence": 54,
+            "Sequence": 55,
             "Status": "Active"
           },
           "primaryKey": {
@@ -792,7 +803,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT33 - RunQuery Catalog Sweep",
-            "Sequence": 55,
+            "Sequence": 56,
             "Status": "Active"
           },
           "primaryKey": {
@@ -807,7 +818,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT34 - RunQuery Parameter Permutation",
-            "Sequence": 56,
+            "Sequence": 57,
             "Status": "Active"
           },
           "primaryKey": {
@@ -822,7 +833,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT37 - Subscription Channel Isolation",
-            "Sequence": 57,
+            "Sequence": 58,
             "Status": "Active"
           },
           "primaryKey": {
@@ -837,7 +848,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT40 - Entity-Server Invariants",
-            "Sequence": 58,
+            "Sequence": 59,
             "Status": "Active"
           },
           "primaryKey": {
@@ -852,7 +863,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT43 - AI Cost Pipeline Integrity",
-            "Sequence": 59,
+            "Sequence": 60,
             "Status": "Active"
           },
           "primaryKey": {
@@ -867,7 +878,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT44 - AI Permission Helpers",
-            "Sequence": 60,
+            "Sequence": 61,
             "Status": "Active"
           },
           "primaryKey": {
@@ -882,7 +893,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT45 - Embedding Invariants",
-            "Sequence": 61,
+            "Sequence": 62,
             "Status": "Active"
           },
           "primaryKey": {
@@ -897,7 +908,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT47 - Transaction Group Atomicity",
-            "Sequence": 62,
+            "Sequence": 63,
             "Status": "Active"
           },
           "primaryKey": {
@@ -912,7 +923,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT50 - CodeGen Artifact Consistency",
-            "Sequence": 63,
+            "Sequence": 64,
             "Status": "Active"
           },
           "primaryKey": {
@@ -927,7 +938,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT52 - Unified Search Seams",
-            "Sequence": 64,
+            "Sequence": 65,
             "Status": "Active"
           },
           "primaryKey": {
@@ -942,7 +953,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT73 - Entity Graph (client transport)",
-            "Sequence": 65,
+            "Sequence": 66,
             "Status": "Active"
           },
           "primaryKey": {

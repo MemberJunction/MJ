@@ -1,6 +1,14 @@
-:host { display: block; }
+/* `height: 100%` here resolves to auto when the host's parent has no definite height, so this is
+   safe for both callers: one that gives the widget a box to fill, and one that asks for 320px. */
+:host { display: block; height: 100%; min-height: 0; }
 
-.run-view { display: flex; flex-direction: column; gap: var(--mj-space-2); }
+.run-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-2);
+  height: 100%;
+  min-height: 0;
+}
 
 .run-view-summary {
   display: flex;
@@ -16,7 +24,12 @@
    colouring it like an error sends people hunting for a bug that does not exist. */
 .run-view-skipped { color: var(--mj-text-tertiary); }
 
+/* Takes what the summary line leaves, rather than a percentage of an ancestor that may not have a
+   definite height — which is what left a canvas stopping halfway down its pane with dead space
+   below it. */
 .run-view-canvas {
+  flex: 1 1 auto;
+  min-height: 0;
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-md);
   overflow: hidden;
@@ -27,4 +40,49 @@
   padding: var(--mj-space-4);
   color: var(--mj-text-secondary);
   font-size: var(--mj-font-size-sm);
+}
+
+.run-view-break {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-1);
+  padding: 2px var(--mj-space-2);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  font-size: var(--mj-font-size-xs);
+  cursor: pointer;
+}
+.run-view-break:hover {
+  border-color: var(--mj-status-error);
+  color: var(--mj-status-error);
+}
+.run-view-break-on,
+.run-view-break-on:hover {
+  border-color: var(--mj-status-error);
+  color: var(--mj-status-error);
+  background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+}
+.run-view-break i { font-size: 8px; }
+
+.run-view-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mj-space-3);
+  font-size: var(--mj-font-size-xs);
+  color: var(--mj-text-muted);
+}
+.run-view-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.run-view-key-break { color: var(--mj-status-error); font-size: 8px; }
+.run-view-key-paused { color: var(--mj-brand-primary); font-size: 10px; }
+.run-view-key-forced { color: var(--mj-status-warning); font-size: 10px; }
+.run-view-key-if {
+  font-family: var(--mj-font-mono, ui-monospace, monospace);
+  font-style: italic;
 }

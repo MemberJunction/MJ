@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-bridge-webex",
   "type": "module",
-  "version": "6.1.0-edge.1",
+  "version": "6.1.0-edge.2",
   "description": "MemberJunction: Cisco Webex Realtime Bridge driver. Connects the realtime agent engine to a Webex meeting (audio in/out, diarized roster, participant mute, Webex meeting chat) via an injectable Cisco Webex Meetings SDK seam (Webex Meetings SDK / xAPI / Webex bot framework), and contributes a Meeting Controls facilitator channel.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,10 +17,10 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.1",
-    "@memberjunction/global": "6.1.0-edge.1",
-    "@memberjunction/core-entities": "6.1.0-edge.1",
-    "@memberjunction/ai-bridge-base": "6.1.0-edge.1"
+    "@memberjunction/core": "6.1.0-edge.2",
+    "@memberjunction/global": "6.1.0-edge.2",
+    "@memberjunction/core-entities": "6.1.0-edge.2",
+    "@memberjunction/ai-bridge-base": "6.1.0-edge.2"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

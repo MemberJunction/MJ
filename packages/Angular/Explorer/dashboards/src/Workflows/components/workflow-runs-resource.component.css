@@ -9,24 +9,50 @@
   align-items: center;
 }
 
-/* List alone until something is selected; two panes after. The canvas gets the larger share
-   because a graph is the thing being read once it is open. */
+/* List alone until something is selected; two resizable panes after. The size is the user's — see
+   the LAYOUT_KEYS note on the component for why it is persisted server-side rather than locally. */
 .wfr-split {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--mj-space-3);
   height: 100%;
   min-height: 0;
 }
 
-.wfr-split-open {
-  grid-template-columns: minmax(28rem, 40%) 1fr;
+/* A gutter you can find. The default is a hairline, which is discoverable only by accident. */
+:host ::ng-deep .wfr-split > .as-split-gutter,
+:host ::ng-deep .wfr-graph-split > .as-split-gutter {
+  background: transparent !important;
+  position: relative;
 }
 
-@media (max-width: 900px) {
-  .wfr-split-open {
-    grid-template-columns: 1fr;
-  }
+:host ::ng-deep .wfr-split > .as-split-gutter::after,
+:host ::ng-deep .wfr-graph-split > .as-split-gutter::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  background: var(--mj-border-default);
+  border-radius: var(--mj-radius-full);
+}
+
+:host ::ng-deep .wfr-split.as-horizontal > .as-split-gutter::after,
+:host ::ng-deep .wfr-graph-split.as-horizontal > .as-split-gutter::after {
+  width: 2px;
+}
+
+:host ::ng-deep .wfr-graph-split.as-vertical > .as-split-gutter::after {
+  height: 2px;
+}
+
+:host ::ng-deep .wfr-split > .as-split-gutter:hover::after,
+:host ::ng-deep .wfr-graph-split > .as-split-gutter:hover::after {
+  background: var(--mj-brand-primary);
+}
+
+/* The canvas and the step record sit SIDE BY SIDE — a JSON record in a strip along the bottom shows
+   about ten lines. Stacks below the breakpoint, where three columns would leave each too narrow to
+   use. */
+.wfr-graph-split {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .wfr-list {
@@ -119,6 +145,9 @@
 .wfr-detail {
   display: flex;
   flex-direction: column;
+  /* Fills its split area. Without it the column sizes to its CONTENT, so the canvas below —
+     `flex: 1 1 auto` of an auto-height parent — got its intrinsic height and left dead space. */
+  height: 100%;
   min-height: 0;
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-default);
@@ -246,19 +275,24 @@
   border-bottom-color: var(--mj-brand-primary);
 }
 
-/* The canvas takes the larger share; the step pane below it is a reading surface, not a diagram. */
 .wfr-graph-pane {
-  flex: 1 1 55%;
+  height: 100%;
   min-height: 12rem;
 }
 
 .wfr-steps-pane {
-  flex: 1 1 45%;
   display: flex;
   flex-direction: column;
+  height: 100%;
   min-height: 0;
-  border-top: 1px solid var(--mj-border-default);
+  border-left: 1px solid var(--mj-border-default);
   overflow: hidden;
+}
+
+/* Stacked layout puts the divider back on top, where the eye expects it. */
+:host ::ng-deep .as-vertical .wfr-steps-pane {
+  border-left: none;
+  border-top: 1px solid var(--mj-border-default);
 }
 
 .wfr-step-list {
@@ -267,8 +301,9 @@
   gap: var(--mj-space-1);
   padding: var(--mj-space-2);
   border-bottom: 1px solid var(--mj-border-default);
-  max-height: 30%;
+  max-height: 8rem;
   overflow-y: auto;
+  flex: none;
 }
 
 .wfr-step {
@@ -319,8 +354,192 @@
 }
 
 .wfr-step-json-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mj-space-2);
   padding: var(--mj-space-1) var(--mj-space-3);
   font-weight: 600;
   font-size: var(--mj-font-size-sm);
   color: var(--mj-text-secondary);
+  flex: none;
 }
+
+/* ── live console ─────────────────────────────────────────────────────────── */
+
+.wfr-stall {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 0 12px 8px;
+  border: 1px solid color-mix(in srgb, var(--mj-status-warning) 45%, var(--mj-border-default));
+  border-left: 4px solid var(--mj-status-warning);
+  border-radius: var(--mj-radius-md);
+  background: color-mix(in srgb, var(--mj-status-warning) 8%, var(--mj-bg-surface));
+  color: var(--mj-text-primary);
+  font-size: var(--mj-font-size-sm);
+}
+.wfr-stall-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.wfr-stall i { color: var(--mj-status-warning); }
+.wfr-stall-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.wfr-stall-copy code {
+  font-family: var(--mj-font-mono, ui-monospace, monospace);
+  font-size: var(--mj-font-size-xs);
+}
+.wfr-stall-reason { color: var(--mj-text-secondary); }
+.wfr-stall-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.wfr-replay {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-page);
+}
+.wfr-replay i { color: var(--mj-text-secondary); }
+.wfr-replay input[type='range'] { flex: 1; accent-color: var(--mj-brand-primary); }
+
+.wfr-engine {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 6px 12px;
+  border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-page);
+  font-family: var(--mj-font-mono, ui-monospace, monospace);
+  font-size: var(--mj-font-size-xs);
+  color: var(--mj-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.wfr-tick {
+  flex: none;
+  padding: 3px 8px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface);
+  white-space: nowrap;
+}
+.wfr-tick-held {
+  border-color: color-mix(in srgb, var(--mj-status-warning, #d97706) 45%, var(--mj-border-default));
+  background: color-mix(in srgb, var(--mj-status-warning, #d97706) 8%, var(--mj-bg-surface));
+}
+.wfr-tick-paused { color: var(--mj-brand-primary); border-color: var(--mj-border-strong); }
+
+.wfr-insp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px;
+  margin: 0 0 8px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface);
+  font-size: var(--mj-font-size-sm);
+  color: var(--mj-text-primary);
+}
+.wfr-insp-card code {
+  font-family: var(--mj-font-mono, ui-monospace, monospace);
+  font-size: var(--mj-font-size-xs);
+}
+.wfr-insp-label {
+  font-size: var(--mj-font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--mj-text-secondary);
+}
+.wfr-insp-card[data-verdict='held'],
+.wfr-insp-bad {
+  border-color: color-mix(in srgb, var(--mj-status-warning, #d97706) 45%, var(--mj-border-default));
+  background: color-mix(in srgb, var(--mj-status-warning, #d97706) 8%, var(--mj-bg-surface));
+}
+.wfr-insp-card[data-verdict='satisfied'] .wfr-insp-label { color: var(--mj-status-success); }
+.wfr-insp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+.wfr-insp-hint {
+  margin: 0 0 8px;
+  font-size: var(--mj-font-size-xs);
+  color: var(--mj-text-muted);
+}
+
+.wfr-bp-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-page);
+}
+.wfr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  font-size: var(--mj-font-size-xs);
+  cursor: pointer;
+}
+.wfr-chip-break { color: var(--mj-status-error); border-color: color-mix(in srgb, var(--mj-status-error) 40%, transparent); }
+.wfr-chip-break i { font-size: 7px; }
+.wfr-chip-paused {
+  color: var(--mj-brand-primary);
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
+  cursor: default;
+}
+.wfr-chip-forced {
+  color: var(--mj-status-warning);
+  border-color: color-mix(in srgb, var(--mj-status-warning) 40%, transparent);
+  cursor: default;
+}
+.wfr-chip-x {
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.wfr-chip-x:hover { color: var(--mj-text-primary); }
+
+.wfr-break-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: var(--mj-font-size-sm);
+  color: var(--mj-text-primary);
+  cursor: pointer;
+}
+.wfr-break-toggle i { font-size: 8px; color: var(--mj-status-error); }
+
+.wfr-editor-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  margin: 0 0 10px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface-card);
+}
+.wfr-editor-danger {
+  border-color: color-mix(in srgb, var(--mj-status-error) 40%, var(--mj-border-default));
+}
+.wfr-json-edit {
+  width: 100%;
+  min-height: 120px;
+  font-family: var(--mj-font-mono, ui-monospace, monospace);
+  font-size: var(--mj-font-size-xs);
+  resize: vertical;
+}
+.wfr-editor-error { color: var(--mj-status-error); font-size: var(--mj-font-size-xs); }

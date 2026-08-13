@@ -9,26 +9,50 @@
     Message="This workflow has not created any steps.">
   </mj-empty-state>
 } @else {
-  <div class="run-view">
+  <div class="run-view" [style.height]="Height">
     <div class="run-view-summary">
       <span class="run-view-count">{{ CompletedCount }} of {{ TotalCount }} complete</span>
       @if (SkippedCount > 0) {
         <span class="run-view-skipped">{{ SkippedCount }} not taken</span>
       }
+      @if (AllowBreakpointEditing && SelectedTaskID) {
+        <button
+          type="button"
+          class="run-view-break"
+          [class.run-view-break-on]="HasSelectedBreakpoint"
+          (click)="OnToggleSelectedBreakpoint()"
+          [attr.title]="HasSelectedBreakpoint ? 'Remove breakpoint' : 'Break before this step'">
+          <i class="fa-solid fa-circle" aria-hidden="true"></i>
+          {{ HasSelectedBreakpoint ? 'Armed on' : 'Break on' }} {{ SelectedTaskName }}
+        </button>
+      }
     </div>
 
-    <div class="run-view-canvas" [style.height]="Height">
+    @if (ShowDebugLegend) {
+      <div class="run-view-legend" aria-label="Debug key">
+        <span><i class="fa-solid fa-circle run-view-key-break" aria-hidden="true"></i> breakpoint</span>
+        <span><i class="fa-solid fa-pause run-view-key-paused" aria-hidden="true"></i> paused here</span>
+        <span><i class="fa-solid fa-hand run-view-key-forced" aria-hidden="true"></i> operator-forced path</span>
+        <span class="run-view-key-if">if condition</span>
+      </div>
+    }
+
+    <div class="run-view-canvas">
       <mj-task-graph-editor
         [Spec]="Spec"
         [RuntimeStatus]="RuntimeStatus"
         [NodePositions]="Positions"
+        [DebugOverlay]="Overlay"
         [ReadOnly]="true"
-        [ShowToolbar]="false"
+        [ShowToolbar]="ShowToolbar"
         [ShowPalette]="false"
         [ShowProperties]="false"
         [ShowMinimap]="false"
         [ShowStatusBar]="false"
-        (SelectionChanged)="OnSelectionChanged($event)">
+        [ShowLegend]="ShowLegend"
+        (SelectionChanged)="OnSelectionChanged($event)"
+        (ConnectionSelected)="OnConnectionSelected($event)"
+        (LegendToggled)="LegendToggled.emit($event)">
       </mj-task-graph-editor>
     </div>
   </div>

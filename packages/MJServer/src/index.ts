@@ -207,6 +207,7 @@ import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';
 import { BaseServerMiddleware } from './middleware/BaseServerMiddleware.js';
+import { SuppressTaskGraphSubmission } from '@memberjunction/ai-core-plus';
 
 export type MJServerOptions = {
   onBeforeServe?: () => void | Promise<void>;
@@ -1419,20 +1420,26 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // client-driven path it replaced. Gated on SQL Server because the provider factory mints
   // SQLServerDataProvider; the PG branch lands with PG parity. Self-registers with ShutdownRegistry.
   //
-  // MJ_DISABLE_TASK_GRAPH_DISPATCHER opts a server OUT of claiming. A dispatcher claims from the
-  // WHOLE Task table, not from "its own" graphs, so any second dispatcher on the same database is a
-  // competitor: it wins some claims and executes them with ITS runner. That is correct in
-  // production (that is what makes multi-server durable execution work) and wrong for a harness
-  // that injects a stub runner and then asserts which tasks its own runner executed — the tasks
-  // MJAPI wins never reach the stub, so the harness reads them as "never ran". The integration lane
-  // boots MJAPI for the client-transport members, so it must set this or IT74 fails intermittently
-  // on whichever tasks became eligible first.
+  // `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1` suppresses it, for the one case where a second dispatcher
+  // is actively harmful: the integration suite's task-graph bundle drives its OWN dispatcher against
+  // a stub runner and asserts exactly-once execution. A dispatcher claims from the whole table, not
+  // from "its own" graphs, so a server sharing that database races the suite for every claim and
+  // executes the suite's tasks with the real agent runner. The bundle then reports tasks that never
+  // ran and graphs that settled to the wrong status — symptoms that read as engine defects and cost
+  // a release cycle to trace back to here. The suite still needs MJAPI up for its client-transport
+  // members, so "stop the server" is not the remedy; this is.
   const taskGraphPool = dataSources[0]?.dataSource;
-  const taskGraphDispatcherDisabled = ['1', 'true', 'yes'].includes(
-    (process.env.MJ_DISABLE_TASK_GRAPH_DISPATCHER ?? '').trim().toLowerCase()
-  );
+  const taskGraphDispatcherDisabled = process.env.MJ_DISABLE_TASK_GRAPH_DISPATCHER === '1';
   if (taskGraphDispatcherDisabled) {
-    console.log('[TaskGraphDispatcher] Not started — MJ_DISABLE_TASK_GRAPH_DISPATCHER is set.');
+    // AND REFUSE SUBMISSIONS, not just execution (R3-11). The durable submitter registers through
+    // the generated manifest unconditionally, so without this the host went on ACCEPTING graphs it
+    // had no intention of running: the agent submitted, promised the user a follow-up, and parked
+    // its run `Paused` — with the graph `Pending` and the run parked forever, no per-submission
+    // diagnostics anywhere, and the stale graph executing hours later if anyone unset the flag.
+    // The entity-action seam already had this treatment (its submitter registers inside
+    // StartTaskGraphDispatcher); this gives the agent seam the same.
+    SuppressTaskGraphSubmission('MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 is set on this host');
+    LogStatus('[TaskGraphDispatcher] Disabled by MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 — this process will neither accept nor execute task graphs.');
   } else if (resumeUser && taskGraphPool instanceof sql.ConnectionPool) {
     StartTaskGraphDispatcher(taskGraphPool, resumeUser)
       .catch(err => console.warn(`[TaskGraphDispatcher] Startup failed: ${err}`));

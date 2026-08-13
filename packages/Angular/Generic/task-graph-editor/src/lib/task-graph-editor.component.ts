@@ -59,6 +59,7 @@ import {
     TASK_GRAPH_NODE_TYPES,
     UpdateTask,
     WouldCreateCycle,
+    type TaskGraphDebugOverlay,
     type TaskGraphRuntimeStatus,
 } from './task-graph-canvas-adapter';
 import type {
@@ -151,6 +152,15 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
     @Input() public ShowToolbar: boolean = true;
     @Input() public ShowPalette: boolean = true;
     @Input() public ShowMinimap: boolean = true;
+    /**
+     * Whether the legend rides on the canvas.
+     *
+     * On for authoring, off for a run — and the difference is what the legend is FOR. It explains the
+     * authoring vocabulary (what a conditional edge means, what a duplicate default looks like),
+     * which is what someone drawing a graph needs. A run view is answering a different question —
+     * what happened — and the legend answers none of it while occluding a third of the canvas.
+     */
+    @Input() public ShowLegend: boolean = true;
     @Input() public ShowStatusBar: boolean = true;
     @Input() public AutoLayoutDirection: FlowLayoutDirection = 'vertical';
 
@@ -176,6 +186,20 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
     /** Shown when there is nothing to draw yet. */
     @Input() public EmptyStateMessage: string = 'No steps yet. Add one to start building this workflow.';
 
+    /**
+     * Debug overlay for a run. Empty by default so an embed (agent-run timeline, test harness)
+     * never grows breakpoint badges or override styling it did not ask for.
+     */
+    @Input()
+    public set DebugOverlay(value: TaskGraphDebugOverlay | null) {
+        if (this.debugOverlay === value) return;
+        this.debugOverlay = value;
+        this.project();
+    }
+    public get DebugOverlay(): TaskGraphDebugOverlay | null {
+        return this.debugOverlay;
+    }
+
     // ── Outputs ──────────────────────────────────────────────────────────────
 
     @Output() public BeforeTaskAdded = new EventEmitter<BeforeTaskAddedEventArgs>();
@@ -190,6 +214,16 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
     @Output() public AfterDependencyRemoved = new EventEmitter<AfterDependencyRemovedEventArgs>();
 
     /** Informational — no `Before` pair, because these report what already happened. */
+    /**
+     * The legend was shown or hidden from the canvas toolbar.
+     *
+     * Forwarded so a host can PERSIST the choice. Without it the toolbar's toggle mutates the
+     * canvas's own flag and nothing else, so the preference dies with the view — and a host that
+     * wanted it remembered would have to add a second control beside the one that already exists,
+     * which is how a surface ends up with two buttons doing the same thing and disagreeing.
+     */
+    @Output() public LegendToggled = new EventEmitter<boolean>();
+
     @Output() public SpecChanged = new EventEmitter<TaskGraphSpecChangedEventArgs>();
     @Output() public SelectionChanged = new EventEmitter<TaskGraphSelectionChangedEventArgs>();
     @Output() public ValidationChanged = new EventEmitter<TaskGraphValidationChangedEventArgs>();
@@ -197,6 +231,8 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
     /** Intent-only — the host navigates; this widget has no Router and must not acquire one. */
     @Output() public AgentOpenRequested = new EventEmitter<AgentOpenRequestedEventArgs>();
     @Output() public RecordOpenRequested = new EventEmitter<RecordOpenRequestedEventArgs>();
+    /** A connection was clicked. Payload is the canvas connection, or null when cleared. */
+    @Output() public ConnectionSelected = new EventEmitter<FlowConnection | null>();
 
     // ── Rendered state ───────────────────────────────────────────────────────
 
@@ -211,6 +247,7 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
 
     private currentSpec: TaskGraphSpec | null = null;
     private currentRuntime: TaskGraphRuntimeStatus | null = null;
+    private debugOverlay: TaskGraphDebugOverlay | null = null;
 
     public get IsEmpty(): boolean {
         return (this.currentSpec?.tasks?.length ?? 0) === 0;
@@ -455,8 +492,17 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
             this.knownPositions.clear();
             return;
         }
-        this.Nodes = SpecToNodes(this.currentSpec, this.currentRuntime ?? undefined, this.knownPositions);
-        this.Connections = SpecToConnections(this.currentSpec);
+        this.Nodes = SpecToNodes(
+            this.currentSpec,
+            this.currentRuntime ?? undefined,
+            this.knownPositions,
+            this.debugOverlay ?? undefined,
+        );
+        this.Connections = SpecToConnections(
+            this.currentSpec,
+            this.currentRuntime ?? undefined,
+            this.debugOverlay ?? undefined,
+        );
         this.Validate();
         this.arrangeIfNeverLaidOut();
     }
@@ -519,6 +565,16 @@ export class TaskGraphEditorComponent extends BaseAngularComponent implements On
      */
     public OnNodesChanged(nodes: FlowNode[]): void {
         for (const n of nodes) this.knownPositions.set(n.ID, { ...n.Position });
+    }
+
+    /** The canvas toolbar showed or hid the legend; tell whoever is remembering that choice. */
+    public OnLegendToggled(show: boolean): void {
+        this.ShowLegend = show;
+        this.LegendToggled.emit(show);
+    }
+
+    public OnConnectionSelected(connection: FlowConnection | null): void {
+        this.ConnectionSelected.emit(connection);
     }
 
     /** A single node was dragged. Same authority, narrower event. */
