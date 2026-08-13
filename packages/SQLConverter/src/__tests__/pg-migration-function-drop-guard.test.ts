@@ -148,7 +148,7 @@ function normalizeSignaturePart(s: string): string {
  * Strip block (`/​* ... *​/`) and line (`-- ...`) comments from a single line.
  * Tracks block-comment state across lines via the inBlockComment flag.
  */
-function stripComments(
+function StripComments(
     line: string,
     inBlockComment: boolean,
 ): { code: string; inBlockComment: boolean } {
@@ -191,7 +191,7 @@ function preprocessContent(content: string): { stripped: string; lineMap: number
 
     const lines = content.split('\n');
     for (let i = 0; i < lines.length; i++) {
-        const result = stripComments(lines[i], inBlockComment);
+        const result = StripComments(lines[i], inBlockComment);
         inBlockComment = result.inBlockComment;
         // Pad each character with its original line number for reporting
         for (let c = 0; c < result.code.length; c++) lineMap.push(i + 1);

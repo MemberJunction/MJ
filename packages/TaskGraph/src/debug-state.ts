@@ -22,6 +22,7 @@
  *
  * @module @memberjunction/task-graph
  */
+import { UUIDsEqual } from '@memberjunction/global';
 
 /** What a step allowance permits: one task, the current frontier, or one named task. */
 export type StepTarget = 'one' | 'wave' | string;
@@ -51,6 +52,12 @@ export type TaskGraphDebugState = {
      * it, so two dispatchers polling the same paused graph release work exactly once.
      */
     step?: StepTarget;
+    /**
+     * Continue from a breakpoint: this task's breakpoint is ignored for one claim so the stopped
+     * step actually runs. Without this, Resume clears `paused` and the next poll re-hits the same
+     * still-eligible breakpoint without claiming anything — a ForEach on the last step never starts.
+     */
+    skipBreakpointTaskID?: string | null;
     /**
      * Authored verdicts for edges whose conditions the user has overridden, keyed by
      * `MJ: Task Dependencies` row ID. `'false'` drops the edge (branch not taken → skip cascade);
@@ -103,6 +110,7 @@ export function ParseTaskGraphDebugState(raw: string | null | undefined): TaskGr
         if (typeof d.pausedBy === 'string') state.pausedBy = d.pausedBy;
         if (d.pausedReason === 'user' || d.pausedReason === 'breakpoint') state.pausedReason = d.pausedReason;
         if (typeof d.pausedAtTaskID === 'string') state.pausedAtTaskID = d.pausedAtTaskID;
+        if (typeof d.skipBreakpointTaskID === 'string') state.skipBreakpointTaskID = d.skipBreakpointTaskID;
         if (Array.isArray(d.breakpoints)) {
             const ids = d.breakpoints.filter((b): b is string => typeof b === 'string' && UUID_SHAPE.test(b));
             if (ids.length > 0) state.breakpoints = ids;
@@ -151,17 +159,21 @@ export function DecideClaimGate(debug: TaskGraphDebugState, eligibleTaskIDs: rea
             return eligibleTaskIDs.length > 0 ? { mode: 'step', taskIDs: [eligibleTaskIDs[0]] } : { mode: 'closed' };
         }
         // A named task steps only itself, and only when it is genuinely eligible.
-        return eligibleTaskIDs.includes(debug.step)
-            ? { mode: 'step', taskIDs: [debug.step] }
-            : { mode: 'closed' };
+        const named = eligibleTaskIDs.find((id) => UUIDsEqual(id, debug.step!));
+        return named ? { mode: 'step', taskIDs: [named] } : { mode: 'closed' };
     }
 
     if (debug.breakpoints && debug.breakpoints.length > 0) {
-        const bp = eligibleTaskIDs.find((id) => debug.breakpoints!.includes(id));
+        const bp = eligibleTaskIDs.find((id) => isArmedBreakpoint(debug, id));
         if (bp) return { mode: 'breakpoint', taskID: bp };
     }
 
     return { mode: 'open' };
+}
+
+function isArmedBreakpoint(debug: TaskGraphDebugState, taskID: string): boolean {
+    if (debug.skipBreakpointTaskID && UUIDsEqual(debug.skipBreakpointTaskID, taskID)) return false;
+    return (debug.breakpoints ?? []).some((id) => UUIDsEqual(id, taskID));
 }
 
 /**

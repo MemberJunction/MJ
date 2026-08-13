@@ -49,6 +49,50 @@ interface DropboxDownloadResponse extends files.FileMetadata {
   fileBinary: ArrayBuffer;
 }
 
+/** The diagnostic fields worth logging from a failed Dropbox API call. */
+interface DropboxErrorDiagnostics {
+  status?: number;
+  summary?: string;
+  message?: string;
+}
+
+/**
+ * Shape of the errors thrown by the Dropbox SDK.
+ *
+ * `DropboxResponseError` carries `status`, `headers` and `error`. Its `headers`
+ * is a fetch `Headers` instance whose data lives in internal slots, so it
+ * serialises to `{}`; `error` is the parsed API error body. None of it is
+ * authentication material — but this driver used to log
+ * `JSON.stringify(error, null, 2)` wholesale, which places no bound on what a
+ * future SDK version might attach. These are the fields we actually want.
+ */
+interface DropboxApiErrorShape {
+  status?: number;
+  message?: string;
+  error?: { error_summary?: string };
+}
+
+/** Caps a vendor-supplied string so a hostile or verbose endpoint cannot flood the log. */
+const MAX_DROPBOX_DETAIL_LENGTH = 300;
+
+function boundedDetail(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length === 0) return undefined;
+  return value.length > MAX_DROPBOX_DETAIL_LENGTH ? `${value.slice(0, MAX_DROPBOX_DETAIL_LENGTH)}…` : value;
+}
+
+/**
+ * Builds a log-safe, bounded description of a Dropbox SDK error.
+ * Never returns the error object itself, and never falls back to it.
+ */
+function describeDropboxError(error: unknown): DropboxErrorDiagnostics {
+  const e = (error ?? {}) as DropboxApiErrorShape;
+  return {
+    status: e.status,
+    summary: boundedDetail(e.error?.error_summary),
+    message: boundedDetail(e.message),
+  };
+}
+
 /**
  * FileStorageBase implementation for Dropbox cloud storage
  *
@@ -516,15 +560,16 @@ export class DropboxFileStorage extends FileStorageBase {
         ProviderKey: normalizedPath,
       };
     } catch (error) {
+      const details = describeDropboxError(error);
       console.error('[DropboxFileStorage.CreatePreAuthUploadUrl] Error:', {
         objectName,
         rootPath: this._rootPath,
-        error: error.message || error,
-        errorDetails: error.error || error,
-        errorStatus: error.status,
-        fullError: JSON.stringify(error, null, 2),
+        ...details,
       });
-      const errorMsg = error.error?.error_summary || error.message || JSON.stringify(error);
+      // Same allowlist for the thrown message — the previous
+      // `|| JSON.stringify(error)` fallback put the whole error object into an
+      // exception that callers are free to log again, further out.
+      const errorMsg = details.summary ?? details.message ?? `Dropbox API error${details.status ? ` (HTTP ${details.status})` : ''}`;
       throw new Error(`Failed to create upload URL for: ${objectName} - ${errorMsg}`);
     }
   }
@@ -585,7 +630,7 @@ export class DropboxFileStorage extends FileStorageBase {
       console.error('[DropboxFileStorage.CreatePreAuthDownloadUrl] Error:', {
         objectName,
         rootPath: this._rootPath,
-        error: error.message || error,
+        ...describeDropboxError(error),
       });
       throw new Error(`Failed to create download URL for: ${objectName}`);
     }

@@ -3,7 +3,7 @@ import { RecordNavigationAdapter } from '@memberjunction/ng-base-types';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MJAIAgentEntityExtended, MJAIPromptEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
-import { MJTemplateParamEntity, MJAIConfigurationEntity } from '@memberjunction/core-entities';
+import { MJTemplateParamEntity, MJAIConfigurationEntity, MJTaskEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -12,6 +12,48 @@ import { ChatMessage } from '@memberjunction/ai';
 import { Subject, Subscription } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ParseJSONRecursive, ParseJSONOptions, UUIDsEqual, EscapeHTML } from '@memberjunction/global';
+import {
+    ParentTaskIDFromStepOutput,
+    ReadPaneSizePair,
+    ToPaneSizePair,
+    type PaneSizePair,
+} from '@memberjunction/ng-task-graph-editor';
+
+type StreamedStep = {
+    StepType?: string;
+    OutputData?: string | Record<string, unknown> | null;
+};
+
+/** `GetAll()` on the agent run puts steps in `__runSteps`, not `Steps`. */
+function streamedRunSteps(serialized: unknown): StreamedStep[] {
+    if (!serialized || typeof serialized !== 'object') return [];
+    const record = serialized as Record<string, unknown>;
+    const raw = record['__runSteps'] ?? record['Steps'];
+    return Array.isArray(raw) ? raw as StreamedStep[] : [];
+}
+
+function streamedRunID(serialized: unknown): string | undefined {
+    if (!serialized || typeof serialized !== 'object') return undefined;
+    const id = (serialized as Record<string, unknown>)['ID'];
+    return typeof id === 'string' ? id : undefined;
+}
+
+interface AITestHarnessPrefs {
+    StartingPayloadOpen: boolean;
+}
+
+function ReadHarnessPrefs(raw: string | undefined): AITestHarnessPrefs {
+    const defaults: AITestHarnessPrefs = { StartingPayloadOpen: false };
+    if (!raw) return defaults;
+    try {
+        const parsed: unknown = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return defaults;
+        const obj = parsed as Record<string, unknown>;
+        return { StartingPayloadOpen: obj['StartingPayloadOpen'] === true };
+    } catch {
+        return defaults;
+    }
+}
 
 /**
  * Supported modes for the test harness
@@ -171,7 +213,17 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         private cdr: ChangeDetectorRef,
         private confirmService: MJConfirmService
     ) {
-    super();}
+        super();
+        try {
+            const saved = ReadPaneSizePair(UserInfoEngine.Instance.GetSetting(AITestHarnessComponent.SPLIT_KEY));
+            if (saved) this.HarnessSplitSizes = saved;
+            this.StartingPayloadOpen = ReadHarnessPrefs(
+                UserInfoEngine.Instance.GetSetting(AITestHarnessComponent.PREFS_KEY),
+            ).StartingPayloadOpen;
+        } catch {
+            // Engine not configured yet (unit tests, pre-bootstrap) — keep the default.
+        }
+    }
     
     /** The mode of operation - either 'agent' or 'prompt' */
     @Input() mode: TestHarnessMode = 'agent';
@@ -234,8 +286,37 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     public WorkflowPayloadError: string | null = null;
     /** The graph the most recent run submitted, so the harness can show it running. */
     public WorkflowParentTaskID: string | null = null;
+    /** True after Debug — chrome, breakpoints, and the start-paused seed stay on for this run. */
+    public WorkflowDebuggerActive = false;
+    public WorkflowSettled = false;
     /** Parsed starting payload, handed to the run as template data on the next send. */
     private workflowStartingData: Record<string, unknown> | null = null;
+    /** Consumed by executeAgent; set only by DebugWorkflow so Pause-after-submit cannot race. */
+    private startWorkflowPaused = false;
+    private workflowAttachTimer: ReturnType<typeof setInterval> | null = null;
+
+    /** [chat, sidebar] percentages. Restored from `MJ: User Settings`. */
+    public HarnessSplitSizes: PaneSizePair = [70, 30];
+    private static readonly SPLIT_KEY = 'mj.aiTestHarness.splitSizes.v1';
+    private static readonly PREFS_KEY = 'mj.aiTestHarness.prefs.v1';
+    /** Starting-payload editor is collapsed unless the person opens it. */
+    public StartingPayloadOpen = false;
+
+    public OnToggleStartingPayload(): void {
+        this.StartingPayloadOpen = !this.StartingPayloadOpen;
+        UserInfoEngine.Instance.SetSettingDebounced(
+            AITestHarnessComponent.PREFS_KEY,
+            JSON.stringify({ StartingPayloadOpen: this.StartingPayloadOpen } satisfies AITestHarnessPrefs),
+        );
+        this.cdr.markForCheck();
+    }
+
+    public OnHarnessSplitDragEnd(sizes: readonly (number | '*')[]): void {
+        const pair = ToPaneSizePair(sizes);
+        if (!pair) return;
+        this.HarnessSplitSizes = pair;
+        UserInfoEngine.Instance.SetSettingDebounced(AITestHarnessComponent.SPLIT_KEY, JSON.stringify(pair));
+    }
 
     /**
      * Starts the workflow.
@@ -262,13 +343,35 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             }
         }
 
+        this.stopWorkflowAttachPoll();
         this.WorkflowParentTaskID = null;
+        if (!this.startWorkflowPaused) {
+            this.WorkflowDebuggerActive = false;
+            this.WorkflowSettled = false;
+        }
         this.workflowStartingData = payload ?? null;
         // Reuse the existing send path: it already owns streaming, the execution monitor, run
         // capture and error handling. A second invocation path here would be a second thing to keep
         // correct, and the two would drift.
         this.currentUserMessage = 'Run the workflow.';
         await this.sendMessage();
+        this.startWorkflowPaused = false;
+    }
+
+    /**
+     * Starts the workflow paused. `$.debug.paused` is written at Submit — Pause-after-submit
+     * races the first dispatcher poll, so this cannot be a follow-up control.
+     */
+    public async DebugWorkflow(): Promise<void> {
+        this.startWorkflowPaused = true;
+        this.WorkflowDebuggerActive = true;
+        this.WorkflowSettled = false;
+        await this.RunWorkflow();
+    }
+
+    public OnWorkflowCanvasSettled(): void {
+        this.WorkflowSettled = true;
+        this.cdr.detectChanges();
     }
 
     private _isVisible: boolean = false;
@@ -560,6 +663,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         if (this._agentStreamSub) {
             this._agentStreamSub.unsubscribe();
         }
+        this.stopWorkflowAttachPoll();
     }
 
     /**
@@ -631,6 +735,11 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                     
                     // Pass the steps from the agent run to the execution monitor for live display
                     this.liveAgentSteps = this.currentAgentRun.Steps || [];
+                    // Flow agents park on the graph. Attach the canvas from the TaskGraph step
+                    // the moment it lands — waiting for RunAIAgent to return deadlocks Debug.
+                    if (this.EffectiveMode === 'workflow') {
+                        this.tryAttachWorkflowFromStream(serializedAgentRun, this.liveAgentSteps);
+                    }
                     
                     console.log('📊 Agent run update:', {
                         id: this.currentAgentRun.ID,
@@ -1141,6 +1250,11 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             const defaultConfig = this.availableConfigurations.find(c => c.IsDefault);
             this.agentConfigurationId = defaultConfig?.ID || '';
         }
+        this.stopWorkflowAttachPoll();
+        this.WorkflowParentTaskID = null;
+        this.WorkflowDebuggerActive = false;
+        this.startWorkflowPaused = false;
+        this.WorkflowSettled = false;
     }
     
     /**
@@ -1357,18 +1471,85 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * submit a graph — true of every Loop agent, and of a Flow agent whose compile failed.
      */
     private captureSubmittedGraph(result: { agentRun?: { Steps?: Array<{ StepType?: string; OutputData?: string | null }> } }): void {
-        const steps = result?.agentRun?.Steps ?? [];
+        this.tryAttachWorkflowFromStream(result?.agentRun, result?.agentRun?.Steps ?? []);
+    }
+
+    /**
+     * The canvas must appear when the graph is *submitted*, not when the parked agent run
+     * settles. Debug starts paused, so settle never happens until the operator continues.
+     *
+     * Three sources, in order: streamed `__runSteps` (what GetAll actually sends), the
+     * hydrated `Steps` collection, then a RunView of the parent task by AgentRunID —
+     * OutputData is often missing from the live stream even when the monitor already
+     * shows the TaskGraph step as complete.
+     */
+    private tryAttachWorkflowFromStream(
+        serialized: unknown,
+        hydratedSteps: Array<{ StepType?: string; OutputData?: string | Record<string, unknown> | null }>,
+    ): void {
+        if (this.WorkflowParentTaskID) return;
+        const streamed = streamedRunSteps(serialized);
+        if (this.tryAttachWorkflowFromSteps(streamed) || this.tryAttachWorkflowFromSteps(hydratedSteps)) {
+            return;
+        }
+        const runID = streamedRunID(serialized) ?? this.currentAgentRun?.ID;
+        if (runID && !runID.startsWith('temp-')) {
+            this.startWorkflowAttachPoll(runID);
+            void this.tryAttachWorkflowFromAgentRun(runID);
+        }
+    }
+
+    private tryAttachWorkflowFromSteps(
+        steps: Array<{ StepType?: string; OutputData?: string | Record<string, unknown> | null }>,
+    ): boolean {
+        if (this.WorkflowParentTaskID) return true;
         for (const step of steps) {
-            if (step?.StepType !== 'TaskGraph' || !step.OutputData) continue;
-            try {
-                const parsed = JSON.parse(step.OutputData) as { parentTaskID?: string };
-                if (parsed?.parentTaskID) {
-                    this.WorkflowParentTaskID = parsed.parentTaskID;
-                    return;
-                }
-            } catch {
-                // A malformed step output costs this one lookup, not the run's result.
+            if (step?.StepType !== 'TaskGraph') continue;
+            const parentTaskID = ParentTaskIDFromStepOutput(step.OutputData);
+            if (!parentTaskID) continue;
+            this.attachWorkflowCanvas(parentTaskID);
+            return true;
+        }
+        return false;
+    }
+
+    private attachWorkflowCanvas(parentTaskID: string): void {
+        this.stopWorkflowAttachPoll();
+        this.WorkflowParentTaskID = parentTaskID;
+        this.cdr.detectChanges();
+    }
+
+    private async tryAttachWorkflowFromAgentRun(agentRunID: string): Promise<void> {
+        if (this.WorkflowParentTaskID) return;
+        const result = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<{ ID: string }>({
+            EntityName: 'MJ: Tasks',
+            ExtraFilter: `AgentRunID='${agentRunID}' AND ParentID IS NULL`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            BypassCache: true,
+            MaxRows: 1,
+        });
+        const id = result.Success ? result.Results?.[0]?.ID : undefined;
+        if (!id) return;
+        this.attachWorkflowCanvas(id);
+    }
+
+    private startWorkflowAttachPoll(agentRunID: string): void {
+        if (this.workflowAttachTimer) return;
+        let ticks = 0;
+        this.workflowAttachTimer = setInterval(() => {
+            if (this.WorkflowParentTaskID || ++ticks > 40) {
+                this.stopWorkflowAttachPoll();
+                return;
             }
+            void this.tryAttachWorkflowFromAgentRun(agentRunID);
+        }, 400);
+    }
+
+    private stopWorkflowAttachPoll(): void {
+        if (this.workflowAttachTimer) {
+            clearInterval(this.workflowAttachTimer);
+            this.workflowAttachTimer = null;
         }
     }
 
@@ -1487,7 +1668,8 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                 data: Object.keys(dataContext).length > 0 ? dataContext : undefined, 
                 lastRunId: this.lastAgentRunId || undefined,
                 autoPopulateLastRunPayload: this.lastAgentRunId ? true : false,
-                configurationId: this.agentConfigurationId || undefined
+                configurationId: this.agentConfigurationId || undefined,
+                taskGraphDebug: this.startWorkflowPaused ? { paused: true } : undefined,
             });
 
             // Stop elapsed time counter

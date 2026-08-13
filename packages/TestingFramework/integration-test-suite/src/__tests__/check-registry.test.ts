@@ -43,6 +43,8 @@ import { ViewSecurityChecks } from '../checks/view-security.checks';
 import { AiProvidersChecks } from '../checks/ai-providers.checks';
 import { AppBehavioralChecks } from '../checks/app-behavioral.checks';
 import { ContentVectorizationChecks } from '../checks/content-vectorization.checks';
+import { MaterializedReadChecks } from '../checks/materialized-read.checks';
+import { MaterializedEntityReadChecks } from '../checks/materialized-entity-read.checks';
 import { ScopedAnonElevationChecks } from '../checks/scoped-anon-elevation.checks';
 import { EntityGraphChecks } from '../checks/entity-graph.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
@@ -136,7 +138,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
-        ['content-vectorization', ContentVectorizationChecks, 6], // CV1-CV6 content vectorization pipeline (IT67)
+        ['content-vectorization', ContentVectorizationChecks, 8], // CV1-CV8 content vectorization pipeline (IT67)
+        ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
+        ['materialized-entity-read', MaterializedEntityReadChecks, 2], // EMR1-EMR2 entity base-view RunView redirect (IT78)
         ['scoped-anon-elevation', ScopedAnonElevationChecks, 5], // SA1-SA5 scoped-anonymous elevation permission contract (IT68)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
@@ -226,7 +230,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'codegen-determinism': 6,
         'communication': 5,
         'concurrent': 2,
-        'content-vectorization': 6,
+        'content-vectorization': 8,
         'conversation-compaction': 12,
         'dataset-cache': 3,
         'entity-actions': 8,
@@ -237,6 +241,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'field-rules-bulk-update': 3,
         'layered-base-views': 6,
         'lists': 3,
+        'materialized-entity-read': 2,
+        'materialized-read': 3,
         'metadata-consistency': 7,
         'metadata-sync': 9,
         'open-app-teardown': 2,
@@ -299,7 +305,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(81);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(83);
     });
 });
 
@@ -356,6 +362,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'content-vectorization.CV4',
         'content-vectorization.CV5',
         'content-vectorization.CV6',
+        'content-vectorization.CV7',
+        'content-vectorization.CV8',
         'entity-actions.EA1',
         'entity-actions.EA2',
         'entity-actions.EA3',

@@ -73,6 +73,19 @@ import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetect
           <i class="fa-solid fa-list-check"></i>
         </button>
       </div>
+
+      <div class="mj-flow-toolbar-divider"></div>
+
+      <div class="mj-flow-toolbar-group">
+        <button class="mj-flow-toolbar-btn" (click)="MinimizeClicked.emit()"
+                title="Minimize toolbar" aria-label="Minimize toolbar">
+          <i class="fa-solid fa-compress"></i>
+        </button>
+        <button class="mj-flow-toolbar-btn" (click)="HideClicked.emit()"
+                title="Hide toolbar" aria-label="Hide toolbar">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
     </div>
     `,
   styles: [`
@@ -158,4 +171,6 @@ export class FlowToolbarComponent {
   @Output() MinimapToggled = new EventEmitter<boolean>();
   @Output() LegendToggled = new EventEmitter<boolean>();
   @Output() PanModeToggled = new EventEmitter<boolean>();
+  @Output() MinimizeClicked = new EventEmitter<void>();
+  @Output() HideClicked = new EventEmitter<void>();
 }
