@@ -197,7 +197,7 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
         });
 
         it('a malformed spec element (missing/non-string column, operator, or paramName) → null, never throws', () => {
-            const bad = [
+            const bad: unknown[] = [
                 [{ operator: '=', paramName: 'status', kind: 'scalar' }],            // missing column
                 [{ column: 'Status', paramName: 'status', kind: 'scalar' }],         // missing operator
                 [{ column: 'Status', operator: '=', kind: 'scalar' }],               // missing paramName
@@ -205,8 +205,9 @@ describe('GenericDatabaseProvider.buildMaterializedReadQuery', () => {
                 [null],                                                              // null element
             ];
             for (const s of bad) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                expect(build({ ...base, spec: s as any, paramValues: { status: 'x' }, isPostgres: false })).toBeNull();
+                // Intentionally malformed spec elements: build() must return null, never throw.
+                const malformedSpec = s as Array<{ column: string; operator: string; paramName: string; kind: 'scalar' | 'list' }>;
+                expect(build({ ...base, spec: malformedSpec, paramValues: { status: 'x' }, isPostgres: false })).toBeNull();
             }
         });
     });
