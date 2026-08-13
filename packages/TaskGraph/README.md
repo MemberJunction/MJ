@@ -5,7 +5,8 @@ that turn a node into work.
 
 > **New to workflows?** Start with the [Workflows and Task Graphs
 > Guide](../../guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md), which covers what a workflow is, when to
-> use one, and every rule that decides what happens next. This README is the package tour.
+> use one, and every rule that decides what happens next. To **step a live run**, see the
+> [Workflow Debugger Guide](../../guides/WORKFLOW_DEBUGGER_GUIDE.md). This README is the package tour.
 
 ---
 
@@ -72,6 +73,8 @@ without standing up the agent framework.
 | `DispatcherConditionEvaluator.ts` | Edge conditions, over the superset context both dialects can read. |
 | `TaskGraphSubmitterImpl.ts` | Registers the durable submitter under the `ClassFactory` seam. |
 | `operations/` | The `TaskGraph.*` remote operations. |
+| `debug-state.ts` | Durable `$.debug` bag — pause, breakpoints, step allowance, `skipBreakpointTaskID`, edge overrides. Pure claim-gate. |
+| `task-graph-kick.ts` | Process-local kick set. `Start()` registers; `Submit` pokes every running dispatcher so the first pass is immediate. |
 
 ---
 
@@ -146,6 +149,30 @@ await dispatcher.Start();
 Without `LoadTaskGraphOperations()` nothing registers the submitter, and
 `GetTaskGraphSubmitter()` returns `null` — which callers must report rather than swallow.
 
+`Start()` registers a kick and fires one immediately. Do not wait for the first `setInterval`
+tick — that is a 5s dead pause after Debug/Run. Submit cannot import the dispatcher instance
+(submit and execute are separate halves), so it calls `KickTaskGraphDispatchers()` instead.
+
+---
+
+## Debugging a live graph
+
+Every control is a **gate on claiming**, never on running. State lives under `$.debug` on the
+parent task's `InputPayload`. The debugger UI and the dispatcher never talk directly — they
+rendezvous on the row. See [`debug-state.ts`](src/debug-state.ts) and the
+[Workflow Debugger Guide](../../guides/WORKFLOW_DEBUGGER_GUIDE.md).
+
+- **Start-paused.** Submit writes `paused: true` before any dispatcher has seen the graph.
+- **Breakpoints.** The claim gate treats an armed, eligible task like a hold. Resume from a
+  breakpoint stamps `skipBreakpointTaskID` so that one claim is allowed through; without it the
+  next poll re-hits the same Pending row. `ForEach` is one task — one Continue runs the loop.
+- **Edge overrides.** Authored `'true'` / `'false'` on a `TaskDependency` id, honored by every
+  instance, survive a restart.
+- **Kick.** After Submit (and on `Start()`), `KickTaskGraphDispatchers()` runs a pass now.
+
+The Angular drop-in is `<mj-task-graph-debugger>` in
+[`@memberjunction/ng-task-graph-editor`](../Angular/Generic/task-graph-editor/README.md).
+
 ---
 
 ## Cost rollup
@@ -179,6 +206,8 @@ real rollup.
 ## Related
 
 - [Workflows and Task Graphs Guide](../../guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md) — start here
+- [Workflow Debugger Guide](../../guides/WORKFLOW_DEBUGGER_GUIDE.md) — step a live run
+- [`@memberjunction/ng-task-graph-editor`](../Angular/Generic/task-graph-editor/README.md) — canvas and drop-in debugger
 - [`@memberjunction/ai-core-plus`](../AI/CorePlus) — the spec, validator, compiler, pure algorithms,
   payload mapping and layout
 - [`@memberjunction/ai-agents`](../AI/Agents) — the agent framework and `FlowAgentType`

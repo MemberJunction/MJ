@@ -134,19 +134,19 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
-        ['content-vectorization', ContentVectorizationChecks, 6], // CV1-CV6 content vectorization pipeline (IT67)
+        ['content-vectorization', ContentVectorizationChecks, 8], // CV1-CV8 content vectorization pipeline (IT67)
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
         ['materialized-entity-read', MaterializedEntityReadChecks, 2], // EMR1-EMR2 entity base-view RunView redirect (IT78)
         ['scoped-anon-elevation', ScopedAnonElevationChecks, 5], // SA1-SA5 scoped-anonymous elevation permission contract (IT68)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
         ['task-graph-orchestration', TaskGraphOrchestrationChecks, 18], // TG1-TG18 submission, validation and trigger bindings (IT71)
-        // TX1-TX17, the dispatcher actually running graphs (IT74). TX8-TX11 landed with Round 1
-        // (#3745), TX12-TX17 with Round 2. TX14 arrived last and in a substituted shape: the plan
-        // named an injected `Save()` failure, which is unreachable from the bundle, so it triggers
-        // the same run-half `defer` verdict through an unreadable run instead. The count moved
-        // deliberately, which is what this guard is for.
-        ['task-graph-execution', TaskGraphExecutionChecks, 17],
+        // TX1-TX27, the dispatcher actually running graphs (IT74). TX8-TX11 landed with Round 1
+        // (#3745), TX12-TX17 with Round 2, TX18-TX26 with Round 3, and TX27 with the two-instance exercise. TX14 arrived in a substituted
+        // shape: the plan named an injected `Save()` failure, which is unreachable from the bundle,
+        // so it triggers the same run-half `defer` verdict through an unreadable run instead. Every
+        // move of this count has been deliberate, which is what the guard is for.
+        ['task-graph-execution', TaskGraphExecutionChecks, 27],
         ['entity-actions', EntityActionChecks, 8], // EA1-EA8 the entity-action substrate end to end (IT75)
     ];
 

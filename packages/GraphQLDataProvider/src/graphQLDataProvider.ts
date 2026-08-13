@@ -49,6 +49,48 @@ export type SocketConnectionState = 'connected' | 'disconnected' | 'unknown';
 export type AuthenticationErrorCallback = (error: Error) => void;
 
 /**
+ * One dispatcher lifecycle frame for a durable workflow run (task graph), as delivered by the
+ * `taskGraphFrames` subscription. Mirrors the server's `TaskGraphFrameNotification` — the graph's
+ * owner is a server-side filter key and never appears here.
+ */
+export interface TaskGraphFrameEvent {
+    /** What happened — 'TaskStarted' | 'TaskCompleted' | 'TaskFailed' | 'TaskBlocked' | 'TaskSkipped'
+     *  | 'TaskAwaitingHuman' | 'GraphSettled' | 'GateDecision' | 'ClaimChanged' | 'PassCompleted'
+     *  | 'GraphPaused' | 'GraphResumed' | 'BreakpointHit' | 'NodeProgress'. Open string so a newer
+     *  server can add kinds without breaking an older client, which should ignore what it does not know. */
+    kind: string;
+    parentTaskId: string;
+    taskId?: string;
+    taskName?: string;
+    status?: string;
+    errorMessage?: string;
+    assignedUserId?: string;
+    completedCount?: number;
+    totalCount?: number;
+    /** GateDecision */
+    edgeId?: string;
+    dependsOnTaskId?: string;
+    verdict?: 'satisfied' | 'notTaken' | 'held';
+    conditionText?: string;
+    reason?: string;
+    /** ClaimChanged */
+    claimEvent?: 'claimed' | 'heartbeat-lost' | 'reclaimed';
+    claimedBy?: string;
+    claimExpiresAt?: string;
+    /** PassCompleted */
+    passNumber?: number;
+    eligibleCount?: number;
+    heldCount?: number;
+    claimedCount?: number;
+    /** The dispatcher instance's own load across every graph — not this graph's in-flight count. */
+    instanceInFlightCount?: number;
+    /** NodeProgress */
+    progressMessage?: string;
+    progressPercent?: number;
+    date?: string;
+}
+
+/**
  * Shared, stateless FieldMapper instance. FieldMapper holds no per-call state (only static
  * prefix constants), so a single shared instance is reused everywhere instead of allocating a
  * new FieldMapper per row in the RunView(s) deserialization loops (ConvertBackToMJFields) and
@@ -3025,6 +3067,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         });
         this._pushStatusSubjects.clear();
+
+        this._taskGraphFrameStreams.forEach((entry, parentTaskId) => {
+            try {
+                entry.subject.complete();
+                entry.subscription.unsubscribe();
+            } catch (e) {
+                console.error(`[GraphQLDataProvider] Error cleaning up frame stream for ${parentTaskId}:`, e);
+            }
+        });
+        this._taskGraphFrameStreams.clear();
     }
 
     /**
@@ -3305,6 +3357,122 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 sub.unsubscribe();
             };
         });
+    }
+
+    /**
+     * Shared, refcounted frame streams per watched graph — the client half of the
+     * `taskGraphFrames` subscription. Torn down when the last subscriber leaves; frames are
+     * graph-scoped and a settled graph stops emitting, so no idle reaper is needed.
+     */
+    private _taskGraphFrameStreams: Map<string, {
+        subject: Subject<TaskGraphFrameEvent>;
+        subscription: Subscription;
+        activeSubscribers: number;
+    }> = new Map();
+
+    /**
+     * Live dispatcher lifecycle frames for one workflow run (durable task graph), keyed by the
+     * graph's parent task ID.
+     *
+     * This is the push channel the run console rides: `TaskStarted` / `TaskCompleted` /
+     * `TaskFailed` / `TaskBlocked` / `TaskSkipped` / `TaskAwaitingHuman` / `GraphSettled`, plus the
+     * debugger frames (`GateDecision`, `ClaimChanged`, `PassCompleted`, `GraphPaused`,
+     * `GraphResumed`, `BreakpointHit`, `NodeProgress`). Addressed by graph rather than by session on
+     * purpose — a durable graph outlives the tab that submitted it, so "watch this workflow run"
+     * survives a refresh and works for whoever the server authorizes (the server filter is
+     * owner-scoped and fails closed).
+     *
+     * **Frames are advisory; rows are truth.** Delivery is best-effort and in-process on the server,
+     * so consumers should treat a frame as a trigger to render and reconcile from `MJ: Tasks` rows
+     * on attach, on reconnect, and on `GraphSettled` — never as a substitute for them.
+     *
+     * The stream is shared and refcounted per graph: ten components watching one run cost one
+     * WebSocket subscription. Errors and completions tear the shared entry down so the next call
+     * re-subscribes fresh (the same posture `PushStatusUpdates` takes).
+     */
+    public TaskGraphFrames(parentTaskId: string): Observable<TaskGraphFrameEvent> {
+        const attachTo = (entry: { subject: Subject<TaskGraphFrameEvent>; activeSubscribers: number }): Observable<TaskGraphFrameEvent> => {
+            return new Observable<TaskGraphFrameEvent>((observer) => {
+                entry.activeSubscribers++;
+                const sub = entry.subject.subscribe(observer);
+                return () => {
+                    sub.unsubscribe();
+                    const current = this._taskGraphFrameStreams.get(parentTaskId);
+                    if (!current) return;
+                    current.activeSubscribers--;
+                    if (current.activeSubscribers <= 0) {
+                        // Last watcher left — close the WebSocket subscription rather than letting
+                        // a settled run's stream linger until an idle reaper notices.
+                        current.subscription.unsubscribe();
+                        current.subject.complete();
+                        this._taskGraphFrameStreams.delete(parentTaskId);
+                    }
+                };
+            });
+        };
+
+        const existing = this._taskGraphFrameStreams.get(parentTaskId);
+        if (existing) {
+            return attachTo(existing);
+        }
+
+        const SUBSCRIBE_TO_FRAMES = gql`subscription TaskGraphFrames($parentTaskId: ID!) {
+            taskGraphFrames(parentTaskId: $parentTaskId) {
+                kind
+                parentTaskId
+                taskId
+                taskName
+                status
+                errorMessage
+                assignedUserId
+                completedCount
+                totalCount
+                edgeId
+                dependsOnTaskId
+                verdict
+                conditionText
+                reason
+                claimEvent
+                claimedBy
+                claimExpiresAt
+                passNumber
+                eligibleCount
+                heldCount
+                claimedCount
+                instanceInFlightCount
+                progressMessage
+                progressPercent
+                date
+            }
+        }`;
+
+        const subject = new Subject<TaskGraphFrameEvent>();
+        const subscription = new Subscription();
+        subscription.add(
+            // `subscribe()` already owns the WS client lifecycle, JWT refresh, and reconnect
+            // posture — riding it keeps one implementation of that machinery.
+            this.subscribe(SUBSCRIBE_TO_FRAMES, { parentTaskId }).subscribe({
+                next: (data: { taskGraphFrames?: TaskGraphFrameEvent }) => {
+                    if (data?.taskGraphFrames) {
+                        subject.next(data.taskGraphFrames);
+                    }
+                },
+                error: (error) => {
+                    subject.error(error);
+                    this._taskGraphFrameStreams.delete(parentTaskId);
+                },
+                complete: () => {
+                    // Token refresh completes the stream by design; consumers re-subscribe and land
+                    // on a fresh WebSocket. Completing the subject propagates that signal.
+                    subject.complete();
+                    this._taskGraphFrameStreams.delete(parentTaskId);
+                },
+            })
+        );
+
+        const entry = { subject, subscription, activeSubscribers: 0 };
+        this._taskGraphFrameStreams.set(parentTaskId, entry);
+        return attachTo(entry);
     }
 
     /**
