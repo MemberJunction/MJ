@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT32 - RunView Cross-Feature Edges",
+    "Description": "RunView cross-feature interactions: OrderBy on unprojected column, count_only+Aggregates, MaxRows+Aggregates, StartRow past end, empty-entity across ResultTypes, literal binding safety (escapes/unicode/long literals). 6 checks (RVF1-RVF6), read-only, client transport.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "RunView cross-feature interactions: OrderBy on unprojected column, count_only+Aggregates, MaxRows+Aggregates, StartRow past end, empty-entity across ResultTypes, literal binding safety (escapes/unicode/long literals). 6 checks (RVF1-RVF6), read-only, client transport."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "runview-features"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "1D6AFAD5-D438-4212-B1BB-C7CC686722BD"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T01:12:44.099Z",
+    "checksum": "1f86b07a4e7bb1e7dd121e4a352d9ec04e8d6cec95fbc45f1977c7780dde1503"
+  }
+}

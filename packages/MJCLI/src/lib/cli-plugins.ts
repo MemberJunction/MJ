@@ -1,4 +1,5 @@
 import { CLIPluginRegistry } from '@memberjunction/cli-core';
+import { RegisterDevWorkspaceUsage } from './dev-workspace/usage.js';
 
 /**
  * Loads all CLI plugins so their `@RegisterClass(BaseCLIPlugin, …)` decorators
@@ -17,6 +18,10 @@ import { CLIPluginRegistry } from '@memberjunction/cli-core';
 export async function loadAllCliPlugins(searchFrom: string = process.cwd()): Promise<void> {
   await import('@memberjunction/metadata-sync/plugins');
   await import('@memberjunction/codegen-lib/plugins');
+  // The `dev` domain ships inside this CLI as plain oclif commands (they must stay
+  // bootstrap-free), so it declares its usage through CLIPluginRegistry.RegisterUsage
+  // on import rather than through a plugin's `static Usage`.
+  RegisterDevWorkspaceUsage();
   const { failed } = await CLIPluginRegistry.LoadPluginsFromConfig(searchFrom);
   // Surface (don't swallow) any third-party plugin that failed to load. stderr
   // keeps stdout clean for `--format=json` consumers.

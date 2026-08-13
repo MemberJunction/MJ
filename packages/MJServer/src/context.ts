@@ -1,10 +1,13 @@
 import { IncomingMessage } from 'http';
+import { createHash, timingSafeEqual } from 'crypto';
 import { default as jwt } from 'jsonwebtoken';
 import 'reflect-metadata';
 import { Subject, firstValueFrom } from 'rxjs';
 import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import sql from 'mssql';
 import { getSigningKeys, getSystemUser, getValidationOptions, verifyUserRecord, extractUserInfoFromPayload } from './auth/index.js';
+import { CloneUserForSessionContext } from './auth/sessionUserClone.js';
+import { GetAPIKeyActingContextResolver } from './auth/actingContextResolver.js';
 import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
 import { authCache } from './cache.js';
 import { userEmailMap, apiKey, mj_core_schema } from './config.js';
@@ -15,11 +18,11 @@ import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
-import { DatabaseProviderBase, UserInfo, type MagicLinkScope } from '@memberjunction/core';
-import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { DatabaseProviderBase, UserInfo, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
+import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 
 // ── Session / login audit (Phase 3) ───────────────────────────────────────────
@@ -242,8 +245,17 @@ function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload
     }
   }
 
-  // Named session with no resource scope → no per-request state needed, use the cached user.
-  if (!isAnon && !scope) {
+  // Returning-visitor context (RV1/RV2/RV4): carried on a widget guest token so the voice path
+  // (server-created conversation) stamps the same returning-visitor anchor + resolved identity.
+  const visitorContext = extractReturningVisitorContext(payload);
+
+  // Widget-instance identity (mj_widget_id): present on every public web-widget guest token. The
+  // privileged agent-dispatch path reads it to resolve the AUTHORITATIVE pinned agent for the guest
+  // (so a guest can never run an arbitrary agent under the elevated server principal).
+  const widgetGuestContext = extractWidgetGuestContext(payload);
+
+  // Named session with no resource scope and no widget/visitor context → no per-request state needed.
+  if (!isAnon && !scope && !visitorContext && !widgetGuestContext) {
     return userRecord;
   }
 
@@ -255,12 +267,50 @@ function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload
   if (scope) {
     sessionUser.MagicLinkScope = scope;
   }
+  if (visitorContext) {
+    sessionUser.ReturningVisitorContext = visitorContext;
+  }
+  if (widgetGuestContext) {
+    sessionUser.WidgetGuestContext = widgetGuestContext;
+  }
   if (isAnon) {
     // Mark the session so the CurrentUser field resolver serves these synthesized roles
     // (the shared Anonymous principal holds none in the DB). See UserInfo.IsMagicLinkAnonymous.
     sessionUser.IsMagicLinkAnonymous = true;
   }
   return sessionUser;
+}
+
+/**
+ * Extracts the returning-visitor context (RV1/RV2/RV4) from a widget guest token's claims, or
+ * undefined when the token carries no VisitorKey (the default, remembering-off case). Used so the
+ * voice path can stamp the conversation with the same anchor/identity the text path stamps client-side.
+ */
+function extractReturningVisitorContext(payload: jwt.JwtPayload): ReturningVisitorContext | undefined {
+  const visitorKey = payload['mj_visitor_key'];
+  if (typeof visitorKey !== 'string' || !visitorKey) {
+    return undefined;
+  }
+  const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
+  return {
+    VisitorKey: visitorKey,
+    LastConversationID: str(payload['mj_last_conversation_id']),
+    LinkedEntityID: str(payload['mj_linked_entity_id']),
+    LinkedRecordID: str(payload['mj_linked_record_id']),
+  };
+}
+
+/**
+ * Extracts the widget-instance identity (`mj_widget_id`) from a public web-widget guest token, or
+ * undefined when the token carries none (every non-widget session). Carried so the privileged
+ * agent-dispatch path can resolve the authoritative pinned agent for the guest from the trusted token.
+ */
+function extractWidgetGuestContext(payload: jwt.JwtPayload): WidgetGuestContext | undefined {
+  const widgetId = payload['mj_widget_id'];
+  if (typeof widgetId !== 'string' || !widgetId) {
+    return undefined;
+  }
+  return { WidgetID: widgetId };
 }
 
 const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>
@@ -272,7 +322,13 @@ const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayloa
       return;
     }
 
-    const verifyOptions: jwt.VerifyOptions = {};
+    const verifyOptions: jwt.VerifyOptions = {
+      // SECURITY: explicitly pin the accepted signature algorithms to the asymmetric family.
+      // The signing key here comes from the issuer's JWKS (an RSA/EC public key), so without an
+      // explicit allow-list a future key-format change or library regression could reintroduce
+      // classic `alg=none` / RS256->HS256 confusion attacks. Pinning fails such tokens closed.
+      algorithms: ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512', 'PS256'],
+    };
     if (Array.isArray(options.audience)) {
       verifyOptions.audience = options.audience as [string, ...string[]];
     } else {
@@ -320,7 +376,8 @@ export const getUserPayload = async (
   requestDomain?: string,
   systemApiKey?: string,
   userApiKey?: string,
-  requestContext?: RequestContext
+  requestContext?: RequestContext,
+  req?: IncomingMessage
 ): Promise<UserPayload> => {
   try {
     const readOnlyDataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -347,7 +404,7 @@ export const getUserPayload = async (
         systemUser
       );
 
-      if (validationResult.IsValid && validationResult.User) {
+      if (validationResult.IsValid && validationResult.User && validationResult.APIKeyId) {
         // Get the user from UserCache to ensure UserRoles is properly populated
         // The validationResult.User from APIKeyEngine doesn't include UserRoles
         const cachedUser = UserCache.Instance.Users.find(
@@ -355,7 +412,32 @@ export const getUserPayload = async (
         );
 
         // Use cached user if available, otherwise fall back to the validation result
-        const userRecord = cachedUser || validationResult.User;
+        const resolvedUser = cachedUser || validationResult.User;
+
+        // ALWAYS clone before stamping per-session state: the resolved user is
+        // very often the SHARED UserCache instance, and stamping it in place
+        // leaks one session's row-filter bindings / acting context to every
+        // concurrent session of the same user (same pattern as
+        // buildMagicLinkSessionUser — see sessionUserClone.ts).
+        const userRecord = CloneUserForSessionContext(resolvedUser);
+
+        // Row-filter bindings for this key, rebuilt PER REQUEST from the
+        // APIKeysEngineBase cache (staleness envelope = scopeCacheTTLMs, same
+        // as scope enforcement). Consumed by
+        // EntityInfo.GetEffectiveRowFilterWhereClause at every RLS enforcement
+        // point — outside the role-RLS exemption. Throws (fail closed) if the
+        // engine's base cache has not loaded yet.
+        userRecord.APIKeyRowFilters = apiKeyEngine.GetRowFilterBindingsForKey(validationResult.APIKeyId);
+
+        // Acting context: values are deployment-supplied via the registered
+        // resolver (plan §5.8) — server-derived only, never client input. No
+        // resolver (the default) means no acting context, and any filter
+        // requiring {{Acting*}} tokens fails closed.
+        const actingResolver = GetAPIKeyActingContextResolver();
+        if (actingResolver) {
+          userRecord.APIKeyActingContext =
+            (await actingResolver(req, userRecord, validationResult.APIKeyId)) ?? undefined;
+        }
 
         return {
           userRecord,
@@ -373,7 +455,13 @@ export const getUserPayload = async (
     // Check for system API key (x-mj-api-key header)
     // This authenticates as the system user for system-level operations
     if (systemApiKey && systemApiKey != String(undefined)) {
-      if (systemApiKey === apiKey) {
+      // SECURITY: compare the superadmin system API key in constant time. A plain `===`
+      // short-circuits on the first differing byte, leaking a timing side-channel that could
+      // be used to recover the key byte-by-byte. Hash both sides to fixed-length digests so
+      // timingSafeEqual never throws on length mismatch and the comparison is length-agnostic.
+      const systemKeyDigest = createHash('sha256').update(String(systemApiKey)).digest();
+      const providedKeyDigest = createHash('sha256').update(String(apiKey)).digest();
+      if (timingSafeEqual(systemKeyDigest, providedKeyDigest)) {
         const systemUser = await getSystemUser(readOnlyDataSource);
         return {
           userRecord: systemUser,
@@ -389,7 +477,10 @@ export const getUserPayload = async (
     const token = bearerToken.replace('Bearer ', '');
 
     if (!token) {
-      console.warn('No token to validate');
+      // No log here — an anonymous/unauthenticated request is routine (a health check, a
+      // CORS preflight-adjacent probe, a client that hasn't finished its auth handshake
+      // yet), not exceptional. `createUnifiedAuthMiddleware`'s catch block below is the
+      // single place that decides how (and whether) to log this — same as `TokenExpiredError`.
       throw new AuthenticationError('Missing token');
     }
 
@@ -465,12 +556,24 @@ export const getUserPayload = async (
 
     return { userRecord: sessionUser, email: sessionUser.Email, sessionId };
   } catch (error) {
-    console.error(error);
+    // An anonymous request presenting no credentials at all (a health check, a CORS
+    // preflight-adjacent probe, a client mid-handshake) is routine, same as an expired
+    // long-lived session — neither is a bug worth a raw console dump here. Both still
+    // propagate (audited below, in the "missing token" case) so the single call site
+    // that actually decides final logging/response policy — createUnifiedAuthMiddleware's
+    // catch block — sees the real error instead of a generic, indistinguishable one.
+    const isMissingToken = error instanceof Error && error.message === 'Missing token';
+    if (!(error instanceof TokenExpiredError) && !isMissingToken) {
+      console.error(error);
+    }
     if (error instanceof TokenExpiredError) {
       throw error; // expected for long-lived sessions; not a failure worth auditing
     }
     // Best-effort failure audit (token scanning / brute-force signal). Never blocks auth.
     void auditLoginFailure(bearerToken, error, requestContext, requestDomain);
+    if (isMissingToken) {
+      throw error; // preserve the original message — see comment above
+    }
     throw new AuthenticationError('Unable to authenticate user');
   }
 };
@@ -560,7 +663,8 @@ export function createUnifiedAuthMiddleware(
         requestDomain,
         systemApiKey,
         userApiKey,
-        requestContext
+        requestContext,
+        req
       );
 
       if (!userPayload) {
@@ -583,6 +687,17 @@ export function createUnifiedAuthMiddleware(
             extensions: { code: 'JWT_EXPIRED' }
           }]
         });
+        return;
+      }
+      // An unauthenticated request presenting no credentials at all is routine (health
+      // checks, CORS preflight-adjacent probes, a client mid-handshake) — same category as
+      // TokenExpiredError above, not a bug to surface with a full stack trace. Anything else
+      // (a malformed/tampered token, an invalid system API key) is still logged in full below,
+      // since those ARE worth a human's attention. Checked by message rather than
+      // `instanceof AuthenticationError` — `type-graphql`'s class can resolve to a distinct
+      // copy across module/bundler boundaries, where `instanceof` silently never matches.
+      if (error instanceof Error && error.message === 'Missing token') {
+        res.status(401).json({ error: 'Authentication required' });
         return;
       }
       console.error('Auth error:', error);
@@ -658,7 +773,12 @@ async function createPerRequestProviders(
     { provider: p, type: 'Read-Write' }
   ];
 
-  if (!isPostgres) {
+  if (isPostgres) {
+    const rp = await tryCreateReadOnlyPostgresProvider();
+    if (rp) {
+      providers.push({ provider: rp, type: 'Read-Only' });
+    }
+  } else {
     const rp = await tryCreateReadOnlyProvider(dataSources);
     if (rp) {
       providers.push({ provider: rp, type: 'Read-Only' });
@@ -699,6 +819,46 @@ async function createPostgresProvider(): Promise<DatabaseProviderBase> {
   }
 
   return pgProvider;
+}
+
+/**
+ * Attempts to create a read-only PostgreSQL provider using DB_READ_ONLY_USERNAME/PASSWORD.
+ * Shares the connection pool from the primary provider. Returns null if no read-only credentials are configured.
+ */
+async function tryCreateReadOnlyPostgresProvider(): Promise<DatabaseProviderBase | null> {
+  const roUser = process.env.PG_READ_ONLY_USERNAME || process.env.DB_READ_ONLY_USERNAME;
+  const roPass = process.env.PG_READ_ONLY_PASSWORD || process.env.DB_READ_ONLY_PASSWORD;
+  if (!roUser || !roPass) {
+    return null;
+  }
+
+  try {
+    const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
+    const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
+    const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
+    const pgDatabase = process.env.PG_DATABASE || process.env.DB_DATABASE || '';
+
+    const roProvider = new PostgreSQLDataProvider();
+    const roConfig = new PostgreSQLProviderConfigData(
+      { Host: pgHost, Port: pgPort, Database: pgDatabase, User: roUser, Password: roPass },
+      mj_core_schema,
+      0,
+      undefined,
+      undefined,
+      false,
+    );
+
+    const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool }; // global-provider-ok: bootstrap (share primary provider's PG pool with the read-only provider)
+    if (primaryProvider?.DatabaseConnection) {
+      await roProvider.ConfigWithSharedPool(roConfig, primaryProvider.DatabaseConnection);
+    } else {
+      await roProvider.Config(roConfig);
+    }
+
+    return roProvider;
+  } catch (_err) {
+    return null;
+  }
 }
 
 /**

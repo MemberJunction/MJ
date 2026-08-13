@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT60 - Agent Compaction End-to-End",
+    "Description": "Compaction end-to-end beyond CC1-CC12: deterministic budget-knob precedence (CE1, no LLM), live over-trigger fires+persists+folds (CE2), under-trigger negative control (CE9). 3 checks CE1/CE2/CE9.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Compaction end-to-end beyond CC1-CC12: deterministic budget-knob precedence (CE1, no LLM), live over-trigger fires+persists+folds (CE2), under-trigger negative control (CE9). 3 checks CE1/CE2/CE9."
+    },
+    "Configuration": {
+      "tier": "live-model",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "agent-compaction-e2e"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "0977F8AD-DBAA-48D6-B27B-3A0844C45443"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T01:12:44.501Z",
+    "checksum": "af2b1b29853037cdba16a4ac466dfd90f7b338faa9c9fed8161626950f0c3c86"
+  }
+}

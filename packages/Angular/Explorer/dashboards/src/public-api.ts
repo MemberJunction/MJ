@@ -11,6 +11,10 @@ export * from './DataExplorer';
 export * from './Communication/communication-dashboard.component';
 export * from './Credentials';
 export * from './SystemDiagnostics';
+export * from './ThemeStudio/theme-studio-dashboard.component';
+export * from './ThemeStudio/theme-studio-resource.component';
+export * from './ThemeStudio/theme-manager-dashboard.component';
+export * from './ThemeStudio/theme-manager-resource.component';
 export * from './DevTools';
 export * from './Admin';
 export * from './Lists';
@@ -73,6 +77,10 @@ export {
   AnalyticsResourceComponent,
   LoadAnalyticsResource
 } from './KnowledgeHub/components/analytics/analytics-resource.component';
+export {
+  FeaturePipelinesResourceComponent,
+  LoadFeaturePipelinesResource
+} from './KnowledgeHub/components/feature-pipelines/feature-pipelines-resource.component';
 
 // Archiving components
 export {
@@ -87,7 +95,6 @@ export {
 // Export Actions components as resources (BaseResourceComponent-based)
 export {
   ActionsOverviewComponent,
-  ScheduledActionsComponent,
   CodeManagementComponent,
   EntityIntegrationComponent,
   SecurityPermissionsComponent,
@@ -216,6 +223,14 @@ export * from './lists-dashboards.module';
 export * from './routines-dashboards.module';
 export * from './component-studio-dashboards.module';
 export * from './predictive-studio-dashboards.module';
+
+// Workflows app — the workflow list, the Create Workflow front door, and the run history (D18/D19).
+export * from './workflows-dashboards.module';
+export * from './Workflows/workflows-dashboard.component';
+export * from './Workflows/components/create-workflow.component';
+export * from './Workflows/components/workflows-resource.component';
+export * from './Workflows/components/workflow-runs-resource.component';
+export * from './Workflows/workflows.types';
 export { PredictiveStudioEngine } from './PredictiveStudio/engine/predictive-studio.engine';
 export * from './DatabaseDesigner/database-designer-dashboards.module';
 export { DatabaseDesignerDashboardComponent, LoadDatabaseDesignerDashboard } from './DatabaseDesigner/components/database-designer-dashboard.component';

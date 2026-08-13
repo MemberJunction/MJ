@@ -1,6 +1,6 @@
 # @memberjunction/ai-agents
 
-Complete framework for building and executing AI agents in MemberJunction. Provides the `BaseAgent` execution engine, pluggable agent type system (Loop and Flow agents), hierarchical sub-agent orchestration, action execution, memory management with notes and examples, payload management, conversation context with message lifecycle management, and reranker integration.
+Complete framework for building and executing AI agents in MemberJunction. Provides the `BaseAgent` execution engine, pluggable agent type system (Loop, Flow, Realtime and Harness agents), hierarchical sub-agent orchestration, action execution, memory management with notes and examples, payload management, conversation context with message lifecycle management, and reranker integration.
 
 It also provides two capability layers any agent can opt into:
 
@@ -140,7 +140,29 @@ Conversational agent that runs in a loop: prompt -> decide -> act -> repeat. Bes
 
 #### FlowAgentType
 
-Step-based agent that follows a predefined flow graph. Each step has explicit paths to the next step based on conditions. Best for deterministic workflows where the execution path is known in advance.
+Step-based agent that follows a predefined flow graph — steps with explicit conditional paths between them. Best for deterministic workflows where the execution path is known in advance.
+
+**A Flow agent no longer walks its own graph.** `DetermineInitialStep` compiles the agent's `AIAgentStep` + `AIAgentStepPath` rows into a `TaskGraphSpec` and returns a `Tasks` step; `BaseAgent.executeTasksStep` submits it and detaches. From that point the workflow is `Task` rows owned by the durable dispatcher in [`@memberjunction/task-graph`](../../TaskGraph/README.md), with the same claiming, conditions, skip cascade, retry and failure semantics as any other graph — one traversal engine, one set of rules, one place a bug can be fixed.
+
+Three consequences worth knowing before you debug one:
+
+- **The run ends at submission.** It returns a handle ("Started — 4 tasks running"), not a result. Per-step detail lives in `Task` rows, not in `AIAgentRunStep`, and cost arrives afterwards via `TotalCostRollup` (see the guide).
+- **The in-run walker is retained but refused.** It stays compiled as the reference implementation the compiler is checked against, and throws at its single choke point if anything reaches it — so a workflow that runs at all provably ran on the dispatcher.
+- **A `Sub-Agent` node starts a new root `AIAgentRun`**, linked from `Task.AgentRunID` rather than nested under the submitting run.
+
+See the **[Workflows and Task Graphs Guide](../../../guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md)** for the full model: node kinds, exclusive groups, payload mappings, loops, failure semantics, observability, and a worked configuration example.
+
+#### HarnessAgentType
+
+Runs an **external agent harness** — Claude Code, Codex CLI, OpenCode, Gemini CLI, Pi — as the reasoning substrate for an MJ agent, while MJ keeps identity, permissions, governed data access, payload contracts, HITL, cost control and run-level audit. Lives in [`@memberjunction/ai-agent-harness`](../AgentHarness/README.md).
+
+It is the **opposite** design choice from `RealtimeAgentType`: where Realtime is session-driven and bypasses the loop entirely (`IsSessionDriven`), Harness stays *inside* the loop. `HarnessAgentType extends LoopAgentType` and inherits `DetermineNextStep` wholesale, because **a harness turn is protocol-identical to a Loop prompt iteration** — the harness ends each turn by emitting the same next-step JSON envelope a Loop model emits. `HarnessAgentBase extends BaseAgent` overrides exactly one method, `executePrompt`, substituting a harness turn for the prompt call.
+
+That is why every existing guarantee still applies with no new enforcement code: next-step validation, per-action `MaxExecutionsPerRun`, skill gates, plan-mode blocking, `PayloadManager` ACLs, `checkExecutionGuardrails`, run-step recording. One authority channel, not two — which is also why the MCP loopback is read-only.
+
+The `'HarnessAgentType'` string is registered under **both** ClassFactory roots (`BaseAgentType` for the protocol, `BaseAgent` for the driver), so a single `AIAgentType.DriverClass` value selects both halves.
+
+See the [External Agent Harness Guide](../../../guides/AGENT_HARNESS_GUIDE.md).
 
 #### RealtimeAgentType
 
@@ -264,6 +286,8 @@ Handles persistent memory operations for agents:
 - Scoped memory for multi-tenant deployments (UserScope support)
 - Consolidation, decay, and protection-tier maintenance over the agent note pool (see below)
 - **Hardening pass** over agent-authored provisional notes — runs unconditionally at the start of every cycle (before the consolidation-gated phases): LLM-dedupes each `Status='Provisional'` note against hardened notes (duplicates archived with `ConsolidatedIntoNoteID` lineage), and hardens survivors to `Status='Active'` with `ExpiresAt=NULL` so they join importance scoring, consolidation, contradiction detection, and decay in the same cycle
+
+**Session tuning & resilience (v5.49)**: the effective config's `realtime.session` section (`effortLevel` — MJ-normalized, `parallelToolCalls`, `mcpTools`, `inputTranscriptionModel`) flows into the driver Config bag on both topologies via `GetSessionTuningSettings`. The session runner observes the chained cancellation signal (`AbortSignal` dep), performs bounded transport reconnects on fatal drops (`MaxTransportReconnects`, default 1), and accumulates per-modality usage detail (`RealtimeUsage.Input/OutputTokenDetails`) that the checkpoint persists for multi-channel cost attribution. See `guides/REALTIME_CO_AGENTS_GUIDE.md` § "Session tuning, cost attribution & resilience".
 
 #### Consolidation Pipeline
 
@@ -434,6 +458,18 @@ The Memory Manager runs on a schedule (every ~15 minutes). `AIEngineBase` alread
 * **Read-only projection, never aliasing**: cache scans project to plain candidate rows (`{ ID, ... }`); they never hand a cached `BaseEntity` instance into a mutate-and-save path. The actual archive/decay/harden writes still re-`Load()` a fresh, owned entity via `GetEntityObject`, so the shared cache instances are never mutated in place.
 * **Single source of truth for status**: note status filtering reuses `IsInjectableNoteStatus()` from `@memberjunction/core-entities` (Active + Provisional), the same predicate the read-path injection/scoping queries use, so the maintenance set can never drift from the injectable set.
 * **Intentional exceptions** (still hit the DB): the **hardening pass** loads `entity_object` provisional notes *specifically to mutate them*, so it reads fresh, owned entities; the resolved-source-chain loader keeps a targeted `RunView` **only** for note IDs the cache misses; and `MJ: AI Agent Runs` reads stay as queries because runs are transactional and not cached by `AIEngineBase`.
+
+## Cross-Turn Conversation Compaction & History Retrieval
+
+Long conversations no longer grow the agent's context without bound. Two cooperating layers (design: [`plans/agent-conversation-compaction.md`](../../../plans/agent-conversation-compaction.md)) activate **only when a run carries `ExecuteAgentParams.conversationId`** — programmatic runs, sub-agents, and tests without a conversation are untouched:
+
+**Tier A — durable summary baseline.** `ConversationCompactionManager` watches the assembled window against the effective budget (`AIAgent.ContextWindowMaxTokens` → `AIAgentType` default → the selected model's `MaxInputTokens`, clamped to the model; trigger/target percents inherit the same way). When the window crosses the trigger, one summary prompt (`Conversation Summary`, seeded metadata) folds the *prior summary + raw delta only* (recursive pattern) into a new summary persisted on the boundary row's `ConversationDetail.SummaryOfEarlierConversation`, with `SummaryPromptRunID` linking the producing `AIPromptRun`. Every subsequent run then assembles `[summary, boundary row, ...tail]` via the shared `ConversationEngine.AssembleContextWindow` fold over rows from the single-sourced `ConversationEngine.LoadWindowRowsFresh` per-request loader. BaseAgent fires the pass **post-turn** (fire-and-forget after the run row saves — the caller's completion event never waits on the summary LLM) for **settled** root runs — `Completed` OR `AwaitingFeedback`, since a Chat final step is the normal per-turn ending for conversational agents — with a **pre-turn** synchronous fallback when a run starts already over an explicitly configured budget. The pass loads its window **fresh per request** (RunView + the shared `ConversationEngine.AssembleContextWindow` fold — never the engine's process-global cache), excludes the in-flight agent-response placeholder row (`ExcludeDetailIds`), and the boundary selector never picks the newest raw row — together eliminating the write race against the resolver. Fired/failed passes record a `StepType='Compaction'` run step whose `TargetLogID` is the same `AIPromptRun` the boundary row points at — written as a **single pre-finalized INSERT** (the pass is already over when the step is recorded, so `createStepEntity`'s `completed` option stamps the terminal state before the queued INSERT and no follow-up UPDATE is issued; `__mj_UpdatedAt` equals `__mj_CreatedAt` on these rows).
+
+**Tier B (existing, unchanged)** — the in-turn message expiration/compaction and context-recovery escalation keep managing pressure *within* a run, now starting from the smaller windowed set.
+
+**Retrieval tools** (`ConversationToolManager`, the `conversationToolCalls` inline response field — zero turn cost, mirroring `artifactToolCalls`): the summary is deliberately lossy; the full history stays addressable by the persisted per-conversation `Sequence`. `getMessageBySequence`, `getMessagesByRange` (max 50 messages / 32k chars), `searchConversation` (keyword/regex + role/range filters, snippets), and `summarizeRange` — a recursive sub-call that re-summarizes any ≤500-message slice through a task-specific lens on a cheap model (`Summarize Conversation Range` seeded prompt), its `AIPromptRun` linked via the Tool step's `TargetLogID`. Results arrive as one-shot conversation messages with the standard compact-after-3-turns lifecycle. Guardrails: at most `MAX_CONVERSATION_TOOL_CALLS_PER_TURN` (8) tool calls execute per response (excess calls come back as skipped results the model can re-request), and `searchConversation`'s regex mode is ReDoS-guarded (256-char pattern cap, 20k-char per-message haystack slice, 2s total scan budget with partial-results warnings). Message edits after summarization are flagged via `OriginalMessageChanged` (server-side detection in `MJConversationDetailEntityServer`); summaries are never regenerated — agents page in exact rows instead.
+
+**Prior-turn tool-result carry-forward.** Because each turn rebuilds its messages from the conversation window, a tool result paged in on turn N would be gone on turn N+1. `injectPriorTurnToolResults` re-injects the same agent's immediately previous settled root run's successful read-tool results (eligibility decided by the `toolFamily` stamped in each Tool step's `OutputData`) as one transient, compactable message — one-turn memory by construction, scoped by `AgentID` so parallel agents in one conversation never inherit each other's results. The per-turn prior-run lookup is served by `PriorTurnToolResultCache` (a `BaseSingleton` wrapping `MJLruCache`, keyed by conversation + agent): the settling root run publishes its own Tool-step projections from memory at finalize — an empty array for tool-free runs, so the common case costs **zero DB queries per turn** — and the loader falls back to the original RunView pair only on a cache miss. Both loaders share one entity-typed predicate (`BaseAgent.carryForwardPredicate` + `settledRunStatuses`) so the SQL filter and the in-memory projection cannot drift; freshness semantics and the multi-node staleness bound are documented on the cache class.
 
 ## Documentation
 

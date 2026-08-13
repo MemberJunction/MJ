@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT29 - Cache Gauntlet (subset-slot x mutation)",
+    "Description": "LIVE coverage of the subset-slot x mutation cell that shipped TWO production cache bugs (#3195 totalRowCount collapse, #3199 rows maintained in place). An audit of the 61 pre-existing cache checks found this cell had NO live coverage: S16 tests that MaxRows fingerprints separately (slot identity), S17 tests that a FILTERED slot invalidates on save, and S23 tests that an UNFILTERED slot upserts in place — but nothing ever saved into a SUBSET slot. CG1: three successive saves must never inflate a MaxRows:1 slot beyond its limit (the #3199 save half). CG2: deleting the cached row must not leave a MaxRows:1 slot serving ZERO rows while the DB still has rows for a TOP 1 (the #3199 delete half, the worse one). CG3: a FILTERED slot still removes a deleted row in place — pinning the legitimate half of the asymmetry so a future over-correction does not needlessly invalidate it (a deleted row matches no predicate, so removal is always safe). CG4: a StartRow offset window must never exceed MaxRows across a save. CG5: a subset slot keeps a DB-accurate TotalRowCount across a save, proving the #3195 and #3199 fixes compose (rows are dropped because unknowable; the DB total IS knowable and must not regress). Uses ExecutionTime === 0 as the cache-hit oracle. Mutation tier — creates and deletes its own MJ: User Settings rows.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Subset (MaxRows/StartRow) slots are never maintained in place across save or delete; filtered slots still remove in place; TotalRowCount tracks the DB."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "cache-gauntlet"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "4D5612C2-ADDB-4EB9-AF36-DB8DC321F8C2"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T01:12:44.043Z",
+    "checksum": "090d243a6d4c7ed2132e19171943f4293ad8e8bcf15e643dfd2baa94aeee07d0"
+  }
+}

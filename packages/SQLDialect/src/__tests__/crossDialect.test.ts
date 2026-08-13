@@ -55,12 +55,12 @@ describe('Cross-Dialect Comparison Tests', () => {
     describe('Schema-Qualified Identifiers', () => {
         it('should produce schema.object in platform-specific quoting', () => {
             expect(ss.QuoteSchema('dbo', 'Users')).toBe('[dbo].[Users]');
-            expect(pg.QuoteSchema('public', 'Users')).toBe('public."Users"');
+            expect(pg.QuoteSchema('public', 'Users')).toBe('"public"."Users"');
         });
 
         it('should handle MJ-style schema names (__mj)', () => {
             expect(ss.QuoteSchema('__mj', 'Entity')).toBe('[__mj].[Entity]');
-            expect(pg.QuoteSchema('__mj', 'Entity')).toBe('__mj."Entity"');
+            expect(pg.QuoteSchema('__mj', 'Entity')).toBe('"__mj"."Entity"');
         });
     });
 
@@ -667,6 +667,43 @@ describe('Cross-Dialect Comparison Tests', () => {
         it('leaves an already-lowercase name unchanged on PostgreSQL', () => {
             expect(pg.CanonicalSchemaName('__mj_bizappscommon')).toBe('__mj_bizappscommon');
             expect(pg.CanonicalSchemaName('__mj')).toBe('__mj');
+        });
+    });
+
+    // ─── FK-Graph Query (cascade planning) ───────────────────────────
+
+    describe('ForeignKeyGraphSQL', () => {
+        it('SQL Server reads sys.foreign_keys and embeds the schema literal (no bind params)', () => {
+            const sql = ss.ForeignKeyGraphSQL('__mj');
+            expect(sql).toContain('sys.foreign_keys');
+            expect(sql).toContain("rs.name = '__mj'");
+            expect(sql).toContain("ps.name = '__mj'");
+            expect(sql).not.toContain('@'); // no bind placeholder — runnable via ExecuteSQL(sql)
+        });
+
+        it('PostgreSQL reads pg_constraint and embeds the schema literal (no bind params)', () => {
+            const sql = pg.ForeignKeyGraphSQL('__mj');
+            expect(sql).toContain('pg_catalog.pg_constraint');
+            expect(sql).toContain("con.contype = 'f'");
+            expect(sql).toContain("cn.nspname = '__mj'");
+            expect(sql).not.toContain('$1'); // literal-embedded, not a positional placeholder
+            // Must avoid `WITH ORDINALITY`: PostgreSQLDataProvider.autoQuoteIdentifiers quotes the bare
+            // uppercase word ORDINALITY → `WITH "ORDINALITY"` → syntax error when run via ExecuteSQL.
+            expect(sql).not.toContain('ORDINALITY');
+            expect(sql).not.toContain('LATERAL');
+        });
+
+        it('both dialects return the SAME normalized column aliases the planner parses', () => {
+            for (const sql of [ss.ForeignKeyGraphSQL('__mj'), pg.ForeignKeyGraphSQL('__mj')]) {
+                for (const alias of ['parentTable', 'parentRefCol', 'childTable', 'childCol', 'childNullable', 'fkName', 'colCount']) {
+                    expect(sql).toContain(alias);
+                }
+            }
+        });
+
+        it('escapes a single-quote in the schema name (no injection)', () => {
+            expect(ss.ForeignKeyGraphSQL("a'b")).toContain("rs.name = 'a''b'");
+            expect(pg.ForeignKeyGraphSQL("a'b")).toContain("cn.nspname = 'a''b'");
         });
     });
 });

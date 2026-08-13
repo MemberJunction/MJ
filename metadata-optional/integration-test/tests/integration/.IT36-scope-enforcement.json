@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT36 - API Scope Enforcement",
+    "Description": "API-key scope enforcement at the engine: deny-beats-allow at equal priority, app-ceiling caps key scopes, app-binding refusal precedes ceiling, unscoped-key default deny via GetAPIKeyEngine, full_access is an ordinary engine scope (god-mode lives only in ResolverBase). 5 checks (SE1-SE5), self-cleaning minted keys/scopes/bindings.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "API-key scope enforcement at the engine: deny-beats-allow at equal priority, app-ceiling caps key scopes, app-binding refusal precedes ceiling, unscoped-key default deny via GetAPIKeyEngine, full_access is an ordinary engine scope (god-mode lives only in ResolverBase). 5 checks (SE1-SE5), self-cleaning minted keys/scopes/bindings."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "scope-enforcement"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "E74D0565-375C-42F9-BA7D-7A5864D53F22"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T01:12:44.161Z",
+    "checksum": "113026cc159e38b73a31010c02047a1f5fba0236f22b8bfc6cd66615c50b709c"
+  }
+}

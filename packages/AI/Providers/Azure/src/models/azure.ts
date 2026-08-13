@@ -1,5 +1,6 @@
-import { 
-  BaseLLM, 
+import {
+  AIErrorInfo,
+  BaseLLM,
   ChatParams,
   ChatResult, 
   ChatResultChoice,
@@ -107,6 +108,65 @@ export class AzureLLM extends BaseLLM {
     }
 
     /**
+     * Cancellation token for the in-flight streaming request, captured in createStreamingRequest so
+     * finalizeStreamingResponse can tell "the stream ended" from "the stream was aborted".
+     */
+    private _activeStreamCancellationToken: AbortSignal | undefined = undefined;
+
+    /**
+     * Clears per-request streaming state. BaseLLM calls this at the start of every streaming request
+     * and again in its `finally`, so the captured cancellation token never leaks across requests.
+     */
+    protected override resetStreamingState(): void {
+        this._activeStreamCancellationToken = undefined;
+    }
+
+    /**
+     * True when `error` represents a cancellation of the request rather than a provider failure.
+     * The Azure core pipeline rejects with an `AbortError` when the supplied `abortSignal` fires.
+     */
+    protected isCancellationError(error: unknown, cancellationToken?: AbortSignal): boolean {
+        if (error instanceof Error && error.name === 'AbortError') {
+            return true;
+        }
+        return cancellationToken?.aborted === true;
+    }
+
+    /**
+     * Structured error info for a cancelled request. Cancellation is deliberate, so it is marked
+     * Fatal and non-failover-able — retrying or failing over to another vendor would defeat the
+     * cancellation. (`AIErrorType` has no dedicated cancellation member, so `Unknown` is used with
+     * an explicit provider error code.)
+     */
+    protected buildCancellationErrorInfo(error: unknown): AIErrorInfo {
+        return {
+            errorType: 'Unknown',
+            severity: 'Fatal',
+            canFailover: false,
+            providerErrorCode: 'request_cancelled',
+            context: { provider: 'Azure', cancelled: true },
+            error
+        };
+    }
+
+    /**
+     * Build the ChatResult returned when a request is cancelled mid-flight — a clean, typed failure
+     * in the same shape as the driver's other error results.
+     */
+    protected buildCancelledChatResult(error: unknown, startTime: Date): ChatResult {
+        const result = new ChatResult(false, startTime, new Date());
+        result.data = {
+            choices: [],
+            usage: new ModelUsage(0, 0)
+        };
+        result.statusText = 'cancelled';
+        result.errorMessage = error instanceof Error ? error.message : 'Request was cancelled';
+        result.exception = error;
+        result.errorInfo = this.buildCancellationErrorInfo(error);
+        return result;
+    }
+
+    /**
      * Implementation of non-streaming chat completion for Azure AI
      */
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
@@ -177,9 +237,12 @@ export class AzureLLM extends BaseLLM {
                 console.warn('Azure provider does not support minP parameter, ignoring');
             }
             
-            // Call Azure AI service
+            // Call Azure AI service. `abortSignal` is the Azure core-client request option that maps
+            // ChatParams.cancellationToken onto the underlying HTTP request, so an abort tears the
+            // socket down rather than leaving it open with the promise abandoned.
             const response = await this.Client.path("/chat/completions").post({
-                body: requestBody
+                body: requestBody,
+                abortSignal: params.cancellationToken
             });
             
             // Handle error responses
@@ -223,6 +286,12 @@ export class AzureLLM extends BaseLLM {
                 exception: null,
             };
         } catch (error) {
+            // A cancellation is not a provider failure — report it as its own typed result so retry
+            // and failover logic leaves it alone.
+            if (this.isCancellationError(error, params.cancellationToken)) {
+                return this.buildCancelledChatResult(error, startTime);
+            }
+
             const endTime = new Date();
             const result = {
                 success: false,
@@ -311,11 +380,18 @@ export class AzureLLM extends BaseLLM {
             console.warn('Azure provider does not support minP parameter, ignoring');
         }
         
-        // Create a streaming request to Azure AI
+        // Remember the token for this request so finalizeStreamingResponse can report a cancellation.
+        // BaseLLM resets streaming state before this call and again in its `finally`, so it never
+        // leaks across requests.
+        this._activeStreamCancellationToken = params.cancellationToken;
+
+        // Create a streaming request to Azure AI. Same `abortSignal` option as the non-streaming
+        // path — aborting it cancels the in-flight request and the response stream.
         const response = await this.Client.path("/chat/completions").post({
-            body: requestBody
+            body: requestBody,
+            abortSignal: params.cancellationToken
         });
-        
+
         // Return the response stream
         return response.body;
     }
@@ -362,12 +438,19 @@ export class AzureLLM extends BaseLLM {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult {
+        // A mid-stream abort surfaces inside BaseLLM's for-await loop, which logs and swallows it —
+        // so without this check a cancelled stream would be finalized as a truncated SUCCESS.
+        const cancellationToken = this._activeStreamCancellationToken;
+        if (cancellationToken?.aborted) {
+            return this.buildCancelledChatResult(cancellationToken.reason, new Date());
+        }
+
         // Create dates (will be overridden by base class)
         const now = new Date();
-        
+
         // Create a proper ChatResult instance with constructor params
         const result = new ChatResult(true, now, now);
-        
+
         // Set all properties
         const finalUsage: ModelUsage = usage || new ModelUsage(0, 0);
         result.data = {

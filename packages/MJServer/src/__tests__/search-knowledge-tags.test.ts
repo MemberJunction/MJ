@@ -10,19 +10,41 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
 
-const { mockSearch, mockPreviewSearch } = vi.hoisted(() => ({
-    mockSearch: vi.fn(),
-    mockPreviewSearch: vi.fn(),
-}));
+const { mockSearch, mockPreviewSearch, mockResolveEffectivePermission, mockLogForbiddenSearch } =
+    vi.hoisted(() => ({
+        mockSearch: vi.fn(),
+        mockPreviewSearch: vi.fn(),
+        mockResolveEffectivePermission: vi.fn(),
+        mockLogForbiddenSearch: vi.fn(),
+    }));
 
+// `SearchKnowledgeResolver` obtains its permission resolver through the pluggable seam —
+// `GetSearchScopePermissionResolver()` — so this mock has to provide that accessor even though
+// no test below currently reaches it: every case here passes `undefined` for scope IDs, and
+// `rejectForbiddenScopes` is guarded by `if (scopeIDs && scopeIDs.length)`.
+//
+// It is here because of how this omission fails. The missing export is simply `undefined`,
+// calling it throws a TypeError, and the resolver's catch-all reports a result code unrelated
+// to the thing under test — the same trap that made 11 failures in the CoreActions suite read
+// like a permissions regression. The first person to add a test case WITH scope IDs would pay
+// that diagnosis cost again, for no reason.
+//
+// The default is permissive (applied in beforeEach, so it survives a reset as well as a clear)
+// so such a test exercises its own subject rather than tripping over an unconfigured double.
+// Override `mockResolveEffectivePermission` in the test to drive the denial paths.
 vi.mock('@memberjunction/search-engine', () => ({
     SearchEngine: {
         Instance: {
             Config: vi.fn().mockResolvedValue(undefined),
             Search: (...args: unknown[]) => mockSearch(...args),
             PreviewSearch: (...args: unknown[]) => mockPreviewSearch(...args),
+            // Called only on the denial branch, to log a Status='Forbidden' execution row.
+            LogForbiddenSearch: (...args: unknown[]) => mockLogForbiddenSearch(...args),
         }
-    }
+    },
+    GetSearchScopePermissionResolver: () => ({
+        ResolveEffectivePermission: (...args: unknown[]) => mockResolveEffectivePermission(...args),
+    }),
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
@@ -120,6 +142,52 @@ const fakeContext = { userPayload: { email: 'test@test.com' } };
 describe('SearchKnowledgeResolver', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mockResolveEffectivePermission.mockResolvedValue({
+            Allowed: true, Level: 'Search', Source: 'DirectGrant',
+            Reason: 'test double', toSqlPredicate: () => '1=1',
+        });
+        mockLogForbiddenSearch.mockResolvedValue(undefined);
+    });
+
+    // ── Scope authorization ────────────────────────────────────────────
+    //
+    // This is the branch `rejectForbiddenScopes` guards, and it had no coverage at all — every
+    // other case here passes `undefined` for scope IDs, so the whole authorization path was
+    // unexercised. These two tests are also what make the resolver entry in the module mock
+    // above load-bearing rather than decorative: remove it and both fail.
+    describe('scope authorization', () => {
+        it('runs the search when every requested scope resolves to Allowed', async () => {
+            const resolver = createResolver();
+            mockSearch.mockResolvedValue(createMockSearchResult());
+
+            const result = await resolver.SearchKnowledge(
+                'test', 20, undefined, undefined, ['scope-a', 'scope-b'], undefined, undefined,
+                fakeContext as never);
+
+            expect(result.Success).toBe(true);
+            expect(mockSearch).toHaveBeenCalled();
+            // One resolution per requested scope — the check is per-scope, not per-call.
+            expect(mockResolveEffectivePermission).toHaveBeenCalledTimes(2);
+        });
+
+        it('REFUSES the whole call on the first denied scope, and never reaches the search', async () => {
+            const resolver = createResolver();
+            mockSearch.mockResolvedValue(createMockSearchResult());
+            mockResolveEffectivePermission.mockResolvedValue({
+                Allowed: false, Level: 'None', Source: 'NoGrant',
+                Reason: 'no grant for this scope', toSqlPredicate: () => '1=0',
+            });
+
+            const result = await resolver.SearchKnowledge(
+                'test', 20, undefined, undefined, ['scope-a'], undefined, undefined,
+                fakeContext as never);
+
+            expect(result.Success).toBe(false);
+            // The point of the branch: a forbidden scope aborts rather than being silently
+            // dropped, because dropping it masks bugs in scope authoring.
+            expect(mockSearch).not.toHaveBeenCalled();
+            expect(mockLogForbiddenSearch).toHaveBeenCalled();
+        });
     });
 
     describe('SearchKnowledge mutation', () => {
@@ -127,7 +195,7 @@ describe('SearchKnowledgeResolver', () => {
             const resolver = createResolver();
             mockSearch.mockResolvedValueOnce(createMockSearchResult());
 
-            const result = await resolver.SearchKnowledge('test query', 20, undefined, undefined, fakeContext as never);
+            const result = await resolver.SearchKnowledge('test query', 20, undefined, undefined, undefined, undefined, undefined, fakeContext as never);
 
             expect(mockSearch).toHaveBeenCalledOnce();
             expect(result.Success).toBe(true);
@@ -139,7 +207,7 @@ describe('SearchKnowledgeResolver', () => {
             const resolver = createResolver();
             mockSearch.mockResolvedValueOnce(createMockSearchResult());
 
-            await resolver.SearchKnowledge('cheese', 50, undefined, undefined, fakeContext as never);
+            await resolver.SearchKnowledge('cheese', 50, undefined, undefined, undefined, undefined, undefined, fakeContext as never);
 
             const searchParams = mockSearch.mock.calls[0][0];
             expect(searchParams.Query).toBe('cheese');
@@ -151,7 +219,7 @@ describe('SearchKnowledgeResolver', () => {
             mockSearch.mockResolvedValueOnce(createMockSearchResult());
 
             const filters = { EntityNames: ['Contacts'], SourceTypes: undefined, Tags: ['VIP'] };
-            await resolver.SearchKnowledge('test', 20, filters as never, undefined, fakeContext as never);
+            await resolver.SearchKnowledge('test', 20, filters as never, undefined, undefined, undefined, undefined, fakeContext as never);
 
             const searchParams = mockSearch.mock.calls[0][0];
             expect(searchParams.Filters).toEqual({
@@ -165,7 +233,7 @@ describe('SearchKnowledgeResolver', () => {
             const resolver = createResolver();
             mockSearch.mockResolvedValueOnce(createMockSearchResult());
 
-            await resolver.SearchKnowledge('test', 20, undefined, 0.5, fakeContext as never);
+            await resolver.SearchKnowledge('test', 20, undefined, 0.5, undefined, undefined, undefined, fakeContext as never);
 
             const searchParams = mockSearch.mock.calls[0][0];
             expect(searchParams.MinScore).toBe(0.5);
@@ -175,7 +243,7 @@ describe('SearchKnowledgeResolver', () => {
             const resolver = createResolver();
             mockSearch.mockResolvedValueOnce(createMockSearchResult());
 
-            const result = await resolver.SearchKnowledge('test', 20, undefined, undefined, fakeContext as never);
+            const result = await resolver.SearchKnowledge('test', 20, undefined, undefined, undefined, undefined, undefined, fakeContext as never);
 
             const item = result.Results[0];
             expect(item.ID).toBe('result-1');
@@ -193,7 +261,7 @@ describe('SearchKnowledgeResolver', () => {
                 SourceCounts: { Vector: 5, FullText: 3, Entity: 10, Storage: 0 }
             }));
 
-            const result = await resolver.SearchKnowledge('test', 20, undefined, undefined, fakeContext as never);
+            const result = await resolver.SearchKnowledge('test', 20, undefined, undefined, undefined, undefined, undefined, fakeContext as never);
 
             expect(result.SourceCounts.Vector).toBe(5);
             expect(result.SourceCounts.FullText).toBe(3);
@@ -204,7 +272,7 @@ describe('SearchKnowledgeResolver', () => {
             const resolver = createResolver();
             mockSearch.mockResolvedValueOnce(createMockSearchResult({ Success: false, ErrorMessage: 'Query cannot be empty' }));
 
-            const result = await resolver.SearchKnowledge('   ', 20, undefined, undefined, fakeContext as never);
+            const result = await resolver.SearchKnowledge('   ', 20, undefined, undefined, undefined, undefined, undefined, fakeContext as never);
 
             expect(mockSearch).toHaveBeenCalled();
             expect(result.Success).toBe(false);
@@ -214,7 +282,7 @@ describe('SearchKnowledgeResolver', () => {
             const resolver = new SearchKnowledgeResolver();
             (resolver as Record<string, unknown>)['GetUserFromPayload'] = vi.fn().mockReturnValue(null);
 
-            const result = await resolver.SearchKnowledge('test', 20, undefined, undefined, fakeContext as never);
+            const result = await resolver.SearchKnowledge('test', 20, undefined, undefined, undefined, undefined, undefined, fakeContext as never);
 
             expect(result.Success).toBe(false);
             expect(result.ErrorMessage).toContain('current user');
@@ -224,7 +292,7 @@ describe('SearchKnowledgeResolver', () => {
             const resolver = createResolver();
             mockSearch.mockRejectedValueOnce(new Error('Connection failed'));
 
-            const result = await resolver.SearchKnowledge('test', 20, undefined, undefined, fakeContext as never);
+            const result = await resolver.SearchKnowledge('test', 20, undefined, undefined, undefined, undefined, undefined, fakeContext as never);
 
             expect(result.Success).toBe(false);
             expect(result.ErrorMessage).toContain('Connection failed');

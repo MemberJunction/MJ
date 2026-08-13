@@ -152,6 +152,14 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   public get DisplayRowCount(): number | null {
+    // In live/paged mode the pager tracks the TRUE total row count
+    // (PagerTotalRowCount, from RunQueryResult.TotalRowCount) — surface that as
+    // the headline count so the title reflects the full result size, not just the
+    // current page (which the bottom pager already shows as a range). Falls back
+    // to the page/inline row count when there's no paged total.
+    if (this.PagerTotalRowCount > 0) {
+      return this.PagerTotalRowCount;
+    }
     return this.liveRowCount ?? this.spec?.metadata?.rowCount ?? null;
   }
 
@@ -328,7 +336,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       if (table.metadata?.sql) {
         // Live SQL execution
         const pageState = this.tablePageState.get(tableIndex)!;
-        const rq = new RunQuery();
+        const rq = this.RunQueryToUse;
         const startRow = (pageState.pageNumber - 1) * pageState.pageSize;
         const result = await rq.RunQuery({
           SQL: table.metadata.sql,
@@ -439,16 +447,22 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
    * Resolves the latest version number and compares saved query SQL.
    */
   private async InitQuerySyncState(): Promise<void> {
-    // Ensure artifact cache is loaded (not registered for startup)
+    // Ensure the artifact-type registry is loaded (not registered for startup).
     await ArtifactMetadataEngine.Instance.Config(false);
+
+    // Load THIS artifact's versions on demand (including Content, which
+    // resolveEffectiveSavedAtVersion parses). Versions are no longer bulk-loaded
+    // at boot — the payload here is bounded to a single artifact's versions.
+    if (this.artifactVersion?.ArtifactID) {
+      await ArtifactMetadataEngine.Instance.LoadVersionsForArtifact(this.artifactVersion.ArtifactID);
+    }
 
     this.LatestVersionNumber = this.resolveLatestVersionNumber();
 
-    // If cache is stale (doesn't know about the version we're viewing),
-    // force-refresh and re-resolve. This happens when new versions are
-    // created during a conversation after the cache was first loaded.
-    if (this.LatestVersionNumber < this.CurrentVersionNumber) {
-      await ArtifactMetadataEngine.Instance.Config(true);
+    // If the loaded versions don't yet include the one we're viewing (a newer
+    // version was created after we first loaded), force a re-fetch and re-resolve.
+    if (this.LatestVersionNumber < this.CurrentVersionNumber && this.artifactVersion?.ArtifactID) {
+      await ArtifactMetadataEngine.Instance.LoadVersionsForArtifact(this.artifactVersion.ArtifactID, undefined, undefined, true);
       this.LatestVersionNumber = this.resolveLatestVersionNumber();
     }
 
@@ -466,9 +480,9 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       return this.CurrentVersionNumber;
     }
 
-    const versions = ArtifactMetadataEngine.Instance.GetVersionsForArtifact(this.artifactVersion.ArtifactID);
+    const versions = ArtifactMetadataEngine.Instance.GetCachedVersionsForArtifact(this.artifactVersion.ArtifactID);
     if (versions.length > 0) {
-      // GetVersionsForArtifact returns DESC sorted
+      // GetCachedVersionsForArtifact returns DESC sorted
       return versions[0].VersionNumber || 1;
     }
 
@@ -491,8 +505,8 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
     if (!this.artifactVersion?.ArtifactID) return effective;
 
-    // GetVersionsForArtifact returns DESC sorted — scan all versions
-    const versions = ArtifactMetadataEngine.Instance.GetVersionsForArtifact(this.artifactVersion.ArtifactID);
+    // GetCachedVersionsForArtifact returns DESC sorted — scan all versions
+    const versions = ArtifactMetadataEngine.Instance.GetCachedVersionsForArtifact(this.artifactVersion.ArtifactID);
     for (const v of versions) {
       try {
         if (!v.Content) continue;

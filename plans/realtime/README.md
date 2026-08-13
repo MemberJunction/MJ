@@ -22,6 +22,7 @@ The realtime co-agent stack (1:1 voice + server-bridged meetings) is shipped and
 
 | Doc | What it is |
 |---|---|
+| [`bridges-and-widget/`](bridges-and-widget/) | **Execution program** — finish the architecture's edges: a droppable public **web widget** (text+voice) and the **vendor SDK bindings** (telephony first, then Teams/Slack). Per-stream docs with verified signatures, phased tasks, and acceptance criteria; written for handoff. |
 | [`realtime-session-lifecycle-and-followups.md`](realtime-session-lifecycle-and-followups.md) | **The roadmap.** Shipped log + prioritized next steps. |
 | [`realtime-bridges-architecture.md`](realtime-bridges-architecture.md) | Master bridge architecture (Zoom/Teams/Webex/telephony). Phase 0/1 shipped, Phase 2+ planned. |
 | [`multi-party-and-meeting-bridge.md`](multi-party-and-meeting-bridge.md) | Proposal: meeting platforms as the shared media plane (future). |

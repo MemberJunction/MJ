@@ -156,7 +156,7 @@ export class MentionAutocompleteService extends BaseSingleton<MentionAutocomplet
    */
   private loadReadableEntities(user: UserInfo, provider?: IMetadataProvider): EntityInfo[] {
     try {
-      const md = provider ?? new Metadata();
+      const md = provider ?? Metadata.Provider;
       return (md.Entities || []).filter(entity => {
         try {
           return entity.GetUserPermisions(user).CanRead;
@@ -177,7 +177,7 @@ export class MentionAutocompleteService extends BaseSingleton<MentionAutocomplet
    */
   private loadRunnableQueries(user: UserInfo, provider?: IMetadataProvider): QueryInfo[] {
     try {
-      const md = provider ?? new Metadata();
+      const md = provider ?? Metadata.Provider;
       return (md.Queries || []).filter(query => {
         try {
           return query.UserCanRun(user);
@@ -197,7 +197,7 @@ export class MentionAutocompleteService extends BaseSingleton<MentionAutocomplet
    */
   private resolveQueriesEntityIcon(provider?: IMetadataProvider): string {
     try {
-      const md = provider ?? new Metadata();
+      const md = provider ?? Metadata.Provider;
       return md.EntityByName('MJ: Queries')?.Icon || 'fa-solid fa-database';
     } catch {
       return 'fa-solid fa-database';
@@ -277,7 +277,7 @@ export class MentionAutocompleteService extends BaseSingleton<MentionAutocomplet
    */
   private getEntityAndQuerySuggestions(query: string): MentionSuggestion[] {
     const lowerQuery = query.toLowerCase().trim();
-    const MAX_SUGGESTIONS = 12;
+    const MAX_SUGGESTIONS = 50;
 
     const entityItems = this.entitiesCache.map(entity => ({
       label: entity.DisplayNameOrName,
@@ -312,6 +312,10 @@ export class MentionAutocompleteService extends BaseSingleton<MentionAutocomplet
       .filter(x => x.score > 0 || !lowerQuery)
       .sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score;
+        // When scores tie, prioritize entities over queries
+        if (a.suggestion.type !== b.suggestion.type) {
+          return a.suggestion.type === 'entity' ? -1 : 1;
+        }
         return a.label.localeCompare(b.label);
       })
       .slice(0, MAX_SUGGESTIONS)

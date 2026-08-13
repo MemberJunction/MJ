@@ -309,6 +309,18 @@ export interface AIPromptRunResult<T = unknown> {
 }
 
 /**
+ * Extracts the usable text of a string-typed prompt run: the parsed `result` when it is a
+ * non-empty string, otherwise the trimmed `rawResult` (empty string when neither exists).
+ * Lives beside {@link AIPromptRunResult} so every caller shares one extraction rule instead
+ * of re-implementing the `result`-vs-`rawResult` fallback.
+ */
+export function ExtractPromptResultText(result: AIPromptRunResult<string>): string {
+  return (typeof result.result === 'string' && result.result.trim().length > 0)
+    ? result.result.trim()
+    : (result.rawResult || '').trim();
+}
+
+/**
  * Model selection information for debugging and analysis
  */
 export class AIModelSelectionInfo {
@@ -406,6 +418,21 @@ export class AIPromptParams {
   cancellationToken?: AbortSignal;
 
   /**
+   * Optional wall-clock bound, in milliseconds, applied to EACH model call this prompt makes
+   * (per failover candidate / per validation retry / per parallel task — mirroring the parallel
+   * coordinator's existing `taskTimeoutMS` semantics).
+   *
+   * When set, AIPromptRunner composes this with `cancellationToken` (if any) into a single abort
+   * signal: BOTH bounds apply and whichever fires first aborts the call. Exceeding the timeout
+   * rejects with a typed `AIPromptTimeoutError` (classified as a retriable NetworkError), so it
+   * flows into the normal failover/retry machinery instead of hanging forever.
+   *
+   * When omitted (and the runner declares no `DefaultPromptTimeoutMS`), the model call is bounded
+   * ONLY by `cancellationToken` — i.e. unbounded if no token is supplied.
+   */
+  timeoutMS?: number;
+
+  /**
    * Optional callback for receiving execution progress updates
    * Provides real-time information about the execution progress
    */
@@ -416,12 +443,6 @@ export class AIPromptParams {
    * Called when AI models support streaming responses
    */
   onStreaming?: ExecutionStreamingCallback;
-
-  /**
-   * Optional agent run ID to link this prompt execution to a parent agent run
-   * When provided, the AIPromptRun record will include this as AgentRunID for comprehensive execution tracking
-   */
-  agentRunId?: string;
 
   /**
    * Optional ID of a previous prompt run to indicate this is a rerun.
@@ -727,6 +748,19 @@ export class AIPromptParams {
    * When omitted, falls back to the global Metadata.Provider.
    */
   provider?: IMetadataProvider;
+
+  /**
+   * ID of the agent this prompt is being executed on behalf of, persisted to
+   * `AIPromptRun.AgentID`. Set by BaseAgent for every prompt it invokes.
+   *
+   * `AIPromptRun.AgentID` is documented as "If this prompt was run as part of an agent,
+   * references the agent", but nothing ever populated it — found during the 6.1 release with
+   * 340 prompt-run rows in the release database and zero non-null AgentIDs. Without it there is
+   * no way to attribute a prompt run to the agent that caused it: agents share agent-type-level
+   * prompts (e.g. "Loop Agent Type: System Prompt"), so PromptID cannot distinguish a parent's
+   * inference from its sub-agent's.
+   */
+  agentId?: string;
 
   /**
    * Optional file artifacts that may be attached as native content blocks

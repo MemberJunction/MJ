@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT39 - Actions Pipeline",
+    "Description": "ActionEngine pipeline deterministically: action metadata integrity, param validation on a pure CoreAction, execution log row created+terminal, result-code contract, pinned known-gaps for ValidateInputs/RunSingleFilter stubs per the register.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "ActionEngine pipeline deterministically: action metadata integrity, param validation on a pure CoreAction, execution log row created+terminal, result-code contract, pinned known-gaps for ValidateInputs/RunSingleFilter stubs per the register."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "actions-pipeline"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "A11F70C8-17C9-44B6-BCAA-129A591FF56A"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T01:12:44.207Z",
+    "checksum": "933717ec542043d3b2c1b09e781988dd63bc881c12361963f8576935d4f1d4d9"
+  }
+}

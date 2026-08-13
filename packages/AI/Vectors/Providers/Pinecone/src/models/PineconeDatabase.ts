@@ -133,11 +133,23 @@ export class PineconeDatabase extends VectorDBBase {
             // 'id' as "query by record ID" which is mutually exclusive with 'vector'
             const indexId = 'id' in params ? (params as { id: string }).id : undefined;
             let index: Index = this.GetIndex(indexId ? { id: indexId } : undefined).data;
-            const queryParams = { ...params };
+
+            const queryParams: Record<string, unknown> = { ...params };
             if (indexId && 'vector' in queryParams) {
-                delete (queryParams as Record<string, unknown>)['id'];
+                delete queryParams['id'];
             }
-            let result: QueryResponse = await index.query(queryParams);
+
+            // providerConfig is an MJ-level opaque blob (from QueryParamsBase) that
+            // Pinecone's SDK does not accept in the query body — extract, strip, then
+            // read driver-specific keys from it.
+            const providerConfig = queryParams['providerConfig'] as Record<string, unknown> | undefined;
+            delete queryParams['providerConfig'];
+            const namespace = typeof providerConfig?.['namespace'] === 'string'
+                ? providerConfig['namespace'] as string
+                : undefined;
+
+            const target = namespace ? index.namespace(namespace) : index;
+            const result: QueryResponse = await target.query(queryParams as Parameters<typeof target.query>[0]);
             return this.wrapSuccessResponse(result);
         }
         catch(ex){
@@ -146,10 +158,58 @@ export class PineconeDatabase extends VectorDBBase {
         }
     }
 
-    public async CreateRecord(params: VectorRecord): Promise<BaseResponse> {
+    /**
+     * Declares `namespaceField` as a source-record dependency so calling pipelines resolve it
+     * onto the record before {@link BuildProviderDirectives} runs. The configured value may be
+     * a plain field name (`"OrganizationID"`) or a single-hop dotted path through a foreign key
+     * (`"ContentSourceID.OrganizationID"`) — dotted paths are resolved by the pipeline and
+     * injected under the full path key, so the directive lookup below works unchanged.
+     */
+    public override GetSourceRecordFieldPaths(providerConfig: Record<string, unknown>): string[] {
+        const namespaceField = this.resolveNamespaceFieldConfig(providerConfig);
+        return namespaceField ? [namespaceField] : [];
+    }
+
+    /**
+     * Derives the Pinecone namespace for a source record from VectorIndex.ProviderConfig.
+     *
+     * Reads `providerConfig.namespaceField` — the name of the source-record field (or resolved
+     * path key, see {@link GetSourceRecordFieldPaths}) whose value becomes the namespace
+     * (e.g. `"OrganizationID"` → namespace `"org-uuid"`). The resolved namespace is returned as
+     * `{ namespace: '<value>' }` so CreateRecords can route the vector without embedding org
+     * data in the stored metadata.
+     *
+     * Fail-closed: when `namespaceField` IS configured but the record supplies no usable value,
+     * this THROWS to reject the record rather than returning `{}` — an empty directive would
+     * silently route the vector into the index's default namespace, breaching the tenant wall
+     * namespacing exists to build. Pipelines treat the throw as a per-record failure and the
+     * rest of the batch proceeds.
+     */
+    public override BuildProviderDirectives(
+        sourceRecord: Record<string, unknown>,
+        providerConfig: Record<string, unknown>,
+    ): Record<string, unknown> {
+        const namespaceField = this.resolveNamespaceFieldConfig(providerConfig);
+        if (!namespaceField) {
+            return {};
+        }
+        const value = sourceRecord[namespaceField];
+        if (value == null || String(value).trim().length === 0) {
+            throw new Error(`Pinecone namespaceField "${namespaceField}" is configured but this record has no value for it — refusing to write to the default namespace`);
+        }
+        return { namespace: String(value) };
+    }
+
+    /** The trimmed `namespaceField` config string, or undefined when not configured. */
+    private resolveNamespaceFieldConfig(providerConfig: Record<string, unknown>): string | undefined {
+        const nf = providerConfig['namespaceField'];
+        return typeof nf === 'string' && nf.trim().length > 0 ? nf.trim() : undefined;
+    }
+
+    public async CreateRecord(params: VectorRecord, indexName?: string, providerConfig?: Record<string, unknown>): Promise<BaseResponse> {
         try{
             let records: VectorRecord[] = [params];
-            let result = await this.CreateRecords(records);
+            let result = await this.CreateRecords(records, indexName, providerConfig);
             return this.wrapSuccessResponse(result);
         }
         catch(ex){
@@ -158,10 +218,37 @@ export class PineconeDatabase extends VectorDBBase {
         }
     }
 
-    public async CreateRecords(records: VectorRecord[], indexName?: string): Promise<BaseResponse> {
+    public async CreateRecords(records: VectorRecord[], indexName?: string, providerConfig?: Record<string, unknown>): Promise<BaseResponse> {
         try{
-            const index: Index = await this.GetIndex(indexName ? { id: indexName } : undefined).data;
-            let result = await index.upsert(records);
+            const index: Index = this.GetIndex(indexName ? { id: indexName } : undefined).data;
+
+            // Strip providerTemporaryDirectives before upserting — they are MJ-internal routing
+            // hints that the Pinecone SDK does not accept and must not be stored.
+            const stripped = records.map(({ providerTemporaryDirectives: _pd, ...r }) => r as VectorRecord);
+
+            // Multi-namespace path: at least one record carries a per-record namespace
+            // set by BuildProviderDirectives (e.g. { namespace: '<orgId>' }).
+            const hasPerRecordNamespace = records.some(r => r.providerTemporaryDirectives?.['namespace'] != null);
+            if (hasPerRecordNamespace) {
+                const groups = new Map<string, VectorRecord[]>();
+                for (let i = 0; i < records.length; i++) {
+                    const ns = String(records[i].providerTemporaryDirectives?.['namespace'] ?? '');
+                    const existing = groups.get(ns);
+                    if (existing) { existing.push(stripped[i]); } else { groups.set(ns, [stripped[i]]); }
+                }
+                for (const [ns, groupRecords] of groups) {
+                    const target = ns ? index.namespace(ns) : index;
+                    await target.upsert(groupRecords);
+                }
+                return this.wrapSuccessResponse(null);
+            }
+
+            // Single-namespace path: use an explicit namespace from providerConfig,
+            // or fall back to the index default (no namespace routing).
+            const directNamespace = typeof providerConfig?.['namespace'] === 'string'
+                ? providerConfig['namespace'] as string : undefined;
+            const target = directNamespace ? index.namespace(directNamespace) : index;
+            const result = await target.upsert(stripped);
             return this.wrapSuccessResponse(result);
         }
         catch(ex){
@@ -217,7 +304,11 @@ export class PineconeDatabase extends VectorDBBase {
     public async DeleteRecord(record: VectorRecord, indexName?: string): Promise<BaseResponse> {
         try{
             const index: Index = this.GetIndex(indexName ? { id: indexName } : undefined).data;
-            let result = index.deleteOne(record.id);
+            // Honor per-record namespace routing set by BuildProviderDirectives — Pinecone deletes
+            // are namespace-scoped, so an unrouted delete of a namespaced vector silently no-ops.
+            const ns = record.providerTemporaryDirectives?.['namespace'];
+            const target = ns != null && String(ns).length > 0 ? index.namespace(String(ns)) : index;
+            const result = await target.deleteOne(record.id);
             return this.wrapSuccessResponse(result);
         }
         catch(ex){
@@ -229,11 +320,32 @@ export class PineconeDatabase extends VectorDBBase {
     public async DeleteRecords(records: VectorRecord[], indexName?: string): Promise<BaseResponse> {
         try{
             const index: Index = this.GetIndex(indexName ? { id: indexName } : undefined).data;
+
+            // Multi-namespace path: mirror CreateRecords — group ids by the per-record namespace
+            // set by BuildProviderDirectives and delete each group inside its own namespace.
+            // Pinecone deletes are namespace-scoped and report success even for ids that don't
+            // exist, so deleting namespaced vectors without routing silently removes nothing.
+            const hasPerRecordNamespace = records.some(r => r.providerTemporaryDirectives?.['namespace'] != null);
+            if (hasPerRecordNamespace) {
+                const groups = new Map<string, string[]>();
+                for (const record of records) {
+                    const ns = String(record.providerTemporaryDirectives?.['namespace'] ?? '');
+                    const existing = groups.get(ns);
+                    if (existing) { existing.push(record.id); } else { groups.set(ns, [record.id]); }
+                }
+                for (const [ns, ids] of groups) {
+                    const target = ns ? index.namespace(ns) : index;
+                    await target.deleteMany(ids);
+                }
+                return this.wrapSuccessResponse(null);
+            }
+
             const IDMap: string[] = records.map((record: VectorRecord) => record.id);
-            let result = index.deleteMany(IDMap);
+            const result = await index.deleteMany(IDMap);
             return this.wrapSuccessResponse(result);
         }
         catch(ex){
+            LogError("Error deleting records", undefined, ex);
             return this.wrapFailureResponse();
         }
     }

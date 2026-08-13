@@ -231,7 +231,7 @@ function MJFormField({
           <div style={{
             position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000,
             background: surface, border: `1px solid ${border}`, borderRadius: radius,
-            maxHeight: '220px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+            maxHeight: '220px', overflowY: 'auto', boxShadow: `0 4px 12px ${colors.shadowLarge || 'rgba(0,0,0,0.12)'}`,
           }}>
             {fkResults.map((r) => (
               <div

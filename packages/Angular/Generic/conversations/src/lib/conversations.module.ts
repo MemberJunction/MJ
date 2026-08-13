@@ -1,7 +1,6 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { RouterModule } from '@angular/router';
 import { OverlayModule } from '@angular/cdk/overlay';
 
 // MJ UI Components
@@ -34,6 +33,8 @@ import { MessageListComponent } from './components/message/message-list.componen
 import { MessageInputComponent } from './components/message/message-input.component';
 import { DynamicFormsModule } from '@memberjunction/ng-forms';
 import { ActionableCommandsComponent } from './components/message/actionable-commands.component';
+import { WorkflowPlanCardComponent } from './components/message/workflow-plan-card.component';
+import { TaskGraphEditorModule } from '@memberjunction/ng-task-graph-editor';
 import { ConversationMessageRatingComponent } from './components/message/conversation-message-rating.component';
 import { ConversationWorkspaceComponent } from './components/workspace/conversation-workspace.component';
 import { ConversationNavigationComponent } from './components/navigation/conversation-navigation.component';
@@ -129,6 +130,7 @@ const COMPONENTS = [
   MessageInputComponent,
   AiComposerComponent,
   ActionableCommandsComponent,
+  WorkflowPlanCardComponent,
   ConversationMessageRatingComponent,
   ConversationWorkspaceComponent,
   ConversationNavigationComponent,
@@ -178,8 +180,8 @@ const COMPONENTS = [
   imports: [
     CommonModule,
     FormsModule,
+    TaskGraphEditorModule,
     ReactiveFormsModule,
-    RouterModule,
     OverlayModule,
     MJButtonDirective,
     MJDatepickerComponent,

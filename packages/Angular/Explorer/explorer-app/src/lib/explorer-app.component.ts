@@ -18,13 +18,14 @@ import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
 import { SystemValidationService, ServerConnectivityService } from '@memberjunction/ng-explorer-core';
-import { NavigationService, AgentContextUpdate } from '@memberjunction/ng-shared';
+import { NavigationService, AgentContextUpdate, RecordSourceContext } from '@memberjunction/ng-shared';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationBridgeService, RealtimeSessionService } from '@memberjunction/ng-conversations';
 import { ApplicationManager, WorkspaceStateManager } from '@memberjunction/ng-base-application';
 import { AppContextSnapshot, ClientToolMetadata } from '@memberjunction/ai-core-plus';
+import { InstanceConfigEngine } from '@memberjunction/core-entities';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJ_PRE_SHELL_GUARD, PreShellGuard } from './pre-shell-guard';
@@ -58,6 +59,42 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   public isChatRoute = false;
   /** Suppresses chat overlay during initial app load — set true after workspace initializes */
   public IsChatOverlayReady = false;
+
+  /**
+   * Instance-config chrome flags, resolved once and cached. The getters below are
+   * read by Angular change detection on every pass, so a per-read engine lookup
+   * would run constantly; this resolves the set once (live from fail-open defaults
+   * until InstanceConfigEngine has loaded, then frozen on the first post-load read
+   * so pre-load defaults are never cached over the real values).
+   */
+  private _chromeFlags: { chatOverlay: boolean; updateNotifications: boolean } | null = null;
+  private get chromeFlags(): { chatOverlay: boolean; updateNotifications: boolean } {
+    if (this._chromeFlags) {
+      return this._chromeFlags;
+    }
+    const engine = InstanceConfigEngine.Instance;
+    const flags = {
+      // 'Shell.ChatOverlay.Enabled' is the pre-existing Shell key seeded for exactly
+      // this bubble; sibling 'Shell.ChatOverlay.AllowOpenInFullApp' governs the
+      // in-bubble "open in full app" affordance.
+      chatOverlay: engine.GetBoolean('Shell.ChatOverlay.Enabled', true),
+      updateNotifications: engine.GetBoolean('Shell.UpdateToasts.Enabled', true),
+    };
+    if (engine.Loaded) {
+      this._chromeFlags = flags;
+    }
+    return flags;
+  }
+
+  /** Instance Config gate for the floating chat overlay bubble. */
+  public get ShowChatOverlay(): boolean {
+    return this.chromeFlags.chatOverlay;
+  }
+
+  /** Instance Config gate for the service-worker update toast. */
+  public get ShowUpdateNotifications(): boolean {
+    return this.chromeFlags.updateNotifications;
+  }
 
   /** Component rendered by PreShellGuard (blocks the shell until dismissed) */
   private _preShellOverlayRef: ComponentRef<unknown> | null = null;
@@ -367,7 +404,26 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
   /** Handle "open entity record" events from the chat overlay */
   public OnOverlayOpenRecord(event: { entityName: string; compositeKey: CompositeKey }): void {
-    this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+    // The overlay is a floating panel, NOT a workspace tab — without an
+    // explicit origin the crumb would blame whatever page sits behind it.
+    this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey, {
+      recordSource: this.chatOverlayRecordSource()
+    });
+  }
+
+  /**
+   * Origin for records opened from the floating chat overlay: labeled
+   * 'Conversation', returning to the Chat app's Conversations page when that
+   * app exists (label-only, non-clickable crumb otherwise).
+   */
+  private chatOverlayRecordSource(): RecordSourceContext {
+    const chatApp = this.ProviderToUse?.Applications?.find(a => a.Name === 'Chat');
+    return {
+      sourceLabel: 'Conversation',
+      sourceAppId: chatApp?.ID,
+      sourceAppName: chatApp?.Name,
+      sourceNavLabel: 'Conversations'
+    };
   }
 
   /** Handle "open full chat workspace" from the chat overlay — navigate to the Conversations tab with the active conversation */
@@ -663,7 +719,11 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         } else {
           pkey.KeyValuePairs = [{ FieldName: 'ID', Value: recordId }];
         }
-        this.navigationService.OpenEntityRecord(entityName, pkey);
+        // The AGENT opened this, from the chat — same origin as overlay
+        // clicks, never the page the user happens to be standing on.
+        this.navigationService.OpenEntityRecord(entityName, pkey, {
+          recordSource: this.chatOverlayRecordSource()
+        });
         return { Success: true, Data: { Navigated: true } };
       }
     });

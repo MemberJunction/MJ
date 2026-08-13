@@ -1,5 +1,807 @@
 # @memberjunction/ng-conversations
 
+## 6.1.0-edge.2
+
+### Minor Changes
+
+- 2792d97: Add a Skills button to the composer, beside Plan Mode.
+
+  `/` skill commands already worked, but were reachable only by knowing to type `/`. Nothing on
+  screen said the feature existed, so a user who had never been told about it had no way to find it.
+  The button is the visible door to the same trigger.
+
+  Clicking it calls the new `MentionEditorComponent.OpenTrigger('/')`, which opens the dropdown
+  WITHOUT writing anything into the editor. The trigger character only ever exists as the chip the
+  user picks, so dismissing leaves the message exactly as they left it. With no character to anchor
+  on, the editor captures a baseline length when a trigger opens this way, and three paths consult
+  it: typing filters against the baseline rather than searching for the character, chip insertion
+  removes only what was typed, and dismissal has nothing to undo.
+
+  It also toggles: a second click closes, because a disclosure control has to be able to close what
+  it opened. Without that the second click re-ran the open path, re-emitting the event pair and
+  re-capturing the baseline at the new caret.
+
+  Built as a sibling of the existing strip controls, with the same `attach-button-icon` chrome and
+  the same active treatment as Plan Mode. The ARIA deliberately differs: Plan Mode is a toggle button
+  (a mode that stays on) so `aria-pressed` is correct there, while this opens a popup and therefore
+  uses `aria-expanded` + `aria-haspopup`. Announcing "pressed" for revealing a list is the wrong
+  thing for a screen reader to say. It joins the strip's
+  visibility gate so a composer offering skills but no attachments, voice or plan mode still renders
+  the strip.
+
+  **Before/After pair, per `guides/UI_LAYERING_GUIDE.md` section 6.** Opening skills is an action a
+  host might veto, so it ships as `BeforeSkillsOpened` (carrying `BeforeSkillsOpenedEventArgs` with
+  `Cancel` / `CancelReason`) and `AfterSkillsOpened`. `After` is not emitted on the canceled path, and
+  not emitted when no active provider owns the trigger, so a host counting it counts dropdowns the
+  user saw rather than clicks. `Before` handlers must be synchronous: EventEmitter's synchronous
+  dispatch is how `Cancel` travels back.
+
+  The base, `CancellableComposerEventArgs`, is per-domain rather than shared. That matches the same
+  guide's naming table, which specifies `Cancellable<Domain>EventArgs` for exactly this class, and the
+  sixteen packages already following it. It is also the only option here on dependency grounds:
+  `ng-composer` is the generic layer and cannot import from `ng-conversations`.
+
+  **The expanded state is derived, not an input.** Plan Mode's active state is a persisted user
+  preference the host owns and threads down. "Is the skill dropdown open" is intrinsic to the
+  composer, so it reads `MentionEditorComponent.IsTriggerOpen('/')` instead. An `@Input` there would
+  be an API no host could answer, and would leave the button permanently collapsed if nobody bound it.
+
+  No new host-level cap: the button is gated on the existing `EnableSkillCommands` /
+  `enableSkillCommands` / `allowSkillCommands` chain, which already defaults true at every layer. The
+  button and the keystroke are two doors to one feature, so one flag governs both rather than letting
+  a composer advertise skills it will not serve.
+
+  **Two pre-existing dropdown bugs fixed along the way**, both of which affect every trigger
+  (`@`, `#`, `/`) rather than only the new button:
+  - **Click-away never dismissed.** Dismissal relied entirely on the editor's blur, and clicking a
+    non-focusable area does not blur a contenteditable, so the dropdown stayed open with nothing able
+    to close it. A `document:mousedown` listener now closes it, chosen over `click` because mousedown
+    fires before focus moves and therefore cannot race blur's 200ms timer. Clicks inside the
+    component are exempt, so a suggestion row still selects. The Skills button sits OUTSIDE the
+    editor's host, so it needs the same exemption: without it the button's mousedown read as an
+    outside press and closed the dropdown, then the click saw it already closed and reopened it, so
+    the toggle never appeared to work. That seam is covered by a DOM test that fires real bubbling
+    mousedown/click rather than calling the handler, which is what hid the bug.
+  - **The dropdown could land off screen.** Positioning measures the caret, and a collapsed range in
+    an empty editor measures 0x0 at 0,0 in every browser, pinning the menu to the bottom-left corner
+    of the viewport. It now falls back to the editor's own box. The menu also prefers to open ABOVE
+    the composer: the composer sits at the bottom of the chat, so a downward menu covers the text
+    being typed.
+  - **A button-opened menu anchors to the button, not the caret.** On the typed path the user's eyes
+    and query are both at the caret, so the caret is the right anchor. On the button path nobody is
+    looking at the caret. The anchored menu aligns left and grows rightward, flipping to right-aligned
+    only when that would overflow the viewport — and the flip aligns to the COMPOSER's right edge
+    rather than the button's, because the strip is pinned bottom-right and Skills is the leftmost of
+    five icons, so pinning to that one icon hangs the menu's whole width out to its left. Coordinates
+    are viewport-relative throughout, since the dropdown renders with `useFixedPositioning`.
+
+  `OpenTrigger` and `IsTriggerOpen` are public and generic. Any trigger character with an active
+  provider can now be opened from a control, and any control can reflect whether its trigger is open.
+
+  **BREAKING (renames), and the reason this is `minor` rather than `patch`.** `MessageInputBoxComponent`
+  was violating MJ's convention that public class members are `PascalCase`, so every public input,
+  output, getter and method on it is renamed: `placeholder` to `Placeholder`, `disabled` to `Disabled`,
+  `value` to `Value`, `valueChange` to `ValueChange`, `textSubmitted` to `TextSubmitted`,
+  `planModeToggle` to `PlanModeToggle`, `canSend` to `CanSend`, `onSendClick` to `OnSendClick`, and so
+  on for all of them. `TriggerProviders`, `ExcludedTriggerKeys` and `Provider` were already correct.
+
+  Native DOM bindings and framework members are deliberately untouched: `[disabled]` on a `<button>`
+  is a DOM property, `ngOnInit` / `writeValue` / `registerOnChange` are framework contracts, and
+  `mj-mention-editor`'s own inputs keep their current casing because that component is not renamed
+  here.
+
+  `mj-ai-composer` is updated to the new names. Any other consumer binding these inputs or listening
+  to these outputs must rename accordingly.
+
+- 9fc0e2d: Carry an authored realtime voice to any provider, not just OpenAI — both override builders filed the voice under a hardcoded `openai` provider key, so a session resolving to ElevenLabs, Gemini, Inworld, AssemblyAI or HuggingFace silently got nothing: the setting stayed visible in the effective config and never reached a driver. On the default-model path the framework picks the vendor itself and never disclosed which, making a provider-keyed voice unauthorable rather than merely wrong. Adds the provider-agnostic `realtime.voice.default.voice` slot, filed onto whichever driver resolves — every realtime driver already reads the same neutral `voice` bag key by design (ElevenLabs maps it to `tts.voice_id` on the wire), so no per-driver accessor is needed. Precedence is per-key: the agnostic value wins `voice` while a matching `providers.<key>` bag still contributes its other settings, so a runtime pick beats a vendor-pinned value in agent metadata. With no agnostic voice authored, behavior is unchanged. Also ends the silence around it — the mint log now carries the resolved driver and the voice that reached it, both realtime surfaces log when authored provider bags matched nothing, and the resolved `DriverClass` is surfaced to the browser on `StartRealtimeClientSessionResult` — and consolidates three byte-identical copies of the vendor-selection walk into one `SelectRealtimeVendorForModel`.
+
+  Minor rather than patch because the change is additive to the public API: `SelectRealtimeVendorForModel`, `RealtimeVendorSelection`, `MatchProviderVoiceSettings` and `WarnOnUnmatchedProviderVoice` are newly exported from `@memberjunction/ai-agents`, and `RealtimeClientSessionPrepResult` / `StartRealtimeClientSessionResult` gain `DriverClass`.
+
+  Three compatibility notes, in rough order of how likely they are to bite:
+  1. **Deploy the client and server together.** A new `@memberjunction/ng-conversations` against an older MJAPI silently drops a picked voice for **every** provider including OpenAI, because the older server's `normalizeVoice` does not carry `default.voice` through the cascade — a regression of currently-working behavior, so a same-version bump is not enough if the two deploy independently. The reverse (old client, new server) is safe: the `providers.openai` shape is still honored.
+  2. **The agent-type `ConfigSchema` reaches a database only via `mj sync push`.** The schema gains the agnostic slot and marks `providers.*.voiceId` deprecated (no driver has ever read it). Until that push runs, authoring `realtime.voice.default.voice` in an agent's `TypeConfiguration` **fails the save** — the old schema validates `voice.default` with `additionalProperties: false`. Runtime overrides are unaffected; they bypass that validator.
+  3. **Bridge hosts that supply a voice without pinning a model now forward that id to whatever vendor wins the priority walk.** `BridgeRealtimeSessionContext.RealtimeVoice` is host-supplied (LiveKit/Twilio/Teams) and independent of the model pin, so a previously inert misconfiguration becomes reachable: an OpenAI voice name like `echo` reaching ElevenLabs is sent as `tts.voice_id`, and an invalid voice id there fails the session rather than degrading. An agnostic voice is only as portable as the id itself — pin the model alongside the voice, or author per-vendor ids under `providers.<key>`.
+
+  One gap found here was closed separately in the same release: **Gemini** consumed the neutral `voice` key no further than its config object — `buildConnectConfig` assigned the bag onto a `LiveConnectConfig` with no `voice` property, so the value was dropped before the wire. `@memberjunction/ai-gemini` now maps it to `speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName` on both topologies (#3721). Separately, only `OpenAIRealtime`, `xAIRealtime` and `HuggingFaceRealtime` declare `SupportedVoices` (HuggingFace returns none) and the native picker's dropdown is gated on that list, so for the vendors this unblocks the voice is reachable through agent metadata and programmatic hosts rather than the picker.
+
+- 768980d: **A Workflows app, and the Create Workflow front door inside it.**
+
+  Phase 5 shipped every component this composes — the canvas, the properties panel, the runtime-overlay
+  source, both Save-as-Workflow surfaces — but not the front door, because the design was not locked.
+  It is now: `mockups/workflow-ux/front-door-v1.html` carries five ratified answers, and this builds
+  all three of its screens against them.
+
+  **Its own Explorer app, not a tab in AI.** D18 puts _Workflow_ in front of end users while _Flow
+  Agent_ survives in metadata and dev docs — filing the surface under "AI" would contradict that at the
+  navigation level, and D19 exists precisely because the editor is today buried inside a saved agent
+  record. Scheduling and Routines set the precedent for an AI-adjacent domain getting its own app.
+
+  **Three doors**, in the locked order, with "Describe it" pre-selected — the only one that needs no
+  prior knowledge of the product. Each states _when to pick it_, not just what it does, because that is
+  the actual question someone has on this screen. Only settled runs are promotable: an in-flight run
+  may still change shape under a retry or a recovery branch, so the saved workflow would not be the one
+  that ran. That is enforced three ways — the handler guards, the row leaves the tab order, and
+  `aria-disabled` is set — because dimming alone leaves a row clickable and keyboard-reachable.
+
+  **Save as Workflow now names it inline and offers the editor** (answer ④). The card previously
+  emitted a save with no name and no way to continue editing, leaving the host to invent both. The name
+  seeds from the plan's own — making someone invent another is the difference between saving and not
+  bothering — but once touched it keeps what was typed, including empty. "Open in editor" is secondary
+  on purpose: making the editor mandatory turns a two-second capture into a task.
+
+  **Nothing anywhere asks for a trigger or a schedule.** Saving is capture, not scheduling; a workflow
+  runs on demand until someone gives it a cadence, and the card says so rather than leaving it to be
+  discovered.
+
+  **D18 is enforced by test.** The vocabulary rule is invisible to a compiler and erodes one label at a
+  time, so the templates and user-facing copy are asserted to contain no _graph_ / _DAG_ / _node_ /
+  _Flow Agent_ — with a companion assertion that _step_ IS present, so the rule cannot be satisfied by
+  deleting the concept instead of renaming it.
+
+  The front door emits a draft rather than persisting anything, because the middle tile promises
+  "Nothing is saved until you approve it" in so many words, and approval happens on the canvas.
+
+### Patch Changes
+
+- Updated dependencies [2792d97]
+- Updated dependencies [255d506]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [59def38]
+- Updated dependencies [11de1a3]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [9a29da4]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/ng-composer@6.1.0-edge.2
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/ai@6.1.0-edge.2
+  - @memberjunction/ai-core-plus@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.2
+  - @memberjunction/ai-engine-base@6.1.0-edge.2
+  - @memberjunction/ai-realtime-client@6.1.0-edge.2
+  - @memberjunction/ng-user-routines@6.1.0-edge.2
+  - @memberjunction/ng-testing@6.1.0-edge.2
+  - @memberjunction/ng-artifacts@6.1.0-edge.2
+  - @memberjunction/ng-base-types@6.1.0-edge.2
+  - @memberjunction/ng-code-editor@6.1.0-edge.2
+  - @memberjunction/ng-notifications@6.1.0-edge.2
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.2
+  - @memberjunction/ng-shared-generic@6.1.0-edge.2
+  - @memberjunction/ng-task-graph-editor@6.1.0-edge.2
+  - @memberjunction/ng-tasks@6.1.0-edge.2
+  - @memberjunction/conversations-runtime@6.1.0-edge.2
+  - @memberjunction/ng-forms@6.1.0-edge.2
+  - @memberjunction/ai-agent-client@6.1.0-edge.2
+  - @memberjunction/ng-agent-client@6.1.0-edge.2
+  - @memberjunction/ng-container-directives@6.1.0-edge.2
+  - @memberjunction/ng-whiteboard@6.1.0-edge.2
+  - @memberjunction/ng-media-player@6.1.0-edge.2
+  - @memberjunction/interactive-component-types@6.1.0-edge.2
+  - @memberjunction/ng-markdown@6.1.0-edge.2
+  - @memberjunction/ng-ui-components@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Minor Changes
+
+- 394d276: Phase 1 of the unified workflow DAG engine program (plan: PR #3456) — makes the task substrate tell the truth about what actually happened.
+
+  **Payloads become columns.** `Task` gains `InputPayload`, `OutputPayload`, `ErrorMessage`, and `AgentRunID`. Inputs and outputs previously rode inside `Task.Description` behind `__TASK_METADATA__` / `__TASK_OUTPUT__` markers, which leaked orchestration plumbing into search results and the task detail panel. A one-time migration backfill converts existing marker rows into the new columns and strips the markers; there is deliberately **no fallback parse** in code, because a fallback with no backfill never dies. The backfill is conservative — a row whose marker text doesn't parse as JSON is left byte-for-byte intact for inspection rather than silently discarded.
+
+  **Failures propagate instead of stalling.** A `Failed` dependency used to leave its dependents `Pending` forever: they never became eligible, so the graph appeared to finish while work silently never ran — and the parent was marked `Complete` at 100% regardless. Now failure propagates transitively to `Blocked`, and the parent rolls its children up honestly (`Failed` > `Blocked` > `Cancelled` > `Complete`, with progress counting only completed children). Completion notifications fire only for genuinely successful graphs.
+
+  **Bad graphs are rejected before they are persisted.** Dependency cycles are detected at creation (a cyclic graph could previously be saved and then deadlock silently), and a graph naming an unknown agent is now an error rather than being logged-and-skipped — which used to execute the graph with holes where the caller's tasks should have been.
+
+  **Waves run in parallel.** Eligible tasks execute with bounded concurrency (5) rather than one at a time, and each pass loads the graph once instead of issuing a dependency query per candidate task. Stalled graphs — pending work, nothing runnable, nothing in flight — are now detected and logged rather than exiting quietly.
+
+  **The Gantt links the right run.** `Task.AgentRunID` records the specific run that executed each task. The UI previously joined tasks to runs through the shared `ConversationDetailID`, so every sibling task in a graph resolved to the _same_ agent run; the link was wrong for all but one. `Blocked` and `Failed` also now render distinctly instead of inheriting the pending treatment.
+
+  **New pure graph algorithms** in `@memberjunction/ai-core-plus` (`computeEligibleTasks`, `computeTasksToBlock`, `computeParentRollup`, `detectCycle`, `isGraphStalled`, `findUnknownDependencyRefs`) — dependency-free, operating on plain shapes rather than entities, with 44 unit tests. Phase 2's durable dispatcher consumes these unchanged rather than reimplementing eligibility and propagation.
+
+  **Also:** dispatcher claim columns (`ClaimedBy`, `ClaimExpiresAt`) and their supporting indexes land now so Phase 2 adds the dispatcher without further schema churn — nothing reads them yet. `AIAgentRunStep.StepType` gains `TaskGraph`. New deterministic integration bundle `task-graph-orchestration` (TG1–TG4) covering cycle rejection, unknown-agent rejection, payload columns, and the new schema's presence in generated metadata.
+
+- 394d276: Phase 2 of the unified workflow DAG engine program (plan: PR #3456) — task-graph execution moves server-side and becomes invocation-agnostic.
+
+  **New package `@memberjunction/task-graph`.** Deliberately not AI-prefixed (D11): an LLM, deterministic code, or a human UI can all construct and submit a DAG. It contains `TaskGraphSpec` (the one fully-qualified contract every producer authors against, D16), a pure validator, `TaskGraphService` (submission), `TaskClaimStore` (the CAS claim protocol), and `TaskGraphDispatcher` (durable execution). Graph _semantics_ stay in the Phase 1 pure algorithms in `ai-core-plus` — eligibility, failure propagation, parent rollup and stall detection are consumed unchanged, so the in-run and durable executors cannot drift apart.
+
+  **Submission is split from execution (D2).** `TaskGraphService.Submit` validates, resolves agents, persists parent + children + edges, and returns. Nothing waits for the work. That is what makes every channel equal (D1).
+
+  **BREAKING: `ExecuteTaskGraph` is removed (D12).** It awaited an entire multi-step workflow inside one long-lived GraphQL request, so a page reload lost the awaited promise, a server restart orphaned every in-flight task, and no channel but Explorer could reach the substrate. Replaced by `SubmitTaskGraph`, `CancelTaskGraph`, and `RetryTask`. Accepted deliberately in the open v6 window; its sole known caller — the Explorer conversation client — becomes an observer in this same change.
+
+  **The durable dispatcher.** A compare-and-swap claim protocol over `ClaimedBy`/`ClaimExpiresAt` (the columns Phase 1 landed): claiming is a single guarded `UPDATE ... WHERE Status='Pending'` whose rowcount decides the winner, so two instances never run the same task without a distributed lock manager. Long tasks heartbeat to extend their claim; startup and periodic reconciliation return expired claims to `Pending`, which is what turns a crash from "work stranded forever" into "work resumes". Per D20 _every_ state transition is guarded on `ClaimedBy=@me`, not just the initial claim, because `MJ: Tasks` stays user-writable — a stale executor's completion write fails cleanly instead of double-completing. Human tasks are exempt from reclamation: a task parked on a person legitimately has no claim, and reclaiming it would reset an approval out from under the user.
+
+  **Server-side detection at three seams.** Task graphs emitted in an agent's payload are now detected and submitted from the MJServer run path, `BaseMessagingAdapter` (ahead of the existing text-regex delegation, since a structured graph is unambiguous), and the Scheduling drivers. Previously only the Explorer client looked, so **Slack/Teams and scheduled routines silently dropped every graph an agent emitted** — the plan's core verified gap. The detection shim is explicitly temporary and dies in Phase 3 when `Tasks` becomes a typed `nextStep`.
+
+  **Provider isolation.** The dispatcher mints a fresh provider per task via an injected `ProviderFactory`, so parallel tasks never share a transaction scope. MJServer supplies the implementation, keeping the dependency MJServer → task-graph and never the reverse.
+
+  **Also:** 18 new unit tests for the validator; integration bundle grows with the three seam checks deferred from Phase 1 (cycle rejection, unknown-agent rejection, payload columns), now targeting `TaskGraphService`'s public API.
+
+- 394d276: Follow-up to Phase 2 of the unified workflow DAG program (plan: PR #3456) — the task-graph control plane becomes **Remote Operations**, and the durable dispatcher actually starts.
+
+  **BREAKING: the `SubmitTaskGraph`, `CancelTaskGraph`, and `RetryTask` GraphQL mutations are removed**, one release after they were added. They shipped in Phase 2 as bespoke resolvers, which fixed the _durability_ problem — nothing awaits a whole workflow inside one request anymore — but left the _reachability_ problem exactly where it was: callable from the Explorer client and nothing else. That undercuts the program's own goal of letting agents **set up** workflows rather than only navigate to them.
+
+  Remote Operations are MJ's typed control plane, and the closest analogous substrate already uses them for precisely this shape of verb: Record Set Processing exposes `Run` / `Pause` / `Resume` / `Cancel` / `Get Run Status` entirely as Remote Operations. One registration is reachable from MCP (external agents), from an Action wrapper (internal agents), and from the UI, with the framework's authorization scopes applied uniformly rather than re-implemented per resolver.
+
+  The replacements are `TaskGraph.Submit`, `TaskGraph.Cancel`, `TaskGraph.RetryTask`, and `TaskGraph.GetStatus`. `GetStatus` is new — it has no mutation predecessor. It is the observation half of making execution durable: once nobody holds a request open, a caller re-attaching after a reload, an agent checking work it submitted, or an external MCP caller all need a way to ask "where is it?". Its rollup runs the same pure algorithm the dispatcher runs, so the reported status cannot disagree with the engine's own view.
+
+  There is deliberately no `TaskGraph.Pause`. The dispatcher has no pause concept — pausing a claimed task means deciding what happens to its claim, and inventing that here to round out a verb set would be guessing ahead of Phase 4.
+
+  **The durable dispatcher now starts.** Phase 2 landed `TaskGraphDispatcher` but nothing ever instantiated it, so a submitted graph persisted correctly and then sat in `Pending` forever — durable and inert, which is strictly worse than the client-driven path it replaced. MJServer now starts one instance per process after `listen()`, alongside the other boot-time reconcilers, keyed by hostname + pid so reconciliation can tell its own orphaned work from a peer's live work. It is gated on SQL Server because the provider factory mints a `SQLServerDataProvider`; the PostgreSQL branch lands with PG parity.
+
+  **The dispatcher self-registers with `ShutdownRegistry`** rather than making each host remember to stop it. A dispatcher still polling through a graceful shutdown would claim work the process is about to abandon — creating exactly the orphaned-claim state reconciliation exists to clean up.
+
+  The Angular conversation client now calls `TaskGraph.Submit` through the generic `ExecuteRemoteOperation` transport, so the hand-written GraphQL document is gone from the client as well.
+
+- 394d276: Phase 5 continued — the two **Save as Workflow** surfaces deferred out of Phase 4 (D17). Phase 4 shipped the converter; these are where a person actually reaches it.
+
+  **Agent Run admin — a Workflow tab on the `TaskGraph` run step.** Phase 3 writes that step for _every_ emitted graph, dispatched or constant-folded, which is what makes a folded single-node graph just as promotable as a dispatched one — the point of recording the fold rather than letting it vanish. The tab opens by default on a `TaskGraph` step, because that step's whole content _is_ the graph and opening on the JSON would bury the one thing it exists to show. A folded graph says so, so the reader sees _why_ it never reached the dispatcher instead of inferring it.
+
+  **ng-conversations — a plan card.** The moment this serves: an agent breaks a request into steps, the work runs, it was good, and today that is where it ends — the decomposition was ephemeral, so the next person who wants the same thing asks an agent to invent it again. Save is offered only once the work has **settled**; offering it mid-run invites saving a shape that may yet change under a retry or a failure routing down a recovery branch. The card starts collapsed, because it sits inline in a thread and must not dominate it.
+
+  **Both render through the same `TaskGraphSpec` component the editor uses**, in `ReadOnly` mode. A second, simpler renderer for chat would be a second thing that can disagree with the canvas about what a graph means — which is the exact class of divergence this whole program has been removing.
+
+  **Save is intent only** on both surfaces. Neither persists agents; the host converts and writes through `AgentSpecSync`, keeping the one place that writes an agent the one place that writes an agent.
+
+### Patch Changes
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- 394d276: DOM specs for the three components Phase 5 added, which takes the `packages/Angular/Generic` coverage ratchet from **138 (failing) to 135 (passing)** — better than the state it has been in on `next`.
+
+  Each covers only what exists in the rendered template rather than the class, because the graph _logic_ is already tested against the pure adapter and the component classes where no TestBed is needed:
+  - **The validation banner** earns DOM coverage specifically. It is the one place author-time feedback from the engine becomes visible, and a template regression there is silent — the component would still compute `IsValid` correctly while showing the user nothing.
+  - **The properties panel never writes.** Every control emits a request the parent applies; a regression there would not throw, it would quietly bypass the veto contract.
+  - **When "Save as Workflow" appears** is the plan card's highest-stakes rule. Offering it while work is still running invites saving a shape that may yet change under a retry or a failure routing down a recovery branch — so the graph a user believed they saved would not be the one that ran.
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/ng-ui-components@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ng-agent-client@6.1.0-edge.1
+  - @memberjunction/ng-artifacts@6.1.0-edge.1
+  - @memberjunction/ng-base-types@6.1.0-edge.1
+  - @memberjunction/ng-code-editor@6.1.0-edge.1
+  - @memberjunction/ng-composer@6.1.0-edge.1
+  - @memberjunction/ng-container-directives@6.1.0-edge.1
+  - @memberjunction/ng-forms@6.1.0-edge.1
+  - @memberjunction/ng-markdown@6.1.0-edge.1
+  - @memberjunction/ng-media-player@6.1.0-edge.1
+  - @memberjunction/ng-notifications@6.1.0-edge.1
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.1
+  - @memberjunction/ng-shared-generic@6.1.0-edge.1
+  - @memberjunction/ng-tasks@6.1.0-edge.1
+  - @memberjunction/ng-testing@6.1.0-edge.1
+  - @memberjunction/ng-user-routines@6.1.0-edge.1
+  - @memberjunction/ng-whiteboard@6.1.0-edge.1
+  - @memberjunction/ng-task-graph-editor@6.1.0-edge.1
+  - @memberjunction/ai-core-plus@6.1.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.1
+  - @memberjunction/ai-agent-client@6.1.0-edge.1
+  - @memberjunction/ai-engine-base@6.1.0-edge.1
+  - @memberjunction/conversations-runtime@6.1.0-edge.1
+  - @memberjunction/interactive-component-types@6.1.0-edge.1
+  - @memberjunction/ai@6.1.0-edge.1
+  - @memberjunction/ai-realtime-client@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- b895f92: Angular DOM unit-testing — Phase 4 coverage push. Dev-only (test files + test-config/CI-gate scoping); no runtime change.
+
+  Drives the Generic DOM-coverage ratchet (`scripts/dom-test-report.mjs … --max-none`) from **185 → 137** by writing DOM specs, in usage-ranked order, for every Generic Angular component appropriate for a DOM unit test. Highlights:
+  - **Highest-leverage primitives** — `MjFormFieldComponent` (the field renderer behind ~4,000 usages) across its read/edit type matrix; the `ui-components` design system (`MJEmptyStateComponent`, the `mj-page-*` chrome family, `MJDropdown`/`MJCombobox`/`MJFilterPopover` via a new CDK-overlay test helper in `ng-test-utils`, the `mj-dialog` family, tabs, filter panel, left-nav).
+  - **Form host stack** — `MjRecordFormContainer`, `MjFormToolbar`, `MjEntityFormHost`, `MjIsaRelatedPanel`, `FormPanelSlot`, `ExplorerEntityDataGrid`, `InteractiveForm`.
+  - **Viewers, grids & dialogs** — `EntityDataGrid` + `QueryDataGrid` (AG-Grid chrome), `EntityViewer`, `ArtifactViewerPanel`, the ERD component family (`ERDComposite`/`MJEntityERD`/`ERDDiagram`), plus a broad set of panels/editors/dialogs across agents, artifacts, search, composer, list-management, scheduling, record-process-studio, user-routines, entity-action-ux, actions, and testing.
+  - **`Angular/Bootstrap` onboarded** — the last untracked library tree gains a DOM test tier (`MJAuthShell`, `MJBootstrap`) and its own `--max-none=0` CI gate, so every shipped Angular library tree (Explorer, Generic, Bootstrap) is now gated.
+
+  Reusable patterns established for the harder components: drive internal state before the first render (`setup`) rather than mutating post-render (unreliable under zoneless CD); stub the heavy core (AG-Grid, React bridge, SVG layout, plugin viewers) and spy async loaders so specs exercise the component's own chrome/wiring; add each component **and its injected services** to enumerated `tsconfig.spec.json` files (or AOT drops decorator metadata → NG0202).
+
+  Deliberately **not** covered, and left at the 137 floor: five integration/e2e-tier orchestrators (`ConversationChatArea`, `MessageInput`, `RealtimeWhiteboardBoard`, `AITestHarness`, `RealtimeSessionOverlay`) — 1,800–4,600-line components with realtime/WebRTC/canvas cores or 14–30 dependencies, which belong in the browser regression suite rather than DOM units.
+
+- Updated dependencies [b895f92]
+- Updated dependencies [b895f92]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [d26e202]
+- Updated dependencies [27e4d09]
+- Updated dependencies [5c6e36c]
+  - @memberjunction/ng-ui-components@6.1.0-edge.0
+  - @memberjunction/ng-artifacts@6.1.0-edge.0
+  - @memberjunction/ng-composer@6.1.0-edge.0
+  - @memberjunction/ng-user-routines@6.1.0-edge.0
+  - @memberjunction/ng-testing@6.1.0-edge.0
+  - @memberjunction/ng-markdown@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/interactive-component-types@6.1.0-edge.0
+  - @memberjunction/ng-forms@6.1.0-edge.0
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.0
+  - @memberjunction/ng-whiteboard@6.1.0-edge.0
+  - @memberjunction/ai-engine-base@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/ng-base-types@6.1.0-edge.0
+  - @memberjunction/ng-code-editor@6.1.0-edge.0
+  - @memberjunction/ng-notifications@6.1.0-edge.0
+  - @memberjunction/ng-shared-generic@6.1.0-edge.0
+  - @memberjunction/ng-tasks@6.1.0-edge.0
+  - @memberjunction/conversations-runtime@6.1.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.0
+  - @memberjunction/ai-agent-client@6.1.0-edge.0
+  - @memberjunction/ng-container-directives@6.1.0-edge.0
+  - @memberjunction/ng-media-player@6.1.0-edge.0
+  - @memberjunction/ng-agent-client@6.1.0-edge.0
+  - @memberjunction/ai@6.1.0-edge.0
+  - @memberjunction/ai-realtime-client@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-agent-client@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/ng-testing@6.0.0
+  - @memberjunction/ng-artifacts@6.0.0
+  - @memberjunction/ng-base-types@6.0.0
+  - @memberjunction/ng-code-editor@6.0.0
+  - @memberjunction/ng-composer@6.0.0
+  - @memberjunction/ng-container-directives@6.0.0
+  - @memberjunction/ng-media-player@6.0.0
+  - @memberjunction/ng-notifications@6.0.0
+  - @memberjunction/ng-resource-permissions@6.0.0
+  - @memberjunction/ng-shared-generic@6.0.0
+  - @memberjunction/ng-tasks@6.0.0
+  - @memberjunction/ng-user-routines@6.0.0
+  - @memberjunction/conversations-runtime@6.0.0
+  - @memberjunction/graphql-dataprovider@6.0.0
+  - @memberjunction/interactive-component-types@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/ng-agent-client@6.0.0
+  - @memberjunction/ng-forms@6.0.0
+  - @memberjunction/ng-whiteboard@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/ai-realtime-client@6.0.0
+  - @memberjunction/ng-markdown@6.0.0
+  - @memberjunction/ng-ui-components@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-agent-client@5.51.0
+  - @memberjunction/ai-engine-base@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/ng-testing@5.51.0
+  - @memberjunction/ng-artifacts@5.51.0
+  - @memberjunction/ng-base-types@5.51.0
+  - @memberjunction/ng-code-editor@5.51.0
+  - @memberjunction/ng-composer@5.51.0
+  - @memberjunction/ng-container-directives@5.51.0
+  - @memberjunction/ng-media-player@5.51.0
+  - @memberjunction/ng-notifications@5.51.0
+  - @memberjunction/ng-resource-permissions@5.51.0
+  - @memberjunction/ng-shared-generic@5.51.0
+  - @memberjunction/ng-tasks@5.51.0
+  - @memberjunction/ng-user-routines@5.51.0
+  - @memberjunction/conversations-runtime@5.51.0
+  - @memberjunction/graphql-dataprovider@5.51.0
+  - @memberjunction/interactive-component-types@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/ng-agent-client@5.51.0
+  - @memberjunction/ng-forms@5.51.0
+  - @memberjunction/ng-whiteboard@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/ai-realtime-client@5.51.0
+  - @memberjunction/ng-markdown@5.51.0
+  - @memberjunction/ng-ui-components@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Minor Changes
+
+- d36131a: Assistant identity inputs for the message feed. `assistantDisplayName` and `assistantAvatarUrl` on `mj-conversation-chat-area` (both default `null` = today's engine-resolved agent identity) let a white-label host brand the AI side of the conversation through the component contract instead of `::ng-deep` on `.message-sender` / `.avatar-circle` internals. The override is display-only by design: `isConversationManager` and the run-details header/record link keep comparing the engine-resolved agent name, so relabeling the persona can never change routing or behavior decisions. A whitespace-only or failing avatar URL degrades back to the agent's Font Awesome icon, and identity changes restamp already-rendered messages so a branding config that resolves after first render still applies.
+- 8580aef: Brandable conversation export + an additive `headerActions` slot. `ExportBranding` (`brandTokens` / `logoUrl` / `title` / `trademark`), supplied via `exportBranding` on `mj-conversation-chat-area`, now applies across all four export formats: HTML gets theme colors as a sanitized `:root{}` block, an inlined data-URI logo, the title, and a styled trademark footer; markdown/text carry the title and trademark (markdown also references the logo); JSON emits a `branding` block. The HTML export's stylesheet was converted to `var(--mj-token, <legacyHex>)` where every fallback is the exact prior literal, so an unbranded export renders identically to previous releases and the JSON/markdown/text output is byte-identical.
+
+  Host CSS values baked into the exported document pass a safe-function **allowlist** (`var`/`calc`/`min`/`max`/`clamp`/`rgb`/`rgba`/`hsl`/`hsla`/`hwb`/`lab`/`lch`/`oklab`/`oklch`/`color`/`color-mix`) plus a rejection of declaration- and tag-escape characters. Blocking only `url()` would have let `image-set()`, `-webkit-image-set()`, `cross-fade()`, `image()`, and `src()` fetch a remote URL from an exported local file without ever writing the literal `url(`.
+
+  Also adds `exportButtonLabel` / `exportButtonIcon` for relabeling the header Export button, the download-free `ExportService.BuildExportContent()` and `SnapshotBrandTokens()` seams, and a seventh chat slot — `headerActions` — which appends host buttons inside the DEFAULT header's action strip (a projected `header` slot replaces the whole header and therefore suppresses it).
+
+  The theme snapshot captures a **chosen** mode rather than the live one: `ExportOptions.themeMode` (`'light'` | `'dark'`, default `'light'`, surfaced as a Theme dropdown in the export modal) reads the requested palette by briefly toggling `data-theme` on `documentElement` and restoring it synchronously. Without this, exporting during a dark session baked dark text onto the export's white page and produced an unreadable file. The exported `body` now carries `--mj-bg-page` / `--mj-text-primary` / `--mj-font-family` so a dark export is coherent and a themed export carries the brand's type; `.message` corners read `--mj-radius-md`, and the user-message tint moved from `--mj-status-info-bg` to `--mj-brand-accent-subtle` (status colors never re-theme, so info-blue bubbles would otherwise survive every rebrand). Each keeps the prior literal as its `var()` fallback, with one deliberate exception: the new `body` rule sets `color: var(--mj-text-primary, #333)`, where message text previously inherited the browser default (black). The same rule makes the export explicitly white-backed, so a reader whose browser defaults to a dark canvas no longer gets black-on-dark — an unbranded export is therefore _more_ robust than before, not merely unchanged.
+
+- 35fb5e3: White-label theming + chrome toggles for the conversation list panel. Nine new public design tokens (`--mj-chat-list-{bg,ink,hover-bg,active-bg,active-ink,active-hover-bg,accent,accent-ink,accent-hover}`) let a host remap the list off the stock brand-secondary rail and onto surface tokens so it matches the chat area; hover, border, divider, preview, badge, and placeholder tints all derive from the ink (or the active-row ink) via `color-mix`, so they follow a remap automatically. They resolve in the component's `:host` onto private `--conv-list-*` names — a custom property cannot name itself in its own fallback without forming a cycle, so the two-name indirection is required rather than stylistic.
+
+  Four chrome toggles (`showSearch`, `showNewConversationButton`, `showHeaderMenu`, `showSectionHeaders`, all default `true`) remove list chrome for embedded and end-user surfaces; the header strip drops out entirely when nothing would occupy it, and `showSectionHeaders=false` renders a flat, fully-expanded list. `mj-conversation-sidebar` passes all four through and now re-emits the list's `(conversationDeleted)` and `(refreshRequested)` outputs, which previously died at the sidebar boundary.
+
+  Defaults are unchanged with one exception: the rename-flash keyframes were hardcoded `rgba()` values that ignored theming entirely (inline `styles:` blocks in `.ts` files escape the repo's CSS token gate) and now run on brand/status tokens at the same alpha ramp — same animation, theme-following hue.
+
+- abab5dc: Per-type mention gating on the chat area. `allowAgentMentions`, `allowEntityMentions`, and `allowSkillCommands` (all default `true`, all under the pre-existing `allowMentions` master) forward host-level caps to `mj-ai-composer`'s existing `EnableAgentMentions` / `EnableEntityMentions` / `EnableSkillCommands` toggles, through every composer consumer — the empty state and both message inputs. No composer or trigger-provider logic changes; the composer already treated `@` agents, `#` entities, and `/` skills as three independent plugins, and only the forwarding was missing.
+
+  This lets a surface offer `/` skill commands while dropping `@` agent mentions. That matters because an `@` outranks the entire default-agent resolution chain, so a host pinned to one agent via `[defaultAgentId]` has not really pinned it while `@` is available. Disabling a type removes its trigger provider rather than hiding UI, and `allowMentions=false` still disables all three regardless of the per-type flags.
+
+### Patch Changes
+
+- 938ae80: Fix collection sharing end-to-end: run the share-create authorization gate against the entity's provider with the caller as contextUser (it previously rejected every share server-side), surface the real block reason instead of "Unknown error creating record", open shared collections from the Sharing Center via the Collections nav item, and polish the shared-indicator UI (badge sizing/styling, Shared chip, owner name resolution and truncation). Includes share-affordance gating for legacy null-OwnerID collections and regression tests for the create gate.
+- 28c1dcd: `showAgentRunDetails=false` now hides the whole agent run-details section rather than only its grid, and the gear button that opens the panel renders only when that panel would actually have content.
+
+  Previously the flag gated the run-detail grid but left the section's "… Run Details" header — and, more visibly, left the gear icon opening onto an empty popup. The gate now sits at the panel root, and `hasAgentDetailsPanelContent` mirrors the panel's three sibling blocks exactly (run details when enabled, associated tasks, and on non-last messages the delete/rating/pin overflow), so a white-labeled end-user surface with run details off and no message actions gets no gear at all. The rating arm is AND-gated on `messageStatus === 'Complete'` to match the template, which only renders the rating in that branch.
+
+  Default behavior is unchanged: with `showAgentRunDetails=true` the gate is unconditionally true, so the gear renders for every agent-run message exactly as before — including the pre-existing window where the run record hasn't loaded yet.
+
+- fe1b8e7: Repair `tsconfig.spec.json`, which two merge resolutions had left as invalid JSON by appending `include` entries without a preceding comma. `vitest.dom.shared.ts` hands that file to `@analogjs/vite-plugin-angular` as its `tsconfig`; with it unparseable, the plugin's TypeScript program no longer contained the component sources, so the AOT transform never ran for them and 9 DOM test files failed with `Component 'X' is not resolved`. The hand-enumerated file list is replaced with `src/**/*.ts` — the include the other Angular packages use — so it cannot drift out of sync with the files on disk again.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [c221553]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ng-artifacts@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/ai-engine-base@5.50.0
+  - @memberjunction/ng-testing@5.50.0
+  - @memberjunction/ng-base-types@5.50.0
+  - @memberjunction/ng-code-editor@5.50.0
+  - @memberjunction/ng-notifications@5.50.0
+  - @memberjunction/ng-resource-permissions@5.50.0
+  - @memberjunction/ng-shared-generic@5.50.0
+  - @memberjunction/ng-tasks@5.50.0
+  - @memberjunction/ng-user-routines@5.50.0
+  - @memberjunction/conversations-runtime@5.50.0
+  - @memberjunction/graphql-dataprovider@5.50.0
+  - @memberjunction/ai-agent-client@5.50.0
+  - @memberjunction/ng-composer@5.50.0
+  - @memberjunction/ng-container-directives@5.50.0
+  - @memberjunction/ng-media-player@5.50.0
+  - @memberjunction/interactive-component-types@5.50.0
+  - @memberjunction/ng-forms@5.50.0
+  - @memberjunction/ai-realtime-client@5.50.0
+  - @memberjunction/ng-markdown@5.50.0
+  - @memberjunction/ng-ui-components@5.50.0
+  - @memberjunction/ng-whiteboard@5.50.0
+  - @memberjunction/ng-agent-client@5.50.0
+  - @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Minor Changes
+
+- 02c8a15: Add host-level pass-through toggles to `mj-conversation-chat-area` so embedding products can disable composer and chrome features through the component contract instead of CSS on internal class names: `allowPlanMode` / `allowRealtime` (thread into new `enablePlanMode` / `enableRealtime` inputs on both `mj-message-input` instances, then into the `ai-composer` inputs that were previously bound to literal `true`), `showEmptyFill` (the message list's "No messages yet" filler), and `showLoadingState` (the centered loading spinner, gated so the loading branch still short-circuits and never flashes the empty state). All default to `true`, so existing consumers are unaffected.
+
+### Patch Changes
+
+- c5e4b9e: Agent conversation compaction: durable cross-turn summaries stored on the conversation (Sequence + SummaryPromptRunID, budget knobs on AIAgentType/AIAgent, Compaction run steps), conversation-history retrieval tools (getMessageBySequence, getMessagesByRange, searchConversation, summarizeRange), edit handling with OriginalMessageChanged flagging and a wired chat edit affordance, plus hardening fixes: failed message expansions now surface a reason to the model (breaks an unbounded retry loop), json5 ESM import fix restores the local JSON-repair tier, and SQLConverter no longer truncates PG column comments at escaped apostrophes.
+- b52ffa8: Fix four silent-failure bugs found while triaging the open issue backlog. Each one looked correct from the outside while doing nothing, or doing the wrong thing, at runtime. No schema changes.
+
+  **`BaseLLM` silently truncated streamed responses (`@memberjunction/ai`).** The streaming chunk loop caught any mid-stream error, logged it, and then finalized the response as a **success**. A dropped connection, a provider fault, or an abort part-way through a stream produced truncated content that the caller was told was complete — under every provider, for every streaming consumer. Genuine failures now surface as failures; cancellation is still routed to the driver's `finalizeStreamingResponse`, since providers differ on whether an abort throws there or simply ends iteration.
+
+  **No LLM driver honored `ChatParams.cancellationToken`** (13 provider packages). The field existed on `ChatParams` and zero drivers read it, so an aborted or timed-out request abandoned the promise while the socket kept streaming and pinning buffers. Now forwarded to the SDK across all 19 drivers — 13 fixed directly, the remaining 6 inheriting from `OpenAILLM` / `GeminiLLM` — on both the streaming and non-streaming paths. The mechanism differs per provider and was verified rather than assumed — Bedrock takes `abortSignal` (not `signal`); Ollama has no per-request hook at all, so the signal is threaded through a custom `fetch`; and `Inception` overrides both chat paths without calling `super`, so it does not inherit the fix from `OpenAILLM` despite appearing to. An abort is reported `Fatal` / `canFailover: false`, because `ErrorAnalyzer` otherwise classifies it as retriable — meaning a request the user just cancelled would have been retried.
+
+  **Prompt execution could not be bounded (`@memberjunction/ai-prompts`, `@memberjunction/ai-core-plus`).** On the single-model path the model call was awaited with no bound unless the caller hand-supplied an `AbortSignal`, so a hung provider connection never resolved. Adds a per-request `AIPromptParams.timeoutMS` and a typed `AIPromptTimeoutError` that `ErrorAnalyzer` classifies as retriable, so a timeout now flows into the existing retry/failover machinery instead of hanging. The timeout and any caller-supplied token compose — neither is discarded. Enforcement lives in `executeModel`, the one method the parallel coordinator also inherits, so the single-model and parallel paths cannot diverge. (Issue #3064 was filed as "`AIPromptRunner` does not enforce `AIPrompt.TimeoutMS`", but that column does not exist — the bound could not be expressed at all. A prompt-level column is tracked separately in #3133.)
+
+  **A malformed deny-list silently disarmed the Predictive Studio leakage guard** (`@memberjunction/predictive-studio*`, `@memberjunction/core-entities-server`, `@memberjunction/ng-dashboards`). Pasting a bracketed list into the pipeline editor produced `DenyFields: ["[CheckInTime", …, "Status]"]`; the deny-set then matched nothing, so the most dangerous leak columns trained completely unguarded and the save was accepted. The editor no longer manufactures the bad input, a new `MJMLTrainingPipelineEntityServer.ValidateAsync` rejects it at save, and the dominance threshold is clamped at enforcement time so rows written before this validation existed cannot disable the guard. Also unifies `DEFAULT_DOMINANCE_THRESHOLD`, which was defined twice with different values (`0.85` vs `0.6`) — agent-authored pipelines had been held to a materially laxer guard than hand-authored ones.
+
+  **Dead CSS shipped to production (`@memberjunction/ng-dashboards`, `@memberjunction/ng-conversations`).** These packages build with bare `ngc` — no Sass step — so `styleUrls` content is embedded verbatim. Native CSS nesting makes `&:hover` accidentally work, but it cannot do string concatenation, so every `&__elem` / `&--modifier` rule was silently dropped. Three components were affected. **This resurrects styling that has never rendered**: the realtime media-surface tab bar had no active-tab indicator, and evidence playback had no active-turn highlight and no played-progress color on its waveform. A new `check:ui-ngc-scss` CI gate prevents the trap re-arming.
+
+  Also fixes `@memberjunction/ai-azure`, whose unit tests had never actually run — the package had test files and a vitest config but no `test` script.
+
+- 3993034: Reset artifact pane width when leaving a maximized pane on conversation switch, so the next artifact opened in another conversation no longer overflows the viewport
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [a9ec419]
+- Updated dependencies [42a680a]
+- Updated dependencies [88d707b]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [9e2278c]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [70c658c]
+- Updated dependencies [b5a8e3f]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/graphql-dataprovider@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/ng-testing@5.49.0
+  - @memberjunction/ai-realtime-client@5.49.0
+  - @memberjunction/ng-artifacts@5.49.0
+  - @memberjunction/ng-composer@5.49.0
+  - @memberjunction/ng-forms@5.49.0
+  - @memberjunction/ng-markdown@5.49.0
+  - @memberjunction/ng-media-player@5.49.0
+  - @memberjunction/ng-resource-permissions@5.49.0
+  - @memberjunction/ng-shared-generic@5.49.0
+  - @memberjunction/ng-tasks@5.49.0
+  - @memberjunction/ng-ui-components@5.49.0
+  - @memberjunction/ng-whiteboard@5.49.0
+  - @memberjunction/ai-agent-client@5.49.0
+  - @memberjunction/ai-engine-base@5.49.0
+  - @memberjunction/ng-base-types@5.49.0
+  - @memberjunction/ng-code-editor@5.49.0
+  - @memberjunction/ng-container-directives@5.49.0
+  - @memberjunction/ng-notifications@5.49.0
+  - @memberjunction/ng-user-routines@5.49.0
+  - @memberjunction/conversations-runtime@5.49.0
+  - @memberjunction/interactive-component-types@5.49.0
+  - @memberjunction/ng-agent-client@5.49.0
+
+## 5.48.0
+
+### Minor Changes
+
+- c20723a: Add a self-hosted **HuggingFace speech-to-speech** realtime (voice) provider, sitting side-by-side with the cloud realtime providers (OpenAI, Gemini, ElevenLabs, AssemblyAI) with no host changes. It treats HuggingFace's open-source VAD → STT → LLM → TTS stack (in its OpenAI-Realtime-compatible `/v1/realtime` mode) as a `Realtime` model — private-by-design (audio never leaves owned infrastructure), cost-free, and component-swappable.
+
+  Because the endpoint is self-hosted, the shipped client-direct audio topology runs through a new provider-agnostic **MJAPI realtime proxy**: the driver mints a one-time ticket into a shared `RealtimeProxyRegistry` (`@memberjunction/ai`) and hands the browser a `wss://<mjapi-public>/realtime-proxy?ticket=…` URL, so the internal endpoint + auth never reach the browser and the box needs no browser-facing ingress. Adds the new `@memberjunction/ai-huggingface` driver package, the `HuggingFaceRealtimeClient` (`@memberjunction/ai-realtime-client`), the `RealtimeProxyServer` + single upgrade-router in `@memberjunction/server`, the class-registration manifest entry (`@memberjunction/server-bootstrap`), and the client-load wiring (`@memberjunction/ng-conversations`), plus the `Hugging Face` vendor + `HuggingFace Speech-to-Speech` model metadata (low PowerRank — opt-in). Additive only; endpoint/auth/sample-rate are deployment config.
+
+- f613d0d: Unified Ctrl+K omnibar command palette + composer draft persistence.
+  - **Omnibar (ng-explorer-core)**: pluggable `OmnibarProvider` ClassFactory registry powering a unified Ctrl+K palette (search, `@agent`, `#entity`, `/skills`, `>commands`, recent searches), gated by a two-layer switch — the `Shell.Omnibar.Enabled` instance config flag is the master availability switch (default ON; OFF = legacy trio for everyone), and each user opts in personally via My Profile → Command Palette (UserInfoEngine setting `mj.shell.omnibar.enabled`, default OFF, cross-device, flips live). Modal palette is summonable from within editable elements (Slack/Linear semantics). `@agent` selection lands in Chat with a one-shot `agent|agentReq` nonce instruction so URL↔tab-config sync echoes can never re-stage the pre-address or wipe an in-progress draft.
+  - **Composer (ng-composer)**: public `InsertMention()` API stages a resolved mention pill programmatically (chip + trailing space + caret focus), `FocusCaretAtEnd()`, blur output, and full serialized-mention rehydration — `writeValue` re-renders `@{...}` tokens as pills via `ParseSerializedMentions`.
+  - **Conversations (ng-conversations)**: `InsertAgentMention()` resolves an agent name to a pill with replace-not-stack semantics and focus re-assertion; new `ComposerDraftStore` persists in-progress drafts per conversation (plus the new-conversation composer) via `UserInfoEngine` under `mj.chat.drafts.v1` — debounced while typing, flushed on blur, cleared on send, restored (pills included) on reload across sessions/devices.
+  - **core-entities**: `UserInfoEngine.SetSetting` recovers when a cached settings row was deleted out-of-band (recreates instead of failing the UPDATE).
+
+### Patch Changes
+
+- 09e1b4b: Fix Apply to my Form (resolve spec code, handle Pending overrides, improve # typeahead), auto-add app schemas to excludeSchemas on OpenApp install/upgrade, surface RenderedSQL through RunQueryResult and TestQuerySQL, strip ORDER BY before outer-wrapping unparseable SQL in MaxRows, fix lazy-config loader variable name collisions in codegen manifest, and add read-only provider support and missing SQL function keywords in PostgreSQL provider
+- Updated dependencies [09e1b4b]
+- Updated dependencies [c20723a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/ng-artifacts@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/ai-realtime-client@5.48.0
+  - @memberjunction/ng-composer@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/ai-agent-client@5.48.0
+  - @memberjunction/ai-engine-base@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/ng-testing@5.48.0
+  - @memberjunction/ng-base-types@5.48.0
+  - @memberjunction/ng-code-editor@5.48.0
+  - @memberjunction/ng-container-directives@5.48.0
+  - @memberjunction/ng-media-player@5.48.0
+  - @memberjunction/ng-notifications@5.48.0
+  - @memberjunction/ng-resource-permissions@5.48.0
+  - @memberjunction/ng-shared-generic@5.48.0
+  - @memberjunction/ng-tasks@5.48.0
+  - @memberjunction/ng-user-routines@5.48.0
+  - @memberjunction/conversations-runtime@5.48.0
+  - @memberjunction/graphql-dataprovider@5.48.0
+  - @memberjunction/interactive-component-types@5.48.0
+  - @memberjunction/ng-markdown@5.48.0
+  - @memberjunction/ng-agent-client@5.48.0
+  - @memberjunction/ng-forms@5.48.0
+  - @memberjunction/ng-whiteboard@5.48.0
+  - @memberjunction/ng-ui-components@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ai-agent-client@5.47.0
+  - @memberjunction/ai-engine-base@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/ng-testing@5.47.0
+  - @memberjunction/ng-artifacts@5.47.0
+  - @memberjunction/ng-base-types@5.47.0
+  - @memberjunction/ng-code-editor@5.47.0
+  - @memberjunction/ng-composer@5.47.0
+  - @memberjunction/ng-container-directives@5.47.0
+  - @memberjunction/ng-media-player@5.47.0
+  - @memberjunction/ng-notifications@5.47.0
+  - @memberjunction/ng-resource-permissions@5.47.0
+  - @memberjunction/ng-shared-generic@5.47.0
+  - @memberjunction/ng-tasks@5.47.0
+  - @memberjunction/ng-user-routines@5.47.0
+  - @memberjunction/conversations-runtime@5.47.0
+  - @memberjunction/graphql-dataprovider@5.47.0
+  - @memberjunction/interactive-component-types@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/ng-agent-client@5.47.0
+  - @memberjunction/ng-forms@5.47.0
+  - @memberjunction/ng-whiteboard@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/ai-realtime-client@5.47.0
+  - @memberjunction/ng-markdown@5.47.0
+  - @memberjunction/ng-ui-components@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ai-engine-base@5.46.0
+  - @memberjunction/ai-agent-client@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/ng-testing@5.46.0
+  - @memberjunction/ng-artifacts@5.46.0
+  - @memberjunction/ng-base-types@5.46.0
+  - @memberjunction/ng-code-editor@5.46.0
+  - @memberjunction/ng-composer@5.46.0
+  - @memberjunction/ng-container-directives@5.46.0
+  - @memberjunction/ng-media-player@5.46.0
+  - @memberjunction/ng-notifications@5.46.0
+  - @memberjunction/ng-resource-permissions@5.46.0
+  - @memberjunction/ng-shared-generic@5.46.0
+  - @memberjunction/ng-tasks@5.46.0
+  - @memberjunction/ng-user-routines@5.46.0
+  - @memberjunction/conversations-runtime@5.46.0
+  - @memberjunction/graphql-dataprovider@5.46.0
+  - @memberjunction/interactive-component-types@5.46.0
+  - @memberjunction/ng-agent-client@5.46.0
+  - @memberjunction/ng-forms@5.46.0
+  - @memberjunction/ng-whiteboard@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/ai-realtime-client@5.46.0
+  - @memberjunction/ng-markdown@5.46.0
+  - @memberjunction/ng-ui-components@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- 572d219: Render agent final-response streaming in the conversation chat. Adds an optional `kind` discriminator to agent streaming chunks — `'final-response'` marks deltas of the user-facing reply — passed through the server's PubSub payload; the conversation client now routes those chunks, accumulates deltas service-side, renders the growing text in the message bubble, and reconciles with the saved final message on completion. Unmarked streams (e.g. Loop-agent JSON turn envelopes) keep today's behavior exactly (dropped), so agents that don't opt in are unaffected.
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/conversations-runtime@5.45.1
+  - @memberjunction/ai-engine-base@5.45.1
+  - @memberjunction/ng-forms@5.45.1
+  - @memberjunction/ng-tasks@5.45.1
+  - @memberjunction/graphql-dataprovider@5.45.1
+  - @memberjunction/ng-user-routines@5.45.1
+  - @memberjunction/ng-testing@5.45.1
+  - @memberjunction/ai-agent-client@5.45.1
+  - @memberjunction/ng-artifacts@5.45.1
+  - @memberjunction/ng-media-player@5.45.1
+  - @memberjunction/ng-notifications@5.45.1
+  - @memberjunction/ng-agent-client@5.45.1
+  - @memberjunction/ng-resource-permissions@5.45.1
+  - @memberjunction/ai@5.45.1
+  - @memberjunction/ai-realtime-client@5.45.1
+  - @memberjunction/ng-base-types@5.45.1
+  - @memberjunction/ng-code-editor@5.45.1
+  - @memberjunction/ng-composer@5.45.1
+  - @memberjunction/ng-container-directives@5.45.1
+  - @memberjunction/ng-markdown@5.45.1
+  - @memberjunction/ng-shared-generic@5.45.1
+  - @memberjunction/ng-ui-components@5.45.1
+  - @memberjunction/ng-whiteboard@5.45.1
+  - @memberjunction/interactive-component-types@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Minor Changes
+
+- ad9f4a3: Surface dropped skill-activation requests instead of silently ignoring them: new 'skill-activation-refused' message type; BaseAgent injects an explanatory system note + logs a warning when requested skills fail the activation guard; conversations UI shows a warning toast at send time when the mentioned agent can't activate the requested skills.
+- c1f2d3d: User Routines (P1.5): user-owned scheduled/monitoring routines that run an Agent, Action, or Prompt on a cron schedule. New UserRoutine/UserRoutineRecipient/UserRoutineRun schema; UserRoutineDispatcherDriver scheduled-job driver (1-minute sweep, claim-before-run, bounded concurrency, per-routine isolation, runs as the owner, Template-driven notifications with OnChange result-hash detection, RequestedSkillIDs pre-arming for Agent targets); pure UserRoutineProcessor schedule/notify primitives shared with MJUserRoutineEntityServer (NextRunAt on save, cron validation) and MJUserRoutineRecipientEntityServer (User-xor-Email); lazy non-startup UserRoutineEngine; new @memberjunction/ng-user-routines widget set (list/editor/history + command-center composite + slide-in, cancelable Before/After events, Agent-only creation with categorical ng-trees picker); conversations bottom-sidebar Routines section gated by ShowRoutines input AND entity-Read permission (hosted in both the generic workspace sidebar and Explorer's Chat wrapper); Routines Explorer app; pure cron preset/describe helpers now in @memberjunction/global (CronUtils); mj-tree gains a DefaultExpansion input ('first-level' | 'all' | 'none'); BaseScheduledJob gains IsHighFrequencyByDesign so by-design pollers (the routine dispatcher) opt out of the high-frequency cron warning; Agent-target routines run inside a dedicated per-routine Conversation (Application-scoped via the Routines app so it stays out of the default chat list; RunAgentInConversation writes proper user/assistant turns; standalone fallback when the app is absent); UserRoutine.ConversationID schema + open-conversation and open-execution-record event chains through the conversations hosts; server-side cascade delete (recipients + run bookkeeping) so routines that have run delete cleanly; agent picker is a compact mj-tree-dropdown (DefaultExpansion pass-through added); mj-slide-panel settles to transform:none when open so position:fixed descendants (dropdown panels) keep true viewport coordinates; time-relative sidebar/card/history text is snapshot-based (NG0100 fix); 16-test live integration suite + live Playwright E2E; Explorer notifications page rebuilt (day-grouped cards, sanitized HTML + Markdown message rendering with expand/collapse previews, snapshot relative times, removal of a test harness that created junk Conversations on Mark-All-Read) and the seeded routine notification template gains a compact Markdown Text body that the dispatcher now prefers for in-app delivery (the HTML document stays for email); new @memberjunction/ng-composer package extracts the conversations message composer (mention editor + dropdown + message input box) so the routine editor's InitialMessage field uses the mention editor without an ng-conversations dependency cycle — and the composer's mention/command triggers are PLUGGABLE: a generic ComposerTriggerProvider contract (TriggerChar/Key/Priority/GetSuggestions, generic MentionSuggestion with provider-supplied presets) with two supply modes (explicit [TriggerProviders] list, or ClassFactory discovery via @RegisterClass(ComposerTriggerProvider,'<key>') filtered by [ExcludedTriggerKeys]), leaving ng-composer with ZERO AI knowledge; the AI plugins moved to ng-conversations (composer-plugins: 'agent-mentions' '@' agents+users w/ configuration presets, 'record-mentions' '#' entities+queries, 'skill-commands' '/' skills — tree-shake-guarded by LoadComposerPlugins(); MentionAutocompleteService moved back to ng-conversations as a BaseSingleton engine shared by plugins and components) plus a new mj-ai-composer wrapped component that proxies the full mj-message-input-box surface with the AI triggers built in and familiar EnableAgentMentions/EnableEntityMentions/EnableSkillCommands convenience flags (the chat composer now uses it); the routine editor uses discovery mode with agent-mentions excluded.
+
+### Patch Changes
+
+- 13716e4: Add the canonical confirm-prompt primitives to `@memberjunction/ng-ui-components` and migrate every native `window.confirm()` in MJ Explorer onto them.
+
+  **`@memberjunction/ng-ui-components` (new capability):**
+  - New **`<mj-confirm-dialog>`** — the canonical confirmation dialog (danger/warning/info/default variants, title + message + detail lines, MJ left-confirm button order, `Processing` state, Esc/backdrop dismissal inherited from `mj-dialog`).
+  - New **`MJConfirmService`** — the imperative, Promise-based replacement for `window.confirm()`: `await confirm.Confirm('Discard changes?')` / `ConfirmDelete({ message, detail, confirmText })`. Mounts the dialog on `document.body`, resolves `true`/`false`, tears down on settle.
+  - **Layering fix:** service-spawned dialogs are lifted into their own stacking context (z-index 20000) so a confirm launched over a drawer, slide-panel, or `mj-window` renders above that overlay instead of dimmed and unclickable beneath its backdrop (previously each swallowed click could re-trigger the caller and stack another dialog). Declarative template usage is unchanged.
+
+  **Consumers — 47 native `confirm()` prompts migrated** across 23 files in 6 packages: dashboards (Credentials, MCP, Tags/Autotagging/Prompts, QueryBrowser, FormBuilder, ComponentStudio, DatabaseDesigner), core-entity-forms (Queries, Templates, Tests, Lists, template editor), artifacts (version restore), ai-test-harness (save/clear/delete/import), conversations (collection + artifact share modals, collection tree/view — whose ten native `alert()`s were also replaced with `MJNotificationService` toasts), and credentials (the credential/type/category edit-panel deletes, adding the package's missing `ng-ui-components` dependency). Deletes route through `ConfirmDelete` (red confirm, "Delete"/"Remove" labels); discards and overwrite warnings through `Confirm`. Handlers that gate on the answer were made async only after verifying every caller is fire-and-forget.
+
+  The single intentional exception is DatabaseDesigner's `ModifyPanelCanClose` — a synchronous `[CanClose]` guard that must return a boolean immediately, documented as such in `MJConfirmService`'s docs.
+
+  No public API changes in the consumer packages. Verified with per-package unit test runs (~2,200 tests across touched packages), full-page light+dark state screenshots of 8 distinct surfaces, and live end-to-end executions of the true paths.
+
+- 6e10f66: Export the components `ConversationsModule` declares from `public-api` so consumers embedding `mj-conversation-chat-area` can build under Angular's local-compilation / HMR mode. 15 module-exported components (e.g. `ActionableCommandsComponent`) were missing from `public-api.ts`; a consumer app importing `ConversationsModule` and running `ng serve --hmr` failed with NG3004 ("Unable to import component … not exported from @memberjunction/ng-conversations"), while full (non-HMR) builds were unaffected. Additive re-exports only — no behavior change, no new dependencies.
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [13716e4]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/graphql-dataprovider@5.45.0
+  - @memberjunction/ng-ui-components@5.45.0
+  - @memberjunction/ng-artifacts@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/ai-engine-base@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/ng-user-routines@5.45.0
+  - @memberjunction/ng-composer@5.45.0
+  - @memberjunction/ai-agent-client@5.45.0
+  - @memberjunction/ng-testing@5.45.0
+  - @memberjunction/ng-base-types@5.45.0
+  - @memberjunction/ng-code-editor@5.45.0
+  - @memberjunction/ng-container-directives@5.45.0
+  - @memberjunction/ng-media-player@5.45.0
+  - @memberjunction/ng-notifications@5.45.0
+  - @memberjunction/ng-resource-permissions@5.45.0
+  - @memberjunction/ng-shared-generic@5.45.0
+  - @memberjunction/ng-tasks@5.45.0
+  - @memberjunction/conversations-runtime@5.45.0
+  - @memberjunction/interactive-component-types@5.45.0
+  - @memberjunction/ng-forms@5.45.0
+  - @memberjunction/ng-whiteboard@5.45.0
+  - @memberjunction/ai@5.45.0
+  - @memberjunction/ai-realtime-client@5.45.0
+  - @memberjunction/ng-agent-client@5.45.0
+  - @memberjunction/ng-markdown@5.45.0
+
 ## 5.44.0
 
 ### Minor Changes

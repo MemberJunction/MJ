@@ -20,7 +20,8 @@ import {
   UserInfo,
 } from '@memberjunction/core';
 import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { PubSubEngine, AuthorizationError } from 'type-graphql';
 import { GraphQLError } from 'graphql';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
@@ -32,7 +33,7 @@ import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './Run
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
 import { EncryptionEngine } from '@memberjunction/encryption';
-import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver.js';
+import { PUSH_STATUS_UPDATES_TOPIC, publishStatusUpdate } from './PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC } from './CacheInvalidationResolver.js';
 import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
@@ -62,16 +63,28 @@ export class ResolverBase {
    * - AllowDecryptInAPI=false + SendEncryptedValue=true: Keep encrypted ciphertext
    * - AllowDecryptInAPI=false + SendEncryptedValue=false: Replace with sentinel
    *
+   * Returns a COPY — `dataObject` is never written to. Callers routinely pass rows straight
+   * from `findBy`/`RunView`, which are the server cache's own objects held by reference, and
+   * `LocalCacheManager` deep-freezes them. Renaming in place therefore threw
+   * `Cannot add property _mj__CreatedAt, object is not extensible` on every `UserByEmail` /
+   * `UserByID` / `UserByEmployeeID` call and on every generated single-record resolver whose
+   * entity has caching enabled. (Before the freeze it did something worse but quieter: it
+   * rewrote the cached row's keys, so later readers were served transport-shaped rows that
+   * `BaseEntity.SetMany` rejects.) Copying here fixes every call site at once and makes the
+   * hazard unreachable for future ones.
+   *
    * @param entityName - The entity name
-   * @param dataObject - The data object with field values
+   * @param dataObject - The data object with field values. Not modified.
    * @param contextUser - Optional user context for decryption (required for encrypted fields)
-   * @returns The processed data object
+   * @returns A new object in transport shape, or null when there is nothing to map
    */
   protected async MapFieldNamesToCodeNames(entityName: string, dataObject: any, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<any> {
     // Return null for empty objects (e.g. when no rows found due to RLS filtering)
     if (!dataObject || Object.keys(dataObject).length === 0) {
       return null;
     }
+    // Shallow copy up front so every write below lands on our object, never the caller's.
+    dataObject = { ...dataObject };
 
     // for the given entity name provided, check to see if there are any fields
     // where the code name is different from the field name, and for just those
@@ -184,14 +197,49 @@ export class ResolverBase {
     return true;
   }
 
-  protected async ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[], contextUser?: UserInfo): Promise<any[]> {
-    // iterate through the array and call MapFieldNamesToCodeNames for each element
-    if (dataObjectArray && dataObjectArray.length > 0) {
-      for (const element of dataObjectArray) {
-        await this.MapFieldNamesToCodeNames(entityName, element, contextUser);
-      }
+  /**
+   * Array form of {@link MapFieldNamesToCodeNames}. Returns a NEW array of NEW objects; neither
+   * the input array nor its rows are modified. Both matter: the cache freezes the array as well
+   * as the rows it contains, so collecting the mapped copies (rather than mapping in place and
+   * returning the original) is what makes this safe on cache-served input.
+   */
+  protected async ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[], contextUser?: UserInfo, provider?: IMetadataProvider): Promise<any[]> {
+    if (!dataObjectArray || dataObjectArray.length === 0) {
+      return dataObjectArray;
     }
-    return dataObjectArray;
+    const mapped: any[] = [];
+    for (const element of dataObjectArray) {
+      mapped.push(await this.MapFieldNamesToCodeNames(entityName, element, contextUser, provider));
+    }
+    return mapped;
+  }
+
+  /**
+   * Loads a single external-data-source-backed entity record by primary key and returns it in
+   * GraphQL field-name (CodeName) shape, or null if not found.
+   *
+   * External entities (`Entity.ExternalDataSourceID` set) have no MJ base view or sproc — their
+   * data is proxied live from a remote system — so the generated single-record resolver cannot run
+   * `SELECT * FROM <baseView>`. Instead it loads through a BaseEntity object, whose `InnerLoad`
+   * the data provider dispatches to the external read router's `LoadExternalRecord` (a composite-key
+   * aware, quoted, parameter-bound single-record lookup), applying the same RLS gate and field
+   * post-processing (decryption / datetime normalization) as the MJ-DB path. The caller is
+   * responsible for the `CheckUserReadPermissions` gate beforehand.
+   */
+  protected async LoadExternalRecordByKey<T>(
+    entityName: string,
+    compositeKey: CompositeKey,
+    provider: DatabaseProviderBase,
+    userPayload: UserPayload,
+  ): Promise<T | null> {
+    const contextUser = this.GetUserFromPayload(userPayload);
+    const entityObject = await provider.GetEntityObject(entityName, contextUser);
+    const loaded = await entityObject.InnerLoad(compositeKey);
+    if (!loaded) {
+      return null;
+    }
+    const mapped = await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), contextUser);
+    return mapped as T;
   }
 
   /**
@@ -645,14 +693,17 @@ export class ResolverBase {
 
     const apiKeyEngine = GetAPIKeyEngine();
 
-    // Check for full_access scope first (god power - bypasses all other checks)
+    // Check for full_access scope first (god power - bypasses all other checks).
+    // Use skipLogging to avoid polluting the usage log with expected denials —
+    // this is a fast-path optimization, not the real authorization decision.
     const fullAccessResult = await apiKeyEngine.Authorize(
       userPayload.apiKeyHash,
       'MJAPI',
       'full_access',
       '*',
       systemUser,
-      { endpoint: '/graphql', method: 'POST' }
+      { endpoint: '/graphql', method: 'POST' },
+      { skipLogging: true }
     );
 
     if (fullAccessResult.Allowed) {
@@ -660,7 +711,11 @@ export class ResolverBase {
       return;
     }
 
-    // Check specific scope
+    // Check specific scope. The acting context stamped on the session user (set
+    // server-side in context.ts, never client-supplied) rides along so filtered
+    // rules with {{Acting*}} tokens can validate their required values — without
+    // it, a filtered rule fails closed even for a session carrying valid context.
+    const sessionUser = this.GetUserFromPayload(userPayload);
     const result = await apiKeyEngine.Authorize(
       userPayload.apiKeyHash,
       'MJAPI',
@@ -670,6 +725,9 @@ export class ResolverBase {
       {
         endpoint: '/graphql',
         method: 'POST'
+      },
+      {
+        actingContext: sessionUser?.APIKeyActingContext
       }
     );
 
@@ -788,12 +846,27 @@ export class ResolverBase {
         LogStatus(`[ResolverBase] RunView result aggregate info: entityName=${viewInfo.Entity}, hasAggregateResults=${!!result?.AggregateResults}, aggregateResultCount=${result?.AggregateResults?.length || 0}, aggregateExecutionTime=${result?.AggregateExecutionTime}, aggregateResults=${JSON.stringify(result?.AggregateResults)}`);
       }
 
-      // Process results for GraphQL transport
+      // Process results for GraphQL transport.
+      //
+      // Map onto COPIES, never in place. `FieldMapper.MapFields` renames keys by
+      // mutating (`obj[mapped] = obj[k]; delete obj[k]`), and these rows are the
+      // provider's own result objects — which the server cache holds BY REFERENCE
+      // under a reference-sharing storage provider. Mapping them in place rewrote
+      // `__mj_CreatedAt` to the transport alias `_mj__CreatedAt` inside the live
+      // cache, and because that cache is process-wide, one GraphQL response made
+      // every later read hand back transport-shaped rows that `BaseEntity.SetMany`
+      // rejects. `ArrayFilterEncryptedFieldsForAPI` mutates too, so it must also
+      // see the copies. (FileResolver already maps a spread copy.)
+      //
+      // These copies are LOAD-BEARING, not merely defensive: LocalCacheManager now
+      // deep-freezes cached rows (see ILocalStorageProvider.SharesReferences), so
+      // mapping in place would throw rather than silently corrupt. `{ ...r }` is a
+      // SHALLOW copy, which is sufficient here because the only post-map mutators
+      // rename top-level keys and redact scalar fields — and the cache's freeze is
+      // deep, so a nested value can no longer be reached through the copy either.
       const mapper = new FieldMapper();
       if (result?.Success && result.Results?.length) {
-        for (const r of result.Results) {
-          mapper.MapFields(r);
-        }
+        result.Results = result.Results.map(r => mapper.MapFields({ ...r }));
         // Filter encrypted fields before sending to API client
         await this.ArrayFilterEncryptedFieldsForAPI(
           viewInfo.Entity,
@@ -910,9 +983,9 @@ export class ResolverBase {
       for (let i = 0; i < runViewResults.length; i++) {
         const runViewResult = runViewResults[i];
         if (runViewResult?.Success && runViewResult.Results?.length) {
-          for (const result of runViewResult.Results) {
-            mapper.MapFields(result);
-          }
+          // Copy-then-map, same reason as the single-view path above: these rows
+          // are cache-held references and MapFields renames keys in place.
+          runViewResult.Results = runViewResult.Results.map(r => mapper.MapFields({ ...r }));
           // Filter encrypted fields before sending to API client
           // Use the corresponding param's entity name
           const entityName = params[i]?.viewInfo?.Entity;
@@ -968,7 +1041,7 @@ export class ResolverBase {
       ?? UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
     if (!user) throw new Error(`User ${userPayload?.email} not found in metadata`);
 
-    return entityInfo.GetUserRowLevelSecurityWhereClause(user, type, returnPrefix);
+    return entityInfo.GetEffectiveRowFilterWhereClause(user, type, returnPrefix);
   }
 
   protected async createAuditLogRecord(
@@ -1070,6 +1143,22 @@ export class ResolverBase {
     });
   }
 
+  /**
+   * Publishes a push-status update to the client on {@link PUSH_STATUS_UPDATES_TOPIC}, stamping the
+   * authenticated owner's user ID from `userPayload` so the subscription filter can bind delivery
+   * to identity (see B49 / `statusUpdatesFilter`). The ergonomic wrapper every resolver should use
+   * instead of calling `pubSub.publish` on the topic directly — it makes omitting identity
+   * impossible. Non-resolver publishers (services, the liveness heartbeat) call the shared
+   * `publishStatusUpdate()` function directly with an explicit `ownerUserId`.
+   */
+  protected PublishStatusUpdate(pubSub: PubSubEngine, sessionId: string, message: string | undefined, userPayload: UserPayload): void {
+    publishStatusUpdate(pubSub, {
+      sessionId,
+      ownerUserId: userPayload?.userRecord?.ID ?? '',
+      message,
+    });
+  }
+
   protected ListenForEntityMessages(entityObject: BaseEntity, pubSub: PubSubEngine, userPayload: UserPayload) {
     // The unique key is set up for each entity object via it's primary key to ensure that we only have one listener at most for each unique
     // entity in the system. This is important because we don't want to have multiple listeners for the same entity as it could
@@ -1099,16 +1188,13 @@ export class ResolverBase {
             const baseEntityEvent = event.args as BaseEntityEvent;
             // message from our entity object, relay it to the client
             LogDebug('ResolverBase.ListenForEntityMessages: About to publish PUSH_STATUS_UPDATES_TOPIC');
-            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-              message: JSON.stringify({
-                status: 'OK',
-                type: 'EntityObjectStatusMessage',
-                entityName: baseEntityEvent.baseEntity.EntityInfo.Name,
-                primaryKey: baseEntityEvent.baseEntity.PrimaryKey,
-                message: event.args.payload,
-              }),
-              sessionId: userPayload.sessionId,
-            });
+            this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+              status: 'OK',
+              type: 'EntityObjectStatusMessage',
+              entityName: baseEntityEvent.baseEntity.EntityInfo.Name,
+              primaryKey: baseEntityEvent.baseEntity.PrimaryKey,
+              message: event.args.payload,
+            }), userPayload);
           }
         }
       });

@@ -2,7 +2,7 @@ import { Component, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/co
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, MJEventType , UUIDsEqual } from '@memberjunction/global';
-import { CompositeKey, Metadata, EntityInfo, RunView } from '@memberjunction/core';
+import { CompositeKey, Metadata, EntityInfo } from '@memberjunction/core';
 import { RecordOpenedEvent, ViewGridState, EntityViewerComponent, ViewRelatedRecordNavigation } from '@memberjunction/ng-entity-viewer';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { ExportColumn } from '@memberjunction/export-engine';
@@ -145,8 +145,12 @@ export class UserViewResource extends BaseResourceComponent {
     public viewEntity: MJUserViewEntityExtended | null = null;
     public gridState: ViewGridState | null = null;
 
-    // Export state
+    // Export state. The header Export button is a FALLBACK shown only for view types that don't
+    // provide their own export UI (Cards / Map / Timeline). The Grid renderer has its own in-toolbar
+    // Export (full result set + format/sampling dialog), so we suppress this one there to avoid a
+    // duplicate/confusing second button — while keeping export available for every other view type.
     public isExporting: boolean = false;
+    public showFallbackExportButton: boolean = false;
 
     // Save-as-list dialog state
     public saveAsListDialogVisible = false;
@@ -206,9 +210,13 @@ export class UserViewResource extends BaseResourceComponent {
         this.cdr.detectChanges();
 
         try {
+            // NavigationService.OpenDynamicView stamps the special marker 'dynamic' as the
+            // record ID (tabs require ResourceRecordId) — that is NOT a saved-view ID.
+            const recordId = data.ResourceRecordID;
+            const isDynamicMarker = typeof recordId === 'string' && recordId.trim().toLowerCase() === 'dynamic';
             // Case 1: Load view by ID
-            if (data.ResourceRecordID) {
-                await this.loadViewById(data.ResourceRecordID);
+            if (recordId && !isDynamicMarker) {
+                await this.loadViewById(recordId);
             }
             // Case 2: Load dynamic view by entity name
             else if (data.Configuration?.Entity) {
@@ -321,6 +329,94 @@ export class UserViewResource extends BaseResourceComponent {
      */
     public onDataLoaded(): void {
         this.NotifyLoadComplete();
+        this.refreshFallbackExportVisibility();
+    }
+
+    /** The active view type changed — recompute whether the fallback Export button is needed. */
+    public onViewTypeChanged(): void {
+        this.refreshFallbackExportVisibility();
+    }
+
+    /**
+     * Show the wrapper's Export button only for view types that don't ship their own export UI. The
+     * entity-viewer reports this via {@link EntityViewerComponent.ActiveViewTypeHasOwnExport} (true for
+     * the Grid renderer, false for Cards / Map / Timeline). Uses a cached flag + explicit change
+     * detection to avoid an ExpressionChanged error from reading child state during a CD pass.
+     */
+    private refreshFallbackExportVisibility(): void {
+        const next = !!this.entityViewerRef && !this.entityViewerRef.ActiveViewTypeHasOwnExport;
+        if (next !== this.showFallbackExportButton) {
+            this.showFallbackExportButton = next;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /**
+     * Fallback export for view types without their own export UI (Cards / Map / Timeline). Pulls the
+     * FULL result set via the entity-viewer's capped, filter/sort-aware fetch (same path the grid uses,
+     * so it's bounded and warns past the cap) and writes an Excel file.
+     */
+    public async onExport(): Promise<void> {
+        // Never fail silently — a "nothing happens" click is impossible to diagnose. Surface the
+        // reason both in the UI and the console.
+        if (!this.entityInfo || !this.entityViewerRef) {
+            console.error('[ViewResource] Export: viewer not ready', {
+                hasEntity: !!this.entityInfo, hasViewer: !!this.entityViewerRef
+            });
+            this.showNotification('Export is not ready yet — try again in a moment.', 'error', 5000);
+            return;
+        }
+        this.isExporting = true;
+        this.cdr.detectChanges();
+        this.showNotification('Preparing your Excel export…', 'info', 2000);
+        try {
+            const rows = await this.entityViewerRef.FetchAllRowsForExport();
+            if (!rows || rows.length === 0) {
+                this.showNotification('Nothing to export — the view returned no records.', 'warning', 5000);
+                return;
+            }
+            const result = await this.exportService.toExcel(rows, {
+                fileName: this.buildExportFileName(),
+                columns: this.buildExportColumns(),
+                includeHeaders: true
+            });
+            if (result.success) {
+                this.exportService.downloadResult(result);
+                this.showNotification(`Exported ${rows.length.toLocaleString()} record(s) to Excel.`, 'success', 3000);
+            } else {
+                this.showNotification('Export failed while building the file.', 'error', 5000);
+                console.error('[ViewResource] Export: toExcel returned failure', result);
+            }
+        } catch (e) {
+            this.showNotification('Error exporting data — see console for details.', 'error', 5000);
+            console.error('[ViewResource] Export error:', e);
+        } finally {
+            this.isExporting = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Columns to export — from grid state, else the view's columns, else the entity's real fields. */
+    private buildExportColumns(): ExportColumn[] {
+        if (!this.entityInfo) return [];
+        if (this.gridState?.columnSettings && this.gridState.columnSettings.length > 0) {
+            return this.gridState.columnSettings
+                .filter(col => col.hidden !== true)
+                .map(col => ({ name: col.Name, displayName: col.DisplayName || col.Name }));
+        }
+        if (this.viewEntity?.Columns) {
+            return this.viewEntity.Columns
+                .filter(col => !col.hidden)
+                .map(col => ({ name: col.Name, displayName: col.DisplayName || col.Name }));
+        }
+        return this.entityInfo.Fields
+            .filter(f => !f.IsVirtual)
+            .map(f => ({ name: f.Name, displayName: f.DisplayNameOrName }));
+    }
+
+    private buildExportFileName(): string {
+        const viewName = this.viewEntity?.Name || 'Data';
+        return `${this.entityInfo!.Name}_${viewName}_${new Date().toISOString().split('T')[0]}`;
     }
 
     /**
@@ -355,48 +451,6 @@ export class UserViewResource extends BaseResourceComponent {
 
         // Use NavigationService to open a new record form
         this.navigationService.OpenNewEntityRecord(this.entityInfo.Name);
-    }
-
-    /**
-     * Handle export to Excel request
-     */
-    public async onExport(): Promise<void> {
-        if (!this.entityInfo) {
-            console.error('Cannot export: entity not available');
-            return;
-        }
-
-        this.isExporting = true;
-        this.cdr.detectChanges();
-
-        try {
-            this.showNotification('Working on the export, will notify you when it is complete...', 'info', 2000);
-
-            const rows = await this.loadExportRows();
-            const columns = this.buildExportColumns();
-            const fileName = this.buildExportFileName();
-
-            const result = await this.exportService.toExcel(rows, {
-                fileName,
-                columns,
-                includeHeaders: true
-            });
-
-            if (result.success) {
-                this.exportService.downloadResult(result);
-                this.showNotification('Excel Export Complete', 'success', 2000);
-            } else {
-                this.showNotification('Export failed', 'error', 5000);
-            }
-        }
-        catch (e) {
-            this.showNotification('Error exporting data', 'error', 5000);
-            console.error('Export error:', e);
-        }
-        finally {
-            this.isExporting = false;
-            this.cdr.detectChanges();
-        }
     }
 
     /**
@@ -458,70 +512,6 @@ export class UserViewResource extends BaseResourceComponent {
         }
     }
 
-    /**
-     * Load all records for the current view/entity for export
-     */
-    private async loadExportRows(): Promise<Record<string, unknown>[]> {
-        if (!this.entityInfo) {
-            throw new Error('No entity selected for export');
-        }
-
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        let filter = '';
-        if (this.viewEntity?.WhereClause) {
-            filter = this.viewEntity.WhereClause;
-        }
-
-        const result = await rv.RunView<Record<string, unknown>>({
-            EntityName: this.entityInfo.Name,
-            ExtraFilter: filter,
-            OrderBy: '',
-            ResultType: 'simple'
-        });
-
-        if (!result.Success) {
-            throw new Error(result.ErrorMessage || 'Failed to load data for export');
-        }
-
-        return result.Results || [];
-    }
-
-    /**
-     * Determine which columns to export based on grid state, view entity, or entity fields
-     */
-    private buildExportColumns(): ExportColumn[] {
-        if (!this.entityInfo) return [];
-
-        if (this.gridState?.columnSettings && this.gridState.columnSettings.length > 0) {
-            const visibleColumns = this.gridState.columnSettings.filter(col => col.hidden !== true);
-            return visibleColumns.map(col => ({
-                name: col.Name,
-                displayName: col.DisplayName || col.Name
-            }));
-        }
-
-        if (this.viewEntity?.Columns) {
-            const visibleColumns = this.viewEntity.Columns.filter(col => !col.hidden);
-            return visibleColumns.map(col => ({
-                name: col.Name,
-                displayName: col.DisplayName || col.Name
-            }));
-        }
-
-        const visibleFields = this.entityInfo.Fields.filter(f => !f.IsVirtual);
-        return visibleFields.map(f => ({
-            name: f.Name,
-            displayName: f.DisplayNameOrName
-        }));
-    }
-
-    /**
-     * Build the export file name based on entity and view
-     */
-    private buildExportFileName(): string {
-        const viewName = this.viewEntity?.Name || 'Data';
-        return `${this.entityInfo!.Name}_${viewName}_${new Date().toISOString().split('T')[0]}`;
-    }
 
     /**
      * Show a notification to the user

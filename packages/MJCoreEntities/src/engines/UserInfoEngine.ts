@@ -368,7 +368,20 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
         setting.Value = value;
       }
 
-      const saved = await setting.Save();
+      let saved = await setting.Save();
+      if (!saved && setting.IsSaved) {
+        // The cached entity's underlying row no longer exists (deleted from another
+        // session/device, or out-of-band) — the UPDATE matched nothing. Recover by
+        // recreating the setting instead of failing the write.
+        console.warn(`UserInfoEngine.SetSetting: update for '${settingKey}' matched no row — recreating`);
+        this._UserSettings = this._UserSettings.filter((s) => !UUIDsEqual(s.ID, setting!.ID));
+        setting = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings', contextUser);
+        setting.NewRecord();
+        setting.UserID = userId;
+        setting.Setting = settingKey;
+        setting.Value = value;
+        saved = await setting.Save();
+      }
       if (saved) {
         // If it was a new record, add to cache
         if (!this._UserSettings.some((s) => UUIDsEqual(s.ID, setting!.ID))) {
@@ -376,7 +389,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
         }
         return true;
       } else {
-        console.error('UserInfoEngine.SetSetting: Failed to save:', setting.LatestResult?.Message);
+        console.error('UserInfoEngine.SetSetting: Failed to save:', setting.LatestResult?.CompleteMessage);
         return false;
       }
     } catch (error) {
@@ -582,19 +595,41 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
-   * Get all applications enabled for the current user, ordered by sequence then application name
+   * Get all applications enabled for the current user, ordered by sequence, then the
+   * application's DefaultSequence, then application name
    */
   public get UserApplications(): MJUserApplicationEntity[] {
     if (!this._loadedForUserId) return [];
     return this.GetConfigData<MJUserApplicationEntity>('_UserApplications')
       .filter((ua) => UUIDsEqual(ua.UserID, this._loadedForUserId))
-      .sort((a, b) => {
-        // Sort by Sequence first, then by Application name
-        if (a.Sequence !== b.Sequence) {
-          return a.Sequence - b.Sequence;
-        }
-        return (a.Application || '').localeCompare(b.Application || '');
-      });
+      .sort((a, b) => this.compareUserApplications(a, b));
+  }
+
+  /**
+   * Canonical ordering for a user's UserApplication rows: user-owned `Sequence` first,
+   * ties broken by the application's `DefaultSequence` (Home ships at -1, so it wins a
+   * tie it didn't ask for), then application name as the final stable tie-break.
+   * Duplicate Sequences are reachable without user action (new rows default to 0 and
+   * `nextUserApplicationSequence` returns 0 for a user with no active rows), so the
+   * tie-break must be deliberate rather than incidental.
+   */
+  private compareUserApplications(a: MJUserApplicationEntity, b: MJUserApplicationEntity): number {
+    if (a.Sequence !== b.Sequence) {
+      return a.Sequence - b.Sequence;
+    }
+    const defaultSequenceDiff = this.applicationDefaultSequence(a.ApplicationID) - this.applicationDefaultSequence(b.ApplicationID);
+    if (defaultSequenceDiff !== 0) {
+      return defaultSequenceDiff;
+    }
+    return (a.Application || '').localeCompare(b.Application || '');
+  }
+
+  /**
+   * The application's DefaultSequence from metadata, or the schema default (100) when
+   * the application is not found.
+   */
+  private applicationDefaultSequence(applicationId: string): number {
+    return this.GetApplicationInfo(applicationId)?.DefaultSequence ?? 100;
   }
 
   /**
@@ -654,12 +689,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   public GetUserApplicationsForUser(userId: string): MJUserApplicationEntity[] {
     return (this._UserApplications || [])
       .filter((ua) => UUIDsEqual(ua.UserID, userId))
-      .sort((a, b) => {
-        if (a.Sequence !== b.Sequence) {
-          return a.Sequence - b.Sequence;
-        }
-        return (a.Application || '').localeCompare(b.Application || '');
-      });
+      .sort((a, b) => this.compareUserApplications(a, b));
   }
 
   // ========================================================================
@@ -879,6 +909,24 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   public GetApplicationInfo(applicationId: string): ApplicationInfo | undefined {
     const md = this.ProviderToUse;
     return md.Applications.find((a) => UUIDsEqual(a.ID, applicationId));
+  }
+
+  /**
+   * The canonical "apps a NEW user should receive by default" list: **Active** applications flagged
+   * `DefaultForNewUser`, in `DefaultSequence` order. This is the SINGLE source of truth for
+   * default-app provisioning (bug F2). Previously the filter was re-implemented in several places
+   * that drifted — e.g. the JWT new-user path omitted the `Status === 'Active'` check, so an
+   * inactive default app could be provisioned there but not via the client self-heal path. All
+   * provisioning paths should call this. Callers that need to skip apps a user already has should
+   * filter the result by their existing ApplicationIDs.
+   *
+   * @param md the metadata source whose `Applications` cache to read (an `IMetadataProvider` or the
+   *           `Metadata` facade — both expose `Applications`)
+   */
+  public static GetDefaultApplicationsForNewUser(md: Pick<IMetadataProvider, 'Applications'>): ApplicationInfo[] {
+    return md.Applications
+      .filter((a) => a.DefaultForNewUser && a.Status === 'Active')
+      .sort((a, b) => (a.DefaultSequence ?? 100) - (b.DefaultSequence ?? 100));
   }
 
   /**
@@ -1226,11 +1274,9 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     // Get existing UserApplication records for this user to prevent duplicates
     const existingAppIds = new Set(this._UserApplications.filter((ua) => UUIDsEqual(ua.UserID, userId)).map((ua) => ua.ApplicationID));
 
-    // Filter to Active apps with DefaultForNewUser=true, sorted by DefaultSequence
-    // Exclude apps that already have UserApplication records
-    const defaultApps = md.Applications.filter((a) => a.DefaultForNewUser && a.Status === 'Active' && !existingAppIds.has(a.ID)).sort(
-      (a, b) => (a.DefaultSequence ?? 100) - (b.DefaultSequence ?? 100),
-    );
+    // Active apps flagged DefaultForNewUser, in DefaultSequence order (shared source of truth),
+    // then exclude apps that already have UserApplication records for this user.
+    const defaultApps = UserInfoEngine.GetDefaultApplicationsForNewUser(md).filter((a) => !existingAppIds.has(a.ID));
 
     if (defaultApps.length === 0) {
       console.log('UserInfoEngine.CreateDefaultApplications: No new apps to install (all defaults already exist)');

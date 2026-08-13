@@ -22,7 +22,6 @@ export class MJConversationDetailFormComponent extends BaseFormComponent {
             { sectionKey: 'interactiveElements', sectionName: 'Interactive Elements', isExpanded: true },
             { sectionKey: 'mediaAndTiming', sectionName: 'Media and Timing', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJReports', sectionName: 'Reports', isExpanded: false },
             { sectionKey: 'mJConversationDetailArtifacts', sectionName: 'Conversation Detail Artifacts', isExpanded: false },
             { sectionKey: 'mJConversationDetailAttachments', sectionName: 'Conversation Detail Attachments', isExpanded: false },
             { sectionKey: 'mJConversationDetailRatings', sectionName: 'Conversation Detail Ratings', isExpanded: false },
@@ -30,7 +29,8 @@ export class MJConversationDetailFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
             { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false },
-            { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false }
+            { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false },
+            { sectionKey: 'mJConversationCompactionRuns', sectionName: 'Conversation Compaction Runs', isExpanded: false }
         ]);
     }
 }

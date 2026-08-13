@@ -1,5 +1,109 @@
 # @memberjunction/ng-livekit-room
 
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- @memberjunction/ng-whiteboard@6.1.0-edge.2
+- @memberjunction/livekit-room-core@6.1.0-edge.2
+- @memberjunction/ng-ui-components@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/ng-ui-components@6.1.0-edge.1
+  - @memberjunction/ng-whiteboard@6.1.0-edge.1
+  - @memberjunction/livekit-room-core@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [b895f92]
+- Updated dependencies [d26e202]
+  - @memberjunction/ng-ui-components@6.1.0-edge.0
+  - @memberjunction/ng-whiteboard@6.1.0-edge.0
+  - @memberjunction/livekit-room-core@6.1.0-edge.0
+
+## 6.0.0
+
+### Patch Changes
+
+- @memberjunction/ng-whiteboard@6.0.0
+- @memberjunction/ng-ui-components@6.0.0
+- @memberjunction/livekit-room-core@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- @memberjunction/ng-whiteboard@5.51.0
+- @memberjunction/ng-ui-components@5.51.0
+- @memberjunction/livekit-room-core@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.50.0
+- @memberjunction/ng-whiteboard@5.50.0
+- @memberjunction/livekit-room-core@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.49.0
+- @memberjunction/ng-whiteboard@5.49.0
+- @memberjunction/livekit-room-core@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- @memberjunction/ng-whiteboard@5.48.0
+- @memberjunction/ng-ui-components@5.48.0
+- @memberjunction/livekit-room-core@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- @memberjunction/ng-whiteboard@5.47.0
+- @memberjunction/ng-ui-components@5.47.0
+- @memberjunction/livekit-room-core@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- @memberjunction/ng-whiteboard@5.46.0
+- @memberjunction/ng-ui-components@5.46.0
+- @memberjunction/livekit-room-core@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.45.1
+- @memberjunction/ng-whiteboard@5.45.1
+- @memberjunction/livekit-room-core@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [13716e4]
+- Updated dependencies [c1f2d3d]
+  - @memberjunction/ng-ui-components@5.45.0
+  - @memberjunction/ng-whiteboard@5.45.0
+  - @memberjunction/livekit-room-core@5.45.0
+
 ## 5.44.0
 
 ### Minor Changes

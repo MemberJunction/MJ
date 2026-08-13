@@ -282,8 +282,75 @@ export class RunViewParams {
      * Result Type is: 'simple', 'entity_object', or 'count_only' and defaults to 'simple'. If 'entity_object' is specified, the Results[] array will contain
      * BaseEntity-derived objects instead of simple objects. This is useful if you want to work with the data in a more strongly typed manner and/or
      * if you plan to do any update/delete operations on the data after it is returned. The 'count_only' option will return no rows, but the TotalRowCount property of the RunViewResult object will be populated.
+     *
+     * ## What `'simple'` rows actually contain — and what `T` does and does not check
+     *
+     * `'simple'` returns plain row objects, but the pipeline normalizes their VALUES to the shapes
+     * the generated entity types declare, identically on every tier: `Date` columns hold real
+     * `Date`s and numeric columns hold `number`s, whether the call ran server-side against the
+     * database or in a browser over GraphQL, and whether it was a fresh query or a cache hit.
+     * (`NULL` stays `NULL`, an unparseable value is left as-is rather than becoming `Invalid
+     * Date`, and integer strings beyond `Number.MAX_SAFE_INTEGER` stay strings to preserve
+     * BIGINT precision.)
+     *
+     * `RunView<T>` still takes a **caller-supplied** `T` the compiler does not verify, so know
+     * what a plain row can and cannot honor when you pass a generated entity type:
+     *
+     * ```typescript
+     * // Date and numeric fields are truthful on simple rows:
+     * const rows = await rv.RunView<OrderEntity>({ EntityName: 'Orders', ResultType: 'simple' });
+     * rows.Results[0].OrderDate.getFullYear();   // works — a real Date on every tier
+     *
+     * // But a plain row is still not an entity:
+     * rows.Results[0].Save();                    // compiles, crashes — no entity methods
+     * // ...and a closed-union column (e.g. Status) holds whatever string the database held.
+     * ```
+     *
+     * Two caveats worth knowing:
+     * - **`Fields` narrowing**: if you narrowed the query with `Fields`, non-selected properties
+     *   simply don't exist on the rows, whatever `T` claims.
+     * - **View-only runs**: a call that passes only `ViewID`/`ViewName` (no `EntityName` and no
+     *   loaded `ViewEntity`) skips normalization, since the entity is not synchronously
+     *   resolvable that deep in the pipeline. Pass `EntityName` alongside the view identifier to
+     *   get normalized rows.
+     *
+     * Rule of thumb: **want entity behavior — methods, validation, save, related records — ask
+     * for entity objects.** Choose `'simple'` for cheap read-only rows; its dates and numbers
+     * are already the types your entity declares.
      */
     ResultType?: 'simple' | 'entity_object' | 'count_only';
+
+    /**
+     * Names of {@link RelatedRecordCollection} companions to populate on the returned entity objects, using
+     * **one batched query per collection** across the entire result set.
+     *
+     * Requires `ResultType: 'entity_object'` — plain objects have no companions to populate.
+     *
+     * ## Why this exists rather than eager loading per row
+     *
+     * The obvious implementation of "load an entity's children automatically" is to do it in
+     * `LoadFromData()`. That is also the path every row of every `RunView(ResultType:'entity_object')`
+     * goes through, so it turns one view into N+1 queries — a real defect found in production
+     * accounting code, where listing 500 journal entries issued 500 line queries plus 500 dimension
+     * queries. Companion eager loading is therefore deliberately excluded from `LoadFromData()`, and
+     * set-oriented loading is served here instead:
+     *
+     * ```typescript
+     * const result = await rv.RunView<JournalEntryEntity>({
+     *     EntityName: 'MJ_BizApps_Accounting: Journal Entries',
+     *     ExtraFilter: `PeriodID = '${periodId}'`,
+     *     ResultType: 'entity_object',
+     *     IncludeRelatedRecords: ['Lines'],      // 1 query for ALL entries' lines, not one per entry
+     * });
+     * ```
+     *
+     * Cost is `1 + K` queries for K named collections, regardless of row count.
+     *
+     * @remarks
+     * Omitted by default. Nothing loads children unless you ask, which keeps grids and pickers —
+     * the overwhelming majority of view usage — free of any child-loading cost.
+     */
+    IncludeRelatedRecords?: string[];
 
     /**
      * Internal flag set by BaseEngine when loading entity configurations.
@@ -501,10 +568,10 @@ export class RunViewParams {
             && a.sqlserver === b.sqlserver
             && a.postgresql === b.postgresql;
     }
-} 
+}
 
 /**
- * Class for running views in a generic, tier-independent manner - uses a provider model for 
+ * Class for running views in a generic, tier-independent manner - uses a provider model for
  * implementation transparently from the viewpoint of the consumer of the class. By default the RunView class you create will
  * connect to the DEFAULT provider. If you want your RunView to connect to a different provider, you can pass in the provider
  * to the constructor.
@@ -589,7 +656,7 @@ export class RunView  {
      * @param params 
      * @returns 
      */
-    public static async GetEntityNameFromRunViewParams(params: RunViewParams, provider: IMetadataProvider | null = null): Promise<string> {
+    public static async GetEntityNameFromRunViewParams(params: RunViewParams, provider: IMetadataProvider | null = null, contextUser?: UserInfo): Promise<string> {
         const p = provider ? provider : <IMetadataProvider><any>RunView.Provider;
 
         if (params.EntityName)
@@ -601,16 +668,33 @@ export class RunView  {
                 return entity.Name
         }
         else if (params.ViewID || params.ViewName) {
-            // we don't have a view entity loaded, so load it up now
+            // we don't have a view entity loaded, so load it up now.
+            //
+            // B39, two defects fixed here:
+            //   1. This inner lookup ran WITHOUT a context user. Server-side, an unscoped read of
+            //      'MJ: User Views' returns nothing, so a ViewID-only RunView failed for EVERY
+            //      caller — including the view's owner. The caller's user must be threaded in.
+            //   2. When the lookup found nothing, this branch FELL THROUGH with no return,
+            //      yielding undefined — which surfaced downstream as the opaque
+            //      "Entity undefined not found in metadata", naming neither the view nor the
+            //      cause. It now throws a descriptive error at the point of knowledge. (This is
+            //      not a semantic change: the undefined already produced a throw downstream —
+            //      just an unreadable one.)
             const rv = RunView.FromMetadataProvider(p);
             const result = await rv.RunView({
                 EntityName: "MJ: User Views",
                 ExtraFilter: params.ViewID ? `ID = '${params.ViewID}'` : `Name = '${params.ViewName}'`,
                 ResultType: 'entity_object'
-            });
+            }, contextUser);
             if (result && result.Success && result.Results.length > 0) {
                 return result.Results[0].Entity; // virtual field in the User Views entity called Entity
             }
+            const viewRef = params.ViewID ? `ViewID '${params.ViewID}'` : `ViewName '${params.ViewName}'`;
+            throw new Error(
+                `RunView: ${viewRef} did not resolve to a User View — it does not exist, or is not readable ` +
+                `${contextUser ? `by user '${contextUser.Email}'` : 'without a context user (server-side callers must pass one)'}. ` +
+                `Pass EntityName alongside the view identifier to bypass this lookup.`
+            );
         }
         else
             return null;

@@ -161,6 +161,7 @@
   --mj-brand-primary-active: var(--mj-color-brand-700);
   --mj-brand-primary-light: var(--mj-color-brand-350);
   --mj-brand-secondary: var(--mj-color-brand-900);
+  --mj-brand-secondary-hover: var(--mj-color-brand-800);
   --mj-brand-on-primary: var(--mj-color-neutral-0);
   --mj-brand-on-secondary: var(--mj-color-neutral-0);
 
@@ -199,6 +200,46 @@
   --mj-status-info-text: var(--mj-color-info-700);
   --mj-status-info-border: var(--mj-color-info-500);
 
+  /* Data-Visualization Categorical Palette
+     Distinct series colors for charts/diagrams (Venn, donut, treemap, etc.).
+     Components read these instead of hardcoding a hex array; the interactive-
+     component theme bridge exposes them as `styles.chartPalette`. These are the
+     default (theme-agnostic) categorical hues — Phase 2 derivation re-tints them
+     from the org brand by overriding these same tokens. */
+  --mj-viz-1: #2196F3;  /* blue */
+  --mj-viz-2: #4CAF50;  /* green */
+  --mj-viz-3: #FF9800;  /* orange */
+  --mj-viz-4: #E91E63;  /* pink */
+  --mj-viz-5: #9C27B0;  /* purple */
+  --mj-viz-6: #00BCD4;  /* cyan */
+  --mj-viz-7: #F44336;  /* red */
+  --mj-viz-8: #8BC34A;  /* light green */
+  --mj-viz-9: #FF5722;  /* deep orange */
+  --mj-viz-10: #3F51B5; /* indigo */
+
+  /* Data-Visualization Sequential Ramp
+     Single-hue intensity ramp for heatmaps, choropleths and density shading,
+     ordered light-to-dark. Built from the brand ramp (not literals) so an org
+     overlay re-tints intensity shading along with everything else. Exposed to
+     interactive components as `styles.sequentialScale`. Dark mode re-anchors
+     these (see the dark block) because a light-to-dark ramp inverts its reading
+     on a dark surface. */
+  --mj-viz-seq-1: var(--mj-color-brand-100);
+  --mj-viz-seq-2: var(--mj-color-brand-200);
+  --mj-viz-seq-3: var(--mj-color-brand-300);
+  --mj-viz-seq-4: var(--mj-color-brand-400);
+  --mj-viz-seq-5: var(--mj-color-brand-500);
+  --mj-viz-seq-6: var(--mj-color-brand-600);
+  --mj-viz-seq-7: var(--mj-color-brand-700);
+
+  /* Data-Visualization Diverging Ramp
+     For measures with a meaningful midpoint (variance vs target, gain/loss,
+     sentiment). Anchored on the status hues so the default reads "bad → neutral
+     → good"; exposed as `styles.divergingScale`. */
+  --mj-viz-div-low: var(--mj-color-error-500);
+  --mj-viz-div-mid: var(--mj-color-neutral-200);
+  --mj-viz-div-high: var(--mj-color-success-500);
+
   /* Application Accent (set per-application from metadata)
      Default uses amber accent, but apps can override to use primary/tertiary/custom */
   --mj-app-accent: var(--mj-brand-accent);
@@ -229,6 +270,9 @@
   --mj-logo-mark-inverse: url('/assets/mj-mark-white.svg');
   --mj-logo-wordmark: url('/assets/MJ_logo.svg');
   --mj-logo-color: #264FAF;
+  /* Header mark geometry. */
+  --mj-logo-width: 32px;
+  --mj-logo-height: 18px;
 
   /* ========================================
      TYPOGRAPHY
@@ -363,7 +407,11 @@
   
   --mj-bg-page: var(--mj-color-neutral-900);
   --mj-bg-surface: var(--mj-color-neutral-800);
-  --mj-bg-surface-card: #253347;
+  /* Card sits between surface (800) and elevated (700). Derived from the neutral
+     primitives (not a literal) so org brand overlays re-tint it in dark mode; the
+     68/32 srgb-linear split reproduces the historical #253347 with MJ's defaults
+     and matches the theme engine's mixHex(neutral-800, neutral-700, 0.32) exactly. */
+  --mj-bg-surface-card: color-mix(in srgb-linear, var(--mj-color-neutral-800) 68%, var(--mj-color-neutral-700));
   --mj-bg-surface-elevated: var(--mj-color-neutral-700);
   --mj-bg-surface-sunken: var(--mj-color-neutral-950);
   --mj-bg-surface-hover: var(--mj-color-neutral-600);
@@ -449,6 +497,26 @@
   --mj-login-wave-1:     var(--mj-color-accent-500);
   --mj-login-wave-2:     var(--mj-color-tertiary-400);
   --mj-login-wave-3:     var(--mj-color-brand-400);
+
+  /* Data-Visualization Sequential Ramp (dark-mode re-anchor)
+     On a dark surface, "more ink" means brighter rather than darker, so the ramp
+     runs from a step that sits close to the page background up to a light,
+     saturated brand step. Order is preserved (index 1 = lowest intensity), only
+     the anchoring flips. */
+  --mj-viz-seq-1: var(--mj-color-brand-900);
+  --mj-viz-seq-2: var(--mj-color-brand-800);
+  --mj-viz-seq-3: var(--mj-color-brand-700);
+  --mj-viz-seq-4: var(--mj-color-brand-600);
+  --mj-viz-seq-5: var(--mj-color-brand-500);
+  --mj-viz-seq-6: var(--mj-color-brand-400);
+  --mj-viz-seq-7: var(--mj-color-brand-300);
+
+  /* Data-Visualization Diverging Ramp (dark-mode re-anchor)
+     Endpoints lighten so they stay legible against the dark surface; the neutral
+     center darkens so "no deviation" recedes rather than glares. */
+  --mj-viz-div-low: var(--mj-color-error-400);
+  --mj-viz-div-mid: var(--mj-color-neutral-700);
+  --mj-viz-div-high: var(--mj-color-success-400);
 
   /* Logo — lighter mark for dark header backgrounds */
   --mj-logo-mark: url('/assets/mj-mark-dark.svg');

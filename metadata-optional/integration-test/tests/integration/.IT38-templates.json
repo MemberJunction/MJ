@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT38 - Template Engine Rendering",
+    "Description": "TemplateEngine rendering determinism through real entities: fixture Template+Content render with params, filter availability, not-found and bad-param error contracts, TemplateText virtual round-trip. Self-cleaning tagged fixtures.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "TemplateEngine rendering determinism through real entities: fixture Template+Content render with params, filter availability, not-found and bad-param error contracts, TemplateText virtual round-trip. Self-cleaning tagged fixtures."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "templates"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "6E0309D6-AAE1-4A56-B2AB-058EB6EC3D22"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T01:12:44.191Z",
+    "checksum": "f4a65fa7ded4d43733d244261990075168c570714c54a56ab6847cb656837174"
+  }
+}

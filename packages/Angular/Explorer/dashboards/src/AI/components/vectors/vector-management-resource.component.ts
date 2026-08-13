@@ -29,7 +29,8 @@ import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-da
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { MJScheduledActionEntity, MJScheduledActionParamEntity } from '@memberjunction/core-entities';
+import { MJScheduledJobEntity } from '@memberjunction/core-entities';
+import { BuildSingleStaticParamConfiguration, ResolveActionJobTypeID } from '../../../shared/action-scheduled-job';
 import { CronToHumanReadable } from '../autotagging/shared/classify.format';
 import {
     buildVectorAgentContext,
@@ -340,7 +341,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         return CronToHumanReadable(cron);
     }
 
-    /** Saves a new ScheduledAction for vectorizing the selected entity document */
+    /** Saves a new Scheduled Job (type: Action) for vectorizing the selected entity document */
     public async SaveScheduleSync(): Promise<void> {
         if (this.ScheduleSyncSaving || !this.ScheduleSyncDocID) return;
         this.ScheduleSyncSaving = true;
@@ -358,29 +359,38 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
             const md = this.ProviderToUse;
 
-            // Create ScheduledAction
-            const scheduledAction = await md.GetEntityObject<MJScheduledActionEntity>('MJ: Scheduled Actions');
-            scheduledAction.NewRecord();
-            scheduledAction.Name = `Vectorize: ${this.ScheduleSyncDocName}`;
-            scheduledAction.Description = `Automated vectorization for entity document "${this.ScheduleSyncDocName}"`;
-            scheduledAction.ActionID = actionID;
-            scheduledAction.Type = 'Custom';
-            scheduledAction.CronExpression = this.ScheduleSyncCron;
-            scheduledAction.CustomCronExpression = this.ScheduleSyncCron;
-            scheduledAction.Status = this.ScheduleSyncEnabled ? 'Active' : 'Disabled';
-            scheduledAction.Timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-            const saved = await scheduledAction.Save();
-            if (!saved) {
+            // Resolve the 'Action' scheduled-job type
+            const jobTypeID = await ResolveActionJobTypeID(md);
+            if (!jobTypeID) {
                 MJNotificationService.Instance.CreateSimpleNotification(
-                    `Failed to create schedule: ${scheduledAction.LatestResult?.Message ?? 'Unknown error'}`,
+                    'Could not find the "Action" scheduled job type. Please check scheduling configuration.',
                     'error', 5000
                 );
                 return;
             }
 
-            // Create param linking the entityDocumentID
-            await this.createVectorizeScheduleParam(scheduledAction.ID, actionID, this.ScheduleSyncDocID);
+            // Create the Scheduled Job — the action and its entityDocumentID parameter ride in
+            // Configuration, which is what ActionScheduledJobDriver reads.
+            const scheduledJob = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
+            scheduledJob.NewRecord();
+            scheduledJob.JobTypeID = jobTypeID;
+            scheduledJob.Name = `Vectorize: ${this.ScheduleSyncDocName}`;
+            scheduledJob.Description = `Automated vectorization for entity document "${this.ScheduleSyncDocName}"`;
+            scheduledJob.CronExpression = this.ScheduleSyncCron;
+            scheduledJob.Status = this.ScheduleSyncEnabled ? 'Active' : 'Disabled';
+            scheduledJob.Timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            scheduledJob.Configuration = await BuildSingleStaticParamConfiguration(
+                md, actionID, 'entityDocumentID', this.ScheduleSyncDocID, '[VectorManagement]'
+            );
+
+            const saved = await scheduledJob.Save();
+            if (!saved) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to create schedule: ${scheduledJob.LatestResult?.CompleteMessage ?? 'Unknown error'}`,
+                    'error', 5000
+                );
+                return;
+            }
 
             MJNotificationService.Instance.CreateSimpleNotification(
                 `Schedule created: ${CronToHumanReadable(this.ScheduleSyncCron)}`, 'success', 3000
@@ -410,36 +420,6 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             return result.Results[0].ID;
         }
         return null;
-    }
-
-    /** Create a ScheduledActionParam linking the entity document ID */
-    private async createVectorizeScheduleParam(scheduledActionID: string, actionID: string, entityDocumentID: string): Promise<void> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const paramResult = await rv.RunView<{ ID: string; Name: string }>({
-            EntityName: 'MJ: Action Params',
-            ExtraFilter: `ActionID = '${actionID}' AND Name = 'entityDocumentID'`,
-            Fields: ['ID', 'Name'],
-            ResultType: 'simple',
-            MaxRows: 1,
-        });
-
-        if (!paramResult.Success || paramResult.Results.length === 0) {
-            console.warn('[VectorManagement] Could not find entityDocumentID action param');
-            return;
-        }
-
-        const md = this.ProviderToUse;
-        const param = await md.GetEntityObject<MJScheduledActionParamEntity>('MJ: Scheduled Action Params');
-        param.NewRecord();
-        param.ScheduledActionID = scheduledActionID;
-        param.ActionParamID = paramResult.Results[0].ID;
-        param.ValueType = 'Static';
-        param.Value = entityDocumentID;
-
-        const saved = await param.Save();
-        if (!saved) {
-            console.warn('[VectorManagement] Failed to save schedule param:', param.LatestResult?.Message);
-        }
     }
 
     // --- Suggest Document Dialog ---

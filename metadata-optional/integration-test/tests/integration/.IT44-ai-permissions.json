@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT44 - AI Permission Helpers",
+    "Description": "AI permission dual-path defaults beyond permission-engine: fail-closed on unknown ids, role-grant downward collapse, owner short-circuit, user+role OR-merge, accessible-set monotonicity, seeded no-grant emptiness on closed inventory surfaces. 6 checks (APM1-APM6), read-only synthetic principals.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "AI permission dual-path defaults beyond permission-engine: fail-closed on unknown ids, role-grant downward collapse, owner short-circuit, user+role OR-merge, accessible-set monotonicity, seeded no-grant emptiness on closed inventory surfaces. 6 checks (APM1-APM6), read-only synthetic principals."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ai-permissions"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "42D1F921-6697-4384-8C90-E86725D316A1"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T01:12:44.275Z",
+    "checksum": "0cd3229656c57e3c5aeb7e4fa89f7a8d8d9128fff7f42ebec925d1e282f20d86"
+  }
+}

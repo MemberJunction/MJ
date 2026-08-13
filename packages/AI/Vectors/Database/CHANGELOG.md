@@ -1,5 +1,189 @@
 # Change Log - @memberjunction/ai-vectordb
 
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [15319b4]
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/sql-dialect@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- 394d276: Content vectorization: generic field-path resolution for provider directives, Pinecone namespace hardening, and autotag action flag coercion
+  - **New `VectorDBBase.GetSourceRecordFieldPaths(providerConfig)`** — a vector-DB driver declares which source-record field paths (plain or single-hop dotted, e.g. `'ContentSourceID.OrganizationID'`) its `ProviderConfig` needs. Default: none. Calling pipelines resolve the declared paths and hand `BuildProviderDirectives` an enriched record; what a path's value MEANS (a namespace, a shard key, a routing region...) is entirely the driver's business — the framework stays generic.
+  - **New `FieldPathResolver`** (`@memberjunction/content-autotagging`) — resolves those declared paths for a batch of `BaseEntity` records. A single-hop path's first segment is validated as a foreign key on the root entity via `EntityInfo` metadata; the related record is loaded and, when the related entity is an IS-A parent type, its child-type row (shared PK) is loaded and merged over it — so a field that physically lives on an IS-A extension entity resolves without any config ever naming that entity. Batched (one `IN (...)` load per entity per pass, not per record) and per-pass cached; consults `BaseEngineRegistry.TryGetCachedRecords` first, so a hop through an already-cached entity (e.g. `ContentSource` via `KnowledgeHubMetadataEngine`) costs zero queries.
+  - **`BuildProviderDirectives` may now throw to reject a record.** `AutotagBaseEngine` converts a throw into a per-record failure — the item/chunk is marked `Failed` (purge: left `Pending`) and the rest of the batch proceeds — across all three call sites: live vectorization, the `EmbedPendingChunks` backfill, and `PurgeDeletedChunks`.
+  - **Pinecone now fails closed on an unresolvable configured namespace.** `PineconeDatabase.BuildProviderDirectives` throws when `namespaceField` is configured but the record has no usable value, instead of returning `{}` — which previously routed the vector into the index's default namespace, silently breaching the tenant wall namespacing exists to build.
+  - **Fix: Pinecone deletes are now namespace-aware.** `DeleteRecord` / `DeleteRecords` route through the per-record `providerTemporaryDirectives.namespace` (grouped, mirroring `CreateRecords`) instead of always deleting from the default namespace — previously a namespaced vector's delete silently no-opped (Pinecone reports success deleting IDs that don't exist in a given namespace). Also fixes both methods calling `index.deleteOne` / `deleteMany` without `await`, so a failed delete could report success.
+  - **Fix: `AutotagAndVectorizeContentAction` flag params accept string values.** `Autotag` / `Vectorize` / `ForceReprocess` / `Purge` / `EmbedPendingChunks` now accept `"1"` / `"true"` / `"yes"` via a new `flagIsSet()` helper — the generic `RunAction` GraphQL mutation types every param as a string, so a caller passing `Value: "1"` previously failed the action's strict `=== 1` check and the phase silently no-op'd with no error.
+
+  Note: if a `VectorIndex.ProviderConfig` already has `namespaceField` set, any content item whose namespace value was previously unresolvable was silently landing in the default Pinecone namespace. After this change those records fail closed (marked `Failed` / left `Pending`) instead of writing there. Worth checking for any such records once this ships.
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+  - @memberjunction/sql-dialect@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+  - @memberjunction/sql-dialect@6.1.0-edge.0
+
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/sql-dialect@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/sql-dialect@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- Updated dependencies [623dfc5]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core@5.50.0
+  - @memberjunction/global@5.50.0
+  - @memberjunction/sql-dialect@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- 15e3017: Add optional embedding dimensions, per-record Pinecone namespace routing, and scope-level provider config support.
+
+  **`@memberjunction/ai`** — Add optional `dimensions` field to `EmbedTextParams`, `EmbedTextsParams`, and `EmbedContentParams`. When provided, overrides the model's native output dimension (only effective on models that support it, e.g. OpenAI `text-embedding-3-*`).
+
+  **`@memberjunction/ai-openai`** — `OpenAIEmbedding.EmbedText` and `embedBatch` now forward `params.dimensions` to the OpenAI embeddings API when set.
+
+  **`@memberjunction/ai-vectordb`** — Three additive changes to the vector DB abstraction layer:
+  - `VectorRecord` gains an optional `providerTemporaryDirectives` field — an MJ-internal routing map set by ingestion and stripped before any external upsert.
+  - `QueryParamsBase` gains an optional `providerConfig` field — an opaque blob sourced from the scope's rendered `ExternalIndexConfig`, threaded through to the driver at query time.
+  - `VectorDBBase` gains a `BuildProviderDirectives(sourceRecord, providerConfig)` hook (default: returns `{}`) that drivers override to extract per-record routing values (e.g. namespace) from the raw source row.
+  - `CreateRecord` and `CreateRecords` signatures gain an optional `providerConfig` parameter.
+
+  **`@memberjunction/ai-vectors-pinecone`** — Full namespace routing support:
+  - `BuildProviderDirectives` reads `providerConfig.namespaceField`, looks up that field on each source record, and returns `{ namespace: '<value>' }` so records are routed to the correct Pinecone namespace during ingestion.
+  - `CreateRecords` groups a mixed batch by namespace and issues one `upsert` per distinct namespace; falls back to a single-namespace path when no per-record directives are present.
+  - `QueryIndex` extracts `providerConfig.namespace`, calls `index.namespace(ns)` when present, and strips the field before passing params to the Pinecone SDK.
+  - `providerTemporaryDirectives` is stripped from each `VectorRecord` before any upsert call.
+
+  **`@memberjunction/ai-vector-sync`** — Sync pipeline now reads `VectorIndex.Dimensions` and `VectorIndex.ProviderConfig` and threads them through:
+  - `Dimensions` is forwarded to `EmbedTexts` so the embedding model produces vectors at the configured size.
+  - `ProviderConfig` (parsed from JSON) is forwarded to `upsertBatchToVectorDB`, which passes it to `BuildProviderDirectives` per record and to `CreateRecords`.
+  - Metadata value storage is now type-aware: SQL numeric types (`int`, `float`, `decimal`, etc.) are stored as JS numbers; a new `storeAs` field config supports `'epochSeconds'` and `'epochMilliseconds'` for datetime columns, `'number'`, and `'boolean'`.
+
+  **`@memberjunction/search-engine`** — `ExternalIndexConfig` on scope external-index rows is now treated as a Nunjucks template: it is rendered against the caller's `SearchContext` before being JSON-parsed. The rendered object (e.g. `{ namespace: '<orgId>' }`) is forwarded as `providerConfig` through `VectorSearchProvider.queryOneIndex` to the vector DB driver. `VectorIndex.Dimensions` is also forwarded to the query-time embedding call.
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [85575cf]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/sql-dialect@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/global@5.48.0
+  - @memberjunction/sql-dialect@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+- Updated dependencies [06a1e44]
+- Updated dependencies [31da520]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/sql-dialect@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/global@5.46.0
+  - @memberjunction/sql-dialect@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/core@5.45.1
+- @memberjunction/global@5.45.1
+- @memberjunction/sql-dialect@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/sql-dialect@5.45.0
+
 ## 5.44.0
 
 ### Minor Changes

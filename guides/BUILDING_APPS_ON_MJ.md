@@ -271,6 +271,7 @@ Two more freedoms worth knowing:
 
 - **UUID primary keys by default, but no fixed key shape.** MJ defaults to `UNIQUEIDENTIFIER` / UUID PKs, yet — because it reads keys from your schema rather than mandating them — supports **any primary-/foreign-key style, including composite and natural keys**. (MJ normalizes UUID casing differences between SQL Server and PostgreSQL for you.)
 - **Bring existing data as-is.** Point CodeGen at existing tables and MJ registers them as entities — migrations are how you *evolve* the schema over time, not a precondition for building.
+- **Add your own columns to a base view without giving up regeneration.** Set `GeneratedBaseViewName` on the entity and CodeGen writes its full generated view under *that* name, while your application owns `BaseView` and wraps it — `SELECT g.*, <your computed columns> FROM <inner> g`. Everything underneath keeps regenerating, so a foreign key added later still appears on its own, and your custom layer stays a few reviewable lines instead of an inherited copy of ~80 lines of generated SQL. Columns you add become first-class virtual `EntityField`s: typed on the entity class, filterable in `RunView`, visible in Explorer, and returned by `spCreate`/`spUpdate`/`spDelete`. SQL Server only. See **[Base Views: Generated, Custom, or Layered](../packages/CodeGenLib/README.md#base-views-generated-custom-or-layered)**.
 
 #### Modeling beyond plain tables: type inheritance & organic (soft) keys
 
@@ -309,7 +310,7 @@ flowchart TB
 
 - **[CodeGenLib README](../packages/CodeGenLib/README.md)** — What CodeGen produces and how to run it.
 - **[Multi-Database Workflow](../packages/CodeGenLib/MULTI_DATABASE_WORKFLOW.md)** — Running CodeGen across multiple database targets/platforms.
-- **Never hand-edit generated files** — regenerate instead (see the CodeGen rules in the root [CLAUDE.md](../CLAUDE.md)). This is what guarantees the layers never drift apart.
+- **Never hand-edit generated files** — regenerate instead (see [`packages/MJCoreEntities/CLAUDE.md`](../packages/MJCoreEntities/CLAUDE.md) and [`packages/CodeGenLib/CLAUDE.md`](../packages/CodeGenLib/CLAUDE.md)). This is what guarantees the layers never drift apart.
 
 ### 3. The entity framework — typed data access
 
@@ -395,7 +396,7 @@ Provider-tier docs:
 - **[GraphQLDataProvider README](../packages/GraphQLDataProvider/README.md)** — The typed client provider; the browser half of the model.
 - **[SQLServerDataProvider README](../packages/SQLServerDataProvider/README.md)** — The server provider that executes against the database directly.
 
-> **One caution for multi-provider scenarios:** in code that may run under a non-default provider (a client talking to multiple MJ servers, or per-request server contexts), use the provider you were handed (`this`, an event's `provider`, or a passed parameter) rather than reaching for the global `new Metadata()`. See the "Don't reach for the global Metadata provider" rules in the root [CLAUDE.md](../CLAUDE.md).
+> **One caution for multi-provider scenarios:** in code that may run under a non-default provider (a client talking to multiple MJ servers, or per-request server contexts), use the provider you were handed (`this`, an event's `provider`, or a passed parameter) rather than reaching for the global `new Metadata()`. See the "Don't reach for the global Metadata provider" rules in [`.claude/rules/data-access.md`](../.claude/rules/data-access.md).
 
 ### 5. The API layer
 
@@ -433,7 +434,7 @@ flowchart LR
 Security isn't an add-on you wire up per screen — it's generated into the data layer and enforced everywhere the object model runs.
 
 - **Row-level security & field permissions** — defined in metadata, baked into generated views/stored procedures, enforced at the data layer regardless of tier.
-- **Audit trail / Record Changes** — every `BaseEntity.Save()` and `Delete()` is tracked automatically. You get built-in version history without writing any of it. See *Entity Version Control* in the root [CLAUDE.md](../CLAUDE.md).
+- **Audit trail / Record Changes** — every `BaseEntity.Save()` and `Delete()` is tracked automatically. You get built-in version history without writing any of it. See *Entity Version Control* in [`.claude/rules/data-access.md`](../.claude/rules/data-access.md).
 - **Authentication** — Auth0, Azure AD (MSAL), and Okta supported out of the box via [auth-services](../packages/Angular/Explorer/auth-services/README.md) on the client and [MJServer](../packages/MJServer/README.md) on the server.
 - **API authorization** — [APIKeys README](../packages/APIKeys/README.md) for scoped, key-based access.
 - **Field-level encryption** — [Encryption README](../packages/Encryption/README.md) for AES-256 encryption of sensitive columns.

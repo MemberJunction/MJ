@@ -1,5 +1,362 @@
 # @memberjunction/ng-entity-viewer
 
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [255d506]
+- Updated dependencies [59def38]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/actions-base@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/ng-base-types@6.1.0-edge.2
+  - @memberjunction/ng-entity-action-ux@6.1.0-edge.2
+  - @memberjunction/ng-list-management@6.1.0-edge.2
+  - @memberjunction/ng-map-view@6.1.0-edge.2
+  - @memberjunction/ng-notifications@6.1.0-edge.2
+  - @memberjunction/ng-record-changes@6.1.0-edge.2
+  - @memberjunction/ng-shared-generic@6.1.0-edge.2
+  - @memberjunction/ng-filter-builder@6.1.0-edge.2
+  - @memberjunction/ng-timeline@6.1.0-edge.2
+  - @memberjunction/ng-export-service@6.1.0-edge.2
+  - @memberjunction/ng-ui-components@6.1.0-edge.2
+  - @memberjunction/ng-pagination@6.1.0-edge.2
+  - @memberjunction/export-engine@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Minor Changes
+
+- 394d276: UI capabilities hoisted from the BizApps accounting app (battle-tested there against live data):
+  - **`mj-left-nav` desktop collapse (opt-in):** `[Collapsible]` + two-way `[(Collapsed)]` + `CollapsedWidth` render a locked-position double-angle toggle chip and an icons-only collapsed strip — labels visually hidden but kept in the a11y tree, section labels folded to divider lines, badges docked on the icon corner, per-item tooltips auto-enabled (`IconOnly` also available standalone for externally-narrowed rails). Consumer owns/persists the state; deliberately no hover-to-peek. Richer rail content is handled rather than assumed away: tree sections fold to their top level while collapsed (with a top-level item standing in as active — `aria-current="true"` — for an active descendant, and `ExpandedIds` untouched so the tree returns intact on expand), icon-less items render a label monogram instead of collapsing to a blank hit-target, and the whole collapsed behavior is viewport-gated to match its ≥701px styling, so a persisted `Collapsed` never follows the user into the ≤700px drawer.
+  - **New `mj-workspace-card` + `mj-workspace-tab-strip` + `MJWorkspaceTabStore`:** the workspace pattern — browser-style draft tabs (open/switch/drag-reorder/close, dirty-dot, rejected/complete states) over a pure, exhaustively unit-tested tab state machine, wrapped in a slotted card frame (identity band, scrolling body, opt-in standardized confirm/draft/discard footer). Plus `mjTip`, a delayed non-interactive truncation tooltip.
+  - **`mj-entity-data-grid`:** new `[FillWidth]` input appends an inert trailing filler column so row banding reaches the container edge without stretching real columns; `width: 'auto'` + `maxWidth` column configs now actually map to AG Grid flex sizing (previously silently ignored) and survive saved-grid-state restores; `computeFieldsList` exported from `record.util` and now takes the host's column list, so a page that declares `[Columns]` gets those fields SELECTed instead of rendering empty cells — including columns declared `visible: false`, which stay in the column model and can be re-shown, and with names resolved to the entity's own casing so a differently-cased column is never requested twice.
+
+### Patch Changes
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/ng-ui-components@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ng-base-types@6.1.0-edge.1
+  - @memberjunction/ng-entity-action-ux@6.1.0-edge.1
+  - @memberjunction/ng-export-service@6.1.0-edge.1
+  - @memberjunction/ng-filter-builder@6.1.0-edge.1
+  - @memberjunction/ng-list-management@6.1.0-edge.1
+  - @memberjunction/ng-map-view@6.1.0-edge.1
+  - @memberjunction/ng-notifications@6.1.0-edge.1
+  - @memberjunction/ng-pagination@6.1.0-edge.1
+  - @memberjunction/ng-record-changes@6.1.0-edge.1
+  - @memberjunction/ng-shared-generic@6.1.0-edge.1
+  - @memberjunction/ng-timeline@6.1.0-edge.1
+  - @memberjunction/actions-base@6.1.0-edge.1
+  - @memberjunction/export-engine@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- b895f92: Angular DOM unit-testing — Phase 4 coverage push. Dev-only (test files + test-config/CI-gate scoping); no runtime change.
+
+  Drives the Generic DOM-coverage ratchet (`scripts/dom-test-report.mjs … --max-none`) from **185 → 137** by writing DOM specs, in usage-ranked order, for every Generic Angular component appropriate for a DOM unit test. Highlights:
+  - **Highest-leverage primitives** — `MjFormFieldComponent` (the field renderer behind ~4,000 usages) across its read/edit type matrix; the `ui-components` design system (`MJEmptyStateComponent`, the `mj-page-*` chrome family, `MJDropdown`/`MJCombobox`/`MJFilterPopover` via a new CDK-overlay test helper in `ng-test-utils`, the `mj-dialog` family, tabs, filter panel, left-nav).
+  - **Form host stack** — `MjRecordFormContainer`, `MjFormToolbar`, `MjEntityFormHost`, `MjIsaRelatedPanel`, `FormPanelSlot`, `ExplorerEntityDataGrid`, `InteractiveForm`.
+  - **Viewers, grids & dialogs** — `EntityDataGrid` + `QueryDataGrid` (AG-Grid chrome), `EntityViewer`, `ArtifactViewerPanel`, the ERD component family (`ERDComposite`/`MJEntityERD`/`ERDDiagram`), plus a broad set of panels/editors/dialogs across agents, artifacts, search, composer, list-management, scheduling, record-process-studio, user-routines, entity-action-ux, actions, and testing.
+  - **`Angular/Bootstrap` onboarded** — the last untracked library tree gains a DOM test tier (`MJAuthShell`, `MJBootstrap`) and its own `--max-none=0` CI gate, so every shipped Angular library tree (Explorer, Generic, Bootstrap) is now gated.
+
+  Reusable patterns established for the harder components: drive internal state before the first render (`setup`) rather than mutating post-render (unreliable under zoneless CD); stub the heavy core (AG-Grid, React bridge, SVG layout, plugin viewers) and spy async loaders so specs exercise the component's own chrome/wiring; add each component **and its injected services** to enumerated `tsconfig.spec.json` files (or AOT drops decorator metadata → NG0202).
+
+  Deliberately **not** covered, and left at the 137 floor: five integration/e2e-tier orchestrators (`ConversationChatArea`, `MessageInput`, `RealtimeWhiteboardBoard`, `AITestHarness`, `RealtimeSessionOverlay`) — 1,800–4,600-line components with realtime/WebRTC/canvas cores or 14–30 dependencies, which belong in the browser regression suite rather than DOM units.
+
+- Updated dependencies [b895f92]
+- Updated dependencies [b895f92]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [d26e202]
+- Updated dependencies [27e4d09]
+  - @memberjunction/ng-ui-components@6.1.0-edge.0
+  - @memberjunction/ng-entity-action-ux@6.1.0-edge.0
+  - @memberjunction/ng-list-management@6.1.0-edge.0
+  - @memberjunction/ng-record-changes@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/actions-base@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/ng-filter-builder@6.1.0-edge.0
+  - @memberjunction/ng-timeline@6.1.0-edge.0
+  - @memberjunction/ng-base-types@6.1.0-edge.0
+  - @memberjunction/ng-map-view@6.1.0-edge.0
+  - @memberjunction/ng-notifications@6.1.0-edge.0
+  - @memberjunction/ng-shared-generic@6.1.0-edge.0
+  - @memberjunction/ng-export-service@6.1.0-edge.0
+  - @memberjunction/ng-pagination@6.1.0-edge.0
+  - @memberjunction/export-engine@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/ng-base-types@6.0.0
+  - @memberjunction/ng-entity-action-ux@6.0.0
+  - @memberjunction/ng-filter-builder@6.0.0
+  - @memberjunction/ng-list-management@6.0.0
+  - @memberjunction/ng-map-view@6.0.0
+  - @memberjunction/ng-notifications@6.0.0
+  - @memberjunction/ng-record-changes@6.0.0
+  - @memberjunction/ng-shared-generic@6.0.0
+  - @memberjunction/ng-timeline@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/ng-export-service@6.0.0
+  - @memberjunction/ng-pagination@6.0.0
+  - @memberjunction/ng-ui-components@6.0.0
+  - @memberjunction/export-engine@6.0.0
+  - @memberjunction/global@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [a8fc549]
+  - @memberjunction/core@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/ng-base-types@5.51.0
+  - @memberjunction/ng-entity-action-ux@5.51.0
+  - @memberjunction/ng-filter-builder@5.51.0
+  - @memberjunction/ng-list-management@5.51.0
+  - @memberjunction/ng-map-view@5.51.0
+  - @memberjunction/ng-notifications@5.51.0
+  - @memberjunction/ng-record-changes@5.51.0
+  - @memberjunction/ng-shared-generic@5.51.0
+  - @memberjunction/ng-timeline@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/ng-export-service@5.51.0
+  - @memberjunction/ng-pagination@5.51.0
+  - @memberjunction/ng-ui-components@5.51.0
+  - @memberjunction/export-engine@5.51.0
+  - @memberjunction/global@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- 0ba33b3: Client-issue batch fixes. Exports (Query viewer, Data Explorer, and User Views) now cover the FULL result set — capped at 100k with an over-cap warning — instead of just the on-screen page, and the Data Explorer toolbar Export button opens a unified Excel/CSV/JSON dialog for every view type (Grid/Cards/Map/Timeline). UI-role users can now create and manage Lists, with owner-scoped delete (or Developer/Integration) enforced server-side on BOTH Lists and List Details — a List Detail's authorization is scoped through its parent List's owner, so a user can't delete membership rows of lists they don't own. Also: grid quick-filter matches hidden columns, primary-key integer columns render without thousands separators, the Queries search-box icon/placeholder overlap is fixed, and the streaming thinking-tag stripper no longer leaks partial `<think>`/`</think>` tags split across chunks — and now flushes a genuine trailing tag-prefix (e.g. a response ending in `<`) at end of stream instead of dropping it.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/ng-base-types@5.50.0
+  - @memberjunction/ng-entity-action-ux@5.50.0
+  - @memberjunction/ng-list-management@5.50.0
+  - @memberjunction/ng-map-view@5.50.0
+  - @memberjunction/ng-notifications@5.50.0
+  - @memberjunction/ng-record-changes@5.50.0
+  - @memberjunction/ng-shared-generic@5.50.0
+  - @memberjunction/ng-filter-builder@5.50.0
+  - @memberjunction/ng-timeline@5.50.0
+  - @memberjunction/ng-export-service@5.50.0
+  - @memberjunction/ng-ui-components@5.50.0
+  - @memberjunction/ng-pagination@5.50.0
+  - @memberjunction/export-engine@5.50.0
+  - @memberjunction/global@5.50.0
+
+## 5.49.0
+
+### Patch Changes
+
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [505c8b5]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [85575cf]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [70c658c]
+  - @memberjunction/core@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/ng-export-service@5.49.0
+  - @memberjunction/ng-list-management@5.49.0
+  - @memberjunction/ng-map-view@5.49.0
+  - @memberjunction/ng-record-changes@5.49.0
+  - @memberjunction/ng-shared-generic@5.49.0
+  - @memberjunction/ng-timeline@5.49.0
+  - @memberjunction/ng-ui-components@5.49.0
+  - @memberjunction/actions-base@5.49.0
+  - @memberjunction/ng-base-types@5.49.0
+  - @memberjunction/ng-entity-action-ux@5.49.0
+  - @memberjunction/ng-filter-builder@5.49.0
+  - @memberjunction/ng-pagination@5.49.0
+  - @memberjunction/export-engine@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [bda123a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ng-list-management@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/actions-base@5.48.0
+  - @memberjunction/ng-base-types@5.48.0
+  - @memberjunction/ng-entity-action-ux@5.48.0
+  - @memberjunction/ng-filter-builder@5.48.0
+  - @memberjunction/ng-map-view@5.48.0
+  - @memberjunction/ng-record-changes@5.48.0
+  - @memberjunction/ng-shared-generic@5.48.0
+  - @memberjunction/ng-timeline@5.48.0
+  - @memberjunction/ng-export-service@5.48.0
+  - @memberjunction/ng-pagination@5.48.0
+  - @memberjunction/ng-ui-components@5.48.0
+  - @memberjunction/export-engine@5.48.0
+  - @memberjunction/global@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/ng-base-types@5.47.0
+  - @memberjunction/ng-entity-action-ux@5.47.0
+  - @memberjunction/ng-filter-builder@5.47.0
+  - @memberjunction/ng-list-management@5.47.0
+  - @memberjunction/ng-map-view@5.47.0
+  - @memberjunction/ng-record-changes@5.47.0
+  - @memberjunction/ng-shared-generic@5.47.0
+  - @memberjunction/ng-timeline@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/ng-export-service@5.47.0
+  - @memberjunction/ng-pagination@5.47.0
+  - @memberjunction/ng-ui-components@5.47.0
+  - @memberjunction/export-engine@5.47.0
+  - @memberjunction/global@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/ng-base-types@5.46.0
+  - @memberjunction/ng-entity-action-ux@5.46.0
+  - @memberjunction/ng-filter-builder@5.46.0
+  - @memberjunction/ng-list-management@5.46.0
+  - @memberjunction/ng-map-view@5.46.0
+  - @memberjunction/ng-record-changes@5.46.0
+  - @memberjunction/ng-shared-generic@5.46.0
+  - @memberjunction/ng-timeline@5.46.0
+  - @memberjunction/ng-export-service@5.46.0
+  - @memberjunction/ng-pagination@5.46.0
+  - @memberjunction/ng-ui-components@5.46.0
+  - @memberjunction/export-engine@5.46.0
+  - @memberjunction/global@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- @memberjunction/ng-list-management@5.45.1
+- @memberjunction/ng-entity-action-ux@5.45.1
+- @memberjunction/ng-record-changes@5.45.1
+- @memberjunction/actions-base@5.45.1
+- @memberjunction/ng-base-types@5.45.1
+- @memberjunction/ng-export-service@5.45.1
+- @memberjunction/ng-filter-builder@5.45.1
+- @memberjunction/ng-map-view@5.45.1
+- @memberjunction/ng-pagination@5.45.1
+- @memberjunction/ng-shared-generic@5.45.1
+- @memberjunction/ng-timeline@5.45.1
+- @memberjunction/ng-ui-components@5.45.1
+- @memberjunction/core@5.45.1
+- @memberjunction/core-entities@5.45.1
+- @memberjunction/export-engine@5.45.1
+- @memberjunction/global@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [13716e4]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/ng-ui-components@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/ng-base-types@5.45.0
+  - @memberjunction/ng-entity-action-ux@5.45.0
+  - @memberjunction/ng-filter-builder@5.45.0
+  - @memberjunction/ng-list-management@5.45.0
+  - @memberjunction/ng-map-view@5.45.0
+  - @memberjunction/ng-record-changes@5.45.0
+  - @memberjunction/ng-shared-generic@5.45.0
+  - @memberjunction/ng-timeline@5.45.0
+  - @memberjunction/ng-export-service@5.45.0
+  - @memberjunction/ng-pagination@5.45.0
+  - @memberjunction/export-engine@5.45.0
+
 ## 5.44.0
 
 ### Patch Changes

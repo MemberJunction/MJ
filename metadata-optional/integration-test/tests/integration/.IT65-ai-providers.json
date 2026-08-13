@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT65 - AI Providers and Model Resolution",
+    "Description": "Domain 4 model-resolution seams, deterministic + LLM-free: AIP1 every Active LLM DriverClass ClassFactory-resolves against BaseLLM (environment-aware — loud skip when no provider packages are loaded, hard fail once any sibling resolves); AIP2 GetHighestPowerLLM returns the independently-computed max-PowerRank Active LLM and the vendor filter provably narrows; AIP3 DefaultAgentResolver precedence (explicit wins, bogus explicit falls through, chain always lands on an Active agent / Sage safety net). AI8/AI9 covered end-to-end by the live agent-loop bundle (AL6/AL7); AI14 belongs with ai-embeddings. 3 checks AIP1-AIP3.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Domain 4 model-resolution seams, deterministic + LLM-free: AIP1 every Active LLM DriverClass ClassFactory-resolves against BaseLLM (environment-aware — loud skip when no provider packages are loaded, hard fail once any sibling resolves); AIP2 GetHighestPowerLLM returns the independently-computed max-PowerRank Active LLM and the vendor filter provably narrows; AIP3 DefaultAgentResolver precedence ("
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "ai-providers"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "DFB23FB2-EDF9-41F7-AA3E-093270FD2D7E"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T01:12:44.566Z",
+    "checksum": "94cd8e7babe2bcc72cf8b67d6f44f21634f4e25e9a288b2730d50e8c26b0076a"
+  }
+}

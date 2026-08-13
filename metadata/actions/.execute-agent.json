@@ -4,7 +4,20 @@
       "Generic 'Execute Agent' action — runs any top-level AIAgent (ExposeAsAction=true)",
       "via AgentRunner. Drives the ExposeAsAction catalog surface: schedulers, workflows,",
       "MCP clients, and Runtime actions invoking utilities.actions.Invoke can all call this",
-      "single action with an AgentName/AgentID param instead of needing a per-agent wrapper."
+      "single action with an AgentName/AgentID param instead of needing a per-agent wrapper.",
+      "",
+      "LogValue=false on Data, ConversationMessages, Payload and AgentResult: these four carry",
+      "arbitrary content — whole records when an Entity Action binding maps a row onto Data, and",
+      "conversation text, agent output and the full run trace on the others. ActionExecutionLog",
+      "writes params on EVERY run (twice: inputs at start, merged inputs+outputs at end), so",
+      "without this they land in a general-purpose log with broad read access. The identifier",
+      "params — AgentName, AgentID, ConversationDetailID, LastRunID, MaxExecutionTimeMs,",
+      "AgentRunID — stay logged, which keeps a run diagnosable: follow AgentRunID into",
+      "'MJ: AI Agent Runs' for the content, where it belongs and is already access-controlled.",
+      "",
+      "REQUIRES ActionParam.LogValue, added by migration V202608042200__v6.1.x. This file",
+      "cannot be pushed until that migration and CodeGen have run — see",
+      "plans/entity-action-workflow-extensions.md §6."
     ],
     "fields": {
       "Name": "Execute Agent",
@@ -61,14 +74,15 @@
             "ValueType": "Simple Object",
             "IsArray": true,
             "Description": "Array of ChatMessage objects ({role, content}) representing conversation history to pass to the agent. Pass an empty array for a fresh run.",
-            "IsRequired": false
+            "IsRequired": false,
+            "LogValue": false
           },
           "primaryKey": {
             "ID": "76458A16-61F5-4B28-ACFF-1D34EF658653"
           },
           "sync": {
-            "lastModified": "2026-04-23T13:09:35.251Z",
-            "checksum": "3e0237ae059dcb9dce815ceee9f58e93809a4bdf3c9011bef36affd46d925f55"
+            "lastModified": "2026-08-05T18:34:35.566Z",
+            "checksum": "21961fb1cd7c3d2368116c9b4b4996a09f2a7ad7ee61cecf162a03a44ebfc79c"
           }
         },
         {
@@ -79,14 +93,15 @@
             "ValueType": "Simple Object",
             "IsArray": false,
             "Description": "Optional JSON object of data passed to the agent's prompts (flows through to sub-agents and actions via the Context channel).",
-            "IsRequired": false
+            "IsRequired": false,
+            "LogValue": false
           },
           "primaryKey": {
             "ID": "F12EF739-720B-4FD4-8B9F-0656A756502E"
           },
           "sync": {
-            "lastModified": "2026-04-23T13:09:35.283Z",
-            "checksum": "5b77fa0cc9a2b67b5af5e10c0cfb3bf257cd69555471c4820bdaa0bfd251ca4c"
+            "lastModified": "2026-08-05T18:34:35.592Z",
+            "checksum": "c61285a938f6146a525ea1ee7fd6cf935d9a9b856a415628d6f60aadf826c537"
           }
         },
         {
@@ -169,14 +184,15 @@
             "ValueType": "Simple Object",
             "IsArray": false,
             "Description": "Final payload returned by the agent at the end of the run.",
-            "IsRequired": false
+            "IsRequired": false,
+            "LogValue": false
           },
           "primaryKey": {
             "ID": "F34F35A2-36A8-44B5-8A7B-D55786B5CB57"
           },
           "sync": {
-            "lastModified": "2026-04-23T13:09:35.437Z",
-            "checksum": "17af7bbb9eed190c1d2f2f2d916fd3e28e43d7760c1d6b40fb432426cbe2e0f8"
+            "lastModified": "2026-08-05T18:34:35.641Z",
+            "checksum": "78769dcf9565bc1c0b8e90bf30b7478b3b137e8e1507ec7434b8b07584087917"
           }
         },
         {
@@ -187,14 +203,15 @@
             "ValueType": "Simple Object",
             "IsArray": false,
             "Description": "Full ExecuteAgentResult shape (agentRun, payload, message, agentResult, success flag, etc.) for callers that need the complete trace.",
-            "IsRequired": false
+            "IsRequired": false,
+            "LogValue": false
           },
           "primaryKey": {
             "ID": "4BF575B0-4945-4BA7-ABE3-664D615D04CE"
           },
           "sync": {
-            "lastModified": "2026-04-23T13:09:35.466Z",
-            "checksum": "5f703903a35c982dfdf71049590e3c27d8922a28b5e765ce3d84bf76d6baf659"
+            "lastModified": "2026-08-05T18:34:35.617Z",
+            "checksum": "4ac37cad6c4945d1f6d084cda8dbf4d057af0c1992e04c091983b254661a3469"
           }
         }
       ],

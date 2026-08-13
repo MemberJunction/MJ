@@ -12,7 +12,10 @@
 
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration, AgentAction, AgentClientToolInvocation } from '@memberjunction/ai-core-plus';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration, AgentAction, AgentClientToolInvocation,
+         FormatValidationErrors, ValidateTaskGraphSpec, type TaskGraphSpec,
+    ConfigOf,
+} from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { LoopAgentResponse } from './loop-agent-response-type';
@@ -52,9 +55,185 @@ import { ConversationMessageResolver } from '../utils/ConversationMessageResolve
  * }
  * ```
  */
+/**
+ * Maximum consecutive turns the inline-read-tool pre-emption may force before the
+ * terminal step is honored anyway. The pre-emption retries are deliberately
+ * "productive" (exempt from the unproductive-retry limit) because each one injects
+ * fresh tool results — but a model that insists on terminal-plus-read-tools every
+ * turn must not be able to extend the run indefinitely on that exemption.
+ */
+const MAX_CONSECUTIVE_READ_TOOL_PREEMPTIONS = 3;
+
 @RegisterClass(BaseAgentType, "LoopAgentType")
 export class LoopAgentType extends BaseAgentType {
     private _evaluator = new SafeExpressionEvaluator();
+
+    /**
+     * Consecutive inline-read-tool pre-emptions forced so far. Per-run safe: a fresh
+     * LoopAgentType instance is created for each agent run (ClassFactory.CreateInstance
+     * in BaseAgentType.GetAgentTypeInstance). Reset whenever a response arrives without
+     * the terminal-step-plus-read-tools combination.
+     */
+    private consecutiveReadToolPreemptions = 0;
+
+    /**
+     * Handles the terminal-step-plus-inline-read-tools combination. Inline READ tools
+     * (artifact/conversation) are yield/await: results arrive on the NEXT turn, so a
+     * terminal step in the same response would orphan them — the tools execute and inject
+     * their results, but the run ends and the user gets "one moment…" and silence. Mirrors
+     * the Pipeline/client-tools pre-emption: force one more (non-terminal) turn so the LLM
+     * responds after reading the results. taskComplete + clientTools is excluded — the
+     * ClientTools path already re-enters the loop and consumes the injected results.
+     * memoryWrites/scratchpad are fire-and-forget writes and never trigger pre-emption.
+     *
+     * @returns The forced Retry step, or null when no pre-emption applies — including when
+     * the consecutive cap is reached (the caller then honors the terminal step; pre-emption
+     * retries are exempt from the unproductive-retry limit, so without the ceiling the
+     * combination could extend a run indefinitely).
+     */
+    private buildReadToolPreemptionStep<P>(response: LoopAgentResponse, hasClientTools: boolean): BaseAgentNextStep<P> | null {
+        const hasInlineReadTools = (response.artifactToolCalls?.length || 0) + (response.conversationToolCalls?.length || 0) > 0;
+        const wantsTerminalStep = response.nextStep?.type === 'Chat' || (response.taskComplete === true && !hasClientTools);
+
+        if (!(hasInlineReadTools && wantsTerminalStep)) {
+            this.consecutiveReadToolPreemptions = 0;
+            return null;
+        }
+        if (this.consecutiveReadToolPreemptions >= MAX_CONSECUTIVE_READ_TOOL_PREEMPTIONS) {
+            LogStatusEx({
+                message: `⚠️ Loop Agent: terminal step + inline read tools recurred ${MAX_CONSECUTIVE_READ_TOOL_PREEMPTIONS} consecutive turns — honoring the terminal step instead of forcing another turn`
+            });
+            return null;
+        }
+
+        this.consecutiveReadToolPreemptions++;
+        LogStatusEx({
+            message: '🔁 Loop Agent: inline tool call(s) combined with a terminal step — forcing one more turn so the results can be read',
+            verboseOnly: true
+        });
+        return this.createNextStep('Retry', {
+            terminate: false,
+            artifactToolCalls: response.artifactToolCalls,
+            conversationToolCalls: response.conversationToolCalls,
+            memoryWrites: response.memoryWrites,
+            scratchpad: response.scratchpad,
+            payloadChangeRequest: response.payloadChangeRequest,
+            reasoning: response.reasoning,
+            confidence: response.confidence
+            // deliberately NO errorMessage/message/retryInstructions: that keeps this
+            // retry "productive" (only errorMessage-bearing retries count toward the
+            // unproductive-retry limit) and suppresses the "Retrying due to:" message.
+        });
+    }
+
+    /**
+     * Resolves whether this agent may emit durable task graphs.
+     *
+     * Read from the merged three-level params bag (schema defaults → agent config → runtime
+     * override), so a per-run override behaves like every other Loop parameter. Absent means NO:
+     * this is the one Loop flag whose default is off, because the capability creates durable rows
+     * that outlive the run rather than merely adding prompt text (D3).
+     */
+    private taskGraphsEnabled(params: ExecuteAgentParams<any, any>): boolean {
+        const promptParams = params?.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+        return promptParams?.enableTaskGraphs === true;
+    }
+
+    /**
+     * Applies a `'Tasks'` emission to the next step: capability gate, validation, then either
+     * single-node constant folding (D9) or a durable submission.
+     *
+     * Mutates `retVal` rather than returning a step so the switch arm stays symmetric with its
+     * siblings, all of which have already populated the shared payload/scratchpad/command fields.
+     */
+    private applyTasksStep<P>(
+        retVal: Partial<BaseAgentNextStep<P>>,
+        spec: TaskGraphSpec | undefined,
+        params: ExecuteAgentParams<any, P>,
+    ): void {
+        // The gate is enforced, not merely documented. Omitting `'Tasks'` from the prompt is the
+        // first line of defense; this is the second, because prompt drift, a cached prompt, or a
+        // model that has seen the type elsewhere can all produce an emission the prompt never
+        // invited. Failing closed with a corrective keeps the agent productive without silently
+        // handing it durable reach it was never configured for.
+        if (!this.taskGraphsEnabled(params)) {
+            retVal.step = 'Retry';
+            retVal.message =
+                'You are not enabled to emit task graphs, so nextStep.type must never be "Tasks". ' +
+                'Use nextStep.type "Sub-Agent" (with subAgents[] for parallel work) or "Actions" instead, ' +
+                'and continue with the task.';
+            retVal.errorMessage = 'Task graphs are not enabled for this agent';
+            return;
+        }
+
+        if (!spec) {
+            retVal.step = 'Retry';
+            retVal.message = 'When nextStep.type == "Tasks", nextStep.tasks must contain the task graph';
+            retVal.errorMessage = 'Task graph not specified for Tasks type';
+            return;
+        }
+
+        // The same validator the server runs at submission (D16), so a graph that passes here
+        // cannot fail a different check later. Every failure is reported at once — a model fixing a
+        // malformed graph should not discover the problems one round-trip at a time.
+        const validation = ValidateTaskGraphSpec(spec);
+        if (!validation.Valid) {
+            retVal.step = 'Retry';
+            retVal.message =
+                'Your task graph is invalid and was not submitted. Fix every problem below and re-emit ' +
+                `the complete graph:\n${FormatValidationErrors(validation.Errors)}`;
+            retVal.errorMessage = `Invalid task graph: ${validation.Errors.map(e => e.Code).join(', ')}`;
+            return;
+        }
+
+        retVal.step = 'Tasks' as BaseAgentNextStep['step'];
+        retVal.taskGraph = { spec, folded: false };
+
+        // Single-node constant folding (D9) — the compiler-flattening analogy: don't spin up loop
+        // machinery for a loop of one. A lone agent task with no edges and default continuation is
+        // observationally identical to a sub-agent call, minus a dispatcher hop and a Task row.
+        const fold = this.describeFold(spec);
+        if (fold.folded) {
+            const node = spec.tasks[0];
+            // describeFold() has already established this is an Agent node — folding is only offered
+            // for one. The `?? ''` is unreachable and exists so this cannot become a silent `undefined`
+            // if that precondition is ever loosened.
+            retVal.step = 'Sub-Agent';
+            retVal.subAgent = {
+                name: ConfigOf(node, 'Agent')?.agentName ?? '',
+                message: node.description,
+                terminateAfter: false,
+                templateParameters: {},
+            };
+            // Recorded, never silent: the TaskGraph run step is written for folded graphs too, so
+            // run forensics show why a graph did not reach the dispatcher, and Save as Workflow
+            // (D17) can attach to the single-node case — the shape a user is most likely to promote.
+            retVal.taskGraph = { spec, folded: true, foldReason: fold.reason };
+        }
+    }
+
+    /**
+     * Decides whether a graph folds to an in-run sub-agent call, and says why when it does not.
+     *
+     * The reason is carried onto the run step rather than discarded: a user who edits a two-node
+     * graph down to one changes its durability and observability, and should be able to read that
+     * off the run record instead of inferring it.
+     */
+    private describeFold(spec: TaskGraphSpec): { folded: boolean; reason: string } {
+        if (spec.tasks.length !== 1) return { folded: false, reason: `graph has ${spec.tasks.length} nodes` };
+
+        const node = spec.tasks[0];
+        if (node.dependsOn?.length) return { folded: false, reason: 'the single node declares dependencies' };
+        // Only an Agent node folds to an in-run sub-agent call. Every other kind — a person's step, an
+        // action, a prompt, a loop — has no in-run equivalent and must reach the dispatcher.
+        if (node.kind !== 'Agent') return { folded: false, reason: `the single node is a ${node.kind} step, which has no in-run equivalent` };
+        if (spec.durable === true) return { folded: false, reason: 'the graph requested durable execution' };
+        if (spec.continuation && spec.continuation !== 'message') {
+            return { folded: false, reason: `continuation is '${spec.continuation}', not the default` };
+        }
+        return { folded: true, reason: 'single agent node, no dependencies, default continuation' };
+    }
+
 
     public async InitializeAgentTypeState<ATS = any, P = any>(params: ExecuteAgentParams<any, P>): Promise<ATS> {
         // Loop agents do not require agent-type specific state initialization
@@ -125,11 +304,20 @@ export class LoopAgentType extends BaseAgentType {
                     terminate: false,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
+                    conversationToolCalls: response.conversationToolCalls,
                     memoryWrites: response.memoryWrites,
                     payloadChangeRequest: response.payloadChangeRequest,
                     reasoning: response.reasoning,
                     confidence: response.confidence
                 });
+            }
+
+            // Computed once here — consumed by the read-tool pre-emption AND the
+            // taskComplete gate below (client tools are yield/await, see both sites).
+            const hasClientTools = (response.nextStep?.clientTools?.length || 0) > 0;
+            const preemptionStep = this.buildReadToolPreemptionStep<P>(response, hasClientTools);
+            if (preemptionStep) {
+                return preemptionStep;
             }
 
             // Check for Chat nextStep BEFORE checking taskComplete
@@ -148,6 +336,7 @@ export class LoopAgentType extends BaseAgentType {
                     payloadChangeRequest: response.payloadChangeRequest,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
+                    conversationToolCalls: response.conversationToolCalls,
                     memoryWrites: response.memoryWrites,
                     responseForm: response.responseForm,
                     actionableCommands: response.actionableCommands,
@@ -161,8 +350,8 @@ export class LoopAgentType extends BaseAgentType {
             // Client tools are yield/await: the LLM can't know the result until they execute.
             // After tools run, executeClientToolsStep calls executePromptStep which re-enters
             // the LLM loop. If taskComplete was true, the LLM will naturally complete on the
-            // next iteration after seeing tool results.
-            const hasClientTools = response.nextStep?.clientTools && response.nextStep.clientTools.length > 0;
+            // next iteration after seeing tool results. (hasClientTools is computed above,
+            // where the inline read-tool pre-emption also consults it.)
             if (response.taskComplete && !hasClientTools) {
                 LogStatusEx({
                     message: '✅ Loop Agent: Task completed successfully. Message: ' + response.message,
@@ -175,6 +364,7 @@ export class LoopAgentType extends BaseAgentType {
                     payloadChangeRequest: response.payloadChangeRequest,
                     scratchpad: response.scratchpad,
                     artifactToolCalls: response.artifactToolCalls,
+                    conversationToolCalls: response.conversationToolCalls,
                     memoryWrites: response.memoryWrites,
                     responseForm: response.responseForm,
                     actionableCommands: response.actionableCommands,
@@ -192,6 +382,7 @@ export class LoopAgentType extends BaseAgentType {
                 payloadChangeRequest: response.payloadChangeRequest,
                 scratchpad: response.scratchpad,
                 artifactToolCalls: response.artifactToolCalls,
+                conversationToolCalls: response.conversationToolCalls,
                 memoryWrites: response.memoryWrites,
                 terminate: response.taskComplete,
                 responseForm: response.responseForm,
@@ -314,6 +505,9 @@ export class LoopAgentType extends BaseAgentType {
                     retVal.message = 'When nextStep.type == "Pipeline", nextStep.pipeline.steps must contain 1 or more stages';
                     retVal.errorMessage = 'Pipeline steps not specified for Pipeline type';
                     break;
+                case 'Tasks':
+                    this.applyTasksStep(retVal, response.nextStep.tasks, params);
+                    break;
                 default:
                     retVal.step = 'Retry';
                     retVal.errorMessage = `Unknown next step type: ${response.nextStep.type}`;
@@ -400,7 +594,7 @@ export class LoopAgentType extends BaseAgentType {
 
         // Validate nextStep structure if present
         if (response.nextStep) {
-            const validStepTypes = ['actions', 'sub-agent', 'chat', 'retry', 'foreach', 'while', 'clienttools', 'pipeline', 'skill', 'plan'];
+            const validStepTypes = ['actions', 'sub-agent', 'chat', 'retry', 'foreach', 'while', 'clienttools', 'pipeline', 'skill', 'plan', 'tasks'];
             let lcaseType = response.nextStep.type?.toLowerCase().trim();
             // allow the AI to mess up the case, but we need to validate it
 
@@ -429,6 +623,9 @@ export class LoopAgentType extends BaseAgentType {
             } else if (!lcaseType && response.nextStep.plan) {
                 response.nextStep.type = 'Plan'; // update the data structure to have the correct type
                 lcaseType = 'plan';
+            } else if (!lcaseType && response.nextStep.tasks) {
+                response.nextStep.type = 'Tasks'; // update the data structure to have the correct type
+                lcaseType = 'tasks';
             }
 
             if (!validStepTypes.includes(lcaseType)) {

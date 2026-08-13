@@ -14,8 +14,11 @@ const {
     mockConfig,
     mockGetAllSafe,
     mockVectorize,
+    mockPurge,
+    mockEmbedPendingChunks,
     mockInitTaxonomyBridge,
     mockCleanupTaxonomyBridge,
+    mockRunViewFn,
 } = vi.hoisted(() => ({
     mockProviderAutotag: vi.fn().mockResolvedValue(0),
     mockCreateInstance: vi.fn(),
@@ -28,8 +31,11 @@ const {
     mockConfig: vi.fn().mockResolvedValue(undefined),
     mockGetAllSafe: vi.fn(),
     mockVectorize: vi.fn().mockResolvedValue({ vectorized: 0, skipped: 0, promptRunIDs: [] }),
+    mockPurge: vi.fn().mockResolvedValue({ purged: 0, failed: 0, skipped: 0 }),
+    mockEmbedPendingChunks: vi.fn().mockResolvedValue({ embedded: 0, failed: 0, skipped: 0 }),
     mockInitTaxonomyBridge: vi.fn().mockResolvedValue(undefined),
     mockCleanupTaxonomyBridge: vi.fn(),
+    mockRunViewFn: vi.fn().mockResolvedValue({ Success: true, Results: [] }),
 }));
 
 vi.mock('@memberjunction/actions', () => ({
@@ -55,7 +61,8 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
     class MockRunView {
-        async RunView() { return { Success: true, Results: [] }; }
+        // Delegates to the hoisted spy so tests can assert the params (ExtraFilter/MaxRows/OrderBy).
+        async RunView(p: unknown) { return mockRunViewFn(p); }
         // Multi-provider migration: source code now uses RunView.FromMetadataProvider(p)
         // instead of `new RunView()` to thread the per-request provider. The mock only needs
         // to return a working instance — the test doesn't assert anything about the provider.
@@ -86,7 +93,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         ContentSourceTypes: [],
         ContentFileTypes: [],
         VectorIndexes: [],
-        GetVectorIndexById: vi.fn().mockReturnValue(undefined),
+        GetVectorIndexByID: vi.fn().mockReturnValue(undefined),
     };
     return {
         ...actual,
@@ -109,6 +116,8 @@ vi.mock('@memberjunction/content-autotagging', () => {
                 ContentSourceTypes: mockContentSourceTypes,
                 GetAllContentSourcesSafe: mockGetAllSafe.mockResolvedValue(mockSources),
                 VectorizeContentItems: mockVectorize,
+                PurgeDeletedChunks: mockPurge,
+                EmbedPendingChunks: mockEmbedPendingChunks,
                 InitializeTaxonomyBridge: mockInitTaxonomyBridge,
                 CleanupTaxonomyBridge: mockCleanupTaxonomyBridge,
                 ForceReprocess: false,
@@ -291,6 +300,216 @@ describe('AutotagAndVectorizeContentAction', () => {
     });
 
     // ========================================================================
+    // Purge (Phase 3)
+    // ========================================================================
+
+    describe('purge', () => {
+        it('should call PurgeDeletedChunks when Purge is 1', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: 0, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 0, Type: 'Input' },
+                    { Name: 'Purge', Value: 1, Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            // Purge is independent of the other phases — a purge-only run still triggers it,
+            // bounded by the default MaxItems (1000) when no MaxItems param is supplied.
+            expect(mockPurge).toHaveBeenCalledTimes(1);
+            expect(mockPurge).toHaveBeenCalledWith({}, { maxItems: 1000 });
+        });
+
+        it('should honor the MaxItems cap when purging', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: 0, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 0, Type: 'Input' },
+                    { Name: 'Purge', Value: 1, Type: 'Input' },
+                    { Name: 'MaxItems', Value: 25, Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            await callInternal(action, params);
+            expect(mockPurge).toHaveBeenCalledWith({}, { maxItems: 25 });
+        });
+
+        it('should NOT call PurgeDeletedChunks when Purge is absent or 0', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: 0, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 0, Type: 'Input' },
+                    { Name: 'Purge', Value: 0, Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockPurge).not.toHaveBeenCalled();
+        });
+
+        it('should still succeed when PurgeDeletedChunks throws (best-effort)', async () => {
+            mockPurge.mockRejectedValueOnce(new Error('vector store unreachable'));
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: 0, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 0, Type: 'Input' },
+                    { Name: 'Purge', Value: 1, Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+        });
+    });
+
+    // ========================================================================
+    // Embed Pending Chunks (Phase 3)
+    // ========================================================================
+
+    describe('embed pending chunks', () => {
+        it('should call EmbedPendingChunks when EmbedPendingChunks is 1', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: 0, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 0, Type: 'Input' },
+                    { Name: 'EmbedPendingChunks', Value: 1, Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            // Independent of the other phases, bounded by the default MaxItems (1000).
+            expect(mockEmbedPendingChunks).toHaveBeenCalledTimes(1);
+            expect(mockEmbedPendingChunks).toHaveBeenCalledWith({}, { maxItems: 1000 });
+        });
+
+        it('should honor the MaxItems cap when embedding pending chunks', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: 0, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 0, Type: 'Input' },
+                    { Name: 'EmbedPendingChunks', Value: 1, Type: 'Input' },
+                    { Name: 'MaxItems', Value: 40, Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            await callInternal(action, params);
+            expect(mockEmbedPendingChunks).toHaveBeenCalledWith({}, { maxItems: 40 });
+        });
+
+        it('should NOT call EmbedPendingChunks when the param is absent or 0', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: 0, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 0, Type: 'Input' },
+                    { Name: 'EmbedPendingChunks', Value: 0, Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockEmbedPendingChunks).not.toHaveBeenCalled();
+        });
+
+        it('should still succeed when EmbedPendingChunks throws (best-effort)', async () => {
+            mockEmbedPendingChunks.mockRejectedValueOnce(new Error('embedding provider down'));
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: 0, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 0, Type: 'Input' },
+                    { Name: 'EmbedPendingChunks', Value: 1, Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+        });
+    });
+
+    // ========================================================================
+    // Flag coercion — the generic RunAction GraphQL mutation delivers every
+    // param value as a STRING, so flags must accept "1"/"true"/"yes" as set
+    // and everything else as unset. A strict `=== 1` check silently skipped
+    // phases for GQL callers.
+    // ========================================================================
+
+    describe('GraphQL string flag coercion', () => {
+        it('should run EmbedPendingChunks when the flag arrives as string "1"', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: '0', Type: 'Input' },
+                    { Name: 'Vectorize', Value: '0', Type: 'Input' },
+                    { Name: 'EmbedPendingChunks', Value: '1', Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockEmbedPendingChunks).toHaveBeenCalledTimes(1);
+        });
+
+        it('should run Purge when the flag arrives as string "true" (case-insensitive)', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: '0', Type: 'Input' },
+                    { Name: 'Vectorize', Value: '0', Type: 'Input' },
+                    { Name: 'Purge', Value: 'True', Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockPurge).toHaveBeenCalledTimes(1);
+        });
+
+        it('should run autotag providers when Autotag arrives as string "1"', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: '1', Type: 'Input' },
+                    { Name: 'Vectorize', Value: '0', Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockInitTaxonomyBridge).toHaveBeenCalledTimes(1);
+        });
+
+        it('should treat string "0" and "false" as unset', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: '0', Type: 'Input' },
+                    { Name: 'Vectorize', Value: '0', Type: 'Input' },
+                    { Name: 'EmbedPendingChunks', Value: '0', Type: 'Input' },
+                    { Name: 'Purge', Value: 'false', Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockEmbedPendingChunks).not.toHaveBeenCalled();
+            expect(mockPurge).not.toHaveBeenCalled();
+            expect(mockInitTaxonomyBridge).not.toHaveBeenCalled();
+        });
+
+        it('should treat arbitrary strings as unset rather than truthy', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: '0', Type: 'Input' },
+                    { Name: 'Vectorize', Value: '0', Type: 'Input' },
+                    { Name: 'EmbedPendingChunks', Value: 'enable', Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockEmbedPendingChunks).not.toHaveBeenCalled();
+        });
+    });
+
+    // ========================================================================
     // Error Handling
     // ========================================================================
 
@@ -344,8 +563,9 @@ describe('AutotagAndVectorizeContentAction', () => {
             };
             const result = await callInternal(action, params);
             expect(result.Success).toBe(true);
-            // Vectorization should be skipped (no new items, not force-reprocess)
-            expect(mockVectorize).not.toHaveBeenCalled();
+            // Vectorization is decoupled from new-item detection: with Vectorize=1 it runs
+            // regardless of whether autotagging produced new items (it selects Pending items).
+            expect(mockVectorize).toHaveBeenCalled();
         });
     });
 
@@ -353,8 +573,8 @@ describe('AutotagAndVectorizeContentAction', () => {
     // Vectorization Skip Logic
     // ========================================================================
 
-    describe('vectorization skip logic', () => {
-        it('should skip vectorization when no new items and not force-reprocessing', async () => {
+    describe('vectorization run logic', () => {
+        it('should still vectorize when Vectorize=1 even if no new items were tagged', async () => {
             mockProviderAutotag.mockResolvedValue(0);
 
             const params = {
@@ -365,7 +585,75 @@ describe('AutotagAndVectorizeContentAction', () => {
                 ContextUser: { ID: 'user-1' }
             };
             await callInternal(action, params);
-            expect(mockVectorize).not.toHaveBeenCalled();
+            // Decoupled from new-item detection — RunDirectVectorization selects Pending items.
+            expect(mockVectorize).toHaveBeenCalled();
+        });
+
+        it('should vectorize standalone (Autotag=0, Vectorize=1) without running any providers', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: 0, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 1, Type: 'Input' }
+                ],
+                ContextUser: { ID: 'user-1' }
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockProviderAutotag).not.toHaveBeenCalled(); // Phase 1 (autotag providers) skipped
+            expect(mockVectorize).toHaveBeenCalled();            // Phase 2 (vectorization) still runs
+        });
+
+        it('should select only Pending items and cap intake at the default MaxItems (1000)', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: 0, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 1, Type: 'Input' }
+                ],
+                ContextUser: { ID: 'user-1' }
+            };
+            await callInternal(action, params);
+
+            expect(mockRunViewFn).toHaveBeenCalled();
+            const rvParams = mockRunViewFn.mock.calls.at(-1)?.[0] as {
+                ExtraFilter?: string; MaxRows?: number; OrderBy?: string;
+            };
+            expect(rvParams.ExtraFilter).toContain("EmbeddingStatus = 'Pending'");
+            expect(rvParams.MaxRows).toBe(1000);           // default cap
+            expect(rvParams.OrderBy).toContain('__mj_CreatedAt'); // deterministic oldest-first
+        });
+
+        it('should honor a custom MaxItems and ContentSourceIDs filter', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: 0, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 1, Type: 'Input' },
+                    { Name: 'MaxItems', Value: 25, Type: 'Input' },
+                    { Name: 'ContentSourceIDs', Value: 'src-1,src-2', Type: 'Input' }
+                ],
+                ContextUser: { ID: 'user-1' }
+            };
+            await callInternal(action, params);
+
+            const rvParams = mockRunViewFn.mock.calls.at(-1)?.[0] as { ExtraFilter?: string; MaxRows?: number };
+            expect(rvParams.MaxRows).toBe(25);
+            expect(rvParams.ExtraFilter).toContain("EmbeddingStatus = 'Pending'");
+            expect(rvParams.ExtraFilter).toContain('ContentSourceID IN');
+        });
+
+        it('should drop the Pending filter under ForceReprocess (re-embed everything)', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: 0, Type: 'Input' },
+                    { Name: 'Vectorize', Value: 1, Type: 'Input' },
+                    { Name: 'ForceReprocess', Value: 1, Type: 'Input' }
+                ],
+                ContextUser: { ID: 'user-1' }
+            };
+            await callInternal(action, params);
+
+            const rvParams = mockRunViewFn.mock.calls.at(-1)?.[0] as { ExtraFilter?: string; MaxRows?: number };
+            expect(rvParams.ExtraFilter).not.toContain('EmbeddingStatus');
+            expect(rvParams.MaxRows).toBe(1000); // cap still protects memory even on force
         });
 
         it('should run content item vectorization when providers processed items', async () => {
@@ -378,10 +666,9 @@ describe('AutotagAndVectorizeContentAction', () => {
                 ],
                 ContextUser: { ID: 'user-1' }
             };
-            await callInternal(action, params);
-            // RunDirectVectorization calls VectorizeContentItems internally
-            // (through RunView → filter → vectorize pipeline)
-            expect(result => result.Success).toBeTruthy();
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockVectorize).toHaveBeenCalled();
         });
     });
 

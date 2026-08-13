@@ -1,0 +1,189 @@
+[
+  {
+    "fields": {
+      "Name": "IT: Echo Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "Bare-minimum loop agent: completes on the first turn. Foundation for agent-loop-live smoke/lineage/cost checks. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 3
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Echo Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "EFBC1292-B59B-4748-856B-C8BB629EEB57"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T01:12:47.617Z",
+            "checksum": "e4a14e7304bf15dca0479800aa196dd142542d2156c326c7bba1c383e8019ad3"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "364C1D12-D160-4065-AFB3-B04CD6D85CB4"
+    },
+    "sync": {
+      "lastModified": "2026-08-08T01:12:47.517Z",
+      "checksum": "1c4272a8652be3662ec3b1fc43bfae7e7739d0da7759210abbce5442ca8f0363"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Tool Loop Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "One-action loop agent (Calculate Expression). Exercises Prompt→Actions→Prompt lineage, action-result carry into context, and carry-forward observing turns. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 5
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Tool Loop Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E5BDFC06-8405-4879-A7D5-408DAFDAE985"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T01:12:47.627Z",
+            "checksum": "7a9d770b5f3154a485dc9dddf404f826ad69f1b46947f2e111b5988aaec6eabd"
+          }
+        }
+      ],
+      "MJ: AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Calculate Expression",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "41B06885-3F42-4444-8BAB-D81A0F4180E0"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T01:12:47.649Z",
+            "checksum": "287e7118d0b949eb25c66afd1abdb58887a12ccc56d2bd01a09915269bc70629"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "CA0902F1-209C-4DF8-9F29-9749F07DDC8B"
+    },
+    "sync": {
+      "lastModified": "2026-08-08T01:12:47.538Z",
+      "checksum": "a12126b3487fae8c26c90225f319df27d4d29ec17219b29e47c11d05754e59bb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Failover Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "Echo-shaped agent with its OWN prompt so checks can deactivate its primary model binding in-fixture and assert completion on the secondary vendor (AL7). (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 3
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Failover Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "44EE3B31-7406-47F4-A3EB-74B08794877F"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T01:12:47.658Z",
+            "checksum": "df567515a6fec2d3dcd8765df1ac97e9b33da9e720a91cba2b45a373107e4b8a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "FB97F1A5-0DCD-4390-90F4-3A0D0336AEDC"
+    },
+    "sync": {
+      "lastModified": "2026-08-08T01:12:47.558Z",
+      "checksum": "3c1b5ccd729ae8757e4cafb8f40ddb92cccab8d2cd9c6724757fe71dcec1597a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Compaction Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "Echo-shaped agent with tight agent-level compaction budget knobs for the agent-compaction-e2e bundle. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 3,
+      "ContextWindowMaxTokens": 8000,
+      "CompactionTriggerPercent": 50,
+      "CompactionTargetPercent": 25
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Compaction Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "667351F8-7575-4159-A9CD-9963C6ED7429"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T01:12:47.667Z",
+            "checksum": "df1f53ad19c557e81b60fe209321d3f965555849f2518d77c94004a9e78d2be1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "CFF42E3B-49A1-4261-AB12-7E23A666B3C3"
+    },
+    "sync": {
+      "lastModified": "2026-08-08T01:12:47.579Z",
+      "checksum": "3978730158db28767d53ac3221c3b9de4ff53a67dbce9f463e7debaa4142250f"
+    }
+  }
+]

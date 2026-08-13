@@ -226,6 +226,15 @@ LANGUAGE plpgsql AS $func$
 DECLARE
   v_is_scoped BOOLEAN := FALSE;
 BEGIN
+  -- [Large Schema Series] Force hash/merge joins for the catalog-introspection
+  -- reconciliation below. In the scoped Pass-2 codegen path this SP runs AFTER
+  -- the SQL-generation phase has created thousands of base views + functions,
+  -- when pg_catalog stats are stale and the introspection view is misestimated
+  -- at rows=1 → nested-loop catalog re-scans. See the matching guard + rationale
+  -- in spDeleteUnneededEntityFields. SET LOCAL scopes it to this call only and
+  -- needs no ANALYZE privileges on pg_catalog.
+  SET LOCAL enable_nestloop = off;
+
   DROP TABLE IF EXISTS _uef_excluded;
   CREATE TEMP TABLE _uef_excluded AS
     SELECT TRIM(s) AS schema_name
@@ -239,8 +248,36 @@ BEGIN
     WHERE TRIM(v) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   v_is_scoped := EXISTS (SELECT 1 FROM _uef_scope);
 
+  -- [Large Schema Series] Materialize the catalog-introspection views into
+  -- ANALYZE'd temp tables BEFORE the reconciliation join below. These views are
+  -- function-based scans over pg_catalog (vwSQLColumnsAndEntityFields computes
+  -- col_description/pg_get_expr/regex per column; the FK/PK/UK views scan
+  -- pg_index/pg_constraint), so the planner has NO row statistics for them and
+  -- defaults every join estimate to rows=1 → a cascade of nested loops that
+  -- re-scan the whole catalog per outer row. Measured on a 600-table schema:
+  -- one call to this function = ~78s, and it grows super-linearly (O(N^2)) as
+  -- codegen adds objects mid-run. Materializing each view exactly once + ANALYZE
+  -- gives the planner real cardinalities so the reconciliation join hash-joins
+  -- instead of nested-looping.
+  DROP TABLE IF EXISTS _uef_cols;
+  CREATE TEMP TABLE _uef_cols AS SELECT * FROM __mj."vwSQLColumnsAndEntityFields";
+  ANALYZE _uef_cols;
+
+  DROP TABLE IF EXISTS _uef_fk;
+  CREATE TEMP TABLE _uef_fk AS SELECT * FROM __mj."vwForeignKeys";
+  ANALYZE _uef_fk;
+
+  DROP TABLE IF EXISTS _uef_pk;
+  CREATE TEMP TABLE _uef_pk AS SELECT * FROM __mj."vwTablePrimaryKeys";
+  ANALYZE _uef_pk;
+
+  DROP TABLE IF EXISTS _uef_uk;
+  CREATE TEMP TABLE _uef_uk AS SELECT * FROM __mj."vwTableUniqueKeys";
+  ANALYZE _uef_uk;
+
   DROP TABLE IF EXISTS _uef_filtered;
   CREATE TEMP TABLE _uef_filtered AS
+  SELECT * FROM (
   SELECT
     e."ID"   AS entity_id,
     e."Name" AS entity_name,
@@ -265,51 +302,65 @@ BEGIN
     re."ID" AS related_entity_id,
     fk."referenced_column"::text AS related_entity_field_name,
     (pk."ColumnName" IS NOT NULL) AS new_is_primary_key,
-    (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL) AS new_is_unique
+    (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL) AS new_is_unique,
+    -- is_material_change = a change that actually affects the generated view/sproc SQL. This is the
+    -- SINGLE definition of "material" — the row filter (outer WHERE) and the modified-entity RETURN
+    -- both derive from it, so there is no duplicated predicate to keep in sync. A pure Sequence
+    -- renumber is deliberately excluded here (tracked as is_sequence_change): the renumber is still
+    -- persisted by the UPDATE below, but must NOT flag its entity as "modified", or every fresh PG
+    -- CodeGen run re-emits byte-identical views + sprocs for dozens of entities.
+    (
+         COALESCE(TRIM(ef."Description"), '') <>
+           COALESCE(TRIM(CASE WHEN ef."AutoUpdateDescription" THEN sq."Description" ELSE ef."Description" END), '')
+      OR (sq."IsVirtual" = 0 AND (
+              (ef."Type" <> sq."Type" AND NOT (ef."Type" = 'numeric' AND sq."Type" = 'decimal'))
+           OR ef."Length" <> sq."Length"
+           OR ef."Precision" <> sq."Precision"
+           OR ef."Scale" <> sq."Scale"
+           OR ef."AllowsNull" <> sq."AllowsNull"
+         ))
+      OR __mj."fnNormalizeDefaultValue"(ef."DefaultValue") IS DISTINCT FROM __mj."fnNormalizeDefaultValue"(sq."DefaultValue")
+      OR ef."AutoIncrement" <> (sq."AutoIncrement" <> 0)
+      OR ef."IsVirtual" <> (sq."IsVirtual" <> 0)
+      OR ef."IsComputed" <> (sq."IsComputed" <> 0)
+      OR COALESCE(ef."RelatedEntityID", '00000000-0000-0000-0000-000000000000'::uuid) <>
+         COALESCE(re."ID", '00000000-0000-0000-0000-000000000000'::uuid)
+      OR COALESCE(TRIM(ef."RelatedEntityFieldName"), '') <> COALESCE(TRIM(fk."referenced_column"::text), '')
+      -- U2 — soft-PK guard: a soft primary key (IsSoftPrimaryKey, set from additionalSchemaInfo)
+      -- has NO physical PK/unique constraint, so the physical-schema comparison would flag it as
+      -- "changed" on EVERY run and the UPDATE below would wipe it. Soft-PK rows are excluded from
+      -- the PK/unique material-change predicate and their flags are frozen in the UPDATE.
+      OR (NOT ef."IsSoftPrimaryKey" AND ef."IsPrimaryKey" <> (pk."ColumnName" IS NOT NULL))
+      OR (NOT ef."IsSoftPrimaryKey" AND ef."IsUnique" <> (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL))
+      OR (ef."AllowUpdateAPI" = TRUE AND sq."IsVirtual" <> 0 AND ef."IsVirtual" = FALSE)
+    ) AS is_material_change,
+    -- A pure Sequence renumber: persisted by the UPDATE below (renumbering is real) but NOT
+    -- material for regeneration. Tracked as its own flag so the row filter is "material OR
+    -- sequence" while the modified-entity RETURN stays material-only.
+    (ef."Sequence" <> sq."Sequence") AS is_sequence_change
   FROM __mj."EntityField" ef
-  INNER JOIN __mj."vwSQLColumnsAndEntityFields" sq
+  -- [Large Schema Series] joins repointed from the catalog views to the ANALYZE'd
+  -- temp tables materialized above (identical column sets via SELECT *).
+  INNER JOIN _uef_cols sq
     ON ef."EntityID" = sq."EntityID" AND ef."Name"::text = sq."FieldName"::text
   INNER JOIN __mj."Entity" e ON ef."EntityID" = e."ID"
-  LEFT JOIN __mj."vwForeignKeys" fk
+  LEFT JOIN _uef_fk fk
     ON ef."Name"::text = fk."column"::text AND e."BaseTable"::text = fk."table"::text AND e."SchemaName"::text = fk."schema_name"::text
   LEFT JOIN __mj."Entity" re
     ON re."BaseTable"::text = fk."referenced_table"::text AND re."SchemaName"::text = fk."referenced_schema"::text
-  LEFT JOIN __mj."vwTablePrimaryKeys" pk
+  LEFT JOIN _uef_pk pk
     ON e."BaseTable"::text = pk."TableName"::text AND ef."Name"::text = pk."ColumnName"::text AND e."SchemaName"::text = pk."SchemaName"::text
-  LEFT JOIN __mj."vwTableUniqueKeys" uk
+  LEFT JOIN _uef_uk uk
     ON e."BaseTable"::text = uk."TableName"::text AND ef."Name"::text = uk."ColumnName"::text AND e."SchemaName"::text = uk."SchemaName"::text
   LEFT JOIN _uef_excluded ex ON e."SchemaName"::text = ex.schema_name
   WHERE e."VirtualEntity" = FALSE
     AND ex.schema_name IS NULL
     AND (NOT v_is_scoped OR e."ID" IN (SELECT s.entity_id FROM _uef_scope s))
-    AND (
-      COALESCE(TRIM(ef."Description"), '') <>
-        COALESCE(TRIM(CASE WHEN ef."AutoUpdateDescription" THEN sq."Description" ELSE ef."Description" END), '')
-      -- Physical attributes are only compared for REAL columns. PG cannot
-      -- derive type facts for view-only (virtual) columns the way SQL Server
-      -- can (view columns are unbounded/nullable in pg_attribute), so virtual
-      -- fields keep their metadata values; the CodeGen TS pipeline's
-      -- getFixVirtualFieldNullabilitySQL step owns virtual-field nullability.
-      OR (sq."IsVirtual" = 0 AND (
-           (ef."Type" <> sq."Type" AND NOT (ef."Type" = 'numeric' AND sq."Type" = 'decimal'))
-        OR ef."Length" <> sq."Length"
-        OR ef."Precision" <> sq."Precision"
-        OR ef."Scale" <> sq."Scale"
-        OR ef."AllowsNull" <> sq."AllowsNull"
-      ))
-      OR __mj."fnNormalizeDefaultValue"(ef."DefaultValue") IS DISTINCT FROM __mj."fnNormalizeDefaultValue"(sq."DefaultValue")
-      OR ef."AutoIncrement" <> (sq."AutoIncrement" <> 0)
-      OR ef."IsVirtual" <> (sq."IsVirtual" <> 0)
-      OR ef."IsComputed" <> (sq."IsComputed" <> 0)
-      OR ef."Sequence" <> sq."Sequence"
-      OR COALESCE(ef."RelatedEntityID", '00000000-0000-0000-0000-000000000000'::uuid) <>
-         COALESCE(re."ID", '00000000-0000-0000-0000-000000000000'::uuid)
-      OR COALESCE(TRIM(ef."RelatedEntityFieldName"), '') <> COALESCE(TRIM(fk."referenced_column"::text), '')
-      OR ef."IsPrimaryKey" <> (pk."ColumnName" IS NOT NULL)
-      OR ef."IsUnique" <> (pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL)
-      -- AllowUpdateAPI needs clearing on a real->virtual transition
-      OR (ef."AllowUpdateAPI" = TRUE AND sq."IsVirtual" <> 0 AND ef."IsVirtual" = FALSE)
-    );
+  ) chg
+  -- Single source of truth for "this row changed": derived from the two flag columns computed
+  -- above (no duplicated predicate to drift). A material change OR a Sequence renumber makes the
+  -- row eligible for the UPDATE below; only is_material_change feeds the modified-entity RETURN.
+  WHERE chg.is_material_change OR chg.is_sequence_change;
 
   -- PG checks UNIQUE row-by-row (SQL Server checks at statement end), so an
   -- in-place renumber can transiently collide on UQ_EntityField_EntityID_Sequence.
@@ -336,8 +387,9 @@ BEGIN
     "Sequence"      = fr.new_sequence,
     "RelatedEntityID"        = CASE WHEN tgt."AutoUpdateRelatedEntityInfo" THEN fr.related_entity_id ELSE tgt."RelatedEntityID" END,
     "RelatedEntityFieldName" = CASE WHEN tgt."AutoUpdateRelatedEntityInfo" THEN fr.related_entity_field_name ELSE tgt."RelatedEntityFieldName" END,
-    "IsPrimaryKey"  = fr.new_is_primary_key,
-    "IsUnique"      = fr.new_is_unique,
+    -- U2 — soft-PK guard: never let the physical-schema sync wipe a soft PK's flags
+    "IsPrimaryKey"  = CASE WHEN tgt."IsSoftPrimaryKey" THEN tgt."IsPrimaryKey" ELSE fr.new_is_primary_key END,
+    "IsUnique"      = CASE WHEN tgt."IsSoftPrimaryKey" THEN tgt."IsUnique"     ELSE fr.new_is_unique     END,
     -- when a field transitions to virtual it can no longer be written to
     "AllowUpdateAPI" = CASE WHEN fr.new_is_virtual AND NOT tgt."IsVirtual" THEN FALSE ELSE tgt."AllowUpdateAPI" END,
     "__mj_UpdatedAt" = now()
@@ -353,7 +405,11 @@ BEGIN
     fr.new_is_virtual, fr.new_is_computed, fr.new_sequence::integer,
     fr.related_entity_id, fr.related_entity_field_name::text,
     fr.new_is_primary_key, fr.new_is_unique
-  FROM _uef_filtered fr;
+  FROM _uef_filtered fr
+  -- Only material changes flag the entity as modified (for regen). Sequence-only
+  -- renumbers were still applied by the UPDATE above but must not trigger a full
+  -- byte-identical view+sproc regeneration.
+  WHERE fr.is_material_change;
 
   DROP TABLE IF EXISTS _uef_filtered;
   DROP TABLE IF EXISTS _uef_scope;
@@ -432,12 +488,47 @@ LANGUAGE plpgsql AS $func$
 DECLARE
   v_is_scoped BOOLEAN := FALSE;
 BEGIN
+  -- [Large Schema Series] Force hash/merge joins for this reconciliation.
+  -- This SP runs in codegen Pass 2, immediately AFTER the SQL-generation phase
+  -- has created thousands of base views + CRUD functions. At that moment PG's
+  -- pg_catalog statistics are stale (autoanalyze hasn't caught up), so the
+  -- catalog-introspection view (vwSQLColumnsAndEntityFields → pg_class/pg_attribute)
+  -- is estimated at rows=1 and the planner picks a cascade of nested loops that
+  -- re-scan the freshly-ballooned catalog per row — measured at ~500s on a
+  -- 2,000-table schema, even though the same call runs in <1s once stats settle.
+  -- enable_nestloop=off sidesteps the stale-stats misestimate directly (the
+  -- correct strategy here is always hash/merge over these large introspection
+  -- scans). SET LOCAL scopes it to this call's transaction only. This does NOT
+  -- require ANALYZE privileges on pg_catalog (which a codegen role may lack on
+  -- managed PostgreSQL).
+  SET LOCAL enable_nestloop = off;
+
   DROP TABLE IF EXISTS _del_scope;
   CREATE TEMP TABLE _del_scope AS
     SELECT DISTINCT TRIM(v)::uuid AS entity_id
     FROM unnest(string_to_array(COALESCE(p_EntityIDs, ''), ',')) AS v
     WHERE TRIM(v) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   v_is_scoped := EXISTS (SELECT 1 FROM _del_scope);
+
+  -- External-data-source entities must be excluded from the field prune (they are remote; they have no
+  -- physical table/view, so the orphan join would match every external EntityField and delete it). But
+  -- EDS is not yet ported to PostgreSQL, so vwEntities has no "ExternalDataSourceID" column here, and a
+  -- static reference to it would abort this SP on every PG CodeGen run (the function creates fine but
+  -- throws "column does not exist" on execution). So we populate the exclusion set only when the column
+  -- exists (a safe no-op today; it auto-activates once the PG EDS migration adds Entity."ExternalDataSourceID").
+  -- The un-taken IF branch is not planned by PL/pgSQL, so the missing-column reference never errors.
+  -- NOTE (parity): the ENTITY-level prune (vwEntitiesWithMissingBaseTables + the ExternalDataSourceID
+  -- guard in manage-metadata) is likewise inert on PG until that same migration also recreates
+  -- vwEntitiesWithMissingBaseTables as SELECT e.* (mirroring SQL Server migration V202607031201).
+  DROP TABLE IF EXISTS _del_ext_entities;
+  CREATE TEMP TABLE _del_ext_entities (entity_id UUID);
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = '__mj' AND table_name = 'vwEntities' AND column_name = 'ExternalDataSourceID'
+  ) THEN
+    INSERT INTO _del_ext_entities
+      SELECT e."ID" FROM __mj."vwEntities" e WHERE e."ExternalDataSourceID" IS NOT NULL;
+  END IF;
 
   -- metadata-side fields for in-scope, non-virtual entities
   DROP TABLE IF EXISTS _del_ef;
@@ -448,8 +539,12 @@ BEGIN
   LEFT JOIN unnest(string_to_array(COALESCE(p_ExcludedSchemaNames, ''), ',')) AS ex(v)
     ON e."SchemaName"::text = TRIM(ex.v)
   WHERE e."VirtualEntity" = FALSE
+    AND ef."EntityID" NOT IN (SELECT entity_id FROM _del_ext_entities) -- exclude external-data-source entities (see note above)
     AND ex.v IS NULL
     AND (NOT v_is_scoped OR ef."EntityID" IN (SELECT s.entity_id FROM _del_scope s));
+  -- [Large Schema Series] ANALYZE so the planner has real cardinalities for the
+  -- orphan join below. Without stats it estimates rows=1 and nested-loops.
+  ANALYZE _del_ef;
 
   -- actual columns present in the database
   DROP TABLE IF EXISTS _del_actual;
@@ -457,6 +552,10 @@ BEGIN
   SELECT sq."EntityID" AS entity_id, sq."FieldName"::text AS field_name
   FROM __mj."vwSQLColumnsAndEntityFields" sq
   WHERE (NOT v_is_scoped OR sq."EntityID" IN (SELECT s.entity_id FROM _del_scope s));
+  -- [Large Schema Series] _del_actual is a single materialization of the heavy
+  -- function-based introspection view; ANALYZE it before the orphan join so the
+  -- LEFT JOIN below hash-joins instead of re-scanning the catalog per row.
+  ANALYZE _del_actual;
 
   -- orphans: metadata field with no matching DB column
   DROP TABLE IF EXISTS _del_deleted;

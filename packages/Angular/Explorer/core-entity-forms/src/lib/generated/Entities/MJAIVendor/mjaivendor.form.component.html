@@ -287,6 +287,56 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Scoped Prompt Configs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJScopedPromptConfigs"
+        SectionName="Scoped Prompt Configs"
+        Icon="fa fa-sliders-h"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJScopedPromptConfigs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scoped Prompt Configs','VendorID')"
+                [NewRecordValues]="NewRecordValues('MJ: Scoped Prompt Configs')"
+                [AllowLoad]="IsSectionExpanded('mJScopedPromptConfigs')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJScopedPromptConfigs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Harnesses Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentHarnesses"
+        SectionName="AI Agent Harnesses"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentHarnesses')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Harnesses','AIVendorID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Harnesses')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentHarnesses')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentHarnesses', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

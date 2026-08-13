@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT62 - Agent RAG and Search",
+    "Description": "RAG + search for agents: deterministic scoped SearchEngine fan-out/fusion (RS1), scope exclusion (RS2), cross-user no-leak (RS3), min-term guard (RS7); live agent scoped-search action (RS4) and pre-exec RAG injection (RS6). 7 checks RS1-RS7.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "RAG + search for agents: deterministic scoped SearchEngine fan-out/fusion (RS1), scope exclusion (RS2), cross-user no-leak (RS3), min-term guard (RS7); live agent scoped-search action (RS4) and pre-exec RAG injection (RS6). 7 checks RS1-RS7."
+    },
+    "Configuration": {
+      "tier": "live-model",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "agent-rag-search"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "71ABF251-86A7-49AD-AF18-BE7518CA5B15"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T01:12:44.527Z",
+    "checksum": "72ea2b0e4641b0c3bd081504574ee3dac7d12bd9e3d02dfb9dfd2a00d14a0e31"
+  }
+}

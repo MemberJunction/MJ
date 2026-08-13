@@ -1,7 +1,7 @@
 import { afterEach, beforeEach } from 'vitest';
 import { Metadata, RunView } from '@memberjunction/core';
 import type { IMetadataProvider, IRunViewProvider } from '@memberjunction/core';
-import { createFakeProvider, FakeProviderOptions } from './fake-provider';
+import { createFakeProvider, FakeProviderOptions } from './fake-provider.js';
 
 /**
  * Install a fake GLOBAL provider for DOM specs of data-bound components that load through the

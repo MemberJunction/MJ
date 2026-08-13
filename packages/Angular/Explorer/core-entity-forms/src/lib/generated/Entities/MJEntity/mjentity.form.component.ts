@@ -22,6 +22,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'aPISearchSettings', sectionName: 'API & Search Settings', isExpanded: true },
             { sectionKey: 'proceduresDeletion', sectionName: 'Procedures & Deletion', isExpanded: true },
             { sectionKey: 'rowStatistics', sectionName: 'Row Statistics', isExpanded: true },
+            { sectionKey: 'externalIntegration', sectionName: 'External Integration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJApplicationEntities', sectionName: 'Application Entities', isExpanded: false },
             { sectionKey: 'mJAuditLogs', sectionName: 'Audit Logs', isExpanded: false },
@@ -32,7 +33,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJDatasetItems', sectionName: 'Dataset Items', isExpanded: false },
             { sectionKey: 'mJDuplicateRuns', sectionName: 'Duplicate Runs', isExpanded: false },
             { sectionKey: 'mJEntities', sectionName: 'Entities', isExpanded: false },
-            { sectionKey: 'mJEntityActions', sectionName: 'Entity Actions', isExpanded: false },
+            { sectionKey: 'mJEntityActionsEntityID', sectionName: 'Entity Actions', isExpanded: false },
             { sectionKey: 'mJEntityAIActionsOutputEntityID', sectionName: 'AI Actions', isExpanded: false },
             { sectionKey: 'mJEntityCommunicationMessageTypes', sectionName: 'Entity Communication Message Types', isExpanded: false },
             { sectionKey: 'mJEntityDocuments', sectionName: 'Entity Documents', isExpanded: false },
@@ -64,7 +65,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJEntityAIActionsEntityID', sectionName: 'Entity AI Actions (Entity ID)', isExpanded: false },
             { sectionKey: 'mJEntityOrganicKeyRelatedEntities', sectionName: 'Entity Organic Key Related Entities', isExpanded: false },
             { sectionKey: 'mJEntityOrganicKeys', sectionName: 'Entity Organic Keys', isExpanded: false },
-            { sectionKey: 'mJEntityRelationshipsRelatedEntityID', sectionName: 'Entity Relationships (Related Entity ID)', isExpanded: false },
+            { sectionKey: 'mJEntityRelationshipsRelatedEntityID', sectionName: 'Entity Relationships (Related Entity)', isExpanded: false },
             { sectionKey: 'mJQueryEntities', sectionName: 'Query Entities', isExpanded: false },
             { sectionKey: 'mJRecordGeoCodes', sectionName: 'Record Geo Codes', isExpanded: false },
             { sectionKey: 'mJRecordLinksTargetEntityID', sectionName: 'Record Links (Target Entity ID)', isExpanded: false },
@@ -91,7 +92,11 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false },
             { sectionKey: 'mJMLTrainingPipelines', sectionName: 'ML Training Pipelines', isExpanded: false },
             { sectionKey: 'mJMLModelScoringBindings', sectionName: 'ML Model Scoring Bindings', isExpanded: false },
-            { sectionKey: 'mJScopedPromptParts', sectionName: 'Scoped Prompt Parts', isExpanded: false }
+            { sectionKey: 'mJAIAgentSessions', sectionName: 'AI Agent Sessions', isExpanded: false },
+            { sectionKey: 'mJScopedPromptParts', sectionName: 'Scoped Prompt Parts', isExpanded: false },
+            { sectionKey: 'mJScopedPromptConfigs', sectionName: 'Scoped Prompt Configs', isExpanded: false },
+            { sectionKey: 'mJActionExecutionLogs', sectionName: 'Action Execution Logs', isExpanded: false },
+            { sectionKey: 'mJEntityActionsScopeEntityID', sectionName: 'Entity Actions (Scope Entity ID)', isExpanded: false }
         ]);
     }
 }

@@ -1,18 +1,27 @@
 import {
   BaseCommunicationProvider,
+  BaseMessageResult,
   CreateDraftParams,
   CreateDraftResult,
+  CreateSubscriptionParams,
+  DeleteSubscriptionParams,
   ForwardMessageParams,
   ForwardMessageResult,
+  GetMessageMessage,
   GetMessagesParams,
   GetMessagesResult,
   MessageResult,
+  NormalizedNotification,
+  ParseNotificationResult,
   ProcessedMessage,
   ProviderCredentialsBase,
   ReplyToMessageParams,
   ReplyToMessageResult,
   resolveCredentialValue,
+  SubscriptionCapabilities,
+  SubscriptionResult,
   validateRequiredCredentials,
+  WebhookNotificationInput,
   ProviderOperation
 } from "@memberjunction/communication-types";
 import { RegisterClass, MJLruCache } from "@memberjunction/global";
@@ -81,8 +90,15 @@ export class TwilioProvider extends BaseCommunicationProvider {
       'SendSingleMessage',
       'GetMessages',
       'ForwardMessage',
-      'ReplyToMessage'
+      'ReplyToMessage',
+      // Push-notification subscriptions (inbound-parse mode). Twilio's "subscription" is
+      // pointing a phone number's inbound SMS webhook at the consumer's URL. Webhooks never
+      // expire, so RenewSubscription is intentionally NOT supported.
+      'CreateSubscription',
+      'DeleteSubscription',
+      'ParseNotification'
       // Note: CreateDraft is NOT supported - Twilio is real-time messaging only
+      // Note: RenewSubscription is NOT supported - Twilio webhooks never expire
       // Mailbox operations (folders, archive, attachments) are not applicable to SMS/messaging
     ];
   }
@@ -239,6 +255,19 @@ export class TwilioProvider extends BaseCommunicationProvider {
 
       // Optional media URLs if specified in context data
       const mediaUrls = message.ContextData?.mediaUrls as string[] || [];
+
+      // DRY RUN: full pipeline ran (credential resolution/validation, channel detection,
+      // from/to formatting, body + media assembly above) — stop at the transport boundary,
+      // never calling the Twilio API.
+      if (message.DryRun) {
+        LogStatus(`[DryRun] Twilio: ${channelType.toUpperCase()} payload constructed for ${to} — external send skipped`);
+        return {
+          Message: message,
+          Success: true,
+          Error: '',
+          DryRun: true
+        };
+      }
 
       // Send the message
       const result = await twilioClient.messages.create({
@@ -490,6 +519,234 @@ export class TwilioProvider extends BaseCommunicationProvider {
     return {
       Success: false,
       ErrorMessage: 'Twilio does not support creating draft messages. Drafts are only supported by email providers with mailbox access (Gmail, MS Graph).'
+    };
+  }
+
+  // ========================================================================
+  // PUSH-NOTIFICATION SUBSCRIPTIONS (inbound-parse mode)
+  //
+  // Twilio has no "subscription" resource. Instead, each phone number owned by the
+  // account carries an inbound-SMS webhook (`smsUrl`); Twilio POSTs an
+  // application/x-www-form-urlencoded body carrying the FULL inbound message to that URL
+  // whenever an SMS arrives. So a "subscription" here is simply pointing a number's
+  // `smsUrl` at the consumer's endpoint, and "deleting" it is clearing that URL. These
+  // registrations never expire — hence no RenewSubscription.
+  //
+  // AUTH NOTE: CreateSubscription/DeleteSubscription ride the account credentials (Account
+  // SID + Auth Token) and require the target phone number to belong to that account.
+  // ParseNotification verifies the inbound webhook's `X-Twilio-Signature` using the same
+  // account Auth Token (the "Messaging webhook signature" secret).
+  // ========================================================================
+
+  /**
+   * Detects whether a Twilio SDK error represents a not-found condition, treated as
+   * success by the idempotent {@link DeleteSubscription}. Twilio surfaces this as HTTP
+   * status 404 and/or Twilio error code 20404.
+   */
+  private isNotFoundError(error: unknown): boolean {
+    if (error && typeof error === 'object') {
+      const e = error as { status?: number; code?: number };
+      return e.status === 404 || e.code === 20404;
+    }
+    return false;
+  }
+
+  /**
+   * Resolves {@link CreateSubscriptionParams.Identifier} to a phone-number SID. An
+   * identifier beginning with `PN` is already a SID and is returned verbatim (no network
+   * call). Otherwise it is treated as an E.164 number and looked up via
+   * `incomingPhoneNumbers.list`, returning the first matching number's SID or `null` when
+   * the account owns no such number.
+   */
+  private async resolvePhoneNumberSid(client: Twilio, identifier: string): Promise<string | null> {
+    if (identifier.startsWith('PN')) {
+      return identifier;
+    }
+    const matches = await client.incomingPhoneNumbers.list({ phoneNumber: identifier, limit: 1 });
+    return matches.length > 0 ? matches[0].sid : null;
+  }
+
+  /**
+   * Points a phone number's inbound-SMS webhook (`smsUrl`) at the consumer's endpoint,
+   * making Twilio deliver inbound SMS notifications there. The number must belong to the
+   * authenticated account.
+   *
+   * Fail-fast: {@link CreateSubscriptionParams.NotificationUrl} must be https and
+   * {@link CreateSubscriptionParams.Identifier} (an E.164 number like `+15551234567` or a
+   * phone-number SID like `PN...`) must be provided.
+   *
+   * @param params - Identifier (target number/SID) and NotificationUrl (webhook target)
+   * @param credentials - Optional account credentials override for this request
+   * @returns Promise<SubscriptionResult> - SubscriptionID = the phone-number SID;
+   *          ExpiresAt is undefined because Twilio webhooks never expire
+   */
+  public override async CreateSubscription(
+    params: CreateSubscriptionParams,
+    credentials?: TwilioCredentials
+  ): Promise<SubscriptionResult> {
+    // Fail-fast input validation (before any Twilio call).
+    if (!params.Identifier) {
+      return { Success: false, ErrorMessage: 'CreateSubscription requires an Identifier (an E.164 phone number or a phone-number SID)' };
+    }
+    if (!params.NotificationUrl || !params.NotificationUrl.toLowerCase().startsWith('https://')) {
+      return { Success: false, ErrorMessage: 'NotificationUrl must be an https:// URL' };
+    }
+
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const client = this.getTwilioClient(creds);
+
+      const sid = await this.resolvePhoneNumberSid(client, params.Identifier);
+      if (!sid) {
+        return {
+          Success: false,
+          ErrorMessage: `No phone number matching '${params.Identifier}' found on this Twilio account`
+        };
+      }
+
+      const result = await client.incomingPhoneNumbers(sid).update({
+        smsUrl: params.NotificationUrl,
+        smsMethod: 'POST'
+      });
+
+      return {
+        Success: true,
+        SubscriptionID: sid,
+        ExpiresAt: undefined, // Twilio webhooks never expire
+        Result: result
+      };
+    } catch (error: unknown) {
+      LogError('Error creating subscription via Twilio', undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: `Error creating subscription: ${error instanceof Error ? error.message : String(error)}`
+      };
+    }
+  }
+
+  /**
+   * Clears a phone number's inbound-SMS webhook, so Twilio stops delivering inbound SMS
+   * notifications for it. Idempotent from the consumer's perspective: a not-found
+   * (HTTP 404 / Twilio code 20404) is treated as success.
+   *
+   * @param params - SubscriptionID = the phone-number SID returned by CreateSubscription
+   * @param credentials - Optional account credentials override for this request
+   * @returns Promise<BaseMessageResult> - Result of the delete operation
+   */
+  public override async DeleteSubscription(
+    params: DeleteSubscriptionParams,
+    credentials?: TwilioCredentials
+  ): Promise<BaseMessageResult> {
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const client = this.getTwilioClient(creds);
+      await client.incomingPhoneNumbers(params.SubscriptionID).update({ smsUrl: '' });
+      return { Success: true };
+    } catch (error: unknown) {
+      if (this.isNotFoundError(error)) {
+        // Already gone - deletion is idempotent from the consumer's perspective.
+        return { Success: true };
+      }
+      LogError('Error deleting subscription via Twilio', undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: `Error deleting subscription: ${error instanceof Error ? error.message : String(error)}`
+      };
+    }
+  }
+
+  /**
+   * Parses and verifies an inbound Twilio SMS webhook. Pure: no Twilio client, no network.
+   * Safe on hostile/garbage input — never throws; returns `Success: false` with a 400
+   * suggested status when the body cannot be parsed at all.
+   *
+   * Twilio posts `application/x-www-form-urlencoded`. The `X-Twilio-Signature` header is
+   * verified via the SDK's `validateRequest(authToken, signature, url, params)` using the
+   * account Auth Token (the "Messaging webhook signature" secret). The parsed notification
+   * is ALWAYS returned even when the signature is invalid — the flag is set so the consumer
+   * can decide — but an unparseable body is the 400 case.
+   *
+   * INLINE mode: the webhook carries the full message, so {@link NormalizedNotification.Message}
+   * is populated and consumers need not re-fetch. `MessageSid` is also surfaced in
+   * {@link NormalizedNotification.MessageIDs} as a still-useful pointer.
+   *
+   * @param input - Transport-neutral capture of the inbound webhook request
+   * @param credentials - Optional account credentials override (for signature verification)
+   * @returns Promise<ParseNotificationResult> - The normalized inbound message + signature outcome
+   */
+  public override async ParseNotification(
+    input: WebhookNotificationInput,
+    credentials?: TwilioCredentials
+  ): Promise<ParseNotificationResult> {
+    // Parse the urlencoded body. Never throw on bad input.
+    let params: Record<string, string>;
+    try {
+      if (!input?.RawBody) {
+        throw new Error('empty body');
+      }
+      params = Object.fromEntries(new URLSearchParams(input.RawBody));
+      if (Object.keys(params).length === 0) {
+        throw new Error('no parameters parsed from body');
+      }
+    } catch (error: unknown) {
+      return {
+        Success: false,
+        ErrorMessage: `Malformed Twilio notification body: ${error instanceof Error ? error.message : String(error)}`,
+        Notifications: [],
+        SuggestedResponseStatus: 400
+      };
+    }
+
+    // Verify the Twilio signature (pure crypto, no network). Resolve the account Auth Token
+    // for the HMAC secret; on missing/invalid credentials treat the signature as invalid
+    // rather than throwing — the notification is still returned for the consumer to judge.
+    let signatureValid = false;
+    try {
+      const creds = this.resolveCredentials(credentials);
+      const signatureHeader = input.Headers?.['x-twilio-signature'] ?? '';
+      const url = input.RequestUrl ?? '';
+      signatureValid = twilio.validateRequest(creds.authToken, signatureHeader, url, params);
+    } catch (error: unknown) {
+      LogError('Error verifying Twilio signature', undefined, error);
+      signatureValid = false;
+    }
+
+    const message: GetMessageMessage = {
+      From: params.From ?? '',
+      To: params.To ?? '',
+      Body: params.Body ?? ''
+    };
+
+    const notification: NormalizedNotification = {
+      Kind: 'message',
+      ChangeType: 'created',
+      MessageIDs: params.MessageSid ? [params.MessageSid] : [],
+      Identifier: params.To,
+      Message: message, // INLINE payload
+      RawData: params
+    };
+
+    return {
+      Success: true,
+      SignatureValid: signatureValid,
+      Notifications: [notification],
+      SuggestedResponseStatus: 200
+    };
+  }
+
+  /**
+   * Returns Twilio's subscription capabilities. Twilio is an INLINE-payload, inbound-parse
+   * provider: webhooks never expire (no renewal), only `created` notifications are
+   * delivered, no endpoint-validation handshake is performed, management is supported
+   * (pointing/clearing a number's `smsUrl`), and the full message is delivered inline.
+   */
+  public override GetSubscriptionCapabilities(): SubscriptionCapabilities {
+    return {
+      MaxLifetimeMinutes: undefined, // Twilio webhooks never expire
+      SupportedChangeTypes: ['created'],
+      RequiresEndpointValidation: false,
+      SupportsSubscriptionManagement: true,
+      DeliversPayloadInline: true
     };
   }
 }

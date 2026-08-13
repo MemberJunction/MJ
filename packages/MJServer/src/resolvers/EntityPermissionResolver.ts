@@ -2,9 +2,8 @@ import { Arg, Ctx, Field, ObjectType, Query, Resolver } from 'type-graphql';
 import { LogError } from '@memberjunction/core';
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadOnlyProvider } from '../util.js';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 @ObjectType()
 class EntityPermissionResult {
@@ -30,7 +29,6 @@ class CheckEntityPermissionsResult {
 @Resolver()
 export class EntityPermissionResolver extends ResolverBase {
 
-    @RequireSystemUser()
     @Query(() => CheckEntityPermissionsResult)
     async CheckEntityPermissionsSystemUser(
         @Arg('EntityNames', () => [String]) entityNames: string[],
@@ -38,6 +36,7 @@ export class EntityPermissionResolver extends ResolverBase {
         @Ctx() context: AppContext
     ): Promise<CheckEntityPermissionsResult> {
         try {
+            await this.CheckAPIKeyScopeAuthorization('view:run', '*', context.userPayload);
             const user = UserCache.Instance.Users.find(
                 u => u.Email.toLowerCase().trim() === userEmail.toLowerCase().trim()
             );

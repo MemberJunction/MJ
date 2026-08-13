@@ -19,7 +19,7 @@ import { RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, Aggregat
 import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
-import { buildPkString, computeFieldsList } from '../utils/record.util';
+import { buildPkString, canonicalizeColumnFields, computeFieldsList } from '../utils/record.util';
 import {
   MJUserViewEntityExtended,
   ViewInfo,
@@ -150,6 +150,26 @@ ModuleRegistry.registerModules([AllCommunityModule]);
  * </mj-entity-data-grid>
  * ```
  */
+
+/**
+ * Floor for a column declared `width: 'auto'` (see `mapColumnConfigToColDef`). A flex column with no
+ * `minWidth` collapses toward zero once its fixed siblings claim the row, so the "fill the slack"
+ * column would paradoxically become the narrowest one on a crowded grid. 160px is roughly the width
+ * at which a text cell still reads as a sentence rather than a fragment. Overridable per column via
+ * `GridColumnConfig.minWidth`.
+ */
+const AUTO_WIDTH_COLUMN_MIN_PX = 160;
+
+/** Column id of the inert width-filler appended when `FillWidth` is on. See `buildFillerColumnDef`. */
+const FILLER_COLUMN_ID = '__mjFill';
+
+/**
+ * Flex weight given to a `width: 'auto'` column so it outranks the filler when leftover row width is
+ * shared out. Any value that dwarfs the filler's weight of 1 works; the effect is "this column takes
+ * what it needs (up to its maxWidth) and the filler takes the remainder", rather than a 50/50 split.
+ */
+const AUTO_WIDTH_FLEX_WEIGHT = 1000;
+
 @Component({
   standalone: false,
   selector: 'mj-entity-data-grid',
@@ -290,6 +310,21 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   @Input() ShowPager: boolean = false;
 
   /**
+   * Optional provider that returns the FULL result set for export. Because the grid is server-side
+   * paged, `Data`/`rowData` only hold the current page (default 100 rows), so exporting them would
+   * silently cap the export at the page size (bug C1). The host (entity-viewer) supplies this callback
+   * to fetch every matching row (honoring the active filter/sort) on demand; the grid awaits it when
+   * the user opens the export dialog. When not provided, export falls back to the loaded page.
+   */
+  @Input() ExportDataProvider: (() => Promise<Record<string, unknown>[]>) | null = null;
+
+  /** True while an export is fetching the full result set via ExportDataProvider. */
+  public IsPreparingExport: boolean = false;
+
+  /** True while "Add to List" (with no explicit selection) is fetching the full result set. */
+  public IsPreparingAddToList: boolean = false;
+
+  /**
    * Whether to render the Recycle Bin chip in the toolbar. The chip
    * auto-hides itself when the entity has no deleted records, doesn't
    * track changes, or the user lacks Delete permission — so it stays
@@ -375,12 +410,44 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   // ========================================
 
   private _columns: GridColumnConfig[] = [];
+
+  /**
+   * True when `_columns` holds a list the HOST supplied via `[Columns]`, as opposed to one derived
+   * from a saved view or generated from entity metadata. Both origins share `_columns`, and a
+   * host-supplied list is an explicit instruction that must outlive view/params churn — whereas a
+   * derived one is disposable and should be rebuilt when the view changes.
+   */
+  private _columnsFromHost: boolean = false;
+
+  /**
+   * True when `_gridState` was adopted from this user's saved entity-browser default rather than
+   * supplied by the host. Such a state is a convenience, not an instruction, so an explicit
+   * `[Columns]` may discard it; a host-passed `[GridState]` never is.
+   */
+  private _gridStateFromUserDefault: boolean = false;
   /**
    * Column definitions - if not provided, auto-generates from entity metadata
    */
   @Input()
   set Columns(value: GridColumnConfig[]) {
     this._columns = value || [];
+    // Remember that THIS list came from the host, not from metadata/a saved view. `_columns` is
+    // shared by both origins, and code that resets it needs to tell them apart — see the reset in
+    // the dynamic-view branch of the params handler.
+    this._columnsFromHost = this._columns.length > 0;
+    // Angular assigns inputs in template order, and `[Params]` is conventionally bound before
+    // `[Columns]`. That means the params handler may already have adopted this user's saved
+    // entity-browser default into `_gridState` while `_columnsFromHost` was still false — and
+    // `buildAgColumnDefs()` prefers `_gridState`, so the host's list would lose despite the guard
+    // there. An explicit `[Columns]` arriving at ANY point supersedes a merely-inherited default,
+    // so drop it. A `_gridState` the host passed deliberately via `[GridState]` is left alone.
+    if (this._columnsFromHost && this._gridStateFromUserDefault) {
+      this._gridState = null;
+      this._gridStateFromUserDefault = false;
+    }
+    // Put the host's field names into the entity's spelling before anything derives from them.
+    // No-op when `[Params]` has not resolved the entity yet — the params handler repeats it.
+    this.canonicalizeHostColumns();
     if (this._columns.length > 0) {
       this.initializeColumnStates();
       this.buildAgColumnDefs();
@@ -627,6 +694,28 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return this._showRowNumbers;
   }
 
+  /**
+   * Append an inert trailing column that soaks up leftover row width, so the row backgrounds, banding
+   * and horizontal rules reach the container's right edge rather than stopping wherever the last real
+   * column happens to end (which reads as a half-drawn table inside its own card).
+   *
+   * Off by default: it is purely cosmetic, it changes the look of EVERY grid it is enabled on, and
+   * existing layouts were built against the current behaviour. Opt in per grid; flipping the default
+   * is a product-wide styling decision, not a per-page one.
+   *
+   * Composes with `width: 'auto'`: give the text column `width: 'auto'` plus a `maxWidth` so it grows
+   * only as far as its content warrants, and the filler takes whatever is left over.
+   */
+  private _fillWidth: boolean = false;
+  @Input()
+  set FillWidth(value: boolean) {
+    this._fillWidth = value;
+    this.buildAgColumnDefs();
+  }
+  get FillWidth(): boolean {
+    return this._fillWidth;
+  }
+
   private _striped: boolean = true;
   @Input()
   set Striped(value: boolean) {
@@ -799,7 +888,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
   private _showExportButton: boolean = true;
   /**
-   * Show the "Export to Excel" button in toolbar
+   * Show the "Export" button in toolbar (opens the export dialog — Excel/CSV/JSON)
    */
   @Input()
   set ShowExportButton(value: boolean) {
@@ -1665,14 +1754,30 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         const md = this.ProviderToUse;
         this._entityInfo = md.Entities.find(e => e.Name === this._params!.EntityName) || null;
 
-        // Reset columns to force regeneration from metadata when switching to dynamic view
-        // This ensures we don't carry over column config from a previous saved view
-        this._columns = [];
+        // Reset columns to force regeneration from metadata when switching to dynamic view.
+        // This ensures we don't carry over column config from a previous saved view.
+        //
+        // ...but ONLY when those columns were themselves derived from a view or from metadata. A
+        // list the HOST passed via `[Columns]` must survive: `Params` is re-assigned on every filter
+        // change, so wiping unconditionally meant a page's declared columns were destroyed the first
+        // time the user touched a filter — the grid silently reverted to metadata-generated columns
+        // (entity display names, estimated widths, `width: 'auto'` lost). It presents as "my column
+        // config works on load and then randomly stops", which is near-impossible to trace back here.
+        if (!this._columnsFromHost) {
+          this._columns = [];
+        }
 
         // For dynamic views, try to load user's saved defaults
         if (this._entityInfo && this._autoPersistState) {
           this.loadUserDefaultGridState(this._entityInfo.Name);
         }
+      }
+
+      // The entity is only known now, and `[Columns]` is commonly bound BEFORE `[Params]` — so this
+      // is the first point at which a host's field names can be checked against real metadata.
+      // Idempotent, so the repeat on every params change costs nothing.
+      if (this.canonicalizeHostColumns()) {
+        this.initializeColumnStates();
       }
 
       // Generate columns if not already set
@@ -1791,8 +1896,20 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       if (savedState) {
         const gridState = JSON.parse(savedState) as ViewGridState;
 
-        // Only apply if not already set via props (props take precedence)
-        if (!this._gridState && gridState.columnSettings?.length) {
+        // Only apply if not already set via props (props take precedence).
+        //
+        // `Columns` is one of those props. It used to be missed here, and the effect was severe but
+        // silent: this default is saved per USER per ENTITY from the generic entity browser, so the
+        // moment anyone tweaked columns while browsing an entity there, EVERY bespoke page grid over
+        // that same entity silently adopted those columns — overriding the page author's explicit
+        // `[Columns]` titles, widths and order, for that user only. Symptoms look like anything but
+        // the cause: a page's declared column titles never appear, widths edited in code have no
+        // effect, and it reproduces for one user and not another.
+        //
+        // A page that hands the grid an explicit column list has stated exactly what it wants; a
+        // user's entity-browser preference is not an instruction about that page. An explicitly
+        // passed `[GridState]` still wins, as it always did — that is a deliberate act by the host.
+        if (!this._gridState && !this._columnsFromHost && gridState.columnSettings?.length) {
           // Validate column settings against the current entity's fields to prevent
           // stale columns from a previously viewed entity leaking into the query.
           // This can happen when user defaults were saved for a different view of
@@ -1809,6 +1926,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
               sortSettings: gridState.sortSettings || [],
               aggregates: gridState.aggregates
             };
+            this._gridStateFromUserDefault = true;
           }
         }
 
@@ -2288,6 +2406,106 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         valueGetter: (params) => params.node ? params.node.rowIndex! + 1 : ''
       });
     }
+
+    if (this._fillWidth && this.agColumnDefs.length > 0) {
+      this.agColumnDefs.push(this.buildFillerColumnDef());
+    }
+  }
+
+  /**
+   * An inert trailing column whose only job is to soak up leftover row width so the row backgrounds,
+   * banding and horizontal rules reach the container's edge instead of stopping mid-card.
+   *
+   * Why a filler rather than stretching a real column: a real column that grows to absorb slack is
+   * either a short/numeric one — whose value then sits marooned in a sea of empty cell (or, if
+   * right-aligned, drifts far from its neighbours) — or a text column blown out well past the width
+   * its content needs, which reads as one enormous mostly-empty column. Neither is what "the table
+   * should reach the edge" means. Growing something DELIBERATELY empty moves nothing and stretches
+   * nothing: every real column keeps the width it earned.
+   *
+   * It is styled to disappear as a column (no header text, no left rule, no sort/menu/resize/move
+   * affordances) so it reads as table background, not as an empty field the user should wonder about.
+   */
+  /**
+   * Make a column absorb leftover row width, but only up to the ceiling the page gave it.
+   *
+   * The weighting is the point. Both this column and the filler are flex, and AG Grid splits leftover
+   * space between flex columns in proportion to their weights — so an even 1:1 split would hand this
+   * column only half the slack no matter how much it needed (that was a real bug: a memo column and
+   * the filler each took ~160px of a 320px remainder). A dominant weight makes the real column the
+   * FIRST claimant: it grows until it hits its own `maxWidth`, and only what it cannot use overflows
+   * to the filler. AG Grid enforces `maxWidth` on flex columns, which is what makes the hand-off work.
+   *
+   * `maxWidth` is therefore load-bearing, not decoration — it is what stops "fill the row" from
+   * becoming "one enormous mostly-empty column". It matters most for a RIGHT-ALIGNED column, where an
+   * over-wide column pushes its values away from the columns they are read against; cap such a column
+   * near its widest value and the drift cannot happen. A `width: 'auto'` column with no `maxWidth`
+   * takes all remaining width, which is only the right call for a genuinely long free-text column.
+   */
+  private registerAutoWidthColumn(colDef: ColDef): void {
+    colDef.colId ??= colDef.field;
+    colDef.flex = AUTO_WIDTH_FLEX_WEIGHT;
+  }
+
+  /**
+   * Field names from a host-supplied `[Columns]`, so the query fetches what the host chose to show.
+   * Empty when the columns were generated from metadata or a view — those origins are already
+   * reflected in the grid state / DefaultInView that `computeFieldsList` consults.
+   *
+   * Includes columns declared `visible: false`. Hiding a column is a DISPLAY decision, not a
+   * statement that the data isn't wanted: this grid deliberately keeps hidden columns in its column
+   * model as col defs with `hide: true` rather than omitting them (see `buildAgColumnDefsFromGridState`),
+   * precisely so a saved `[GridState]` that marks one visible can bring it back. A column that
+   * reappears with no data behind it renders every cell empty, which reads as a data bug rather
+   * than a missing SELECT. The cost of the alternative is one column in the query that the host
+   * itself asked for by name.
+   */
+  private hostColumnFieldNames(): string[] {
+    if (!this._columnsFromHost) return [];
+    return this._columns.map(c => c.field);
+  }
+
+  /**
+   * Put host-supplied `[Columns]` into the entity's own field spelling — see
+   * {@link canonicalizeColumnFields} for why the spelling is load-bearing rather than cosmetic.
+   * Returns true when something actually changed, so the caller can rebuild derived state.
+   *
+   * Deliberately the ONLY place this normalisation happens. Everything downstream — the colDef's
+   * `field` and hence its `colId`, `_columnStates`, captured grid state, sort settings, the export
+   * column list, the fetched field list — reads `_columns`, so fixing it here keeps all of them
+   * speaking one vocabulary instead of each needing its own case-insensitive comparison.
+   */
+  private canonicalizeHostColumns(): boolean {
+    if (!this._columnsFromHost || !this._entityInfo || this._columns.length === 0) {
+      return false;
+    }
+    const next = canonicalizeColumnFields(this._entityInfo, this._columns);
+    const changed = next.some((col, i) => col !== this._columns[i]);
+    if (changed) {
+      this._columns = next;
+    }
+    return changed;
+  }
+
+  private buildFillerColumnDef(): ColDef {
+    return {
+      colId: FILLER_COLUMN_ID,
+      headerName: '',
+      flex: 1,
+      // No floor: this column is the one thing that SHOULD yield when real columns need the room —
+      // it shrinks to nothing and the grid falls back to horizontal scrolling, exactly as before.
+      minWidth: 0,
+      sortable: false,
+      resizable: false,
+      suppressMovable: true,
+      // Never let a filler participate in anything a real column does.
+      suppressHeaderMenuButton: true,
+      suppressColumnsToolPanel: true,
+      lockPosition: 'right',
+      valueGetter: () => '',
+      headerClass: 'mj-grid-filler-header',
+      cellClass: 'mj-grid-filler-cell'
+    };
   }
 
   private buildAgColumnDefsFromGridState(columnSettings: ViewGridColumnSetting[]): ColDef[] {
@@ -2300,22 +2518,44 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     const cols: ColDef[] = [];
 
     for (const colConfig of sortedColumns) {
-      if (colConfig.hidden) continue;
-
       const field = this._entityInfo.Fields.find(f =>
         f.Name.toLowerCase() === colConfig.Name.toLowerCase()
       );
 
       if (!field) continue;
 
+      // A saved grid state carries pixel widths only, so restoring one would otherwise drop the
+      // `width: 'auto'` fill declared by the host page — the dead-space-on-the-right bug would come
+      // back the moment a user resized any column and the state was persisted. Treat 'auto' as a
+      // LAYOUT decision owned by the page author, not a user preference the saved state overrides:
+      // everything else (order, visibility, the other columns' widths) still comes from the state.
+      const declared = this._columns.find(c => c.field.toLowerCase() === colConfig.Name.toLowerCase());
+      const isAutoWidth = declared?.width === 'auto';
+
       const colDef: ColDef = {
         field: field.Name,
         // Use userDisplayName if set, otherwise fall back to DisplayName or field name
         headerName: colConfig.userDisplayName || colConfig.DisplayName || field.DisplayNameOrName,
-        width: colConfig.width || this.estimateColumnWidth(field),
+        width: isAutoWidth ? undefined : (colConfig.width || this.estimateColumnWidth(field)),
+        // The declared min/max travel with the 'auto' decision. Dropping them here was a real bug:
+        // the saved state has no notion of either, so the column lost its ceiling and its floor and
+        // sized itself off whatever space happened to be left.
+        minWidth: isAutoWidth ? (declared?.minWidth ?? AUTO_WIDTH_COLUMN_MIN_PX) : undefined,
+        maxWidth: isAutoWidth ? declared?.maxWidth : undefined,
         sortable: this._allowSorting,
-        resizable: this._allowColumnResize
+        resizable: this._allowColumnResize,
+        // Hidden columns are still added as col defs with hide:true rather than omitted
+        // entirely (bug C2). A column omitted from the col defs is invisible to AG Grid's
+        // quick filter, so search couldn't match values in columns the user had hidden.
+        // Adding it with hide:true keeps it out of the visible layout and CSV export while
+        // making its values quick-filterable. (Server-side filtered grids additionally need
+        // the field flagged IncludeInUserSearchAPI for the server to return matching rows.)
+        hide: colConfig.hidden === true
       };
+
+      if (isAutoWidth) {
+        this.registerAutoWidthColumn(colDef);
+      }
 
       // Add type-specific formatters with optional custom format
       this.applyFieldFormatter(colDef, field, colConfig.format);
@@ -2327,17 +2567,36 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
 
   private mapColumnConfigToColDef(col: GridColumnConfig): ColDef {
+    // `width: 'auto'` means "this column absorbs the leftover row width". It is part of the public
+    // GridColumnConfig contract (`width?: number | 'auto'`) but was previously mapped to `undefined`,
+    // so it silently did nothing and AG Grid fell back to its default width.
+    //
+    // Why it matters, and why this is the RIGHT place to fix it: `autoSizeColumnsSmartly()` below
+    // deliberately declines to stretch when the pane is much wider than the columns (its `maxRatio`
+    // guard), so a narrow `Status` column is never blown up to 400px on a wide monitor. That guard is
+    // correct — but combined with `estimateColumnWidth()`'s hard 350px cap it meant a grid with a few
+    // columns on a wide screen could NEVER fill, leaving permanent dead space to the right while a
+    // text column truncated. `'auto'` is the per-column escape hatch for exactly that case: fixed
+    // columns keep their pixel widths (what the guard protects) and only the column the page author
+    // designated grows. AG Grid's `flex` is the native mechanism, so map straight onto it.
+    const isAutoWidth = col.width === 'auto';
     const colDef: ColDef = {
       field: col.field,
       headerName: col.title || col.field,
       width: typeof col.width === 'number' ? col.width : undefined,
-      minWidth: col.minWidth,
+      // An auto-width column still needs a floor, or a column whose visible rows are all empty
+      // measures to nothing and the header ends up unreadable.
+      minWidth: col.minWidth ?? (isAutoWidth ? AUTO_WIDTH_COLUMN_MIN_PX : undefined),
       maxWidth: col.maxWidth,
       sortable: col.sortable !== false && this._allowSorting,
       filter: false,
       resizable: col.resizable !== false && this._allowColumnResize,
       hide: col.visible === false
     };
+
+    if (isAutoWidth) {
+      this.registerAutoWidthColumn(colDef);
+    }
 
     // Apply field formatter for highlighting and type-specific formatting
     // if we have entity metadata for this field
@@ -2643,7 +2902,15 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         // Regular number formatting
         else if (fieldType === 'number') {
           const num = Number(params.value);
-          displayValue = isNaN(num) ? String(params.value) : num.toLocaleString();
+          if (isNaN(num)) {
+            displayValue = String(params.value);
+          } else if (field.IsPrimaryKey) {
+            // Primary-key integers are identifiers, not quantities — never group them with
+            // thousands separators (an ID of 12345 must render as "12345", not "12,345").
+            displayValue = String(params.value);
+          } else {
+            displayValue = num.toLocaleString();
+          }
         }
         // Email formatting
         else if (isEmail && vc.clickableEmails) {
@@ -3019,7 +3286,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       const result = await rv.RunView<Record<string, unknown>>({
         ...runViewParams,
         ResultType: 'simple',
-        Fields: this._entityInfo ? computeFieldsList(this._entityInfo, this._gridState) : undefined,
+        Fields: this._entityInfo ? computeFieldsList(this._entityInfo, this._gridState, this.hostColumnFieldNames()) : undefined,
         Aggregates: aggregateExpressions
       });
 
@@ -3153,7 +3420,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
           const result = await rv.RunView<Record<string, unknown>>({
             ...runViewParams,
             ResultType: 'simple',
-            Fields: this._entityInfo ? computeFieldsList(this._entityInfo, this._gridState) : undefined
+            Fields: this._entityInfo ? computeFieldsList(this._entityInfo, this._gridState, this.hostColumnFieldNames()) : undefined
           });
 
           if (result.Success) {
@@ -3357,6 +3624,11 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
   onGridReady(event: GridReadyEvent): void {
     this.gridApi = event.api;
+    // Let the quick filter (search box) match values in HIDDEN columns too (bug C2). AG Grid
+    // defaults `includeHiddenColumnsInQuickFilter` to false, so without this a search term that
+    // only exists in a column the user has hidden would match nothing — even though we now add
+    // hidden columns to the col defs with hide:true precisely so they remain searchable.
+    this.gridApi.setGridOption('includeHiddenColumnsInQuickFilter', true);
     this.updateSelection();
 
     if (this._sortState.length > 0) {
@@ -3378,6 +3650,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
    * while ensuring the grid fills available space appropriately
    */
   private autoSizeColumnsSmartly(api: GridApi): void {
+    // With a filler present, leftover width already has a home and it is deliberately an empty one.
+    // The proportional stretch below would fight that: sizeColumnsToFit() assigns explicit widths to
+    // every column, which clears the filler's flex and re-introduces the stretching of real columns
+    // that the filler exists to avoid.
+    if (this.agColumnDefs.some(col => col.flex)) return;
+
     // Get total estimated width from our column definitions
     const totalEstimatedWidth = this.agColumnDefs.reduce((sum, col) => sum + (col.width || 150), 0);
 
@@ -3819,7 +4097,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       const col = columnState[i];
       if (col.colId === '__rowNumber') continue; // Skip row number column
 
-      const field = this._entityInfo.Fields.find(f => f.Name === col.colId);
+      // Case-insensitive: `colId` originates from a colDef's `field`, which for host-supplied
+      // columns is whatever the page wrote. `canonicalizeHostColumns()` normally settles that
+      // before we get here, but an exact-case miss silently DROPS the column from the captured
+      // state — and that state is what the grid is rebuilt from, so the column would disappear
+      // entirely the first time a user resized anything. Too quiet a failure to leave to one guard.
+      const field = this._entityInfo.Fields.find(f => f.Name.toLowerCase() === col.colId?.toLowerCase());
 
       if (field) {
         const keyLower = field.Name.toLowerCase();
@@ -4112,14 +4395,22 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     this.ExportRequested.emit();
     this.ExportButtonClick.emit();
     // Show the export dialog
-    this.showExportDialogForCurrentData();
+    void this.showExportDialogForCurrentData();
   }
 
   /**
-   * Shows the export dialog for the current grid data
+   * Shows the export dialog for the full result set (falling back to the loaded page when no
+   * ExportDataProvider is supplied).
    */
-  private showExportDialogForCurrentData(): void {
-    const data = this.getExportData();
+  private async showExportDialogForCurrentData(): Promise<void> {
+    this.IsPreparingExport = true;
+    this.cdr.detectChanges();
+    let data: ExportData;
+    try {
+      data = await this.resolveExportData();
+    } finally {
+      this.IsPreparingExport = false;
+    }
     const columns = this.getExportColumns();
     const fileName = this.getDefaultExportFileName();
 
@@ -4154,7 +4445,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
    * @returns Export result with data buffer and metadata
    */
   async Export(options?: Partial<ExportOptions>, download: boolean = true): Promise<ExportResult> {
-    const data = this.getExportData();
+    const data = await this.resolveExportData();
     const columns = this.getExportColumns();
     const fileName = options?.fileName || this.getDefaultExportFileName();
 
@@ -4200,9 +4491,27 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
 
   /**
-   * Get the current grid data formatted for export
+   * Resolves the rows to export. An explicit row selection always wins — export exactly the rows the
+   * user picked (matches the Query viewer's behavior). With NO selection, the FULL result set is
+   * fetched via the host's ExportDataProvider so export isn't silently capped at the current page
+   * (bug C1). So: "export these" = select rows first; "export everything" = export with nothing
+   * selected. If no provider is supplied or the fetch yields nothing, falls back to the loaded page.
    */
-  private getExportData(): ExportData {
+  private async resolveExportData(): Promise<ExportData> {
+    const selected = this.GetSelectedRows();
+    if (selected.length > 0) {
+      return selected.map(row => row as Record<string, unknown>);
+    }
+    if (this.ExportDataProvider) {
+      try {
+        const allRows = await this.ExportDataProvider();
+        if (allRows && allRows.length > 0) {
+          return allRows.map(row => row as Record<string, unknown>);
+        }
+      } catch {
+        // Fall through to the loaded page on any fetch failure.
+      }
+    }
     // rowData is already plain Record<string, unknown>[] objects - return directly
     return this.rowData.map(row => row as Record<string, unknown>);
   }
@@ -4225,9 +4534,14 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return this._columns
       .filter(col => col.visible !== false)
       .map(col => {
-        const field = this._entityInfo?.Fields.find(f => f.Name === col.field);
+        // Case-insensitive, matching how col defs and auto-width resolve a host's field name.
+        // An exact-case match here silently cost the export column its data type.
+        const field = this._entityInfo?.Fields.find(f => f.Name.toLowerCase() === col.field.toLowerCase());
         return {
-          name: col.field,
+          // The entity's spelling, because `name` is the KEY the export engine reads each row by
+          // (`row[col.name]`) and rows are keyed from entity metadata. The host's spelling here
+          // exported a correctly-headed column of blank cells.
+          name: field?.Name ?? col.field,
           displayName: col.title || field?.DisplayName || col.field,
           dataType: this.mapFieldTypeToExportType(field?.Type),
           width: typeof col.width === 'number' ? col.width : undefined
@@ -4303,20 +4617,38 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     }
   }
 
-  onAddToListClick(): void {
-    const selectedRows = this.GetSelectedRows();
-    if (selectedRows.length > 0) {
+  async onAddToListClick(): Promise<void> {
+    let rows = this.GetSelectedRows();
+
+    // No explicit selection → add EVERY matching record, not just the loaded page. Without this,
+    // building a list from a sizeable view meant selecting-all page by page (bug E3). We fetch the
+    // full result set via the host-supplied provider; the downstream list dialog still requires the
+    // user to pick a target list and confirm, so nothing is committed implicitly.
+    if (rows.length === 0 && this.ExportDataProvider) {
+      this.IsPreparingAddToList = true;
+      this.cdr.detectChanges();
+      try {
+        rows = await this.ExportDataProvider();
+      } catch {
+        rows = [];
+      } finally {
+        this.IsPreparingAddToList = false;
+        this.cdr.detectChanges();
+      }
+    }
+
+    if (rows.length > 0) {
       // Emit legacy event for backward compatibility
-      this.AddToListButtonClick.emit(selectedRows);
+      this.AddToListButtonClick.emit(rows);
 
       // Emit new structured event with record IDs for list management
       if (this._entityInfo) {
-        const recordIds = selectedRows.map(r => {
+        const recordIds = rows.map(r => {
           return buildPkString(r, this._entityInfo!);
         });
         this.AddToListRequested.emit({
           entityInfo: this._entityInfo,
-          records: selectedRows,
+          records: rows,
           recordIds
         });
       }

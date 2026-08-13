@@ -1,5 +1,361 @@
 # @memberjunction/ng-explorer-app
 
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [2792d97]
+- Updated dependencies [255d506]
+- Updated dependencies [59def38]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [9fc0e2d]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [9a29da4]
+- Updated dependencies [0967ba7]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [768980d]
+- Updated dependencies [1c0d586]
+  - @memberjunction/ng-conversations@6.1.0-edge.2
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/ai-core-plus@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/ng-explorer-core@6.1.0-edge.2
+  - @memberjunction/ng-bootstrap@6.1.0-edge.2
+  - @memberjunction/ng-base-application@6.1.0-edge.2
+  - @memberjunction/ng-shared@6.1.0-edge.2
+  - @memberjunction/ng-workspace-initializer@6.1.0-edge.2
+  - @memberjunction/ng-base-types@6.1.0-edge.2
+  - @memberjunction/ng-notifications@6.1.0-edge.2
+  - @memberjunction/ai-agent-client@6.1.0-edge.2
+  - @memberjunction/ng-auth-services@6.1.0-edge.2
+  - @memberjunction/ng-agent-client@6.1.0-edge.2
+  - @memberjunction/ng-feedback@6.1.0-edge.2
+  - @memberjunction/ng-explorer-service-worker@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ng-agent-client@6.1.0-edge.1
+  - @memberjunction/ng-auth-services@6.1.0-edge.1
+  - @memberjunction/ng-base-application@6.1.0-edge.1
+  - @memberjunction/ng-base-types@6.1.0-edge.1
+  - @memberjunction/ng-conversations@6.1.0-edge.1
+  - @memberjunction/ng-explorer-core@6.1.0-edge.1
+  - @memberjunction/ng-explorer-service-worker@6.1.0-edge.1
+  - @memberjunction/ng-feedback@6.1.0-edge.1
+  - @memberjunction/ng-notifications@6.1.0-edge.1
+  - @memberjunction/ng-shared@6.1.0-edge.1
+  - @memberjunction/ng-workspace-initializer@6.1.0-edge.1
+  - @memberjunction/ai-core-plus@6.1.0-edge.1
+  - @memberjunction/ng-bootstrap@6.1.0-edge.1
+  - @memberjunction/ai-agent-client@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [b895f92]
+- Updated dependencies [b895f92]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [ea003fc]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [d26e202]
+- Updated dependencies [27e4d09]
+- Updated dependencies [8d0d45a]
+  - @memberjunction/ng-conversations@6.1.0-edge.0
+  - @memberjunction/ng-bootstrap@6.1.0-edge.0
+  - @memberjunction/ng-explorer-core@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/ng-shared@6.1.0-edge.0
+  - @memberjunction/ng-base-application@6.1.0-edge.0
+  - @memberjunction/ng-auth-services@6.1.0-edge.0
+  - @memberjunction/ng-feedback@6.1.0-edge.0
+  - @memberjunction/ng-workspace-initializer@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/ng-base-types@6.1.0-edge.0
+  - @memberjunction/ng-notifications@6.1.0-edge.0
+  - @memberjunction/ai-agent-client@6.1.0-edge.0
+  - @memberjunction/ng-agent-client@6.1.0-edge.0
+  - @memberjunction/ng-explorer-service-worker@6.1.0-edge.0
+
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-agent-client@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/ng-bootstrap@6.0.0
+  - @memberjunction/ng-auth-services@6.0.0
+  - @memberjunction/ng-base-application@6.0.0
+  - @memberjunction/ng-explorer-core@6.0.0
+  - @memberjunction/ng-shared@6.0.0
+  - @memberjunction/ng-workspace-initializer@6.0.0
+  - @memberjunction/ng-base-types@6.0.0
+  - @memberjunction/ng-conversations@6.0.0
+  - @memberjunction/ng-feedback@6.0.0
+  - @memberjunction/ng-notifications@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/ng-agent-client@6.0.0
+  - @memberjunction/ng-explorer-service-worker@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [1e048ef]
+- Updated dependencies [a8fc549]
+  - @memberjunction/ng-bootstrap@5.51.0
+  - @memberjunction/ng-explorer-core@5.51.0
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ng-shared@5.51.0
+  - @memberjunction/ng-workspace-initializer@5.51.0
+  - @memberjunction/ai-agent-client@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/ng-auth-services@5.51.0
+  - @memberjunction/ng-base-application@5.51.0
+  - @memberjunction/ng-base-types@5.51.0
+  - @memberjunction/ng-conversations@5.51.0
+  - @memberjunction/ng-feedback@5.51.0
+  - @memberjunction/ng-notifications@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/ng-agent-client@5.51.0
+  - @memberjunction/ng-explorer-service-worker@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- Updated dependencies [1c991f7]
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [28c1dcd]
+- Updated dependencies [d36131a]
+- Updated dependencies [8580aef]
+- Updated dependencies [35fb5e3]
+- Updated dependencies [abab5dc]
+- Updated dependencies [ce6374c]
+- Updated dependencies [deb02b4]
+- Updated dependencies [764d6f6]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [fe1b8e7]
+- Updated dependencies [dd04a24]
+  - @memberjunction/ng-explorer-core@5.50.0
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/ng-conversations@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ng-bootstrap@5.50.0
+  - @memberjunction/ng-workspace-initializer@5.50.0
+  - @memberjunction/ng-base-application@5.50.0
+  - @memberjunction/ng-shared@5.50.0
+  - @memberjunction/ng-base-types@5.50.0
+  - @memberjunction/ng-notifications@5.50.0
+  - @memberjunction/ai-agent-client@5.50.0
+  - @memberjunction/ng-auth-services@5.50.0
+  - @memberjunction/ng-feedback@5.50.0
+  - @memberjunction/ng-agent-client@5.50.0
+  - @memberjunction/ng-explorer-service-worker@5.50.0
+
+## 5.49.0
+
+### Minor Changes
+
+- c220620: Extend Instance Config coverage to the remaining Explorer shell chrome so white-labeled deployments can hide developer chrome through metadata instead of CSS. New `Shell.Notifications.Enabled`, `Shell.AppSwitcher.Enabled`, `Shell.AppNav.Enabled`, and `Shell.UpdateToasts.Enabled` keys (all default `true`, gating both desktop and mobile), following the existing `Shell.SearchBar.Enabled` pattern; the floating chat-overlay bubble is wired to the pre-existing-but-unread `Shell.ChatOverlay.Enabled` key rather than a new one. Home quick-launch is deliberately excluded (already controllable via Applications metadata/roles).
+
+### Patch Changes
+
+- Updated dependencies [d3f9d77]
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [02c8a15]
+- Updated dependencies [505c8b5]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [14e2117]
+- Updated dependencies [3993034]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [c220620]
+- Updated dependencies [70c658c]
+  - @memberjunction/ng-explorer-core@5.49.0
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/ng-conversations@5.49.0
+  - @memberjunction/ng-bootstrap@5.49.0
+  - @memberjunction/ng-workspace-initializer@5.49.0
+  - @memberjunction/ng-feedback@5.49.0
+  - @memberjunction/ai-agent-client@5.49.0
+  - @memberjunction/ng-auth-services@5.49.0
+  - @memberjunction/ng-base-application@5.49.0
+  - @memberjunction/ng-shared@5.49.0
+  - @memberjunction/ng-base-types@5.49.0
+  - @memberjunction/ng-notifications@5.49.0
+  - @memberjunction/ng-agent-client@5.49.0
+  - @memberjunction/ng-explorer-service-worker@5.49.0
+
+## 5.48.0
+
+### Patch Changes
+
+- Updated dependencies [09e1b4b]
+- Updated dependencies [c20723a]
+- Updated dependencies [bda123a]
+- Updated dependencies [f613d0d]
+- Updated dependencies [d1e1a15]
+  - @memberjunction/ng-conversations@5.48.0
+  - @memberjunction/ng-explorer-core@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/ng-shared@5.48.0
+  - @memberjunction/ng-bootstrap@5.48.0
+  - @memberjunction/ng-workspace-initializer@5.48.0
+  - @memberjunction/ai-agent-client@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/ng-auth-services@5.48.0
+  - @memberjunction/ng-base-application@5.48.0
+  - @memberjunction/ng-base-types@5.48.0
+  - @memberjunction/ng-feedback@5.48.0
+  - @memberjunction/ng-notifications@5.48.0
+  - @memberjunction/ng-agent-client@5.48.0
+  - @memberjunction/ng-explorer-service-worker@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/ai-agent-client@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/ng-bootstrap@5.47.0
+  - @memberjunction/ng-auth-services@5.47.0
+  - @memberjunction/ng-base-application@5.47.0
+  - @memberjunction/ng-explorer-core@5.47.0
+  - @memberjunction/ng-shared@5.47.0
+  - @memberjunction/ng-workspace-initializer@5.47.0
+  - @memberjunction/ng-base-types@5.47.0
+  - @memberjunction/ng-conversations@5.47.0
+  - @memberjunction/ng-feedback@5.47.0
+  - @memberjunction/ng-notifications@5.47.0
+  - @memberjunction/ng-agent-client@5.47.0
+  - @memberjunction/ng-explorer-service-worker@5.47.0
+
+## 5.46.0
+
+### Patch Changes
+
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/ai-agent-client@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/ng-bootstrap@5.46.0
+  - @memberjunction/ng-auth-services@5.46.0
+  - @memberjunction/ng-base-application@5.46.0
+  - @memberjunction/ng-explorer-core@5.46.0
+  - @memberjunction/ng-shared@5.46.0
+  - @memberjunction/ng-workspace-initializer@5.46.0
+  - @memberjunction/ng-base-types@5.46.0
+  - @memberjunction/ng-conversations@5.46.0
+  - @memberjunction/ng-feedback@5.46.0
+  - @memberjunction/ng-notifications@5.46.0
+  - @memberjunction/ng-agent-client@5.46.0
+  - @memberjunction/ng-explorer-service-worker@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/ng-conversations@5.45.1
+  - @memberjunction/ng-bootstrap@5.45.1
+  - @memberjunction/ng-explorer-core@5.45.1
+  - @memberjunction/ng-shared@5.45.1
+  - @memberjunction/ng-workspace-initializer@5.45.1
+  - @memberjunction/ai-agent-client@5.45.1
+  - @memberjunction/ng-feedback@5.45.1
+  - @memberjunction/ng-notifications@5.45.1
+  - @memberjunction/ng-agent-client@5.45.1
+  - @memberjunction/ng-auth-services@5.45.1
+  - @memberjunction/ng-base-application@5.45.1
+  - @memberjunction/ng-explorer-service-worker@5.45.1
+  - @memberjunction/ng-base-types@5.45.1
+  - @memberjunction/core@5.45.1
+
+## 5.45.0
+
+### Patch Changes
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [13716e4]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [fbee64c]
+- Updated dependencies [6e10f66]
+- Updated dependencies [b2927f1]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/ng-bootstrap@5.45.0
+  - @memberjunction/ng-conversations@5.45.0
+  - @memberjunction/ng-explorer-core@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/ai-agent-client@5.45.0
+  - @memberjunction/ng-auth-services@5.45.0
+  - @memberjunction/ng-base-application@5.45.0
+  - @memberjunction/ng-shared@5.45.0
+  - @memberjunction/ng-workspace-initializer@5.45.0
+  - @memberjunction/ng-base-types@5.45.0
+  - @memberjunction/ng-feedback@5.45.0
+  - @memberjunction/ng-notifications@5.45.0
+  - @memberjunction/ng-agent-client@5.45.0
+  - @memberjunction/ng-explorer-service-worker@5.45.0
+
 ## 5.44.0
 
 ### Patch Changes

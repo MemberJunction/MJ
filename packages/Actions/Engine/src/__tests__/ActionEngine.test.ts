@@ -83,6 +83,11 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
     // BaseEntitySaveQueue that ActionEngine's action-log queue now uses) — pulled from the actual module.
     MJLruCache: (await importOriginal<typeof import('@memberjunction/global')>()).MJLruCache,
     KeyedSerialTaskQueue: (await importOriginal<typeof import('@memberjunction/global')>()).KeyedSerialTaskQueue,
+    // Real RequiresSubclass decorator — imported transitively through the ActionEngine
+    // module graph; the mocked module must re-export it or the suite fails to load.
+    RequiresSubclass: (await importOriginal<typeof import('@memberjunction/global')>()).RequiresSubclass,
+    // Same story for OptionalKeyedSpecialization (baseEntity.ts marks EntityField with it, B47).
+    OptionalKeyedSpecialization: (await importOriginal<typeof import('@memberjunction/global')>()).OptionalKeyedSpecialization,
     MJGlobal: {
         Instance: {
             ClassFactory: mockClassFactory,
@@ -96,6 +101,9 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
         }
     }),
     RegisterClass: () => (target: Function) => target,
+    // No-op decorator factory — some classes in the ActionEngine module graph declare
+    // `@RequiresSubclass()`; the mock must expose it or module init throws on the missing export.
+    RequiresSubclass: () => (target: Function) => target,
     // Case-insensitive UUID equality. Used by ActionEngineServer when
     // matching action result codes and by EntityActionInvocation*.MapParams.
     UUIDsEqual: (a: unknown, b: unknown): boolean =>
@@ -181,13 +189,26 @@ vi.mock('@memberjunction/actions-base', () => {
         EntityActionEngineBase: MockEntityActionEngineBase,
         EntityActionInvocationParams: class {},
         EntityActionResult: class {},
+        ActionInvocationProvenance: class {
+            EntityActionID?: string;
+            EntityActionInvocationTypeID?: string;
+            TargetEntityID?: string;
+            TargetRecordID?: string;
+            LoggingMode?: string;
+            EntityActionParams?: Array<Record<string, unknown>>;
+        },
+        // Stand-in for the real redactor: these tests are about the engine's log lifecycle, not about
+        // redaction rules (those are covered exhaustively in actions-base/ParamRedaction.test.ts). The
+        // engine's own use of the redactor — snapshot-at-call-time, Params vs ResultParams, provenance,
+        // LoggingMode — is covered in ActionEngine.logging.test.ts.
+        RedactParamsToJSON: (params: unknown[] | null | undefined) => JSON.stringify(params ?? []),
     };
 });
 
 // ============================================================================
 // Now import the modules under test
 // ============================================================================
-import { ActionEngineServer } from '../generic/ActionEngine';
+import { ACTION_PREVENTED_BY_FILTER_MESSAGE, ActionEngineServer } from '../generic/ActionEngine';
 import { BaseAction } from '../generic/BaseAction';
 import { Metadata, LogError, LogErrorEx } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
@@ -297,8 +318,59 @@ describe('ActionEngineServer', () => {
 
             const result = await engine.RunAction(params as unknown as Record<string, Function>);
 
-            expect(internalSpy).toHaveBeenCalledWith(params);
+            // The second argument is the input-parameter snapshot RunAction takes before the action can
+            // mutate its params — here an empty param set, so the redacted JSON is "[]".
+            expect(internalSpy).toHaveBeenCalledWith(params, '[]');
             expect(result.Success).toBe(true);
+        });
+
+        it('must NOT run the action when filters refuse', async () => {
+            // The regression this exists for: the refusal branch built a result, logged it, and then
+            // fell through to execute the action anyway. Every filter recorded that it had prevented
+            // something while preventing nothing — and the log row made the mechanism look like it
+            // worked, which is exactly why it survived. Asserting on the returned message alone would
+            // NOT have caught it; the assertion that matters is that execution never happened.
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'RunFilters' as never).mockResolvedValue(false as never);
+            const internalSpy = vi.spyOn(engine as never, 'InternalRunAction' as never);
+            const timeoutSpy = vi.spyOn(engine as never, 'RunActionWithTimeout' as never);
+
+            const params = {
+                Action: { ID: 'action-1', Name: 'Test Action', DriverClass: 'TestDriver' },
+                ContextUser: { ID: 'user-1', Name: 'Test' },
+                Filters: [{ ID: 'f1' }],
+                Params: [],
+                SkipActionLog: true,
+            };
+
+            const result = await engine.RunAction(params as unknown as Record<string, Function>);
+
+            expect(internalSpy).not.toHaveBeenCalled();
+            expect(timeoutSpy).not.toHaveBeenCalled();
+            // Prevented is a SUCCESS: a filter saying "not this time" is the mechanism working, not
+            // an error, and callers must not treat it as a failure to retry.
+            expect(result.Success).toBe(true);
+            expect(result.Message).toBe(ACTION_PREVENTED_BY_FILTER_MESSAGE);
+        });
+
+        it('runs a deferral in place of the action, but only after filters pass', async () => {
+            // Durable dispatch hangs on this seam. If a deferral could run before the gates, a scoped
+            // or filtered durable binding would fire on every record and every save.
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'RunFilters' as never).mockResolvedValue(false as never);
+            const defer = vi.fn().mockResolvedValue({ Success: true, ResultCode: 'SUBMITTED', Message: 'submitted' });
+
+            const params = {
+                Action: { ID: 'action-1', Name: 'Test Action', DriverClass: 'TestDriver' },
+                ContextUser: { ID: 'user-1', Name: 'Test' },
+                Filters: [{ ID: 'f1' }],
+                Params: [],
+                SkipActionLog: true,
+                DeferExecution: defer,
+            };
+
+            await engine.RunAction(params as unknown as Record<string, Function>);
+            expect(defer).not.toHaveBeenCalled();
         });
     });
 
@@ -351,9 +423,81 @@ describe('ActionEngineServer', () => {
     });
 
     describe('RunSingleFilter', () => {
-        it('should return true (stub implementation)', async () => {
-            const result = await (engine as unknown as Record<string, Function>)['RunSingleFilter']({} as never, {} as unknown as Record<string, Function>);
-            expect(result).toBe(true);
+        // Minimal filter-row shape the engine reads: ID, Code, __mj_UpdatedAt.
+        const makeFilter = (code: string, id = 'filter-1') => ({
+            ID: id,
+            Code: code,
+            __mj_UpdatedAt: new Date('2026-01-01T00:00:00Z'),
+        });
+        const runFilter = (filter: Record<string, unknown>, params: Record<string, unknown> = {}) =>
+            (engine as unknown as Record<string, Function>)['RunSingleFilter'](params, filter);
+
+        it('should allow the action when filter code returns true', async () => {
+            await expect(runFilter(makeFilter('return true;'))).resolves.toBe(true);
+        });
+
+        it('should prevent the action when filter code returns false', async () => {
+            await expect(runFilter(makeFilter('return false;'))).resolves.toBe(false);
+        });
+
+        it('should read the verdict from ActionFilterContext.result when code does not return', async () => {
+            await expect(runFilter(makeFilter('ActionFilterContext.result = true;'))).resolves.toBe(true);
+        });
+
+        it('should expose params and filter on the execution context', async () => {
+            const params = { Action: { Name: 'Test Action' } };
+            const code = 'return ActionFilterContext.params.Action.Name === "Test Action" && ActionFilterContext.filter.ID === "filter-1";';
+            await expect(runFilter(makeFilter(code), params)).resolves.toBe(true);
+        });
+
+        it('should support async filter code', async () => {
+            await expect(runFilter(makeFilter('return await Promise.resolve(true);'))).resolves.toBe(true);
+        });
+
+        it('should fail closed and log when filter code throws', async () => {
+            await expect(runFilter(makeFilter('throw new Error("boom");'))).resolves.toBe(false);
+            expect(LogErrorEx).toHaveBeenCalled();
+        });
+
+        it('should fail closed and log on a non-boolean verdict', async () => {
+            await expect(runFilter(makeFilter('return "yes";'))).resolves.toBe(false);
+            expect(LogError).toHaveBeenCalled();
+        });
+
+        it('should fail closed and log when Code is empty and no subclass is registered', async () => {
+            await expect(runFilter(makeFilter('   '))).resolves.toBe(false);
+            expect(LogError).toHaveBeenCalled();
+        });
+
+        it('should recompile when the filter row version changes', async () => {
+            const first = makeFilter('return true;', 'filter-2');
+            await expect(runFilter(first)).resolves.toBe(true);
+            const edited = { ...first, Code: 'return false;', __mj_UpdatedAt: new Date('2026-02-01T00:00:00Z') };
+            await expect(runFilter(edited)).resolves.toBe(false);
+        });
+
+        it('should serve the cached compilation for an unchanged row version', async () => {
+            const filter = makeFilter('return true;', 'filter-3');
+            await expect(runFilter(filter)).resolves.toBe(true);
+            // Same ID + same __mj_UpdatedAt → the cached compilation runs even though Code text changed.
+            const sameVersion = { ...filter, Code: 'return false;' };
+            await expect(runFilter(sameVersion)).resolves.toBe(true);
+        });
+
+        it('should let a registered BaseActionFilter subclass win over inline Code', async () => {
+            const subclassRun = vi.fn().mockResolvedValue(false);
+            mockClassFactory.GetAllRegistrations.mockReturnValueOnce([{ SubClass: class {} }]);
+            mockClassFactory.CreateInstance.mockReturnValueOnce({ Run: subclassRun });
+
+            await expect(runFilter(makeFilter('return true;', 'filter-4'))).resolves.toBe(false);
+            expect(subclassRun).toHaveBeenCalled();
+        });
+
+        it('should coerce a non-boolean subclass verdict to false', async () => {
+            mockClassFactory.GetAllRegistrations.mockReturnValueOnce([{ SubClass: class {} }]);
+            mockClassFactory.CreateInstance.mockReturnValueOnce({ Run: vi.fn().mockResolvedValue('truthy') });
+
+            await expect(runFilter(makeFilter('return true;', 'filter-5'))).resolves.toBe(false);
         });
     });
 
@@ -361,7 +505,7 @@ describe('ActionEngineServer', () => {
         it('should map Scalar ValueType to default value directly', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'Scalar', DefaultValue: 'hello', Type: 'Input' }],
+                Params: { Items: [{ Name: 'param1', ValueType: 'Scalar', DefaultValue: 'hello', Type: 'Input' }] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -371,7 +515,7 @@ describe('ActionEngineServer', () => {
         it('should parse JSON for Simple Object ValueType', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'Simple Object', DefaultValue: '{"key":"val"}', Type: 'Input' }],
+                Params: { Items: [{ Name: 'param1', ValueType: 'Simple Object', DefaultValue: '{"key":"val"}', Type: 'Input' }] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -381,7 +525,7 @@ describe('ActionEngineServer', () => {
         it('should use raw string for Simple Object when JSON parse fails', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'Simple Object', DefaultValue: 'not-json', Type: 'Input' }],
+                Params: { Items: [{ Name: 'param1', ValueType: 'Simple Object', DefaultValue: 'not-json', Type: 'Input' }] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -391,7 +535,7 @@ describe('ActionEngineServer', () => {
         it('should pass through BaseEntity Sub-Class ValueType', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'BaseEntity Sub-Class', DefaultValue: 'entity-ref', Type: 'Input' }],
+                Params: { Items: [{ Name: 'param1', ValueType: 'BaseEntity Sub-Class', DefaultValue: 'entity-ref', Type: 'Input' }] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -401,7 +545,7 @@ describe('ActionEngineServer', () => {
         it('should pass through Other ValueType', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'Other', DefaultValue: 'other-val', Type: 'Both' }],
+                Params: { Items: [{ Name: 'param1', ValueType: 'Other', DefaultValue: 'other-val', Type: 'Both' }] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -411,7 +555,7 @@ describe('ActionEngineServer', () => {
         it('should log error and use default for unknown ValueType', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [{ Name: 'param1', ValueType: 'UnknownType', DefaultValue: 'fallback', Type: 'Output' }],
+                Params: { Items: [{ Name: 'param1', ValueType: 'UnknownType', DefaultValue: 'fallback', Type: 'Output' }] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -422,10 +566,10 @@ describe('ActionEngineServer', () => {
         it('should handle multiple params', () => {
             const action = {
                 Name: 'TestAction',
-                Params: [
+                Params: { Items: [
                     { Name: 'p1', ValueType: 'Scalar', DefaultValue: 'a', Type: 'Input' },
                     { Name: 'p2', ValueType: 'Scalar', DefaultValue: 'b', Type: 'Output' },
-                ],
+                ] },
             };
 
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
@@ -435,7 +579,7 @@ describe('ActionEngineServer', () => {
         });
 
         it('should handle empty params array', () => {
-            const action = { Name: 'TestAction', Params: [] };
+            const action = { Name: 'TestAction', Params: { Items: [] } };
             const result = (engine as unknown as Record<string, Function>)['GetActionParamsForAction'](action as unknown as Record<string, Function>);
             expect(result).toEqual([]);
         });
@@ -803,7 +947,8 @@ describe('ActionEngineServer', () => {
 
             const logEntry = await (engine as unknown as Record<string, Function>)['StartAndEndActionLog'](params as never, result as unknown as Record<string, Function>);
 
-            expect(startSpy).toHaveBeenCalledWith(params, false);
+            // Called without a pre-taken snapshot here, so StartActionLog takes its own.
+            expect(startSpy).toHaveBeenCalledWith(params, false, undefined);
             expect(endSpy).toHaveBeenCalledWith(mockLogEntity, params, result);
             expect(logEntry).toBe(mockLogEntity);
         });

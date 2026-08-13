@@ -4,6 +4,8 @@ import { ResourcePermissionEngine, MJResourcePermissionEntity } from '@memberjun
 import { UUIDsEqual } from '@memberjunction/global';
 import { ResourceData } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { MJ_AG_GRID_THEME_PARAMS } from '@memberjunction/ng-shared-generic';
+import { FormatSimpleRowCell } from './format-cell';
 import {
   ColDef,
   GridReadyEvent,
@@ -14,7 +16,6 @@ import {
   RowSelectionOptions,
   SelectionChangedEvent,
   themeAlpine,
-  colorSchemeVariable,
   type Theme
 } from 'ag-grid-community';
 
@@ -58,7 +59,9 @@ export class AvailableResourcesComponent  extends BaseAngularComponent implement
         checkboxes: false,
         enableClickSelection: true
     };
-    public GridTheme: Theme = themeAlpine.withPart(colorSchemeVariable);
+    // Themed from the shared --mj-* token params so this grid follows light/dark and
+    // the org brand overlay, matching the main entity/query grids.
+    public GridTheme: Theme = themeAlpine.withParams(MJ_AG_GRID_THEME_PARAMS);
     private gridApi: GridApi | null = null;
 
     public getRowId = (params: GetRowIdParams<ResourceData>): string => {
@@ -166,7 +169,7 @@ export class AvailableResourcesComponent  extends BaseAngularComponent implement
             cols.push({
                 headerName: col.DisplayNameOrName,
                 valueGetter: (params) => {
-                    return params.data?.Configuration?.[col.Name] ?? '';
+                    return FormatSimpleRowCell(params.data?.Configuration?.[col.Name]);
                 }
             });
         }

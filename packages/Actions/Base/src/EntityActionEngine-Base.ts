@@ -2,7 +2,9 @@ import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, Us
 import { UUIDsEqual } from "@memberjunction/global";
 import { MJActionExecutionLogEntity, MJActionResultCodeEntity, MJEntityActionFilterEntity, MJEntityActionInvocationEntity, MJEntityActionInvocationTypeEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { ActionParam, AIDirective, RunActionParams } from "./ActionEngine-Base";
+import { EntityChangeContext } from "./EntityChangeContext";
 import { MJEntityActionEntityExtended } from "./MJEntityActionEntityExtended";
+import { IsEntityActionInScope, ResolveEntityActionScopeResolver } from "./EntityActionScopeResolver";
 
 /**
  * Parameters type for invoking an entity action
@@ -35,6 +37,18 @@ export class EntityActionInvocationParams {
      * If the invocation type is list-oriented, this parameter will be needed
      */
     public ListID?: string;
+
+    /**
+     * What changed about the record, for filters that need both sides of the save.
+     *
+     * Captured by the dispatcher at the moment the lifecycle event fires, **not** read from the entity
+     * later: `After*` dispatch is fire-and-forget, and by the time an action's filter runs the entity
+     * has been reloaded from the save's returned row and its `OldValue`s reset. A filter reading the
+     * live entity would see before-values identical to after-values and conclude nothing changed.
+     *
+     * Absent on invocations with no save behind them (a View or List fan-out, a direct call).
+     */
+    public EntityChange?: EntityChangeContext;
 }
 
 
@@ -176,7 +190,44 @@ export class EntityActionEngineBase extends BaseEngine<EntityActionEngineBase> {
      * @returns 
      */
     public GetActionsByEntityName(entityName: string, status?: 'Active' | 'Pending' | 'Disabled'): MJEntityActionEntityExtended[] {
-        return this._EntityActions.filter(e => (!status || e.Status === status) && e.Entity.trim().toLowerCase() === entityName.trim().toLowerCase());
+        return this.SortBySequence(
+            this._EntityActions.filter(e => (!status || e.Status === status) && e.Entity.trim().toLowerCase() === entityName.trim().toLowerCase())
+        );
+    }
+
+    /**
+     * Orders bindings the way they will execute: ascending `Sequence`, ties broken by `Name` so the
+     * order is total and stable rather than dependent on how the rows happened to load.
+     *
+     * The dispatch loop runs bindings in array order, so this ordering IS the execution contract —
+     * a `Validate` binding that normalizes a field must be able to run before one that checks it.
+     * `Sequence` defaults to 0, so unsequenced bindings keep their pre-existing name-ordered behaviour
+     * relative to each other and run before anything deliberately pushed later.
+     */
+    protected SortBySequence(entityActions: MJEntityActionEntityExtended[]): MJEntityActionEntityExtended[] {
+        return [...entityActions].sort((a, b) => {
+            const bySequence = (a.Sequence ?? 0) - (b.Sequence ?? 0);
+            return bySequence !== 0 ? bySequence : (a.Action ?? '').localeCompare(b.Action ?? '');
+        });
+    }
+
+    /**
+     * Narrows a candidate set to the bindings that apply to `subject`, honouring `ScopeEntityID` /
+     * `ScopeRecordID`. Unscoped bindings (the overwhelming majority, and the pre-existing behaviour)
+     * always apply; scoped ones are asked of the `@RegisterClass`-resolved
+     * {@link EntityActionScopeResolver} for their scope entity.
+     *
+     * Call this from a dispatch path that has a record in hand. Ordering from
+     * {@link SortBySequence} is preserved.
+     */
+    public async FilterByScope(
+        entityActions: MJEntityActionEntityExtended[],
+        subject: BaseEntity | undefined | null
+    ): Promise<MJEntityActionEntityExtended[]> {
+        const verdicts = await Promise.all(
+            entityActions.map(ea => IsEntityActionInScope(ea, subject, name => ResolveEntityActionScopeResolver(name)))
+        );
+        return entityActions.filter((_ea, i) => verdicts[i]);
     }
 
     /**
@@ -185,7 +236,7 @@ export class EntityActionEngineBase extends BaseEngine<EntityActionEngineBase> {
      * @returns 
      */
     public GetActionsByEntityID(entityID: string): MJEntityActionEntityExtended[] {
-        return this._EntityActions.filter(e => UUIDsEqual(e.EntityID, entityID));
+        return this.SortBySequence(this._EntityActions.filter(e => UUIDsEqual(e.EntityID, entityID)));
     }
 
     /**

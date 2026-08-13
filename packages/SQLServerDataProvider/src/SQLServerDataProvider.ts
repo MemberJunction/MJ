@@ -37,7 +37,6 @@ import {
   LogError,
   EntityRecordNameInput,
   EntityRecordNameResult,
-  IRunReportProvider,
   RecordDependency,
   EntityDependency,
   LogStatus,
@@ -262,7 +261,7 @@ async function executeSQLCore(
  */
 export class SQLServerDataProvider
   extends GenericDatabaseProvider
-  implements IEntityDataProvider, IMetadataProvider, IRunReportProvider, IColocatedVectorHost
+  implements IEntityDataProvider, IMetadataProvider, IColocatedVectorHost
 {
   /**************************************************************************/
   // SQL Dialect Implementations (override abstract methods from DatabaseProviderBase)
@@ -304,6 +303,12 @@ export class SQLServerDataProvider
   // Instance transaction properties
   private _transaction: sql.Transaction;
   private _transactionDepth: number = 0;
+  /**
+   * Set while an OUTERMOST `BeginTransaction` is awaiting `sql.Transaction.begin()`. Concurrent
+   * `BeginTransaction` callers await this first so they cannot take the nested-savepoint branch
+   * before `_transaction` exists. Null whenever no begin is in flight.
+   */
+  private _beginInFlight: Promise<void> | null = null;
   private _savepointCounter: number = 0;
   private _savepointStack: string[] = [];
 
@@ -315,14 +320,36 @@ export class SQLServerDataProvider
   private _datetimeOffsetTestComplete: boolean = false;
   /**
    * Per-entity base-view column order — the view's column NAMES in physical (`column_id`) order,
-   * keyed by `'<schema>.<baseview>'` lowercased. Populated once in {@link Config} (after metadata
-   * load) by a single `sys.columns` query over all views. {@link getAllEntityColumnsSQL} declares the
-   * save-capture `@ResultTable` in this order so it matches the view that the positional
-   * `INSERT INTO @ResultTable EXEC ...` is filled from — authoritative for ANY view layout
-   * (CodeGen-generated, computed-column-in-the-middle, or hand-maintained). A missing key (or a view
-   * column with no matching field) falls back to the metadata-derived non-virtual-then-virtual order.
+   * keyed by `'<schema>.<baseview>'` lowercased. Populated in {@link Config} (after metadata
+   * load) from the per-pool shared cache (see {@link _viewColumnOrderCacheByPool}).
+   * {@link getAllEntityColumnsSQL} declares the save-capture `@ResultTable` in this order so it
+   * matches the view that the positional `INSERT INTO @ResultTable EXEC ...` is filled from —
+   * authoritative for ANY view layout (CodeGen-generated, computed-column-in-the-middle, or
+   * hand-maintained). A missing key (or a view column with no matching field) falls back to the
+   * metadata-derived non-virtual-then-virtual order.
    */
   private _viewColumnOrderCache: Map<string, string[]> = new Map();
+
+  /**
+   * Process-wide view-column-order cache, scoped PER CONNECTION POOL and shared across provider
+   * instances. MJServer creates 1–2 fresh, fully-Config()'d provider instances per GraphQL request
+   * (read-write + read-only) around the same boot-time pools; without this sharing, the full
+   * `sys.columns` scan in {@link loadViewColumnOrderCache} ran once or twice on EVERY request
+   * (issue #3102 — ~9.6k scans/day in production vs the ~2 needed).
+   *
+   * Keyed by the `ConnectionPool` object (NOT by `schema.view` alone) because one process can hold
+   * providers to different databases (RW + RO datasources, multi-DB tooling) where the same
+   * `schema.view` has different physical column orders — a process-global map would serve one
+   * database's column order to another's provider and silently reintroduce the positional
+   * `@ResultTable` mis-routing this cache exists to prevent. A WeakMap lets pools (and their cache)
+   * be collected if a pool is discarded.
+   *
+   * The value is the load PROMISE (not the resolved Map) so concurrent per-request Config() calls
+   * de-duplicate onto a single in-flight scan. Invalidated on metadata refresh (see
+   * {@link Refresh} / {@link InvalidateViewColumnOrderCache}) so view changes from
+   * migrations/CodeGen are picked up without a server restart.
+   */
+  private static _viewColumnOrderCacheByPool = new WeakMap<sql.ConnectionPool, Promise<Map<string, string[]>>>();
 
   // Instance SQL execution queue for serializing transaction queries
   // Non-transactional queries bypass this queue for maximum parallelism
@@ -363,6 +390,15 @@ export class SQLServerDataProvider
    */
   public get transactionDepth(): number {
     // Request-specific depth should be accessed via getTransactionContext
+    return this._transactionDepth;
+  }
+
+  /**
+   * Feeds real nesting depth to the entity-transaction machinery (`IsNested`, out-of-order settle
+   * detection). Deliberately separate from `IsInTransaction`, which this provider leaves `false`
+   * so `RunMaybeSerial` keeps fanning out — see the note in `packages/MJCore/src/generic/util.ts`.
+   */
+  protected override get CurrentTransactionDepth(): number {
     return this._transactionDepth;
   }
   
@@ -431,44 +467,90 @@ export class SQLServerDataProvider
   }
 
   /**
-   * Loads every view's column order (name, in `column_id` order) from `sys.columns` in a single query
-   * and caches it by `'<schema>.<view>'`. Used by {@link getAllEntityColumnsSQL} to declare the
-   * save-capture `@ResultTable` in the view's actual physical order — the order SQL Server uses when it
-   * fills the table via the positional `INSERT INTO @ResultTable EXEC <sp>` (the sp ends in
-   * `SELECT * FROM <BaseView>`). Best-effort: any failure leaves the cache empty, and
-   * getAllEntityColumnsSQL falls back to the metadata-derived order. Runs once at {@link Config}.
+   * Resolves this instance's view-column-order cache from the per-pool shared cache, scanning
+   * `sys.columns` only when this pool has no (valid) entry yet. Used by
+   * {@link getAllEntityColumnsSQL} to declare the save-capture `@ResultTable` in the view's actual
+   * physical order — the order SQL Server uses when it fills the table via the positional
+   * `INSERT INTO @ResultTable EXEC <sp>` (the sp ends in `SELECT * FROM <BaseView>`).
+   *
+   * Concurrency: the shared entry is the scan PROMISE, so simultaneous per-request Config() calls
+   * against the same pool share one in-flight scan. Best-effort: a failed scan leaves this
+   * instance's cache empty (getAllEntityColumnsSQL falls back to the metadata-derived order) and
+   * removes the shared entry so the next Config() retries instead of pinning the failure.
    */
   private async loadViewColumnOrderCache(): Promise<void> {
+    const pool = this._pool;
+    let scanPromise = SQLServerDataProvider._viewColumnOrderCacheByPool.get(pool);
+    if (!scanPromise) {
+      scanPromise = this.scanViewColumnOrder();
+      SQLServerDataProvider._viewColumnOrderCacheByPool.set(pool, scanPromise);
+    }
     try {
-      const viewOrderSQL = `SELECT s.name AS SchemaName, o.name AS ViewName, c.name AS ColumnName
-                   FROM sys.columns c
-                     INNER JOIN sys.objects o ON c.object_id = o.object_id
-                     INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
-                   WHERE o.type = 'V'
-                   ORDER BY s.name, o.name, c.column_id`;
-      const rows: Array<{ SchemaName: string; ViewName: string; ColumnName: string }> = await this.ExecuteSQL(viewOrderSQL, null, {
-        ignoreLogging: true,
-        description: 'load view column order for save-capture @ResultTable alignment',
-      });
-      const cache = new Map<string, string[]>();
-      for (const r of rows ?? []) {
-        const key = `${r.SchemaName}.${r.ViewName}`.toLowerCase();
-        let cols = cache.get(key);
-        if (!cols) {
-          cols = [];
-          cache.set(key, cols);
-        }
-        cols.push(r.ColumnName);
-      }
-      this._viewColumnOrderCache = cache;
-      LogStatusEx({
-        message: `SQLServerDataProvider: cached column order for ${cache.size} view(s) (save-capture @ResultTable alignment)`,
-        verboseOnly: true,
-      });
+      this._viewColumnOrderCache = await scanPromise;
     } catch (e) {
-      // best-effort: an empty cache makes getAllEntityColumnsSQL fall back to the metadata-derived order
+      // best-effort: an empty cache makes getAllEntityColumnsSQL fall back to the metadata-derived order.
+      // Drop the shared entry (only if it's still OUR failed promise) so a later Config() can retry.
+      if (SQLServerDataProvider._viewColumnOrderCacheByPool.get(pool) === scanPromise) {
+        SQLServerDataProvider._viewColumnOrderCacheByPool.delete(pool);
+      }
+      this._viewColumnOrderCache = new Map();
       LogStatus(`SQLServerDataProvider: view column-order prefetch failed; save-capture will use metadata order. ${e}`);
     }
+  }
+
+  /**
+   * Runs the actual `sys.columns` scan — every view's column names in `column_id` order, keyed by
+   * `'<schema>.<view>'` lowercased. One query for the whole database; called at most once per
+   * connection pool per process (plus once per metadata refresh) via the shared per-pool cache.
+   */
+  private async scanViewColumnOrder(): Promise<Map<string, string[]>> {
+    const viewOrderSQL = `SELECT s.name AS SchemaName, o.name AS ViewName, c.name AS ColumnName
+                 FROM sys.columns c
+                   INNER JOIN sys.objects o ON c.object_id = o.object_id
+                   INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+                 WHERE o.type = 'V'
+                 ORDER BY s.name, o.name, c.column_id`;
+    const rows: Array<{ SchemaName: string; ViewName: string; ColumnName: string }> = await this.ExecuteSQL(viewOrderSQL, null, {
+      ignoreLogging: true,
+      description: 'load view column order for save-capture @ResultTable alignment',
+    });
+    const cache = new Map<string, string[]>();
+    for (const r of rows ?? []) {
+      const key = `${r.SchemaName}.${r.ViewName}`.toLowerCase();
+      let cols = cache.get(key);
+      if (!cols) {
+        cols = [];
+        cache.set(key, cols);
+      }
+      cols.push(r.ColumnName);
+    }
+    LogStatusEx({
+      message: `SQLServerDataProvider: cached column order for ${cache.size} view(s) (save-capture @ResultTable alignment)`,
+      verboseOnly: true,
+    });
+    return cache;
+  }
+
+  /**
+   * Invalidates the shared view-column-order cache for a connection pool, so the next Config()
+   * against that pool re-reads `sys.columns`. Call after out-of-band DDL that creates or alters
+   * views (migrations, direct SQL) when a metadata {@link Refresh} isn't also being performed —
+   * Refresh() invalidates automatically.
+   */
+  public static InvalidateViewColumnOrderCache(pool: sql.ConnectionPool): void {
+    SQLServerDataProvider._viewColumnOrderCacheByPool.delete(pool);
+  }
+
+  /**
+   * Metadata refresh invalidates this pool's shared view-column-order cache before re-running
+   * Config, so view changes from migrations/CodeGen (the same events that change metadata) are
+   * picked up by the subsequent rescan instead of serving a stale column order until restart.
+   */
+  public override async Refresh(providerToUse?: IMetadataProvider): Promise<boolean> {
+    if (this.AllowRefresh && this._pool) {
+      SQLServerDataProvider.InvalidateViewColumnOrderCache(this._pool);
+    }
+    return super.Refresh(providerToUse);
   }
 
   /**
@@ -1476,20 +1558,6 @@ export class SQLServerDataProvider
     return { dataSource: this._pool };
   }
 
-  protected override BuildSaveExecuteOptions(entity: BaseEntity, sqlDetails: SaveSQLResult): ExecuteSQLOptions {
-    const opts = super.BuildSaveExecuteOptions(entity, sqlDetails);
-    (opts as ExecuteSQLOptions).connectionSource =
-      (entity.ProviderTransaction as sql.Transaction) ?? undefined;
-    return opts;
-  }
-
-  protected override BuildDeleteExecuteOptions(entity: BaseEntity, sqlDetails: DeleteSQLResult): ExecuteSQLOptions {
-    const opts = super.BuildDeleteExecuteOptions(entity, sqlDetails);
-    (opts as ExecuteSQLOptions).connectionSource =
-      (entity.ProviderTransaction as sql.Transaction) ?? undefined;
-    return opts;
-  }
-
   protected override ValidateDeleteResult(
     entity: BaseEntity,
     rawResult: Record<string, unknown>[],
@@ -2109,39 +2177,6 @@ export class SQLServerDataProvider
   }
 
   /**
-   * Begin an independent transaction for IS-A chain orchestration.
-   * Returns a new sql.Transaction object that is NOT linked to the provider's
-   * internal transaction state (used by TransactionGroup). Each IS-A chain
-   * gets its own transaction to avoid interference with other operations.
-   */
-  public async BeginISATransaction(): Promise<unknown> {
-    const transaction = new sql.Transaction(this._pool);
-    await transaction.begin();
-    return transaction;
-  }
-
-  /**
-   * Commit an IS-A chain transaction.
-   * @param txn The sql.Transaction object returned from BeginISATransaction()
-   */
-  public async CommitISATransaction(txn: unknown): Promise<void> {
-    if (txn && txn instanceof sql.Transaction) {
-      await txn.commit();
-    }
-  }
-
-  /**
-   * Rollback an IS-A chain transaction.
-   * @param txn The sql.Transaction object returned from BeginISATransaction()
-   */
-  public async RollbackISATransaction(txn: unknown): Promise<void> {
-    if (txn && txn instanceof sql.Transaction) {
-      await txn.rollback();
-    }
-  }
-
-
-  /**
    * Builds a UNION ALL query that probes each child entity's BaseView for a
    * record with the given primary key. Returns the first match (disjoint
    * subtypes guarantee at most one result) unless used with overlapping
@@ -2237,16 +2272,48 @@ IF ${varName} IS NOT NULL
   }
 
   public async BeginTransaction() {
+    // Serialize against an outermost begin that is still in flight. Without this, a second caller
+    // arriving during that window takes the depth-2 savepoint branch and issues
+    // `SAVE TRANSACTION` while `this._transaction` is still null — which silently runs it on the
+    // POOL, outside the transaction it is supposed to be marking. Swallow the in-flight begin's
+    // own rejection: if it failed, the depth is back to 0 and this caller must try its own begin.
+    while (this._beginInFlight) {
+      await this._beginInFlight.catch(() => undefined);
+    }
     try {
       this._transactionDepth++;
 
       if (this._transactionDepth === 1) {
-        // First transaction - actually begin using mssql Transaction object
-        this._transaction = new sql.Transaction(this._pool);
-        await this._transaction.begin();
-        
-        // Emit transaction state change
-        this._transactionState$.next(true);
+        // First transaction - actually begin using mssql Transaction object.
+        //
+        // 🚨 BEGIN LOCALLY, PUBLISH AFTER. `this._transaction` is a SHARED provider field that
+        // every ExecuteSQL call with no explicit connectionSource picks up (see ~1768). Assigning
+        // it before `begin()` resolves publishes an UN-BEGUN transaction to the whole process, and
+        // any concurrent query in that window dies with mssql's
+        //   "Transaction has not begun. Call begin() first."
+        // Worse, if `begin()` THROWS, the old code's catch block restored the depth but left the
+        // un-begun object assigned — poisoning the provider PERMANENTLY, so every later save on it
+        // failed with that same message until the process restarted.
+        //
+        // Found during the 6.1 release: it silently destroyed AI agent run persistence. Agent-run,
+        // step, prompt-run and heartbeat saves all failed ("Failed to create agent run record",
+        // "N step record save(s) failed"), leaving IT56/IT57's live checks with no steps to read.
+        // They therefore reported `model-noncompliance:` — byte-identically across every run and
+        // every model tier — for a defect that had nothing to do with the model.
+        const begun = (async () => {
+          const transaction = new sql.Transaction(this._pool);
+          await transaction.begin();
+          this._transaction = transaction;
+
+          // Emit transaction state change
+          this._transactionState$.next(true);
+        })();
+        this._beginInFlight = begun;
+        try {
+          await begun;
+        } finally {
+          this._beginInFlight = null;
+        }
       } else {
         // Nested transaction - create a savepoint
         const savepointName = `SavePoint_${++this._savepointCounter}`;
@@ -2260,6 +2327,14 @@ IF ${varName} IS NOT NULL
       }
     } catch (e) {
       this._transactionDepth--; // Restore depth on error
+      // Never leave a transaction object published once the depth is back to 0 — a non-null
+      // `_transaction` with no live transaction behind it poisons every subsequent ExecuteSQL on
+      // this provider. The publish-after-begin above already prevents the common case; this is the
+      // backstop that keeps the invariant true no matter how the begin failed.
+      if (this._transactionDepth === 0) {
+        this._transaction = null;
+        this._transactionState$.next(false);
+      }
       LogError(e);
       throw e; // force caller to handle
     }
@@ -2353,14 +2428,47 @@ IF ${varName} IS NOT NULL
         if (!savepointName) {
           throw new Error('Savepoint stack mismatch - no savepoint to rollback to');
         }
-        
-        await this.ExecuteSQL(`ROLLBACK TRANSACTION ${savepointName}`, null, {
-          description: `Rolling back to savepoint ${savepointName}`,
-          ignoreLogging: true
-        });
-        
-        this._savepointStack.pop();
-        this._transactionDepth--;
+
+        try {
+          await this.ExecuteSQL(`ROLLBACK TRANSACTION ${savepointName}`, null, {
+            description: `Rolling back to savepoint ${savepointName}`,
+            ignoreLogging: true
+          });
+
+          this._savepointStack.pop();
+          this._transactionDepth--;
+        } catch (savepointError) {
+          // SQL Server dooms the ENTIRE transaction (XACT_STATE() = -1) on deadlock-victim,
+          // batch-aborting and XACT_ABORT errors. In that state `ROLLBACK TRANSACTION <savepoint>`
+          // is illegal (Msg 3931) and throws — and leaving the depth/stack untouched would strand
+          // a dead physical transaction that every subsequent statement on this provider silently
+          // joins, with nested Commit calls "succeeding" against a transaction that can never
+          // commit. The only recovery is a FULL rollback plus a complete state reset; the outer
+          // scopes' own settles then fail loudly against depth 0 instead of pretending to work.
+          // (The old per-chain BeginISATransaction never hit this — sql.Transaction.rollback() is
+          // legal on an aborted transaction — so this hazard is specific to savepoint joining.)
+          LogError(
+            `Savepoint rollback to ${savepointName} failed — the transaction is likely doomed ` +
+            `(XACT_STATE() = -1). Performing a full rollback and resetting transaction state.`
+          );
+          try {
+            await this._transaction.rollback();
+          } catch (fullRollbackError) {
+            LogError('Full rollback after savepoint rollback failure also failed:', undefined, fullRollbackError);
+          } finally {
+            this._transaction = null;
+            this._transactionDepth = 0;
+            this._savepointStack = [];
+            this._savepointCounter = 0;
+            this._transactionState$.next(false);
+            const deferredCount = this._deferredTasks.length;
+            this._deferredTasks = [];
+            if (deferredCount > 0) {
+              LogStatus(`Cleared ${deferredCount} deferred tasks after doomed-transaction recovery`);
+            }
+          }
+          throw savepointError; // the caller's unit of work still failed — report it
+        }
       }
     } catch (e) {
       // On error in outer transaction, reset everything
@@ -2371,7 +2479,7 @@ IF ${varName} IS NOT NULL
         this._savepointCounter = 0;
         this._transactionState$.next(false);
       }
-      
+
       LogError(e);
       throw e; // force caller to handle
     }

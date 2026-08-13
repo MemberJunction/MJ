@@ -168,11 +168,17 @@ export class PostgreSQLDialect extends SQLDialect {
     // ─── Identifier Quoting ──────────────────────────────────────────
 
     QuoteIdentifier(name: string): string {
-        return `"${name}"`;
+        // Double any embedded double-quote (`"`→`""`) so an identifier from an untrusted source — e.g. an
+        // external entity's remote column/table names, which arrive via remote-schema introspection — cannot
+        // break out of its quoting in generated DDL/DML. A no-op for normal identifiers (they contain no `"`).
+        return `"${name.replace(/"/g, '""')}"`;
     }
 
     QuoteSchema(schema: string, object: string): string {
-        return `${schema}."${object}"`;
+        // Quote BOTH parts (schema was previously interpolated bare). PG folds an unquoted identifier to
+        // lowercase, so quoting the schema also preserves case for any non-lowercase schema; for the
+        // all-lowercase core schema it is behavior-neutral. Escaping comes from QuoteIdentifier.
+        return `${this.QuoteIdentifier(schema)}.${this.QuoteIdentifier(object)}`;
     }
 
     /**
@@ -180,10 +186,12 @@ export class PostgreSQLDialect extends SQLDialect {
      * `AS EntityName` into the result column `entityname`. Quoting the
      * alias preserves the requested casing for callers that key off the
      * column name (e.g. when consuming results into a TypeScript object
-     * with a PascalCase property).
+     * with a PascalCase property). Any embedded `"` is doubled (`"`→`""`),
+     * for consistency with QuoteIdentifier — an alias sourced from an
+     * untrusted name can't break out of its quoting.
      */
     QuoteColumnAlias(aliasName: string): string {
-        return `"${aliasName}"`;
+        return `"${aliasName.replace(/"/g, '""')}"`;
     }
 
     /**
@@ -708,6 +716,48 @@ export class PostgreSQLDialect extends SQLDialect {
                     WHERE n.nspname = $1 AND c.relname = $2
                 ) AS exists`,
         };
+    }
+
+    /**
+     * PostgreSQL FK-graph query for cascade planning — reads `pg_catalog.pg_constraint`
+     * (`contype = 'f'`). Returns one row per FK column (via `unnest(conkey, confkey)`, which
+     * preserves column pairing/order), with `childNullable` (`NOT attnotnull`) and `colCount`
+     * (`array_length(conkey, 1)`, for composite exclusion). Column aliases and semantics MATCH
+     * the SQL Server variant so a single caller parses both. `relname`/`attname` preserve the
+     * quoted mixed-case identifiers MJ creates on PG, so they feed straight into QuoteIdentifier.
+     * Both parent + child are filtered to `schema`; the schema is embedded as a literal.
+     */
+    ForeignKeyGraphSQL(schema: string): string {
+        const s = this.QuoteStringLiteral(schema);
+        // NOTE: deliberately avoids `unnest(...) WITH ORDINALITY` / `LATERAL`. This query is executed
+        // through PostgreSQLDataProvider.ExecuteSQL, whose autoQuoteIdentifiers tokenizer quotes the
+        // bare uppercase word `ORDINALITY` (not in its keyword set) → `WITH "ORDINALITY"` → a syntax
+        // error. Using `= any(con.conkey)` (all-lowercase, autoQuote-safe) resolves the FK column via
+        // array membership instead. For SINGLE-column FKs (the only ones the planner keeps, colCount=1)
+        // this yields exactly one correctly-paired row; composite FKs (colCount>1) produce a cross
+        // product of rows that the caller skips wholesale by fkName — so the mispairing is irrelevant.
+        return (
+            'SELECT pt.relname AS "parentTable", pa.attname AS "parentRefCol", ct.relname AS "childTable", ' +
+            'ca.attname AS "childCol", (NOT ca.attnotnull) AS "childNullable", con.conname AS "fkName", ' +
+            'array_length(con.conkey, 1) AS "colCount" ' +
+            'FROM pg_catalog.pg_constraint con ' +
+            'JOIN pg_catalog.pg_class ct ON ct.oid = con.conrelid ' +
+            'JOIN pg_catalog.pg_namespace cn ON cn.oid = ct.relnamespace ' +
+            'JOIN pg_catalog.pg_class pt ON pt.oid = con.confrelid ' +
+            'JOIN pg_catalog.pg_namespace pn ON pn.oid = pt.relnamespace ' +
+            'JOIN pg_catalog.pg_attribute ca ON ca.attrelid = con.conrelid AND ca.attnum = any(con.conkey) ' +
+            'JOIN pg_catalog.pg_attribute pa ON pa.attrelid = con.confrelid AND pa.attnum = any(con.confkey) ' +
+            `WHERE con.contype = 'f' AND cn.nspname = ${s} AND pn.nspname = ${s} ` +
+            'ORDER BY con.conname'
+        );
+    }
+
+    AtomicBatchScript(statements: string[]): string {
+        if (!statements || !statements.length) return '';
+        const body = statements.join(';\n');
+        // No session pragmas (QUOTED_IDENTIFIER/ANSI_NULLS are SQL-Server concepts) and PostgreSQL
+        // already aborts the whole transaction on any error, so plain BEGIN … COMMIT is all-or-nothing.
+        return `BEGIN;\n${body};\nCOMMIT;`;
     }
 
     // ─── IIF ─────────────────────────────────────────────────────────

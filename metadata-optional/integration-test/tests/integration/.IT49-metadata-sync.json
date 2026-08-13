@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT49 - MetadataSync Parsing Contracts",
+    "Description": "mj-sync seams without pushing: lookup/parent/file reference parsing contracts incl. the ampersand-in-name pin, validate-only over the in-repo integration metadata, donor-cache delegation rules. Read-only. Server transport.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "mj-sync seams without pushing: lookup/parent/file reference parsing contracts incl. the ampersand-in-name pin, validate-only over the in-repo integration metadata, donor-cache delegation rules. Read-only. Server transport."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "metadata-sync"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "0F804527-745A-4C0F-BF70-BE7FE59E71F8"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T01:12:44.342Z",
+    "checksum": "ca6a7b1006a4cc14a5a29e6a0dbd89fa2454116fe8285d342f308082a9b7bde6"
+  }
+}

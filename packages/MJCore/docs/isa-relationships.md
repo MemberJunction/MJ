@@ -1,5 +1,10 @@
 # IS-A Type Relationships in MemberJunction
 
+> **Not what you want?** IS-A is *vertical* — one logical record spread across parent and child
+> tables sharing a primary key. For a header plus N rows that carry a foreign key back to it (order
+> lines, an action's parameters), see [Related-Record Collections](./related-record-collections.md).
+> MJCore reserves the word **child** for IS-A subtypes; FK dependents are **related records**.
+
 > **Package**: [@memberjunction/core](../readme.md)
 > **Related Guides**: [Virtual Entities](./virtual-entities.md) | [RunQuery Pagination](./runquery-pagination.md)
 > **Related Packages**: [@memberjunction/codegen-lib](../../CodeGenLib/README.md) | [@memberjunction/sqlserver-dataprovider](../../SQLServerDataProvider/README.md) | [@memberjunction/graphql-dataprovider](../../GraphQLDataProvider/README.md) | [@memberjunction/ng-core-entity-forms](../../Angular/Explorer/core-entity-forms/README.md)
@@ -325,18 +330,17 @@ sequenceDiagram
     participant DB as SQL Server
 
     App->>W: Save()
-    W->>Prov: BeginISATransaction()
-    Prov-->>W: Transaction object
-    W->>W: PropagateTransactionToParents()
+    W->>Prov: BeginEntityTransaction()
+    Prov-->>W: Scope (new transaction, or joins one already in flight)
 
     W->>P: Save({ IsParentEntitySave: true })
-    P->>Prov: Save(ProductEntity) [uses shared transaction]
+    P->>Prov: Save(ProductEntity) [uses ambient transaction]
     Prov->>DB: EXEC spCreateProduct / spUpdateProduct
     DB-->>Prov: Result
     Prov-->>P: Success
 
     W->>M: Save({ IsParentEntitySave: true })
-    M->>Prov: Save(MeetingEntity) [uses shared transaction]
+    M->>Prov: Save(MeetingEntity) [uses ambient transaction]
     Prov->>DB: EXEC spCreateMeeting / spUpdateMeeting
     DB-->>Prov: Result
     Prov-->>M: Success
@@ -345,14 +349,42 @@ sequenceDiagram
     Prov->>DB: EXEC spCreateWebinar / spUpdateWebinar
     DB-->>Prov: Result
 
-    W->>Prov: CommitISATransaction()
-    Prov->>DB: COMMIT TRANSACTION
+    W->>Prov: scope.Commit()
+    Prov->>DB: COMMIT TRANSACTION (only if outermost)
     W-->>App: true (success)
 ```
 
 **Save order:** Parent → ... → Child (Product first, then Meeting, then Webinar)
 
 **On failure:** The entire transaction is rolled back — no partial saves.
+
+> ### ⚠️ Transaction handling changed in 6.2
+>
+> IS-A chains previously called a dedicated provider trio — `BeginISATransaction()` /
+> `CommitISATransaction()` / `RollbackISATransaction()` — and propagated the resulting handle down
+> the parent chain via `PropagateTransactionToParents()`.
+>
+> **The problem:** `BeginISATransaction()` opened a *brand-new physical transaction on the pool* with
+> no depth awareness, while `DatabaseProviderBase.BeginTransaction()` — used by every hand-written
+> application cascade — is depth-counted and savepoint-aware. The two were blind to each other. An
+> IS-A entity saved inside an application transaction therefore wrote into **two independent
+> transactions**; rolling one back left the other committed, and nothing raised an error.
+>
+> **The fix:** IS-A now calls the same `BeginEntityTransaction()` everything else does. The provider
+> arbitrates — starting a physical transaction or joining one already in flight as a savepoint — so
+> participants stay ignorant of each other *and* end up in one transaction. Because the ambient
+> transaction is picked up automatically by any `ExecuteSQL` call with no explicit
+> `connectionSource`, there is nothing left to propagate.
+>
+> **🚨 Removed, not deprecated.** 6.x LTS had not shipped, so the old surface was deleted outright
+> rather than carried as debt: the three `*ISATransaction` provider methods,
+> `BaseEntity.ProviderTransaction`, and `BaseEntity.PropagateTransactionToParents()` are all gone.
+> Nothing set the handle after the unification, and the provider reads that consumed it were already
+> dead — an `ExecuteSQL` call with no explicit `connectionSource` picks up the ambient transaction,
+> which is exactly what the scope opens. Callers that hand-managed a handle should open a scope
+> instead: `BeginEntityTransaction()`, or `RunInEntityTransaction(provider, work)`.
+>
+> See [Transactions, Batching & Entity Graphs](../../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md).
 
 ### Delete Orchestration
 
@@ -365,7 +397,7 @@ sequenceDiagram
     participant DB as SQL Server
 
     App->>W: Delete()
-    W->>W: BeginISATransaction()
+    W->>W: BeginEntityTransaction()
 
     W->>DB: DELETE from Webinar (own row first)
     DB-->>W: Success
@@ -500,9 +532,90 @@ WHERE Name = 'Persons';
 
 No other changes are needed — the existing IS-A infrastructure handles everything else automatically.
 
+## Creating a Child Record
+
+**Create the CHILD and set fields from anywhere in the chain. One save writes every table.**
+
+You do not create the parent and then attach a child to it. You create the child, set both its own
+fields and its ancestors', and save once — `BaseEntity` routes each field to the entity that owns it
+via `EntityInfo.ParentEntityFieldNames`, saves the chain root-first, and shares one primary key
+across every level.
+
+```typescript
+// Webinar IS-A Meeting IS-A Product
+const webinar = await md.GetEntityObject<WebinarEntity>('Webinars', contextUser);
+webinar.NewRecord();
+
+// Webinar's own fields
+webinar.RecordingURL = 'https://example.com/rec/123';
+webinar.MaxViewers   = 500;
+
+// Meeting's fields — one level up
+webinar.StartTime    = new Date('2026-03-01T15:00:00Z');
+webinar.Location     = 'Online';
+
+// Product's fields — two levels up. Set on the SAME object.
+webinar.Name         = 'Q1 Product Webinar';
+webinar.Status       = 'Active';
+webinar.CompanyID    = companyId;
+
+await webinar.Save();   // writes Product, then Meeting, then Webinar — one call
+```
+
+There is no depth limit: a field belonging to any ancestor is set on the child object and routed
+upward. `Get` reads back the same way, so `webinar.Name` returns the Product's `Name`.
+
+### Set the parent's required fields, or the save fails
+
+The most common IS-A mistake is forgetting a NOT NULL column that lives on an ANCESTOR table. The
+child's own fields are all present, the child looks complete, and the save still fails — because the
+parent insert is rejected first.
+
+```typescript
+const webinar = await md.GetEntityObject<WebinarEntity>('Webinars', contextUser);
+webinar.NewRecord();
+webinar.RecordingURL = 'https://example.com/rec/123';   // child fields only
+await webinar.Save();   // → false. Product.Name is NOT NULL and was never set.
+```
+
+From v5.50.0 the failure explains itself:
+
+```
+Failed to save parent entity 'Products': Name cannot be null; Status cannot be null
+```
+
+**Before v5.50.0 this returned `false` with `LatestResult === null` and an empty `ResultHistory`** —
+every result had been written to the parent object, which callers hold no reference to. If you are on
+an older version and a child save returns `false` with no message anywhere, this is almost certainly
+why; read `entity.ISAParent?.LatestResult` to see it.
+
+### Anti-pattern: creating the parent, then "attaching" a child
+
+```typescript
+// ❌ WRONG — this is not how IS-A works
+const product = await md.GetEntityObject<ProductEntity>('Products', contextUser);
+product.NewRecord();
+product.Name = 'Q1 Product Webinar';
+await product.Save();                       // parent row exists
+
+const webinar = await md.GetEntityObject<WebinarEntity>('Webinars', contextUser);
+webinar.NewRecord();
+webinar.Set('ID', product.ID);              // trying to adopt the parent's key
+webinar.RecordingURL = '...';
+await webinar.Save();                       // → false
+```
+
+`NewRecord()` starts a NEW chain, so this creates a second parent and then fights the first over the
+primary key. Use the correct form above instead: one `GetEntityObject` on the child, one `Save`.
+
+If you genuinely need to add a child to a parent row that ALREADY exists — a subtype decided after
+the fact — that is a different operation from creation, and IS-A's save path does not model it: it
+always saves the parent too, which fails if the parent is immutable or frozen by a trigger. Handle
+that case explicitly rather than expecting `Save()` to attach.
+
 ## NewRecord & ID Propagation
 
-When creating a new IS-A child record, the UUID is automatically shared across the entire chain:
+`NewRecord()` walks the chain and shares one UUID across every level:
 
 ```typescript
 const webinar = await md.GetEntityObject<WebinarEntity>('Webinars');
@@ -516,20 +629,28 @@ webinar.NewRecord();
 // Result: All three entities share 'abc-123' as their primary key
 ```
 
+You never set the ID yourself — that shared key IS the relationship.
+
 ## Provider Implementation
 
 ### SQLServerDataProvider
 
-Implements IS-A transaction methods:
+IS-A uses the **shared** entity transaction primitive, not an IS-A-specific one:
 
 ```typescript
-// These methods create independent SQL Server transactions
-async BeginISATransaction(): Promise<sql.Transaction>
-async CommitISATransaction(txn: sql.Transaction): Promise<void>
-async RollbackISATransaction(txn: sql.Transaction): Promise<void>
+// Inherited from DatabaseProviderBase; delegates to the provider's depth-counted
+// BeginTransaction / CommitTransaction / RollbackTransaction.
+async BeginEntityTransaction(): Promise<EntityTransactionScope>
 ```
 
-The transaction is propagated to each entity in the chain via `entity.ProviderTransaction`, ensuring all SPs execute within the same database transaction.
+The scope either starts a physical transaction or joins one already in flight (as a `SAVE
+TRANSACTION` savepoint). Every stored-procedure call in the chain then runs inside it automatically,
+because `ExecuteSQL` picks up the provider's ambient transaction whenever no explicit
+`connectionSource` is supplied — so no handle has to be propagated along the chain.
+
+The deprecated `BeginISATransaction` / `CommitISATransaction` / `RollbackISATransaction` trio still
+exists on the provider for external callers, but MJ core no longer calls it. See the 6.2 note under
+[Save Orchestration](#save-orchestration) for why it was retired.
 
 ### GraphQLDataProvider (Client-Side)
 
@@ -799,7 +920,9 @@ class BaseEntity {
 | Parent fields not appearing in view | `ParentID` not set on entity | Set `Entity.ParentID` to parent entity's ID |
 | "Field collision" error in CodeGen | Child table has column with same name as parent field | Rename the child column to avoid conflict |
 | Disjoint violation on save | Same ID exists in a sibling child entity | Each record can only be one child type |
-| Save fails with rollback | Parent entity validation failed | Check parent entity field requirements |
+| Save fails with rollback | Parent entity validation failed | Check parent entity field requirements — most often a NOT NULL column on an ANCESTOR table that was never set. See [Creating a Child Record](#creating-a-child-record) |
+| Save returns `false` with NO message, empty `ResultHistory` | Parent save failed on core **< 5.50.0**, where the result was recorded only on the parent object | Upgrade to 5.50.0+, which reports `Failed to save parent entity '<Name>': <detail>`. On older versions read `entity.ISAParent?.LatestResult` |
+| Child save fails after creating the parent separately | `NewRecord()` starts a NEW chain — it does not adopt an existing parent row | Create the CHILD and set the parent's fields on it; one `Save()` writes both |
 | Delete blocked on parent | Child records exist | Delete children first or enable `CascadeDeletes` |
 | `_parentEntity` is null | Entity not properly initialized | Ensure `GetEntityObject()` is used (not direct constructor) |
 | `ISAChild` is null after Load | Provider doesn't implement `FindISAChildEntity` | Update provider or use `ResolveLeafEntity()` static method |

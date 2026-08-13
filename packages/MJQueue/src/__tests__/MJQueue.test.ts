@@ -231,4 +231,85 @@ describe('QueueBase', () => {
       expect(queue.ShutdownName).toContain('type-1');
     });
   });
+
+  describe('_queue trimming (memory-leak fix D-critical-2)', () => {
+    it('removes a task from the queue once it completes successfully', async () => {
+      const taskRecord = { ID: 't1', Status: 'Pending', Save: vi.fn().mockResolvedValue(true) } as unknown as MJQueueTaskEntity;
+      const task = new TaskBase(taskRecord, {}, {});
+
+      expect(queue.QueueSize).toBe(0);
+      queue.AddTask(task);
+      // Flush the microtask queue so StartTask's awaited continuation runs.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(queue.QueueSize).toBe(0);
+      expect(queue.FindTask('t1')).toBeUndefined();
+      expect(task.Status).toBe(TaskStatus.Complete);
+    });
+
+    it('removes a task from the queue once it fails (ProcessTask resolves success:false)', async () => {
+      class FailingQueue extends QueueBase {
+        protected async ProcessTask(): Promise<TaskResult> {
+          return { success: false, userMessage: 'nope', output: null, exception: null };
+        }
+      }
+      const queueRecord = { ID: 'queue-2', Save: vi.fn() } as unknown as import('@memberjunction/core-entities').MJQueueEntity;
+      const user = { ID: 'user-1' } as InstanceType<typeof import('@memberjunction/core').UserInfo>;
+      const failingQueue = new FailingQueue(queueRecord, 'type-1', user);
+
+      const taskRecord = { ID: 't2', Status: 'Pending', Save: vi.fn().mockResolvedValue(true) } as unknown as MJQueueTaskEntity;
+      const task = new TaskBase(taskRecord, {}, {});
+
+      failingQueue.AddTask(task);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(failingQueue.QueueSize).toBe(0);
+      expect(task.Status).toBe(TaskStatus.Failed);
+      failingQueue.Stop();
+    });
+
+    it('removes a task from the queue and marks it Failed when ProcessTask throws (does not stay stuck InProgress)', async () => {
+      class ThrowingQueue extends QueueBase {
+        protected async ProcessTask(): Promise<TaskResult> {
+          throw new Error('boom');
+        }
+      }
+      const queueRecord = { ID: 'queue-3', Save: vi.fn() } as unknown as import('@memberjunction/core-entities').MJQueueEntity;
+      const user = { ID: 'user-1' } as InstanceType<typeof import('@memberjunction/core').UserInfo>;
+      const throwingQueue = new ThrowingQueue(queueRecord, 'type-1', user);
+
+      const taskRecord = { ID: 't3', Status: 'Pending', Save: vi.fn().mockResolvedValue(true) } as unknown as MJQueueTaskEntity;
+      const task = new TaskBase(taskRecord, {}, {});
+
+      throwingQueue.AddTask(task);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      // Before the fix, a thrown ProcessTask left the task stuck at InProgress forever,
+      // permanently occupying one of the queue's concurrency slots.
+      expect(task.Status).toBe(TaskStatus.Failed);
+      expect(throwingQueue.QueueSize).toBe(0);
+      throwingQueue.Stop();
+    });
+
+    it('does not grow _queue without bound across many sequential completed tasks', async () => {
+      vi.useFakeTimers();
+      try {
+        // _maxTasks defaults to 3, so this exercises multiple recursive ProcessTasks()
+        // cycles (driven by the periodic setTimeout) rather than a single batch.
+        for (let i = 0; i < 50; i++) {
+          const taskRecord = { ID: `bulk-${i}`, Status: 'Pending', Save: vi.fn().mockResolvedValue(true) } as unknown as MJQueueTaskEntity;
+          queue.AddTask(new TaskBase(taskRecord, {}, {}));
+        }
+        // Advance past enough recursive ProcessTasks() cycles (250ms each, 3 tasks per
+        // cycle) to drain all 50 tasks. ProcessTasks reschedules itself forever while the
+        // queue isn't stopped, so use a bounded advance rather than runAllTimersAsync().
+        await vi.advanceTimersByTimeAsync(5000);
+
+        expect(queue.QueueSize).toBe(0);
+      } finally {
+        queue.Stop();
+        vi.useRealTimers();
+      }
+    });
+  });
 });

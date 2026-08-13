@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT52 - Unified Search Seams",
+    "Description": "Unified search seams: EntityByName contract, SearchEntity lexical ranking incl. exact-name hit, batch SearchEntities alignment, scope permission resolution against real metadata; loud skips when search infra unconfigured. Client transport.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Unified search seams: EntityByName contract, SearchEntity lexical ranking incl. exact-name hit, batch SearchEntities alignment, scope permission resolution against real metadata; loud skips when search infra unconfigured. Client transport."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "search"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "9B0651FF-395F-4A71-9D4C-185542C6EF44"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T01:12:44.385Z",
+    "checksum": "f7a3d573f98f3d9f9ecaa226fb714f714298e3b251f24be4cb8a40e47fd9005b"
+  }
+}

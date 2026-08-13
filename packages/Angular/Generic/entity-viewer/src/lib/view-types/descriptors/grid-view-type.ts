@@ -24,6 +24,13 @@ export class GridViewType extends BaseViewTypeDescriptor {
    */
   override readonly UsesCanonicalGridState = true;
 
+  /**
+   * The grid renderer has its own in-toolbar "Export" button (full result set + format/sampling
+   * dialog), so hosts should NOT add a duplicate fallback Export button when the grid is active.
+   * See {@link IViewTypeDescriptor.ProvidesOwnExport}.
+   */
+  override readonly ProvidesOwnExport = true;
+
   // IsAvailableFor inherits the base "always available" behavior.
 }
 

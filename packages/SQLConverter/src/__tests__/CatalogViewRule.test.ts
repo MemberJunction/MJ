@@ -163,8 +163,12 @@ describe('CatalogViewRule', () => {
     it('should produce valid PG syntax for vwTablePrimaryKeys (no SQL Server constructs)', () => {
       const sql = `CREATE VIEW [__mj].[vwTablePrimaryKeys] AS SELECT s.name FROM sys.tables t`;
       const result = convert(sql);
-      // No SQL Server syntax
-      expect(result).not.toMatch(/\[.*\]/); // No square brackets
+      // No SQL Server syntax. Strip SQL line-comments first: the emitted PG views carry
+      // documentation tags like `-- [Large Schema Series] …` whose square brackets are prose,
+      // not SQL-Server identifier quoting. The assertion targets bracket-quoted *identifiers*
+      // in the emitted SQL — comments are not SQL constructs.
+      const sqlOnly = result.replace(/--.*$/gm, '');
+      expect(sqlOnly).not.toMatch(/\[.*\]/); // No square-bracket identifier quoting
       expect(result).not.toContain('NVARCHAR');
       expect(result).not.toContain('sys.');
       // Has PG syntax

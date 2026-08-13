@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Offline demo — MJ Support Widget (mock transport)</title>
+    <style>
+        body { font-family: Georgia, serif; background: #fafad2; color: #663399; padding: 2rem; }
+        button { background: hotpink !important; border: 4px dashed red !important; }
+    </style>
+</head>
+<body>
+    <h1>Offline widget demo</h1>
+    <p>This page exercises the widget UI with a <code>MockWidgetTransport</code> — no MJAPI, no
+       network. Use it to verify the chat UX and shadow-DOM isolation. Click the 💬 launcher.</p>
+
+    <!-- Requires the bundle: run `npm run build && npm run bundle` first. -->
+    <script type="module">
+        import {
+            defineSupportWidgetElement,
+            WIDGET_TAG_NAME,
+            MockWidgetTransport,
+        } from '../dist/mj-widget.js';
+
+        defineSupportWidgetElement();
+
+        const transport = new MockWidgetTransport(
+            (text) => `(demo) You said: "${text}". In production a pinned MJ agent answers here.`,
+        );
+        const session = {
+            token: 'demo',
+            expiresAtMs: Date.now() + 3_600_000,
+            widgetId: 'demo-widget',
+            applicationId: 'demo-app',
+            pinnedAgentId: 'demo-agent',
+            modality: 'Both',
+        };
+        await transport.Initialize(session);
+
+        const el = document.createElement(WIDGET_TAG_NAME);
+        el.Configure({ title: 'Acme Support (demo)', greeting: 'Hi! This is an offline demo.' });
+        el.SetSession(session);
+        el.SetTransport(transport);
+        document.body.appendChild(el);
+    </script>
+</body>
+</html>

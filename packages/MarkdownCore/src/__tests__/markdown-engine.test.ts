@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Tokens } from 'marked';
-import { MarkdownEngine } from '../engine/markdown-engine';
-import type { SvgCodeBlockToken } from '../extensions/svg-renderer.extension';
+import { MarkdownEngine } from '../engine/markdown-engine.js';
+import type { SvgCodeBlockToken } from '../extensions/svg-renderer.extension.js';
 
 describe('MarkdownEngine.parseToHtml', () => {
   it('renders a heading with a gfm id', () => {

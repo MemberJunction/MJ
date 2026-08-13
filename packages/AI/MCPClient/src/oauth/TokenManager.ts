@@ -9,6 +9,7 @@
 
 import { Metadata, RunView, UserInfo, LogError, LogStatus, BaseEntity, CompositeKey, IMetadataProvider } from '@memberjunction/core';
 import { CredentialEngine } from '@memberjunction/credentials';
+import { DescribeTokenEndpointFailure } from '@memberjunction/global';
 import type {
     OAuthTokenSet,
     OAuthTokenResponse,
@@ -536,20 +537,12 @@ export class TokenManager {
         });
 
         if (!response.ok) {
-            const errorBody = await response.text();
-            let errorCode = `HTTP ${response.status}`;
-            try {
-                const errorJson = JSON.parse(errorBody);
-                if (errorJson.error) {
-                    errorCode = errorJson.error;
-                    if (errorJson.error_description) {
-                        errorCode += `: ${errorJson.error_description}`;
-                    }
-                }
-            } catch {
-                errorCode += `: ${errorBody}`;
-            }
-            throw new Error(errorCode);
+            // SECURITY: the previous fallback appended the raw body whenever it failed
+            // to parse as JSON. Token endpoints commonly echo the failing request back
+            // in their error body, and that request carries `client_secret` and the
+            // refresh token — so an unparseable body is exactly the case that must NOT
+            // be surfaced. Only the RFC 6749 §5.2 error fields are safe.
+            throw new Error(`HTTP ${response.status}${DescribeTokenEndpointFailure(await response.text())}`);
         }
 
         return await response.json() as OAuthTokenResponse;

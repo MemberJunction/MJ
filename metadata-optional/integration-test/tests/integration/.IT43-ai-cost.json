@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT43 - AI Cost Pipeline Integrity",
+    "Description": "AI cost/pricing integrity: price-unit DriverClass resolution + exact divisor math, normalization invariants, cost-pipeline join integrity in engine caches, GetActiveModelCost selection parity, orphaned cost rows, historical prompt-run cost identity. 6 checks (AC1-AC6), read-only.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "AI cost/pricing integrity: price-unit DriverClass resolution + exact divisor math, normalization invariants, cost-pipeline join integrity in engine caches, GetActiveModelCost selection parity, orphaned cost rows, historical prompt-run cost identity. 6 checks (AC1-AC6), read-only."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ai-cost"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "5A910BF2-2C9A-40A9-B026-08FE4B8ADB6C"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T01:12:44.261Z",
+    "checksum": "f2fcafee1d826a627cfbcc3c4fbcc6c7fbaed19993de7a882708bf41f738f74f"
+  }
+}

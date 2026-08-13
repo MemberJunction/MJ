@@ -5,6 +5,7 @@
 
 import os from 'os';
 import { v4 as uuidv4 } from 'uuid';
+import { Subscription } from 'rxjs';
 import {
     UserInfo,
     Metadata,
@@ -21,6 +22,7 @@ import { BaseSingleton, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { ScheduledJobResult, NotificationChannel } from '@memberjunction/scheduling-base-types';
 import { SchedulingEngineBase } from '@memberjunction/scheduling-engine-base';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from './BaseScheduledJob';
+import { DecideMissedRun } from './MissedRunPolicy';
 import { CronExpressionHelper } from './CronExpressionHelper';
 import { NotificationManager } from './NotificationManager';
 
@@ -64,6 +66,20 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     private pollingTimer?: NodeJS.Timeout;
     private isPolling: boolean = false;
     private hasInitialized: boolean = false;
+
+    /**
+     * Subscription to the base engine's {@link SchedulingEngineBase.JobsChanged$}. Created
+     * once (lifetime of the engine) so an activation that arrives after boot — when polling
+     * was suspended because there were zero active jobs — can wake the poll timer. Torn down
+     * only on full service shutdown; the internal "all jobs removed" stop keeps it alive.
+     */
+    private _jobsChangedSubscription?: Subscription;
+
+    /**
+     * The user context polling was started with. Retained so the {@link JobsChanged$} handler
+     * can restart polling with the same (system) user after a boot-time suspension.
+     */
+    private _pollingContextUser?: UserInfo;
 
     /** Job IDs we have already warned about for sub-threshold run frequency. */
     private highFrequencyWarnedJobIds: Set<string> = new Set();
@@ -300,12 +316,19 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         // Order: Config first (so this.ScheduledJobs is populated), then
         // initializeNextRunTimes / cleanupStaleLocks / permission probe.
         await this.Config(false, contextUser);
+
+        // Retain the context user and subscribe to job-change notifications BEFORE the
+        // zero-jobs early-return below, so that if polling is suspended at boot (no active
+        // jobs), a later activation still fires JobsChanged$ and wakes the timer.
+        this._pollingContextUser = contextUser;
+        this.ensureJobChangeSubscription();
+
         await this.initializeNextRunTimes(contextUser);
         await this.cleanupStaleLocks(contextUser);
         await this.probeLockSprocPermissions();
 
         if (this.ScheduledJobs.length === 0) {
-            console.log(`📅 Scheduled Jobs: No active jobs found, polling not started`);
+            console.log(`📅 Scheduled Jobs: No active jobs found, polling not started (will auto-start when a job is activated)`);
             return;
         }
 
@@ -370,6 +393,14 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      * @param opts.maxWaitMs - Bound the wait (only meaningful with waitForInflight)
      */
     public async StopPolling(opts?: { waitForInflight?: boolean; maxWaitMs?: number }): Promise<void> {
+        // Full service shutdown (ScheduledJobsService.Stop passes waitForInflight) releases the
+        // job-change listener. The internal "all jobs removed" stop passes NO opts and
+        // deliberately keeps the subscription alive so a later activation re-wakes polling.
+        // This runs before the isPolling guard so an already-suspended engine still tears down.
+        if (opts?.waitForInflight) {
+            this.releaseJobChangeSubscription();
+        }
+
         if (!this.isPolling) return;
 
         // Order matters: block new dispatches BEFORE snapshotting inflight.
@@ -435,6 +466,52 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         if (!this.isPolling && this.ScheduledJobs.length > 0) {
             console.log(`📅 Scheduled Jobs: Jobs detected, starting polling`);
             this.StartPolling(contextUser);
+        }
+    }
+
+    /**
+     * Subscribe once (engine lifetime) to the base engine's job-change notifications.
+     * Idempotent — repeated calls (e.g. a restart via {@link OnJobChanged}/{@link onBaseJobsChanged})
+     * are no-ops while the subscription is live.
+     */
+    private ensureJobChangeSubscription(): void {
+        if (this._jobsChangedSubscription) {
+            return;
+        }
+        this._jobsChangedSubscription = this.Base.JobsChanged$.subscribe(() => {
+            // Fire-and-forget; onBaseJobsChanged owns its error handling.
+            void this.onBaseJobsChanged();
+        });
+    }
+
+    /**
+     * Tear down the job-change subscription. Called only on full service shutdown.
+     */
+    private releaseJobChangeSubscription(): void {
+        if (this._jobsChangedSubscription) {
+            this._jobsChangedSubscription.unsubscribe();
+            this._jobsChangedSubscription = undefined;
+        }
+    }
+
+    /**
+     * React to a change in the active scheduled-job set (surfaced by the base engine after
+     * it has reconciled and Active-filtered {@link ScheduledJobs}). Recomputes the polling
+     * cadence and — if polling is currently suspended but active jobs now exist — restarts it.
+     *
+     * Cannot recurse: {@link StartPolling} calls `Config(false)`, a no-op once metadata is
+     * loaded, so it emits no further change events; and it short-circuits when already polling.
+     */
+    private async onBaseJobsChanged(): Promise<void> {
+        try {
+            this.UpdatePollingInterval();
+
+            if (!this.isPolling && this.ScheduledJobs.length > 0 && this._pollingContextUser) {
+                console.log(`📅 Scheduled Jobs: Job activated, starting polling`);
+                await this.StartPolling(this._pollingContextUser);
+            }
+        } catch (error) {
+            this.logError('Error handling scheduled job change notification', error);
         }
     }
 
@@ -580,6 +657,11 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             console.log(`  - ${job.Name}: NextRunAt=${job.NextRunAt?.toISOString() || 'NULL'}, Status=${job.Status}`);
 
             if (this.isJobDue(job, evalTime)) {
+                if (this.shouldSkipMissedRun(job, evalTime)) {
+                    console.log(`    ⏭ Missed run skipped per MissedRunPolicy`);
+                    await this.advancePastMissedRuns(job, evalTime);
+                    continue;
+                }
                 console.log(`    ✓ Job is due, attempting to acquire lock...`);
                 try {
                     const lockResult = await this.tryAcquireLock(job.ID, job.MaxRuntimeMinutes);
@@ -694,6 +776,14 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         for (const job of this.ScheduledJobs) {
             if (!this.isJobDue(job, evalTime)) continue;
 
+            // A job whose fire time passed while nothing was running asks a question the schedule
+            // alone cannot answer — should the missed occurrences happen now? Its policy decides,
+            // and 'Skip' answers by advancing past them without running.
+            if (this.shouldSkipMissedRun(job, evalTime)) {
+                await this.advancePastMissedRuns(job, evalTime);
+                continue;
+            }
+
             if (this.inflightJobPromises.size >= this.MaxConcurrentJobs) {
                 skippedAtCapacity++;
                 continue;
@@ -737,6 +827,13 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         }
 
         this.UpdatePollingInterval();
+        // PHASE 3: retire jobs whose window has closed. Deliberately AFTER dispatch rather than
+        // before it: `isJobDue` already refuses a job past its EndAt, so retirement changes nothing
+        // about what runs this tick — it is bookkeeping. Putting it in front of the loop added an
+        // await that let the sweep's fire-and-forget orphan cleanup interleave differently, which is
+        // a real hazard for anything that shares ordering with dispatch, not just for tests.
+        await this.expireFinishedJobs(contextUser, evalTime);
+
         return { swept, dispatched, lockedOut, skippedAtCapacity };
     }
 
@@ -931,7 +1028,12 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         _runId: string
     ): Promise<void> {
         const now = new Date();
-        const nextRun = CronExpressionHelper.GetNextRunTime(job.CronExpression, job.Timezone);
+        // Where the NEXT occurrence is measured from depends on the job's missed-run policy.
+        // 'RunAll' measures from the occurrence just consumed, so a backlog is walked one step per
+        // tick; everything else measures from now, which collapses a backlog into the single
+        // catch-up run the engine has always performed.
+        const advanceFrom = job.MissedRunPolicy === 'RunAll' && job.NextRunAt ? job.NextRunAt : undefined;
+        const nextRun = CronExpressionHelper.GetNextRunTime(job.CronExpression, job.Timezone, advanceFrom);
 
         // Update in-memory entity so callers reading job.RunCount/job.NextRunAt
         // immediately after see the new values without a Load round-trip.
@@ -994,7 +1096,119 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     }
 
     /**
-     * Send notifications if configured
+     * Apply the job's missed-run policy, advancing past the missed occurrences when it says Skip.
+     *
+     * Only reached for a job that is already due, so the "merely due" case costs one cron
+     * computation and always runs. Whether anything was actually *missed* is decided
+     * cron-relatively — a later occurrence has also come due — rather than against a grace window,
+     * which would misjudge a per-minute job after a short pause and a monthly job that is a week
+     * late in opposite directions.
+     *
+     * **Synchronous on purpose.** It runs inside the dispatch loop, immediately before lock
+     * acquisition; making it async would insert a microtask exactly where ordering against the
+     * sweep's fire-and-forget cleanup matters. The decision needs no I/O — only the skip branch
+     * writes, and that is awaited separately once the answer is known.
+     *
+     * @returns true when the job should NOT run this tick.
+     */
+    private shouldSkipMissedRun(job: MJScheduledJobEntity, evalTime: Date): boolean {
+        if (!job.NextRunAt) {
+            return false;
+        }
+
+        // Fails OPEN throughout: this check can only ever *withhold* a run the schedule already
+        // said was due, so anything it cannot evaluate must let the job through. An unparseable
+        // cron is a configuration problem the execution path reports far better than a silent skip,
+        // and a helper that returns something other than a date is a bug that must not become a job
+        // that quietly stops running.
+        let followingOccurrence: Date | undefined;
+        try {
+            followingOccurrence = CronExpressionHelper.GetNextRunTime(job.CronExpression, job.Timezone, job.NextRunAt);
+        } catch (error) {
+            this.logError(`Could not evaluate the missed-run policy for "${job.Name}"; running it`, error);
+            return false;
+        }
+        if (!(followingOccurrence instanceof Date) || Number.isNaN(followingOccurrence.getTime())) {
+            return false;
+        }
+
+        return DecideMissedRun(job.MissedRunPolicy, job.NextRunAt, followingOccurrence, evalTime).Action === 'SkipAndAdvance';
+    }
+
+    /**
+     * Move a skipped job past the occurrences it missed, so it rejoins its schedule instead of
+     * being re-evaluated as missed on every subsequent poll.
+     *
+     * Best-effort: a failed advance is logged and retried next tick, never propagated.
+     */
+    private async advancePastMissedRuns(job: MJScheduledJobEntity, evalTime: Date): Promise<void> {
+        try {
+            const resumeAt = CronExpressionHelper.GetNextRunTime(job.CronExpression, job.Timezone, evalTime);
+            job.NextRunAt = resumeAt;
+            if (await job.Save()) {
+                this.log(`Job "${job.Name}" skipped its missed run(s) per MissedRunPolicy=Skip; next run ${resumeAt.toISOString()}.`);
+            } else {
+                this.logError(`Could not advance "${job.Name}" past its missed runs: ${job.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+        } catch (error) {
+            this.logError(`Advancing "${job.Name}" past its missed runs threw (non-fatal)`, error);
+        }
+    }
+
+    /**
+     * Move jobs past their `EndAt` to `Status='Expired'`.
+     *
+     * **`Expired` has always been a declared status that nothing ever set.** `isJobDue` already
+     * refuses a job whose `EndAt` has passed, so such a job stops running on its own — but it stays
+     * `Active` forever, permanently inert, and keeps counting toward `UpdatePollingInterval`. A
+     * one-shot expressed as "cron at T plus `EndAt` just after T" therefore left the whole scheduler
+     * polling at that job's cadence for a job that will never run again.
+     *
+     * That makes this the one-shot story rather than a new schedule shape: "run once at T" is
+     * already expressible with the columns that exist, and what was missing was the retirement.
+     *
+     * Deliberately narrow. It only transitions `Active`/`Pending` — a `Paused` or `Disabled` job was
+     * put there by a person, and quietly rewriting their decision to `Expired` would lose it. And it
+     * only fires on `EndAt`, never on "the cron has no future occurrence": a cron always has one, so
+     * inferring exhaustion would be guessing.
+     *
+     * Best-effort: a failed transition is logged and retried on the next poll, never propagated —
+     * retiring a finished job must not be able to stop live ones from dispatching.
+     */
+    private async expireFinishedJobs(contextUser: UserInfo, evalTime: Date): Promise<void> {
+        for (const job of this.ScheduledJobs) {
+            if (!job.EndAt || evalTime <= job.EndAt) {
+                continue;
+            }
+            if (job.Status !== 'Active' && job.Status !== 'Pending') {
+                continue;
+            }
+
+            try {
+                job.Status = 'Expired';
+                if (await job.Save()) {
+                    this.log(`Job "${job.Name}" passed its EndAt (${job.EndAt.toISOString()}) — marked Expired.`);
+                } else {
+                    this.logError(`Could not mark job "${job.Name}" Expired: ${job.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+            } catch (error) {
+                this.logError(`Expiring job "${job.Name}" threw (non-fatal)`, error);
+            }
+        }
+
+        // The active set may have shrunk, and the polling cadence is derived from it — an expired
+        // job must stop driving how often every other job is checked.
+        this.UpdatePollingInterval();
+    }
+
+    /**
+     * Send notifications if configured.
+     *
+     * Runs at the tail of job completion, after the run record is written — so a delivery problem
+     * is contained here rather than faulting the bookkeeping of a job that actually succeeded.
+     * `NotificationManager` already swallows its own errors; the guard covers the formatting call
+     * into plugin code, which does not carry that contract.
+     *
      * @private
      */
     private async sendNotificationsIfNeeded(
@@ -1023,13 +1237,23 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             return;
         }
 
-        const content = plugin.FormatNotification(context, result);
+        try {
+            const content = plugin.FormatNotification(context, result);
 
-        await NotificationManager.SendScheduledJobNotification(
-            recipientUserId,
-            content,
-            channels
-        );
+            await NotificationManager.SendScheduledJobNotification({
+                RecipientUserID: recipientUserId,
+                Content: content,
+                Channels: channels,
+                ContextUser: context.ContextUser,
+                ScheduledJobID: job.ID,
+                ScheduledJobRunID: context.Run?.ID,
+                // The provider this job ran under, not the process default — a server hosting more
+                // than one connection must notify through the same one it read the job from.
+                Provider: this.Base.ProviderToUse,
+            });
+        } catch (error) {
+            this.logError(`Notification for job "${job.Name}" failed (non-fatal)`, error);
+        }
     }
 
     /**
@@ -1415,7 +1639,23 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     }
 
     /**
-     * Create a queued job run for later execution
+     * Record a queue event for a job whose lock is held (`ConcurrencyMode='Queue'`).
+     *
+     * IMPORTANT — terminal-on-creation semantics (bug-register B8 fix):
+     * This engine has NO drainer: nothing ever picks a queued run back up and executes
+     * it when the lock frees. The original implementation wrote `Status='Running'`,
+     * which produced runs that stayed 'Running' FOREVER (they looked like live
+     * executions to monitoring, stats, and the orphan sweep — the sweep couldn't even
+     * reach them because they were never in `inflightJobPromises`). Until real queue
+     * draining is designed and built, the queue event is recorded as an immediately
+     * TERMINAL run: `Status='Cancelled'`, `Success=false`, `CompletedAt` set, with an
+     * `ErrorMessage` explaining why. `QueuedAt` still records when the queue event
+     * happened, so the observability intent of Queue mode is preserved — no run is
+     * silently lost, and no run is ever orphaned in 'Running'.
+     *
+     * When a drainer is implemented, revisit: the run should then be created in a
+     * pending state the drainer owns, and this comment + the scheduling-concurrency
+     * integration check (SC2) that pins this contract must be updated together.
      * @private
      */
     private async createQueuedJobRun(
@@ -1429,14 +1669,32 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             contextUser
         );
 
+        const now = new Date();
         run.ScheduledJobID = job.ID;
         run.ExecutedByUserID = contextUser.ID;
-        run.Status = 'Running';
-        run.QueuedAt = new Date();
-        run.StartedAt = new Date();
+        run.QueuedAt = now;
+        run.StartedAt = now;
+        // Terminal on creation — see the method doc above (B8). A 'Running' status here
+        // would orphan the row forever because no drainer exists to complete it.
+        run.Status = 'Cancelled';
+        run.Success = false;
+        run.CompletedAt = now;
+        run.ErrorMessage =
+            `Job was due while its lock was held by another execution (ConcurrencyMode=Queue). ` +
+            `Deferred execution is not yet implemented, so this queue event is recorded as a ` +
+            `terminal Cancelled run instead of being left orphaned in 'Running'. The job will ` +
+            `run again at its next scheduled time.`;
 
-        await run.Save();
-        this.log(`Queued job ${job.Name} for later execution (Run ID: ${run.ID})`);
+        const saved = await run.Save();
+        if (!saved) {
+            this.logError(
+                `Failed to persist queued-run record for job ${job.Name}: ` +
+                `${run.LatestResult?.CompleteMessage ?? 'unknown'}`,
+                null
+            );
+        } else {
+            this.log(`Recorded queue event for job ${job.Name} (Run ID: ${run.ID}, terminal Cancelled — no drainer yet)`);
+        }
         return run;
     }
 

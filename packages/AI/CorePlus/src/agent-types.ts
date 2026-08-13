@@ -155,6 +155,7 @@ export interface SecondaryDimension {
 // Exported directly from index.ts, not re-exported here
 import type { ForEachOperation } from './foreach-operation';
 import type { WhileOperation } from './while-operation';
+import type { TaskGraphSpec } from './task-graph/task-graph-spec';
 
 /**
  * Represents a media output that an agent has explicitly promoted to its outputs.
@@ -593,6 +594,16 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      */
     artifactToolCalls?: { artifactId: string; tool: string; input: Record<string, unknown> }[];
     /**
+     * Conversation-history retrieval tool calls from the agent's response — page exact
+     * stored messages back in by their persisted Sequence handles, or search history.
+     * Processed inline (zero turn cost) alongside artifact tool calls; only honored
+     * when the run has a conversationId.
+     * NOTE: structural duplicate of ConversationToolCall in @memberjunction/ai-agents
+     * (CorePlus sits below Agents and cannot import from it), mirroring how
+     * artifactToolCalls duplicates ArtifactToolCall above.
+     */
+    conversationToolCalls?: { tool: string; input: Record<string, unknown> }[];
+    /**
      * Durable memory writes from the agent's response. Each entry records a
      * fact/preference that persists across runs as a provisional agent note.
      * Processed inline (zero turn cost) alongside artifact tool calls; only
@@ -631,6 +642,23 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * via the standard response-form HITL flow before the agent may execute Actions/Sub-Agents.
      */
     planDetails?: { plan: string };
+    /**
+     * The emitted task graph, set whenever a Loop agent produced one — whether it was dispatched
+     * (`step === 'Tasks'`) or constant-folded into an in-run `'Sub-Agent'` call (D9).
+     *
+     * **The fold is recorded, not silent.** The `TaskGraph` run step is written for every emitted
+     * graph, so run forensics show why a graph did or did not reach the dispatcher; a user who
+     * edits a two-node graph down to one can read the durability change off the run record instead
+     * of inferring it; and Save as Workflow (D17) attaches to the recorded spec, which makes the
+     * single-node case — the shape most likely to be worth promoting — promotable like any other.
+     */
+    taskGraph?: {
+        spec: TaskGraphSpec;
+        /** True when the graph was flattened to an in-run sub-agent call rather than dispatched. */
+        folded: boolean;
+        /** Why it folded. Absent when it did not. */
+        foldReason?: string;
+    };
     /**
      * When true, the agent should terminate after executing the current step.
      * Used by ClientTools: the main loop needs `terminate: false` so it continues
@@ -811,6 +839,16 @@ export type AgentExecutionStreamingCallback = (chunk: {
     stepEntityId?: string;
     /** Model name producing this content (for prompt steps) */
     modelName?: string;
+    /**
+     * Content discriminator for chat-client rendering. `'final-response'` marks chunks
+     * that are deltas of the user-facing final reply — safe for the conversation client
+     * to accumulate and render into the message bubble as they arrive. Chunks WITHOUT a
+     * kind are raw prompt output (e.g. a Loop agent's streamed JSON turn envelope) and
+     * are not rendered by the conversation client. Emitters that compose the final
+     * answer as plain prose (outside the turn envelope) set this on their compose
+     * stream; future kinds (e.g. inter-turn progress narration) extend this union.
+     */
+    kind?: 'final-response';
 }) => void;
 
 /**
@@ -947,6 +985,20 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     parentAgentHierarchy?: string[];
     /** Optional parent depth for sub-agent execution */
     parentDepth?: number;
+
+    /**
+     * How many task-graph continuations led to this run, persisted to
+     * `AIAgentRun.ContinuationDepth`.
+     *
+     * Set only by the continuation deliverer when a finished graph restarts its submitting agent.
+     * Any graph this run subsequently submits inherits the value, which is what allows
+     * `MAX_REINVOKE_DEPTH` to bound a graph-reinvokes-agent-emits-graph chain — before this existed
+     * the depth restarted at zero on every hop and the cap could never fire.
+     *
+     * Distinct from `parentDepth`, which measures sub-agent nesting inside a single turn. A
+     * continuation is a NEW top-level turn caused by work that already completed.
+     */
+    continuationDepth?: number;
     /**
      * Optional parent step counts from root to immediate parent agent.
      * Used to build hierarchical step display (e.g., "2.1.3" for nested agents).
@@ -1049,10 +1101,25 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     /**
      * Optional conversation detail ID to associate with this agent execution.
      * When provided, this value is stored in the ConversationDetailID column within
-     * the to be created AIAgentRun record. This allows for linking the agent run 
+     * the to be created AIAgentRun record. This allows for linking the agent run
      * to a specific conversation detail for tracking and reporting purposes.
      */
     conversationDetailId?: string;
+
+    /**
+     * Optional conversation ID — the PREFERRED input for conversation-driven runs.
+     * All durable cross-turn context features (persistent summary compaction, the
+     * summary-windowed context assembly via `ConversationEngine.AssembleContextWindow`
+     * over `LoadWindowRowsFresh` rows, and conversation-history retrieval tools) are
+     * gated on this being present.
+     * When absent, the agent behaves exactly as before: the caller supplies
+     * `conversationMessages` and only in-turn (per-run) context management applies —
+     * programmatic runs, internal sub-agent invocations, and tests need no change.
+     * When present alongside caller-supplied `conversationMessages`, the supplied
+     * messages win (deliberate override/escape hatch); the id still flows to the run
+     * record and gates the compaction/retrieval features.
+     */
+    conversationId?: string;
 
     /**
      * Optional flag to automatically populate the payload from the last run.
@@ -1612,6 +1679,20 @@ export type AgentChatMessageMetadata = {
     subAgentName?: string;
     /** ID of the sub-agent (only for sub-agent-result messages) */
     subAgentId?: string;
+    /**
+     * `ConversationDetail.Sequence` of the row this message came from. Stamped by
+     * `ConversationEngine.AssembleContextWindow` (kept assignment-compatible with its
+     * locally-defined `ConversationContextMetadata` — that package cannot import this
+     * type without creating a cycle). The symbolic handle for conversation-history
+     * retrieval tools.
+     */
+    sequence?: number;
+    /** ID of the `ConversationDetail` row this message came from (window-assembled messages only) */
+    conversationDetailId?: string;
+    /** True only on the synthetic first message carrying the persisted cross-turn conversation summary */
+    isConversationSummary?: boolean;
+    /** On the summary message: the boundary row's Sequence — the summary covers all rows below it */
+    summaryBoundarySequence?: number;
 }
 
 /**

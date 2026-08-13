@@ -28,7 +28,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import {
     SearchEngine,
     SearchContext,
-    SearchScopePermissionResolver,
+    GetSearchScopePermissionResolver,
     SearchStreamEvent,
 } from '@memberjunction/search-engine';
 import { MJAIAgentEntity } from '@memberjunction/core-entities';
@@ -299,7 +299,7 @@ export class SearchKnowledgeStreamResolver extends ResolverBase {
         agentID: string | undefined,
     ): Promise<string | undefined> {
         const agent = await this.loadAgent(agentID, user);
-        const resolver = new SearchScopePermissionResolver();
+        const resolver = GetSearchScopePermissionResolver();
         for (const scopeID of scopeIDs) {
             const verdict = await resolver.ResolveEffectivePermission({
                 User: user,

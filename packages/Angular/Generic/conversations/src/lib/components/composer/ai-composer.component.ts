@@ -1,10 +1,11 @@
 import { Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import {
+import { MentionSuggestion,
   ComposerTriggerProvider,
   MentionEditorComponent,
   MessageInputBoxComponent,
-  PendingAttachment
+  PendingAttachment,
+  BeforeSkillsOpenedEventArgs
 } from '@memberjunction/ng-composer';
 import { AgentMentionProvider } from '../../composer-plugins/agent-mention.provider';
 import { RecordMentionProvider } from '../../composer-plugins/record-mention.provider';
@@ -33,32 +34,36 @@ import { SkillCommandProvider } from '../../composer-plugins/skill-command.provi
   template: `
     <mj-message-input-box
       #inputBox
-      [placeholder]="placeholder"
-      [disabled]="disabled"
-      [value]="value"
-      [showCharacterCount]="showCharacterCount"
-      [enableMentions]="enableMentions"
+      [Placeholder]="placeholder"
+      [Disabled]="disabled"
+      [Value]="value"
+      [ShowCharacterCount]="showCharacterCount"
+      [EnableMentions]="enableMentions"
       [TriggerProviders]="ActiveTriggerProviders"
       [Provider]="Provider"
-      [currentUser]="currentUser"
-      [rows]="rows"
-      [enableAttachments]="enableAttachments"
-      [maxAttachments]="maxAttachments"
-      [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
-      [acceptedFileTypes]="acceptedFileTypes"
-      [enableRealtime]="enableRealtime"
-      [voiceActive]="voiceActive"
-      [canStartRealtime]="canStartRealtime"
-      [enablePlanMode]="enablePlanMode"
-      [planModeActive]="planModeActive"
-      (textSubmitted)="textSubmitted.emit($event)"
-      (valueChange)="onInnerValueChange($event)"
-      (attachmentsChanged)="attachmentsChanged.emit($event)"
-      (attachmentError)="attachmentError.emit($event)"
-      (attachmentClicked)="attachmentClicked.emit($event)"
-      (voiceRequested)="voiceRequested.emit()"
-      (voiceOptionsRequested)="voiceOptionsRequested.emit()"
-      (planModeToggle)="planModeToggle.emit()">
+      [CurrentUser]="currentUser"
+      [Rows]="rows"
+      [EnableAttachments]="enableAttachments"
+      [MaxAttachments]="maxAttachments"
+      [MaxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+      [AcceptedFileTypes]="acceptedFileTypes"
+      [EnableRealtime]="enableRealtime"
+      [VoiceActive]="voiceActive"
+      [CanStartRealtime]="canStartRealtime"
+      [EnablePlanMode]="enablePlanMode"
+      [EnableSkills]="EnableSkillCommands"
+      [PlanModeActive]="planModeActive"
+      (TextSubmitted)="textSubmitted.emit($event)"
+      (Blurred)="blurred.emit()"
+      (ValueChange)="onInnerValueChange($event)"
+      (AttachmentsChanged)="attachmentsChanged.emit($event)"
+      (AttachmentError)="attachmentError.emit($event)"
+      (AttachmentClicked)="attachmentClicked.emit($event)"
+      (VoiceRequested)="voiceRequested.emit()"
+      (VoiceOptionsRequested)="voiceOptionsRequested.emit()"
+      (PlanModeToggle)="planModeToggle.emit()"
+      (BeforeSkillsOpened)="beforeSkillsOpened.emit($event)"
+      (AfterSkillsOpened)="afterSkillsOpened.emit()">
     </mj-message-input-box>
   `
 })
@@ -153,6 +158,8 @@ export class AiComposerComponent {
 
   // ── Proxied outputs ───────────────────────────────────────────────────────────────
   @Output() textSubmitted = new EventEmitter<string>();
+  /** Composer lost focus — hosts persist drafts on this. */
+  @Output() blurred = new EventEmitter<void>();
   @Output() valueChange = new EventEmitter<string>();
   @Output() attachmentsChanged = new EventEmitter<PendingAttachment[]>();
   @Output() attachmentError = new EventEmitter<string>();
@@ -160,6 +167,15 @@ export class AiComposerComponent {
   @Output() voiceRequested = new EventEmitter<void>();
   @Output() voiceOptionsRequested = new EventEmitter<void>();
   @Output() planModeToggle = new EventEmitter<void>();
+  /**
+   * Before/After pair for the Skills button, proxied straight through from the input box. Gated on
+   * `EnableSkillCommands` — the button and the keystroke are two doors to the same feature, so one
+   * flag governs both rather than letting a composer advertise skills it will not serve.
+   *
+   * Cancel on `beforeSkillsOpened` vetoes the dropdown; `afterSkillsOpened` then does not fire.
+   */
+  @Output() beforeSkillsOpened = new EventEmitter<BeforeSkillsOpenedEventArgs>();
+  @Output() afterSkillsOpened = new EventEmitter<void>();
 
   onInnerValueChange(newValue: string): void {
     this.value = newValue;
@@ -174,6 +190,16 @@ export class AiComposerComponent {
   }
 
   /** Focus the composer input. */
+  /** Inserts a resolved mention chip + space (see MentionEditorComponent.InsertMention). */
+  public InsertMention(suggestion: MentionSuggestion, focus: boolean = true): boolean {
+    return this.inputBox?.InsertMention(suggestion, focus) ?? false;
+  }
+
+  /** Focus with the caret at the end of content. */
+  public FocusCaretAtEnd(): boolean {
+    return this.inputBox?.FocusCaretAtEnd() ?? false;
+  }
+
   public focus(): void {
     this.inputBox?.focus();
   }
@@ -185,7 +211,7 @@ export class AiComposerComponent {
 
   /** Mention chip data (id/type/name + preset info) currently in the editor. */
   public getMentionChipsData(): Array<{ id: string; type: string; name: string; presetId?: string; presetName?: string }> {
-    return this.inputBox?.getMentionChipsData() || [];
+    return this.inputBox?.GetMentionChipsData() || [];
   }
 
   /** Plain text with mentions encoded as JSON (`@{"type":...}`) — the persistence format. */
@@ -195,12 +221,12 @@ export class AiComposerComponent {
 
   /** Pending (not yet uploaded) attachments. */
   public getPendingAttachments(): PendingAttachment[] {
-    return this.inputBox?.getPendingAttachments() || [];
+    return this.inputBox?.GetPendingAttachments() || [];
   }
 
   /** Open the attachment file picker programmatically. */
   public openFilePicker(): void {
-    this.inputBox?.openFilePicker();
+    this.inputBox?.OpenFilePicker();
   }
 
   /** Attach an artifact as a pending attachment (artifact picker flow). */

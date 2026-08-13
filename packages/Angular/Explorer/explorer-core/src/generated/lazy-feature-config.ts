@@ -9,218 +9,289 @@
  * When ClassFactory.GetRegistrationAsync() or CreateInstanceAsync() cannot find a
  * registration synchronously, the registered lazy loader builds the compound key and
  * looks it up here to dynamically import the chunk containing the class.
+ *
+ * Every entry carries an explicit `chunkId` — the dynamic import specifier — because many
+ * compound keys share one chunk and the registry must be able to tell those chunks apart.
+ * Do NOT collapse these into a shared helper that returns a closure: closures built by the
+ * same helper are indistinguishable by identity-adjacent means (e.g. Function.toString()),
+ * which silently merges all chunks into one.
  */
 
-/** Helper to create a loader that all entries in a feature share. */
-function featureLoader(importFn: () => Promise<unknown>): () => Promise<void> {
-  return () => importFn().then(() => {});
-}
-
-// --- @memberjunction/ng-dashboards → ./actions-dashboards.module (7 entries) ---
-const loadActionsDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/actions-dashboards.module'));
+// --- @memberjunction/ng-dashboards → ./actions-dashboards.module (6 entries) ---
+const loadNgDashboardsActionsDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/actions-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/actions-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./ai-dashboards.module (17 entries) ---
-const loadAiDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/ai-dashboards.module'));
+const loadNgDashboardsAiDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/ai-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/ai-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./communication-dashboards.module (7 entries) ---
-const loadCommunicationDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/communication-dashboards.module'));
+const loadNgDashboardsCommunicationDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/communication-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/communication-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./component-studio-dashboards.module (3 entries) ---
-const loadComponentStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/component-studio-dashboards.module'));
+const loadNgDashboardsComponentStudioDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/component-studio-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/component-studio-dashboards.module').then(() => {})
+};
 
-// --- @memberjunction/ng-dashboards → ./core-dashboards.module (30 entries) ---
-const loadCoreDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/core-dashboards.module'));
+// --- @memberjunction/ng-dashboards → ./core-dashboards.module (36 entries) ---
+const loadNgDashboardsCoreDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/core-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/core-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./credentials-dashboards.module (6 entries) ---
-const loadCredentialsDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/credentials-dashboards.module'));
+const loadNgDashboardsCredentialsDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/credentials-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/credentials-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./data-explorer-dashboards.module (2 entries) ---
-const loadDataExplorerDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/data-explorer-dashboards.module'));
+const loadNgDashboardsDataExplorerDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/data-explorer-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/data-explorer-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./integration.module (6 entries) ---
-const loadIntegrationModule = featureLoader(() => import('@memberjunction/ng-dashboards/integration.module'));
+const loadNgDashboardsIntegrationModule = {
+  chunkId: '@memberjunction/ng-dashboards/integration.module',
+  load: () => import('@memberjunction/ng-dashboards/integration.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./lists-dashboards.module (5 entries) ---
-const loadListsDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/lists-dashboards.module'));
+const loadNgDashboardsListsDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/lists-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/lists-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./mcp.module (2 entries) ---
-const loadMcpModule = featureLoader(() => import('@memberjunction/ng-dashboards/mcp.module'));
+const loadNgDashboardsMcpModule = {
+  chunkId: '@memberjunction/ng-dashboards/mcp.module',
+  load: () => import('@memberjunction/ng-dashboards/mcp.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./module (3 entries) ---
-const loadModule = featureLoader(() => import('@memberjunction/ng-dashboards/module'));
+const loadNgDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/module',
+  load: () => import('@memberjunction/ng-dashboards/module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module (3 entries) ---
-const loadPredictiveStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/predictive-studio-dashboards.module'));
+const loadNgDashboardsPredictiveStudioDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/predictive-studio-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/predictive-studio-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./routines-dashboards.module (1 entries) ---
-const loadRoutinesDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/routines-dashboards.module'));
+const loadNgDashboardsRoutinesDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/routines-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/routines-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./scheduling-dashboards.module (4 entries) ---
-const loadSchedulingDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/scheduling-dashboards.module'));
+const loadNgDashboardsSchedulingDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/scheduling-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/scheduling-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-dashboards → ./testing-dashboards.module (6 entries) ---
-const loadTestingDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/testing-dashboards.module'));
+const loadNgDashboardsTestingDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/testing-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/testing-dashboards.module').then(() => {})
+};
+
+// --- @memberjunction/ng-dashboards → ./workflows-dashboards.module (3 entries) ---
+const loadNgDashboardsWorkflowsDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/workflows-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/workflows-dashboards.module').then(() => {})
+};
 
 // --- @memberjunction/ng-explorer-settings → ./settings.module (6 entries) ---
-const loadSettingsModule = featureLoader(() => import('@memberjunction/ng-explorer-settings/settings.module'));
+const loadNgExplorerSettingsSettingsModule = {
+  chunkId: '@memberjunction/ng-explorer-settings/settings.module',
+  load: () => import('@memberjunction/ng-explorer-settings/settings.module').then(() => {})
+};
 
 // --- @memberjunction/ng-file-storage → ./file-storage.module (1 entries) ---
-const loadFileStorageModule = featureLoader(() => import('@memberjunction/ng-file-storage/file-storage.module'));
+const loadNgFileStorageFileStorageModule = {
+  chunkId: '@memberjunction/ng-file-storage/file-storage.module',
+  load: () => import('@memberjunction/ng-file-storage/file-storage.module').then(() => {})
+};
 
 // --- @memberjunction/ng-react → . (1 entries) ---
-const loadNgReact = featureLoader(() => import('@memberjunction/ng-react'));
+const loadNgReact = {
+  chunkId: '@memberjunction/ng-react',
+  load: () => import('@memberjunction/ng-react').then(() => {})
+};
 
 /**
- * Complete mapping of compound keys (BaseClassName::Key) to lazy-loading functions.
+ * Complete mapping of compound keys (BaseClassName::Key) to their chunk descriptor.
  * Covers all @RegisterClass decorated classes in lazy-loaded packages.
  */
-export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
+export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => Promise<void> }> = {
   // @memberjunction/ng-dashboards → ./actions-dashboards.module
-  'BaseResourceComponent::ActionExplorerResource': loadActionsDashboardsModule,
-  'BaseResourceComponent::ActionsCodeResource': loadActionsDashboardsModule,
-  'BaseResourceComponent::ActionsEntitiesResource': loadActionsDashboardsModule,
-  'BaseResourceComponent::ActionsMonitorResource': loadActionsDashboardsModule,
-  'BaseResourceComponent::ActionsOverviewResource': loadActionsDashboardsModule,
-  'BaseResourceComponent::ActionsScheduleResource': loadActionsDashboardsModule,
-  'BaseResourceComponent::ActionsSecurityResource': loadActionsDashboardsModule,
+  'BaseResourceComponent::ActionExplorerResource': loadNgDashboardsActionsDashboardsModule,
+  'BaseResourceComponent::ActionsCodeResource': loadNgDashboardsActionsDashboardsModule,
+  'BaseResourceComponent::ActionsEntitiesResource': loadNgDashboardsActionsDashboardsModule,
+  'BaseResourceComponent::ActionsMonitorResource': loadNgDashboardsActionsDashboardsModule,
+  'BaseResourceComponent::ActionsOverviewResource': loadNgDashboardsActionsDashboardsModule,
+  'BaseResourceComponent::ActionsSecurityResource': loadNgDashboardsActionsDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./ai-dashboards.module
-  'BaseResourceComponent::AIAgentRequestsResource': loadAiDashboardsModule,
-  'BaseResourceComponent::AIAgentsResource': loadAiDashboardsModule,
-  'BaseResourceComponent::AIAnalyticsResource': loadAiDashboardsModule,
-  'BaseResourceComponent::AIConfigResource': loadAiDashboardsModule,
-  'BaseResourceComponent::AIModelsResource': loadAiDashboardsModule,
-  'BaseResourceComponent::AIMonitorResource': loadAiDashboardsModule,
-  'BaseResourceComponent::AIPromptsResource': loadAiDashboardsModule,
-  'BaseResourceComponent::AnalyticsResource': loadAiDashboardsModule,
-  'BaseResourceComponent::AutotaggingPipelineResource': loadAiDashboardsModule,
-  'BaseResourceComponent::ClusterVisualizationResource': loadAiDashboardsModule,
-  'BaseResourceComponent::DuplicateDetectionResource': loadAiDashboardsModule,
-  'BaseResourceComponent::FeaturePipelinesResource': loadAiDashboardsModule,
-  'BaseResourceComponent::KnowledgeConfigResource': loadAiDashboardsModule,
-  'BaseResourceComponent::SchedulingResource': loadAiDashboardsModule,
-  'BaseResourceComponent::Tags': loadAiDashboardsModule,
-  'BaseResourceComponent::VectorManagementResource': loadAiDashboardsModule,
-  'BaseResourceComponent::VisualizationResource': loadAiDashboardsModule,
+  'BaseResourceComponent::AIAgentRequestsResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::AIAgentsResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::AIAnalyticsResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::AIConfigResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::AIModelsResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::AIMonitorResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::AIPromptsResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::AnalyticsResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::AutotaggingPipelineResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::ClusterVisualizationResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::DuplicateDetectionResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::FeaturePipelinesResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::KnowledgeConfigResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::SchedulingResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::Tags': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::VectorManagementResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::VisualizationResource': loadNgDashboardsAiDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./communication-dashboards.module
-  'BaseDashboard::CommunicationDashboard': loadCommunicationDashboardsModule,
-  'BaseResourceComponent::CommunicationLogsResource': loadCommunicationDashboardsModule,
-  'BaseResourceComponent::CommunicationMonitorResource': loadCommunicationDashboardsModule,
-  'BaseResourceComponent::CommunicationProvidersResource': loadCommunicationDashboardsModule,
-  'BaseResourceComponent::CommunicationRunsResource': loadCommunicationDashboardsModule,
-  'BaseResourceComponent::CommunicationsNewMessageResource': loadCommunicationDashboardsModule,
-  'BaseResourceComponent::CommunicationTemplatesResource': loadCommunicationDashboardsModule,
+  'BaseDashboard::CommunicationDashboard': loadNgDashboardsCommunicationDashboardsModule,
+  'BaseResourceComponent::CommunicationLogsResource': loadNgDashboardsCommunicationDashboardsModule,
+  'BaseResourceComponent::CommunicationMonitorResource': loadNgDashboardsCommunicationDashboardsModule,
+  'BaseResourceComponent::CommunicationProvidersResource': loadNgDashboardsCommunicationDashboardsModule,
+  'BaseResourceComponent::CommunicationRunsResource': loadNgDashboardsCommunicationDashboardsModule,
+  'BaseResourceComponent::CommunicationsNewMessageResource': loadNgDashboardsCommunicationDashboardsModule,
+  'BaseResourceComponent::CommunicationTemplatesResource': loadNgDashboardsCommunicationDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./component-studio-dashboards.module
-  'BaseDashboard::ComponentStudioDashboard': loadComponentStudioDashboardsModule,
-  'BaseResourceComponent::ComponentStudioResource': loadComponentStudioDashboardsModule,
-  'BaseResourceComponent::FormBuilderResource': loadComponentStudioDashboardsModule,
+  'BaseDashboard::ComponentStudioDashboard': loadNgDashboardsComponentStudioDashboardsModule,
+  'BaseResourceComponent::ComponentStudioResource': loadNgDashboardsComponentStudioDashboardsModule,
+  'BaseResourceComponent::FormBuilderResource': loadNgDashboardsComponentStudioDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./core-dashboards.module
-  'BaseApplication::HomeApplication': loadCoreDashboardsModule,
-  'BaseDashboard::EntityAdmin': loadCoreDashboardsModule,
-  'BaseResourceComponent::AdminDataSchema': loadCoreDashboardsModule,
-  'BaseResourceComponent::AdminDeveloperTools': loadCoreDashboardsModule,
-  'BaseResourceComponent::AdminIdentityAccess': loadCoreDashboardsModule,
-  'BaseResourceComponent::AdminMonitoring': loadCoreDashboardsModule,
-  'BaseResourceComponent::APIKeysResource': loadCoreDashboardsModule,
-  'BaseResourceComponent::ApplicationRolesResource': loadCoreDashboardsModule,
-  'BaseResourceComponent::AppStateInspector': loadCoreDashboardsModule,
-  'BaseResourceComponent::BulkOperationsContainer': loadCoreDashboardsModule,
-  'BaseResourceComponent::BulkOperationsOperations': loadCoreDashboardsModule,
-  'BaseResourceComponent::BulkOperationsRunHistory': loadCoreDashboardsModule,
-  'BaseResourceComponent::ClassRegistryInspector': loadCoreDashboardsModule,
-  'BaseResourceComponent::DashboardBrowserResource': loadCoreDashboardsModule,
-  'BaseResourceComponent::EventMonitorInspector': loadCoreDashboardsModule,
-  'BaseResourceComponent::GraphQLConsoleInspector': loadCoreDashboardsModule,
-  'BaseResourceComponent::HomeDashboard': loadCoreDashboardsModule,
-  'BaseResourceComponent::LayoutInspector': loadCoreDashboardsModule,
-  'BaseResourceComponent::LazyModuleStatusInspector': loadCoreDashboardsModule,
-  'BaseResourceComponent::PermissionsAuditLogResource': loadCoreDashboardsModule,
-  'BaseResourceComponent::PermissionsResourceAccessResource': loadCoreDashboardsModule,
-  'BaseResourceComponent::PermissionsUserAccessResource': loadCoreDashboardsModule,
-  'BaseResourceComponent::QueryBrowserResource': loadCoreDashboardsModule,
-  'BaseResourceComponent::RealtimeRecordingsDashboard': loadCoreDashboardsModule,
-  'BaseResourceComponent::SettingsExplorerInspector': loadCoreDashboardsModule,
-  'BaseResourceComponent::SystemDiagnosticsResource': loadCoreDashboardsModule,
-  'BaseResourceComponent::VersionHistoryDiffResource': loadCoreDashboardsModule,
-  'BaseResourceComponent::VersionHistoryGraphResource': loadCoreDashboardsModule,
-  'BaseResourceComponent::VersionHistoryLabelsResource': loadCoreDashboardsModule,
-  'BaseResourceComponent::VersionHistoryRestoreResource': loadCoreDashboardsModule,
+  'BaseApplication::HomeApplication': loadNgDashboardsCoreDashboardsModule,
+  'BaseDashboard::EntityAdmin': loadNgDashboardsCoreDashboardsModule,
+  'BaseDashboard::ThemeManagerDashboard': loadNgDashboardsCoreDashboardsModule,
+  'BaseDashboard::ThemeStudioDashboard': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::AdminDataSchema': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::AdminDeveloperTools': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::AdminIdentityAccess': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::AdminMonitoring': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::APIKeysResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::ApplicationRolesResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::AppStateInspector': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::BulkOperationsContainer': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::BulkOperationsOperations': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::BulkOperationsRunHistory': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::ClassRegistryInspector': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::DashboardBrowserResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::EventMonitorInspector': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::GraphQLConsoleInspector': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::GridWidthLabInspector': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::HomeDashboard': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::LayoutInspector': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::LazyModuleStatusInspector': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::PermissionsAuditLogResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::PermissionsResourceAccessResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::PermissionsUserAccessResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::QueryBrowserResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::RealtimeRecordingsDashboard': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::SettingsExplorerInspector': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::SystemDiagnosticsResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::TabStripLabInspector': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::ThemeManagerResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::ThemeStudioResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::VersionHistoryDiffResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::VersionHistoryGraphResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::VersionHistoryLabelsResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::VersionHistoryRestoreResource': loadNgDashboardsCoreDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./credentials-dashboards.module
-  'BaseDashboard::CredentialsDashboard': loadCredentialsDashboardsModule,
-  'BaseResourceComponent::CredentialsAuditResource': loadCredentialsDashboardsModule,
-  'BaseResourceComponent::CredentialsCategoriesResource': loadCredentialsDashboardsModule,
-  'BaseResourceComponent::CredentialsListResource': loadCredentialsDashboardsModule,
-  'BaseResourceComponent::CredentialsOverviewResource': loadCredentialsDashboardsModule,
-  'BaseResourceComponent::CredentialsTypesResource': loadCredentialsDashboardsModule,
+  'BaseDashboard::CredentialsDashboard': loadNgDashboardsCredentialsDashboardsModule,
+  'BaseResourceComponent::CredentialsAuditResource': loadNgDashboardsCredentialsDashboardsModule,
+  'BaseResourceComponent::CredentialsCategoriesResource': loadNgDashboardsCredentialsDashboardsModule,
+  'BaseResourceComponent::CredentialsListResource': loadNgDashboardsCredentialsDashboardsModule,
+  'BaseResourceComponent::CredentialsOverviewResource': loadNgDashboardsCredentialsDashboardsModule,
+  'BaseResourceComponent::CredentialsTypesResource': loadNgDashboardsCredentialsDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./data-explorer-dashboards.module
-  'BaseDashboard::DataExplorer': loadDataExplorerDashboardsModule,
-  'BaseResourceComponent::DataExplorerResource': loadDataExplorerDashboardsModule,
+  'BaseDashboard::DataExplorer': loadNgDashboardsDataExplorerDashboardsModule,
+  'BaseResourceComponent::DataExplorerResource': loadNgDashboardsDataExplorerDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./integration.module
-  'BaseResourceComponent::IntegrationActivity': loadIntegrationModule,
-  'BaseResourceComponent::IntegrationConnections': loadIntegrationModule,
-  'BaseResourceComponent::IntegrationMappingWorkspace': loadIntegrationModule,
-  'BaseResourceComponent::IntegrationOverview': loadIntegrationModule,
-  'BaseResourceComponent::IntegrationPipelines': loadIntegrationModule,
-  'BaseResourceComponent::IntegrationSchedules': loadIntegrationModule,
+  'BaseResourceComponent::IntegrationActivity': loadNgDashboardsIntegrationModule,
+  'BaseResourceComponent::IntegrationConnections': loadNgDashboardsIntegrationModule,
+  'BaseResourceComponent::IntegrationMappingWorkspace': loadNgDashboardsIntegrationModule,
+  'BaseResourceComponent::IntegrationOverview': loadNgDashboardsIntegrationModule,
+  'BaseResourceComponent::IntegrationPipelines': loadNgDashboardsIntegrationModule,
+  'BaseResourceComponent::IntegrationSchedules': loadNgDashboardsIntegrationModule,
 
   // @memberjunction/ng-dashboards → ./lists-dashboards.module
-  'BaseResourceComponent::ListsBrowseResource': loadListsDashboardsModule,
-  'BaseResourceComponent::ListsCategoriesResource': loadListsDashboardsModule,
-  'BaseResourceComponent::ListsMyListsResource': loadListsDashboardsModule,
-  'BaseResourceComponent::ListsOperationsResource': loadListsDashboardsModule,
-  'BaseResourceComponent::ListsSharedWithMeResource': loadListsDashboardsModule,
+  'BaseResourceComponent::ListsBrowseResource': loadNgDashboardsListsDashboardsModule,
+  'BaseResourceComponent::ListsCategoriesResource': loadNgDashboardsListsDashboardsModule,
+  'BaseResourceComponent::ListsMyListsResource': loadNgDashboardsListsDashboardsModule,
+  'BaseResourceComponent::ListsOperationsResource': loadNgDashboardsListsDashboardsModule,
+  'BaseResourceComponent::ListsSharedWithMeResource': loadNgDashboardsListsDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./mcp.module
-  'BaseDashboard::MCPDashboard': loadMcpModule,
-  'BaseResourceComponent::MCPResource': loadMcpModule,
+  'BaseDashboard::MCPDashboard': loadNgDashboardsMcpModule,
+  'BaseResourceComponent::MCPResource': loadNgDashboardsMcpModule,
 
   // @memberjunction/ng-dashboards → ./module
-  'BaseResourceComponent::ArchiveConfigResource': loadModule,
-  'BaseResourceComponent::ArchiveRunsResource': loadModule,
-  'BaseResourceComponent::DatabaseDesignerDashboard': loadModule,
+  'BaseResourceComponent::ArchiveConfigResource': loadNgDashboardsModule,
+  'BaseResourceComponent::ArchiveRunsResource': loadNgDashboardsModule,
+  'BaseResourceComponent::DatabaseDesignerDashboard': loadNgDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module
-  'BaseResourceComponent::PredictiveStudioModelsResource': loadPredictiveStudioDashboardsModule,
-  'BaseResourceComponent::PredictiveStudioPredictionsResource': loadPredictiveStudioDashboardsModule,
-  'BaseResourceComponent::PredictiveStudioStudioResource': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioModelsResource': loadNgDashboardsPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioPredictionsResource': loadNgDashboardsPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioStudioResource': loadNgDashboardsPredictiveStudioDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./routines-dashboards.module
-  'BaseResourceComponent::UserRoutines': loadRoutinesDashboardsModule,
+  'BaseResourceComponent::UserRoutines': loadNgDashboardsRoutinesDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./scheduling-dashboards.module
-  'BaseDashboard::SchedulingDashboard': loadSchedulingDashboardsModule,
-  'BaseResourceComponent::SchedulingActivityResource': loadSchedulingDashboardsModule,
-  'BaseResourceComponent::SchedulingDashboardResource': loadSchedulingDashboardsModule,
-  'BaseResourceComponent::SchedulingJobsResource': loadSchedulingDashboardsModule,
+  'BaseDashboard::SchedulingDashboard': loadNgDashboardsSchedulingDashboardsModule,
+  'BaseResourceComponent::SchedulingActivityResource': loadNgDashboardsSchedulingDashboardsModule,
+  'BaseResourceComponent::SchedulingDashboardResource': loadNgDashboardsSchedulingDashboardsModule,
+  'BaseResourceComponent::SchedulingJobsResource': loadNgDashboardsSchedulingDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./testing-dashboards.module
-  'BaseDashboard::TestingDashboard': loadTestingDashboardsModule,
-  'BaseResourceComponent::TestingAnalyticsResource': loadTestingDashboardsModule,
-  'BaseResourceComponent::TestingDashboardTabResource': loadTestingDashboardsModule,
-  'BaseResourceComponent::TestingExplorerResource': loadTestingDashboardsModule,
-  'BaseResourceComponent::TestingReviewResource': loadTestingDashboardsModule,
-  'BaseResourceComponent::TestingRunsResource': loadTestingDashboardsModule,
+  'BaseDashboard::TestingDashboard': loadNgDashboardsTestingDashboardsModule,
+  'BaseResourceComponent::TestingAnalyticsResource': loadNgDashboardsTestingDashboardsModule,
+  'BaseResourceComponent::TestingDashboardTabResource': loadNgDashboardsTestingDashboardsModule,
+  'BaseResourceComponent::TestingExplorerResource': loadNgDashboardsTestingDashboardsModule,
+  'BaseResourceComponent::TestingReviewResource': loadNgDashboardsTestingDashboardsModule,
+  'BaseResourceComponent::TestingRunsResource': loadNgDashboardsTestingDashboardsModule,
+
+  // @memberjunction/ng-dashboards → ./workflows-dashboards.module
+  'BaseDashboard::WorkflowsDashboard': loadNgDashboardsWorkflowsDashboardsModule,
+  'BaseResourceComponent::WorkflowRunsResource': loadNgDashboardsWorkflowsDashboardsModule,
+  'BaseResourceComponent::WorkflowsResource': loadNgDashboardsWorkflowsDashboardsModule,
 
   // @memberjunction/ng-explorer-settings → ./settings.module
-  'BaseDashboard::ApplicationManagement': loadSettingsModule,
-  'BaseDashboard::EntityPermissions': loadSettingsModule,
-  'BaseDashboard::RoleManagement': loadSettingsModule,
-  'BaseDashboard::SqlLogging': loadSettingsModule,
-  'BaseDashboard::UserManagement': loadSettingsModule,
-  'BaseNavigationComponent::Settings': loadSettingsModule,
+  'BaseDashboard::ApplicationManagement': loadNgExplorerSettingsSettingsModule,
+  'BaseDashboard::EntityPermissions': loadNgExplorerSettingsSettingsModule,
+  'BaseDashboard::RoleManagement': loadNgExplorerSettingsSettingsModule,
+  'BaseDashboard::SqlLogging': loadNgExplorerSettingsSettingsModule,
+  'BaseDashboard::UserManagement': loadNgExplorerSettingsSettingsModule,
+  'BaseNavigationComponent::Settings': loadNgExplorerSettingsSettingsModule,
 
   // @memberjunction/ng-file-storage → ./file-storage.module
-  'BaseResourceComponent::FileBrowserResource': loadFileStorageModule,
+  'BaseResourceComponent::FileBrowserResource': loadNgFileStorageFileStorageModule,
 
   // @memberjunction/ng-react → .
   'RuntimeUtilities::RuntimeUtilities': loadNgReact,
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 110;
+export const LAZY_FEATURE_CONFIG_COUNT = 118;

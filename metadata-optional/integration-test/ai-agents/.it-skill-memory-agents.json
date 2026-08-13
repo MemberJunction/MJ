@@ -1,0 +1,106 @@
+[
+  {
+    "fields": {
+      "Name": "IT: Skill Probe Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "Skill-gating probe: AcceptsSkills=Limited with a single grant to IT: Probe Skill and SkillActivationMode=RequestedOnly, so requested-activation, unentitled-drop, hallucinated-skill demotion, and the double activation gate are all reachable. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 5,
+      "AcceptsSkills": "Limited",
+      "SkillActivationMode": "RequestedOnly"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Skill Probe Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "342FBD06-1E3B-4DDD-B811-A1AEA39915DA"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T01:12:48.174Z",
+            "checksum": "00dfda62b8970c4f8cccf0eaa2866e582996b3069bdc1079f0fb2bcfa6d204b6"
+          }
+        }
+      ],
+      "MJ: AI Agent Skills": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SkillID": "@lookup:MJ: AI Skills.Name=IT: Probe Skill",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3758837B-EBD6-4BF0-B8D9-5BF6E5B43870"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T01:12:48.202Z",
+            "checksum": "39b78a88ae122930e473d7423cb48fd96e72688f8bd5fc650241581b8271e487"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "91B57290-932A-4593-8BB0-B9039182593F"
+    },
+    "sync": {
+      "lastModified": "2026-08-08T01:12:48.136Z",
+      "checksum": "5da9bb1b9b347602d8225453a452c9893fc3accc1e243eb1cf5e8ab3b29d8f8d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Memory Writer",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "Memory-guard probe (AllowMemoryWrite=true): emits exactly the memoryWrites listed in the user message so the 6-stage in-flight guard pipeline (type guard, idempotency, per-run cap, scope clamp, provenance) is provably attempted. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": true,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 5,
+      "AllowMemoryWrite": true,
+      "MaxNotesToInject": 10
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Memory Writer - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "327F0ABB-C247-4AD4-8CD0-7284B2E399A9"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T01:12:48.211Z",
+            "checksum": "5311a87098dc88fb41a28dc6e4bdce1fcd995a307f6bab20619d1a53a662e7c5"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "36ED0964-C759-4EFF-A5E2-C5CC824221D3"
+    },
+    "sync": {
+      "lastModified": "2026-08-08T01:12:48.157Z",
+      "checksum": "89623bf43380cd0acabe2c5b354021383047e217d6057789772ec2b0b6b41013"
+    }
+  }
+]

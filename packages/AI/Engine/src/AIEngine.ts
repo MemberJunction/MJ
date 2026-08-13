@@ -7,13 +7,14 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRol
          ChatMessageContent,
          BaseEmbeddings} from "@memberjunction/ai";
 import { SummarizeResult } from "@memberjunction/ai";
+import { AIModelConfiguration } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup } from "@memberjunction/core";
 import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, UUIDsEqual } from "@memberjunction/global";
 import { createHash } from "crypto";
 import { MJAIActionEntity, MJActionEntity,
-         MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity,
+         MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity, MJAIPromptModelEntity, MJAIPromptTypeEntity,
          MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJArtifactTypeEntity,
          MJEntityAIActionEntity, MJVectorDatabaseEntity, MJAIAgentPromptEntity,
@@ -28,10 +29,6 @@ import { MJAIActionEntity, MJActionEntity,
          MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity, MJAIAgentSkillEntity, MJAISkillPermissionEntity } from "@memberjunction/core-entities";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
-import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
-import { ActionEmbeddingService } from "./services/ActionEmbeddingService";
-import { AgentEmbeddingMetadata, AgentMatchResult } from "./types/AgentMatchResult";
-import { ActionEmbeddingMetadata, ActionMatchResult } from "./types/ActionMatchResult";
 import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
 import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
 import { ActionEngineBase } from "@memberjunction/actions-base";
@@ -90,12 +87,6 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         this._provider = value;
     }
 
-    // Vector service for agent embeddings - initialized during Config
-    private _agentVectorService: SimpleVectorService<AgentEmbeddingMetadata> | null = null;
-
-    // Vector service for action embeddings - initialized during Config
-    private _actionVectorService: SimpleVectorService<ActionEmbeddingMetadata> | null = null;
-
     // Vector service for note embeddings - initialized during Config
     private _noteVectorService: SimpleVectorService<NoteEmbeddingMetadata> | null = null;
 
@@ -105,9 +96,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     // Actions loaded from database
     private _actions: MJActionEntity[] = [];
 
-    // Embedding caches to track which items have embeddings generated
-    private _agentEmbeddingsCache: Map<string, boolean> = new Map();
-    private _actionEmbeddingsCache: Map<string, boolean> = new Map();
+    // Tracks whether the lazily-generated local embeddings (notes, examples) have been built
     private _embeddingsGenerated: boolean = false;
 
     /**
@@ -227,13 +216,23 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         // Load the AI configuration and base metadata
         await this.Config(false, contextUser, provider);
 
-        // Pre-generate agent, action, and other local embeddings in the background
+        // Pre-generate local note/example embeddings in the background.
+        // Agent/Action discovery now goes through Provider.SearchEntity (daily-synced
+        // EntityDocument vectors), so they are no longer embedded here.
         await this.ensureEmbeddingsGenerated();
     }
 
     // ========================================================================
     // Delegated Properties from AIEngineBase
     // All base metadata is accessed through AIEngineBase.Instance
+    //
+    // 🚨 THIS CLASS IS A FACADE, NOT A SUBCLASS — the delegation below is the
+    // ONLY thing that makes AIEngineBase's surface reachable as
+    // `AIEngine.Instance.X`. When a public member is added to AIEngineBase,
+    // add its one-line delegate here too, or every server-side caller gets
+    // `Property 'X' does not exist on type 'AIEngine'` at compile time.
+    // The rationale for composition-over-inheritance is on the AIEngineBase
+    // class docblock (packages/AI/BaseAIEngine/src/BaseAIEngine.ts).
     // ========================================================================
 
     /** Access to the underlying AIEngineBase instance */
@@ -268,6 +267,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get AgentPermissions(): MJAIAgentPermissionEntity[] { return this.Base.AgentPermissions; }
     public get AgentNotes(): MJAIAgentNoteEntity[] { return this.Base.AgentNotes; }
     public get ScopedPromptParts(): MJScopedPromptPartEntity[] { return this.Base.ScopedPromptParts; }
+    public get ScopedPromptConfigs(): MJScopedPromptConfigEntity[] { return this.Base.ScopedPromptConfigs; }
     public get AgentExamples(): MJAIAgentExampleEntity[] { return this.Base.AgentExamples; }
     public get VendorTypeDefinitions(): MJAIVendorTypeDefinitionEntity[] { return this.Base.VendorTypeDefinitions; }
     public get InferenceProviderTypeID(): string | undefined { return this.Base.InferenceProviderTypeID; }
@@ -324,6 +324,15 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get Modalities(): MJAIModalityEntity[] { return this.Base.Modalities; }
     public get AgentModalities(): MJAIAgentModalityEntity[] { return this.Base.AgentModalities; }
     public get ModelModalities(): MJAIModelModalityEntity[] { return this.Base.ModelModalities; }
+
+    /**
+     * Resolves the EFFECTIVE model-catalog configuration for a model, optionally scoped to one of
+     * its vendor rows — the `AIModelType < AIModel < AIModelVendor` `ModelConfiguration` cascade.
+     * See {@link AIEngineBase.GetEffectiveModelConfiguration} for the merge semantics.
+     */
+    public GetEffectiveModelConfiguration(modelID: string, vendorModelVendorID?: string): AIModelConfiguration | null {
+        return this.Base.GetEffectiveModelConfiguration(modelID, vendorModelVendorID);
+    }
 
     // Modality helper methods - delegated from AIEngineBase
     public GetModalityByName(name: string): MJAIModalityEntity | undefined {
@@ -457,22 +466,6 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     // ========================================================================
 
     /**
-     * Get the agent vector service for semantic search.
-     * Initialized during Config - will be null before AIEngine.Config() completes.
-     */
-    public get AgentVectorService(): SimpleVectorService<AgentEmbeddingMetadata> | null {
-        return this._agentVectorService;
-    }
-
-    /**
-     * Get the action vector service for semantic search.
-     * Initialized during Config - will be null before AIEngine.Config() completes.
-     */
-    public get ActionVectorService(): SimpleVectorService<ActionEmbeddingMetadata> | null {
-        return this._actionVectorService;
-    }
-
-    /**
      * Get all available actions loaded from the database.
      * Loaded during Config() - will be empty before AIEngine.Config() completes.
      * NOTE: This returns MJActionEntity (MJ Action system), not the deprecated MJAIActionEntity.
@@ -573,8 +566,6 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      * 
      * If you only need to refresh specific elements noted above, call the individual methods:
      *  - RefreshActions (refreshes just the server side action metadata - e.g. 'Active' Actions)
-     *  - RefreshActionEmbeddings (dynamic recalc of embedings from stored data)
-     *  - RefreshAgentEmbeddings (dynamic recalc of embeddings from stored data)
      *  - RefreshNoteEmbeddings
      *  - RefreshExampleEmbeddings
      */
@@ -589,8 +580,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     }
 
     /**
-     * Ensures embeddings are generated, loading the model if needed.
-     * Called lazily from FindSimilar* methods on first use.
+     * Ensures local note/example embeddings are generated, loading the model if needed.
+     * Called lazily from the FindSimilar*Notes / *Examples methods on first use.
      */
     private _embeddingsPromise: Promise<void> | null = null;
 
@@ -600,8 +591,6 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             this._embeddingsPromise = (async () => {
                 try {
                     await Promise.all([
-                        this.RefreshAgentEmbeddings(),
-                        this.RefreshActionEmbeddings(),
                         this.RefreshNoteEmbeddings(this._contextUser),
                         this.RefreshExampleEmbeddings(this._contextUser)
                     ]);
@@ -638,73 +627,19 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      */
     public async RegenerateEmbeddings(contextUser?: UserInfo): Promise<void> {
         try {
-            // Clear the caches
-            this._agentEmbeddingsCache.clear();
-            this._actionEmbeddingsCache.clear();
+            // Clear the local-embedding state and force a fresh rebuild of the
+            // note/example vector pools on next access.
             this._embeddingsGenerated = false;
+            this._noteVectorService = null;
+            this._exampleVectorService = null;
 
-            // Clear the vector services
-            this._agentVectorService = null;
-            this._actionVectorService = null;
-
-            // Reload actions and regenerate embeddings
-            await this.RefreshActions(contextUser);
-            await this.RefreshAgentEmbeddings();
-            await this.RefreshActionEmbeddings();
+            await this.RefreshNoteEmbeddings(contextUser);
+            await this.RefreshExampleEmbeddings(contextUser);
             this._embeddingsGenerated = true;
 
         } catch (error) {
             LogError('AIEngine: Failed to regenerate embeddings', undefined, error instanceof Error ? error : undefined);
             throw error;
-        }
-    }
-
-    /**
-     * Refreshes Agent embeddings - agents are pre-loaded at this point, but we need
-     * to generate, dynamically, embeddings from the text stored in the agent. This is not a
-     * cheap operation, use it sparingly.
-     */
-    public async RefreshAgentEmbeddings(): Promise<void> {
-        try {
-            // Use agents already loaded by base class
-            const agents = this.Agents;  // Delegates to AIEngineBase
-
-            if (!agents || agents.length === 0) {
-                return;
-            }
-
-            // Filter out restricted agents - they should not be discoverable
-            const nonRestrictedAgents = agents.filter(agent => !agent.IsRestricted);
-
-            // Filter to only agents that don't have embeddings yet
-            const agentsNeedingEmbeddings = nonRestrictedAgents.filter(agent =>
-                !this._agentEmbeddingsCache.has(agent.ID)
-            );
-
-            if (agentsNeedingEmbeddings.length === 0) {
-                return;
-            }
-
-            // Generate embeddings using static utility method
-            const entries = await AgentEmbeddingService.GenerateAgentEmbeddings(
-                agentsNeedingEmbeddings,
-                (text) => this.EmbedTextLocal(text)
-            );
-
-            // Mark these agents as having embeddings
-            for (const agent of agentsNeedingEmbeddings) {
-                this._agentEmbeddingsCache.set(agent.ID, true);
-            }
-
-            // Load into vector service (create if needed, or add to existing)
-            if (!this._agentVectorService) {
-                this._agentVectorService = new SimpleVectorService();
-            }
-            this._agentVectorService.LoadVectors(entries);
-
-        } catch (error) {
-            LogError(`AIEngine: Failed to load agent embeddings: ${error instanceof Error ? error.message : String(error)}`);
-            // Don't throw - allow AIEngine to continue loading even if embeddings fail
         }
     }
 
@@ -741,53 +676,6 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         } catch (error) {
             LogError(`AIEngine: Error loading actions: ${error instanceof Error ? error.message : String(error)}`);
             this._actions = [];
-        }
-    }
-
-    /**
-     * Dynamically calculation of embeddings for all `Active` actions. Assumes that the internal Actions array is up to date, call
-     * @see RefreshActions first if you do not think they are already.
-     * 
-     * This operation dynamically calculates embeddings from the text in the Action metadata and is an expensive operation, use it
-     * sparingly.
-     */
-    public async RefreshActionEmbeddings(): Promise<void> {
-        try {
-            const actions = this._actions;
-
-            if (!actions || actions.length === 0) {
-                return;
-            }
-
-            // Filter to only actions that don't have embeddings yet
-            const actionsNeedingEmbeddings = actions.filter(action =>
-                !this._actionEmbeddingsCache.has(action.ID)
-            );
-
-            if (actionsNeedingEmbeddings.length === 0) {
-                return;
-            }
-
-            // Generate embeddings using static utility method
-            const entries = await ActionEmbeddingService.GenerateActionEmbeddings(
-                actionsNeedingEmbeddings,
-                (text) => this.EmbedTextLocal(text)
-            );
-
-            // Mark these actions as having embeddings
-            for (const action of actionsNeedingEmbeddings) {
-                this._actionEmbeddingsCache.set(action.ID, true);
-            }
-
-            // Load into vector service (create if needed, or add to existing)
-            if (!this._actionVectorService) {
-                this._actionVectorService = new SimpleVectorService();
-            }
-            this._actionVectorService.LoadVectors(entries);
-
-        } catch (error) {
-            LogError(`AIEngine: Failed to load action embeddings: ${error instanceof Error ? error.message : String(error)}`);
-            // Don't throw - allow AIEngine to continue loading even if embeddings fail
         }
     }
 
@@ -1237,50 +1125,6 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     // ========================================================================
     // Semantic Search Methods
     // ========================================================================
-
-    /**
-     * Find agents similar to a task description using semantic search.
-     */
-    public async FindSimilarAgents(
-        taskDescription: string,
-        topK: number = 5,
-        minSimilarity: number = 0.5
-    ): Promise<AgentMatchResult[]> {
-        await this.ensureEmbeddingsGenerated();
-        if (!this._agentVectorService) {
-            throw new Error('Agent embeddings not loaded. Ensure AIEngine.Config() has completed.');
-        }
-
-        return AgentEmbeddingService.FindSimilarAgents(
-            this._agentVectorService,
-            taskDescription,
-            (text) => this.EmbedTextLocal(text),
-            topK,
-            minSimilarity
-        );
-    }
-
-    /**
-     * Find actions similar to a task description using semantic search.
-     */
-    public async FindSimilarActions(
-        taskDescription: string,
-        topK: number = 10,
-        minSimilarity: number = 0.5
-    ): Promise<ActionMatchResult[]> {
-        await this.ensureEmbeddingsGenerated();
-        if (!this._actionVectorService) {
-            throw new Error('Action embeddings not loaded. Ensure AIEngine.Config() has completed.');
-        }
-
-        return ActionEmbeddingService.FindSimilarActions(
-            this._actionVectorService,
-            taskDescription,
-            (text) => this.EmbedTextLocal(text),
-            topK,
-            minSimilarity
-        );
-    }
 
     /**
      * Find notes similar to query text using semantic search.

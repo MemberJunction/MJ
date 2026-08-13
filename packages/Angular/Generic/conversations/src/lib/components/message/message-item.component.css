@@ -228,6 +228,18 @@
 }
 
 /* Avatar images (for users with uploaded photos or URLs) */
+/* Host-supplied assistant avatar: the AI tile is a rounded SQUARE (8px, brand
+   fill), so the image must clip to the tile's radius — not the user avatar's
+   50% circle — and the brand fill must drop so nothing peeks out at the
+   corners or behind a transparent image. */
+.avatar-circle.ai-avatar.avatar-has-image {
+  background-color: transparent;
+  overflow: hidden;
+}
+.avatar-circle.ai-avatar .avatar-image {
+  border-radius: inherit;
+}
+
 .avatar-image {
   width: 100%;
   height: 100%;
@@ -300,13 +312,39 @@
    agent completion — the gear icon would shift to the left. */
 .time-pill,
 .test-feedback-icon,
-.agent-run-icon {
+.agent-run-icon,
+.message-edit-icon {
   margin-left: auto;
 }
 .time-pill ~ .test-feedback-icon,
 .time-pill ~ .agent-run-icon,
-.test-feedback-icon ~ .agent-run-icon {
+.test-feedback-icon ~ .agent-run-icon,
+.message-edit-icon ~ .test-feedback-icon,
+.message-edit-icon ~ .agent-run-icon {
   margin-left: 8px;
+}
+
+/* Edit pencil on user messages — revealed on message hover to keep headers quiet */
+.message-edit-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0;
+}
+.message-item:hover .message-edit-icon,
+.message-edit-icon:focus-visible {
+  opacity: 1;
+}
+.message-edit-icon:hover {
+  color: var(--mj-text-secondary);
+}
+.message-edit-icon i.fa-pen {
+  font-size: 12px;
 }
 
 /* Time pill - unified styling for all AI message states */

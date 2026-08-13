@@ -1,0 +1,62 @@
+name: Docs site CI
+
+# Fast PR gate for the docs site: unit tests + ingest + Astro build.
+# Deliberately skips the monorepo build and TypeDoc (those only run in the
+# deploy workflow, docs.yml) so this stays a minutes-not-hours check.
+
+on:
+  pull_request:
+    paths:
+      - 'docs-site/**'
+      - 'guides/**'
+      - 'README.md'
+      - 'UPGRADE-v5.0.md'
+      - 'UPGRADE-v6.0.md'
+      - 'CONTRIBUTING.md'
+      - 'metadata/README.md'
+      - '.claude/skills/**'
+      - 'releases/**'
+      - '.github/workflows/docs-site-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-site-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build docs site
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: docs-site/package-lock.json
+
+      - name: Install docs site dependencies
+        run: npm ci
+        working-directory: docs-site
+
+      - name: Run unit tests
+        run: npm test
+        working-directory: docs-site
+
+      - name: Build docs site (ingest + Astro)
+        run: npm run build
+        working-directory: docs-site
+        env:
+          # Mirror one leg of the versioned deploy (docs.yml) so CI builds what
+          # prod ships, version switcher included.
+          DOCS_BASE: /v6
+          DOCS_SITE: https://docs.memberjunction.org
+          DOCS_VERSION: v6
+          DOCS_VERSIONS: '[{"id":"v5","label":"v5 (LTS)"},{"id":"v6","label":"v6 (Edge)"}]'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, ElementRef, AfterViewChecked, SecurityContext, ChangeDetectorRef } from '@angular/core';
+import { RecordNavigationAdapter } from '@memberjunction/ng-base-types';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MJAIAgentEntityExtended, MJAIPromptEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
@@ -7,16 +8,23 @@ import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
-import { SharedService } from '@memberjunction/ng-shared';
 import { ChatMessage } from '@memberjunction/ai';
 import { Subject, Subscription } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { ParseJSONRecursive, ParseJSONOptions, UUIDsEqual } from '@memberjunction/global';
+import { ParseJSONRecursive, ParseJSONOptions, UUIDsEqual, EscapeHTML } from '@memberjunction/global';
 
 /**
  * Supported modes for the test harness
  */
-export type TestHarnessMode = 'agent' | 'prompt';
+/**
+ * What the harness is testing.
+ *
+ * `'workflow'` is not a variant of `'agent'` — it is a different interaction entirely. You do not
+ * converse with a Flow agent: its first step is compiled from its own graph, so anything typed into
+ * a composer is discarded, and the one reply it produces ("Started — 4 tasks running") is not an
+ * answer to it. Offering a chat transcript there teaches the wrong model of what a workflow is.
+ */
+export type TestHarnessMode = 'agent' | 'prompt' | 'workflow';
 
 /**
  * Result interface for AI agent execution operations.
@@ -195,6 +203,74 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         }
     }
     
+    /**
+     * True when the loaded agent is a Flow agent, which is decided by its type rather than by a
+     * caller remembering to set one more input. `vwAIAgents` carries the type's name, so this costs
+     * no extra query.
+     */
+    public get IsWorkflowAgent(): boolean {
+        const agent = this.isAgentEntity(this.entity) ? this.entity : null;
+        return (agent?.Type ?? '').trim().toLowerCase() === 'flow';
+    }
+
+    /** The effective mode, with a Flow agent selecting `'workflow'` whatever the caller asked for. */
+    public get EffectiveMode(): TestHarnessMode {
+        return this.mode === 'agent' && this.IsWorkflowAgent ? 'workflow' : this.mode;
+    }
+
+    /**
+     * What the execution monitor is watching.
+     *
+     * A workflow run IS an agent run — it is the same `AIAgentRun` row, just one that compiled a
+     * graph instead of reasoning. Widening the monitor's own contract would imply otherwise.
+     */
+    public get MonitorRunType(): 'agent' | 'prompt' {
+        return this.mode === 'prompt' ? 'prompt' : 'agent';
+    }
+
+    /** Optional starting payload for a workflow run, as JSON the user can edit. */
+    public WorkflowStartingPayload: string = '';
+    /** Parse error for the payload editor, shown inline rather than swallowed at submit time. */
+    public WorkflowPayloadError: string | null = null;
+    /** The graph the most recent run submitted, so the harness can show it running. */
+    public WorkflowParentTaskID: string | null = null;
+    /** Parsed starting payload, handed to the run as template data on the next send. */
+    private workflowStartingData: Record<string, unknown> | null = null;
+
+    /**
+     * Starts the workflow.
+     *
+     * Deliberately not routed through the chat send path: there is no message, and pushing an empty
+     * user turn into a transcript to trigger a run is exactly the fiction this mode removes.
+     */
+    public async RunWorkflow(): Promise<void> {
+        this.WorkflowPayloadError = null;
+        let payload: Record<string, unknown> | undefined;
+
+        const raw = this.WorkflowStartingPayload.trim();
+        if (raw.length > 0) {
+            try {
+                const parsed: unknown = JSON.parse(raw);
+                if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                    this.WorkflowPayloadError = 'The starting payload must be a JSON object, like { "ticker": "NVDA" }.';
+                    return;
+                }
+                payload = parsed as Record<string, unknown>;
+            } catch (e) {
+                this.WorkflowPayloadError = `That is not valid JSON: ${e instanceof Error ? e.message : String(e)}`;
+                return;
+            }
+        }
+
+        this.WorkflowParentTaskID = null;
+        this.workflowStartingData = payload ?? null;
+        // Reuse the existing send path: it already owns streaming, the execution monitor, run
+        // capture and error handling. A second invocation path here would be a second thing to keep
+        // correct, and the two would drift.
+        this.currentUserMessage = 'Run the workflow.';
+        await this.sendMessage();
+    }
+
     private _isVisible: boolean = false;
     
     /**
@@ -1273,6 +1349,29 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         }
     }
     
+    /**
+     * Finds the graph a run submitted, from its `TaskGraph` step.
+     *
+     * Read from the step's recorded output rather than from the reply text, because the reply is
+     * prose meant for a person and the step is the record. Absent simply means this run did not
+     * submit a graph — true of every Loop agent, and of a Flow agent whose compile failed.
+     */
+    private captureSubmittedGraph(result: { agentRun?: { Steps?: Array<{ StepType?: string; OutputData?: string | null }> } }): void {
+        const steps = result?.agentRun?.Steps ?? [];
+        for (const step of steps) {
+            if (step?.StepType !== 'TaskGraph' || !step.OutputData) continue;
+            try {
+                const parsed = JSON.parse(step.OutputData) as { parentTaskID?: string };
+                if (parsed?.parentTaskID) {
+                    this.WorkflowParentTaskID = parsed.parentTaskID;
+                    return;
+                }
+            } catch {
+                // A malformed step output costs this one lookup, not the run's result.
+            }
+        }
+    }
+
     public async sendMessage() {
         if (!this.currentUserMessage.trim() || !this.entity) {
             return;
@@ -1372,6 +1471,11 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             if (this.subAgentHistory.length > 0) {
                 dataContext._subAgentHistory = this.subAgentHistory;
             }
+            // A workflow's starting payload rides in the same data context every other run uses, so
+            // a step's input mapping reaches it the ordinary way: `data.<key>`.
+            if (this.workflowStartingData) {
+                Object.assign(dataContext, this.workflowStartingData);
+            }
             
             // Execute the agent using the new AI client
             // Start typing animation while we wait for the first real stream
@@ -1462,6 +1566,12 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                 if (fullResult.agentRun?.ID) {
                     this.lastAgentRunId = fullResult.agentRun.ID;
                 }
+
+                // A workflow run's real output is the graph it submitted, not the sentence it
+                // returned. Capture the parent task so the pane can show it running — the run itself
+                // has already ended by this point, which is exactly why the graph is the thing to
+                // watch rather than the transcript.
+                this.captureSubmittedGraph(fullResult);
 
                 // Store the full result as raw content for debugging/inspection
                 assistantMessage.rawContent = JSON.stringify(fullResult, null, 2);
@@ -2515,9 +2625,9 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      */
     navigateToRun(event: { runId: string; runType: 'agent' | 'prompt' }) {
         if (event.runType === 'agent') {
-            SharedService.Instance.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(event.runId));
+            RecordNavigationAdapter.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(event.runId));
         } else {
-            SharedService.Instance.OpenEntityRecord('MJ: AI Prompt Runs', CompositeKey.FromID(event.runId));
+            RecordNavigationAdapter.OpenEntityRecord('MJ: AI Prompt Runs', CompositeKey.FromID(event.runId));
         }
         
         // Emit event so parent window can minimize
@@ -2693,9 +2803,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         let html = content;
         
         // Escape HTML first
-        html = html.replace(/&/g, '&amp;')
-                   .replace(/</g, '&lt;')
-                   .replace(/>/g, '&gt;');
+        html = EscapeHTML(html);
         
         // Code blocks with language support
         html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
@@ -2800,12 +2908,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * Escapes HTML content for use in attributes
      */
     private escapeHtmlAttribute(text: string): string {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
+        return EscapeHTML(text);
     }
 
     /**
@@ -2946,9 +3049,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     }
 
     private escapeHtml(text: string): string {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        return EscapeHTML(text);
     }
 
     /**
@@ -3097,7 +3198,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      */
     public navigateToAgentRun({runId, runType}: {runId: string, runType: 'agent' | 'prompt'}) {
         if (runId && runType==='agent') {
-            SharedService.Instance.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(runId));
+            RecordNavigationAdapter.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(runId));
             // Request minimization from our container
             this.minimizeRequested.emit();
         }

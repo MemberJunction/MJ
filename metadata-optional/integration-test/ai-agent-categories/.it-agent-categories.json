@@ -1,0 +1,16 @@
+[
+  {
+    "fields": {
+      "Name": "IT: Integration Test",
+      "Description": "Purpose-built test agents for the extended agents integration suite (mj-integration-test — safe to delete)",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "72685CA5-F536-4EB1-98DC-444ED7C035D3"
+    },
+    "sync": {
+      "lastModified": "2026-08-08T01:12:45.718Z",
+      "checksum": "b29502aa52505b777cedebbc61be27f436ca16effd4b1855ea7588bdfcd4a8d0"
+    }
+  }
+]

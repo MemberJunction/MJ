@@ -1,0 +1,545 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+.wfr-status-filters {
+  display: flex;
+  gap: var(--mj-space-1);
+  align-items: center;
+}
+
+/* List alone until something is selected; two resizable panes after. The size is the user's — see
+   the LAYOUT_KEYS note on the component for why it is persisted server-side rather than locally. */
+.wfr-split {
+  height: 100%;
+  min-height: 0;
+}
+
+/* A gutter you can find. The default is a hairline, which is discoverable only by accident. */
+:host ::ng-deep .wfr-split > .as-split-gutter,
+:host ::ng-deep .wfr-graph-split > .as-split-gutter {
+  background: transparent !important;
+  position: relative;
+}
+
+:host ::ng-deep .wfr-split > .as-split-gutter::after,
+:host ::ng-deep .wfr-graph-split > .as-split-gutter::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  background: var(--mj-border-default);
+  border-radius: var(--mj-radius-full);
+}
+
+:host ::ng-deep .wfr-split.as-horizontal > .as-split-gutter::after,
+:host ::ng-deep .wfr-graph-split.as-horizontal > .as-split-gutter::after {
+  width: 2px;
+}
+
+:host ::ng-deep .wfr-graph-split.as-vertical > .as-split-gutter::after {
+  height: 2px;
+}
+
+:host ::ng-deep .wfr-split > .as-split-gutter:hover::after,
+:host ::ng-deep .wfr-graph-split > .as-split-gutter:hover::after {
+  background: var(--mj-brand-primary);
+}
+
+/* The canvas and the step record sit SIDE BY SIDE — a JSON record in a strip along the bottom shows
+   about ten lines. Stacks below the breakpoint, where three columns would leave each too narrow to
+   use. */
+.wfr-graph-split {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.wfr-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-1);
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.wfr-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mj-space-2);
+  width: 100%;
+  padding: var(--mj-space-2) var(--mj-space-3);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  text-align: left;
+  cursor: pointer;
+  color: var(--mj-text-primary);
+}
+
+.wfr-row:hover {
+  border-color: var(--mj-border-strong);
+}
+
+.wfr-row:focus-visible {
+  outline: 2px solid var(--mj-brand-primary);
+  outline-offset: 2px;
+}
+
+.wfr-row-selected {
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+}
+
+.wfr-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wfr-row-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wfr-row-when {
+  font-size: var(--mj-font-size-sm);
+  color: var(--mj-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.wfr-row-status {
+  flex: none;
+  font-size: var(--mj-font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px var(--mj-space-2);
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-page);
+  color: var(--mj-text-secondary);
+  border: 1px solid var(--mj-border-default);
+}
+
+/* Status carries meaning, so it is encoded in colour as well as text — a failed run should be
+   findable without reading every row. Skipped stays grey on purpose: a branch that was not taken
+   is a normal outcome, not a warning. */
+.wfr-row-status[data-status='Complete'] {
+  color: var(--mj-status-success);
+  border-color: color-mix(in srgb, var(--mj-status-success) 40%, transparent);
+}
+
+.wfr-row-status[data-status='Failed'] {
+  color: var(--mj-status-error);
+  border-color: color-mix(in srgb, var(--mj-status-error) 40%, transparent);
+}
+
+.wfr-row-status[data-status='Running'] {
+  color: var(--mj-brand-primary);
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
+}
+
+.wfr-detail {
+  display: flex;
+  flex-direction: column;
+  /* Fills its split area. Without it the column sizes to its CONTENT, so the canvas below —
+     `flex: 1 1 auto` of an auto-height parent — got its intrinsic height and left dead space. */
+  height: 100%;
+  min-height: 0;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  overflow: hidden;
+}
+
+.wfr-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-2) var(--mj-space-3);
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.wfr-detail-title {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  min-width: 0;
+}
+
+.wfr-detail-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wfr-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-1);
+  flex: none;
+}
+
+/* ============================================================
+   The run list as a sortable table
+   ============================================================
+   A run list is scanned for two things — the slowest run and the one that failed — and neither is
+   answerable by scrolling. Columns line up so a reader compares down a column rather than reading
+   each row; `tabular-nums` keeps the timestamps from jittering as digits change. */
+.wfr-head,
+.wfr-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) minmax(0, 0.7fr) minmax(0, 0.9fr);
+  gap: var(--mj-space-2);
+  align-items: center;
+}
+
+.wfr-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0 var(--mj-space-3) var(--mj-space-1);
+  background: var(--mj-bg-page);
+}
+
+.wfr-head-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: var(--mj-space-1) 0;
+  font-size: var(--mj-font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.wfr-head-cell:hover {
+  color: var(--mj-text-primary);
+}
+
+.wfr-head-cell i {
+  opacity: 0.65;
+  font-size: 0.85em;
+}
+
+.wfr-col-time,
+.wfr-col-duration {
+  font-size: var(--mj-font-size-sm);
+  color: var(--mj-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wfr-col-status {
+  justify-self: start;
+}
+
+/* ============================================================
+   Detail panel: canvas + step JSON, or the whole run as JSON
+   ============================================================ */
+.wfr-detail-tabs {
+  display: flex;
+  gap: var(--mj-space-1);
+  padding: 0 var(--mj-space-3);
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.wfr-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: var(--mj-space-2) var(--mj-space-2);
+  font-size: var(--mj-font-size-sm);
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+}
+
+.wfr-tab-active {
+  color: var(--mj-brand-primary);
+  border-bottom-color: var(--mj-brand-primary);
+}
+
+.wfr-graph-pane {
+  height: 100%;
+  min-height: 12rem;
+}
+
+.wfr-steps-pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  border-left: 1px solid var(--mj-border-default);
+  overflow: hidden;
+}
+
+/* Stacked layout puts the divider back on top, where the eye expects it. */
+:host ::ng-deep .as-vertical .wfr-steps-pane {
+  border-left: none;
+  border-top: 1px solid var(--mj-border-default);
+}
+
+.wfr-step-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mj-space-1);
+  padding: var(--mj-space-2);
+  border-bottom: 1px solid var(--mj-border-default);
+  max-height: 8rem;
+  overflow-y: auto;
+  flex: none;
+}
+
+.wfr-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-1) var(--mj-space-2);
+  background: var(--mj-bg-page);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  color: var(--mj-text-primary);
+  font-size: var(--mj-font-size-sm);
+  cursor: pointer;
+  text-align: left;
+}
+
+.wfr-step:hover {
+  border-color: var(--mj-border-strong);
+}
+
+.wfr-step-selected {
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+}
+
+/* Work that never ran must not read like work that did — the same rule the run timeline follows. */
+.wfr-step[data-status='Skipped'] .wfr-step-name {
+  text-decoration: line-through;
+  color: var(--mj-text-secondary);
+}
+
+.wfr-step-name {
+  font-weight: 600;
+}
+
+.wfr-step-meta {
+  font-size: var(--mj-font-size-xs);
+  color: var(--mj-text-secondary);
+}
+
+.wfr-step-json,
+.wfr-json-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.wfr-step-json-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-1) var(--mj-space-3);
+  font-weight: 600;
+  font-size: var(--mj-font-size-sm);
+  color: var(--mj-text-secondary);
+  flex: none;
+}
+
+/* ── live console ─────────────────────────────────────────────────────────── */
+
+.wfr-stall {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 0 12px 8px;
+  border: 1px solid color-mix(in srgb, var(--mj-status-warning) 45%, var(--mj-border-default));
+  border-left: 4px solid var(--mj-status-warning);
+  border-radius: var(--mj-radius-md);
+  background: color-mix(in srgb, var(--mj-status-warning) 8%, var(--mj-bg-surface));
+  color: var(--mj-text-primary);
+  font-size: var(--mj-font-size-sm);
+}
+.wfr-stall-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.wfr-stall i { color: var(--mj-status-warning); }
+.wfr-stall-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.wfr-stall-copy code {
+  font-family: var(--mj-font-mono, ui-monospace, monospace);
+  font-size: var(--mj-font-size-xs);
+}
+.wfr-stall-reason { color: var(--mj-text-secondary); }
+.wfr-stall-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.wfr-replay {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-page);
+}
+.wfr-replay i { color: var(--mj-text-secondary); }
+.wfr-replay input[type='range'] { flex: 1; accent-color: var(--mj-brand-primary); }
+
+.wfr-engine {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 6px 12px;
+  border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-page);
+  font-family: var(--mj-font-mono, ui-monospace, monospace);
+  font-size: var(--mj-font-size-xs);
+  color: var(--mj-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.wfr-tick {
+  flex: none;
+  padding: 3px 8px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface);
+  white-space: nowrap;
+}
+.wfr-tick-held {
+  border-color: color-mix(in srgb, var(--mj-status-warning, #d97706) 45%, var(--mj-border-default));
+  background: color-mix(in srgb, var(--mj-status-warning, #d97706) 8%, var(--mj-bg-surface));
+}
+.wfr-tick-paused { color: var(--mj-brand-primary); border-color: var(--mj-border-strong); }
+
+.wfr-insp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px;
+  margin: 0 0 8px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface);
+  font-size: var(--mj-font-size-sm);
+  color: var(--mj-text-primary);
+}
+.wfr-insp-card code {
+  font-family: var(--mj-font-mono, ui-monospace, monospace);
+  font-size: var(--mj-font-size-xs);
+}
+.wfr-insp-label {
+  font-size: var(--mj-font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--mj-text-secondary);
+}
+.wfr-insp-card[data-verdict='held'],
+.wfr-insp-bad {
+  border-color: color-mix(in srgb, var(--mj-status-warning, #d97706) 45%, var(--mj-border-default));
+  background: color-mix(in srgb, var(--mj-status-warning, #d97706) 8%, var(--mj-bg-surface));
+}
+.wfr-insp-card[data-verdict='satisfied'] .wfr-insp-label { color: var(--mj-status-success); }
+.wfr-insp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+.wfr-insp-hint {
+  margin: 0 0 8px;
+  font-size: var(--mj-font-size-xs);
+  color: var(--mj-text-muted);
+}
+
+.wfr-bp-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-page);
+}
+.wfr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  font-size: var(--mj-font-size-xs);
+  cursor: pointer;
+}
+.wfr-chip-break { color: var(--mj-status-error); border-color: color-mix(in srgb, var(--mj-status-error) 40%, transparent); }
+.wfr-chip-break i { font-size: 7px; }
+.wfr-chip-paused {
+  color: var(--mj-brand-primary);
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
+  cursor: default;
+}
+.wfr-chip-forced {
+  color: var(--mj-status-warning);
+  border-color: color-mix(in srgb, var(--mj-status-warning) 40%, transparent);
+  cursor: default;
+}
+.wfr-chip-x {
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.wfr-chip-x:hover { color: var(--mj-text-primary); }
+
+.wfr-break-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: var(--mj-font-size-sm);
+  color: var(--mj-text-primary);
+  cursor: pointer;
+}
+.wfr-break-toggle i { font-size: 8px; color: var(--mj-status-error); }
+
+.wfr-editor-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  margin: 0 0 10px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface-card);
+}
+.wfr-editor-danger {
+  border-color: color-mix(in srgb, var(--mj-status-error) 40%, var(--mj-border-default));
+}
+.wfr-json-edit {
+  width: 100%;
+  min-height: 120px;
+  font-family: var(--mj-font-mono, ui-monospace, monospace);
+  font-size: var(--mj-font-size-xs);
+  resize: vertical;
+}
+.wfr-editor-error { color: var(--mj-status-error); font-size: var(--mj-font-size-xs); }

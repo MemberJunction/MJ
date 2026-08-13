@@ -7,10 +7,15 @@ import { AppNavComponent } from './components/header/app-nav.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { AppAccessDialogComponent } from './components/dialogs/app-access-dialog.component';
 import { CommandPaletteComponent } from '../command-palette/command-palette.component';
+import { OmnibarPaletteComponent } from '../omnibar/omnibar-palette.component';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
+// Records-style record-open surface (Shell.RecordOpen.Style = 'records')
+import { RecordsHubPillComponent } from './components/record-open/records-hub-pill.component';
+import { RecordBarComponent } from './components/record-open/record-bar.component';
+import { RecordSwitcherSheetComponent } from './components/record-open/record-switcher-sheet.component';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { MJDropdownComponent, MJClickableDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJDropdownComponent, MJClickableDirective, MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { SearchModule } from '@memberjunction/ng-search';
 
 @NgModule({
@@ -20,17 +25,22 @@ import { SearchModule } from '@memberjunction/ng-search';
     AppNavComponent,
     TabContainerComponent,
     AppAccessDialogComponent,
-    CommandPaletteComponent
+    CommandPaletteComponent,
+    OmnibarPaletteComponent
   ],
   imports: [
     CommonModule,
     FormsModule,
     MJDropdownComponent,
     MJClickableDirective,
+    MJButtonDirective,
     MJEmptyStateComponent,
     ExplorerSettingsModule,
     SharedGenericModule,
-    SearchModule
+    SearchModule,
+    RecordsHubPillComponent,
+    RecordBarComponent,
+    RecordSwitcherSheetComponent
   ],
   providers: [
     CommandPaletteService

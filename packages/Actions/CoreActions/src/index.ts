@@ -9,6 +9,11 @@ export * from './custom/communication/teams-webhook.action';
 // CRUD Actions
 export * from './custom/crud/create-record.action';
 export * from './custom/crud/get-record.action';
+// Plural, and genuinely a different action: `Get Record` fetches one row by primary key, `Get
+// Records` runs a filtered view. Missing from this list since it was written, which is why every
+// agent that reached for it failed with "could not find a class for action Get Records" — the class
+// existed and built, but never reached a registration manifest, so nothing could resolve it.
+export * from './custom/crud/get-records.action';
 export * from './custom/crud/update-record.action';
 export * from './custom/crud/delete-record.action';
 export * from './custom/crud/write-entity-fields.action';
@@ -110,6 +115,12 @@ export * from './custom/ai/test-runtime-action.action';
 export * from './custom/ai/summarize-content.action';
 export * from './custom/ai/find-candidate-agents.action';
 export * from './custom/ai/find-candidate-actions.action';
+// The find-best pair could not be exported until their classes were renamed apart from the
+// copy-pasted find-candidate pair (both declared FindBestActionAction/FindBestAgentAction).
+// Unexported meant absent from the ServerBootstrap manifest, hence unprotected from
+// tree-shaking — and a shaken-out registration silently resolves to BaseAction.
+export * from './custom/ai/find-best-action.action';
+export * from './custom/ai/find-best-agent.action';
 export * from './custom/ai/load-agent-spec.action';
 export * from './custom/ai/generate-image.action';
 export * from './custom/ai/run-cluster-analysis.action';

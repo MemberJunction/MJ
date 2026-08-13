@@ -7,6 +7,8 @@ import {
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { RealtimeClientSessionService, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
 import { GetHostInstanceID } from './HostInstance.js';
+import { writeReturningVisitorRecap } from './ReturningVisitorRecap.js';
+import { ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
 
 /** Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -77,7 +79,8 @@ const HEARTBEAT_MIN_WRITE_INTERVAL_MS = 3_000;
  * correct identity/provider and never pin the process-global provider.
  *
  * The only in-memory state it holds is a small per-session last-heartbeat-write timestamp map used
- * purely to coalesce {@link Heartbeat} writes; it carries no user or provider state across calls.
+ * purely to coalesce {@link Heartbeat} writes, plus the injected {@link RealtimeClientSessionService}
+ * used by {@link finalizeObservabilityRuns}; it carries no user or provider state across calls.
  *
  * Responsibilities:
  * - **Create** — authorize (`CanRun`), optionally mint a Conversation, persist an `Active` session.
@@ -93,6 +96,29 @@ const HEARTBEAT_MIN_WRITE_INTERVAL_MS = 3_000;
 export class SessionManager {
     /** session ID (lowercased) → epoch ms of its last persisted `LastActiveAt` write. */
     private heartbeatLastWrite = new Map<string, number>();
+
+    /**
+     * The {@link RealtimeClientSessionService} used to finalize a closing session's co-agent
+     * observability runs (see {@link finalizeObservabilityRuns}). Defaults to a fresh instance for
+     * callers that don't own a shared one (e.g. `SessionJanitor`, telephony services) — but a caller
+     * that itself created the co-agent's `AIPromptRun` writes through its OWN `RealtimeClientSessionService`
+     * (currently only `RealtimeClientSessionResolver`) MUST pass that same instance here. Otherwise
+     * finalize's internal per-run write-chain cleanup runs against a different object than the one that
+     * accumulated the chain, silently no-op'ing on the live instance (see the constructor param doc).
+     */
+    private readonly realtimeClientSessionService: RealtimeClientSessionService;
+
+    /**
+     * @param realtimeClientSessionService The shared {@link RealtimeClientSessionService} instance to
+     *   finalize observability runs through. Pass the SAME instance your resolver/service used to create
+     *   and write to the session's co-agent `AIAgentRun`/`AIPromptRun` (e.g.
+     *   `RealtimeClientSessionResolver`'s own field) so `CloseSession` can correctly clean up that
+     *   instance's per-run state. Omit only when this `SessionManager` never closes a client-direct
+     *   voice session it also originated observability writes for.
+     */
+    constructor(realtimeClientSessionService?: RealtimeClientSessionService) {
+        this.realtimeClientSessionService = realtimeClientSessionService ?? new RealtimeClientSessionService();
+    }
 
     /**
      * Authorize and create a new session. Flow:
@@ -160,6 +186,10 @@ export class SessionManager {
         await this.disconnectChannels(agentSessionID, contextUser, provider, preloadedChannels);
         await this.finalizeObservabilityRuns(session, contextUser, provider);
         await this.notifyChannelPluginsSessionClosed(agentSessionID, closeReason);
+        // Returning-visitor recap (RV2): if this session's conversation is returning-visitor-enabled,
+        // summarize it into an Active memory note so the visitor's next session opens with prior context.
+        // Best-effort + no-op for non-returning-visitor conversations; never blocks teardown.
+        await writeReturningVisitorRecap(session.ConversationID, session.AgentID, contextUser, provider);
         return true;
     }
 
@@ -225,10 +255,14 @@ export class SessionManager {
             return;
         }
         try {
-            await new RealtimeClientSessionService().FinalizeCoAgentRun(
+            // SCOPED-ANONYMOUS ELEVATION (issue #3371): the runs were CREATED under the system user
+            // for a scoped anonymous session, so an owner-initiated (or error) close must finalize
+            // under it too — the caller's role holds no grants on the AI run entities. Janitor and
+            // shutdown sweeps already close as the system user and pass through unchanged.
+            await this.realtimeClientSessionService.FinalizeCoAgentRun(
                 config.coAgentRunID ?? null,
                 config.promptRunID ?? null,
-                contextUser,
+                ResolveScopedAnonymousRunUser(contextUser),
                 provider,
                 true,
                 config.coAgentRunStepID ?? null,
@@ -316,6 +350,31 @@ export class SessionManager {
         conversation.NewRecord();
         conversation.UserID = input.userID;
         conversation.Name = 'Agent Session';
+        // For a magic-link-anonymous principal (e.g. a public web-widget voice guest), stamp the
+        // session's conversation with the signed per-session scope so the Widget Guest RLS filters
+        // ({{ScopeResourceID}}) isolate this session — and everything chained to it (AI Agent
+        // Sessions via ConversationID, Session Channels via the session) — from other guests
+        // sharing the Anonymous UserID. No-op for named principals (no scope → default ExternalID).
+        if (contextUser.MagicLinkScope?.ResourceID) {
+            conversation.ExternalID = contextUser.MagicLinkScope.ResourceID;
+        }
+
+        // Returning-visitor memory (RV1/RV2/RV4) for the VOICE path: the widget guest token carries the
+        // resolved VisitorKey / prior-conversation / linked identity (surfaced on ReturningVisitorContext),
+        // so a server-created voice conversation gets the same anchor the text path stamps client-side.
+        // The resolved counterparty reuses the existing polymorphic LinkedEntityID/LinkedRecordID pair.
+        // Absent for non-widget sessions and widgets with returning-visitor memory off — a no-op default.
+        const visitor = contextUser.ReturningVisitorContext;
+        if (visitor?.VisitorKey) {
+            conversation.VisitorKey = visitor.VisitorKey;
+            if (visitor.LastConversationID) {
+                conversation.LastConversationID = visitor.LastConversationID;
+            }
+            if (visitor.LinkedEntityID && visitor.LinkedRecordID) {
+                conversation.LinkedEntityID = visitor.LinkedEntityID;
+                conversation.LinkedRecordID = visitor.LinkedRecordID;
+            }
+        }
 
         const saved = await conversation.Save();
         if (!saved) {
@@ -343,6 +402,14 @@ export class SessionManager {
         session.HostInstanceID = GetHostInstanceID();
         session.Config_ = input.config ?? null;
         session.LastActiveAt = new Date();
+        // Mirror the conversation's resolved counterparty onto the session's own polymorphic pair, so a
+        // session carries its linked identity directly (parallels Conversation.LinkedEntityID/RecordID).
+        // Sourced from the same widget visitor context; a no-op for non-widget / anonymous sessions.
+        const visitor = contextUser.ReturningVisitorContext;
+        if (visitor?.LinkedEntityID && visitor.LinkedRecordID) {
+            session.LinkedEntityID = visitor.LinkedEntityID;
+            session.LinkedRecordID = visitor.LinkedRecordID;
+        }
 
         const saved = await session.Save();
         if (!saved) {

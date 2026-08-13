@@ -6,12 +6,11 @@ import { IPcmMicCapture } from '../audio/micCapture';
 import { IRealtimePcmPlayback } from '../audio/pcmPlayback';
 import {
     xAIRealtimeClient,
-    XAIRealtimeEvent,
-    IxAIClientSocket,
     XAI_REALTIME_WS_URL,
     XAI_CLIENT_SECRET_SUBPROTOCOL_PREFIX,
     XAI_PCM_SAMPLE_RATE,
 } from '../drivers/xaiRealtimeClient';
+import { IOpenAIProtocolClientSocket, OpenAIProtocolServerEvent } from '../generic/openAIProtocolClient';
 import { collect, FakeMediaStream, FakeTrack } from './helpers/realtime-fakes';
 
 // ── Fakes (no network, no Web Audio) ───────────────────────────────────────────
@@ -26,7 +25,7 @@ interface ParsedFrame {
 }
 
 /** Fake realtime socket: records sent frames; lets tests fire open/close/server events. */
-class FakeSocket implements IxAIClientSocket {
+class FakeSocket implements IOpenAIProtocolClientSocket {
     public onopen: (() => void) | null = null;
     public onmessage: ((data: string) => void) | null = null;
     public onerror: ((message: string) => void) | null = null;
@@ -46,7 +45,7 @@ class FakeSocket implements IxAIClientSocket {
         this.onopen?.();
     }
     /** Injects a provider server event as an inbound JSON frame. */
-    public EmitServer(event: XAIRealtimeEvent | JSONObject): void {
+    public EmitServer(event: OpenAIProtocolServerEvent | JSONObject): void {
         this.onmessage?.(JSON.stringify(event));
     }
     /** Injects a raw (possibly non-JSON) inbound frame. */
@@ -104,9 +103,19 @@ class TestxAIClient extends xAIRealtimeClient {
     /** The driver's mic-chunk callback, captured so tests can simulate worklet frames. */
     public OnPcmChunk: ((base64Pcm16: string) => void) | null = null;
 
-    protected override createSocket(url: string, subprotocol: string): IxAIClientSocket {
+    /** Optional override for the NEXT createSocket call (reuse/reconnect tests); consumed once. */
+    private nextSocket: FakeSocket | null = null;
+    public SetNextSocket(socket: FakeSocket): void {
+        this.nextSocket = socket;
+    }
+
+    protected override createSocket(url: string, subprotocol: string): IOpenAIProtocolClientSocket {
         this.LastUrl = url;
         this.LastSubprotocol = subprotocol;
+        if (this.nextSocket) {
+            this.Fake = this.nextSocket;
+            this.nextSocket = null;
+        }
         return this.Fake;
     }
     protected override async createMicCapture(
@@ -124,7 +133,7 @@ class TestxAIClient extends xAIRealtimeClient {
     }
 
     /** Drives an inbound xAI server event through the socket handler. */
-    public Emit(event: XAIRealtimeEvent | JSONObject): void {
+    public Emit(event: OpenAIProtocolServerEvent | JSONObject): void {
         this.Fake.EmitServer(event);
     }
 }
@@ -266,6 +275,29 @@ describe('xAIRealtimeClient', () => {
             expect(transcripts.at(-1)).toEqual({ Role: 'User', Text: 'and Skip?', IsFinal: true, Kind: 'normal', ReplacesPrevious: false });
         });
 
+        it('treats a post-pause caption that CONTINUES the utterance as a replacement, not a new bubble (topology parity)', () => {
+            // Mirrors the server-session regression: Grok's VAD fires speech_started on mid-sentence
+            // pauses, but the provider keeps re-emitting the SAME utterance with more words. Without
+            // the continuation check, one spoken thought renders as several growing bubbles. Note the
+            // re-punctuation ('remote.' → 'remote,') — a raw prefix test would miss it.
+            const { transcripts } = collect(client);
+            const P1 = 'including whiteboarding, uh, remote.';
+            const P2 = 'including whiteboarding, uh, remote, so just get going.';
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: P1 });
+            client.Emit({ type: 'input_audio_buffer.speech_started' });   // breath, NOT a turn boundary
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: P2 });
+            expect(transcripts.map(t => t.ReplacesPrevious)).toEqual([false, true]);
+        });
+
+        it('a NEW utterance after the model responded starts a fresh bubble (anchor cleared on response.created)', () => {
+            const { transcripts } = collect(client);
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'Show me the weather' });
+            client.Emit({ type: 'response.created' });                    // model replies → user turn over
+            client.Emit({ type: 'input_audio_buffer.speech_started' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'Show me the weather for Tokyo too' });
+            expect(transcripts.map(t => t.ReplacesPrevious)).toEqual([false, false]);
+        });
+
         it('should emit nothing for empty transcript payloads', () => {
             const { transcripts } = collect(client);
             client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: '  ' });
@@ -320,6 +352,52 @@ describe('xAIRealtimeClient', () => {
             client.Emit({ type: 'response.created' });
             client.Emit({ type: 'response.done', response: { usage: { input_tokens: 30, output_tokens: 12 } } });
             expect(usage).toEqual([{ InputTokens: 30, OutputTokens: 12, Raw: { input_tokens: 30, output_tokens: 12 } }]);
+        });
+
+        /**
+         * REGRESSION — xAI does NOT use the nested slot.
+         *
+         * The frame below is copied from a live capture off `wss://api.x.ai/v1/realtime`
+         * (grok-voice-think-fast-2.0): usage sits at the TOP LEVEL, and `response.usage` is present
+         * but EMPTY. The test above passes against a hand-written OpenAI-shaped frame, which is
+         * exactly why this went unnoticed — real Grok sessions recorded NULL tokens on AIPromptRun
+         * because `{}` is truthy, so the old `if (!usage) return` guard never fired and the emitted
+         * delta was `{undefined, undefined}` → clamped to 0 → dropped by the host.
+         */
+        it('should read usage from the TOP-LEVEL key when response.usage is an empty object (real xAI shape)', () => {
+            const { usage } = collectUsage(client);
+            client.Emit({ type: 'response.created' });
+            client.Emit({
+                type: 'response.done',
+                response: { id: 'resp_1', status: 'completed', usage: {} },
+                usage: {
+                    input_tokens: 6,
+                    input_token_details: { text_tokens: 6, audio_tokens: 0, grok_tokens: 0 },
+                    output_tokens: 87,
+                    output_token_details: { text_tokens: 7, audio_tokens: 80, grok_tokens: 0 },
+                    total_tokens: 93,
+                    output_audio_seconds: 1.5895,
+                    billable_audio_seconds: 1,
+                },
+            } as unknown as Parameters<typeof client.Emit>[0]);
+
+            expect(usage).toHaveLength(1);
+            expect(usage[0].InputTokens).toBe(6);
+            expect(usage[0].OutputTokens).toBe(87);
+            // The per-modality detail must survive on Raw — audio vs text bill at very different rates.
+            expect(usage[0].Raw).toMatchObject({
+                output_token_details: { text_tokens: 7, audio_tokens: 80 },
+                billable_audio_seconds: 1,
+            });
+        });
+
+        it('should emit NOTHING when neither slot carries token counts', () => {
+            const { usage } = collectUsage(client);
+            client.Emit({ type: 'response.created' });
+            // Both empty — a cancelled/failed turn. Previously emitted a bogus all-undefined delta.
+            client.Emit({ type: 'response.done', response: { usage: {} } } as unknown as Parameters<typeof client.Emit>[0]);
+            client.Emit({ type: 'response.done' });
+            expect(usage).toEqual([]);
         });
     });
 
@@ -674,3 +752,249 @@ function collectUsage(client: BaseRealtimeClient): { usage: Array<{ InputTokens?
     client.OnUsage((u) => usage.push(u));
     return { usage };
 }
+
+describe('QA hardening: B2 stale response.done protection', () => {
+    let client: TestxAIClient;
+
+    beforeEach(() => {
+        client = new TestxAIClient();
+    });
+
+    it('the cancelled turn\'s trailing done does NOT release the busy lock while our replacement create is in flight', async () => {
+        await connect(client);
+        client.Emit({ type: 'response.created' }); // narration/VAD response active
+        client.SendText('barge in with text'); // cancel + inject + response.create (local, in flight)
+        expect(client.IsBusy).toBe(true);
+        client.Emit({ type: 'response.done', response: {} }); // STALE done of the cancelled turn
+        expect(client.IsBusy).toBe(true); // window closed — the stale done cannot clear it
+        // Narration cannot collide in the window either:
+        const before = client.Fake.Sent.length;
+        client.RequestSpokenUpdate('should be skipped');
+        expect(client.Fake.Sent.length).toBe(before);
+        // The REAL lifecycle then proceeds normally:
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.done', response: {} });
+        expect(client.IsBusy).toBe(false);
+    });
+
+    it('a queued tool-result trigger fires exactly once, on the REAL done — never doubled by the stale done', async () => {
+        await connect(client);
+        client.RequestSpokenUpdate('narrating…'); // local create #1 in flight
+        client.Emit({ type: 'response.created' }); // consumed
+        client.SendToolResult('c1', '{"r":1}'); // queues behind the narration
+        client.SendText('typed barge-in'); // cancel + create #2 (also consumes queued debt immediately)
+        const createsAfterBarge = client.Fake.SentFrames().filter((f) => f.type === 'response.create').length;
+        client.Emit({ type: 'response.done', response: {} }); // stale done of cancelled narration
+        // No extra response.create fired off the stale done:
+        expect(client.Fake.SentFrames().filter((f) => f.type === 'response.create').length).toBe(createsAfterBarge);
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.done', response: {} });
+        expect(client.Fake.SentFrames().filter((f) => f.type === 'response.create').length).toBe(createsAfterBarge);
+    });
+
+    it('usage from a stale done is still emitted (the cancelled response consumed tokens)', async () => {
+        const usage: Array<{ InputTokens?: number }> = [];
+        client.OnUsage((u) => usage.push(u));
+        await connect(client);
+        client.Emit({ type: 'response.created' });
+        client.SendText('barge');
+        client.Emit({ type: 'response.done', response: { usage: { input_tokens: 5, output_tokens: 2 } } });
+        expect(usage).toHaveLength(1);
+    });
+
+    it('VAD-initiated responses never underflow the local-create counter', async () => {
+        await connect(client);
+        // Two pure-VAD cycles (no local creates at all):
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.done', response: {} });
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.done', response: {} });
+        expect(client.IsBusy).toBe(false);
+        // A local create afterwards still round-trips correctly:
+        client.SendToolResult('c9', '{}');
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.done', response: {} });
+        expect(client.IsBusy).toBe(false);
+    });
+});
+
+describe('QA hardening: B3 barge-in floor protection', () => {
+    let client: TestxAIClient;
+
+    beforeEach(() => {
+        client = new TestxAIClient();
+    });
+
+    it('a TRUE user barge-in drops the queued auto-trigger — the cancelled turn\'s done fires NO response.create', async () => {
+        await connect(client);
+        client.RequestSpokenUpdate('narrating…');
+        client.Emit({ type: 'response.created' });
+        client.SendToolResult('c1', '{"r":1}'); // item out now; trigger queued
+        const beforeCreates = client.Fake.SentFrames().filter((f) => f.type === 'response.create').length;
+        client.Emit({ type: 'input_audio_buffer.speech_started' }); // user takes the floor
+        client.Emit({ type: 'response.done', response: {} }); // cancelled narration's trailing done
+        expect(client.Fake.SentFrames().filter((f) => f.type === 'response.create').length).toBe(beforeCreates);
+        // The result ITEM was still delivered — the model voices it on the user's next natural turn.
+        expect(client.Fake.SentFrames().some((f) => f.item?.type === 'function_call_output' && f.item?.call_id === 'c1')).toBe(true);
+    });
+
+    it('WITHOUT a barge-in the queued trigger still flushes (tool-result-delivery invariant intact)', async () => {
+        await connect(client);
+        client.RequestSpokenUpdate('narrating…');
+        client.Emit({ type: 'response.created' });
+        client.SendToolResult('c1', '{"r":1}');
+        const beforeCreates = client.Fake.SentFrames().filter((f) => f.type === 'response.create').length;
+        client.Emit({ type: 'response.done', response: {} });
+        expect(client.Fake.SentFrames().filter((f) => f.type === 'response.create').length).toBe(beforeCreates + 1);
+    });
+
+    it('open-phase connect timeout: a socket that never opens rejects Connect at the deadline', async () => {
+        vi.useFakeTimers();
+        try {
+            const promise = client.Connect(makeConfig(), new FakeMediaStream([new FakeTrack()]));
+            const guarded = expect(promise).rejects.toThrow(/timed out/);
+            await vi.advanceTimersByTimeAsync(15_001); // never Open()
+            await guarded;
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});
+
+describe('QA re-audit fixes (S1/S3)', () => {
+    let client: TestxAIClient;
+
+    beforeEach(() => {
+        client = new TestxAIClient();
+    });
+
+    it('S1: a rejected response.create (error frame, no response.created) SELF-HEALS — the client never wedges', async () => {
+        await connect(client);
+        // A locally-initiated response.create that the provider REJECTS: error frame, no created echo.
+        client.Emit({ type: 'response.created' }); // an active response (VAD/narration)
+        client.SendText('barge in'); // cancel + inject + local response.create (counter=1, awaiting created)
+        // Provider rejects the new create as overlapping → error frame, NO response.created:
+        client.Emit({ type: 'error', error: { message: 'conversation already has an active response', code: 'conflict' } });
+        // The cancelled turn's trailing done arrives. Pre-fix this would take the stale branch forever.
+        client.Emit({ type: 'response.done', response: {} });
+        // Self-healed: the client is NOT stuck busy, and a fresh spoken update goes out.
+        expect(client.IsBusy).toBe(false);
+        const before = client.Fake.Sent.length;
+        expect(client.RequestSpokenUpdate('now speak')).not.toBe(false);
+        expect(client.Fake.Sent.length).toBeGreaterThan(before);
+    });
+
+    it('S1b: a narration create REJECTED while idle (no response.created ever comes) clears the PHANTOM busy flag — IsBusy does not wedge', async () => {
+        await connect(client);
+        // Idle → RequestSpokenUpdate sets responseActive EAGERLY (before the send) and fires a local
+        // response.create. The provider rejects it (error, NO response.created) — e.g. a compat endpoint
+        // that won't voice a bare instruction.
+        client.RequestSpokenUpdate('say a quick status');
+        expect(client.IsBusy).toBe(true); // eager
+        client.Emit({ type: 'error', error: { message: 'response.create rejected', code: 'invalid' } });
+        // Pre-fix: responseActive stuck true forever (no done ever comes) → IsBusy wedged, every future
+        // RequestSpokenUpdate silently skipped. Fixed: the phantom is cleared because no CONFIRMED
+        // response is active.
+        expect(client.IsBusy).toBe(false);
+        const before = client.Fake.Sent.length;
+        client.RequestSpokenUpdate('try again'); // must NOT be skipped by a stuck responseActive
+        expect(client.Fake.Sent.length).toBeGreaterThan(before);
+    });
+
+    it('S1c: a REJECTED narration create clears its pending narration-kind so a subsequent VAD turn is tagged normal (not ephemeral narration)', async () => {
+        await connect(client);
+        const { transcripts } = collect(client);
+        client.RequestSpokenUpdate('narrate'); // sets pendingNarrationKind + eager responseActive
+        client.Emit({ type: 'error', error: { message: 'rejected', code: 'invalid' } }); // no response.created
+        // A genuine user turn now drives a VAD response. Pre-fix the leftover narration kind tagged this
+        // real assistant answer 'narration' → the host discards it as ephemeral. Fixed: kind is 'normal'.
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.output_audio_transcript.delta', delta: 'Here is the real answer' });
+        expect(transcripts.at(-1)).toEqual({ Role: 'Assistant', Text: 'Here is the real answer', IsFinal: false, Kind: 'normal' });
+    });
+
+    it('S1d: a narration create rejected WHILE a cancelled response is still draining does not mistag the next delegated answer as ephemeral narration', async () => {
+        await connect(client);
+        const { transcripts } = collect(client);
+        client.Emit({ type: 'response.created' });        // a response is in flight (confirmed active)
+        client.CancelActiveResponse();                     // host takes the floor → responseActive=false, but the response is still DRAINING (confirmedResponseActive stays true)
+        client.RequestSpokenUpdate('working on it');       // passes the idle gate → pendingNarrationKind=true, sends a narration response.create
+        client.Emit({ type: 'error', error: { message: 'conversation already has an active response', code: 'conflict' } }); // provider rejects it, NO response.created
+        client.Emit({ type: 'response.done', response: {} }); // the cancelled response's trailing done drains
+        // Delegated work returns → its reply create → the ANSWER turn. Pre-fix the leaked narration kind
+        // (cleared only in the !confirmedResponseActive branch) mistagged this durable answer as
+        // ephemeral 'narration' and its transcript was dropped. It must be 'normal'.
+        client.SendToolResult('c1', '{"ok":true}');
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.output_audio_transcript.delta', delta: 'The result is 42' });
+        expect(transcripts.at(-1)).toEqual({ Role: 'Assistant', Text: 'The result is 42', IsFinal: false, Kind: 'normal' });
+    });
+
+    it('S1e: an error while a CONFIRMED response is still active does NOT drop the busy lock (the confirmedResponseActive guard protects a live/draining turn)', async () => {
+        await connect(client);
+        client.Emit({ type: 'response.created' });   // a provider-CONFIRMED response is active
+        client.CancelActiveResponse();               // floor control: responseActive=false, but the response is still DRAINING (confirmedResponseActive stays true)
+        client.SendToolResult('c1', '{"ok":true}');  // delegated result → a fresh local response.create (counter=1, responseActive=true)
+        expect(client.IsBusy).toBe(true);
+        // An unrelated error arrives while the cancelled response is still draining. The guard must NOT
+        // clear responseActive — that would drop the busy lock mid-turn and cut the pending reply. This
+        // is the whole point of confirmedResponseActive; removing the guard makes IsBusy flip false here.
+        client.Emit({ type: 'error', error: { message: 'transient', code: 'x' } });
+        expect(client.IsBusy).toBe(true);
+    });
+
+    it('S1: an unrelated error frame floors the counter at 0 (never negative)', async () => {
+        await connect(client);
+        client.Emit({ type: 'error', error: { message: 'transient' } }); // no local create outstanding
+        client.Emit({ type: 'error', error: { message: 'another' } });
+        // A normal turn still round-trips cleanly:
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.done', response: {} });
+        expect(client.IsBusy).toBe(false);
+    });
+
+    it('S1 bounded worst-case: an UNRELATED error while a local create is outstanding under-protects exactly ONE done — releases the lock early but NEVER wedges', async () => {
+        await connect(client);
+        // A legitimate locally-initiated create is outstanding (cancel+recreate in flight): counter=1,
+        // awaiting its response.created.
+        client.Emit({ type: 'response.created' });        // the response we are about to cancel
+        client.SendText('barge in');                       // cancel + inject + local response.create → counter=1
+        // An UNRELATED error frame (e.g. a transient rate-limit note) arrives BEFORE our create's
+        // response.created. The self-heal cannot tell it apart, so it spends the outstanding create's
+        // stale-done credit here (counter 1→0). This is the documented bounded degradation.
+        client.Emit({ type: 'error', error: { message: 'transient rate limit', code: 'rate_limited' } });
+        // The cancelled response's trailing (stale) done now arrives UNPROTECTED → it releases the lock
+        // early instead of being ignored. Acceptable: the session stays LIVE (no wedge), which is the
+        // whole point of flooring at 0 rather than leaving the counter stuck.
+        client.Emit({ type: 'response.done', response: {} });
+        expect(client.IsBusy).toBe(false);                 // released early — bounded, not wedged
+        // Crucially the session still functions: our real create's own response.created/done round-trip
+        // cleanly and a fresh spoken update still goes out (never dead-air).
+        client.Emit({ type: 'response.created' });
+        client.Emit({ type: 'response.done', response: {} });
+        const before = client.Fake.Sent.length;
+        expect(client.RequestSpokenUpdate('still alive')).not.toBe(false);
+        expect(client.Fake.Sent.length).toBeGreaterThan(before);
+    });
+
+    it('S3: a PREVIOUS socket\'s late onclose does not corrupt the reconnected session', async () => {
+        await connect(client);
+        const oldSocket = client.Fake;
+        await client.Disconnect();
+        // Reconnect on the SAME instance with a fresh socket:
+        const newSocket = new FakeSocket();
+        client.SetNextSocket(newSocket);
+        const seen = collect(client);
+        const promise = client.Connect(makeConfig(), new FakeMediaStream([new FakeTrack()]));
+        newSocket.Open();
+        await promise;
+        // The OLD socket now fires its async close (post-reconnect) — must be ignored:
+        oldSocket.onclose?.();
+        oldSocket.onerror?.('stale error');
+        expect(seen.errors).toHaveLength(0); // fresh session not driven to error
+        expect(seen.states.at(-1)).toBe('listening'); // still healthy
+        // The new socket still sends:
+        client.SendContextNote('works');
+        expect(newSocket.SentFrames().some((f) => f.type === 'conversation.item.create')).toBe(true);
+    });
+});

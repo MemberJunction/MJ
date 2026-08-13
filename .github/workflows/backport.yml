@@ -1,0 +1,60 @@
+name: Backport merged pull request
+
+# Line-fix flow (see plans/lts-process.md §5.2 on PR #3241): fixes land on
+# next first, then reach an LTS line by label. Put `backport lts/5` on a
+# merged next PR and this opens the cherry-pick PR against lts/5
+# automatically; conflicts become a draft PR a human finishes. Labeling
+# after the merge also triggers (the `labeled` event type below).
+#
+# Merge commits on the source branch are SKIPPED, not fatal (merge_commits:
+# skip): merging next into a feature branch is routine here, and with the
+# default `fail` the action refuses the whole backport — while this run
+# still went green (#3525, 2026-08-06). Consequence of `skip`: only
+# non-merge commits are cherry-picked, so a change that exists solely in a
+# merge commit's conflict resolution will NOT reach the line — keep real
+# payload in ordinary commits. And if the backport fails for any other
+# reason, the assert step below turns this run red instead of letting a
+# PR comment be the only signal.
+
+on:
+  pull_request_target:
+    types: [closed, labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  backport:
+    name: Open backport pull request
+    if: >
+      github.repository_owner == 'MemberJunction' &&
+      github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create backport pull requests
+        id: backport
+        uses: korthout/backport-action@v3
+        with:
+          # Matches labels of the form `backport <branch>`, e.g. `backport lts/5`
+          label_pattern: ^backport ([^ ]+)$
+          merge_commits: skip
+          pull_title: "[${target_branch}] ${pull_title}"
+          pull_description: |-
+            Backport of #${pull_number} to `${target_branch}`, opened automatically by the `backport ${target_branch}` label.
+
+            Line rules apply: patch-only; migrations require their §12 label.
+
+      # No backport completes without being asserted: the action reports
+      # failures as a PR comment but exits 0, so without this step a failed
+      # backport leaves a green run — and a fix everyone believes is on the
+      # line never arrives. A label-less merge is fine (no targets, action
+      # reports success); any attempted-but-failed target turns the run red.
+      - name: Fail the run if any backport did not land
+        if: steps.backport.outputs.was_successful == 'false'
+        run: |
+          echo "::error::Backport failed for at least one target (${{ steps.backport.outputs.was_successful_by_target }}) — see the comment on the source PR. The label did NOT deliver this fix to the line."
+          exit 1

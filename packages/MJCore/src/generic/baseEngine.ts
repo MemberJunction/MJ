@@ -1,4 +1,4 @@
-import { BaseSingleton, MJEvent, MJEventType, MJGlobal } from "@memberjunction/global";
+import { BaseSingleton, MJEvent, MJEventType, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { BehaviorSubject, Observable, Subject } from "rxjs";
 import { buffer, debounceTime, filter } from "rxjs/operators";
@@ -256,6 +256,17 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _propertySubjects: Map<string, BehaviorSubject<BaseEntity[]>> = new Map();
     private _isPermissionConstrained: boolean = false;
     private _deniedEntityNames: string[] = [];
+    /**
+     * Per-property monotonic full-refresh counter. Guards {@link LoadSingleEntityConfig}
+     * against overlapping full refreshes clobbering each other: when several full-refresh
+     * RunViews for the same property are in flight at once (e.g. a burst of saves each
+     * landing in its own debounce window because the round-trip exceeds the DebounceTime),
+     * only the latest-INITIATED refresh may commit its results. Without this, whichever
+     * RunView happens to RESOLVE last wins — which can be an earlier-initiated request that
+     * read a staler snapshot, leaving the cache "one operation behind" until a full reload
+     * reconciles it. Keyed by config PropertyName. See {@link beginConfigRefresh}.
+     */
+    private _configRefreshGeneration: Map<string, number> = new Map();
 
     /**
      * Returns an Observable for a specific engine array property. Subscribers receive the
@@ -816,10 +827,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // Fall through to server fetch if direct delete failed
             }
 
-            // Fallback: re-fetch from server (missing data or apply failure)
+            // Fallback: re-fetch from server (missing data or apply failure). Bypass the cache
+            // for the same reason as the local-event path: this fetch runs BECAUSE a
+            // (cross-server) write signaled the cache stale, so reading back through it would
+            // re-sync the pre-write snapshot.
             let refreshCount = 0;
             for (const config of matchingConfigs) {
-                await this.LoadSingleConfig(config, this._contextUser);
+                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ true);
                 if (!this.configLoadedSuccessfully(config.PropertyName)) {
                     // Same one-shot hazard as the debounced path: the invalidation event is
                     // consumed, so a transient failure here needs a bounded retry too.
@@ -1055,8 +1069,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                                 await this.applyImmediateMutation(config, c.event);
                             }
                         } else {
-                            // One full refresh covers every event in the window
-                            await this.LoadSingleConfig(config, this._contextUser);
+                            // One full refresh covers every event in the window. Bypass the cache:
+                            // this refresh is triggered BY a save/delete of this very entity, so a
+                            // cached view result is precisely what may be stale. Reading true DB
+                            // state guarantees the engine cache reflects the write that just fired
+                            // the event — otherwise a filtered/ordered config (which can't be
+                            // updated in place, e.g. UserInfoEngine's per-user '_UserApplications')
+                            // re-syncs the PRE-write snapshot and the UI sits "one operation behind"
+                            // until a full page reload repopulates the cache.
+                            await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ true);
                             if (!this.configLoadedSuccessfully(config.PropertyName)) {
                                 this.scheduleEventRefreshRetry(config, 1);
                             }
@@ -1260,7 +1281,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const timer = setTimeout(async () => {
             this._eventRefreshRetryTimers.delete(key);
             try {
-                await this.LoadSingleConfig(config, this._contextUser);
+                // Bypass the cache: this retries an event-triggered refresh, so the cache is
+                // still the stale copy the original write invalidated — reading through it
+                // could "succeed" with stale data and reinstate the one-operation-behind bug.
+                await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ true);
                 if (this.configLoadedSuccessfully(key)) {
                     await this.AdditionalLoading(this._contextUser);
                 } else {
@@ -1496,16 +1520,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             connectionString = (provider as ProviderBase).InstanceConnectionString;
         }
 
-        // Generate the same fingerprint that would be used when loading this data
-        const params: RunViewParams = {
-            EntityName: config.EntityName,
-            ExtraFilter: config.Filter || '',
-            OrderBy: config.OrderBy || '',
-            ResultType: 'entity_object',
-            MaxRows: -1,
-            StartRow: 0
-        };
-        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, connectionString);
+        // Use the shared builder so the fingerprint matches what LoadSingleEntityConfig
+        // and RegisterCacheChangeCallbacks produce — prevents silent cache-slot mismatches
+        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(
+            this.BuildRunViewParamsForConfig(config),
+            connectionString
+        );
 
         // Build CompositeKey from the entity's primary key fields
         const key = entity.PrimaryKey;
@@ -1565,7 +1585,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             // Compare all primary key values
             return primaryKeys.every((pk, idx) => {
                 const entityValue = (e as unknown as Record<string, unknown>)[pk.Name];
-                return entityValue === targetKeyValues[idx];
+                const targetValue = targetKeyValues[idx];
+                // UUID columns must compare case-insensitively: the SAME id can arrive with
+                // different casing depending on its source (a client-minted lowercase UUID from
+                // BaseEntity.NewRecord vs. an uppercase value loaded from SQL Server). A raw `===`
+                // then misses the match, and the caller's "not found → add it" branch appends a
+                // DUPLICATE copy of the row into the engine cache. Drive this off metadata
+                // (EntityFieldInfo.IsUniqueIdentifier, which is PG-aware) — never a string-shape
+                // heuristic. See guides/UUID_COMPARISON_GUIDE.md.
+                if (pk.IsUniqueIdentifier) {
+                    return UUIDsEqual(entityValue as string | null | undefined, targetValue as string | null | undefined);
+                }
+                return entityValue === targetValue;
             });
         });
     }
@@ -1686,25 +1717,72 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * Opens a new full-refresh "generation" for a property and returns its token. Each call
+     * bumps the property's monotonic counter, so a token is the latest iff no later refresh
+     * for that property has begun since. See {@link _configRefreshGeneration}.
+     */
+    protected beginConfigRefresh(propertyName: string): number {
+        const next = (this._configRefreshGeneration.get(propertyName) ?? 0) + 1;
+        this._configRefreshGeneration.set(propertyName, next);
+        return next;
+    }
+
+    /**
+     * True when `generation` is still the most recent token handed out by
+     * {@link beginConfigRefresh} for `propertyName` — i.e. no newer full refresh for this
+     * property has started since. A refresh whose token is stale must NOT commit its results:
+     * a newer refresh was initiated afterward and read a more-recent state.
+     */
+    protected isLatestConfigRefresh(propertyName: string, generation: number): boolean {
+        return this._configRefreshGeneration.get(propertyName) === generation;
+    }
+
+    /**
+     * Builds the RunViewParams for an engine config. Used by LoadSingleEntityConfig,
+     * LoadMultipleEntityConfigs, RegisterCacheChangeCallbacks, and syncLocalCacheForConfig
+     * to ensure the fingerprint-affecting params (EntityName, ExtraFilter, OrderBy,
+     * IgnoreMaxRows) are always consistent — preventing cache key mismatches that break
+     * cross-server invalidation via Redis pub/sub and local cache upsert/remove operations.
+     */
+    protected BuildRunViewParamsForConfig(config: BaseEnginePropertyConfig, bypassCache: boolean = false): RunViewParams {
+        return {
+            EntityName: config.EntityName,
+            ResultType: config.ResultType || this.EngineDefaultResultType,
+            ExtraFilter: config.Filter,
+            OrderBy: config.OrderBy,
+            IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
+            _fromEngine: true,   // Mark as engine-initiated to avoid false positive telemetry warnings
+            CacheLocal: config.CacheLocal,
+            CacheLocalTTL: config.CacheLocalTTL,
+            BypassCache: bypassCache
+        } as RunViewParams;
+    }
+
+    /**
      * Handles the process of loading a single config of type 'entity'.
      * @param config
      * @param contextUser
      * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database
      */
     protected async LoadSingleEntityConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
+        // Claim a refresh generation BEFORE the awaited RunView. If another full refresh for
+        // this same property starts while our RunView is in flight, ours becomes stale and must
+        // not commit — otherwise concurrent refreshes (the filtered/OrderBy path, e.g.
+        // UserInfoEngine's per-user '_UserApplications') apply out of initiation-order and the
+        // cache ends up "one operation behind". See _configRefreshGeneration.
+        const generation = this.beginConfigRefresh(config.PropertyName);
         const p = this.RunViewProviderToUse;
         const rv = new RunView(p);
-        const result = await rv.RunView({
-            EntityName: config.EntityName,
-            ResultType: config.ResultType || this.EngineDefaultResultType,
-            ExtraFilter: config.Filter,
-            OrderBy: config.OrderBy,
-            IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
-            _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
-            CacheLocal: config.CacheLocal,
-            CacheLocalTTL: config.CacheLocalTTL,
-            BypassCache: bypassCache
-        }, contextUser);
+        const result = await rv.RunView(this.BuildRunViewParamsForConfig(config, bypassCache), contextUser);
+
+        // A newer full refresh superseded us while we awaited — drop this (staler) snapshot
+        // rather than clobber the newer one. The newer refresh owns the assignment, the
+        // observer notification, and (on failure) the retry, so bailing here leaves no
+        // observer un-notified. The single-refresh path is unaffected: its generation is
+        // still the latest when its RunView returns.
+        if (!this.isLatestConfigRefresh(config.PropertyName, generation)) {
+            return;
+        }
 
         this.HandleSingleViewResult(config, result, contextUser);
         this.emitPropertyChange(config.PropertyName);
@@ -1811,19 +1889,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (configs && configs.length > 0) {
             const p = this.RunViewProviderToUse;
             const rv = new RunView(p);
-            const viewConfigs = configs.map(c => {
-                return <RunViewParams>{
-                    EntityName: c.EntityName,
-                    ResultType: c.ResultType || this.EngineDefaultResultType,
-                    ExtraFilter: c.Filter,
-                    OrderBy: c.OrderBy,
-                    IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
-                    _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
-                    CacheLocal: c.CacheLocal,
-                    CacheLocalTTL: c.CacheLocalTTL,
-                    BypassCache: bypassCache
-                };
-            });
+            const viewConfigs = configs.map(c => this.BuildRunViewParamsForConfig(c, bypassCache));
             const results = await rv.RunViews(viewConfigs, contextUser);
 
             // Process results and record entity loads for redundancy detection
@@ -1948,12 +2014,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
         for (const config of entityConfigs) {
             const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(
-                {
-                    EntityName: config.EntityName,
-                    ExtraFilter: config.Filter,
-                    OrderBy: config.OrderBy,
-                    ResultType: 'entity_object',
-                } as RunViewParams,
+                this.BuildRunViewParamsForConfig(config),
                 connectionPrefix
             );
 

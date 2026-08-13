@@ -1,6 +1,7 @@
 import { Component,  EventEmitter,  Input, OnDestroy, OnInit, Output } from '@angular/core';
 import { BaseEntity, EntityFieldInfo, EntityInfo, LogError, RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { MJ_AG_GRID_THEME_PARAMS } from '@memberjunction/ng-shared-generic';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import {
@@ -12,7 +13,6 @@ import {
   RowSelectionOptions,
   SelectionChangedEvent,
   themeAlpine,
-  colorSchemeVariable,
   type Theme
 } from 'ag-grid-community';
 
@@ -69,7 +69,9 @@ export class FindRecordComponent extends BaseAngularComponent implements OnInit,
     checkboxes: false,
     enableClickSelection: true
   };
-  public GridTheme: Theme = themeAlpine.withPart(colorSchemeVariable);
+  // Themed from the shared --mj-* token params so this grid follows light/dark and
+  // the org brand overlay, matching the main entity/query grids.
+  public GridTheme: Theme = themeAlpine.withParams(MJ_AG_GRID_THEME_PARAMS);
   private gridApi: GridApi | null = null;
 
  
@@ -151,7 +153,7 @@ export class FindRecordComponent extends BaseAngularComponent implements OnInit,
 
   // Stub function for simulating a database search (replace with actual search logic)
   protected async doSearch(searchTerm: string): Promise<BaseEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView({
       EntityName: this.EntityName, 
       UserSearchString: searchTerm, 

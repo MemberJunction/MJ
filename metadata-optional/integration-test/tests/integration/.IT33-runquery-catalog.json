@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT33 - RunQuery Catalog Sweep",
+    "Description": "Every shipped catalog query executed dynamically from QueryEngine: no-param sweep, required-param enforcement, metadata-derived parameterized sweep, raw-identifier token queries, AppliedParameters echo, templated/composition queries. 6 checks (QC1-QC6), read-only, client transport.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Every shipped catalog query executed dynamically from QueryEngine: no-param sweep, required-param enforcement, metadata-derived parameterized sweep, raw-identifier token queries, AppliedParameters echo, templated/composition queries. 6 checks (QC1-QC6), read-only, client transport."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "runquery-catalog"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "4CB3C4A3-43E8-4317-93DC-C617223E962E"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T01:12:44.118Z",
+    "checksum": "9ec57832eff99b7ee204b8a568b6a683603c1191c3da7ac51bedf26911232dd2"
+  }
+}

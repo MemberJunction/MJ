@@ -10,7 +10,7 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange,
          ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError, LogStatus,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput,
-         EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult,
+         EntityRecordNameResult, RecordDependency, RecordMergeRequest, RecordMergeResult,
          RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
          RunQueryParams, RunQueryEnrichment, BaseEntityResult, QueryExecutionSpec,
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
@@ -28,6 +28,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
 import { GraphQLAIClient } from "./graphQLAIClient";
 import { BrowserIndexedDBStorageProvider } from "./storage-providers";
+import { SanitizeGraphQLError, ToSafeGraphQLError } from "./sanitizeGraphQLError";
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
@@ -46,6 +47,48 @@ export type SocketConnectionState = 'connected' | 'disconnected' | 'unknown';
  * The client application should use this to notify the user and force re-authentication.
  */
 export type AuthenticationErrorCallback = (error: Error) => void;
+
+/**
+ * One dispatcher lifecycle frame for a durable workflow run (task graph), as delivered by the
+ * `taskGraphFrames` subscription. Mirrors the server's `TaskGraphFrameNotification` — the graph's
+ * owner is a server-side filter key and never appears here.
+ */
+export interface TaskGraphFrameEvent {
+    /** What happened — 'TaskStarted' | 'TaskCompleted' | 'TaskFailed' | 'TaskBlocked' | 'TaskSkipped'
+     *  | 'TaskAwaitingHuman' | 'GraphSettled' | 'GateDecision' | 'ClaimChanged' | 'PassCompleted'
+     *  | 'GraphPaused' | 'GraphResumed' | 'BreakpointHit' | 'NodeProgress'. Open string so a newer
+     *  server can add kinds without breaking an older client, which should ignore what it does not know. */
+    kind: string;
+    parentTaskId: string;
+    taskId?: string;
+    taskName?: string;
+    status?: string;
+    errorMessage?: string;
+    assignedUserId?: string;
+    completedCount?: number;
+    totalCount?: number;
+    /** GateDecision */
+    edgeId?: string;
+    dependsOnTaskId?: string;
+    verdict?: 'satisfied' | 'notTaken' | 'held';
+    conditionText?: string;
+    reason?: string;
+    /** ClaimChanged */
+    claimEvent?: 'claimed' | 'heartbeat-lost' | 'reclaimed';
+    claimedBy?: string;
+    claimExpiresAt?: string;
+    /** PassCompleted */
+    passNumber?: number;
+    eligibleCount?: number;
+    heldCount?: number;
+    claimedCount?: number;
+    /** The dispatcher instance's own load across every graph — not this graph's in-flight count. */
+    instanceInFlightCount?: number;
+    /** NodeProgress */
+    progressMessage?: string;
+    progressPercent?: number;
+    date?: string;
+}
 
 /**
  * Shared, stateless FieldMapper instance. FieldMapper holds no per-call state (only static
@@ -104,6 +147,27 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
     get WSURL(): string { return this.Data.WSURL }
 
     /**
+     * Opt in to logging the *values* of GraphQL variables when a request fails.
+     *
+     * Defaults to `false`, in which case a failed request logs the operation's
+     * diagnostics plus the variables' **shape** (key names and value types) — enough
+     * to answer "was the field sent?", "was it empty?", "is the nesting right?" —
+     * but never a value.
+     *
+     * Set to `true` while debugging to log values verbatim. Do this only in a
+     * development environment: the values of a mutation's input routinely include
+     * credentials, and console output on a server is typically captured to a
+     * persistent log file that outlives any later rotation of the secret.
+     *
+     * This mirrors the server-side `loggingSettings.graphql.logVariables` tier, which
+     * is likewise off by default.
+     *
+     * @default false
+     */
+    get LogVariableValues(): boolean { return this.Data.LogVariableValues === true }
+    set LogVariableValues(value: boolean) { this.Data.LogVariableValues = value }
+
+    /**
      * RefreshTokenFunction is a function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
      */
     get RefreshTokenFunction(): RefreshTokenFunction { return this.Data.RefreshFunction }
@@ -160,10 +224,10 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
 
 // The GraphQLDataProvider implements both the IEntityDataProvider and IMetadataProvider interfaces.
 /**
- * The GraphQLDataProvider class is a data provider for MemberJunction that implements the IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, IRunQueryProvider interfaces and connects to the
+ * The GraphQLDataProvider class is a data provider for MemberJunction that implements the IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunQueryProvider interfaces and connects to the
  * MJAPI server using GraphQL. This class is used to interact with the server to get and save data, as well as to get metadata about the entities and fields in the system.
  */
-export class GraphQLDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunReportProvider {
+export class GraphQLDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider {
     /**
      * Opt-in verbose logging for the real-time cache-invalidation subscription. Off by default — these
      * messages fire on every cross-server save/delete and flood the console. Set to `true` (e.g. from
@@ -467,36 +531,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
 
     /**************************************************************************/
-    // START ---- IRunReportProvider
-    /**************************************************************************/
-    public async RunReport(params: RunReportParams, contextUser?: UserInfo): Promise<RunReportResult> {
-        const query = gql`
-        query GetReportDataQuery ($ReportID: String!) {
-            GetReportData(ReportID: $ReportID) {
-                Success
-                Results
-                RowCount
-                ExecutionTime
-                ErrorMessage
-            }
-        }`
-
-        const result = await this.ExecuteGQL(query, {ReportID: params.ReportID} );
-        if (result && result.GetReportData)
-            return {
-                ReportID: params.ReportID,
-                Success: result.GetReportData.Success,
-                Results: JSON.parse(result.GetReportData.Results),
-                RowCount: result.GetReportData.RowCount,
-                ExecutionTime: result.GetReportData.ExecutionTime,
-                ErrorMessage: result.GetReportData.ErrorMessage,
-            };
-    }
-    /**************************************************************************/
-    // END ---- IRunReportProvider
-    /**************************************************************************/
-
-    /**************************************************************************/
     // START ---- IRunQueryProvider
     /**************************************************************************/
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
@@ -623,7 +657,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return this.TransformQueryPayload(result.GetQueryData);
         }
     }
-    
+
     public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment): Promise<RunQueryResult> {
         const query = gql`
             query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
@@ -1170,6 +1204,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     ForceAuditLog: item.params.ForceAuditLog || false,
                     AuditLogDescription: item.params.AuditLogDescription || '',
                     ResultType: item.params.ResultType || 'simple',
+                    // Aggregates were silently OMITTED from this input map (B40's true root
+                    // cause): the schema accepted them, the server could compute them, the
+                    // response could carry them — but the request never asked. Every layer
+                    // downstream looked correct while the caller got Success with no aggregates.
+                    Aggregates: item.params.Aggregates ?? null,
                 },
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
@@ -1187,6 +1226,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             status
                             maxUpdatedAt
                             rowCount
+                            aggregateResults {
+                                expression
+                                alias
+                                value
+                                error
+                            }
                             errorMessage
                             Results {
                                 PrimaryKey {
@@ -1223,6 +1268,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     rowCount?: number;
                     errorMessage?: string;
                     Results?: Array<{ PrimaryKey: Array<{ FieldName: string; Value: string }>; EntityID: string; Data: string }>;
+                    aggregateResults?: Array<{ expression: string; alias: string; value?: string; error?: string }>;
                     differentialData?: {
                         updatedRows: Array<{ PrimaryKey: Array<{ FieldName: string; Value: string }>; EntityID: string; Data: string }>;
                         deletedRecordIDs: string[];
@@ -1272,6 +1318,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         return data as T;
                     });
 
+                    // Aggregates ride the stale reply (B40). The resolver JSON-stringifies each
+                    // value to preserve its type across GraphQL; parse it back so consumers get
+                    // the native number/string the AggregateResult contract declares.
+                    const aggregateResults = result.aggregateResults?.map(a => ({
+                        expression: a.expression,
+                        alias: a.alias,
+                        value: a.value !== undefined && a.value !== null ? JSON.parse(a.value) : null,
+                        error: a.error,
+                    }));
+
                     return {
                         viewIndex: result.viewIndex,
                         status: result.status as 'current' | 'stale' | 'differential' | 'error',
@@ -1279,6 +1335,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         maxUpdatedAt: result.maxUpdatedAt,
                         rowCount: result.rowCount,
                         errorMessage: result.errorMessage,
+                        aggregateResults,
                     };
                 }
 
@@ -2550,16 +2607,34 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return data;
         }
         catch (e) {
-            // Enhanced error logging to diagnose 500 errors
-            console.error('[GraphQL] ExecuteGQL error caught:', {
-                hasResponse: !!e?.response,
-                hasErrors: !!e?.response?.errors,
-                errorCount: e?.response?.errors?.length,
-                firstError: e?.response?.errors?.[0],
-                errorCode: e?.response?.errors?.[0]?.extensions?.code,
-                errorMessage: e?.response?.errors?.[0]?.message,
-                fullError: e
-            });
+            // Enhanced error logging to diagnose 500 errors.
+            //
+            // SECURITY: the error thrown by the underlying graphql-request client
+            // serialises the originating request — INCLUDING its `variables` — into its
+            // own `message` at construction time, and V8 then embeds that message in
+            // `stack`. Any mutation carrying a secret therefore has that secret sitting
+            // in three places on the error object at once. Logging the error directly,
+            // or stringifying it, writes the secret in plaintext to whatever this
+            // process's console output is captured to — on a server, typically a
+            // persistent log file.
+            //
+            // `SanitizeGraphQLError` builds a fresh diagnostic object from known-safe
+            // fields only, re-deriving the message from `response.errors[0]` rather than
+            // reusing the upstream one. It does not mutate `e`, so the control flow
+            // below — and every caller that catches the rethrown error — is unaffected.
+            // `LogVariableValues` is the developer opt-in — off by default, mirroring
+            // the server's `loggingSettings.graphql.logVariables` tier.
+            const safeError = SanitizeGraphQLError(e, this._configData?.LogVariableValues === true);
+            console.error('[GraphQL] ExecuteGQL error caught:', safeError);
+
+            // SECURITY: what propagates out of here must ALSO be free of the payload.
+            // Sanitising the log line above fixes one log statement; the raw error is
+            // caught and logged by ~178 call sites across the repo (19 `LogError(e)` in
+            // this file alone), each of which would stringify the serialised request.
+            // Rethrowing a SafeGraphQLError closes all of them at once, including
+            // callers not yet written. It preserves `response.status`,
+            // `response.errors` and `request.query` — everything known consumers read.
+            const safeToThrow = ToSafeGraphQLError(e);
 
             if (e && e.response && e.response.errors?.length > 0) {//e.code === 'JWT_EXPIRED') {
                 const error = e.response.errors[0];
@@ -2573,15 +2648,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     else {
                         // token expired but the caller doesn't want a refresh, so just return the error
                         LogError(`JWT_EXPIRED and refreshTokenIfNeeded is false`);
-                        throw e;
+                        throw safeToThrow;
                     }
                 }
                 else
-                    throw e;
+                    throw safeToThrow;
             }
             else {
-                LogError(e);
-                throw e; // force the caller to handle the error
+                // LogError() stringifies its argument (String(message) internally), which
+                // for the raw error class yields the full serialised request.
+                LogError(JSON.stringify(safeError));
+                throw safeToThrow; // force the caller to handle the error
             }
         }
     }
@@ -2961,6 +3038,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         });
         this._pushStatusSubjects.clear();
+
+        this._taskGraphFrameStreams.forEach((entry, parentTaskId) => {
+            try {
+                entry.subject.complete();
+                entry.subscription.unsubscribe();
+            } catch (e) {
+                console.error(`[GraphQLDataProvider] Error cleaning up frame stream for ${parentTaskId}:`, e);
+            }
+        });
+        this._taskGraphFrameStreams.clear();
     }
 
     /**
@@ -3241,6 +3328,122 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 sub.unsubscribe();
             };
         });
+    }
+
+    /**
+     * Shared, refcounted frame streams per watched graph — the client half of the
+     * `taskGraphFrames` subscription. Torn down when the last subscriber leaves; frames are
+     * graph-scoped and a settled graph stops emitting, so no idle reaper is needed.
+     */
+    private _taskGraphFrameStreams: Map<string, {
+        subject: Subject<TaskGraphFrameEvent>;
+        subscription: Subscription;
+        activeSubscribers: number;
+    }> = new Map();
+
+    /**
+     * Live dispatcher lifecycle frames for one workflow run (durable task graph), keyed by the
+     * graph's parent task ID.
+     *
+     * This is the push channel the run console rides: `TaskStarted` / `TaskCompleted` /
+     * `TaskFailed` / `TaskBlocked` / `TaskSkipped` / `TaskAwaitingHuman` / `GraphSettled`, plus the
+     * debugger frames (`GateDecision`, `ClaimChanged`, `PassCompleted`, `GraphPaused`,
+     * `GraphResumed`, `BreakpointHit`, `NodeProgress`). Addressed by graph rather than by session on
+     * purpose — a durable graph outlives the tab that submitted it, so "watch this workflow run"
+     * survives a refresh and works for whoever the server authorizes (the server filter is
+     * owner-scoped and fails closed).
+     *
+     * **Frames are advisory; rows are truth.** Delivery is best-effort and in-process on the server,
+     * so consumers should treat a frame as a trigger to render and reconcile from `MJ: Tasks` rows
+     * on attach, on reconnect, and on `GraphSettled` — never as a substitute for them.
+     *
+     * The stream is shared and refcounted per graph: ten components watching one run cost one
+     * WebSocket subscription. Errors and completions tear the shared entry down so the next call
+     * re-subscribes fresh (the same posture `PushStatusUpdates` takes).
+     */
+    public TaskGraphFrames(parentTaskId: string): Observable<TaskGraphFrameEvent> {
+        const attachTo = (entry: { subject: Subject<TaskGraphFrameEvent>; activeSubscribers: number }): Observable<TaskGraphFrameEvent> => {
+            return new Observable<TaskGraphFrameEvent>((observer) => {
+                entry.activeSubscribers++;
+                const sub = entry.subject.subscribe(observer);
+                return () => {
+                    sub.unsubscribe();
+                    const current = this._taskGraphFrameStreams.get(parentTaskId);
+                    if (!current) return;
+                    current.activeSubscribers--;
+                    if (current.activeSubscribers <= 0) {
+                        // Last watcher left — close the WebSocket subscription rather than letting
+                        // a settled run's stream linger until an idle reaper notices.
+                        current.subscription.unsubscribe();
+                        current.subject.complete();
+                        this._taskGraphFrameStreams.delete(parentTaskId);
+                    }
+                };
+            });
+        };
+
+        const existing = this._taskGraphFrameStreams.get(parentTaskId);
+        if (existing) {
+            return attachTo(existing);
+        }
+
+        const SUBSCRIBE_TO_FRAMES = gql`subscription TaskGraphFrames($parentTaskId: ID!) {
+            taskGraphFrames(parentTaskId: $parentTaskId) {
+                kind
+                parentTaskId
+                taskId
+                taskName
+                status
+                errorMessage
+                assignedUserId
+                completedCount
+                totalCount
+                edgeId
+                dependsOnTaskId
+                verdict
+                conditionText
+                reason
+                claimEvent
+                claimedBy
+                claimExpiresAt
+                passNumber
+                eligibleCount
+                heldCount
+                claimedCount
+                instanceInFlightCount
+                progressMessage
+                progressPercent
+                date
+            }
+        }`;
+
+        const subject = new Subject<TaskGraphFrameEvent>();
+        const subscription = new Subscription();
+        subscription.add(
+            // `subscribe()` already owns the WS client lifecycle, JWT refresh, and reconnect
+            // posture — riding it keeps one implementation of that machinery.
+            this.subscribe(SUBSCRIBE_TO_FRAMES, { parentTaskId }).subscribe({
+                next: (data: { taskGraphFrames?: TaskGraphFrameEvent }) => {
+                    if (data?.taskGraphFrames) {
+                        subject.next(data.taskGraphFrames);
+                    }
+                },
+                error: (error) => {
+                    subject.error(error);
+                    this._taskGraphFrameStreams.delete(parentTaskId);
+                },
+                complete: () => {
+                    // Token refresh completes the stream by design; consumers re-subscribe and land
+                    // on a fresh WebSocket. Completing the subject propagates that signal.
+                    subject.complete();
+                    this._taskGraphFrameStreams.delete(parentTaskId);
+                },
+            })
+        );
+
+        const entry = { subject, subscription, activeSubscribers: 0 };
+        this._taskGraphFrameStreams.set(parentTaskId, entry);
+        return attachTo(entry);
     }
 
     /**

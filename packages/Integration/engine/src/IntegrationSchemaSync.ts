@@ -108,6 +108,83 @@ export function decideBooleanOverlay(
   return { value: discovered, winner: 'Discovered' };
 }
 
+/**
+ * U1 / rsuplan line 29 — the PRIMARY KEY is EITHER declared OR stream-discovered, never unioned.
+ * Pure decision for one field's `IsPrimaryKey` during the discovery-persist overlay. Extracted (like
+ * {@link decideBooleanOverlay}) so the matrix is unit-pinnable.
+ *
+ * Also SELF-HEALS: when a declared PK exists and a *Discovered* field was previously (wrongly) promoted
+ * to PK, it is demoted back to non-PK — its uniqueness survives separately via `IsUniqueKey`. This both
+ * prevents NEW fabricated composites and repairs objects an earlier buggy sync already corrupted.
+ *
+ *  - No declared PK on the object → discovery/stream is the authority (the fallback PK picker): the
+ *    discovered opinion wins when it has one; otherwise the existing value stands.
+ *  - A declared PK exists → either/or: a `Discovered` field is never the declared key, so it is forced
+ *    non-PK (blocking a new composite AND demoting an already-persisted one); a declared/custom field
+ *    keeps its own declared `IsPrimaryKey` and discovery may not flip it.
+ */
+export function decidePKPromotion(args: {
+  objectHasDeclaredPK: boolean;
+  fieldIsDiscovered: boolean;
+  existingIsPrimaryKey: boolean;
+  discoveredIsPrimaryKey: boolean | undefined;
+}): { value: boolean; winner: 'Declared' | 'Discovered' } {
+  const { objectHasDeclaredPK, fieldIsDiscovered, existingIsPrimaryKey, discoveredIsPrimaryKey } = args;
+  if (!objectHasDeclaredPK) {
+    if (discoveredIsPrimaryKey !== undefined) return { value: discoveredIsPrimaryKey, winner: 'Discovered' };
+    return { value: existingIsPrimaryKey, winner: 'Declared' };
+  }
+  if (fieldIsDiscovered) return { value: false, winner: 'Declared' };
+  return { value: existingIsPrimaryKey, winner: 'Declared' };
+}
+
+/**
+ * Pure overlay rule for SEMANTIC string attributes (Description, DisplayName, the
+ * IncrementalWatermarkField cursor name) — external-wins-when-present:
+ *
+ *   - The external system RETURNED a non-empty value that differs → Discovered wins (a
+ *     returned source description overrides the metadata folder's).
+ *   - The external system returned the SAME value → no change, Declared credited.
+ *   - The external system was SILENT (null/undefined/empty) → the curated value sticks.
+ *
+ * Distinct from {@link decideBooleanOverlay} only in the empty-string handling: an empty
+ * string from a describe is treated as silence, never as an instruction to blank a curated
+ * value.
+ */
+export function decideSemanticOverlay(
+  declared: string | null | undefined,
+  discovered: string | null | undefined,
+): { value: string | null | undefined; changed: boolean; winner: 'Declared' | 'Discovered' } {
+  const said = typeof discovered === 'string' && discovered.length > 0;
+  if (!said) {
+    return { value: declared, changed: false, winner: 'Declared' };
+  }
+  if (declared === discovered) {
+    return { value: declared, changed: false, winner: 'Declared' };
+  }
+  return { value: discovered, changed: true, winner: 'Discovered' };
+}
+
+/**
+ * U2 — PURE width overlay: a rediscovery's measured width should only ever GROW the persisted catalog
+ * `Length`, never shrink it. RSU widens the physical column but never shrinks it, so shrinking the
+ * catalog `Length` (because this run's sample happened to be narrower than a prior run's) drifts the
+ * two apart — the catalog says `nvarchar(128)` while the column is still `nvarchar(512)` — and a later
+ * apply keyed off the catalog could truncate a value the wider column still holds. Returns the new
+ * length + whether it changed. A null/undefined `srcMaxLength` is "no opinion" → keep the persisted
+ * value (never clears a width to MAX). Large-text types carry their MAX in the Type, not here.
+ */
+export function decideLengthOverlay(
+  existingLength: number | null | undefined,
+  srcMaxLength: number | null | undefined,
+): { Length: number | null | undefined; changed: boolean } {
+  if (srcMaxLength == null) return { Length: existingLength, changed: false };
+  if (existingLength == null || srcMaxLength > existingLength) {
+    return { Length: srcMaxLength, changed: existingLength !== srcMaxLength };
+  }
+  return { Length: existingLength, changed: false };   // never shrink
+}
+
 /** §7 — input for {@link decideAbsentDeactivations}. */
 export interface AbsentDeactivationInput {
   /** Caller requested a deactivating (comprehensive) refresh. */
@@ -331,10 +408,18 @@ export class IntegrationSchemaSync {
       .filter((r) => r.ObjectID)
       .map((r) => async () => {
         const existingFields = engine.GetIntegrationObjectFields(r.ObjectID!);
+        // U1 / rsuplan line 29 — the primary key is EITHER declared OR streamed, NEVER unioned. If the
+        // object already carries a primary key from its declared metadata, streamed discovery must not
+        // promote a *different* field to PK: that fabricates a composite whose extra, often-nullable
+        // component breaks the generated spCreate read-back (`WHERE a=@a AND b=@b` never matches when the
+        // added component is NULL — the HubSpot `id` + `hs_object_id` failure). Streaming still runs for
+        // every object to find columns/widths/customs; ONLY the PK promotion is gated. A prior *discovered*
+        // PK does not count as the authoritative declared key (excluded so a re-run can't self-perpetuate).
+        const objectHasDeclaredPK = existingFields.some(f => f.IsPrimaryKey === true && f.MetadataSource !== 'Discovered');
         const perObjectLogs: FieldMergeLog[] = [];
         const perObjectStats = { created: 0, updated: 0 };
         for (const srcField of r.srcObj.Fields) {
-          const fr = await IntegrationSchemaSync.UpsertField(md, r.ObjectID!, srcField, existingFields, ContextUser, siblingNameToID);
+          const fr = await IntegrationSchemaSync.UpsertField(md, r.ObjectID!, srcField, existingFields, ContextUser, siblingNameToID, objectHasDeclaredPK);
           if (fr.Created) perObjectStats.created++;
           if (fr.Updated) perObjectStats.updated++;
           perObjectLogs.push({
@@ -468,23 +553,34 @@ export class IntegrationSchemaSync {
     const existing = existingObjects.find((o) => o.Name.toLowerCase() === srcObj.ExternalName.toLowerCase());
 
     if (existing) {
-      // Declared row exists. Discovery may enrich (e.g. Description if empty,
-      // IncrementalWatermarkField if newly observed). Curated values win for
-      // everything human-authored; describe wins only for technical/empty slots.
+      // Declared row exists. Overlay rule (external-wins-when-present): when the
+      // EXTERNAL system returns a value for an attribute, that value overrides the curated
+      // metadata; when the external system is SILENT on it, the curated value sticks. This is
+      // the per-attribute overlay precedence — e.g. a source object that
+      // returns a description overrides the metadata folder's description, but an object whose
+      // describe carries none keeps the curated text. (Previously curated non-empty values were
+      // never overwritten; the spec inverts that precedence.)
       let dirty = false;
       const changes: string[] = [];
-      if (!existing.Description && srcObj.Description) {
-        existing.Description = srcObj.Description;
+      const descOverlay = decideSemanticOverlay(existing.Description, srcObj.Description);
+      if (descOverlay.changed) {
+        existing.Description = descOverlay.value ?? null;
         dirty = true;
         changes.push('Description');
       }
-      // §3 metadata refresh: capture the source's watermark field when the stored row has none.
-      // We deliberately do NOT overwrite an already-set value on a later refresh — a watermark
-      // field may have been deliberately chosen/curated, and the "curated values win" invariant
-      // (above) applies. A genuine source-side rename is rare and handled by re-curation, not by
-      // silently clobbering the stored cursor field on every refresh.
-      if (srcObj.IncrementalWatermarkField && !existing.IncrementalWatermarkField) {
-        existing.IncrementalWatermarkField = srcObj.IncrementalWatermarkField;
+      const labelOverlay = decideSemanticOverlay(existing.DisplayName, srcObj.ExternalLabel);
+      if (labelOverlay.changed) {
+        existing.DisplayName = labelOverlay.value ?? null;
+        dirty = true;
+        changes.push('DisplayName');
+      }
+      // §3 metadata refresh — same external-wins-when-present rule for the watermark cursor
+      // field: a discovery that REPORTS one overrides the stored value ("prefer new over old
+      // always for the same existing columns"); a silent discovery leaves the
+      // curated choice untouched.
+      const wmOverlay = decideSemanticOverlay(existing.IncrementalWatermarkField, srcObj.IncrementalWatermarkField);
+      if (wmOverlay.changed) {
+        existing.IncrementalWatermarkField = wmOverlay.value ?? null;
         dirty = true;
         changes.push('IncrementalWatermarkField');
       }
@@ -585,6 +681,7 @@ export class IntegrationSchemaSync {
     existingFields: MJIntegrationObjectFieldEntity[],
     contextUser: UserInfo,
     siblingNameToID?: Map<string, string>,
+    objectHasDeclaredPK: boolean = false,
   ): Promise<{
     Created: boolean;
     Updated: boolean;
@@ -599,10 +696,15 @@ export class IntegrationSchemaSync {
     const winners: FieldMergeLog['AttributeWinners'] = {};
 
     if (existing) {
-      // Declared row exists. Overlay rule:
-      //  - Describe wins for DDL-affecting attributes (Type, AllowsNull, IsRequired, IsPrimaryKey, IsUniqueKey, IsReadOnly).
-      //    Curated values for these can drift from what the live system enforces and cause sync errors.
-      //  - Curated wins for semantic attributes (Description if non-empty, DisplayName, Sequence, Category).
+      // Declared row exists. Overlay rule — external-wins-when-present, per attribute:
+      //  - Describe wins for DDL-affecting attributes (Type, AllowsNull, IsRequired, IsPrimaryKey,
+      //    IsUniqueKey, IsReadOnly) whenever the source states an opinion; `undefined` = no opinion
+      //    and the Declared value sticks (decideBooleanOverlay). Width is the spec's one explicit
+      //    exception: "pick the larger" (decideLengthOverlay — grow-only, never shrink).
+      //  - Semantic attributes (Description, DisplayName) follow the SAME rule: a source that
+      //    RETURNS a value overrides the curated one; a silent source keeps the curated value.
+      // (The worked example — a returned description overrides the metadata
+      //    folder's description; absent, the metadata description stays.)
       //
       // Returned attribute winners surface EXACTLY which source decided each
       // attribute so the caller (progress emitter, UI) can show structural
@@ -627,8 +729,10 @@ export class IntegrationSchemaSync {
       // Length is DDL-affecting (describe wins): seed it so the column is sized
       // nvarchar(N) instead of defaulting to NVARCHAR(MAX) downstream. (Large-text types carry
       // their MAX in the Type itself — 'nvarchar(MAX)' — via MapSourceType, so no length here.)
-      if (srcField.MaxLength != null && existing.Length !== srcField.MaxLength) {
-        existing.Length = srcField.MaxLength;
+      // U2 — describe wins only to GROW the persisted width, never to shrink it (see decideLengthOverlay).
+      const lengthOverlay = decideLengthOverlay(existing.Length, srcField.MaxLength);
+      if (lengthOverlay.changed) {
+        existing.Length = lengthOverlay.Length;
         dirty = true;
       }
       if (existing.AllowsNull !== describedAllowsNull) {
@@ -652,12 +756,21 @@ export class IntegrationSchemaSync {
       }
       winners.IsRequired = reqOverlay.winner;
 
-      const pkOverlay = decideBooleanOverlay(existing.IsPrimaryKey, srcField.IsPrimaryKey);
-      if (pkOverlay.winner === 'Discovered' && pkOverlay.value !== undefined) {
-        existing.IsPrimaryKey = pkOverlay.value;
+      // U1 / rsuplan line 29 — either/or PK with self-heal. When a declared PK exists, discovery may not
+      // add a *different* field as PK (fabricated composite → nullable component breaks the spCreate
+      // read-back); and a Discovered field that was previously wrongly promoted is DEMOTED here (its
+      // uniqueness survives via the IsUniqueKey overlay below). With no declared PK, the stream picker wins.
+      const pkDecision = decidePKPromotion({
+        objectHasDeclaredPK,
+        fieldIsDiscovered: existing.MetadataSource === 'Discovered',
+        existingIsPrimaryKey: existing.IsPrimaryKey === true,
+        discoveredIsPrimaryKey: srcField.IsPrimaryKey,
+      });
+      if ((existing.IsPrimaryKey === true) !== pkDecision.value) {
+        existing.IsPrimaryKey = pkDecision.value;
         dirty = true;
       }
-      winners.IsPrimaryKey = pkOverlay.winner;
+      winners.IsPrimaryKey = pkDecision.winner;
 
       const uqOverlay = decideBooleanOverlay(existing.IsUniqueKey, srcField.IsUniqueKey);
       if (uqOverlay.winner === 'Discovered' && uqOverlay.value !== undefined) {
@@ -672,15 +785,20 @@ export class IntegrationSchemaSync {
         dirty = true;
       }
       winners.IsReadOnly = roOverlay.winner;
-      // Description: only fill if missing — curated descriptions outrank
-      // generic describe output. So 'Declared' wins unless the row had
-      // no description at all and discovery has one.
-      if (!existing.Description && srcField.Description) {
-        existing.Description = srcField.Description;
+      // Description / DisplayName — external-wins-when-present: a source that
+      // returns a value overrides the curated one; a silent source keeps the curated value.
+      const fieldDescOverlay = decideSemanticOverlay(existing.Description, srcField.Description);
+      if (fieldDescOverlay.changed) {
+        existing.Description = fieldDescOverlay.value ?? null;
         dirty = true;
         winners.Description = 'Discovered';
       } else if (existing.Description) {
         winners.Description = 'Declared';
+      }
+      const fieldLabelOverlay = decideSemanticOverlay(existing.DisplayName, srcField.Label);
+      if (fieldLabelOverlay.changed) {
+        existing.DisplayName = fieldLabelOverlay.value ?? null;
+        dirty = true;
       }
       // FK metadata overlay: declared wins if already set. Otherwise resolve the
       // discovered ForeignKeyTarget name against sibling objects in this integration
@@ -720,7 +838,18 @@ export class IntegrationSchemaSync {
       // MapSourceType, so no length is set for them here.
       if (srcField.MaxLength != null) field.Length = srcField.MaxLength;
       field.AllowsNull = srcField.AllowsNull ?? !srcField.IsRequired;
-      field.IsPrimaryKey = srcField.IsPrimaryKey;
+      // New row: there is no declared value to wipe, so the NOT-NULL column takes the safe
+      // default when the source had no opinion (undefined). The overlay path above is where
+      // undefined MUST stay undefined (U1) — this is creation, not overlay.
+      // U1 / rsuplan line 29 — a newly-discovered field may BE the PK only when the object has NO
+      // declared PK (either/or). With a declared PK present a streamed field never becomes a PK
+      // component (its uniqueness rides IsUniqueKey below). Same pure rule as the overlay path.
+      field.IsPrimaryKey = decidePKPromotion({
+        objectHasDeclaredPK,
+        fieldIsDiscovered: true,
+        existingIsPrimaryKey: false,
+        discoveredIsPrimaryKey: srcField.IsPrimaryKey,
+      }).value;
       field.IsRequired = srcField.IsRequired;
       field.IsReadOnly = srcField.IsReadOnly ?? false;
       field.IsUniqueKey = srcField.IsUniqueKey ?? false;

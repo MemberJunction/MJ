@@ -1,5 +1,33 @@
 # @memberjunction/config
 
+## 6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+## 6.0.0
+
+## 5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- dd04a24: Widen the zod pin from `~3.24.4` to `^3.25.0` so it satisfies `@modelcontextprotocol/sdk`'s peer requirement (`zod ^3.25 || ^4.0`). The old tilde pin has no overlap with the SDK's peer range, which breaks strict package managers (pnpm) and MJCLI's oclif manifest generation under strict installs. zod 3.25.x keeps the classic v3 API at the root import, so this is a version-range correction with no behavior change.
+
+## 5.49.0
+
+## 5.48.0
+
+## 5.47.0
+
+## 5.46.0
+
+## 5.45.1
+
+## 5.45.0
+
 ## 5.44.0
 
 ## 5.43.0

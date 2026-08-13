@@ -101,6 +101,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Action Execution Logs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJActionExecutionLogs"
+        SectionName="Action Execution Logs"
+        Icon="fa fa-history"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJActionExecutionLogs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Execution Logs','EntityActionInvocationTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Action Execution Logs')"
+                [AllowLoad]="IsSectionExpanded('mJActionExecutionLogs')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJActionExecutionLogs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

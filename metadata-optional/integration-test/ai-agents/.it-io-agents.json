@@ -1,0 +1,119 @@
+[
+  {
+    "fields": {
+      "Name": "IT: Artifact Reader",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "Artifact interrogation probe: performs exactly one instructed artifactToolCalls entry per run against the checked-in asset artifacts, then completes. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 5
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Artifact Reader - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6755E2BB-58E6-4250-ADA4-617A99610B71"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T01:12:47.742Z",
+            "checksum": "86c24135832b2ef051474f67496a9abd424e0aa030657153e0d1d60b6c39f83f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "FF06C0C2-30AE-4373-A0C0-1D65A9380E97"
+    },
+    "sync": {
+      "lastModified": "2026-08-08T01:12:47.703Z",
+      "checksum": "6e97614cf2c827b0f40f4db3f5e0787519f1de948aa1b546482772ac34949b99"
+    }
+  },
+  {
+    "fields": {
+      "Name": "IT: Search Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "Agent-facing search probe: SearchScopeAccess=Assigned with the IT: Integration Test Scope (Phase=Both) and the Scoped Search action, covering both the agent-invoked action path and pre-execution RAG injection. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false,
+      "MaxIterationsPerRun": 5,
+      "SearchScopeAccess": "Assigned"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Search Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5461E121-B20D-414F-A715-9A31756D5592"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T01:12:47.752Z",
+            "checksum": "6d2627d7f4a0c30e1699eeeeca5c261922e08058e91c8c135273eb1487623f1f"
+          }
+        }
+      ],
+      "MJ: AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Scoped Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AEF4E074-4126-435A-A095-5D72D548E75D"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T01:12:47.794Z",
+            "checksum": "a3551e0d0bd09cc54d7b74086cc6945b3ef1761f9e3e071ba38c01489bf24c4d"
+          }
+        }
+      ],
+      "MJ: AI Agent Search Scopes": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SearchScopeID": "@lookup:MJ: Search Scopes.Name=IT: Integration Test Scope",
+            "Phase": "Both"
+          },
+          "primaryKey": {
+            "ID": "2BFD732B-C7C8-402A-9250-7E33AADEB2C1"
+          },
+          "sync": {
+            "lastModified": "2026-08-08T01:12:47.780Z",
+            "checksum": "22bf01f4daa4d0ebe3064bf5026133c64e0bac60acb62579a00667ae25f722c5"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "868EEE5D-5434-48B3-9489-DEA8638EF260"
+    },
+    "sync": {
+      "lastModified": "2026-08-08T01:12:47.723Z",
+      "checksum": "03fbfbcd42bf298e95bd239ee0dbd342d62eb3b2e58ba472018cfea9f2f967df"
+    }
+  }
+]

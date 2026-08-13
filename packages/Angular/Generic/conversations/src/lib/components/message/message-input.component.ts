@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy, O
 import { ConnectedPosition } from '@angular/cdk/overlay';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, Metadata } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJEnvironmentEntityExtended, ConversationEngine, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJEnvironmentEntityExtended, ConversationEngine, UserInfoEngine, TaskGraphSubmitOperation, type TaskGraphSubmitInput } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, AppContextSnapshot } from "@memberjunction/ai-core-plus";
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
@@ -40,7 +40,7 @@ import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
   standalone: false,
   selector: 'mj-message-input',
   templateUrl: './message-input.component.html',
-  styleUrl: './message-input.component.scss'
+  styleUrl: './message-input.component.css'
 })
 export class MessageInputComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges, AfterViewInit  {
   // Default artifact type ID for JSON (when agent doesn't specify DefaultArtifactTypeID)
@@ -54,6 +54,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Input() parentMessageId?: string; // Optional: for replying in threads
   @Input() enableAttachments: boolean = true; // Whether to show attachment button (based on agent modality support)
   @Input() enableMentions: boolean = true; // Whether to enable @-mention autocomplete (agents/users). Hosts addressing a single fixed agent (e.g. Form Builder cockpit) typically set false.
+  // Per-type caps under enableMentions (all default true) — forwarded to the AI composer's
+  // EnableAgentMentions/EnableEntityMentions/EnableSkillCommands. Let a host keep '/' skill
+  // commands while dropping '@' agent mentions (which would override a pinned default agent).
+  @Input() enableAgentMentions: boolean = true;
+  @Input() enableEntityMentions: boolean = true;
+  @Input() enableSkillCommands: boolean = true;
+  @Input() enablePlanMode: boolean = true; // Whether the composer shows the Plan Mode toggle. Hosts that don't expose plan-mode workflows set false.
+  @Input() enableRealtime: boolean = true; // Whether the composer shows the realtime voice-call launcher/options. Hosts without a voice experience set false.
   @Input() maxAttachments: number = 10; // Maximum number of attachments per message
   @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // Maximum size per attachment (20MB default)
   @Input() acceptedFileTypes: string = 'image/*'; // Accepted MIME types pattern
@@ -261,6 +269,133 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @ViewChild('inputBox') inputBox!: AiComposerComponent;
 
   public messageText: string = '';
+
+  /**
+   * Prefills the composer with draft text WITHOUT sending (unlike pendingMessage,
+   * which auto-sends) and focuses the input — e.g. the omnibar's '@agent' flow
+   * lands in chat with '@AgentName ' staged so the user just types their ask.
+   */
+  /**
+   * Draft text to stage in the composer when this input mounts (NOT sent — unlike
+   * pendingMessage). Applied once per distinct value, view-readiness-proof: if the
+   * view isn't up yet, ngAfterViewInit applies it. Emits initialDraftApplied so the
+   * host can clear its pending state.
+   */
+  @Input()
+  set initialDraft(value: string | null) {
+    if (value && value !== this.appliedInitialDraft) {
+      this.appliedInitialDraft = value;
+      if (this.inputBox) {
+        this.SetDraft(value, true);
+        this.initialDraftApplied.emit();
+      } else {
+        this.pendingInitialDraft = value;
+      }
+    }
+  }
+  get initialDraft(): string | null {
+    return this.appliedInitialDraft;
+  }
+  private appliedInitialDraft: string | null = null;
+  private pendingInitialDraft: string | null = null;
+
+  @Output() initialDraftApplied = new EventEmitter<void>();
+
+  /**
+   * Live draft-state signal: fires on every composer value change with the
+   * SERIALIZED content (mention pills encoded via getPlainTextWithJsonMentions,
+   * so hosts can persist drafts losslessly). Empty string = draft cleared.
+   */
+  @Output() DraftStateChanged = new EventEmitter<string>();
+
+  /** The composer lost focus — hosts flush persisted drafts on this. */
+  @Output() ComposerBlurred = new EventEmitter<void>();
+
+  /** Handles the composer's value stream: keeps messageText in sync + emits draft state. */
+  public OnComposerValueChanged(value: string): void {
+    this.messageText = value;
+    this.DraftStateChanged.emit(this.GetSerializedDraft());
+  }
+
+  /** Current composer content in the lossless serialized form ('' when empty). */
+  public GetSerializedDraft(): string {
+    const serialized = this.inputBox?.getPlainTextWithJsonMentions() ?? this.messageText ?? '';
+    return serialized.trim().length === 0 ? '' : serialized;
+  }
+
+  /**
+   * Pre-addresses the composer to an agent as a RESOLVED mention pill (+ trailing
+   * space, caret after, focused) — identical to the user typing '@agent' and picking
+   * it from the dropdown. Resolves the agent through MentionAutocompleteService so
+   * the chip carries the agent's real id/icon/presets; falls back to a plain-text
+   * '@Name ' draft when the agent can't be resolved (e.g. name mismatch).
+   *
+   * @returns false while the composer view isn't mounted yet — callers may retry.
+   */
+  public async InsertAgentMention(agentName: string, focus: boolean = true, clearExisting: boolean = true): Promise<boolean> {
+    if (!this.inputBox) {
+      console.log(`[Omnibar→Chat] InsertAgentMention('${agentName}'): input box not mounted yet — caller will retry`);
+      return false;
+    }
+    if (clearExisting) {
+      // Pre-addressing REPLACES any un-sent draft (tagging agent B after agent A
+      // must not stack pills).
+      this.inputBox.mentionEditor?.clear();
+      this.messageText = '';
+    }
+    try {
+      if (!this.mentionAutocomplete.IsInitialized && this.currentUser) {
+        console.log(`[Omnibar→Chat] InsertAgentMention('${agentName}'): initializing mention autocomplete…`);
+        await this.mentionAutocomplete.initialize(this.currentUser);
+      }
+      const wanted = agentName.trim().toLowerCase();
+      const suggestion = this.mentionAutocomplete
+        .getSuggestions(agentName, false, '@')
+        .find(s => s.type === 'agent' && s.name.trim().toLowerCase() === wanted);
+      if (suggestion) {
+        const inserted = this.inputBox.InsertMention(suggestion, focus);
+        console.log(`[Omnibar→Chat] InsertAgentMention('${agentName}'): resolved to pill (id=${suggestion.id}) — insert ${inserted ? 'OK' : 'FAILED (editor view not ready)'}`);
+        if (inserted) {
+          if (focus) {
+            this.scheduleFocusReassert(agentName);
+          }
+          return true;
+        }
+        return false; // editor view not mounted — caller retries
+      }
+      console.warn(`[Omnibar→Chat] InsertAgentMention('${agentName}'): agent NOT found in autocomplete (initialized=${this.mentionAutocomplete.IsInitialized}) — falling back to plain text`);
+    } catch (e) {
+      console.warn(`[Omnibar→Chat] InsertAgentMention('${agentName}'): resolution error — falling back to plain text`, e);
+    }
+    const mention = agentName.includes(' ') ? `@"${agentName}" ` : `@${agentName} `;
+    this.SetDraft(mention, focus);
+    return true;
+  }
+
+  /**
+   * The insert happens mid-tab-mount; late-arriving chat UI (lists, empty-state
+   * autofocus, tab chrome) can steal focus AFTER we set it. Re-assert at settle
+   * points — only when focus genuinely left the editor, so we never fight the user.
+   */
+  private scheduleFocusReassert(context: string): void {
+    for (const delay of [300, 900, 1800]) {
+      setTimeout(() => {
+        const editor = this.inputBox?.mentionEditor;
+        if (editor && !editor.HasFocus) {
+          const ok = editor.FocusCaretAtEnd();
+          console.log(`[Omnibar→Chat] focus re-assert (+${delay}ms) for '${context}': ${ok ? 'refocused' : 'editor gone'}`);
+        }
+      }, delay);
+    }
+  }
+
+  public SetDraft(text: string, focus: boolean = true): void {
+    this.messageText = text;
+    if (focus) {
+      // The composer mounts/binds on the next tick after messageText flows down.
+      setTimeout(() => this.inputBox?.focus(), 50);
+    }
+  }
   public isSending: boolean = false;
   public isProcessing: boolean = false; // True when waiting for agent/naming response
   public processingMessage: string = 'AI is responding...'; // Message shown during processing
@@ -335,6 +470,15 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   ngAfterViewInit() {
+    if (this.pendingInitialDraft) {
+      const draft = this.pendingInitialDraft;
+      this.pendingInitialDraft = null;
+      // next tick — the composer's own view finishes mounting first
+      setTimeout(() => {
+        this.SetDraft(draft, true);
+        this.initialDraftApplied.emit();
+      }, 50);
+    }
     // Focus input on initial load
     this.focusInput();
 
@@ -704,10 +848,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * This callback will be invoked by the streaming service when progress updates arrive.
    */
   private createMessageProgressCallback(messageId: string): (progress: MessageProgressUpdate) => Promise<void> {
+    // Resolve the message once and reuse it for the callback's lifetime: streamed
+    // final-response updates arrive per content delta, and re-awaiting the cache on
+    // every delta both wastes work and (on a cold cache) races concurrent loads.
+    let resolvedMessage: Awaited<ReturnType<DataCacheService['getConversationDetail']>> = null;
     return async (progress: MessageProgressUpdate) => {
       try {
         // Get message from cache (single source of truth)
-        const message = await this.dataCache.getConversationDetail(messageId, this.currentUser);
+        const message = (resolvedMessage ??= await this.dataCache.getConversationDetail(messageId, this.currentUser));
 
         if (!message) {
           console.warn(`[StreamingCallback] Message ${messageId} not found in cache`);
@@ -724,6 +872,18 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         const completionTime = this.completionTimestamps.get(messageId);
         if (completionTime) {
           console.log(`[StreamingCallback] Message ${messageId} marked complete at ${new Date(completionTime).toISOString()}, ignoring late progress update`);
+          return;
+        }
+
+        // Streamed final-response content: the service accumulates deltas, so
+        // progress.streaming.content is always the full reply text so far — assign it.
+        // The completion flow (above guards + the 'complete' path) reconciles the
+        // bubble with the server-saved final message, so no append/merge is needed here.
+        if (progress.streaming) {
+          message.Message = progress.streaming.content;
+          this.messageSent.emit(message);
+          // Keep the tasks dropdown on a stable status line rather than the growing reply text.
+          this.activeTasks.updateStatusByConversationDetailId(message.ID, 'Responding…');
           return;
         }
 
@@ -1706,9 +1866,31 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     }
   }
 
+  /** Detaches the progress callback for one message — used when submission never starts. */
+  private releaseProgressCallback(messageId: string): void {
+    const callback = this.registeredCallbacks.get(messageId);
+    if (callback) {
+      this.streamingService.unregisterMessageCallback(messageId, callback);
+      this.registeredCallbacks.delete(messageId);
+    }
+  }
+
   /**
-   * Handle task graph execution based on Sage's payload
-   * Creates tasks and orchestrates their execution
+   * Submits a task graph to the server and returns — the client no longer drives execution.
+   *
+   * This used to call the `ExecuteTaskGraph` mutation and await the ENTIRE workflow inside one
+   * long-lived GraphQL request. That had three unfixable problems: a page reload lost the awaited
+   * promise (leaving a workflow running with nobody watching), a server restart orphaned every
+   * in-flight task, and no other channel could reach the substrate at all.
+   *
+   * Now submission returns as soon as the graph is durable and the server-side dispatcher executes
+   * it. The client is purely an observer: progress arrives over the existing PubSub frames, and
+   * because the work lives in Task rows rather than in a promise, a reload can re-attach to a
+   * workflow already in flight.
+   *
+   * Single-task graphs are no longer special-cased here. The old client-side fork ran them through
+   * a different code path entirely; they now submit like any other graph, and the decision about
+   * whether a one-node graph is worth durable machinery moves server-side where it can be recorded.
    */
   private async handleTaskGraphExecution(
     userMessage: MJConversationDetailEntity,
@@ -1716,162 +1898,66 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     conversationId: string,
     conversationManagerMessage: MJConversationDetailEntity
   ): Promise<void> {
-    const taskGraph = managerResult.payload.taskGraph;
+    // `payload` is untyped by construction (an agent's payload shape is agent-specific), so pin the
+    // graph to the operation's own input contract at the boundary rather than letting it stay loose.
+    const taskGraph: TaskGraphSubmitInput['spec'] | undefined = managerResult.payload?.taskGraph;
+    if (!taskGraph) return;
+
     const workflowName = taskGraph.workflowName || 'Workflow';
     const reasoning = taskGraph.reasoning || 'Executing multi-step workflow';
-    const taskCount = taskGraph.tasks?.length || 0;
+    const taskCount = Array.isArray(taskGraph.tasks) ? taskGraph.tasks.length : 0;
 
-    // Deduplicate tasks by tempId (LLM sometimes returns duplicates)
-    const seenTempIds = new Set<string>();
-    const uniqueTasks = taskGraph.tasks.filter((task: any) => {
-      if (seenTempIds.has(task.tempId)) {
-        console.warn(`⚠️ Duplicate tempId detected on client, filtering: ${task.tempId} (${task.name})`);
-        return false;
-      }
-      seenTempIds.add(task.tempId);
-      return true;
-    });
-
-    const uniqueTaskCount = uniqueTasks.length;
-
-    const isSingleTask = uniqueTaskCount === 1;
-
-    // If single task, use direct agent execution (existing pattern with great PubSub support)
-    if (isSingleTask) {
-      const task = uniqueTasks[0];
-      const agentName = task.agentName;
-
-      // Update CM message
-      const delegationMessage = `👉 Delegating to **${agentName}**`;
-      await this.updateConversationDetail(conversationManagerMessage, delegationMessage, 'Complete');
-
-      // Execute single agent directly using existing pattern
-      await this.handleSingleTaskExecution(
-        userMessage,
-        task,
-        agentName,
-        conversationId,
-        conversationManagerMessage
-      );
-
-      return;
-    }
-
-    // Multi-step workflow - use server-side task orchestration
-    console.log(`📋 Multi-step workflow detected (${uniqueTaskCount} tasks), using task orchestration`);
-
-    // Update CM message with task summary (use unique tasks only)
-    const taskSummary = uniqueTasks.map((t: any) => `• ${t.name}`).join('\n');
-
-    await this.updateConversationDetail(conversationManagerMessage, `📋 Setting up multi-step workflow...\n\n**${workflowName}**\n${taskSummary}`, 'Complete');
-
-    // Step 2: Create new ConversationDetail for task execution updates
+    // A message the user can watch. Progress frames from the dispatcher land against this ID.
     const taskExecutionMessage = await this.dataCache.createConversationDetail(this.currentUser);
     taskExecutionMessage.ConversationID = conversationId;
     taskExecutionMessage.Role = 'AI';
-    taskExecutionMessage.Message = '⏳ Starting workflow execution...';
-    taskExecutionMessage.ParentID = conversationManagerMessage.ID; // Thread under delegation message
+    taskExecutionMessage.Message = `⏳ **${workflowName}**\n\n${reasoning}\n\nSubmitting ${taskCount} task(s)…`;
+    taskExecutionMessage.ParentID = conversationManagerMessage.ID;
     taskExecutionMessage.Status = 'In-Progress';
     taskExecutionMessage.HiddenToUser = false;
-    // No AgentID for now - this represents the task orchestration system
     await taskExecutionMessage.Save();
     this.messageSent.emit(taskExecutionMessage);
 
-    // Register for streaming updates via global streaming service
     const callback = this.createMessageProgressCallback(taskExecutionMessage.ID);
     this.registeredCallbacks.set(taskExecutionMessage.ID, callback);
     this.streamingService.registerMessageCallback(taskExecutionMessage.ID, callback);
 
     try {
-      // Get default environment ID (MJ standard environment used across all installations)
-      const environmentId = MJEnvironmentEntityExtended.DefaultEnvironmentID;
+      // `TaskGraph.Submit` is a Remote Operation, not a bespoke mutation: the same call site is
+      // reachable from MCP, an Action wrapper, and this UI. `Execute` marshals over the generic
+      // `ExecuteRemoteOperation` transport, so there is no hand-written GraphQL document here.
+      const result = await new TaskGraphSubmitOperation().Execute({
+        spec: taskGraph,
+        environmentID: MJEnvironmentEntityExtended.DefaultEnvironmentID,
+        conversationDetailID: taskExecutionMessage.ID,
+      });
 
-      // Get session ID for PubSub subscriptions
-      const sessionId = GraphQLDataProvider.Instance.sessionId || '';
-      
-      // Step 3: Call ExecuteTaskGraph mutation (links to taskExecutionMessage)
-      const mutation = `
-        mutation ExecuteTaskGraph($taskGraphJson: String!, $conversationDetailId: String!, $environmentId: String!, $sessionId: String!, $createNotifications: Boolean) {
-          ExecuteTaskGraph(
-            taskGraphJson: $taskGraphJson
-            conversationDetailId: $conversationDetailId
-            environmentId: $environmentId
-            sessionId: $sessionId
-            createNotifications: $createNotifications
-          ) {
-            success
-            errorMessage
-            results {
-              taskId
-              success
-              output
-              error
-            }
-          }
-        }
-      `;
-
-      const variables = {
-        taskGraphJson: JSON.stringify(taskGraph),
-        conversationDetailId: taskExecutionMessage.ID, // Link tasks to execution message, not CM message
-        environmentId: environmentId,
-        sessionId: sessionId,
-        createNotifications: true
-      };
-
-      const result = await GraphQLDataProvider.Instance.ExecuteGQL(mutation, variables);
-
-      // Step 4: Update task execution message with results
-      // ExecuteGQL returns data directly (not wrapped in {data, errors})
-      if (result?.ExecuteTaskGraph?.success) {
-        await this.updateConversationDetail(taskExecutionMessage, `✅ **${workflowName}** completed successfully`, 'Complete');
+      if (result.Success && result.Output?.success) {
+        // Deliberately NOT "completed" — submission means the work is durable and running, and
+        // claiming completion here is exactly the lie the old await-everything path told when it
+        // returned early. The dispatcher's progress frames update this message as tasks finish.
+        await this.updateConversationDetail(
+          taskExecutionMessage,
+          `▶️ **${workflowName}** started — ${taskCount} task(s) running.`,
+          'In-Progress'
+        );
       } else {
-        const errorMsg = result?.ExecuteTaskGraph?.errorMessage || 'Unknown error';
-        console.error('❌ Task graph execution failed:', errorMsg);
+        const errorMsg = result.Output?.errorMessage || result.ErrorMessage || 'Unknown error';
+        console.error('Task graph submission rejected:', errorMsg);
         taskExecutionMessage.Error = errorMsg;
-        await this.updateConversationDetail(taskExecutionMessage, `❌ **${workflowName}** failed: ${errorMsg}`, 'Error');
+        await this.updateConversationDetail(taskExecutionMessage, `❌ **${workflowName}** rejected: ${errorMsg}`, 'Error');
+        this.releaseProgressCallback(taskExecutionMessage.ID);
       }
-
-      // Trigger artifact reload for this message
-      // Artifacts were created on server during task execution and linked to this message
-      // This event triggers the parent component to reload artifacts from the database
-      this.emitArtifactReload(taskExecutionMessage);
-
-      // Unregister streaming callback (task complete)
-      const callback = this.registeredCallbacks.get(taskExecutionMessage.ID);
-      if (callback) {
-        this.streamingService.unregisterMessageCallback(taskExecutionMessage.ID, callback);
-        this.registeredCallbacks.delete(taskExecutionMessage.ID);
-      }
-
-      // Mark agent response message as complete (removes task from active tasks)
-      await this.updateConversationDetail(conversationManagerMessage, conversationManagerMessage.Message, 'Complete');
-
-      // Mark user message as complete
-      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
-
     } catch (error) {
-      console.error('❌ Error executing task graph:', error);
-      taskExecutionMessage.Error = String(error);
-      await this.updateConversationDetail(taskExecutionMessage, `❌ **${workflowName}** - Error: ${String(error)}`, 'Error');
-
-      // Trigger artifact reload even on error - partial artifacts may have been created
-      this.emitArtifactReload(taskExecutionMessage);
-
-      // Unregister streaming callback (task failed)
-      const callback = this.registeredCallbacks.get(taskExecutionMessage.ID);
-      if (callback) {
-        this.streamingService.unregisterMessageCallback(taskExecutionMessage.ID, callback);
-        this.registeredCallbacks.delete(taskExecutionMessage.ID);
-      }
-
-      // Mark agent response message as complete (removes task from active tasks)
-      conversationManagerMessage.Error = String(error);
-      await this.updateConversationDetail(conversationManagerMessage, conversationManagerMessage.Message, 'Error');
-
-      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('Task graph submission failed:', error);
+      taskExecutionMessage.Error = msg;
+      await this.updateConversationDetail(taskExecutionMessage, `❌ **${workflowName}** failed to submit: ${msg}`, 'Error');
+      this.releaseProgressCallback(taskExecutionMessage.ID);
     }
   }
+
+
 
   protected async updateConversationDetail(convoDetail: MJConversationDetailEntity, message: string, status: 'In-Progress' | 'Complete' | 'Error', result?: ExecuteAgentResult): Promise<void> {
     // Mark as completing FIRST if status is Complete or Error
@@ -1990,103 +2076,6 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     console.log(`📦 No previous payload found for agent ${agentId} after searching ${agentMessages.length} messages`);
     return { payload: null, artifactInfo: null };
-  }
-
-  /**
-   * Handle single task execution from task graph using direct agent execution
-   * Uses the existing agent execution pattern with PubSub support
-   */
-  private async handleSingleTaskExecution(
-    userMessage: MJConversationDetailEntity,
-    task: any, // Task definition from taskGraph
-    agentName: string,
-    conversationId: string,
-    conversationManagerMessage: MJConversationDetailEntity
-  ): Promise<void> {
-    try {
-      // Look up the agent
-      const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
-      if (!agent) {
-        throw new Error(`Agent not found: ${agentName}`);
-      }
-
-      // Create AI response message for the agent execution
-      const agentResponseMessage = await this.dataCache.createConversationDetail(this.currentUser);
-
-      agentResponseMessage.ConversationID = conversationId;
-      agentResponseMessage.Role = 'AI';
-      agentResponseMessage.Message = '⏳ Starting...';
-      agentResponseMessage.ParentID = conversationManagerMessage.ID; // Thread under delegation
-      agentResponseMessage.Status = 'In-Progress';
-      agentResponseMessage.HiddenToUser = false;
-      agentResponseMessage.AgentID = agent.ID;
-
-      await agentResponseMessage.Save();
-      this.messageSent.emit(agentResponseMessage);
-
-      // Add to active tasks
-      const newTaskId = this.activeTasks.add({
-        agentName: agentName,
-        status: 'Starting...',
-        relatedMessageId: userMessage.ID,
-        conversationDetailId: agentResponseMessage.ID,
-        conversationId,
-        conversationName: this.conversationName
-      });
-
-      // Load previous payload if agent has been invoked before
-      const { payload: previousPayload, artifactInfo } = await this.loadPreviousPayloadForAgent(agent.ID);
-
-      // Merge Sage's task payload with previous agent payload (Sage's takes precedence)
-      const mergedPayload = previousPayload
-        ? { ...previousPayload, ...task.inputPayload }
-        : task.inputPayload;
-
-      // Invoke agent with merged payload
-      const agentResult = await this.agentService.invokeSubAgent(
-        agentName,
-        conversationId,
-        userMessage,
-        this.conversationHistory,
-        task.description || task.name,
-        agentResponseMessage.ID,
-        mergedPayload, // Pass merged payload for continuity
-        this.createProgressCallback(agentResponseMessage, agentName),
-        artifactInfo?.artifactId,
-        artifactInfo?.versionId,
-        undefined, // configurationPresetId not used in this path
-        this.appContext, // Embedder-supplied app/form context
-        this.PlanModeEnabled, // per-request Plan Mode toggle
-        this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
-      );
-
-      // Task will be removed automatically in markMessageComplete() when status changes to Complete/Error
-      // DO NOT remove here - allows UI to show task during entire execution
-
-      if (agentResult && agentResult.success) {
-        // Update message with result
-        await this.updateConversationDetail(agentResponseMessage, agentResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', agentResult);
-
-        // Server created artifacts - emit event to trigger UI reload
-        if (agentResult.payload && Object.keys(agentResult.payload).length > 0) {
-          this.emitArtifactReload(agentResponseMessage);
-          console.log('🎨 Server created artifact from single task execution');
-          this.messageSent.emit(agentResponseMessage);
-        }
-      } else {
-        // Handle failure
-        const errorMsg = agentResult?.agentRun?.ErrorMessage || 'Agent execution failed';
-        agentResponseMessage.Error = errorMsg;
-        await this.updateConversationDetail(agentResponseMessage, `❌ **${agentName}** failed: ${errorMsg}`, 'Error');
-      }
-
-      // Mark user message as complete
-      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
-
-    } catch (error) {
-      console.error('❌ Error in single task execution:', error);
-      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
-    }
   }
 
   /**

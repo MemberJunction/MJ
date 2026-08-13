@@ -27,6 +27,7 @@ import {
 import { BaseFormComponent } from '../base-form-component';
 import { RestoreVersionEvent, RecordChangesComponent } from '@memberjunction/ng-record-changes';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ListManagementResult } from '@memberjunction/ng-list-management';
 import { FormSlotCoordinator } from '../panel-slot/form-slot-coordinator.service';
 
 /**
@@ -263,7 +264,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   get EffectiveIsDirty(): boolean {
     if (this.fc) {
-      return this.fc.record?.Dirty ?? false;
+      // OR'd with the form's own extra state: a section that owns an editor (a flow canvas, a
+      // designer) holds edits no entity field reflects, and reporting the record clean would let
+      // the navigate-away guard discard them without asking.
+      return (this.fc.record?.Dirty ?? false) || this.fc.HasAdditionalUnsavedChanges;
     }
     return this.IsDirty;
   }
@@ -756,6 +760,28 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   OnListManagementClosed(): void {
     this.ShowListManagement = false;
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Fired when the list-management dialog applies changes. Surfaces the
+   * outcome — especially silently-skipped duplicates and failures, which
+   * users otherwise misread as "everything was added".
+   */
+  OnListManagementComplete(result: ListManagementResult): void {
+    const s = result.summary;
+    if (s && (s.added > 0 || s.removed > 0 || s.skipped > 0 || s.failed > 0)) {
+      const parts: string[] = [];
+      if (s.added > 0) parts.push(`added to ${result.added.length} list${result.added.length === 1 ? '' : 's'}`);
+      if (s.removed > 0) parts.push(`removed from ${result.removed.length} list${result.removed.length === 1 ? '' : 's'}`);
+      if (s.skipped > 0) parts.push(`${s.skipped} duplicate${s.skipped === 1 ? '' : 's'} skipped`);
+      if (s.failed > 0) parts.push(`${s.failed} failed`);
+      this.notificationService.CreateSimpleNotification(
+        `List changes applied: ${parts.join(', ')}`,
+        s.failed > 0 ? 'warning' : 'success',
+        s.failed > 0 ? 5000 : 3500,
+      );
+    }
+    this.OnListManagementClosed();
   }
 
   OnShowChangesRequested(): void {

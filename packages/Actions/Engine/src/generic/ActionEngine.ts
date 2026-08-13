@@ -1,7 +1,8 @@
 import { BaseEntitySaveQueue, LogError, LogErrorEx, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
 import { MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionCategoryEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
-import { BaseSingleton, MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
+import { BaseSingleton, MJGlobal, MJLruCache, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
+import { BaseActionFilter } from "./BaseActionFilter";
 import {
     ActionEngineBase,
     MJActionEntityExtended,
@@ -10,7 +11,11 @@ import {
     ActionResultSimple,
     RunActionParams,
     RuntimeActionConfigurationSchema,
-    RuntimeActionBridgeBuilder
+    RuntimeActionBridgeBuilder,
+    RedactParamsToJSON,
+    EntityChangeContext,
+    DidFieldChange,
+    DidFieldChangeToValue
 } from "@memberjunction/actions-base";
 import { RuntimeActionExecutor } from "@memberjunction/action-runtime";
 import type { BridgeHandlerMap } from "@memberjunction/code-execution";
@@ -18,7 +23,64 @@ import type { BridgeHandlerMap } from "@memberjunction/code-execution";
  
 
 /**
- * Base class for executing actions. This class can be sub-classed if desired if you would like to modify the logic across ALL actions. To do so, sub-class this class and use the 
+ * The `Message` on a run that a filter prevented.
+ *
+ * Exported because it is the only thing distinguishing a prevented run from an executed one in
+ * `ActionExecutionLog` — both write a row, deliberately, so an operator can see that a filter
+ * refused rather than wondering why nothing happened.
+ */
+export const ACTION_PREVENTED_BY_FILTER_MESSAGE =
+   'Filters were run and the result indicated this action should not be executed. This is a Success condition as filters returning false is not considered an error.';
+
+/**
+ * Execution context handed to an Action Filter's `Code` when the engine evaluates it inline
+ * (i.e. when no {@link BaseActionFilter} subclass is registered for the filter). The code runs
+ * with this object bound as `ActionFilterContext` and signals its verdict either by returning
+ * a boolean or by assigning `ActionFilterContext.result`.
+ */
+export interface ActionFilterContext {
+   /** The full parameters of the action run being gated, including Action, Params, and ContextUser. */
+   params: RunActionParams;
+   /** The filter row being evaluated. */
+   filter: MJActionFilterEntity;
+   /** Alternative verdict channel: filter code may assign true (allow) / false (prevent) here instead of returning. */
+   result: boolean | null;
+
+   /**
+    * What changed about the record, when the run came from an entity lifecycle event.
+    *
+    * `undefined` for a run with no save behind it — a direct invocation, a View/List fan-out, an
+    * agent calling the action. Filter code must therefore treat absence as "I cannot tell", which
+    * the helpers below already do by returning false.
+    */
+   change?: EntityChangeContext;
+
+   /** Field values as they were before the change. Empty object when there is no change context. */
+   OldValues: Readonly<Record<string, unknown>>;
+   /** Field values as they are now. Empty object when there is no change context. */
+   NewValues: Readonly<Record<string, unknown>>;
+
+   /**
+    * `true` when the named field's value actually differs across this save.
+    *
+    * Bound to the run's change context so filter code reads as the question it is asking:
+    * `return ActionFilterContext.DidFieldChange('Status')`. False on a create — a field that was
+    * never anything else did not *change* to what it is.
+    */
+   DidFieldChange(fieldName: string): boolean;
+
+   /**
+    * `true` when the named field changed AND its new value equals `value`.
+    *
+    * The transition predicate — "when Status becomes Approved" — as opposed to the state predicate
+    * "when Status is Approved", which fires on every subsequent save too. Comparison is loose across
+    * the string boundary metadata forces, so `'1'`, `1` and `true` compare equal.
+    */
+   DidFieldChangeToValue(fieldName: string, value: unknown): boolean;
+}
+
+/**
+ * Base class for executing actions. This class can be sub-classed if desired if you would like to modify the logic across ALL actions. To do so, sub-class this class and use the
  * @RegisterClass decorator from the @memberjunction/global package to register your sub-class with the ClassFactory. This will cause your sub-class to be used instead of this base class when the Metadata object insantiates the ActionEngine.
  */
 export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
@@ -109,6 +171,10 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    }
 
    public async RunAction(params: RunActionParams): Promise<ActionResult> {
+      // Snapshot the inputs BEFORE anything can run — see SnapshotInputParams. Threaded down every
+      // path (validation failure, filter refusal, timeout, normal run) so all four write the same
+      // as-called values into ActionExecutionLog.Params.
+      const inputSnapshot = this.SnapshotInputParams(params);
       const validInputs: boolean = await this.ValidateInputs(params);
       if(!validInputs){
          const result: ActionResult = {
@@ -119,8 +185,8 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
             RunParams: params
          };
 
-         if(!params.SkipActionLog){
-            result.LogEntry = await this.StartAndEndActionLog(params, result);
+         if(this.ShouldLogOutcome(params, result)){
+            result.LogEntry = await this.StartAndEndActionLog(params, result, inputSnapshot);
          }
 
          return result;
@@ -131,18 +197,25 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          // filters indicated we should NOT run this action
          const result: ActionResult = {
             Success: true,
-            Message: "Filters were run and the result indicated this action should not be executed. This is a Success condition as filters returning false is not considered an error.",
+            Message: ACTION_PREVENTED_BY_FILTER_MESSAGE,
             LogEntry: null, // initially null
             Params: params.Params,
             RunParams: params
          };
 
-         if(!params.SkipActionLog){
-            result.LogEntry = await this.StartAndEndActionLog(params, result);
+         if(this.ShouldLogOutcome(params, result)){
+            result.LogEntry = await this.StartAndEndActionLog(params, result, inputSnapshot);
          }
+
+         // RETURNING here is the entire point of a filter. Without it this block logged a refusal
+         // and then fell through to run the action anyway — so every filter recorded that it had
+         // prevented something while preventing nothing. The refusal row made it look like the
+         // mechanism worked, which is why it survived: the observable said "prevented" and the side
+         // effect happened regardless.
+         return result;
       }
 
-      return await this.RunActionWithTimeout(params);
+      return await this.RunActionWithTimeout(params, inputSnapshot);
    }
 
    /**
@@ -157,7 +230,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * (e.g. when being run from a Runtime-action bridge that has its own
     * abort), we chain to it so either source can trigger cancellation.
     */
-   protected async RunActionWithTimeout(params: RunActionParams): Promise<ActionResult> {
+   protected async RunActionWithTimeout(params: RunActionParams, inputSnapshot?: string): Promise<ActionResult> {
       const actionTimeoutMS = params.Action.MaxExecutionTimeMS ?? this.DefaultActionTimeoutMS;
 
       // Chain with any upstream AbortSignal (e.g. Runtime-action bridge).
@@ -199,7 +272,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          });
 
          try {
-            return await Promise.race([this.InternalRunAction(params), timeoutPromise]);
+            return await Promise.race([this.InternalRunAction(params, inputSnapshot), timeoutPromise]);
          } catch (err) {
             // Timeout or upstream abort — return a standard TIMEOUT result.
             // Result is left undefined (we don't guarantee a 'TIMEOUT' ActionResultCode
@@ -218,8 +291,8 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
                   RunParams: params,
                   Result: undefined
                };
-               if (!params.SkipActionLog) {
-                  timeoutResult.LogEntry = await this.StartAndEndActionLog(params, timeoutResult);
+               if (this.ShouldLogOutcome(params, timeoutResult)) {
+                  timeoutResult.LogEntry = await this.StartAndEndActionLog(params, timeoutResult, inputSnapshot);
                }
                return timeoutResult;
             }
@@ -238,7 +311,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    
 
    protected GetActionParamsForAction(action: MJActionEntityExtended): ActionParam[] {
-      const params: ActionParam[] = action.Params.map((param: MJActionParamEntity) => {
+      const params: ActionParam[] = action.Params.Items.map((param: MJActionParamEntity) => {
          let value: any = null;
          switch (param.ValueType) {
             case 'Scalar':
@@ -296,29 +369,107 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    }
 
    /**
-    * This method runs a single filter. Subclasses can override this method to provide custom filter logic.
-    * 
-    * @param filter 
+    * Bounded cache of compiled filter functions. Keyed by filter ID + row version so an edited
+    * filter's Code is recompiled on next use instead of serving the stale compilation.
+    */
+   private _filterCache = new MJLruCache<string, (context: ActionFilterContext) => Promise<unknown>>({ maxSize: 1000 });
+
+   /**
+    * Runs a single Action Filter and returns whether the action should proceed.
+    *
+    * Resolution order:
+    * 1. A {@link BaseActionFilter} subclass registered with the ClassFactory under the filter's ID
+    *    (the CodeGen / custom-subclass pattern documented on BaseActionFilter) wins when present.
+    * 2. Otherwise the filter's `Code` column — JavaScript that evaluates to true (allow) or
+    *    false (prevent), per the column contract — is compiled once per filter row version and
+    *    executed with an {@link ActionFilterContext} argument. The code may `return` its verdict
+    *    or assign `ActionFilterContext.result`.
+    *
+    * Failure semantics are FAIL-CLOSED: a filter that throws, yields a non-boolean, or has no
+    * evaluable logic prevents the action and logs the reason. A broken gate must not silently
+    * allow execution — silently allowing everything is precisely the pre-fix bug this replaces.
+    *
+    * Subclasses can still override this method entirely to provide custom filter logic.
     */
    protected async RunSingleFilter(params: RunActionParams, filter: MJActionFilterEntity): Promise<boolean> {
-      return true;
-      // temp stub above, replace with code that will run the filter      
+      try {
+         const registered = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseActionFilter, filter.ID);
+         if (registered && registered.length > 0) {
+            const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseActionFilter>(BaseActionFilter, filter.ID);
+            if (instance) {
+               return await instance.Run(params, filter) === true;
+            }
+         }
+
+         const code = filter.Code?.trim();
+         if (!code) {
+            LogError(`Action Filter ${filter.ID} has no Code and no registered BaseActionFilter subclass — failing closed, action prevented.`);
+            return false;
+         }
+
+         const cacheKey = `${filter.ID}:${filter.__mj_UpdatedAt instanceof Date ? filter.__mj_UpdatedAt.getTime() : ''}`;
+         let filterFunction = this._filterCache.Get(cacheKey);
+         if (!filterFunction) {
+            filterFunction = new Function('ActionFilterContext', `
+               return (async () => {
+                  ${code}
+               })();
+            `) as (context: ActionFilterContext) => Promise<unknown>;
+            this._filterCache.Set(cacheKey, filterFunction);
+         }
+
+         const change = params.EntityChange;
+         const context: ActionFilterContext = {
+            params,
+            filter,
+            result: null,
+            change,
+            OldValues: change?.OldValues ?? {},
+            NewValues: change?.NewValues ?? {},
+            DidFieldChange: (fieldName) => DidFieldChange(change, fieldName),
+            DidFieldChangeToValue: (fieldName, value) => DidFieldChangeToValue(change, fieldName, value),
+         };
+         const returned = await filterFunction(context);
+         const verdict = returned ?? context.result;
+         if (typeof verdict !== 'boolean') {
+            LogError(`Action Filter ${filter.ID} evaluated to a non-boolean verdict (${String(verdict)}) — failing closed, action prevented.`);
+            return false;
+         }
+         return verdict;
+      }
+      catch (e) {
+         LogErrorEx({
+            message: `Action Filter ${filter.ID} threw during evaluation — failing closed, action prevented.`,
+            error: e instanceof Error ? e : new Error(String(e))
+         });
+         return false;
+      }
    }
 
-   protected async InternalRunAction(params: RunActionParams): Promise<ActionResult> {
+   protected async InternalRunAction(params: RunActionParams, inputSnapshot?: string): Promise<ActionResult> {
+      const loggingMode = this.ResolveLoggingMode(params);
       let logEntry: MJActionExecutionLogEntity | undefined;
-      if(!params.SkipActionLog){
-         logEntry = await this.StartActionLog(params);
+      if(!params.SkipActionLog && loggingMode !== 'None'){
+         // Under 'FailuresOnly' the row is built but the 'started' INSERT is withheld: if the run
+         // succeeds nothing is ever written, and if it fails EndActionLog's force-persist inserts it.
+         logEntry = await this.StartActionLog(params, loggingMode === 'All', inputSnapshot);
       }
 
       try {
          // Branch by Action.Type. Runtime actions go through the sandboxed
          // RuntimeActionExecutor; Custom / Generated (and legacy rows where
          // Type may be null) flow through the existing ClassFactory path.
-         const simpleResult: ActionResultSimple =
+         // A deferral takes the place of execution, never of the gates above it — validation and
+         // filters have already run by the time control reaches here. A deferral that returns null
+         // declined, so the action runs normally.
+         const deferred: ActionResultSimple | null = params.DeferExecution
+            ? await params.DeferExecution(params)
+            : null;
+         const simpleResult: ActionResultSimple = deferred ?? (
             params.Action.Type === 'Runtime'
                ? await this.RunRuntimeAction(params)
-               : await this.RunClassBasedAction(params);
+               : await this.RunClassBasedAction(params)
+         );
 
          const resultCodeEntity: MJActionResultCodeEntity | undefined = this.ActionResultCodes.find(r => UUIDsEqual(r.ActionID, params.Action.ID) &&
                                                                r.ResultCode.trim().toLowerCase() === simpleResult.ResultCode.trim().toLowerCase());
@@ -332,8 +483,13 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
             Result: resultCodeEntity
          };
 
-         if(logEntry){
+         if(logEntry && this.ShouldLogOutcome(params, result)){
             await this.EndActionLog(logEntry, params, result);
+         }
+         else if (logEntry) {
+            // 'FailuresOnly' + success: the row was never inserted, so drop it rather than return a
+            // LogEntry pointing at a row that does not exist.
+            result.LogEntry = undefined;
          }
 
          return result;
@@ -354,6 +510,8 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          };
 
          if(logEntry){
+            // An exception is always a failure, so every logging mode except 'None' records it —
+            // and 'None' never produced a logEntry in the first place.
             await this.EndActionLog(logEntry, params, result);
          }
 
@@ -488,7 +646,55 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       };
    }
 
-   protected async StartActionLog(params: RunActionParams, saveRecord: boolean = true): Promise<MJActionExecutionLogEntity> {
+   /**
+    * The as-called input parameters, redacted and serialized, for `ActionExecutionLog.Params`.
+    *
+    * Taken **once, at the top of {@link RunAction}**, before the action can mutate its own parameter
+    * array. Custom and Generated actions write outputs back into the very array they were handed, so a
+    * snapshot taken any later — inside `StartActionLog`, or on the timeout path — is a post-hoc capture
+    * of a mutated array masquerading as "what it was called with".
+    *
+    * Every value passes through {@link RedactParamsToJSON} first: this method is the only producer of
+    * the `Params` column, so redaction here is what makes the column safe by construction.
+    */
+   protected SnapshotInputParams(params: RunActionParams): string {
+      return RedactParamsToJSON(params.Params, this.ParamDefinitionsFor(params), params.Provenance?.EntityActionParams);
+   }
+
+   /**
+    * The `ActionParam` definition rows for the action being run — the source of each parameter's
+    * `LogValue` flag. Read from the shared ActionEngineBase cache rather than off `params.Action`,
+    * which is typed as the plain entity and carries no params collection.
+    */
+   protected ParamDefinitionsFor(params: RunActionParams): MJActionParamEntity[] {
+      return params.Action ? this.ActionParams.filter(p => UUIDsEqual(p.ActionID, params.Action.ID)) : [];
+   }
+
+   /**
+    * How much of this run to log, from the Entity Action binding that dispatched it. Direct
+    * invocations have no binding and therefore always log — the pre-existing behaviour.
+    */
+   protected ResolveLoggingMode(params: RunActionParams): 'All' | 'FailuresOnly' | 'None' {
+      return params.Provenance?.LoggingMode ?? 'All';
+   }
+
+   /**
+    * Whether a completed run should leave a log row, honouring both the caller's `SkipActionLog` and
+    * the binding's `LoggingMode`. `FailuresOnly` exists for high-frequency bindings whose successful
+    * runs would otherwise dominate the log table; a failure is always written.
+    */
+   protected ShouldLogOutcome(params: RunActionParams, result: ActionResult): boolean {
+      if (params.SkipActionLog) {
+         return false;
+      }
+      const mode = this.ResolveLoggingMode(params);
+      if (mode === 'None') {
+         return false;
+      }
+      return mode !== 'FailuresOnly' || !result.Success;
+   }
+
+   protected async StartActionLog(params: RunActionParams, saveRecord: boolean = true, inputSnapshot?: string): Promise<MJActionExecutionLogEntity> {
       // this is where the log entry for the action run will be created
       const md = params.Provider ?? new Metadata();
       const logEntity = await md.GetEntityObject<MJActionExecutionLogEntity>('MJ: Action Execution Logs', this.ContextUser);
@@ -496,8 +702,18 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       logEntity.ActionID = params.Action.ID;
       logEntity.StartedAt = new Date();
       logEntity.UserID = this.ContextUser.ID;
-      // we will save this again in the EndActionLog, this is the initial state, and the action could add/modify the params
-      logEntity.Params = JSON.stringify(params.Params);
+      // The as-called inputs. Written once and never overwritten — EndActionLog writes the final
+      // merged set to ResultParams instead. `inputSnapshot` is supplied by RunAction; the fallback
+      // covers callers that reach StartActionLog directly.
+      logEntity.Params = inputSnapshot ?? this.SnapshotInputParams(params);
+      // Stamped at write time, from the action's own policy, so the row is self-describing. Reading
+      // Action.RetentionPeriod at purge time instead would make an edit to that column retroactive:
+      // tightening retention would delete history that was written under the old policy, which is
+      // not what someone changing a going-forward setting is asking for. NULL stays NULL — a purge
+      // must never invent a lifetime nobody configured.
+      logEntity.RetentionPeriod = params.Action.RetentionPeriod;
+
+      this.StampProvenance(logEntity, params);
 
       if (saveRecord){
          // Fire-and-forget the 'started' INSERT (unless the caller opts out) — the action runs
@@ -518,7 +734,15 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       // from the sandbox executor that lives on `result.Params`, so logging `params.Params` would lose
       // every new output key. Custom/Generated actions mutate `params.Params` in place, and
       // `result.Params` falls back to that same reference, so they remain equivalent.
-      const finalParams = JSON.stringify(result.Params ?? params.Params);
+      //
+      // This goes to ResultParams, NOT Params: Params holds the as-called inputs captured at the top of
+      // RunAction and is deliberately never overwritten, so a run's inputs stay recoverable even though
+      // the action mutated the array they arrived in.
+      const finalParams = RedactParamsToJSON(
+         result.Params ?? params.Params,
+         this.ParamDefinitionsFor(params),
+         params.Provenance?.EntityActionParams
+      );
       const resultCode = result.Result?.ResultCode;
       const message = result.Message;
       // Fire-and-forget — the action's caller never blocks on the 'ended' UPDATE. The mutation runs
@@ -526,17 +750,33 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       // the INSERT's reload. The queue is self-bounding, so no flush is needed on this long-lived singleton.
       this._logQueue.Update(logEntity, () => {
          logEntity.EndedAt = endedAt;
-         logEntity.Params = finalParams;
+         logEntity.ResultParams = finalParams;
          logEntity.ResultCode = resultCode;
          logEntity.Message = message;
       });
    }
 
-   protected async StartAndEndActionLog(params: RunActionParams, result: ActionResult): Promise<MJActionExecutionLogEntity> {
+   protected async StartAndEndActionLog(params: RunActionParams, result: ActionResult, inputSnapshot?: string): Promise<MJActionExecutionLogEntity> {
       // No separate INSERT — the single 'ended' UPDATE (force-persist on a never-inserted NewRecord) inserts.
-      const logEntity: MJActionExecutionLogEntity = await this.StartActionLog(params, false);
+      const logEntity: MJActionExecutionLogEntity = await this.StartActionLog(params, false, inputSnapshot);
       await this.EndActionLog(logEntity, params, result);
       return logEntity;
+   }
+
+   /**
+    * Writes the Entity Action provenance onto a log row: which binding fired, from which lifecycle
+    * event, against which record. All four columns are NULL for a direct invocation, and that NULL is
+    * meaningful — it is how "nobody configured this, some code called it" reads in the log.
+    */
+   protected StampProvenance(logEntity: MJActionExecutionLogEntity, params: RunActionParams): void {
+      const provenance = params.Provenance;
+      if (!provenance) {
+         return;
+      }
+      logEntity.EntityActionID = provenance.EntityActionID ?? null;
+      logEntity.EntityActionInvocationTypeID = provenance.EntityActionInvocationTypeID ?? null;
+      logEntity.TargetEntityID = provenance.TargetEntityID ?? null;
+      logEntity.TargetRecordID = provenance.TargetRecordID ?? null;
    }
 }
 

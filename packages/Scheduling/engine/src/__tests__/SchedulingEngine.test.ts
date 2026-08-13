@@ -111,7 +111,11 @@ vi.mock('@memberjunction/scheduling-base-types', () => ({
     NotificationChannel: {}
 }));
 
-vi.mock('@memberjunction/scheduling-engine-base', () => {
+vi.mock('@memberjunction/scheduling-engine-base', async () => {
+    // Real rxjs Subject so JobsChanged$ is genuinely subscribable and the wake-on-
+    // activation path can be exercised by tests via the __emitJobsChanged() helper.
+    const { Subject } = await import('rxjs');
+    const jobsChanged = new Subject<void>();
     const fakeBase = {
         ScheduledJobs: [] as Array<Record<string, unknown>>,
         ScheduledJobTypes: [] as Array<Record<string, unknown>>,
@@ -123,6 +127,10 @@ vi.mock('@memberjunction/scheduling-engine-base', () => {
         GetJobTypeByDriverClass: vi.fn(),
         GetJobsByType: vi.fn().mockReturnValue([]),
         GetRunsForJob: vi.fn().mockReturnValue([]),
+        // Fires when the active scheduled-job set changes; the engine subscribes to
+        // wake a suspended poll timer on activation.
+        JobsChanged$: jobsChanged.asObservable(),
+        __emitJobsChanged: () => jobsChanged.next(),
         // Added in v5.39 for the decoupling fix. Provider doubles as both an
         // IMetadataProvider and a DatabaseProviderBase via the engine's cast.
         // Default ExecuteSQL returns the permission-probe "OK" shape so the
@@ -244,6 +252,47 @@ describe('SchedulingEngine', () => {
             await engine.StopPolling();
             mockBase.ScheduledJobs = [];
         });
+
+        // Flush the fire-and-forget async restart kicked off by the JobsChanged$
+        // handler. Microtasks only — the 60s poll timer is never advanced under
+        // fake timers, so this can't recurse into a poll tick.
+        const flushMicrotasks = async () => {
+            for (let i = 0; i < 25; i++) {
+                await Promise.resolve();
+            }
+        };
+
+        it('should auto-start polling when a job is activated after a boot-time suspension', async () => {
+            const mockUser = { ID: 'user-1' } as Parameters<typeof engine.StartPolling>[0];
+            // Boot with zero active jobs: polling is suspended, but the engine still
+            // subscribes to JobsChanged$ and retains the context user.
+            mockBase.ScheduledJobs = [];
+            await engine.StartPolling(mockUser);
+            expect(engine.IsPolling).toBe(false);
+
+            // A job is activated → base reconciles its set and fires JobsChanged$.
+            mockBase.ScheduledJobs = [{ ID: 'job-1', Name: 'TestJob', Status: 'Active' }];
+            (mockBase as unknown as { __emitJobsChanged: () => void }).__emitJobsChanged();
+            await flushMicrotasks();
+
+            expect(engine.IsPolling).toBe(true);
+            await engine.StopPolling();
+            mockBase.ScheduledJobs = [];
+        });
+
+        it('should NOT start polling on a JobsChanged notification while no active jobs exist', async () => {
+            const mockUser = { ID: 'user-1' } as Parameters<typeof engine.StartPolling>[0];
+            mockBase.ScheduledJobs = [];
+            await engine.StartPolling(mockUser);
+            expect(engine.IsPolling).toBe(false);
+
+            // e.g. a job was edited but remains inactive → the set is still empty.
+            (mockBase as unknown as { __emitJobsChanged: () => void }).__emitJobsChanged();
+            await flushMicrotasks();
+
+            expect(engine.IsPolling).toBe(false);
+            await engine.StopPolling();
+        });
     });
 
     describe('ExecuteScheduledJobs', () => {
@@ -314,6 +363,96 @@ describe('SchedulingEngine', () => {
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.OnJobChanged>[0];
             await engine.OnJobChanged(mockUser);
             expect(mockBase.UpdatePollingInterval).toHaveBeenCalled();
+        });
+    });
+
+    describe('expireFinishedJobs — retiring a job whose window has closed', () => {
+        // `Expired` has been a declared ScheduledJobStatus that NOTHING ever set. isJobDue already
+        // refuses a job past its EndAt, so such a job stops running on its own — but it stayed
+        // Active forever, permanently inert, and kept driving UpdatePollingInterval. That is why
+        // "run once at T" (cron at T + EndAt just after T) left the whole scheduler polling at that
+        // job's cadence for a job that would never run again.
+        const expire = (evalTime: Date) =>
+            (engine as unknown as { expireFinishedJobs(u: unknown, t: Date): Promise<void> })
+                .expireFinishedJobs({ ID: 'user-1' }, evalTime);
+
+        const job = (over: Record<string, unknown> = {}) => ({
+            ID: 'job-1',
+            Name: 'One-shot',
+            Status: 'Active',
+            EndAt: new Date('2026-08-08T10:00:00Z'),
+            Save: vi.fn().mockResolvedValue(true),
+            LatestResult: null,
+            ...over,
+        });
+
+        it('marks a job past its EndAt as Expired', async () => {
+            const j = job();
+            mockBase.ScheduledJobs = [j];
+
+            await expire(new Date('2026-08-08T11:00:00Z'));
+
+            expect(j.Status).toBe('Expired');
+            expect(j.Save).toHaveBeenCalled();
+        });
+
+        it('leaves a job whose window is still open alone', async () => {
+            const j = job();
+            mockBase.ScheduledJobs = [j];
+
+            await expire(new Date('2026-08-08T09:00:00Z'));
+
+            expect(j.Status).toBe('Active');
+            expect(j.Save).not.toHaveBeenCalled();
+        });
+
+        it('ignores a job with no EndAt — an open-ended schedule never expires', async () => {
+            const j = job({ EndAt: null });
+            mockBase.ScheduledJobs = [j];
+
+            await expire(new Date('2030-01-01T00:00:00Z'));
+
+            expect(j.Status).toBe('Active');
+            expect(j.Save).not.toHaveBeenCalled();
+        });
+
+        it.each(['Paused', 'Disabled'])('does NOT overwrite a %s job a person set', async (status) => {
+            // Rewriting a deliberate human decision to Expired would lose it, and the two states
+            // mean different things: Paused is "resume this later".
+            const j = job({ Status: status });
+            mockBase.ScheduledJobs = [j];
+
+            await expire(new Date('2026-08-08T11:00:00Z'));
+
+            expect(j.Status).toBe(status);
+            expect(j.Save).not.toHaveBeenCalled();
+        });
+
+        it('expires a Pending job too — it never ran and never will', async () => {
+            const j = job({ Status: 'Pending' });
+            mockBase.ScheduledJobs = [j];
+
+            await expire(new Date('2026-08-08T11:00:00Z'));
+
+            expect(j.Status).toBe('Expired');
+        });
+
+        it('keeps going when one job fails to save', async () => {
+            // Retiring a finished job must never stop live ones from being considered.
+            const bad = job({ ID: 'bad', Save: vi.fn().mockResolvedValue(false), LatestResult: { CompleteMessage: 'locked' } });
+            const good = job({ ID: 'good' });
+            mockBase.ScheduledJobs = [bad, good];
+
+            await expire(new Date('2026-08-08T11:00:00Z'));
+
+            expect(good.Save).toHaveBeenCalled();
+        });
+
+        it('does not throw when a save blows up', async () => {
+            const j = job({ Save: vi.fn().mockRejectedValue(new Error('deadlock')) });
+            mockBase.ScheduledJobs = [j];
+
+            await expect(expire(new Date('2026-08-08T11:00:00Z'))).resolves.toBeUndefined();
         });
     });
 

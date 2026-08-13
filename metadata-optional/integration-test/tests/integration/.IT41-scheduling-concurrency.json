@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT41 - Scheduling Concurrency",
+    "Description": "Scheduling engine concurrency semantics: ConcurrencyMode Skip vs Queue with noop fixture jobs, and the queue-terminalization defect pin per the register. Self-cleaning tagged fixture jobs.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Scheduling engine concurrency semantics: ConcurrencyMode Skip vs Queue with noop fixture jobs, and the queue-terminalization defect pin per the register. Self-cleaning tagged fixture jobs."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "scheduling-concurrency"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "C41D8BDD-4280-4DD3-B1FF-F34612928495"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T01:12:44.233Z",
+    "checksum": "d8ce9850be32f9ecbc05db03901a70a44d425402ddda1fcf4846a757d821c57e"
+  }
+}

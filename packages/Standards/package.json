@@ -1,0 +1,38 @@
+{
+  "name": "@memberjunction/standards",
+  "type": "module",
+  "version": "6.1.0-edge.2",
+  "description": "MemberJunction engineering standards as runnable, versioned checks — plus the scaffolding that gets a repo enforcing them. Opt-in per check; a new standard never changes an existing repo's result.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "mj-standards": "bin/run.js"
+  },
+  "files": [
+    "/dist",
+    "/bin",
+    "/schema"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "MemberJunction",
+    "standards",
+    "lint",
+    "architecture"
+  ],
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "tsc-alias": "^1.8.16",
+    "vitest": "^4.0.18"
+  }
+}

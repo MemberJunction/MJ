@@ -76,8 +76,48 @@ function DataGrid({
     }
   };
   
-  // Color mapping for common status values (darker for better contrast with white text)
-  const statusColorMap = {
+  // Theme tokens, with the previous hardcoded values kept as fallbacks for a host
+  // that renders this component without styles.
+  const themeColors = styles?.colors || {};
+
+  // Shifts a hex color toward black (negative) or white (positive) by `pct`.
+  const shade = (hex, pct) => {
+    if (typeof hex !== 'string') return hex;
+    const raw = hex.trim().replace('#', '');
+    const full = raw.length === 3 ? raw.split('').map(ch => ch + ch).join('') : raw;
+    if (!/^[0-9a-fA-F]{6}$/.test(full)) return hex;
+    const int = parseInt(full, 16);
+    const mix = (channel) => {
+      const target = pct < 0 ? 0 : 255;
+      const moved = channel + ((target - channel) * Math.abs(pct)) / 100;
+      return Math.max(0, Math.min(255, Math.round(moved)));
+    };
+    const out = [(int >> 16) & 255, (int >> 8) & 255, int & 255].map(mix);
+    return `#${out.map(v => v.toString(16).padStart(2, '0')).join('')}`;
+  };
+
+  // Value pills render as antd <Tag color={hex}>, which puts WHITE text on a custom
+  // color. A theme whose status colors are light would therefore produce white-on-light
+  // and unreadable pills, so every pill color is darkened until it can carry white text.
+  const darkenForWhiteText = (hex) => {
+    let current = hex;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const raw = current.trim().replace('#', '');
+      const full = raw.length === 3 ? raw.split('').map(ch => ch + ch).join('') : raw;
+      if (!/^[0-9a-fA-F]{6}$/.test(full)) return current;
+      const int = parseInt(full, 16);
+      const [r, g, b] = [(int >> 16) & 255, (int >> 8) & 255, int & 255];
+      // Perceived luminance (ITU-R BT.601), good enough to decide "too light for white".
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      if (luminance <= 0.5) return current;
+      current = shade(current, -20);
+    }
+    return current;
+  };
+
+  // Original per-status pill colors (darker for better contrast with white text) — the
+  // exact pre-theming literals, kept for any family whose base color the theme does not supply.
+  const originalStatusColors = {
     // Green colors for positive states
     active: '#389e0d',      // darker green
     approved: '#52c41a',    // green
@@ -87,7 +127,7 @@ function DataGrid({
     successful: '#5b8c00',  // light olive
     enabled: '#7cb305',     // lime
     published: '#a0d911',   // light lime
-    
+
     // Red colors for negative states
     inactive: '#cf1322',    // darker red
     rejected: '#f5222d',    // red
@@ -99,7 +139,7 @@ function DataGrid({
     terminated: '#873800',  // burnt orange
     expired: '#ad4e00',     // dark orange
     deprecated: '#d4380d',  // rust orange
-    
+
     // Yellow/Orange for pending states
     pending: '#d48806',     // darker orange
     paused: '#fa8c16',      // orange
@@ -107,7 +147,7 @@ function DataGrid({
     draft: '#d4b106',       // dark gold
     review: '#ad8b00',      // darker gold
     waiting: '#ffc53d',     // light gold
-    
+
     // Blue for informational states
     processing: '#096dd9',  // darker blue
     running: '#1890ff',     // blue
@@ -115,10 +155,40 @@ function DataGrid({
     'in progress': '#003a8c', // very dark blue
     'in-progress': '#40a9ff' // light blue
   };
-  
-  // 50 distinct colors for value lists (excluding colors used in statusColorMap)
-  // These are carefully selected to be visually distinct from each other
-  const fallbackColors = [
+
+  // Status families. When the theme supplies a family's base hue, a shade ramp keeps
+  // values inside the family distinguishable the way the original palette did.
+  const statusFamilies = [
+    { token: 'success', statuses: ['active', 'approved', 'complete', 'completed', 'success', 'successful', 'enabled', 'published'] },
+    { token: 'error', statuses: ['inactive', 'rejected', 'failed', 'error', 'disabled', 'cancelled', 'canceled'] },
+    { token: 'warning', statuses: ['terminated', 'expired', 'deprecated', 'pending', 'paused', 'temporary', 'draft', 'review', 'waiting'] },
+    { token: 'info', statuses: ['processing', 'running', 'inprogress', 'in progress', 'in-progress'] }
+  ];
+
+  // Only a parseable hex base can be shaded. A theme expressing a status as a named
+  // CSS color ('lime') or rgb() would otherwise pass through unshaded, collapsing a
+  // whole family to one color AND skipping the readability check.
+  const asHex = (color) =>
+    (typeof color === 'string' && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color.trim()))
+      ? color.trim()
+      : null;
+
+  const statusColorMap = { ...originalStatusColors };
+  statusFamilies.forEach(family => {
+    const base = asHex(themeColors[family.token]);
+    if (!base) return;
+    const span = Math.max(1, family.statuses.length - 1);
+    family.statuses.forEach((name, index) => {
+      // -35% (darkest) through +15% (lightest) across the family.
+      const pct = -35 + Math.round((50 * index) / span);
+      statusColorMap[name] = darkenForWhiteText(shade(base, pct));
+    });
+  });
+
+  // Categorical colors for arbitrary value lists. The theme's chart palette is exactly
+  // this — distinct series colors — and is also where the host resolves an organization
+  // default or a user-requested palette. The literal list stays as the fallback.
+  const builtInFallbackColors = [
     '#722ed1', // purple
     '#9254de', // light purple
     '#531dab', // dark purple
@@ -179,7 +249,20 @@ function DataGrid({
     '#b8860b', // dark goldenrod
     '#ff6347'  // tomato
   ];
-  
+
+  const fallbackColors = (styles?.chartPalette && styles.chartPalette.length > 0)
+    ? styles.chartPalette.map(darkenForWhiteText)
+    : builtInFallbackColors;
+
+  // A themed chartPalette is typically short (~10 colors); wrapping modulo would hand
+  // the 11th+ distinct value a duplicate color. Overflow past the palette falls through
+  // to the built-in 50-color list so distinct values keep getting distinct colors.
+  const fallbackColorAt = (index) =>
+    index < fallbackColors.length
+      ? fallbackColors[index]
+      : builtInFallbackColors[(index - fallbackColors.length) % builtInFallbackColors.length];
+  const fallbackColorCount = Math.max(fallbackColors.length, builtInFallbackColors.length);
+
   // Get color for a value in a value list - ensures unique colors for all values
   const getValueColor = (value, possibleValues) => {
     if (!value) return null;
@@ -200,7 +283,7 @@ function DataGrid({
             colorAssignments.set(pvValue, statusColorMap[pvValue]);
           } else {
             // Assign next available fallback color
-            colorAssignments.set(pvValue, fallbackColors[nextColorIndex % fallbackColors.length]);
+            colorAssignments.set(pvValue, fallbackColorAt(nextColorIndex));
             nextColorIndex++;
           }
         }
@@ -223,7 +306,7 @@ function DataGrid({
     for (let i = 0; i < normalized.length; i++) {
       hash = normalized.charCodeAt(i) + ((hash << 5) - hash);
     }
-    return fallbackColors[Math.abs(hash) % fallbackColors.length];
+    return fallbackColorAt(Math.abs(hash) % fallbackColorCount);
   };
   
   // Debounce filter input
@@ -597,7 +680,7 @@ function DataGrid({
 
       return columnDef;
     });
-  }, [normalizedColumns, entityInfo, sorting, filtering, highlightFilterMatches, debouncedFilter, expandedCells]);
+  }, [normalizedColumns, entityInfo, sorting, filtering, highlightFilterMatches, debouncedFilter, expandedCells, styles]);
   
   // Filter data based on search term
   // Handles null/undefined data gracefully and returns appropriate defaults
@@ -781,10 +864,13 @@ function DataGrid({
     
     return filteredData.map((row, index) => ({
       ...row,
-      // Use existing key, ID fields, or fall back to index
-      key: row?.key || row?.ID || row?.id || index
+      key: row?.key
+        || (entityPrimaryKeys?.length && entityPrimaryKeys.map(k => row?.[k]).filter(v => v != null).join('_'))
+        || row?.ID
+        || row?.id
+        || index
     }));
-  }, [filteredData]);
+  }, [filteredData, entityPrimaryKeys]);
   
   return (
     <div className="data-grid-component" style={{ width: '100%' }}>

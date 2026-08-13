@@ -26,6 +26,7 @@ export class MJAIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'retentionArchiving', sectionName: 'Retention & Archiving', isExpanded: true },
             { sectionKey: 'retrievalRanking', sectionName: 'Retrieval & Ranking', isExpanded: true },
             { sectionKey: 'contextMemoryManagement', sectionName: 'Context & Memory Management', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentActions', sectionName: 'AIAgent Actions', isExpanded: false },
             { sectionKey: 'mJAIAgentArtifactTypes', sectionName: 'AI Agent Artifact Types', isExpanded: false },
@@ -62,7 +63,9 @@ export class MJAIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false },
             { sectionKey: 'mJEntityDocuments', sectionName: 'Entity Documents', isExpanded: false },
             { sectionKey: 'mJAIAgentSkills', sectionName: 'AI Agent Skills', isExpanded: false },
-            { sectionKey: 'mJAISkillSubAgents', sectionName: 'AI Skill Sub Agents', isExpanded: false }
+            { sectionKey: 'mJConversationWidgetInstances', sectionName: 'Conversation Widget Instances', isExpanded: false },
+            { sectionKey: 'mJAISkillSubAgents', sectionName: 'AI Skill Sub Agents', isExpanded: false },
+            { sectionKey: 'mJAIAgentCredentials', sectionName: 'AI Agent Credentials', isExpanded: false }
         ]);
     }
 }

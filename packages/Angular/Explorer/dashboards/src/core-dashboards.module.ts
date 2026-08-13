@@ -23,6 +23,7 @@ import {
   MJRefreshButtonComponent,
   MJLeftNavComponent,
   MJLeftNavContentComponent,
+  MJSwitchComponent,
   MJTabNavComponent,
   MJEmptyStateComponent,
   MJAlertComponent,
@@ -33,6 +34,9 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
+import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
+import { MJTabStripModule } from '@memberjunction/ng-tabstrip';
+import { MJWorkspaceTabStripComponent } from '@memberjunction/ng-ui-components';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
 import { VersionsModule } from '@memberjunction/ng-versions';
@@ -51,6 +55,10 @@ import { ActionPinRunnerDialogComponent } from './Home/action-pin-runner-dialog.
 // via the lazy loading system when ApplicationManager calls CreateInstanceAsync.
 import { HomeApplication } from './Home/home-application';
 import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnostics.component';
+import { ThemeStudioDashboardComponent } from './ThemeStudio/theme-studio-dashboard.component';
+import { ThemeStudioResourceComponent } from './ThemeStudio/theme-studio-resource.component';
+import { ThemeManagerDashboardComponent } from './ThemeStudio/theme-manager-dashboard.component';
+import { ThemeManagerResourceComponent } from './ThemeStudio/theme-manager-resource.component';
 // Developer Tools
 import { AppStateInspectorComponent } from './DevTools/app-state-inspector.component';
 import { LayoutInspectorComponent } from './DevTools/layout-inspector.component';
@@ -59,6 +67,8 @@ import { LazyModuleStatusComponent } from './DevTools/lazy-module-status.compone
 import { SettingsExplorerComponent } from './DevTools/settings-explorer.component';
 import { EventMonitorComponent } from './DevTools/event-monitor.component';
 import { GraphQLConsoleComponent } from './DevTools/graphql-console.component';
+import { GridWidthLabComponent } from './DevTools/grid-width-lab.component';
+import { TabStripLabComponent } from './DevTools/tab-strip-lab.component';
 // Admin Containers
 import { AdminDevToolsResourceComponent } from './Admin/admin-dev-tools-resource.component';
 import { AdminIdentityAccessComponent } from './Admin/admin-identity-access.component';
@@ -106,6 +116,10 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     BulkOperationsRunHistoryComponent,
     EntityAdminDashboardComponent,
     HomeDashboardComponent,
+    ThemeStudioDashboardComponent,
+    ThemeStudioResourceComponent,
+    ThemeManagerDashboardComponent,
+    ThemeManagerResourceComponent,
     ActionPinConfigDialogComponent,
     ActionPinRunnerDialogComponent,
     SystemDiagnosticsComponent,
@@ -116,6 +130,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     SettingsExplorerComponent,
     EventMonitorComponent,
     GraphQLConsoleComponent,
+    GridWidthLabComponent,
+    TabStripLabComponent,
     AdminDevToolsResourceComponent,
     AdminIdentityAccessComponent,
     AdminDataSchemaComponent,
@@ -149,6 +165,9 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
+    EntityViewerModule,
+    MJTabStripModule,
+    MJWorkspaceTabStripComponent,
     MJButtonDirective,
     MJClickableDirective,
     MJDatepickerComponent,
@@ -170,6 +189,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     MJRefreshButtonComponent,
     MJLeftNavComponent,
     MJLeftNavContentComponent,
+    MJSwitchComponent,
     MJTabNavComponent,
     MJEmptyStateComponent,
     MJAlertComponent,
@@ -197,6 +217,10 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     BulkOperationsRunHistoryComponent,
     EntityAdminDashboardComponent,
     HomeDashboardComponent,
+    ThemeStudioDashboardComponent,
+    ThemeStudioResourceComponent,
+    ThemeManagerDashboardComponent,
+    ThemeManagerResourceComponent,
     SystemDiagnosticsComponent,
     AppStateInspectorComponent,
     LayoutInspectorComponent,
@@ -205,6 +229,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     SettingsExplorerComponent,
     EventMonitorComponent,
     GraphQLConsoleComponent,
+    GridWidthLabComponent,
+    TabStripLabComponent,
     AdminDevToolsResourceComponent,
     AdminIdentityAccessComponent,
     AdminDataSchemaComponent,

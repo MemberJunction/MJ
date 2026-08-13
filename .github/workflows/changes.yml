@@ -6,9 +6,21 @@ on:
       - next
       - main
 
+# Keyed by ref, like every other PR-scoped workflow here (test.yml, integration.yml,
+# docs-site-ci.yml). A constant group makes the group REPO-WIDE: with cancel-in-progress,
+# one PR's run cancels every other open PR's run, so `Check migrations` can only be green
+# on whichever PR pushed last — and a re-run just moves the cancellation elsewhere.
 concurrency:
-  group: "changes"
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+# `pull-requests: write` lets the migration-ID-determinism step post a sticky PR
+# comment when it finds a violation. NOTE: for PRs from forks, GitHub hands the job a
+# read-only GITHUB_TOKEN regardless of this block, so the comment step is best-effort
+# (continue-on-error) — those PRs still get the ::warning + step summary.
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   changes_and_migrations:
@@ -19,15 +31,31 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Fetch PR base commit
-        # The default checkout is a depth-1 shallow clone of the merge commit, so
-        # the base commit's objects aren't present and `git diff <base>` fails
-        # with "bad object" — which previously made every validation step silently
-        # skip. Fetch just that one commit at depth 1: its trees are nearly
-        # identical to the already-checked-out merge commit, so the incremental
-        # transfer is ~the PR diff size, not the full repo history that
-        # `fetch-depth: 0` would pull.
-        run: git fetch --no-tags --depth=1 origin ${{ github.event.pull_request.base.sha }}
+      - name: Self-test migration ID determinism detector
+        # Runs on EVERY PR (even those with no migrations, like the one that introduced
+        # this check) so a regression in the load-bearing detectors (the NEWID() regex
+        # and the spCreate-without-@ID structural scan) surfaces here rather than the
+        # next time someone happens to add a migration.
+        run: .github/scripts/check-migration-id-determinism.sh --self-test
+
+      - name: Resolve current base branch tip
+        id: base
+        # Two subtleties:
+        # 1. The default checkout is a depth-1 shallow clone of the merge commit,
+        #    so the base branch's objects aren't present and `git diff <base>`
+        #    fails with "bad object". Fetch the base at depth 1 — `git diff A B`
+        #    compares trees, no history walk needed, so the incremental transfer
+        #    is ~the PR diff size.
+        # 2. We deliberately do NOT use `github.event.pull_request.base.sha`: it
+        #    is a snapshot from when the PR was opened and never advances with
+        #    the base branch. A long-lived PR that merges the base branch in
+        #    (this repo's standard flow — no rebases) would be diffed against a
+        #    months-old base and blamed for every migration merged since.
+        #    `github.sha` is the test merge of the PR head into the CURRENT base
+        #    tip, so diffing from that tip yields exactly what this PR adds.
+        run: |
+          git fetch --no-tags --depth=1 origin ${{ github.event.pull_request.base.ref }}
+          echo "sha=$(git rev-parse FETCH_HEAD)" >> $GITHUB_OUTPUT
 
       - name: Check for migration file changes
         id: check_migrations
@@ -35,7 +63,7 @@ jobs:
           # Resolve the diff first so a real git failure (e.g. an unfetched base
           # commit) hard-fails the job under `set -e` instead of being swallowed
           # by `|| true` and reported as "no migrations".
-          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }})
+          CHANGED_FILES=$(git diff --name-only ${{ steps.base.outputs.sha }} ${{ github.sha }})
           MIGRATION_FILES=$(echo "$CHANGED_FILES" | grep -E '^migrations/.*\.sql$' || true)
           if [ -n "$MIGRATION_FILES" ]; then
             echo "has_migrations=true" >> $GITHUB_OUTPUT
@@ -46,13 +74,19 @@ jobs:
             echo "No migration files in this PR - skipping validation"
           fi
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up node
         if: steps.check_migrations.outputs.has_migrations == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: 'npm'
-          cache-dependency-path: 'package-lock.json'
+          # No dependency cache here on purpose: this job never runs `pnpm install`
+          # (the gate is shell + jq over filenames), so there is no pnpm store to save.
+          # With `cache: 'pnpm'` the post-job cache-save step fails the whole check with
+          # "Path Validation Error: Path(s) specified in the action for caching do(es) not
+          # exist" — after every real validation step has already passed.
 
       - name: Get current version
         if: steps.check_migrations.outputs.has_migrations == 'true'
@@ -68,12 +102,32 @@ jobs:
         run: |
           CURRENT_VERSION="${{ steps.get_version.outputs.CURRENT_VERSION }}"
           IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
-          NEXT_MINOR_VERSION="${VERSION_PARTS[0]}.$(( ${VERSION_PARTS[1]} + 1 ))"
-          EXPECTED_STRING="__v$NEXT_MINOR_VERSION"
 
-          git diff --name-only --diff-filter=A ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
+          # Which line are migrations building toward?
+          #
+          # Outside pre-mode the version is the LAST release (e.g. 5.50.0), so the next one bumps
+          # the minor and migrations carry v5.51.x.
+          #
+          # In pre-mode the version is 6.1.0-edge.N and the stream is still building toward line
+          # 6.1 — every subsequent edge release stays on 6.1 — so migrations keep v6.1.x. This
+          # matches DEPLOYMENT.md: "use the tuple the Edge stream is building toward — while
+          # `next` streams 6.1.0-edge.N, name it v6.1.x".
+          #
+          # The old unconditional minor+1 only happened to work for the FIRST edge release of a
+          # line (6.0.x -> v6.1.x). On the second (6.1.0-edge.0 -> 6.1.0-edge.1) it demanded
+          # v6.2.x and rejected every correctly-named migration in the release.
+          if [[ "$CURRENT_VERSION" == *-* ]]; then
+            TARGET_LINE="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}"
+            echo "Pre-release version $CURRENT_VERSION — migrations target the line being built toward: v$TARGET_LINE"
+          else
+            TARGET_LINE="${VERSION_PARTS[0]}.$(( ${VERSION_PARTS[1]} + 1 ))"
+            echo "Released version $CURRENT_VERSION — migrations target the next minor: v$TARGET_LINE"
+          fi
+          EXPECTED_STRING="__v$TARGET_LINE"
+
+          git diff --name-only --diff-filter=A ${{ steps.base.outputs.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
             if [[ ! "$file" =~ $EXPECTED_STRING ]]; then
-              echo "::error file=$file::Migration filename doesn't match the next minor version (v$NEXT_MINOR_VERSION)"
+              echo "::error file=$file::Migration filename doesn't match the target line (v$TARGET_LINE)"
               exit 1
             fi
             if [[ ! "$file" =~ "V" ]]; then
@@ -86,7 +140,32 @@ jobs:
         if: steps.check_migrations.outputs.has_migrations == 'true'
         run: |
           # Get new migration files being added in this PR
-          NEW_MIGRATIONS=$(git diff --name-only --diff-filter=A ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' || true)
+          NEW_MIGRATIONS=$(git diff --name-only --diff-filter=A ${{ steps.base.outputs.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' || true)
+
+          # Drop anything already released. A migration present on `main` is not "new" — it is
+          # released history arriving late through the post-release back-merge of main into next,
+          # and it CANNOT be brought into order: renaming a migration that production databases
+          # have already applied strands it as an unresolved applied version, which is strictly
+          # worse than the out-of-order execution this check guards against.
+          #
+          # This only surfaces when a back-merge travels through a PR. publish.yml normally pushes
+          # it straight to next, so this gate never sees one; it did for v6.1.0-edge.1 because the
+          # automated merge hit conflicts and the merge was routed through review instead. The
+          # check stays fully strict for genuinely new migrations, which is every feature PR.
+          git fetch --no-tags --depth=1 origin main >/dev/null 2>&1 || true
+          RELEASED_MIGRATIONS=$(git ls-tree -r --name-only FETCH_HEAD -- migrations/ 2>/dev/null | grep -E '\.sql$' || true)
+          if [ -n "$RELEASED_MIGRATIONS" ]; then
+            FILTERED=""
+            while read -r file; do
+              [ -z "$file" ] && continue
+              if echo "$RELEASED_MIGRATIONS" | grep -qxF "$file"; then
+                echo "↷ $(basename "$file") is already released on main — not a new migration, skipping"
+              else
+                FILTERED="${FILTERED}${file}"$'\n'
+              fi
+            done <<< "$NEW_MIGRATIONS"
+            NEW_MIGRATIONS=$(printf '%s' "$FILTERED")
+          fi
 
           if [ -z "$NEW_MIGRATIONS" ]; then
             echo "No new migration files to check"
@@ -98,7 +177,7 @@ jobs:
           MAX_EXISTING_TIMESTAMP=0
 
           # Get all existing migration files from the base branch
-          for file in $(git ls-tree -r --name-only ${{ github.event.pull_request.base.sha }} -- migrations/ | grep -E '\.sql$'); do
+          for file in $(git ls-tree -r --name-only ${{ steps.base.outputs.sha }} -- migrations/ | grep -E '\.sql$'); do
             filename=$(basename "$file")
             # Extract timestamp from filename (VYYYYMMDDHHMM format)
             if [[ "$filename" =~ ^V([0-9]{12})__ ]]; then
@@ -149,7 +228,7 @@ jobs:
       - name: Check migration content
         if: steps.check_migrations.outputs.has_migrations == 'true'
         run: |
-          git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
+          git diff --name-only ${{ steps.base.outputs.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
             # Strip single-quoted SQL string literals before the hard-coded-schema check so that
             # seeded data (e.g. prompt/template content that legitimately shows __mj.* SQL examples)
             # doesn't trip the guard. T-SQL escapes a quote by doubling it (''); slurp mode handles
@@ -165,10 +244,66 @@ jobs:
             fi
           done
 
+      - name: Check migration ID determinism (hard-coded UUIDs, not NEWID())
+        id: id_determinism
+        if: steps.check_migrations.outputs.has_migrations == 'true'
+        # Deterministic replacement for the former Opus-powered "Claude Code Review"
+        # migration check (removed .github/workflows/claude.yml). The detectors — the
+        # load-bearing NEWID() regex + allow-list, the structural spCreate-without-@ID
+        # scan, the Flyway-only glob, and the full rationale — live in the committed,
+        # self-testable script below (run on every PR via the "Self-test" step above),
+        # NOT inline here, so future edits can be re-validated instead of trusted. It
+        # scans only the lines this PR ADDS to changed migration files and is ADVISORY
+        # (never fails the job); hits are surfaced as a sticky PR comment + ::warning +
+        # step summary. Both detectors were retro-validated against all 617 committed
+        # migrations (see the script header).
+        #
+        # IN SCOPE (both mint a non-deterministic ID, both mechanically checkable):
+        #   1. a literal NEWID() that generates an ID, and
+        #   2. an `EXEC spCreate<Entity>` invocation missing `@ID` (the proc's
+        #      ISNULL(@ID, NEWID()) fallback then fires).
+        #
+        # OUT OF SCOPE (deliberately — a judgment call, not a grep): a raw INSERT that
+        # omits the ID column (table default NEWSEQUENTIALID() mints a fresh ID). It is
+        # syntactically detectable, but omitting ID is NOT a violation in general —
+        # CodeGen/metadata-sync omit ID on bulk-metadata inserts by design (6,186 such
+        # inserts across the committed migrations, virtually all legitimate). Flagging
+        # them needs semantics — which tables' rows are FK-referenced by stable IDs —
+        # not something a structural scan can settle without a maintained allow-list.
+        env:
+          COMMENT_BODY_FILE: ${{ runner.temp }}/id-determinism-comment.md
+        run: |
+          .github/scripts/check-migration-id-determinism.sh \
+            '${{ steps.base.outputs.sha }}' \
+            '${{ github.sha }}'
+
+      - name: Comment on non-deterministic migration IDs
+        # Best-effort: fork PRs get a read-only token and this fails — the ::warning +
+        # step summary from the step above still fire, so the signal isn't lost.
+        if: steps.check_migrations.outputs.has_migrations == 'true' && steps.id_determinism.outputs.found == 'true'
+        continue-on-error: true
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: migration-id-determinism
+          path: ${{ runner.temp }}/id-determinism-comment.md
+
+      - name: Clear stale non-deterministic ID comment
+        # Remove the sticky comment whenever this push has NO current violation — which
+        # includes the case where a later push removed all migration changes entirely
+        # (has_migrations=false skips the determinism step, so `found` is empty ≠ 'true').
+        # `!cancelled()` lets it also clear a stale comment when an unrelated migration
+        # check failed. Best-effort (continue-on-error) — a no-op if there's no comment.
+        if: ${{ !cancelled() && steps.id_determinism.outputs.found != 'true' }}
+        continue-on-error: true
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: migration-id-determinism
+          delete: true
+
       - name: Check for minor version change
         if: steps.check_migrations.outputs.has_migrations == 'true'
         run: |
-          MIGRATION_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' || true)
+          MIGRATION_FILES=$(git diff --name-only ${{ steps.base.outputs.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' || true)
           if [ -n "$MIGRATION_FILES" ]; then
             MINOR_CHANGE=$(grep 'minor' .changeset/*.md || true)
             if [ -z "$MINOR_CHANGE" ]; then

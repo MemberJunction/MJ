@@ -2,7 +2,7 @@ import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy, ElementRef,
 import { RegisterClass , UUIDsEqual, MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJListCategoryEntity } from '@memberjunction/core-entities';
-import { MJListEntity, MJListDetailEntity, MJUserFavoriteEntity } from '@memberjunction/core-entities';
+import { MJListEntity, MJListEntityExtended, MJListDetailEntity, MJUserFavoriteEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseEntity, BaseEntityEvent, Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -410,14 +410,14 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
             <i class="fa-solid fa-copy"></i>
             Duplicate
           </button>
-          @if (contextItemCapabilities.CanDelete) {
+          @if (CanDeleteContextItem) {
             <div class="menu-divider"></div>
             <button class="menu-item danger" (click)="confirmDeleteList()">
               <i class="fa-solid fa-trash"></i>
               Delete
             </button>
           }
-          @if (!contextItemCapabilities.CanEdit && !contextItemCapabilities.CanShare && !contextItemCapabilities.CanDelete) {
+          @if (!contextItemCapabilities.CanEdit && !contextItemCapabilities.CanShare && !CanDeleteContextItem) {
             <div class="menu-viewer-hint">
               <i class="fa-solid fa-eye"></i>
               Viewer access — read only
@@ -1834,6 +1834,20 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   public contextItemCapabilities: ListCapabilities = CapabilitiesForLevel('Owner');
   private capabilityCache = new Map<string, SharePermissionLevel | null>();
 
+  /**
+   * Whether the current user may DELETE the context-menu's list. This uses the single shared
+   * ownership rule ({@link MJListEntityExtended.UserCanDelete}) — the same rule the server enforces
+   * in MJListEntityServer.Delete() — rather than the share-level capability, so the button is shown
+   * only when the delete would actually succeed: the List's owner, or a Developer/Integration user.
+   */
+  public get CanDeleteContextItem(): boolean {
+    const list = this.selectedContextItem?.list;
+    if (!list) {
+      return false;
+    }
+    return MJListEntityExtended.UserCanDelete(list.UserID, this.ProviderToUse.CurrentUser);
+  }
+
   // Tracks whether the in-memory categories list is known-stale
   // relative to the DB. Flipped to true by the BaseEntity event
   // subscription whenever any `MJ: List Categories` row is saved or
@@ -1893,8 +1907,24 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     }
   }
 
+  /** User-preference key for the favorites-only filter (F5a) — server-persisted so it survives reloads and follows the user across devices. */
+  private static readonly FAVORITES_FILTER_PREF_KEY = 'mj.lists.browse.showOnlyFavorites';
+
+  /** Persists the current favorites-filter state as a user preference (debounced). */
+  private persistFavoritesFilter(): void {
+    UserInfoEngine.Instance.SetSettingDebounced(
+      ListsBrowseResource.FAVORITES_FILTER_PREF_KEY,
+      String(this.showOnlyFavorites),
+    );
+  }
+
   async ngOnInit() {
     super.ngOnInit();
+    // Restore the favorites-only filter preference (synchronous cache hit —
+    // UserInfoEngine is populated during app bootstrap)
+    this.showOnlyFavorites = UserInfoEngine.Instance.GetSetting(
+      ListsBrowseResource.FAVORITES_FILTER_PREF_KEY,
+    ) === 'true';
     this.subscribeToCategoryChanges();
     await this.loadData();
     this.registerAgentTools();
@@ -2109,12 +2139,14 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       this.currentUserId = md.CurrentUser?.ID || '';
 
-      // BypassCache on Lists + List Details: after a delete/duplicate, the
-      // RunView cache for these entities doesn't always reflect the latest
-      // state in time (event-driven invalidation races the immediate
-      // refresh). Trading a small perf hit for correctness here is worth
-      // it — categories and users stay cache-warm.
-      const [listsResult, categoriesResult, detailsResult, usersResult] = await rv.RunViews([
+      // BypassCache on Lists: after a delete/duplicate, the RunView cache
+      // for this entity doesn't always reflect the latest state in time
+      // (event-driven invalidation races the immediate refresh). Trading a
+      // small perf hit for correctness here is worth it — categories stay
+      // cache-warm. Owner names come from the denormalized `User` view
+      // field on each list, and item counts from batched COUNT queries —
+      // this deliberately does NOT download List Details or Users rows.
+      const [listsResult, categoriesResult] = await rv.RunViews([
         {
           EntityName: 'MJ: Lists',
           OrderBy: 'Name',
@@ -2125,17 +2157,6 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
           EntityName: 'MJ: List Categories',
           OrderBy: 'Name',
           ResultType: 'entity_object'
-        },
-        {
-          EntityName: 'MJ: List Details',
-          Fields: ['ListID'],
-          ResultType: 'simple',
-          BypassCache: true
-        },
-        {
-          EntityName: 'MJ: Users',
-          Fields: ['ID', 'Name'],
-          ResultType: 'simple'
         }
       ]);
 
@@ -2146,8 +2167,6 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
       const lists = listsResult.Results as MJListEntity[];
       this.categories = (categoriesResult.Results || []) as MJListCategoryEntity[];
-      const details = (detailsResult.Results || []) as Array<{ ListID: string }>;
-      const users = (usersResult.Results || []) as Array<{ ID: string; Name: string }>;
 
       // Build category map
       this.categoryMap.clear();
@@ -2161,17 +2180,20 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       // flag so the first dialog open doesn't redundantly refetch.
       this.categoriesDirty = false;
 
-      // Build user map
-      const userMap = new Map<string, string>();
-      for (const user of users) {
-        userMap.set(user.ID, user.Name);
-      }
-
-      // Count items per list
+      // Per-list item counts: one batched round trip of count_only queries
+      // (each an index-seek COUNT on ListDetail.ListID server-side) instead
+      // of transferring every membership row to the client.
       const itemCounts = new Map<string, number>();
-      for (const detail of details) {
-        const count = itemCounts.get(detail.ListID) || 0;
-        itemCounts.set(detail.ListID, count + 1);
+      if (lists.length > 0) {
+        const countResults = await rv.RunViews(lists.map(list => ({
+          EntityName: 'MJ: List Details',
+          ExtraFilter: `ListID = '${list.ID}'`,
+          ResultType: 'count_only' as const,
+          BypassCache: true
+        })));
+        countResults.forEach((res, idx) => {
+          itemCounts.set(lists[idx].ID, res.Success ? res.TotalRowCount : 0);
+        });
       }
 
       // Build entity info
@@ -2198,7 +2220,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
           list,
           itemCount: itemCounts.get(list.ID) || 0,
           entityName,
-          ownerName: userMap.get(list.UserID) || 'Unknown',
+          ownerName: list.User || 'Unknown',
           isOwner: UUIDsEqual(list.UserID, this.currentUserId)
         };
       });
@@ -2349,6 +2371,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.selectedOwner  = (values['selectedOwner']  as string) ?? 'mine';
     this.selectedEntity = (values['selectedEntity'] as string) ?? 'all';
     this.showOnlyFavorites = values['favorites'] === 'favorites';
+    this.persistFavoritesFilter();
     this.applyFilters();
     this.buildCategoryTree();
     this.publishAgentContext();
@@ -2359,6 +2382,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.selectedOwner = 'mine';
     this.selectedEntity = 'all';
     this.showOnlyFavorites = false;
+    this.persistFavoritesFilter();
     this.applyFilters();
     this.buildCategoryTree();
   }
@@ -2381,6 +2405,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.selectedOwner = 'mine';
     this.selectedEntity = 'all';
     this.showOnlyFavorites = false;
+    this.persistFavoritesFilter();
     this.tagFilters = [];
     void this.recomputeTagMembership();
     this.buildCategoryTree();
@@ -2424,6 +2449,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.selectedEntity = 'all';
     this.selectedOwner = 'mine';
     this.showOnlyFavorites = false;
+    this.persistFavoritesFilter();
     this.tagFilters = [];
     void this.recomputeTagMembership(); // empty tagFilters → clears tagFilteredListIds + re-applies
     this.buildCategoryTree();
@@ -2964,6 +2990,17 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
     const listToDelete = this.listToDelete;
     const listName = listToDelete.Name;
+
+    // Defense-in-depth: re-check the ownership rule before deleting so a stale/forced menu can't
+    // bypass the gate. The server (MJListEntityServer.Delete) is the true enforcement point, but
+    // failing fast here gives a clean message instead of a rejected server round-trip.
+    if (!MJListEntityExtended.UserCanDelete(listToDelete.UserID, this.ProviderToUse.CurrentUser)) {
+      this.notificationService.CreateSimpleNotification(
+        `You don't have permission to delete "${listName}".`,
+        'error', 6000,
+      );
+      return;
+    }
 
     this.isDeleting = true;
     this.cdr.detectChanges();

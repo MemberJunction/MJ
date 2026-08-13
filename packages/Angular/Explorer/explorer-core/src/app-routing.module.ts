@@ -7,7 +7,7 @@ import {
 } from './public-api';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { LogError, Metadata, StartupManager, IMetadataProvider } from '@memberjunction/core';
-import { SharedService, SYSTEM_APP_ID } from '@memberjunction/ng-shared';
+import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { ApplicationManager, TabService } from '@memberjunction/ng-base-application';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
@@ -247,7 +247,7 @@ export class ResourceResolver implements Resolve<void> {
           const entityName = decodeURIComponent(param1);
           const recordId = param2;
 
-          const entityInfo = md.Entities.find(e => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase());
+          const entityInfo = md.EntityByName(entityName);
           if (!entityInfo) {
             LogError(`Entity ${entityName} not found in metadata`);
             return;
@@ -257,7 +257,7 @@ export class ResourceResolver implements Resolve<void> {
             ApplicationId: app.ID,
             Title: `${entityName} - ${recordId}`,
             Configuration: {
-              resourceType: 'Records',
+              resourceType: RECORDS_RESOURCE_TYPE,
               Entity: entityName,
               recordId: recordId,
               appName: appName,
@@ -328,26 +328,6 @@ export class ResourceResolver implements Resolve<void> {
               appId: app.ID
             },
             ResourceRecordId: queryId,
-            IsPinned: false
-          });
-          return;
-        }
-
-        case 'report': {
-          // /app/:appName/report/:reportId
-          const reportId = param1;
-
-          this.tabService.OpenTab({
-            ApplicationId: app.ID,
-            Title: `Report - ${reportId}`,
-            Configuration: {
-              resourceType: 'Reports',
-              reportId,
-              recordId: reportId,
-              appName: appName,
-              appId: app.ID
-            },
-            ResourceRecordId: reportId,
             IsPinned: false
           });
           return;
@@ -512,7 +492,7 @@ export class ResourceResolver implements Resolve<void> {
       const entityName = decodeURIComponent(route.params['entityName']);
       const recordId = route.params['recordId'];
 
-      const entityInfo = md.Entities.find(e => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase());
+      const entityInfo = md.EntityByName(entityName);
       if (!entityInfo) {
         LogError(`Entity ${entityName} not found in metadata`);
         return;
@@ -523,7 +503,7 @@ export class ResourceResolver implements Resolve<void> {
         ApplicationId: SYSTEM_APP_ID,
         Title: `${entityName} - ${recordId}`,
         Configuration: {
-          resourceType: 'Records',
+          resourceType: RECORDS_RESOURCE_TYPE,
           Entity: entityName,
           recordId: recordId
         },

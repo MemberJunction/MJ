@@ -25,16 +25,23 @@ import {
   TabComponentState,
   TabShownEvent,
   WorkspaceTab,
-  LayoutNode
+  LayoutNode,
+  FlattenLayoutToSingleStack
 } from '@memberjunction/ng-base-application';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseResourceComponent, HomeAppPinService, NavigationService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, HomeAppPinService, NavigationService, IsRecordTabsStyle, IsRecordsTabConfiguration, IsRecordsRegionTab, IsRecordDockedToWorkspace, RECORD_DOCKED_TO_WORKSPACE_KEY, GetRecordSourceContext, SafeDetectChanges, ExplorerBreakpointService, ResolveRecordTypeIcon } from '@memberjunction/ng-shared';
 import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
+import { RecordOriginCrumbComponent } from '../record-open/record-origin-crumb.component';
+import { RecordSwitcherService } from '../record-open/record-switcher.service';
+import { RecordSwitcherEntry } from '../record-open/record-switcher-sheet.component';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { BaseEntity, DatasetResultType, LogError, Metadata } from '@memberjunction/core';
 import { ComponentCacheManager, CachedComponentInfo } from './component-cache-manager';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+
+/** Fallback tab accent when an app has no color (matches pre-existing usage) */
+const DEFAULT_APP_COLOR = '#757575';
 /**
  * Container for Golden Layout tabs with app-colored styling.
  *
@@ -55,6 +62,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export class TabContainerComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('glContainer', { static: false }) glContainer!: ElementRef<HTMLDivElement>;
   @ViewChild('directContentContainer', { static: false }) directContentContainer!: ElementRef<HTMLDivElement>;
+  @ViewChild('recordsGlContainer', { static: false }) recordsGlContainer?: ElementRef<HTMLDivElement>;
 
   /**
    * Emitted when the first resource component finishes loading.
@@ -71,6 +79,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
   private pinService = inject(HomeAppPinService);
   private navigationService = inject(NavigationService);
+  private recordSwitcher = inject(RecordSwitcherService);
   private subscriptions: Subscription[] = [];
   private layoutInitRetryCount = 0;
   private readonly MAX_LAYOUT_INIT_RETRIES = 5;
@@ -79,6 +88,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
   // Track component references for cleanup (legacy - keep for backward compat during transition)
   private componentRefs = new Map<string, ComponentRef<BaseResourceComponent>>();
+  /** Pane-level origin crumbs, one per record pane (see RecordOriginCrumbComponent) */
+  private originCrumbRefs = new Map<string, ComponentRef<RecordOriginCrumbComponent>>();
 
   // Guard against concurrent loadTabContent calls for the same tab.
   // When a tab's content changes while active, both the reload path (workspace config subscription)
@@ -103,6 +114,401 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   contextMenuX = 0;
   contextMenuY = 0;
   contextMenuTabId: string | null = null;
+  /** The control that opened the context menu — focus returns here on close */
+  private contextMenuAnchor: HTMLElement | null = null;
+
+  // ---- RECORDS region (records-style record opens) ----
+  /**
+   * A SEPARATE Golden Layout instance hosting only record tabs. Instantiated
+   * directly (not DI) — GoldenLayoutManager has no constructor dependencies
+   * and the root-provided instance belongs to the MAIN region. Records get
+   * native GL tabs (close/drag-to-split/pin) without ever appearing in the
+   * main workspace's tab bar.
+   */
+  private recordsLayoutManager = new GoldenLayoutManager();
+  private recordsLayoutInitialized = false;
+  /** Last active tab id reported by the records GL (guards focus feedback loops) */
+  private recordsRegionActiveTabId: string | null = null;
+  /**
+   * True while records-GL tabs are being created/restored in a batch. GL
+   * fires an activation event for EVERY tab it creates; letting those write
+   * back into the workspace during init steals focus from the tab the user
+   * actually asked for (and persists junk layouts mid-build). Suppress both
+   * write-backs while set; the batch ends with one explicit focus.
+   */
+  private recordsCreatingTabs = false;
+
+  /** Shell mobile breakpoint (768px) — drives the records mobile surface */
+  private breakpoint = inject(ExplorerBreakpointService);
+  /**
+   * True while the records surface renders MOBILE chrome: strip hidden
+   * (headerless GL), record bar shown, splits flattened at render, layout
+   * persistence suppressed (see the LayoutChanged guard), move actions
+   * hidden. Mirrors the breakpoint; flips via rebuildRecordsLayoutForBreakpoint.
+   */
+  private mobileRecordsActive = this.breakpoint.IsMobile;
+  /**
+   * True only synchronously around Destroy() during a breakpoint-crossing
+   * rebuild. Destroy fires TabClosed for EVERY live pane; without this guard
+   * the records TabClosed handler would CloseTab each one — a crossing would
+   * close every open record. cleanupTabComponent still runs (the cache
+   * detach is what lets the re-init reattach content).
+   */
+  private recordsRebuilding = false;
+
+  /** True when the deployment runs the records-style record-open model */
+  public get RecordsStyleActive(): boolean {
+    return IsRecordTabsStyle();
+  }
+
+  /** Records surface is in mobile chrome (record bar instead of tab strip) */
+  public get IsMobileRecords(): boolean {
+    return this.RecordsStyleActive && this.mobileRecordsActive;
+  }
+
+  // ---- Mobile record bar state (computed by updateRecordSurfaceState) ----
+  /** Active record's title, entity icon, and app color for the mobile bar */
+  public RecordBarTitle = '';
+  public RecordBarIcon = 'fa-regular fa-file-lines';
+  public RecordBarColor = DEFAULT_APP_COLOR;
+  /**
+   * ALL open records — region AND docked — matching the switcher sheet's
+   * row count (docked/region composition is a desktop concept; on mobile
+   * they're one list).
+   */
+  public OpenRecordCount = 0;
+  /** Record switcher sheet visibility (mobile) */
+  public RecordSwitcherVisible = false;
+  /** Rows for the record switcher sheet (region + docked records, by sequence) */
+  public SwitcherEntries: RecordSwitcherEntry[] = [];
+
+  /** Open the record switcher sheet (record bar tap / drawer pill) */
+  public OpenRecordSwitcher(): void {
+    if (this.OpenRecordCount === 0) {
+      return;
+    }
+    this.RecordSwitcherVisible = true;
+    this.flushRegionCd();
+  }
+
+  /** Sheet row tapped: activate — same contract as the pill (sync drives GL focus) */
+  public OnSwitcherActivate(tabId: string): void {
+    this.RecordSwitcherVisible = false;
+    this.flushRegionCd();
+    // Guard against a stale row (SetActiveTab doesn't validate existence —
+    // stamping a closed tab's id would leave no resolvable active tab)
+    if (this.workspaceManager.GetTab(tabId)) {
+      this.workspaceManager.SetActiveTab(tabId);
+    }
+  }
+
+  /**
+   * Sheet row ✕: close the record through the SAME path as the tab context
+   * menu — GL RemoveTab → TabClosed handler (workspace bookkeeping, close
+   * guards, cache eviction all apply). The workspace-level fallback covers
+   * the edge where GL never held the tab (zero-height init refusal).
+   * The sheet stays open; entries recompute on the config emission.
+   */
+  public OnSwitcherClose(tabId: string): void {
+    const tab = this.workspaceManager.GetTab(tabId);
+    const manager = tab && this.isRecordTab(tab) ? this.recordsLayoutManager : this.layoutManager;
+    if (manager.GetContainer(tabId)) {
+      manager.RemoveTab(tabId);
+    } else if (tab) {
+      // GL never held this tab (e.g. docked record in single-resource mode) —
+      // run the same cleanup the GL close path does (cache detach, origin
+      // crumb destroy) or the crumb ComponentRef leaks in originCrumbRefs.
+      this.cleanupTabComponent(tabId);
+      this.workspaceManager.CloseTab(tabId);
+    }
+  }
+
+  public OnSwitcherVisibleChange(visible: boolean): void {
+    this.RecordSwitcherVisible = visible;
+  }
+
+  /**
+   * Recompute the mobile record-surface state (bar inputs + count) from a
+   * workspace configuration emission. Cheap and unconditional — the values
+   * only render while IsMobileRecords, but keeping them current at all
+   * widths makes the breakpoint flip instant.
+   */
+  private updateRecordSurfaceState(config: { tabs: WorkspaceTab[]; activeTabId: string | null }): void {
+    if (!this.RecordsStyleActive) {
+      return;
+    }
+    const previous = `${this.RecordBarTitle}|${this.RecordBarIcon}|${this.RecordBarColor}|${this.OpenRecordCount}`;
+    const allRecords = config.tabs
+      .filter(t => IsRecordsTabConfiguration(t.configuration))
+      .sort((a, b) => a.sequence - b.sequence);
+    this.OpenRecordCount = allRecords.length;
+    this.SwitcherEntries = allRecords.map(tab => this.buildSwitcherEntry(tab, config.activeTabId));
+    const activeTab = config.tabs.find(t => t.id === config.activeTabId);
+    if (activeTab && this.isRecordTab(activeTab)) {
+      const app = this.appManager.GetAppById(activeTab.applicationId);
+      this.RecordBarTitle = activeTab.title;
+      this.RecordBarIcon = ResolveRecordTypeIcon(activeTab.configuration, this.ProviderToUse);
+      this.RecordBarColor = app?.GetColor() || DEFAULT_APP_COLOR;
+    }
+    // If the active tab is NOT a region record the bar isn't visible (the
+    // records region is hidden) — stale bar values are harmless.
+    if (this.RecordSwitcherVisible && this.OpenRecordCount === 0) {
+      // Last record closed from the sheet — nothing left to switch to
+      this.RecordSwitcherVisible = false;
+    }
+    const current = `${this.RecordBarTitle}|${this.RecordBarIcon}|${this.RecordBarColor}|${this.OpenRecordCount}`;
+    // Always flush while the sheet is OPEN: its rows carry state the bar hash
+    // can't see (row titles, origins, IsActive) — an activation or async
+    // title change with identical bar values would otherwise render stale.
+    if (this.RecordSwitcherVisible || (this.mobileRecordsActive && current !== previous)) {
+      this.flushRegionCd();
+    }
+  }
+
+  /** One switcher sheet row: identity + origin subtitle (crumb semantics) */
+  private buildSwitcherEntry(tab: WorkspaceTab, activeTabId: string | null): RecordSwitcherEntry {
+    const app = this.appManager.GetAppById(tab.applicationId);
+    const origin = GetRecordSourceContext(tab.configuration);
+    const originLabel = origin
+      ? (origin.sourceLabel ?? ([origin.sourceAppName, origin.sourceNavLabel].filter(Boolean).join(' › ') || null))
+      : null;
+    return {
+      TabId: tab.id,
+      Title: tab.title,
+      Icon: ResolveRecordTypeIcon(tab.configuration, this.ProviderToUse),
+      Color: app?.GetColor() || DEFAULT_APP_COLOR,
+      OriginLabel: originLabel,
+      IsActive: tab.id === activeTabId
+    };
+  }
+
+  /** True while the RECORDS region is the visible surface (active tab is a record) */
+  public ShowRecordsRegion = false;
+
+
+  /**
+   * A tab belongs to the records REGION (not the main workspace layout).
+   * Records docked to the workspace ("Move to Workspace") fail this check —
+   * they are main-layout tabs everywhere this predicate gates.
+   */
+  private isRecordTab(tab: WorkspaceTab): boolean {
+    return this.RecordsStyleActive && IsRecordsRegionTab(tab.configuration);
+  }
+
+  /**
+   * Synchronous, exception-safe change-detection flush. Zoneless + OnPush
+   * ancestors make RxJS-driven mutations invisible until SOMETHING runs CD;
+   * detectChanges throws when a pass is already in flight, and an unguarded
+   * throw inside a promise/subscription silently kills the update (the
+   * original "clicked the pill, nothing happened for seconds" bug). markForCheck
+   * first so even the re-entrant case gets picked up by the in-flight pass.
+   */
+  private flushRegionCd(): void {
+    SafeDetectChanges(this.cdr);
+  }
+
+  /**
+   * Keep the RECORDS region in lockstep with the workspace configuration:
+   * resolve region visibility (active tab is a record), lazily initialize the
+   * records layout on first show (restoring the persisted records layout when
+   * it matches the tab set), add/remove record tabs, and focus the active one.
+   */
+  private syncRecordsRegion(config: { tabs: WorkspaceTab[]; activeTabId: string | null }): void {
+    if (!this.RecordsStyleActive) {
+      // Defense in depth: if the style ever resolves to classic AFTER a
+      // records-style pass set the flag (e.g. late instance-config load),
+      // un-hide the main region — otherwise it stays invisible forever.
+      if (this.ShowRecordsRegion) {
+        this.ShowRecordsRegion = false;
+        this.flushRegionCd();
+      }
+      return;
+    }
+    const recordTabs = config.tabs.filter(t => this.isRecordTab(t));
+    const activeTab = config.tabs.find(t => t.id === config.activeTabId);
+    const showing = !!activeTab && this.isRecordTab(activeTab);
+
+    // EAGER init + sync on EVERY emission. The region container always keeps
+    // its full layout box (visibility-hidden, never display:none — see the
+    // component CSS), so the records GL can initialize and reconcile even
+    // while the region isn't the visible surface. This is what keeps the
+    // strip, the pill, and the workspace from ever drifting apart: closed
+    // records leave the strip immediately, new ones appear immediately,
+    // whether or not the user is looking at the region.
+    if (!this.recordsLayoutInitialized && recordTabs.length > 0) {
+      this.ensureRecordsLayoutInitialized(recordTabs);
+    }
+    if (this.recordsLayoutInitialized) {
+      this.syncRecordsTabs(recordTabs);
+    }
+
+    if (showing !== this.ShowRecordsRegion) {
+      this.ShowRecordsRegion = showing;
+      // Flush NOW — the visibility class must land in this pass, not
+      // whenever the next unrelated emission happens to run CD.
+      this.flushRegionCd();
+    }
+
+    if (showing && activeTab && this.recordsLayoutInitialized) {
+      this.focusRecordsTab(activeTab.id);
+    }
+  }
+
+  /** Add/remove/style record tabs in the records GL to match the configuration */
+  private syncRecordsTabs(recordTabs: WorkspaceTab[]): void {
+    if (!this.recordsLayoutInitialized) {
+      return;
+    }
+    const existingIds = this.recordsLayoutManager.GetAllTabIds();
+    const configIds = recordTabs.map(t => t.id);
+    existingIds.forEach(id => {
+      if (!configIds.includes(id)) {
+        this.recordsLayoutManager.RemoveTab(id);
+      }
+    });
+    const toCreate = recordTabs.filter(t => !existingIds.includes(t.id));
+    if (toCreate.length > 0) {
+      this.recordsCreatingTabs = true;
+      try {
+        toCreate.forEach(tab => this.createRecordsRegionTab(tab));
+      } finally {
+        this.recordsCreatingTabs = false;
+      }
+    }
+    recordTabs.forEach(tab => {
+      if (existingIds.includes(tab.id)) {
+        const app = this.appManager.GetAppById(tab.applicationId);
+        this.recordsLayoutManager.UpdateTabStyle(tab.id, {
+          isPinned: tab.isPinned,
+          title: tab.title,
+          appColor: app?.GetColor() || DEFAULT_APP_COLOR,
+          typeIcon: this.resolveTabTypeIcon(tab)
+        });
+        // Origin can change on re-open re-capture — keep the pane crumb live
+        this.updateOriginCrumb(tab);
+      }
+    });
+  }
+
+  /** Focus a records-region tab without feeding back into SetActiveTab loops */
+  private focusRecordsTab(tabId: string): void {
+    if (this.recordsRegionActiveTabId !== tabId) {
+      this.recordsLayoutManager.FocusTab(tabId);
+    }
+  }
+
+  /**
+   * Initialize the records Golden Layout as soon as record tabs exist —
+   * EAGERLY, whether or not the region is visible (its container always has
+   * a full layout box). Restores the persisted records layout when its
+   * component count matches the current record-tab set; otherwise builds
+   * tabs fresh. Creation/restore runs with activation write-backs
+   * suppressed (see recordsCreatingTabs).
+   */
+  private ensureRecordsLayoutInitialized(recordTabs: WorkspaceTab[]): void {
+    if (this.recordsLayoutInitialized) {
+      return;
+    }
+    const container = this.recordsGlContainer?.nativeElement;
+    if (!container) {
+      return; // Template not settled yet — the next sync pass retries
+    }
+    // NEVER initialize GL inside a zero-size (hidden) container — it bakes a
+    // 0x0 internal size into every stack it later creates and the region
+    // renders collapsed forever. Happens when the region flip is reverted
+    // (activation stolen) before this deferred init runs; staying
+    // uninitialized is safe — the next real show retries.
+    if (container.getBoundingClientRect().height === 0) {
+      return;
+    }
+    // Mobile: headerless GL — the record bar replaces the strip
+    this.recordsLayoutManager.Initialize(container, { HideHeaders: this.mobileRecordsActive });
+    this.recordsLayoutInitialized = true;
+
+    this.recordsCreatingTabs = true;
+    try {
+      const config = this.workspaceManager.GetConfiguration();
+      const savedLayout = config?.recordsLayout;
+      // Mobile renders the persisted layout FLATTENED to one stack — a clone;
+      // the persisted recordsLayout is never touched (and never written back
+      // while mobile — see the LayoutChanged guard). Flattening preserves
+      // components, so the restore gate below is unaffected.
+      const layoutToLoad = this.mobileRecordsActive ? FlattenLayoutToSingleStack(savedLayout) : savedLayout;
+      // Restore gate: the persisted layout must cover EXACTLY the current tab
+      // set — identity, not count. Counts can match while identities diverge
+      // (open one + close one during a persistence-suppressed mobile session);
+      // loading such a layout would render a ghost pane for a closed record.
+      if (layoutToLoad?.root && recordTabs.length > 0 && this.layoutCoversExactTabSet(layoutToLoad.root, recordTabs)) {
+        if (this.recordsLayoutManager.LoadLayout(layoutToLoad)) {
+          return;
+        }
+      }
+      // No (or mismatched) saved layout — create record tabs fresh
+      [...recordTabs]
+        .sort((a, b) => a.sequence - b.sequence)
+        .forEach(tab => this.createRecordsRegionTab(tab));
+    } finally {
+      this.recordsCreatingTabs = false;
+    }
+  }
+
+  /**
+   * Breakpoint crossing: tear the records GL down and let the next sync pass
+   * rebuild it in the other chrome mode (mobile: headerless + flattened;
+   * desktop: full strip + restored splits). The teardown runs under
+   * recordsRebuilding — Destroy() fires TabClosed per pane, and without the
+   * guard those events would CloseTab every open record (see the guard's
+   * field comment). Content survives via the component cache: cleanup
+   * detaches each pane's component, and the re-init's first-show reattaches.
+   */
+  private rebuildRecordsLayoutForBreakpoint(): void {
+    // The switcher sheet is MOBILE chrome — never let it survive a crossing
+    // (it would overlay the desktop UI and its entries stop re-rendering)
+    this.RecordSwitcherVisible = false;
+    // Template state first (bar/strip @if flips, region height settles)
+    this.flushRegionCd();
+    if (!this.recordsLayoutInitialized) {
+      return; // GL not built yet — the next sync initializes in the new mode
+    }
+    this.recordsRebuilding = true;
+    try {
+      this.recordsLayoutManager.Destroy();
+    } finally {
+      // ALL teardown state resets live in the finally: if Destroy() throws
+      // mid-walk, leaving recordsLayoutInitialized=true over a half-destroyed
+      // GL would corrupt every subsequent sync pass.
+      this.recordsRebuilding = false;
+      this.recordsLayoutInitialized = false;
+      this.recordsRegionActiveTabId = null;
+    }
+    // Defer re-init one macrotask so the flipped template has painted and
+    // the GL container has its final (bar-adjusted) height before Initialize
+    // measures it — same reason handleTabBarVisibilityChange defers.
+    setTimeout(() => {
+      const config = this.workspaceManager.GetConfiguration();
+      if (config) {
+        this.syncRecordsRegion(config);
+      }
+    }, 0);
+  }
+
+  /** Create a record tab in the RECORDS layout (mirror of createTab for main) */
+  private createRecordsRegionTab(tab: WorkspaceTab): void {
+    const app = this.appManager.GetAppById(tab.applicationId);
+    const state: TabComponentState = {
+      tabId: tab.id,
+      appId: tab.applicationId,
+      appColor: app?.GetColor() || DEFAULT_APP_COLOR,
+      title: tab.title,
+      route: tab.configuration['route'] as string || '',
+      isPinned: tab.isPinned,
+      isLoaded: false,
+      typeIcon: this.resolveTabTypeIcon(tab)
+    };
+    this.recordsLayoutManager.AddTab(state);
+    this.updateTabDisplayName(tab);
+  }
+
 
   constructor(
     private layoutManager: GoldenLayoutManager,
@@ -125,6 +531,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       }),
       this.layoutManager.TabClosed.subscribe(tabId => {
         this.cleanupTabComponent(tabId);
+        // DEMOTE guard ("Move to Records"): the tab was removed from the
+        // main GL because its region membership changed — it's still in the
+        // workspace config and the records region is about to pick it up.
+        // Closing it here would destroy the tab the user asked to keep.
+        // cleanupTabComponent above still runs: the cache detach is what
+        // lets the records GL reattach the component with state intact.
+        const movedTab = this.workspaceManager.GetTab(tabId);
+        if (movedTab && this.isRecordTab(movedTab)) {
+          return;
+        }
         this.workspaceManager.CloseTab(tabId);
       }),
       this.layoutManager.LayoutChanged.subscribe(event => {
@@ -140,19 +556,59 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         this.workspaceManager.TogglePin(tabId);
       }),
       this.layoutManager.TabRightClicked.subscribe(event => {
-        this.showContextMenu(event.x, event.y, event.tabId);
+        this.showContextMenu(event.x, event.y, event.tabId, event.anchorEl);
       })
     );
 
-    // Subscribe to configuration changes to sync tabs
+    this.wireRecordsLayoutEvents();
+
+    // Breakpoint crossings rebuild the records GL in the other chrome mode
+    // (headerless+flattened vs full strip+splits). Skip-if-equal: the
+    // BehaviorSubject replays the current value on subscribe.
+    this.subscriptions.push(
+      this.breakpoint.IsMobile$.subscribe(isMobile => {
+        // Exception-guarded like the Configuration subscription: a throw from
+        // one crossing (e.g. a cached component's ngOnDestroy during the GL
+        // teardown) would otherwise unsubscribe the stream permanently and
+        // brick breakpoint handling until reload.
+        try {
+          if (isMobile === this.mobileRecordsActive) {
+            return;
+          }
+          this.mobileRecordsActive = isMobile;
+          this.rebuildRecordsLayoutForBreakpoint();
+        } catch (err) {
+          LogError(err);
+        }
+      }),
+      // Open requests from surfaces outside this component (drawer pill)
+      this.recordSwitcher.OpenRequested.subscribe(() => {
+        this.OpenRecordSwitcher();
+      })
+    );
+
+    // Subscribe to configuration changes to sync tabs.
+    // The callback is exception-guarded: an error thrown from ONE emission
+    // would otherwise unsubscribe the stream permanently — after which the
+    // regions silently stop tracking the workspace (tabs drift, content
+    // stops loading) with no visible failure.
     this.subscriptions.push(
       this.workspaceManager.Configuration.subscribe(config => {
+        try {
         if (config) {
+          // Keep the RECORDS region in sync first — it also resolves whether
+          // the region is the visible surface for this configuration.
+          this.syncRecordsRegion(config);
+          this.updateRecordSurfaceState(config);
+
           if (this.useSingleResourceMode) {
             // In single-resource mode, reload content if the tab content changed
             // The same tab ID can have different content (tab gets reused)
             const activeTab = config.tabs.find(t => t.id === config.activeTabId) || config.tabs[0];
-            if (activeTab) {
+            if (activeTab && this.isRecordTab(activeTab)) {
+              // Active tab is a RECORD — the records region owns it. Leave the
+              // main region's content (the last nav page) untouched behind it.
+            } else if (activeTab) {
               const signature = this.getTabContentSignature(activeTab);
               if (signature !== this.currentSingleResourceSignature) {
                 // DO NOT call saveCurrentComponentQueryParams() here — by the time this
@@ -167,11 +623,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
               }
             }
           } else if (this.layoutRestorationComplete && !this.isCreatingInitialTabs) {
-            // In multi-tab mode, sync with Golden Layout
+            // In multi-tab mode, sync with Golden Layout.
+            // Record tabs live in the records region — never in the main layout.
             // IMPORTANT: Only sync AFTER layout restoration is complete to avoid creating duplicate tabs
             // layoutRestorationComplete is set to true only after initializeGoldenLayout finishes
-            this.syncTabsWithConfiguration(config.tabs);
+            this.syncTabsWithConfiguration(config.tabs.filter(t => !this.isRecordTab(t)));
           }
+        }
+        } catch (err) {
+          // Never let one bad emission kill the stream — see comment above.
+          LogError(err);
         }
       })
     );
@@ -180,6 +641,90 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     this.subscriptions.push(
       this.workspaceManager.TabBarVisible.subscribe(tabBarVisible => {
         this.handleTabBarVisibilityChange(tabBarVisible);
+      })
+    );
+  }
+
+
+  /**
+   * RECORDS region event wiring: the separate layout's events route through
+   * the SAME handlers as the main layout — content loading, close, pin, and
+   * context menu are layout-agnostic; only layout persistence targets its
+   * own slot. Activation + persistence write-backs are suppressed during
+   * batch creation/restore (recordsCreatingTabs) so GL's per-tab-created
+   * events can't steal focus or persist half-built layouts.
+   */
+  private wireRecordsLayoutEvents(): void {
+    this.subscriptions.push(
+      this.recordsLayoutManager.TabShown.subscribe(async event => {
+        if (event.isFirstShow) {
+          await this.loadTabContent(event.tabId, event.container);
+          // Mark loaded ONLY when content actually attached to the LIVE
+          // container. During layout restore, GL can re-render item elements
+          // while an async load is in flight — the load appends into a
+          // detached element and the visible pane stays blank. Leaving the
+          // tab unmarked lets the next show retry, which hits the component
+          // cache and reattaches instantly into the live element.
+          const live = this.recordsLayoutManager.GetContainer(event.tabId);
+          if (live?.element && live.element.childElementCount > 0) {
+            this.recordsLayoutManager.MarkTabLoaded(event.tabId);
+          }
+        }
+      }),
+      this.recordsLayoutManager.TabClosed.subscribe(async tabId => {
+        this.cleanupTabComponent(tabId);
+        // REBUILD guard (breakpoint crossing): Destroy() fires TabClosed for
+        // every pane. The tabs are NOT closing — the layout is being rebuilt
+        // in the other chrome mode. Cache detach above is exactly what the
+        // re-init needs; everything below (CloseTab, backfill) must not run.
+        if (this.recordsRebuilding) {
+          return;
+        }
+        const closedTab = this.workspaceManager.GetTab(tabId);
+        // PROMOTE guard ("Move to Workspace"): the tab left the records GL
+        // because its region membership changed — it's still in the
+        // workspace config and the MAIN layout is about to pick it up.
+        // Closing it here would destroy the tab the user just promoted.
+        // cleanupTabComponent above still runs: the cache detach is what
+        // lets the main GL reattach the component with state intact.
+        if (closedTab && !this.isRecordTab(closedTab)) {
+          return;
+        }
+        // Guard: a configuration sync that removed this tab already updated
+        // the workspace — closing again would re-emit an unchanged config
+        // from inside a subscription pass.
+        if (closedTab) {
+          this.workspaceManager.CloseTab(tabId);
+        }
+        // Records close OUTRIGHT (no keep-last-tab-alive rule) — if that
+        // emptied the workspace, land the user on the active app's default
+        // tab instead of a blank shell.
+        await this.backfillEmptyWorkspace();
+      }),
+      this.recordsLayoutManager.ActiveTab.subscribe(tabId => {
+        this.recordsRegionActiveTabId = tabId;
+        if (tabId && this.ShowRecordsRegion && !this.recordsCreatingTabs && !this.recordsRebuilding) {
+          this.workspaceManager.SetActiveTab(tabId);
+        }
+      }),
+      this.recordsLayoutManager.LayoutChanged.subscribe(() => {
+        // MOBILE suppression: the mobile surface renders a FLATTENED clone of
+        // the persisted layout — persisting it would destroy the user's
+        // desktop splits (GL fires stateChanged on load/resize/tab ops, so
+        // the clobber would land within the 500ms persist debounce of the
+        // first mobile render). While suppressed, tab opens/closes still
+        // persist via the tab LIST; on the next desktop init a changed tab
+        // count hits the existing count-mismatch restore path (fresh
+        // sequential creation — splits lost gracefully, records kept).
+        if (this.recordsLayoutInitialized && !this.recordsCreatingTabs && !this.recordsRebuilding && !this.mobileRecordsActive) {
+          this.workspaceManager.UpdateRecordsLayout(this.recordsLayoutManager.SaveLayout());
+        }
+      }),
+      this.recordsLayoutManager.TabDoubleClicked.subscribe(tabId => {
+        this.workspaceManager.TogglePin(tabId);
+      }),
+      this.recordsLayoutManager.TabRightClicked.subscribe(event => {
+        this.showContextMenu(event.x, event.y, event.tabId, event.anchorEl);
       })
     );
   }
@@ -228,7 +773,13 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // If not, wait for it to be loaded before proceeding
     const config = this.workspaceManager.GetConfiguration();
     if (!config) {
-      // Configuration not loaded yet - wait for it
+      // Configuration not loaded yet — wait for it. TRACKED in
+      // this.subscriptions: the sub normally retires itself on the first
+      // non-null config, but if the component is destroyed while config is
+      // still null (failed load, fast navigation away), an untracked sub
+      // would outlive us and re-init a destroyed component when config
+      // finally lands. Unsubscribe is idempotent — self-retire + ngOnDestroy
+      // both firing is safe.
       const configSub = this.workspaceManager.Configuration.subscribe(loadedConfig => {
         if (loadedConfig) {
           configSub.unsubscribe();
@@ -236,6 +787,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           this.initializeGoldenLayout(forceCreateTabs);
         }
       });
+      this.subscriptions.push(configSub);
       return;
     }
 
@@ -245,8 +797,12 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // Mark layout as initialized
     this.layoutInitialized = true;
 
+    // The MAIN layout hosts only non-record tabs — record tabs live in the
+    // separate records region (no-op filter under classic style).
+    const mainTabs = config.tabs.filter(t => !this.isRecordTab(t));
+
     // Check if config has no tabs
-    if (config.tabs.length === 0) {
+    if (mainTabs.length === 0) {
       // No tabs to load, but mark restoration as complete
       this.layoutRestorationComplete = true;
       return;
@@ -258,8 +814,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     if (hasSavedLayout && !forceCreateTabs && config.layout) {
       // VALIDATE: Check that layout component count matches tabs array count
       const layoutComponentCount = this.countLayoutComponents(config.layout.root);
-      if (layoutComponentCount !== config.tabs.length) {
-        console.warn(`[TabContainer.initializeGoldenLayout] Layout/tabs mismatch: layout has ${layoutComponentCount} components but tabs array has ${config.tabs.length} tabs. Clearing layout.`);
+      if (layoutComponentCount !== mainTabs.length) {
+        console.warn(`[TabContainer.initializeGoldenLayout] Layout/tabs mismatch: layout has ${layoutComponentCount} components but tabs array has ${mainTabs.length} tabs. Clearing layout.`);
         this.workspaceManager.ClearLayout();
         // Fall through to create fresh tabs
       } else {
@@ -291,8 +847,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     }
 
     // CREATE FRESH - no saved layout, forceCreateTabs=true, or layout load failed
-    // Use config.tabs sorted by sequence to build a simple single-stack layout
-    const sortedTabs = [...config.tabs].sort((a, b) => a.sequence - b.sequence);
+    // Use the main (non-record) tabs sorted by sequence for a single-stack layout
+    const sortedTabs = [...mainTabs].sort((a, b) => a.sequence - b.sequence);
 
     this.isCreatingInitialTabs = true;
     try {
@@ -372,10 +928,64 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         }
       }
     }
+
+    // The RECORDS region is a separate layout with the same destroyed-cache
+    // problem — sweep it in BOTH main modes or every record pane stays
+    // permanently blank after a tenant switch (marked loaded, component gone).
+    await this.reloadRecordsRegionTabs();
+  }
+
+  /** Mark all records-region tabs not-loaded and reload the active one (tenant switch) */
+  private async reloadRecordsRegionTabs(): Promise<void> {
+    if (!this.recordsLayoutInitialized) {
+      return;
+    }
+    for (const tabId of this.recordsLayoutManager.GetAllTabIds()) {
+      this.recordsLayoutManager.MarkTabNotLoaded(tabId);
+    }
+    const activeTabId = this.workspaceManager.GetActiveTabId();
+    const activeTab = activeTabId ? this.workspaceManager.GetTab(activeTabId) : undefined;
+    if (activeTab && this.isRecordTab(activeTab)) {
+      const container = this.recordsLayoutManager.GetContainer(activeTab.id);
+      if (container) {
+        await this.loadTabContent(activeTab.id, container);
+        this.recordsLayoutManager.MarkTabLoaded(activeTab.id);
+      }
+    }
+  }
+
+  /**
+   * If the workspace has no tabs left (closing the last record empties it —
+   * records skip the manager's keep-last-tab-alive rule), open the active
+   * app's default tab so the user lands on a meaningful surface.
+   */
+  private async backfillEmptyWorkspace(): Promise<void> {
+    const config = this.workspaceManager.GetConfiguration();
+    if (!config || config.tabs.length > 0) {
+      return;
+    }
+    const app = this.appManager.GetActiveApp();
+    if (!app) {
+      return;
+    }
+    const request = await app.CreateDefaultTab();
+    if (request) {
+      this.workspaceManager.OpenTab(request, app.GetColor());
+    }
   }
 
   ngOnDestroy(): void {
+    // Pane crumbs are appRef-attached views — destroy them or they stay in
+    // every CD pass after the container is gone (logout/tenant teardown).
+    this.originCrumbRefs.forEach(ref => ref.destroy());
+    this.originCrumbRefs.clear();
     this.subscriptions.forEach(sub => sub.unsubscribe());
+
+    // Tear down the records region's layout
+    if (this.recordsLayoutInitialized) {
+      this.recordsLayoutManager.Destroy();
+      this.recordsLayoutInitialized = false;
+    }
 
     // Cleanup single-resource mode component if exists
     this.cleanupSingleResourceComponent();
@@ -450,8 +1060,11 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           // All OTHER unpinned tabs should be pinned since they represent content
           // the user explicitly kept open
           const updatedTabs = config.tabs.map(tab => {
-            // Pin all tabs except the newly active one (which is the temporary tab)
-            if (tab.id !== config.activeTabId && !tab.isPinned) {
+            // Pin all MAIN-layout tabs except the newly active one (which is
+            // the temporary tab). Record tabs are exempt — their pin state is
+            // user-owned (PreservePinState), and force-pinning them makes the
+            // temp-tab semantics path-dependent.
+            if (tab.id !== config.activeTabId && !tab.isPinned && !this.isRecordTab(tab)) {
               return { ...tab, isPinned: true };
             }
             return tab;
@@ -501,7 +1114,20 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     }
 
     // Get the active tab (or first tab)
-    const activeTab = config.tabs.find(t => t.id === config.activeTabId) || config.tabs[0];
+    let activeTab = config.tabs.find(t => t.id === config.activeTabId) || config.tabs[0];
+
+    // Records style: record tabs render in the RECORDS region, never here.
+    // When the active tab is a record (e.g. reloading the app while viewing
+    // one), the main region shows the most recently used NAV tab behind it.
+    if (activeTab && this.isRecordTab(activeTab)) {
+      const navTabs = config.tabs.filter(t => !this.isRecordTab(t));
+      activeTab = [...navTabs].sort((a, b) => (b.lastAccessedAt || '').localeCompare(a.lastAccessedAt || ''))[0];
+      if (!activeTab) {
+        // Only record tabs exist — the records region owns first-load
+        return;
+      }
+    }
+
     if (!activeTab) {
       // Config has tabs but none match activeTabId and the array fallback failed.
       // This shouldn't happen, but if it does, unblock the loading screen.
@@ -564,8 +1190,15 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         cacheDiscriminator
       );
 
+      // Record panes lead with their origin crumb
+      this.ensureRecordOriginCrumb(activeTab, container);
+
+      // Re-home the component's tab binding (see loadTabContent's cached
+      // branch — same cross-tab reattach hazard).
+      (cached.componentRef.instance as BaseResourceComponent).RebindTabId(activeTab.id);
+
       // Reattach the cached wrapper element to single-resource container
-      cached.wrapperElement.style.height = "100%"; // Ensure full height
+      // (sizing via the pane-layout CSS: crumb fixed, content flex-fills)
       container.appendChild(cached.wrapperElement);
 
       // Store reference and identity for cleanup/detachment
@@ -649,12 +1282,15 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // Guard: only update the title if THIS component is the currently displayed one.
     // Without this guard, cached components (detached but alive) can fire this callback
     // and overwrite the active tab's title with a stale name.
+    // CRITICAL: rename the tab this component was RENDERED FOR — never
+    // GetActiveTabId(). Under the records style the active tab can be a
+    // record (region showing) while the main region keeps a SUBSTITUTE nav
+    // component alive underneath; its emission was renaming the user's
+    // record tab (an Action Params record ended up titled "Data").
+    const renderedTabId = activeTab.id;
     instance.DisplayNameChangedEvent = (newName: string) => {
       if (this.singleResourceComponentRef?.instance === instance) {
-        const tabId = this.workspaceManager.GetActiveTabId();
-        if (tabId) {
-          this.workspaceManager.UpdateTabTitle(tabId, newName);
-        }
+        this.workspaceManager.UpdateTabTitle(renderedTabId, newName);
       }
     };
 
@@ -671,13 +1307,13 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       this.handleResourceCloseRequested(activeTab.id, instance);
     };
 
+    // Record panes lead with their origin crumb
+    this.ensureRecordOriginCrumb(activeTab, container);
+
     // Get the native element and append to container
+    // (sizing via the pane-layout CSS: crumb fixed, content flex-fills)
     const nativeElement = (componentRef.hostView as unknown as { rootNodes: HTMLElement[] }).rootNodes[0];
     container.appendChild(nativeElement);
-    // now make sure that the container's direct child is 100% height
-    if (container.children?.length > 0) {
-      (container.children[0] as any).style.height = "100%";
-    }
 
     // Cache the component for reuse when switching between nav items within the same app.
     // Without this, every nav switch creates a brand new component from scratch.
@@ -970,13 +1606,59 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       title: tab.title,
       route: tab.configuration['route'] as string || '',
       isPinned: tab.isPinned,
-      isLoaded: false
+      isLoaded: false,
+      typeIcon: this.resolveTabTypeIcon(tab)
     };
 
     this.layoutManager.AddTab(state);
 
+    // Nav-item icons live behind an async lookup — upgrade in the background
+    void this.upgradeNavTabIcon(tab, this.layoutManager);
+
     // Load display name in background without loading full component
     this.updateTabDisplayName(tab);
+  }
+
+  /**
+   * Synchronous best-effort TYPE icon for a tab (the app-colored icon in
+   * the tab's type slot — see TabComponentState.typeIcon). Record tabs
+   * resolve fully here (entity metadata is loaded); nav tabs start with the
+   * app's icon and get upgraded to the nav item's own icon asynchronously
+   * (upgradeNavTabIcon).
+   */
+  private resolveTabTypeIcon(tab: WorkspaceTab): string {
+    if (IsRecordsTabConfiguration(tab.configuration)) {
+      // Shared helper — the record bar and switcher sheet resolve through the
+      // same function so a record shows one icon everywhere
+      return ResolveRecordTypeIcon(tab.configuration, this.ProviderToUse);
+    }
+    const app = this.appManager.GetAppById(tab.applicationId);
+    return app?.Icon || 'fa-regular fa-file';
+  }
+
+  /**
+   * Resolve and apply a NAV tab's type icon — the async owner of nav-tab
+   * icons (GetNavItems is a cached JSON parse: near-instant, but async by
+   * contract). Ladder: nav item's own icon → app icon → generic. No-op for
+   * record tabs (their icons resolve synchronously). Idempotent: the slot
+   * only touches the DOM when the class actually changes.
+   */
+  private async upgradeNavTabIcon(tab: WorkspaceTab, manager: GoldenLayoutManager): Promise<void> {
+    if (IsRecordsTabConfiguration(tab.configuration)) {
+      return;
+    }
+    const app = this.appManager.GetAppById(tab.applicationId);
+    let navItemIcon: string | undefined;
+    const navItemName = tab.configuration?.['navItemName'];
+    if (app && typeof navItemName === 'string' && navItemName) {
+      try {
+        const navItems = await app.GetNavItems();
+        navItemIcon = navItems.find(i => i.Label === navItemName)?.Icon;
+      } catch {
+        // Icon resolution is cosmetic — fall through to the app fallback.
+      }
+    }
+    manager.UpdateTabStyle(tab.id, { typeIcon: navItemIcon || app?.Icon || 'fa-regular fa-file' });
   }
 
   /**
@@ -1030,6 +1712,10 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       // Clear any existing content from the container (important for tab reuse)
       glContainer.element.innerHTML = '';
 
+      // Record panes lead with their origin crumb — BEFORE content attaches
+      // (fresh or cached), so it is always the pane's first element.
+      this.ensureRecordOriginCrumb(tab, glContainer.element);
+
       // Get driver class for cache lookup (resolves to actual component class name)
       const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
       // Discriminate distinct "new record" tabs of different entities (all have empty
@@ -1056,6 +1742,13 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           tabId,
           cacheDiscriminator
         );
+
+        // RE-HOME the component's tab binding: the cache keys on
+        // driver+record+app, so this component may have been born under a
+        // DIFFERENT tab id — without the rebind its query-param
+        // subscription listens to the dead tab forever and deliveries to
+        // this tab are lost.
+        (cached.componentRef.instance as BaseResourceComponent).RebindTabId(tabId);
 
         // Keep legacy componentRefs map updated
         this.componentRefs.set(tabId, cached.componentRef);
@@ -1119,9 +1812,12 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         this.handleResourceCloseRequested(tabId, instance);
       };
 
-      // Wire up display name change notifications
+      // Wire up display name change notifications (routed to whichever
+      // Golden Layout hosts this tab)
       instance.DisplayNameChangedEvent = (newName: string) => {
-        this.layoutManager.UpdateTabStyle(tabId, { title: newName });
+        const t = this.workspaceManager.GetTab(tabId);
+        const manager = t && this.isRecordTab(t) ? this.recordsLayoutManager : this.layoutManager;
+        manager.UpdateTabStyle(tabId, { title: newName });
         this.workspaceManager.UpdateTabTitle(tabId, newName);
       };
 
@@ -1149,7 +1845,17 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       this.componentRefs.set(tabId, componentRef as ComponentRef<BaseResourceComponent>);
 
     } catch (e) {
+      // A tab whose resource can't resolve (e.g. a persisted tab referencing an
+      // unknown ResourceType) must NEVER brick the shell: log, signal load-complete
+      // so the boot loading screen clears, and close the poisoned tab so it doesn't
+      // re-fail on every boot from restored workspace state.
       LogError(e);
+      this.emitFirstLoadCompleteOnce();
+      try {
+        this.workspaceManager.CloseTab(tabId);
+      } catch {
+        // best-effort — leaving the tab is still recoverable via manual close
+      }
     } finally {
       this.tabsCurrentlyLoading.delete(tabId);
     }
@@ -1194,8 +1900,9 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       const displayName = await tempInstance.GetResourceDisplayName(resourceData);
 
       if (displayName && displayName !== tab.title) {
-        // Update the tab title in Golden Layout
-        this.layoutManager.UpdateTabStyle(tab.id, { title: displayName });
+        // Update the tab title in whichever Golden Layout hosts this tab
+        const targetManager = this.isRecordTab(tab) ? this.recordsLayoutManager : this.layoutManager;
+        targetManager.UpdateTabStyle(tab.id, { title: displayName });
 
         // Update the tab title in workspace configuration for persistence
         this.workspaceManager.UpdateTabTitle(tab.id, displayName);
@@ -1305,8 +2012,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // The engine loads ResourceTypes during startup and keeps them in memory.
     const resourceTypes = ResourcePermissionEngine.Instance.ResourceTypes;
     if (resourceTypes && resourceTypes.length > 0) {
-      const rt = resourceTypes.find(rt => rt.Name.trim().toLowerCase() === resourceType.trim().toLowerCase());
-      return rt || null;
+      return TabContainerComponent.findResourceTypeTolerant(resourceTypes, resourceType);
     }
 
     // Fallback: if engine hasn't loaded yet (shouldn't happen in normal flow),
@@ -1323,11 +2029,24 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
     const result = ds.Results.find(r => r.Code.trim().toLowerCase() === 'resourcetypes');
     if (result && result.Results?.length > 0) {
-      const rt = result.Results.find(rt => rt.Name.trim().toLowerCase() === resourceType.trim().toLowerCase()) as MJResourceTypeEntity;
-      return rt || null;
+      return TabContainerComponent.findResourceTypeTolerant(result.Results as MJResourceTypeEntity[], resourceType);
     }
 
     return null;
+  }
+
+  /**
+   * Resolve a resource type BY NAME, tolerant of the 'MJ: ' prefix in EITHER
+   * direction — core ResourceType rows predate the prefix convention ('User Views'),
+   * while newer callers may pass 'MJ: User Views' (and vice versa). Exact match wins;
+   * prefix-normalized is the fallback, so historical and prefixed names both resolve.
+   */
+  private static findResourceTypeTolerant(rows: MJResourceTypeEntity[], resourceType: string): MJResourceTypeEntity | null {
+    const wanted = resourceType.trim().toLowerCase();
+    const normalize = (name: string) => name.trim().toLowerCase().replace(/^mj:\s*/, '');
+    return rows.find(r => r.Name.trim().toLowerCase() === wanted)
+      ?? rows.find(r => normalize(r.Name) === normalize(wanted))
+      ?? null;
   }
 
   private async getResourceTypeId(resourceType: string): Promise<string> {
@@ -1396,10 +2115,100 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
+   * A saved records layout is restorable only when its component tabIds are
+   * EXACTLY the current record-tab set. Count equality is not enough: a
+   * persistence-suppressed mobile session can open one record and close
+   * another, leaving a same-sized layout that references a closed tab —
+   * restoring it renders a ghost pane (content load fails) until the next
+   * sync sweeps it.
+   */
+  private layoutCoversExactTabSet(root: LayoutNode, recordTabs: WorkspaceTab[]): boolean {
+    const layoutIds = new Set<string>();
+    const collect = (node: LayoutNode | undefined): void => {
+      if (!node) {
+        return;
+      }
+      if (node.type === 'component') {
+        const id = node.componentState?.['tabId'];
+        if (typeof id === 'string') {
+          layoutIds.add(id);
+        }
+        return;
+      }
+      node.content?.forEach(collect);
+    };
+    collect(root);
+    return layoutIds.size === recordTabs.length && recordTabs.every(t => layoutIds.has(t.id));
+  }
+
+  /**
    * Cleanup a tab's component
    * Detaches from DOM but keeps in cache for potential reuse
    */
+  /**
+   * Ensure a record pane's FIRST element is its origin crumb (Matt's
+   * pane-level placement — correct in splits, docked panes, and
+   * single-resource, unlike the old region-level bar). Recreated on every
+   * content attach: the pane container is cleared/re-homed on loads,
+   * cache reattaches, and promote/demote moves.
+   */
+  private ensureRecordOriginCrumb(tab: WorkspaceTab, containerEl: HTMLElement): void {
+    this.destroyOriginCrumb(tab.id);
+    // The single-resource container is REUSED across tabs — sweep any crumb
+    // element a previous tab left behind before (maybe) adding ours.
+    containerEl.querySelectorAll('mj-record-origin-crumb').forEach(e => e.remove());
+    if (!this.RecordsStyleActive || !IsRecordsTabConfiguration(tab.configuration)) {
+      return;
+    }
+    const origin = GetRecordSourceContext(tab.configuration);
+    if (!origin) {
+      return; // No captured origin (deep link, history re-open) — no crumb.
+    }
+    const ref = createComponent(RecordOriginCrumbComponent, {
+      environmentInjector: this.environmentInjector
+    });
+    ref.setInput('Origin', origin);
+    this.appRef.attachView(ref.hostView);
+    const el = (ref.hostView as unknown as { rootNodes: HTMLElement[] }).rootNodes[0];
+    containerEl.insertBefore(el, containerEl.firstChild);
+    this.originCrumbRefs.set(tab.id, ref);
+  }
+
+  /**
+   * Refresh a pane crumb's origin after a config change (re-open
+   * re-capture). Also handles the CREATE case: a record first opened
+   * WITHOUT an origin (deep link, history recreate) whose re-open just
+   * captured one — the pane is already attached, so ensureRecordOriginCrumb
+   * never runs again; build the crumb into the live pane here.
+   */
+  private updateOriginCrumb(tab: WorkspaceTab): void {
+    const ref = this.originCrumbRefs.get(tab.id);
+    const origin = GetRecordSourceContext(tab.configuration);
+    if (ref) {
+      ref.setInput('Origin', origin);
+      return;
+    }
+    if (origin && this.RecordsStyleActive && IsRecordsTabConfiguration(tab.configuration)) {
+      const paneEl = this.recordsLayoutManager.GetContainer(tab.id)?.element
+        ?? this.layoutManager.GetContainer(tab.id)?.element;
+      if (paneEl && paneEl.childElementCount > 0) {
+        this.ensureRecordOriginCrumb(tab, paneEl);
+      }
+    }
+  }
+
+  private destroyOriginCrumb(tabId: string): void {
+    const ref = this.originCrumbRefs.get(tabId);
+    if (ref) {
+      ref.destroy();
+      this.originCrumbRefs.delete(tabId);
+    }
+  }
+
   private cleanupTabComponent(tabId: string): void {
+    // The pane crumb belongs to the pane, not the cached component — always
+    // destroyed here; the next attach recreates it in the new pane.
+    this.destroyOriginCrumb(tabId);
     // First, try to detach from cache (preserves component for reuse)
     const cachedInfo = this.cacheManager.findAndDetachByTabId(tabId);
 
@@ -1489,13 +2298,24 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           }
         }
 
-        // Update styling for existing tabs
+        // Update styling for existing tabs. typeIcon ownership is split:
+        // record tabs resolve synchronously here; NAV tab icons are owned
+        // by upgradeNavTabIcon (async ladder) — setting the sync fallback
+        // here too would downgrade an upgraded icon every emission and
+        // flicker. Restored nav tabs never pass through createTab, so the
+        // upgrade call here is also their FIRST icon application.
         const app = this.appManager.GetAppById(tab.applicationId);
-        this.layoutManager.UpdateTabStyle(tab.id, {
+        const styleUpdate: Partial<TabComponentState> = {
           isPinned: tab.isPinned,
           title: tab.title,
-          appColor: app?.GetColor() || '#757575'
-        });
+          appColor: app?.GetColor() || DEFAULT_APP_COLOR
+        };
+        if (IsRecordsTabConfiguration(tab.configuration)) {
+          styleUpdate.typeIcon = this.resolveTabTypeIcon(tab);
+        }
+        this.layoutManager.UpdateTabStyle(tab.id, styleUpdate);
+        void this.upgradeNavTabIcon(tab, this.layoutManager);
+        this.updateOriginCrumb(tab);
       }
     });
 
@@ -1510,42 +2330,118 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   /**
    * Show context menu
    */
-  showContextMenu(x: number, y: number, tabId: string): void {
+  showContextMenu(x: number, y: number, tabId: string, anchorEl?: HTMLElement): void {
     this.contextMenuX = x;
     this.contextMenuY = y;
     this.contextMenuTabId = tabId;
     this.contextMenuVisible = true;
+    // Remember the invoking control so closing can hand focus back (the
+    // slot button passes itself; right-click falls back to whatever was
+    // focused). aria-expanded reflects the open menu on the anchor.
+    this.contextMenuAnchor = anchorEl ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    if (this.contextMenuAnchor?.classList.contains('mj-tab-type-slot')) {
+      this.contextMenuAnchor.setAttribute('aria-expanded', 'true');
+    }
+    // GL tab events (right-click, type-slot click) originate OUTSIDE any
+    // Angular CD trigger — zoneless: without an explicit flush the flag
+    // flips but the menu never renders.
+    SafeDetectChanges(this.cdr);
+    // Menu-pattern focus: land on the first enabled item so arrow keys work
+    // immediately (rAF — the flush above just created the DOM).
+    requestAnimationFrame(() => {
+      const first = document.querySelector<HTMLButtonElement>('.context-menu [role="menuitem"]:not([disabled])');
+      first?.focus();
+    });
 
-    // Close menu when clicking outside - use setTimeout to avoid immediate trigger
+    // Close menu when clicking outside - use setTimeout to avoid immediate trigger.
+    // CAPTURE phase: bubble-phase closers are blind to clicks whose
+    // propagation something stopped (the origin crumb stops its clicks so
+    // GL pane-focus can't stomp navigation) — the menu stayed open when the
+    // outside click landed on such an element.
     setTimeout(() => {
       const clickHandler = (event: MouseEvent) => {
         const target = event.target as HTMLElement;
         if (!target.closest('.context-menu')) {
           this.hideContextMenu();
-          document.removeEventListener('click', clickHandler);
-          document.removeEventListener('keydown', keyHandler);
+          document.removeEventListener('click', clickHandler, true);
+          document.removeEventListener('keydown', keyHandler, true);
         }
       };
 
       const keyHandler = (event: KeyboardEvent) => {
         if (event.key === 'Escape') {
           this.hideContextMenu();
-          document.removeEventListener('click', clickHandler);
-          document.removeEventListener('keydown', keyHandler);
+          document.removeEventListener('click', clickHandler, true);
+          document.removeEventListener('keydown', keyHandler, true);
         }
       };
 
-      document.addEventListener('click', clickHandler);
-      document.addEventListener('keydown', keyHandler);
+      document.addEventListener('click', clickHandler, true);
+      document.addEventListener('keydown', keyHandler, true);
     }, 0);
   }
 
   /**
    * Hide context menu
    */
-  hideContextMenu(): void {
+  hideContextMenu(restoreFocus = true): void {
     this.contextMenuVisible = false;
     this.contextMenuTabId = null;
+    const anchor = this.contextMenuAnchor;
+    this.contextMenuAnchor = null;
+    if (anchor?.classList.contains('mj-tab-type-slot')) {
+      anchor.setAttribute('aria-expanded', 'false');
+    }
+    // Outside-click/Escape teardown also runs outside CD — flush so the
+    // menu actually disappears (see showContextMenu).
+    SafeDetectChanges(this.cdr);
+    // Menu-pattern focus return (app-switcher precedent). Actions that
+    // deliberately move the user to another surface pass restoreFocus=false
+    // and let the destination own focus.
+    if (restoreFocus && anchor?.isConnected) {
+      requestAnimationFrame(() => anchor.focus());
+    }
+  }
+
+  /**
+   * role="menu" keyboard model: ArrowUp/Down rove (wrapping) over enabled
+   * items, Home/End jump, Escape closes with focus return, Tab dismisses
+   * (native menus don't trap Tab).
+   */
+  onMenuKeydown(event: KeyboardEvent): void {
+    const items = Array.from(document.querySelectorAll<HTMLButtonElement>('.context-menu [role="menuitem"]:not([disabled])'));
+    if (items.length === 0) {
+      return;
+    }
+    const idx = items.indexOf(document.activeElement as HTMLButtonElement);
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        items[(idx + 1) % items.length].focus();
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        items[(idx - 1 + items.length) % items.length].focus();
+        break;
+      case 'Home':
+        event.preventDefault();
+        items[0].focus();
+        break;
+      case 'End':
+        event.preventDefault();
+        items[items.length - 1].focus();
+        break;
+      case 'Escape':
+        // Handle here (with stopPropagation) so Escape works even before the
+        // deferred document-level teardown listener attaches.
+        event.preventDefault();
+        event.stopPropagation();
+        this.hideContextMenu();
+        break;
+      case 'Tab':
+        this.hideContextMenu(false);
+        break;
+    }
   }
 
   /**
@@ -1555,6 +2451,70 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     if (!this.contextMenuTabId) return false;
     const tab = this.workspaceManager.GetTab(this.contextMenuTabId);
     return tab?.isPinned || false;
+  }
+
+  /** Context tab is a records-REGION record — eligible for "Move to Workspace" */
+  get canContextMoveToWorkspace(): boolean {
+    // Docked/region composition is a DESKTOP concept — no move actions on mobile
+    if (!this.contextMenuTabId || !this.RecordsStyleActive || this.mobileRecordsActive) return false;
+    const tab = this.workspaceManager.GetTab(this.contextMenuTabId);
+    return !!tab && IsRecordsRegionTab(tab.configuration);
+  }
+
+  /** Context tab is a DOCKED record — eligible for "Move to Records" */
+  get canContextMoveToRecords(): boolean {
+    if (!this.contextMenuTabId || !this.RecordsStyleActive || this.mobileRecordsActive) return false;
+    const tab = this.workspaceManager.GetTab(this.contextMenuTabId);
+    return !!tab && IsRecordsTabConfiguration(tab.configuration) && IsRecordDockedToWorkspace(tab.configuration);
+  }
+
+  /**
+   * Promote: records region → main workspace layout ("Move to Workspace").
+   * ORDER MATTERS: activate FIRST, then flip the flag. With the tab already
+   * active, (a) the moved tab stays the user's focus through the membership
+   * flip (syncTabsWithConfiguration's tail focuses config.activeTabId), and
+   * (b) a single-resource→multi-tab transition triggered by the flip exempts
+   * it from the force-pin sweep (it IS the activeTabId).
+   */
+  onContextMoveToWorkspace(): void {
+    const tabId = this.contextMenuTabId;
+    this.hideContextMenu(false);
+    if (!tabId) return;
+    this.workspaceManager.SetActiveTab(tabId);
+    this.workspaceManager.UpdateTabConfiguration(tabId, { [RECORD_DOCKED_TO_WORKSPACE_KEY]: true });
+    this.assertMovedTabActivation(tabId);
+  }
+
+  /**
+   * Demote: main workspace layout → records region ("Move to Records").
+   * Same activate-first ordering: the flip's emission then computes
+   * showing=true in syncRecordsRegion, so the region surfaces focused on
+   * the returned tab. `false` (not undefined) so the choice is explicit in
+   * the persisted configuration.
+   */
+  onContextMoveToRecords(): void {
+    const tabId = this.contextMenuTabId;
+    this.hideContextMenu(false);
+    if (!tabId) return;
+    this.workspaceManager.SetActiveTab(tabId);
+    this.workspaceManager.UpdateTabConfiguration(tabId, { [RECORD_DOCKED_TO_WORKSPACE_KEY]: false });
+    this.assertMovedTabActivation(tabId);
+  }
+
+  /**
+   * A move's SOURCE layout auto-activates its next tab when the moved tab is
+   * removed, and that GL activation WRITES BACK into the workspace — stomping
+   * the moved tab's activation (demote left the user staring at the main
+   * layout while the record surfaced in the records region). Re-assert after
+   * the removal cascade settles — the assertRecordActivation pattern.
+   */
+  private assertMovedTabActivation(tabId: string): void {
+    setTimeout(() => {
+      const config = this.workspaceManager.GetConfiguration();
+      if (config?.tabs.some(t => t.id === tabId) && config.activeTabId !== tabId) {
+        this.workspaceManager.SetActiveTab(tabId);
+      }
+    }, 0);
   }
 
   /**
@@ -1572,9 +2532,12 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    */
   onContextClose(): void {
     if (this.contextMenuTabId) {
-      this.layoutManager.RemoveTab(this.contextMenuTabId);
+      const tab = this.workspaceManager.GetTab(this.contextMenuTabId);
+      const manager = tab && this.isRecordTab(tab) ? this.recordsLayoutManager : this.layoutManager;
+      manager.RemoveTab(this.contextMenuTabId);
     }
-    this.hideContextMenu();
+    // The anchor lives on the closed tab — nothing to return focus to.
+    this.hideContextMenu(false);
   }
 
   /**
@@ -1674,7 +2637,6 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     if (rt === 'Dashboards' || config['dashboardId']) return 'Dashboards';
     if (rt === 'User Views' || rt === 'MJ: User Views' || config['viewId']) return 'User Views';
     if (rt === 'Queries' || config['queryId']) return 'Queries';
-    if (rt === 'Reports' || config['reportId']) return 'Reports';
     if (rt === 'Records' || (config['entity'] && config['recordId'])) return 'Records';
     if (rt === 'Custom' || config['navItemName']) return 'Custom';
     return rt || 'Custom';

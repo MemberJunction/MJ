@@ -16,12 +16,50 @@ import { EntityVectorSyncer } from "@memberjunction/ai-vector-sync";
  * Params:
  *  * Autotag: Bit, if set to 1, will autotag content from all source types.
  *  * Vectorize: Bit, if set to 1, will embed tagged content items directly into the vector index.
+ *  * EmbedPendingChunks: Bit (optional, default 0). If set to 1, (re)embeds persisted
+ *          ContentItemChunk rows whose EmbeddingStatus is still 'Pending', upserting their vectors.
+ *          Independent of the other phases — used for migration backfill and error recovery.
+ *          Bounded by MaxItems.
+ *  * Purge: Bit (optional, default 0). If set to 1, runs PurgeDeletedChunks after vectorization —
+ *          removes the vectors of soft-deleted (superseded) ContentItemChunks from the 3rd-party
+ *          store and flips those rows to 'Deleted'. Independent of Vectorize, so a purge-only run
+ *          (Autotag=0, Vectorize=0, Purge=1 — e.g. scheduled cleanup) is valid. Bounded by MaxItems.
+ *
+ * All flag params accept 1/true as well as the string forms "1"/"true"/"yes" — the generic
+ * RunAction GraphQL mutation delivers every param value as a string, so strict numeric checks
+ * would silently skip phases for GQL callers (see flagIsSet).
  *
  * Uses plugin architecture: iterates all ContentSourceType records and resolves
  * providers dynamically via ClassFactory using the DriverClass field.
  */
 @RegisterClass(BaseAction, "__AutotagAndVectorizeContent")
 export class AutotagAndVectorizeContentAction extends BaseAction {
+    /**
+     * Default cap on how many pending content items a single vectorization run processes.
+     * Prevents a large backlog (e.g. tens of thousands of Pending items) from loading all at
+     * once. Vectorization drains the backlog MaxItems at a time — each run flips items
+     * Pending→Complete, so a subsequent (e.g. scheduled) run picks up the next batch.
+     * Override per-invocation with the 'MaxItems' action param.
+     */
+    private static readonly DEFAULT_MAX_ITEMS = 1000;
+
+    /**
+     * True when a flag param is set: accepts boolean true, numeric 1, and the string forms
+     * '1'/'true'/'yes' (case-insensitive). String forms matter because the generic RunAction
+     * GraphQL mutation types every param value as a string, so a caller passing Value: "1"
+     * previously failed the strict `=== 1` checks and the phase was silently skipped.
+     */
+    private static flagIsSet(value: unknown): boolean {
+        if (value === true || value === 1) {
+            return true;
+        }
+        if (typeof value === 'string') {
+            const v = value.trim().toLowerCase();
+            return v === '1' || v === 'true' || v === 'yes';
+        }
+        return false;
+    }
+
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const autotagParam: ActionParam | undefined = params.Params.find(p => p.Name === 'Autotag');
         const vectorizeParam: ActionParam | undefined = params.Params.find(p => p.Name === 'Vectorize');
@@ -44,17 +82,37 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
 
         // Optional: force reprocessing of existing content items (skip checksum comparison)
         const forceReprocessParam = params.Params.find(p => p.Name === 'ForceReprocess');
-        const forceReprocess = forceReprocessParam?.Value === 1 || forceReprocessParam?.Value === true;
+        const forceReprocess = AutotagAndVectorizeContentAction.flagIsSet(forceReprocessParam?.Value);
+
+        // Optional: purge soft-deleted chunks after vectorization (default off). Independent of
+        // Vectorize so a purge-only invocation is valid.
+        const purgeParam = params.Params.find(p => p.Name === 'Purge');
+        const purge = AutotagAndVectorizeContentAction.flagIsSet(purgeParam?.Value);
+
+        // Optional: (re)embed persisted ContentItemChunk rows still awaiting embedding (default off).
+        // Independent of the other phases — used for migration backfill and error recovery.
+        const embedPendingChunksParam = params.Params.find(p => p.Name === 'EmbedPendingChunks');
+        const embedPendingChunks = AutotagAndVectorizeContentAction.flagIsSet(embedPendingChunksParam?.Value);
 
         // Optional: ContentProcessRunID to link detail records for per-source tracking
         const processRunParam = params.Params.find(p => p.Name === 'ContentProcessRunID');
         const contentProcessRunID = processRunParam?.Value ? String(processRunParam.Value) : undefined;
 
+        // Optional: cap how many pending content items a single vectorization run grabs
+        // (default DEFAULT_MAX_ITEMS). A positive integer; anything else falls back to the default.
+        const maxItemsParam = params.Params.find(p => p.Name === 'MaxItems');
+        const parsedMaxItems = maxItemsParam?.Value != null ? Number(maxItemsParam.Value) : NaN;
+        const maxItems = Number.isFinite(parsedMaxItems) && parsedMaxItems > 0
+            ? Math.floor(parsedMaxItems)
+            : AutotagAndVectorizeContentAction.DEFAULT_MAX_ITEMS;
+
         try {
             // Initialize the autotagging engine (loads cached metadata)
             await AutotagBaseEngine.Instance.Config(false, params.ContextUser);
 
-            LogStatus(`[AutotagAction] Autotag=${autotagParam.Value}, Vectorize=${vectorizeParam.Value}`);
+            const autotag = AutotagAndVectorizeContentAction.flagIsSet(autotagParam.Value);
+            const vectorize = AutotagAndVectorizeContentAction.flagIsSet(vectorizeParam.Value);
+            LogStatus(`[AutotagAction] Autotag=${autotag}, Vectorize=${vectorize}, EmbedPendingChunks=${embedPendingChunks}, Purge=${purge}`);
 
             // When the resolver is managing the ContentProcessRun, suppress the
             // legacy saveProcessRun() in the engine to avoid phantom run records.
@@ -63,7 +121,7 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             // Phase 1: Run autotag providers to create/update ContentItems in the DB.
             // Providers use checksum comparison to skip unchanged items.
             let hasNewItems = false;
-            if (autotagParam.Value === 1) {
+            if (autotag) {
                 // Initialize the taxonomy bridge BEFORE providers run so ALL providers
                 // (RSS, Entity, Website, CloudStorage) get tag taxonomy bridging
                 LogStatus(`[AutotagAction] Initializing taxonomy bridge...`);
@@ -83,27 +141,40 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
                 AutotagBaseEngine.Instance.CleanupTaxonomyBridge();
             }
 
-            // Phase 2: Vectorization. Content item vectorization runs when new tags
-            // were created. Entity vector sync only runs when forceReprocess is set,
-            // since entity records don't change during tagging — their vectors were
-            // already synced when first ingested via the Vectors dashboard.
-            if (vectorizeParam.Value === 1) {
+            // Phase 2: Vectorization. Runs whenever Vectorize=1 — decoupled from whether
+            // autotagging produced new items this run, so a standalone Autotag=0 + Vectorize=1
+            // invocation still embeds pending content. RunDirectVectorization selects only items
+            // that still need embedding (EmbeddingStatus='Pending') unless forceReprocess re-embeds
+            // everything. Entity vector sync only runs when forceReprocess is set, since entity
+            // records don't change during tagging — their vectors were already synced when first
+            // ingested via the Vectors dashboard.
+            if (vectorize) {
                 const tasks: Promise<void>[] = [];
 
-                if (hasNewItems) {
-                    tasks.push(this.RunDirectVectorization(params, contentProcessRunID));
-                }
+                tasks.push(this.RunDirectVectorization(params, contentProcessRunID, contentSourceIDs, forceReprocess, maxItems));
 
                 if (forceReprocess) {
                     tasks.push(this.SyncEntitySourceVectors(params, contentSourceIDs));
                 }
 
-                if (tasks.length > 0) {
-                    LogStatus(`[AutotagAction] Phase 2: Running ${tasks.length} vectorization task(s)...`);
-                    await Promise.all(tasks);
-                } else {
-                    LogStatus(`[AutotagAction] Phase 2: Skipping vectorization — no new content items and not force-reprocessing`);
-                }
+                LogStatus(`[AutotagAction] Phase 2: Running ${tasks.length} vectorization task(s)...`);
+                await Promise.all(tasks);
+            }
+
+            // Phase 3: (Re)embed persisted chunk rows still awaiting embedding. Runs whenever
+            // EmbedPendingChunks=1, independent of the other phases — used to backfill vectors for
+            // chunk rows created without them (migration) and to retry chunks whose embed failed
+            // (recovery). Bounded by MaxItems so a large backlog drains over several runs.
+            if (embedPendingChunks) {
+                await this.RunEmbedPendingChunks(params, maxItems);
+            }
+
+            // Phase 4: Purge soft-deleted chunks. Runs whenever Purge=1, independent of the other
+            // phases — a re-chunk during vectorization soft-deletes superseded chunks (rows kept,
+            // DeleteStatus='Pending'); this removes their vectors from the 3rd-party store and flips
+            // the rows to 'Deleted'. Bounded by MaxItems so a large backlog drains over several runs.
+            if (purge) {
+                await this.RunPurgeDeletedChunks(params, maxItems);
             }
             LogStatus(`[AutotagAction] All tasks completed`);
 
@@ -193,7 +264,10 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
      */
     private async RunDirectVectorization(
         params: RunActionParams,
-        contentProcessRunID?: string
+        contentProcessRunID?: string,
+        contentSourceIDs?: string[],
+        forceReprocess?: boolean,
+        maxItems?: number
     ): Promise<void> {
         // Resolve the per-request provider once and thread it down the call stack so
         // every BaseEntity / RunView operation in this action runs against the caller's
@@ -203,12 +277,30 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
         // implement RunView.
         const provider = (params.Provider ?? Metadata.Provider) as unknown as IMetadataProvider;
 
-        // Load all content items, then exclude Entity-sourced items.
-        // Entity sources get their vectors via EntityVectorSyncer (Phase 2b),
-        // not through content item vectorization.
+        // Select only items that still need embedding, then exclude Entity-sourced items.
+        // EmbeddingStatus='Pending' is the "not yet vectorized" signal — new items default to
+        // Pending, successfully embedded items are 'Complete'. Failed items are intentionally
+        // NOT retried here (they failed for a reason); use ForceReprocess to re-embed everything.
+        // Optionally scope to specific content sources. Entity sources get their vectors via
+        // EntityVectorSyncer (Phase 2b), not through content item vectorization.
+        const filters: string[] = [];
+        if (!forceReprocess) {
+            filters.push(`EmbeddingStatus = 'Pending'`);
+        }
+        if (contentSourceIDs && contentSourceIDs.length > 0) {
+            const idList = contentSourceIDs.map(id => `'${id.replace(/'/g, "''")}'`).join(', ');
+            filters.push(`ContentSourceID IN (${idList})`);
+        }
+        const extraFilter = filters.join(' AND ');
+
+        // Cap the intake per run and order deterministically (oldest-pending first) so the
+        // backlog drains predictably instead of arbitrarily starving older items.
         const rv = RunView.FromMetadataProvider(provider);
         const result = await rv.RunView<MJContentItemEntity>({
             EntityName: 'MJ: Content Items',
+            ExtraFilter: extraFilter,
+            OrderBy: '__mj_CreatedAt ASC',
+            MaxRows: maxItems,
             ResultType: 'entity_object'
         }, params.ContextUser);
 
@@ -248,6 +340,38 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             await this.vectorizeSourceWithTracking(
                 sourceID, sourceItems, contentProcessRunID, params.ContextUser, provider
             );
+        }
+    }
+
+    /**
+     * Run EmbedPendingChunks on the engine: embed persisted ContentItemChunk rows awaiting embedding
+     * and upsert their vectors under the chunk's identity. Bounded by maxItems so a large backlog
+     * drains over several runs. Best-effort — a failure is logged but does not fail the action, since
+     * unembedded chunks stay 'Pending' and are retried on the next run.
+     */
+    private async RunEmbedPendingChunks(params: RunActionParams, maxItems: number): Promise<void> {
+        try {
+            LogStatus(`[AutotagAction] Phase 3: Embedding pending chunks (max ${maxItems})...`);
+            const stats = await AutotagBaseEngine.Instance.EmbedPendingChunks(params.ContextUser, { maxItems });
+            LogStatus(`[AutotagAction] Phase 3 complete — ${stats.embedded} embedded, ${stats.skipped} skipped (empty text/no parent), ${stats.failed} failed`);
+        } catch (error) {
+            LogError(`[AutotagAction] EmbedPendingChunks failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Run PurgeDeletedChunks on the engine: remove soft-deleted chunks' vectors from the 3rd-party
+     * store and flip those rows to 'Deleted'. Bounded by maxItems so a large backlog drains over
+     * several runs. Best-effort — a purge failure is logged but does not fail the action, since the
+     * chunks stay 'Pending' and are retried on the next run.
+     */
+    private async RunPurgeDeletedChunks(params: RunActionParams, maxItems: number): Promise<void> {
+        try {
+            LogStatus(`[AutotagAction] Phase 3: Purging soft-deleted chunks (max ${maxItems})...`);
+            const stats = await AutotagBaseEngine.Instance.PurgeDeletedChunks(params.ContextUser, { maxItems });
+            LogStatus(`[AutotagAction] Phase 3 complete — ${stats.purged} purged, ${stats.skipped} skipped (no vector), ${stats.failed} failed`);
+        } catch (error) {
+            LogError(`[AutotagAction] PurgeDeletedChunks failed: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 

@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT30 - Conversation Compaction (assembly layer)",
+    "Description": "Deterministic coverage of PR #2732's cross-turn conversation compaction assembly layer, graduated from the standalone conversation-compaction-tests.ts dispatcher into the shared registry (bundle 'conversation-compaction', CC1-CC12). CC1: the trgConversationDetail_AssignSequence trigger assigns per-conversation monotonic Sequence through real spCreate. CC2-CC6: ConversationEngine.GetAgentContextWindow — no-boundary passthrough, maxTailMessages cap, boundary selection at the highest non-null SummaryOfEarlierConversation with warm-cache coherency after an external save, recursive highest-wins, and excludeDetailIds placeholder filtering. CC7: the retrieval tools (getMessageBySequence / getMessagesByRange / searchConversation) page and search the full stored history. CC8: independent per-conversation sequence spaces. CC9: a completed-at-creation 'Compaction' run step persists via a SINGLE INSERT (__mj_UpdatedAt === __mj_CreatedAt). CC10: the prior-turn tool-result carry-forward loader — DB fallback finds an AwaitingFeedback prior run, cache precedence on hit, agent-scoped provenance both directions, and settle-time cache population. CC11: AssembleContextWindow parity between the engine window, an independent hand-built ConversationWindowFields query, AND the production LoadWindowRowsFresh loader (previously never invoked by any test). CC12: BREAK ATTEMPT — concurrent same-conversation inserts still receive distinct consecutive Sequences (the trigger's UPDLOCK/HOLDLOCK serialization path). NO LLM calls. Mutation-by-design: creates and FK-ordered-deletes its own tagged Conversations/Details/Agent Runs/Run Steps.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Sequence assignment is monotonic and concurrency-safe; context windows fold identically across the warm cache, fresh queries, and the production loader; compaction steps persist in one INSERT; carry-forward results stay agent-scoped."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "conversation-compaction"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "4EDF17FF-2B77-4C7B-A337-2CFBAB0802B0"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T01:12:44.057Z",
+    "checksum": "d45bf76c5abfda7f9f8eeb67434ef9334feaff01dfec6f536833256d14899292"
+  }
+}

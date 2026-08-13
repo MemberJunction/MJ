@@ -213,6 +213,23 @@ export interface Prediction {
   score: number;
   /** Predicted class label, present for classification problems. */
   class?: string;
+  /**
+   * Per-record feature contributions for THIS row (P1-5) — the top signed drivers behind this specific
+   * prediction, ranked by magnitude. Present only for models where an honest per-row attribution is cheap
+   * and exact — linear models (`coef_ · transformed value`, i.e. the log-odds/value contribution). Absent
+   * (undefined) for tree/ensemble models (which need SHAP) and multiclass; callers fall back to the model's
+   * GLOBAL feature importance. Feature names are the post-preprocessing output columns (one-hot names like
+   * `Col=Value`), so a UI should collapse/humanize them for display.
+   */
+  contributions?: PredictionContribution[];
+}
+
+/** One signed per-record feature contribution: `value > 0` pushes the score up, `< 0` down. */
+export interface PredictionContribution {
+  /** The (post-preprocessing) feature/output-column name. */
+  feature: string;
+  /** Signed contribution to the model output for this row (log-odds for classification, value for regression). */
+  value: number;
 }
 
 /**

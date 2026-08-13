@@ -6,14 +6,16 @@
  * a {@link MockRealtimeModel} (no provider SDK / DB), engine config is a no-op, and delegation is
  * stubbed. No network, no DB — fully deterministic.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
     BaseRealtimeModel,
     ClientRealtimeSessionConfig,
     IRealtimeSession,
+    JSONObject,
     RealtimeSessionParams,
     RealtimeToolCall
 } from '@memberjunction/ai';
+import { AIEngine } from '@memberjunction/aiengine';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJAIAgentEntityExtended, MJAIModelEntityExtended, AppContextSnapshot } from '@memberjunction/ai-core-plus';
 
@@ -1011,8 +1013,6 @@ describe('RealtimeClientSessionService.createCoAgentObservabilityRun (real path)
         expect(promptRun.Status).toBe('Running');
         expect(promptRun.RunType).toBe('Single');
         expect(promptRun.RunAt).toBeInstanceOf(Date);
-        expect(promptRun.AgentRunID).toBe('co-run-real');
-
         // The single Timeline step: StepType Prompt targeting the system prompt + its prompt run.
         expect(runStep.NewRecord).toHaveBeenCalled();
         expect(runStep.AgentRunID).toBe('co-run-real');
@@ -1174,6 +1174,26 @@ describe('RealtimeClientSessionService.delegateToTarget (real path)', () => {
         // A fresh (non-resume) run does NOT set lastRunId / autoPopulateLastRunPayload.
         expect(passed.lastRunId).toBeUndefined();
         expect(passed.autoPopulateLastRunPayload).toBeUndefined();
+    });
+
+    it('threads AttributionUserID into the run as userId (issue #3371)', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const svc = new DelegateTestService();
+
+        await svc.CallDelegate(makeDelegateInput({ AttributionUserID: 'visitor-1' }), makeDelegateRequest());
+
+        // The run row + context-memory scope follow the PERSON, even when the relay executes under
+        // an elevated principal — base-agent reads `userId` ahead of `contextUser.ID`.
+        expect(runAgentMock.mock.calls[0][0].userId).toBe('visitor-1');
+    });
+
+    it('leaves userId undefined when no AttributionUserID is supplied, falling back to contextUser', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const svc = new DelegateTestService();
+
+        await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
+
+        expect(runAgentMock.mock.calls[0][0].userId).toBeUndefined();
     });
 
     it('returns the question + surfaces PausedRunID when the run is AwaitingFeedback', async () => {
@@ -1646,5 +1666,132 @@ describe('RealtimeClientSessionService.resolveDelegationTarget', () => {
         const r = svc.ExposeResolveDelegationTarget(undefined, input);
         expect(r.Agent).toBeUndefined();
         expect(r.Error).toContain('No target agent is configured');
+    });
+});
+
+describe('C1: session-tuning knobs flow into the driver Config bag', () => {
+    class BagExposingService extends RealtimeClientSessionService {
+        public Bag(
+            input: Parameters<RealtimeClientSessionService['buildSessionConfigBag']>[0],
+            effectiveConfig?: RealtimeCoAgentConfig,
+            driverClass?: string
+        ): JSONObject | undefined {
+            return this.buildSessionConfigBag(input, effectiveConfig, driverClass);
+        }
+    }
+
+    const tuningConfig: RealtimeCoAgentConfig = {
+        realtime: {
+            session: { effortLevel: 'high', parallelToolCalls: true, inputTranscriptionModel: 'whisper-1' },
+            voice: { providers: { OpenAIRealtime: { voice: 'sage' } } },
+        },
+    };
+
+    it('folds effortLevel/parallelToolCalls/inputTranscriptionModel in UNDER the provider voice', () => {
+        const svc = new BagExposingService();
+        const bag = svc.Bag({} as Parameters<BagExposingService['Bag']>[0], tuningConfig, 'OpenAIRealtime');
+        expect(bag).toMatchObject({ effortLevel: 'high', parallelToolCalls: true, inputTranscriptionModel: 'whisper-1', voice: 'sage' });
+    });
+
+    it('the runtime bag WINS over configured tuning (cascade precedence)', () => {
+        const svc = new BagExposingService();
+        const bag = svc.Bag(
+            { Config: { effortLevel: 20 } } as unknown as Parameters<BagExposingService['Bag']>[0],
+            tuningConfig,
+            'OpenAIRealtime'
+        );
+        expect(bag?.effortLevel).toBe(20);
+        expect(bag?.parallelToolCalls).toBe(true); // untouched keys still flow
+    });
+
+    it('no tuning section + no voice ⇒ the original runtime bag is returned byte-for-byte', () => {
+        const svc = new BagExposingService();
+        const runtime = { anything: 1 } as unknown as JSONObject;
+        const bag = svc.Bag({ Config: runtime } as unknown as Parameters<BagExposingService['Bag']>[0], {}, 'OpenAIRealtime');
+        expect(bag).toBe(runtime);
+    });
+
+    it('disableAutoResponse still rides on top of the folded bag', () => {
+        const svc = new BagExposingService();
+        const bag = svc.Bag(
+            { DisableAutoResponse: true } as unknown as Parameters<BagExposingService['Bag']>[0],
+            tuningConfig,
+            'OpenAIRealtime'
+        );
+        expect(bag?.disableAutoResponse).toBe(true);
+        expect(bag?.effortLevel).toBe('high');
+    });
+});
+
+describe('model-catalog ModelConfiguration is the BASE layer of the session Config bag', () => {
+    class CatalogBagService extends RealtimeClientSessionService {
+        public Bag(
+            input: Parameters<RealtimeClientSessionService['buildSessionConfigBag']>[0],
+            effectiveConfig?: RealtimeCoAgentConfig,
+            driverClass?: string,
+            modelID?: string,
+            modelVendorID?: string
+        ): JSONObject | undefined {
+            return this.buildSessionConfigBag(input, effectiveConfig, driverClass, modelID, modelVendorID);
+        }
+    }
+
+    const EMPTY_INPUT = {} as Parameters<CatalogBagService['Bag']>[0];
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('does not consult the catalog at all when no model was resolved', () => {
+        const spy = vi.spyOn(AIEngine.Instance, 'GetEffectiveModelConfiguration');
+        const bag = new CatalogBagService().Bag(EMPTY_INPUT, {}, 'OpenAIRealtime');
+        expect(spy).not.toHaveBeenCalled();
+        expect(bag).toBeUndefined();
+    });
+
+    it('threads the model AND the model-vendor ROW id into the cascade read', () => {
+        const spy = vi.spyOn(AIEngine.Instance, 'GetEffectiveModelConfiguration').mockReturnValue(null);
+        new CatalogBagService().Bag(EMPTY_INPUT, {}, 'OpenAIRealtime', 'model-1', 'model-vendor-9');
+        expect(spy).toHaveBeenCalledWith('model-1', 'model-vendor-9');
+    });
+
+    it('projects the catalog turn-detection default into the bag', () => {
+        vi.spyOn(AIEngine.Instance, 'GetEffectiveModelConfiguration').mockReturnValue({
+            Realtime: { TurnDetection: { Mode: 'semanticVad', Eagerness: 'auto' } },
+        });
+        const bag = new CatalogBagService().Bag(EMPTY_INPUT, {}, 'OpenAIRealtime', 'model-1');
+        expect(bag).toEqual({ turnDetection: { Mode: 'semanticVad', Eagerness: 'auto' } });
+    });
+
+    it('agent/app session tuning REFINES the catalog default (catalog < realtime.session)', () => {
+        vi.spyOn(AIEngine.Instance, 'GetEffectiveModelConfiguration').mockReturnValue({
+            Realtime: { TurnDetection: { Mode: 'semanticVad', Eagerness: 'auto' } },
+        });
+        const bag = new CatalogBagService().Bag(
+            EMPTY_INPUT,
+            { realtime: { session: { turnDetection: { Eagerness: 'low' } } } },
+            'OpenAIRealtime',
+            'model-1'
+        );
+        // Mode inherited from the catalog, eagerness refined by the agent config.
+        expect(bag?.turnDetection).toEqual({ Mode: 'semanticVad', Eagerness: 'low' });
+    });
+
+    it('the runtime bag still wins over BOTH (catalog < session tuning < runtime)', () => {
+        vi.spyOn(AIEngine.Instance, 'GetEffectiveModelConfiguration').mockReturnValue({
+            Realtime: { TurnDetection: { Mode: 'semanticVad', Eagerness: 'auto' } },
+        });
+        const bag = new CatalogBagService().Bag(
+            { Config: { turnDetection: { Mode: 'serverVad' } } } as unknown as Parameters<CatalogBagService['Bag']>[0],
+            { realtime: { session: { turnDetection: { Mode: 'native' } } } },
+            'OpenAIRealtime',
+            'model-1'
+        );
+        expect(bag?.turnDetection).toMatchObject({ Mode: 'serverVad', Eagerness: 'auto' });
+    });
+
+    it('a catalog with no Realtime section contributes nothing', () => {
+        vi.spyOn(AIEngine.Instance, 'GetEffectiveModelConfiguration').mockReturnValue({ LLM: { effortLevel: 'high' } });
+        expect(new CatalogBagService().Bag(EMPTY_INPUT, {}, 'OpenAIRealtime', 'model-1')).toBeUndefined();
     });
 });

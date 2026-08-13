@@ -49,7 +49,10 @@ export function createMediaStreamRouter(): Router {
 
 /** Top-level request handler: verify token → resolve bytes → stream/buffer with Range support. */
 async function handleMediaRequest(req: Request, res: Response): Promise<void> {
-  const fileId = req.params.fileId;
+  // Express type defs allow req.params values to be string | string[]; normalize to string
+  // so downstream consumers with moduleResolution:"node" type-check cleanly (see SignatureWebhookHandler).
+  const rawFileId = req.params.fileId;
+  const fileId: string = Array.isArray(rawFileId) ? rawFileId[0] : rawFileId;
   const token = typeof req.query.token === 'string' ? req.query.token : '';
 
   const claims = verifyMediaToken(token, fileId);

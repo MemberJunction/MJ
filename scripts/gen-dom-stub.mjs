@@ -298,7 +298,10 @@ export default defineConfig({
       mergeConfig(
         domSharedConfig,
         defineConfig({
-          test: { name: '${shortName} (dom)', include: ['src/**/*.dom.test.ts'], exclude: ['**/__tests__/**'] },
+          // The dom shared config contributes a broad \`src/**/*.test.ts\` include; \`!(*.dom).test.ts\`
+          // excludes every non-\`.dom\` test so node-only logic specs (which may vi.mock @angular/core
+          // and live OUTSIDE __tests__) don't get pulled through the Angular AOT path.
+          test: { name: '${shortName} (dom)', include: ['src/**/*.dom.test.ts'], exclude: ['**/__tests__/**', '**/!(*.dom).test.ts'] },
         }),
       ),
     ],

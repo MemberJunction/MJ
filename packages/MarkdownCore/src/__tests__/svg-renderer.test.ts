@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Marked } from 'marked';
-import { createSvgRendererExtension, isSvgContent } from '../extensions/svg-renderer.extension';
+import { createSvgRendererExtension, isSvgContent } from '../extensions/svg-renderer.extension.js';
 
 describe('isSvgContent', () => {
   it('accepts a normal svg element', () => {

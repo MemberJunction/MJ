@@ -1,29 +1,43 @@
-name: PostgreSQL migration parity
+name: PostgreSQL migration validation
 
-# Validates that T-SQL migrations convert cleanly to PostgreSQL and apply
-# to a fresh PG database without errors. This is Phase C of the PG migration
-# architecture plan — the "continuous build process" ensuring PG stays in sync.
-
+# Validates that COMMITTED PostgreSQL migrations apply to a fresh PG database
+# without errors, and that no counterpart is an empty stub.
+#
+# ─── THIS IS A RELEASE-TIME GATE, NOT A PER-PR GATE ────────────────────────────
+# Authoring `.pg.sql` counterparts is deterministic toolchain work the BUILD
+# ENGINEER performs when cutting a release (`mj migrate convert`, `/pg-migrate-v2`);
+# it is explicitly NOT feature-PR work. See migrations/CLAUDE.md
+# ("PostgreSQL counterparts are BUILD-ENGINEER work").
+#
+# So this workflow deliberately does NOT trigger on `migrations/**`. A feature PR
+# that adds a T-SQL migration must not be gated on PG work nobody expected it to
+# do — that only pressured engineers into converting against a moving schema.
+# It triggers on `migrations-pg/**` (which is exactly what a release/build PR
+# touches) and on changes to the conversion toolchain itself, plus manual
+# dispatch for the build engineer.
 on:
-  workflow_dispatch: # Manual trigger for testing
+  workflow_dispatch: # Manual trigger — the build engineer's on-demand entry point
   pull_request:
     branches: [next]
     paths:
-      - 'migrations/**'
+      # NOTE: 'migrations/**' is intentionally absent — see the header above.
       - 'migrations-pg/**'
       - 'packages/SQLConverter/**'
       - 'packages/CodeGenLib/src/Database/providers/postgresql/**'
       - '.github/workflows/pg-migrations.yml'
+      # The content detector runs in this workflow (self-test + verify steps), so a
+      # PR that changes only the detector must still exercise it here.
+      - 'scripts/check-pg-migration-content.mjs'
   push:
     branches: [next]
     paths:
-      - 'migrations/**'
       - 'migrations-pg/**'
       - 'packages/SQLConverter/**'
+      - 'scripts/check-pg-migration-content.mjs'
 
 jobs:
   pg-parity:
-    name: PG migration parity check
+    name: PG migration validation (release-time)
     runs-on: ubuntu-latest
 
     services:
@@ -45,6 +59,9 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -52,7 +69,10 @@ jobs:
 
       # ─── Step 1: Validate PG migration filenames ─────────────────────
       - name: Validate PG migration filenames
-        run: ./.github/scripts/validate-migration-filenames.sh migrations-pg/v5
+        run: |
+          for d in migrations-pg/v*/; do
+            ./.github/scripts/validate-migration-filenames.sh "${d%/}"
+          done
 
       # ─── Step 2: Build MJCLI + SQLConverter ─────────────────────────
       # MJCLI (`@memberjunction/cli`) is the production migration entry point —
@@ -60,7 +80,7 @@ jobs:
       # same path. Turbo builds MJCLI's full transitive dep graph, which also
       # covers SQLConverter (so we don't need a second build step).
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build MJ CLI + SQLConverter
         run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/sql-converter
@@ -80,17 +100,18 @@ jobs:
       # Coverage of the converter is preserved by:
       #   - packages/SQLConverter/src/__tests__/pg-migration-regression.test.ts
       #     (107 conversion tests + sequence-dedup + TODO-marker check)
-      #   - The parity test in the same file (re-enabled) which enforces that
-      #     every T-SQL V-migration has a committed PG counterpart.
+      #   - The CONTENT check in Step 3b below, for the counterparts that exist.
       #
-      # If migrations-pg/v5/ is empty (e.g. on a tooling-only PR before the
+      # Counterpart EXISTENCE is deliberately NOT gated here — see Step 3b's note.
+      #
+      # If the migrations-pg version folders are empty (e.g. on a tooling-only PR before the
       # migrations PR has merged), this step skips the apply gracefully so the
-      # workflow doesn't block. The actual coverage gate is the parity test.
+      # workflow doesn't block.
       - name: Verify committed PG migration files
         id: verify_committed
         run: |
-          PG_FILES=$(ls migrations-pg/v5/*.pg.sql migrations-pg/v5/*.pg-only.sql 2>/dev/null | wc -l)
-          BASELINE=$(ls migrations-pg/v5/B*.pg.sql 2>/dev/null | head -1)
+          PG_FILES=$(ls migrations-pg/v*/*.pg.sql migrations-pg/v*/*.pg-only.sql 2>/dev/null | wc -l)
+          BASELINE=$(ls migrations-pg/v*/B*.pg.sql 2>/dev/null | head -1)
           echo "Committed PG migration files: $PG_FILES"
           echo "Baseline file: ${BASELINE:-(none)}"
           if [ "$PG_FILES" -eq 0 ]; then
@@ -99,6 +120,37 @@ jobs:
           else
             echo "skip_apply=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # ─── Step 3b: Verify PG counterparts have CONTENT, not just existence ──
+      # NOTE ON COUNTERPART EXISTENCE: there is deliberately no gate for it.
+      # Authoring the `.pg.sql` counterpart is BUILD-ENGINEER work performed at
+      # release time, not something a feature PR does — see migrations/CLAUDE.md
+      # ("PostgreSQL counterparts are BUILD-ENGINEER work"). An unconverted
+      # migration between releases is therefore the EXPECTED state, and failing
+      # feature PRs for it only taught engineers to convert against a moving
+      # schema. The former check-pg-migration-parity.mjs gate was removed for
+      # this reason. This step still runs, because a counterpart that DOES exist
+      # and is empty is a real defect at any time.
+      #
+      # Step 3 asserts a .pg.sql counterpart EXISTS. Nothing
+      # asserted it contains anything, and that gap shipped a broken release:
+      # v5.45's Metadata_Sync.pg.sql is 126 bytes against 12,041 lines of T-SQL,
+      # so PG deployments migrating through v5.45 silently received none of that
+      # release's metadata.
+      #
+      # Critically, the apply step below CANNOT catch this. An empty migration
+      # applies perfectly cleanly — there is nothing in it to fail. So this must
+      # be its own gate, and it must run BEFORE the apply, where the failure is
+      # still attributable to conversion rather than to SQL.
+      #
+      # The detector self-tests first (same convention as changes.yml running
+      # check-migration-id-determinism.sh --self-test), so a broken detector
+      # fails loudly instead of silently passing everything.
+      - name: Self-test the PG content detector
+        run: node scripts/check-pg-migration-content.mjs --self-test
+
+      - name: Verify PG migration content
+        run: node scripts/check-pg-migration-content.mjs
 
       # ─── Step 4: Bootstrap PG roles ─────────────────────────────────
       # Skyway creates `__mj.flyway_schema_history` itself at startup, so the
@@ -152,7 +204,7 @@ jobs:
           PGPASSWORD: testpass
           PGDATABASE: mj_pg_ci
         run: |
-          npx mj migrate --dir=migrations-pg/v5 -v
+          npx mj migrate --dir=migrations-pg -v
 
           # Read back the applied count from Skyway's history table for the
           # parity report. `mj migrate` exits non-zero on any failure, so by
@@ -209,7 +261,7 @@ jobs:
           # Resolve the same Flyway placeholder Skyway resolves at apply time.
           # We use a tmp directory so we don't mutate the working tree.
           TMPDIR=$(mktemp -d)
-          for f in migrations-pg/v5/V*.sql; do
+          for f in migrations-pg/v*/V*.sql; do
             sed 's/\${flyway:defaultSchema}/__mj/g' "$f" > "$TMPDIR/$(basename "$f")"
           done
 

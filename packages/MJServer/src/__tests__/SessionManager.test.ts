@@ -40,6 +40,21 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     };
 });
 
+// --- Partial mock: control ONLY UserCache.GetSystemUser (the scoped-anonymous elevation seam,
+//     issue #3371); everything else in the data provider stays real ---
+const getSystemUserMock = vi.fn<[], UserInfo | undefined>();
+vi.mock('@memberjunction/generic-database-provider', async (importOriginal) => {
+    const actual = await importOriginal<Record<string, unknown>>();
+    return {
+        ...actual,
+        UserCache: {
+            get Instance() {
+                return { GetSystemUser: getSystemUserMock };
+            },
+        },
+    };
+});
+
 import { SessionManager, SessionAuthorizationError } from '../agentSessions/SessionManager.js';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 
@@ -94,6 +109,8 @@ beforeEach(() => {
     hostSessionClosedMock.mockResolvedValue(undefined);
     runViewMock.mockReset();
     runViewMock.mockResolvedValue({ Success: true, Results: [] });
+    getSystemUserMock.mockReset();
+    getSystemUserMock.mockReturnValue(undefined);
 });
 
 describe('SessionManager.CreateSession', () => {
@@ -245,6 +262,51 @@ describe('SessionManager.CloseSession', () => {
         expect(finalizeCoAgentRunMock).toHaveBeenCalledWith('co-run-6', 'prompt-run-6', user, provider, true, 'run-step-6');
     });
 
+    it('finalizes as the SYSTEM user when a scoped anonymous owner closes their session (issue #3371)', async () => {
+        const systemUser = { ID: 'system-1', Email: 'system@system.org' } as unknown as UserInfo;
+        getSystemUserMock.mockReturnValue(systemUser);
+        const anonUser = {
+            ID: 'anon-1',
+            Email: 'anonymous@magic-link.local',
+            IsMagicLinkAnonymous: true,
+            MagicLinkScope: { ResourceID: 'res-1' },
+        } as unknown as UserInfo;
+        const session = makeSessionEntity({
+            ID: 'session-anon',
+            Status: 'Active',
+            Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: 'co-run-9', promptRunID: 'prompt-run-9' }),
+        });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        const ok = await mgr.CloseSession('session-anon', anonUser, provider);
+
+        expect(ok).toBe(true);
+        // The session-close writes themselves stay on the caller — only finalize elevates.
+        expect(session.Status).toBe('Closed');
+        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith('co-run-9', 'prompt-run-9', systemUser, provider, true, null);
+    });
+
+    it('FAILS CLOSED — finalizes as the anonymous caller when no system user is available', async () => {
+        getSystemUserMock.mockReturnValue(undefined);
+        const anonUser = {
+            ID: 'anon-1',
+            IsMagicLinkAnonymous: true,
+            MagicLinkScope: { ResourceID: 'res-1' },
+        } as unknown as UserInfo;
+        const session = makeSessionEntity({
+            ID: 'session-anon-2',
+            Status: 'Active',
+            Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: 'co-run-10', promptRunID: null }),
+        });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager();
+
+        await mgr.CloseSession('session-anon-2', anonUser, provider);
+
+        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith('co-run-10', null, anonUser, provider, true, null);
+    });
+
     it('does not finalize when the session config has no run ids (target only)', async () => {
         const session = makeSessionEntity({
             ID: 'session-no-runs',
@@ -257,6 +319,50 @@ describe('SessionManager.CloseSession', () => {
         await mgr.CloseSession('session-no-runs', makeUser(), provider);
 
         expect(finalizeCoAgentRunMock).not.toHaveBeenCalled();
+    });
+
+    it('finalizes through an INJECTED RealtimeClientSessionService instance, not the default one', async () => {
+        // Regression test for the wrong-instance leak: a caller (e.g. RealtimeClientSessionResolver)
+        // that created the session's co-agent AIPromptRun through its OWN RealtimeClientSessionService
+        // must have CloseSession finalize through that SAME instance — otherwise the service's internal
+        // per-run write-chain cleanup (finalizePromptRun -> promptRunWriteChains.Delete) silently no-ops
+        // on a throwaway instance while the real accumulated state on the caller's instance never clears.
+        const injectedFinalizeMock = vi.fn(async () => undefined);
+        const injectedService = { FinalizeCoAgentRun: injectedFinalizeMock } as unknown as ConstructorParameters<
+            typeof SessionManager
+        >[0];
+        const session = makeSessionEntity({
+            ID: 'session-injected',
+            Status: 'Active',
+            Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: 'co-run-injected', promptRunID: 'prompt-run-injected' }),
+        });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager(injectedService);
+        const user = makeUser();
+
+        const ok = await mgr.CloseSession('session-injected', user, provider);
+
+        expect(ok).toBe(true);
+        // The finalize call landed on the INJECTED instance, never the module-default one.
+        expect(injectedFinalizeMock).toHaveBeenCalledTimes(1);
+        expect(injectedFinalizeMock).toHaveBeenCalledWith('co-run-injected', 'prompt-run-injected', user, provider, true, null);
+        expect(finalizeCoAgentRunMock).not.toHaveBeenCalled();
+    });
+
+    it('defaults to its own RealtimeClientSessionService instance when none is injected (back-compat)', async () => {
+        const session = makeSessionEntity({
+            ID: 'session-default-svc',
+            Status: 'Active',
+            Config_: JSON.stringify({ targetAgentID: 't1', coAgentRunID: 'co-run-default', promptRunID: 'prompt-run-default' }),
+        });
+        const { provider } = makeProvider(() => session);
+        const mgr = new SessionManager(); // no injection — e.g. SessionJanitor, telephony services
+        const user = makeUser();
+
+        const ok = await mgr.CloseSession('session-default-svc', user, provider);
+
+        expect(ok).toBe(true);
+        expect(finalizeCoAgentRunMock).toHaveBeenCalledWith('co-run-default', 'prompt-run-default', user, provider, true, null);
     });
 
     it('stamps CloseReason = Explicit by default (untouched call sites get the right reason)', async () => {

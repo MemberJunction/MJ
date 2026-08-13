@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT67 - Content Vectorization Pipeline",
+    "Description": "Exercises the ContentSource / autotag vectorization pipeline (AutotagBaseEngine) end-to-end against the live DB (deterministic + mutation — the embedding call and the vector-DB/Pinecone upsert+delete are stubbed & captured, exactly as the tier stubs LLM/embedding calls; everything below that line runs for real). CV1: the default alwaysChunk+recordId strategy creates a ContentItemChunk row carrying chunk identity (Entity='MJ: Content Item Chunks', RecordID=<chunk PK>, ContentItemID, Sequence) with the item-level VectorRecordID left null and the chunk's VectorRecordID UUID-equal to its row id. CV2: a long item produces ordered multi-chunk rows and re-vectorizing soft-deletes the prior chunks (DeleteStatus=Pending, rows kept) while appending a fresh set with new row + vector ids (no collision). CV3: PurgeDeletedChunks removes exactly the superseded chunks' vectors from the store (DeleteRecords), tombstones those rows (DeleteStatus=Deleted + LastDeletedAt), and leaves live chunks untouched. CV4: EmbedPendingChunks backfills a chunk row created with EmbeddingStatus=Pending (migration/recovery). CV5: VectorMetadata FieldStrategy='explicit' emits minimal metadata (Entity + configured field only). CV6: VectorIndex.Dimensions threads into the embedding call and ProviderConfig.namespaceField routes the upsert. Fixtures are self-cleaning; the two external seams are restored in Teardown.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The content vectorization pipeline creates chunk-identity ContentItemChunk rows, soft-deletes+appends on re-chunk, purges superseded vectors, backfills pending chunks, honors the explicit metadata strategy, and threads dimensions + namespace routing — all verified against real DB rows with the embedding/vector-store seams captured."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "content-vectorization"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "6F31BEEA-DF7D-45EF-99A6-4D2B4EB43E5C"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T01:12:44.594Z",
+    "checksum": "39ee119963e2f315225f263d2b637fe2e3959e2cf83efbf950e9b5e137da8797"
+  }
+}

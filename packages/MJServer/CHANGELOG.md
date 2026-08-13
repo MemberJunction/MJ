@@ -1,5 +1,2002 @@
 # Change Log - @memberjunction/server
 
+## 6.1.0-edge.2
+
+### Minor Changes
+
+- 59def38: The entity-action substrate finishes what its schema has been promising. Seven pieces, all of which
+  share a failure shape: a column, a flag or a field that read as configured and did nothing.
+
+  **Action Filters now actually prevent execution.** `RunAction`'s filter-refusal branch built its
+  result, logged it, and then fell through to run the action anyway — there was no `return`. Every
+  Action Filter has therefore recorded that it prevented something while preventing nothing, since the
+  mechanism shipped. The refusal row is why it went unnoticed: the observable said "prevented" and the
+  side effect happened regardless, so #3606's claim that filters fail closed described evaluation,
+  which landed, rather than enforcement, which did not. **Anyone relying on an Action Filter to gate an
+  action has been getting the action anyway; after this it stops, which is the configured behaviour but
+  a visible change.** A prevented run still writes a log row, deliberately — an operator should be able
+  to see that a filter refused rather than wonder why nothing happened — so its `Message` is now an
+  exported constant, since that is the only thing distinguishing a prevented run from an executed one.
+
+  **Transition filters.** An entity action could see a record's current state and nothing else, so
+  "when Status _becomes_ Approved" was indistinguishable from "when Status _is_ Approved" — which is
+  true on every subsequent save too. `EntityChangeContext` now carries both sides of the save to where
+  filters run, built from `EntityField.OldValue`, which `BaseEntity` has tracked all along and simply
+  never carried anywhere. Filter code gets `DidFieldChange`, `DidFieldChangeToValue`, `OldValues` and
+  `NewValues` on `ActionFilterContext`. A create reports no changes, because a record whose Status
+  started at Approved did not _become_ anything. Comparison is loose across the string boundary
+  metadata forces, so a configured `'1'` matches a numeric `1` rather than silently never matching.
+
+  The capture happens as the first statement of `HandleEntityActions`, deliberately before its first
+  `await`: After-hooks are fire-and-forget, and the moment that method yields, the save completes and
+  reloads the entity, resetting every `OldValue`. Reading `IsCreate` from that same synchronous
+  snapshot also closes a latent bug — `entity.IsSaved` was previously read _after_ an await, so a
+  create whose save finalized in that window dispatched as `AfterUpdate`.
+
+  **Two filter-substrate fixes fall out of using it for real.** `EntityActionFilter.Status` was never
+  consulted, so a `Disabled` binding still gated — and filters fail closed, so that was not an inert
+  row but a permanent block whose only symptom is a trigger that quietly stopped firing. And a binding
+  pointing at an unresolvable filter used to reach the evaluator as `undefined` and throw there:
+  fail-closed by accident, with no usable reason logged. It now returns a failed result naming the
+  filter.
+
+  **Workflow triggers accept a filter.** `ValidateWorkflowSpec` refused `WorkflowEntityEventTrigger.filter`
+  outright because the contract to honor it did not exist. It now reconciles onto an owned
+  `ActionFilter` bound through `EntityActionFilter` — the additive path — and validates that the
+  expression parses, because filters fail closed and a syntax error is not a loud failure, it is a
+  trigger that silently never fires.
+
+  **Record Process on-change triggers.** `OnChangeEnabled` has described itself as running "per-record
+  on save via an owned Entity Action" since the column shipped, and `OnChangeFilter` promised to
+  "compile into the owned Entity Action Filter". Neither owned anything. Saving a Record Process now
+  reconciles that binding, matching ownership on the `RecordProcessID` param — `Run Record Process` is
+  one shared action, so matching on entity + action alone would let a second process silently repoint
+  the first one's trigger. `OnChangeFilter` compiles through the same builder workflow triggers use, so
+  one expression vocabulary covers both surfaces.
+
+  **Durable `After*` dispatch (D14).** After-hooks are fire-and-forget, so a process dying mid-flight
+  loses the action with nothing to retry it. `EntityAction.RunMode = 'Durable'` routes the dispatch to
+  the task-graph substrate as a single-node durable graph — the claim protocol, restart recovery and
+  orphan reclaim that already exist there — rather than adding a third async substrate. Opt-in per
+  binding, because it costs a Task row, a dispatcher hop, and params persisted at rest. When no
+  submitter is registered or submission fails, the work runs **inline**: `Durable` asks for the work to
+  be harder to lose, so dropping it would make opting in less reliable than leaving it off. New
+  `Task.ActionID` widens the assignment exclusivity to three ways, and `TaskGraphSpecNode.actionName`
+  joins `agentName`/`assignToUser`.
+
+  Durability replaces _execution_, not _dispatch_: `RunActionParams.DeferExecution` is called by
+  `RunAction` in place of running the action, after validation and filters have passed, so a durable
+  binding is gated by exactly what an inline one is gated by. Submitting at dispatch time instead —
+  which is where this first landed — would have fired a scoped durable trigger for every record of the
+  entity and a filtered one on every save.
+
+  **Execution-log retention.** `Action.RetentionPeriod` and `ActionExecutionLog.RetentionPeriod` shipped
+  with descriptions and no reader anywhere in the codebase; the log grew forever while the schema
+  claimed otherwise. Retention is now stamped onto each row when the run starts — decided at write
+  time, so editing an action's retention is a going-forward change rather than a retroactive deletion —
+  and a new opt-in `Action Log Retention` scheduled job purges expired rows oldest-first, bounded per
+  run, reporting when it stopped at its ceiling rather than because it was finished.
+
+  **The `Validate` invocation hole.** `EntityActionInvocationValidate` overrode single-record invocation
+  with a near-copy that had drifted into a strict subset: no scope resolution (so a binding narrowed to
+  one record ran `Validate` against every record of the entity) and no provenance (so a whole-record
+  parameter was logged raw, ignoring the binding's `LogValue` rows). The override is deleted; the class
+  inherits, which is what keeps both facts true for `Validate` permanently rather than until the copies
+  drift again.
+
+  **The `RunEntityAction` null contract.** `null` means the action did not run — the binding is scoped
+  and this record falls outside it. `HandleEntityActions` guarded for it; the GraphQL resolver did not,
+  so an out-of-scope binding surfaced to clients as a server error. The signature now says so and the
+  resolver reports it as the ordinary outcome it is.
+
+### Patch Changes
+
+- 55d6299: Close a fail-open gap in GraphQL variables logging, and mark the credential field it was missing.
+
+  The variables-logging redactor binds a GraphQL input type to an entity by name — `/^(Create|Update|Delete)(?<name>.+)Input$/`, then `Entities.find(e => e.ClassName === name)`. Codegen inputs embed the entity ClassName (`CreateMJCredentialInput` → `MJCredential`), so the lookup succeeds and `Encrypt=true` columns are redacted. Hand-written resolver inputs do not: `CreateConnectionInput` captures `Connection`, which is no entity, so no encrypted-field names are contributed and — absent any `@NoLog` — the argument falls through to `shortenForLog` with its values intact. `shortenForLog` truncates whole-object JSON but returns string leaves untruncated, so a long value is emitted in full.
+
+  The boot audit tests only the _name_ pattern, so it classifies these inputs as metadata-bound and stays silent. Every hand-written `Create*Input` in the resolvers is therefore both unredacted and unwarned — the two mechanisms use the same regex, but only the redactor performs the lookup that decides whether redaction can actually apply.
+
+  Two changes:
+  - `CreateConnectionInput.CredentialValues` is now marked `@NoLog`. This field does not map to an entity column — the resolver assigns it onto `MJ: Credentials`.`Values` (which is `Encrypt=true`) in procedural code — so the metadata-driven half of the redactor cannot see it. `@NoLog` is exactly the escape hatch the design documents for this case.
+  - When an input name matches the CRUD convention but resolves to no entity, the redactor now reports it once per input type, naming the type and what to do about it, rather than silently falling through.
+
+  Both are scoped to verbose mode (`loggingSettings.graphql.logVariables`), which remains off by default. No behaviour change in the default configuration.
+
+- 8288711: Fix process-wide server cache corruption, and make the cache structurally unable to be
+  corrupted by consumers.
+
+  **Take this bump urgently if you run MJAPI.** `ResolverBase` mapped GraphQL transport field
+  names onto the data provider's own result rows, which the server cache holds _by reference_.
+  Preparing one GraphQL response therefore rewrote `__mj_CreatedAt` to the wire alias
+  `_mj__CreatedAt` **inside the live cache**, and every later read served the corrupted shape —
+  failing in `BaseEntity.SetMany` with `Field _mj__CreatedAt does not exist on <Entity>`. The
+  cache is process-wide, so a single response poisoned every subsequent request across all
+  workers. Fixed by mapping onto copies.
+
+  Fixing it at the reader alone left the whole class of bug open — nothing in the type system or
+  the API surface said "this array is shared, do not mutate," and the exposure runs in both
+  directions (a cache _hit_ returns the stored array; a cache _miss_ stores the array it is about
+  to return). So the cache now defends itself:
+  - **`ILocalStorageProvider` gains an optional `readonly SharesReferences?: boolean`**, declaring
+    whether a provider hands back live references (the in-memory providers) or serialized copies
+    (IndexedDB, localStorage, Redis, MMKV). **Fully backward compatible**: existing implementations
+    keep compiling, and omitting the property is not an opt-out — `LocalCacheManager` measures any
+    provider that does not declare one (store a sentinel, read it back, compare identity), so a
+    provider written before this contract still gets the correct protection instead of silently
+    losing it to a falsy default.
+  - **`LocalCacheManager` deep-freezes row data at write time** — rows, their nested values, and
+    the array itself — but only when the provider shares references. Mutations then throw a
+    `TypeError` at the offending line instead of silently corrupting shared state, and cache
+    **hits cost nothing extra** (the freeze is a one-time per-write cost). Applied at both write
+    funnels: `SetRunViewResult` / `SetRunQueryResult` and `storeCachedResults`, the in-place
+    slot-maintenance path that bypasses the first. The freeze lands immediately after the only
+    gate that can decline a write (the synchronous oversized-entry check) and **before** the
+    awaited eviction steps — callers do not always await these methods, so any yield point
+    before the freeze is a window in which shared rows are handed out still mutable. Browser
+    clients are untouched (IndexedDB / localStorage serialize), but **Node-side clients — the
+    CLI, MetadataSync, and anything else on an in-memory provider — do get the freeze**, so
+    "client behavior is unchanged" holds only for the browser. The freeze decision also follows
+    the provider across `SetStorageProvider`: MJAPI initializes on the in-memory provider during
+    engine loading and swaps to Redis afterward, two providers with opposite semantics in one
+    process. The deep-freeze skips **binary payloads**
+    (`Buffer`/TypedArray/`ArrayBuffer`, e.g. `varbinary` columns — `Object.freeze` throws on
+    non-empty views by spec), freezes parent-first so cycles terminate, and a freeze failure of
+    any kind degrades to a logged, unfrozen store — it can never fail a `RunView`/`RunQuery`.
+  - **Dataset cache slots get their own key namespace.** `GetDatasetByName` keyed its
+    write-through cache with the same fingerprint builder ordinary reads use, passing only
+    `{ EntityName, ExtraFilter }` — and every shipped dataset item has a NULL `WhereClause`, so a
+    dataset item and a plain unfiltered `RunView` of the same entity produced an IDENTICAL key and
+    silently shared one slot. That leaked the `MJ_Metadata` scaffolding exemption below to ordinary
+    callers of `MJ: Entities` / `MJ: Entity Fields` (the most-read entities in the process, served
+    unfrozen), and in the other direction let an ordinary read repopulate an evicted slot FROZEN so
+    the next metadata refresh threw. `GenerateRunViewFingerprint` now takes an optional dataset
+    segment, appended only when supplied — ordinary reads keep their exact pre-existing key, so no
+    existing cache entry is invalidated.
+  - **`CacheWriteOptions.ProviderInternalScaffolding`** exempts slots whose only consumer is the
+    provider that wrote them — scoped to the **`MJ_Metadata` dataset only** at its single write
+    site. Metadata bootstrap needs this: the provider's own assembly (`PostProcessEntityMetadata`,
+    plus `GetAllMetadata`'s Applications assembly) hydrates its object graph by mutating those
+    rows in place. Every **other** dataset's cached rows are frozen shared state like any RunView
+    result, because `GetDatasetByName` serves them to arbitrary consumers (`BaseEngine.Load` hands
+    the live arrays to every engine subclass). The flag is persisted and carried forward through
+    slot maintenance so a later save cannot re-freeze the slot.
+
+  Pre-existing consumer bugs surfaced by the freeze and fixed:
+  - **`BaseEntity.Get()` wrote to its own source row.** The raw-mode fast path keeps the caller's
+    row by reference and `Get()` wrote back into it to memoize a converted `Date` or an rtrimmed
+    fixed-width string — so on a cache-served row, _reading_ a `datetime` or `CHAR(n)` field threw.
+    This broke AI cost calculation on `MJ: AI Model Costs.Currency`. `Get()` now memoizes into a
+    per-instance side table and never writes to the row at all. Gating the write on a once-sampled
+    `Object.isFrozen` was not sufficient: the freeze is asynchronous relative to the consumer (cache
+    writes are not always awaited), so the sample could be stale by the first read and the write
+    still threw. Keeping the memo off the row makes freeze timing irrelevant AND restores the
+    optimization for frozen rows, which the isFrozen-guard version had given up.
+  - **`ResolverBase.MapFieldNamesToCodeNames` renamed fields on its argument.** Callers pass rows
+    straight from `findBy`/`RunView` — the cache's own objects — so with the freeze in place
+    `UserByEmail`, `UserByID`, `UserByEmployeeID` and every CodeGen-generated single-record resolver
+    over a cached entity threw `Cannot add property _mj__CreatedAt, object is not extensible`
+    (reproduced live against a running MJAPI). Before the freeze it did something quieter and worse:
+    it rewrote the cached row's keys. It now returns a copy, which fixes every call site at once;
+    `ArrayMapFieldNamesToCodeNames` likewise returns a new array of new objects.
+  - **`GenericDatabaseProvider.serveFromServerCache` and the smart-cache legs** duplicated
+    `CachedRunViewResult` as four inline structural types, which had already caused one silent
+    field drop; they now share the canonical type.
+  - **The singular server RunView path silently dropped a `PostRunView` hook's returned
+    replacement result** (`PostRunView` reassigned a local; `RunView` returned the pre-hook
+    reference), while the client and batch paths honored it. The freeze un-masked this: with
+    in-place row mutation now throwing, no signature-conformant result-modifying hook worked on
+    that path at all. `PostRunView` now copies a hook-supplied replacement onto the result object
+    it was handed, so the change reaches the caller — its `Promise<void>` signature is unchanged,
+    so external subclasses that override it keep compiling. Hook docs (`PostRunViewHook`,
+    `BaseServerMiddleware.PostRunView`) now state that rows may be frozen shared cache state:
+    modify by mapping onto copies (`results.Results = results.Results.map(r => ({ ...r, ... }))`)
+    or return a new result — never mutate rows in place.
+  - **Cache-served reads skipped the `PostRunView` hook chain entirely.** `PostRunView` is the
+    OUTPUT half of the data-hook enforcement seam (masking / audit) and hooks receive
+    `contextUser`, so masking is per-user while a cache slot is shared — there is no correct way
+    to apply it once at write time for a reader who has not arrived yet. Three of the four server
+    paths already ran the chain (miss, mixed batch, client smart-cache); the singular cache hit and
+    the all-cached batch returned early, so masking depended on whether a _sibling_ view in the same
+    batch happened to miss. This looked correct before only by accident: the cache write precedes
+    the hooks, so an in-place masking hook wrote through into the cached rows — which both made
+    later hits appear masked and baked one user's masking decision into a shared slot. Both hit
+    paths now run the chain against the per-hit result wrapper, so a hook's replacement reaches the
+    caller and can never write back into the cache. The zero-hook path (the default — no shipped
+    middleware overrides `PostRunView`) costs ~80ns, down from ~2.4µs: `GetDataHooks` now memoizes
+    the resolved global object store, whose `GetGlobalObjectStore()` probe throws and catches a
+    `ReferenceError` on every call under Node (~1.4µs), and the hit paths check for registered hooks
+    before awaiting the chain.
+
+  The cache result types stay ordinary mutable arrays, documented as shared-and-frozen: the runtime
+  freeze is the enforcement, and a `readonly` marker would have broken existing downstream readers
+  without adding protection. **This release contains no breaking changes** — every public signature
+  it touches is additive or unchanged.
+
+  Consumer-facing contract, documented in `guides/CACHING_AND_PUBSUB_GUIDE.md`: **treat rows from
+  `RunView`/`RunViews`/`RunQuery` as read-only** unless you produced them. Copy before mutating —
+  `rows.map(r => ({ ...r }))`, `[...rows].sort(...)`. Narrow-`Fields` requests and
+  `ResultType: 'entity_object'` results are unaffected (both get per-caller objects).
+
+- ac7a79a: Fix O(N²) GraphQL schema-build scaling at MJAPI boot. `buildSchemaSync` was super-linear in entity count due to two O(N²) hotspots inside type-graphql (a loop-invariant recompute in the field-config thunk, and per-field/per-def `.filter()` scans over global metadata arrays). Applied via `patch-package` (`packages/MJServer/patches/type-graphql+2.0.0-beta.3.patch`) as pure memoization/indexing that preserves schema output exactly. Measured at 1,380 entities: `buildSchemaSync` 66.3s → 1.2s (54×), total cold boot 95.6s → 32.1s (−66%); win grows with entity count and does not affect per-request serving. Also adds flag-gated boot-profiling instrumentation (`MJ_SCHEMA_PROFILE` / `MJ_SCHEMA_CPUPROF`, no-op unless set).
+- 2262b40: A host can run MJServer without the task-graph dispatcher
+
+  `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1` suppresses the durable dispatcher at boot. There was no way to
+  do this before: the dispatcher started unconditionally wherever the data source was SQL Server.
+
+  The case that needs it is the integration suite. `IT74 - Task Graph Execution` drives its own
+  dispatcher against a stub runner and asserts exactly-once execution, but a dispatcher claims from the
+  whole task table rather than from its own graphs — so any MJServer sharing that database races the
+  suite for every claim and runs the suite's tasks with the real agent runner. The bundle then reports
+  tasks that never ran and graphs that settled to the wrong status, with the winner of each race
+  differing per run. The suite still needs MJAPI up for its client-transport members, so stopping the
+  server is not an option.
+
+  Unset, behaviour is unchanged.
+
+- d8adda1: **BREAKING — `UserCache` moved packages. Update the import, not just the call.**
+
+  `UserCache` now lives in `@memberjunction/generic-database-provider`. It is no longer exported
+  from `@memberjunction/sqlserver-dataprovider`, and there is deliberately **no re-export shim**,
+  so every import of the symbol must be repointed or it will fail to resolve:
+
+  ```diff
+  - import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+  + import { UserCache } from '@memberjunction/generic-database-provider';
+  ```
+
+  `Refresh` is now dialect-neutral and takes the configured provider rather than an
+  `mssql.ConnectionPool`:
+
+  ```diff
+  - await UserCache.Instance.Refresh(pool, intervalMs);
+  + await UserCache.Instance.Refresh(provider, intervalMs);
+  ```
+
+  **These are two separate breaks, and the first is much wider than the second.** The import path
+  affects _every_ consumer of the symbol — reads included. The signature affects only the handful
+  of callers of `Refresh`. Anything that imports `UserCache` merely to call `Users`,
+  `GetSystemUser()` or `UserByName()` still has to change its import, so a consumer who reads only
+  "the signature changed" will treat this as a no-op and fail to build. In this repo the split was
+  56 files versus 9 call sites.
+
+  Packages that import `UserCache` must also declare `@memberjunction/generic-database-provider`
+  as a dependency — pnpm resolves strictly, so an undeclared import fails rather than falling
+  through to a hoisted copy.
+
+  **Check for dynamic imports too**, not just static ones. `await import('@memberjunction/sqlserver-dataprovider')`
+  destructuring `UserCache` breaks the same way, and a grep for `import { … } from` will not find it.
+
+  **Unchanged:** the read surface (`Users`, `GetSystemUser`, `UserByName`, `SYSTEM_USER_ID`), and
+  the class name. The name is load-bearing — `BaseSingleton` keys its global store on the
+  constructor name, so keeping it `UserCache` preserves singleton identity across the move.
+
+  **Also fixed:** `_users` now initializes to `[]`. It previously stayed `undefined` after a
+  `Refresh` that never ran or that failed (failures are swallowed into `LogError`), so
+  `GetSystemUser()` threw a `TypeError` off `.find()` instead of returning `undefined` as its
+  callers already assume.
+
+  **Why:** the cache was dialect-neutral except for that one `mssql` type, which left PostgreSQL
+  with no user cache at all and produced four separate hand-rolled "read `vwUsers` + `vwUserRoles`,
+  build `UserInfo[]`" implementations — one of which reached into the singleton's private field
+  through a cast from another package. Those are all removed, and a PostgreSQL process that never
+  goes through the server bootstrap now has a system user.
+
+- 1c0d586: Flow agents now execute on the durable task-graph dispatcher instead of walking their own graph
+  inside an agent run.
+
+  `FlowAgentType.DetermineInitialStep` compiles the agent's steps and paths into a `TaskGraphSpec` and
+  returns a `Tasks` step; `BaseAgent.executeTasksStep` submits it and detaches. From there a workflow
+  is `Task` rows owned by a server-side dispatcher, with the same claiming, conditions, skip cascade,
+  retry and failure semantics as any other graph — one traversal engine rather than two that drift.
+  The in-run walker is retained as the reference implementation the compiler is checked against, but
+  refuses at its single choke point, so a workflow that runs at all provably ran on the new engine.
+
+  Also in this change:
+  - `Task` gains `StepType`, `PromptID` and a typed `Configuration` bag (`ITaskStepConfiguration`)
+    carrying kind-specific settings, the payload mappings, the execution policy and the author's
+    canvas layout. `CK_Task_Assignment` now counts `PromptID`.
+  - Payload mapping semantics are lifted into `@memberjunction/ai-core-plus` so both engines share one
+    dialect — the `*` wildcard, case-insensitive result lookup, `[]` append, `$message` fields, and the
+    `static:` / `payload.` / `data.` / `context.` prefixes.
+  - `ForEach` and `While` steps run through a new `TaskLoopExecutor`: bounds (`maxIterations: 0` means
+    unlimited), `continueOnError`, delay, and parallel batches that keep results in **iteration** order.
+  - New deterministic DAG layout (`LayoutTaskGraph` / `LayoutGraphNodes` / `GraphLayoutBounds`) — a
+    `Task` row has no position columns, so a run view previously drew every node on the origin.
+  - A settled graph credits its spending back to the submitting run through the `…Rollup` columns on
+    `AIAgentRun`, which existed since v3 and were never written. `TotalCost` keeps its current meaning.
+  - `TaskGraphActionRunner` returns a flat, name-addressable result instead of an `ActionParam[]`, so
+    output mappings resolve and branch conditions can be evaluated.
+  - `GetTaskGraphSubmitter()` now honours its documented contract and returns `null` when no
+    durable-execution package is loaded, instead of an instantiated abstract base.
+
+  New guide: `guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md`.
+
+- Updated dependencies [d430fa5]
+- Updated dependencies [c49a34a]
+- Updated dependencies [71817db]
+- Updated dependencies [255d506]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [59def38]
+- Updated dependencies [11de1a3]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [aa4fbe9]
+- Updated dependencies [9fc0e2d]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [9a29da4]
+- Updated dependencies [e26c866]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [82a8585]
+- Updated dependencies [d8adda1]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/codegen-lib@6.1.0-edge.2
+  - @memberjunction/search-engine@6.1.0-edge.2
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/ai@6.1.0-edge.2
+  - @memberjunction/ai-agents@6.1.0-edge.2
+  - @memberjunction/actions-base@6.1.0-edge.2
+  - @memberjunction/actions@6.1.0-edge.2
+  - @memberjunction/generic-database-provider@6.1.0-edge.2
+  - @memberjunction/core-entities-server@6.1.0-edge.2
+  - @memberjunction/scheduling-engine@6.1.0-edge.2
+  - @memberjunction/ai-core-plus@6.1.0-edge.2
+  - @memberjunction/task-graph@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.2
+  - @memberjunction/redis-provider@6.1.0-edge.2
+  - @memberjunction/ai-engine-base@6.1.0-edge.2
+  - @memberjunction/aiengine@6.1.0-edge.2
+  - @memberjunction/ai-agent-manager@6.1.0-edge.2
+  - @memberjunction/integration-engine@6.1.0-edge.2
+  - @memberjunction/ai-mcp-client@6.1.0-edge.2
+  - @memberjunction/storage@6.1.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.2
+  - @memberjunction/core-actions@6.1.0-edge.2
+  - @memberjunction/notifications@6.1.0-edge.2
+  - @memberjunction/ai-agent-manager-actions@6.1.0-edge.2
+  - @memberjunction/clustering-engine@6.1.0-edge.2
+  - @memberjunction/tag-engine@6.1.0-edge.2
+  - @memberjunction/tag-engine-base@6.1.0-edge.2
+  - @memberjunction/computer-use-engine@6.1.0-edge.2
+  - @memberjunction/ai-prompts@6.1.0-edge.2
+  - @memberjunction/ai-bridge-base@6.1.0-edge.2
+  - @memberjunction/ai-bridge-ringcentral@6.1.0-edge.2
+  - @memberjunction/ai-bridge-teams@6.1.0-edge.2
+  - @memberjunction/ai-bridge-twilio@6.1.0-edge.2
+  - @memberjunction/ai-bridge-vonage@6.1.0-edge.2
+  - @memberjunction/ai-bridge-server@6.1.0-edge.2
+  - @memberjunction/remote-browser-base@6.1.0-edge.2
+  - @memberjunction/remote-browser-server@6.1.0-edge.2
+  - @memberjunction/ai-vector-sync@6.1.0-edge.2
+  - @memberjunction/api-keys@6.1.0-edge.2
+  - @memberjunction/actions-apollo@6.1.0-edge.2
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.2
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.2
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.2
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.2
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.2
+  - @memberjunction/communication-types@6.1.0-edge.2
+  - @memberjunction/communication-engine@6.1.0-edge.2
+  - @memberjunction/entity-communications-base@6.1.0-edge.2
+  - @memberjunction/entity-communications-server@6.1.0-edge.2
+  - @memberjunction/communication-ms-graph@6.1.0-edge.2
+  - @memberjunction/communication-sendgrid@6.1.0-edge.2
+  - @memberjunction/credentials@6.1.0-edge.2
+  - @memberjunction/doc-utils@6.1.0-edge.2
+  - @memberjunction/encryption@6.1.0-edge.2
+  - @memberjunction/external-change-detection@6.1.0-edge.2
+  - @memberjunction/integration-engine-base@6.1.0-edge.2
+  - @memberjunction/lists@6.1.0-edge.2
+  - @memberjunction/livekit-room-server@6.1.0-edge.2
+  - @memberjunction/data-context@6.1.0-edge.2
+  - @memberjunction/queue@6.1.0-edge.2
+  - @memberjunction/record-comparison@6.1.0-edge.2
+  - @memberjunction/scheduling-actions@6.1.0-edge.2
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.2
+  - @memberjunction/templates@6.1.0-edge.2
+  - @memberjunction/testing-engine@6.1.0-edge.2
+  - @memberjunction/testing-engine-base@6.1.0-edge.2
+  - @memberjunction/version-history@6.1.0-edge.2
+  - @memberjunction/esignature@6.1.0-edge.2
+  - @memberjunction/computer-use@6.1.0-edge.2
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.2
+  - @memberjunction/postgresql-dataprovider@6.1.0-edge.2
+  - @memberjunction/remote-browser-cdp@6.1.0-edge.2
+  - @memberjunction/remote-browser-selfhost@6.1.0-edge.2
+  - @memberjunction/ai-vectordb@6.1.0-edge.2
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.2
+  - @memberjunction/auth-providers@6.1.0-edge.2
+  - @memberjunction/component-registry-client-sdk@6.1.0-edge.2
+  - @memberjunction/integration-progress-artifacts@6.1.0-edge.2
+  - @memberjunction/integration-schema-builder@6.1.0-edge.2
+  - @memberjunction/data-context-server@6.1.0-edge.2
+  - @memberjunction/scheduling-base-types@6.1.0-edge.2
+  - @memberjunction/schema-engine@6.1.0-edge.2
+  - @memberjunction/server-extensions-core@6.1.0-edge.2
+  - @memberjunction/interactive-component-types@6.1.0-edge.2
+  - @memberjunction/config@6.1.0-edge.2
+  - @memberjunction/lists-base@6.1.0-edge.2
+  - @memberjunction/sql-dialect@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Minor Changes
+
+- 394d276: Phase 0 of the unified workflow DAG engine program (plan: PR #3456) — retires three dead or superseded subsystems so the **Workflow** name is freed for the program's user-facing vocabulary, and so the task-graph engine isn't built alongside a parallel, non-functioning orchestration model.
+
+  **Eleven tables dropped** — the Skip v1-era workflow schema (`Workflow`, `WorkflowRun`, `WorkflowEngine`), the Skip v1-era report artifact (`Report`, `ReportCategory`, `ReportSnapshot`, `ReportUserState`, `ReportVersion`), the legacy `ScheduledAction` / `ScheduledActionParam` pair, and the report-era `OutputTriggerType`. All were verified dead or superseded: nothing outside generated code read the workflow tables, the `Reports` resource type named a `DriverClass` (`ReportResource`) that exists nowhere in the repo, and the legacy scheduled-action cron due-check is mathematically always-false so authored schedules could never fire.
+
+  **Breaking — the report execution surface is gone.** `RunReport` was already marked `@deprecated` ("Reports are no longer supported... Interactive Components and Artifacts are replacements") and read `vwReports`, which this migration drops. Removed: `IRunReportProvider`, the `RunReport` class, `RunReportParams` / `RunReportResult`, `BaseEntity.RunReportProviderToUse`, `BaseAngularComponent.RunReportToUse`, `GraphQLDataProvider.GetReportData`, the `GetReportData` GraphQL query and `CreateReportFromConversationDetailID` mutation, and the `GET /reports/:reportId` REST endpoint. Accepted deliberately in the open v6 breaking-change window. Consumers should use Interactive Components and Artifacts.
+
+  **Scheduled Actions are superseded by Scheduled Jobs, and the UI moved with them.** Contrary to the original plan's read, the entities were live authoring surface: four Knowledge Hub / AI dashboards created and read them. Those surfaces now author a `MJ: Scheduled Jobs` row of type **Action** — the same work, executed by `ActionScheduledJobDriver`, with the action and its parameters carried in the job's `Configuration` JSON rather than in child parameter rows. `ContentSource.ScheduledActionID` becomes `ContentSource.ScheduledJobID`. A shared `action-scheduled-job` helper in `ng-dashboards` owns the mapping so it isn't triplicated across surfaces.
+
+  **Also removed:** the `@memberjunction/scheduled-actions` and `@memberjunction/scheduled-actions-server` packages (nothing depended on either), the `MJScheduledActionEntityExtended` subclass, the "coming soon" Scheduled Actions placeholder dashboard, and the Explorer report wiring (route, `TabService.OpenReport`, `NavigationService.OpenReport`, resource-type map entry, home-pin matcher, and the dashboard add-item Reports branch).
+
+- 394d276: Phase 1 of the unified workflow DAG engine program (plan: PR #3456) — makes the task substrate tell the truth about what actually happened.
+
+  **Payloads become columns.** `Task` gains `InputPayload`, `OutputPayload`, `ErrorMessage`, and `AgentRunID`. Inputs and outputs previously rode inside `Task.Description` behind `__TASK_METADATA__` / `__TASK_OUTPUT__` markers, which leaked orchestration plumbing into search results and the task detail panel. A one-time migration backfill converts existing marker rows into the new columns and strips the markers; there is deliberately **no fallback parse** in code, because a fallback with no backfill never dies. The backfill is conservative — a row whose marker text doesn't parse as JSON is left byte-for-byte intact for inspection rather than silently discarded.
+
+  **Failures propagate instead of stalling.** A `Failed` dependency used to leave its dependents `Pending` forever: they never became eligible, so the graph appeared to finish while work silently never ran — and the parent was marked `Complete` at 100% regardless. Now failure propagates transitively to `Blocked`, and the parent rolls its children up honestly (`Failed` > `Blocked` > `Cancelled` > `Complete`, with progress counting only completed children). Completion notifications fire only for genuinely successful graphs.
+
+  **Bad graphs are rejected before they are persisted.** Dependency cycles are detected at creation (a cyclic graph could previously be saved and then deadlock silently), and a graph naming an unknown agent is now an error rather than being logged-and-skipped — which used to execute the graph with holes where the caller's tasks should have been.
+
+  **Waves run in parallel.** Eligible tasks execute with bounded concurrency (5) rather than one at a time, and each pass loads the graph once instead of issuing a dependency query per candidate task. Stalled graphs — pending work, nothing runnable, nothing in flight — are now detected and logged rather than exiting quietly.
+
+  **The Gantt links the right run.** `Task.AgentRunID` records the specific run that executed each task. The UI previously joined tasks to runs through the shared `ConversationDetailID`, so every sibling task in a graph resolved to the _same_ agent run; the link was wrong for all but one. `Blocked` and `Failed` also now render distinctly instead of inheriting the pending treatment.
+
+  **New pure graph algorithms** in `@memberjunction/ai-core-plus` (`computeEligibleTasks`, `computeTasksToBlock`, `computeParentRollup`, `detectCycle`, `isGraphStalled`, `findUnknownDependencyRefs`) — dependency-free, operating on plain shapes rather than entities, with 44 unit tests. Phase 2's durable dispatcher consumes these unchanged rather than reimplementing eligibility and propagation.
+
+  **Also:** dispatcher claim columns (`ClaimedBy`, `ClaimExpiresAt`) and their supporting indexes land now so Phase 2 adds the dispatcher without further schema churn — nothing reads them yet. `AIAgentRunStep.StepType` gains `TaskGraph`. New deterministic integration bundle `task-graph-orchestration` (TG1–TG4) covering cycle rejection, unknown-agent rejection, payload columns, and the new schema's presence in generated metadata.
+
+- 394d276: Phase 2 of the unified workflow DAG engine program (plan: PR #3456) — task-graph execution moves server-side and becomes invocation-agnostic.
+
+  **New package `@memberjunction/task-graph`.** Deliberately not AI-prefixed (D11): an LLM, deterministic code, or a human UI can all construct and submit a DAG. It contains `TaskGraphSpec` (the one fully-qualified contract every producer authors against, D16), a pure validator, `TaskGraphService` (submission), `TaskClaimStore` (the CAS claim protocol), and `TaskGraphDispatcher` (durable execution). Graph _semantics_ stay in the Phase 1 pure algorithms in `ai-core-plus` — eligibility, failure propagation, parent rollup and stall detection are consumed unchanged, so the in-run and durable executors cannot drift apart.
+
+  **Submission is split from execution (D2).** `TaskGraphService.Submit` validates, resolves agents, persists parent + children + edges, and returns. Nothing waits for the work. That is what makes every channel equal (D1).
+
+  **BREAKING: `ExecuteTaskGraph` is removed (D12).** It awaited an entire multi-step workflow inside one long-lived GraphQL request, so a page reload lost the awaited promise, a server restart orphaned every in-flight task, and no channel but Explorer could reach the substrate. Replaced by `SubmitTaskGraph`, `CancelTaskGraph`, and `RetryTask`. Accepted deliberately in the open v6 window; its sole known caller — the Explorer conversation client — becomes an observer in this same change.
+
+  **The durable dispatcher.** A compare-and-swap claim protocol over `ClaimedBy`/`ClaimExpiresAt` (the columns Phase 1 landed): claiming is a single guarded `UPDATE ... WHERE Status='Pending'` whose rowcount decides the winner, so two instances never run the same task without a distributed lock manager. Long tasks heartbeat to extend their claim; startup and periodic reconciliation return expired claims to `Pending`, which is what turns a crash from "work stranded forever" into "work resumes". Per D20 _every_ state transition is guarded on `ClaimedBy=@me`, not just the initial claim, because `MJ: Tasks` stays user-writable — a stale executor's completion write fails cleanly instead of double-completing. Human tasks are exempt from reclamation: a task parked on a person legitimately has no claim, and reclaiming it would reset an approval out from under the user.
+
+  **Server-side detection at three seams.** Task graphs emitted in an agent's payload are now detected and submitted from the MJServer run path, `BaseMessagingAdapter` (ahead of the existing text-regex delegation, since a structured graph is unambiguous), and the Scheduling drivers. Previously only the Explorer client looked, so **Slack/Teams and scheduled routines silently dropped every graph an agent emitted** — the plan's core verified gap. The detection shim is explicitly temporary and dies in Phase 3 when `Tasks` becomes a typed `nextStep`.
+
+  **Provider isolation.** The dispatcher mints a fresh provider per task via an injected `ProviderFactory`, so parallel tasks never share a transaction scope. MJServer supplies the implementation, keeping the dependency MJServer → task-graph and never the reverse.
+
+  **Also:** 18 new unit tests for the validator; integration bundle grows with the three seam checks deferred from Phase 1 (cycle rejection, unknown-agent rejection, payload columns), now targeting `TaskGraphService`'s public API.
+
+- 394d276: Phase 4 of the unified workflow DAG engine program (plan: PR #3456) — convergence. Design-time flows and runtime task graphs stop being two graph models and become one.
+
+  **One traversal engine, `GraphTraversalEngine`.** Flow agents and task graphs were always the same shape — nodes, conditional edges, joins — reached from opposite directions. `FlowAgentType` did not merely have its own copy of the traversal rules; it had **four**, written out separately for the post-prompt, post-action, initial-step and skip-recursion paths. They had already drifted: the skip recursion omits the inactive-destination fallback the other three have, so a skipped node routed differently from a normal one for reasons nobody chose. Both executors now consume one dependency-free engine — graph storage arrives through a synchronous repository seam, condition evaluation through an injected evaluator — so the in-run and durable executors keep completely different state backends while sharing one definition of the rules.
+
+  **Four behaviors deliberately changed, each pinned by a named test** so a future "restore parity" pass has to argue with a test rather than quietly undo a fix:
+  1. **Fan-out follows every satisfied edge.** The old code fetched the full edge list and then indexed `[0]`, silently discarding the rest — a genuine fan-out ran one branch and dropped the others with no diagnostic.
+  2. **A missing destination is a rejection, not a fatal error.** Previously an _inactive_ destination fell through to the next alternate while a _dangling_ one failed the graph outright. A data problem should not be more fatal than a deliberately disabled step.
+  3. **A condition that throws is distinguishable from one that evaluated false.** Both still refuse the edge — a malformed expression must never become an accidental `true` — but a graph stalled by a typo no longer looks identical to one that finished normally.
+  4. **Results are addressed by node id.** The old lookup read the tail of the execution path, which was deduped on revisit, so a condition on a loop-back edge silently read a _different_ node's output.
+
+  Also not ported: the `Priority <= 0` fallback branch, which was unreachable. Unconditional edges are collected in the main pass, so it could only run when every edge had a condition — in which case it matched nothing. Fallbacks work, and always did, via an unconditional low-priority edge.
+
+  **Frontier, joins and concurrency.** `TraversalState` tracks a set of active nodes rather than a single program counter. AND-joins (matching `Prerequisite`) are the default and OR-joins map to `Optional` — which is _why_ the two models converge: "wait for every predecessor" is the same rule in both. A predecessor that failed, or that can no longer be reached, counts as settled rather than pending, so an AND-join behind an untaken branch cannot deadlock.
+
+  **Flow gets a params bag.** `traversalMode` defaults to `'sequential'`, and that default is load-bearing: existing flows have fan-out shapes drawn in the editor that have never actually run in parallel, and flipping the default would start executing branches their authors have never seen run. Graphs built from a `TaskGraphSpec` always run parallel regardless.
+
+  **Conditional edges for durable graphs** (migration: `TaskDependency.Condition`, NULL = unconditional, so no existing graph changes meaning). Same column shape and same grammar as `AIAgentStepPath.Condition` — deliberately, because if the two needed different storage then Save as Workflow would need a translation layer and the models had not really converged. The dispatcher resolves conditions by _dropping_ edges rather than adding a second rule to eligibility, which keeps one definition of "ready". One asymmetry is intentional: where the flow executor skips an edge whose condition cannot be evaluated, the dispatcher **keeps** it — there, dropping a prerequisite would run a dependent task early, turning a typo into out-of-order execution, whereas keeping it stalls the graph visibly.
+
+  **Human tasks are announced.** A human task becoming eligible is the moment its assignee can finally act, and nothing else in the system knew that moment had arrived — the task sat `Pending` behind prerequisites and no save touched it when they cleared. Without a notification the workflow simply stopped, waiting on someone who was never told. The dispatcher now sends one through `NotificationEngine` (new metadata-seeded `Task Assignment` type) exactly once, marked durably so a restart cannot resend. Assignment stays self-only until the authorization model in #3524 lands.
+
+  **`continuation: 'reinvoke'` is now delivered**, via a `TaskContinuationDeliverer` seam. Deferred out of Phase 3 because implementing it inside the dispatcher would have inverted the dependency to task-graph → ai-agents; the seam keeps the direction correct, and a host that cannot start agent turns degrades to a message rather than dropping the outcome of work that genuinely ran.
+
+  **Save as Workflow (D17)** — `ConvertTaskGraphToAgentSpec` projects a runtime graph onto a Flow `AgentSpec`. That it is a projection and not a translation is the empirical test of whether the convergence was real. The one inversion: `dependsOn` points backwards, a flow path points forwards. Losses are **returned, never swallowed** — a conversion that quietly dropped a human approval step would hand someone a workflow that skips an approval they believed they had saved.
+
+  **`TaskOrchestrator` retired.** Phase 2 orphaned it; it had zero callers and was not even exported.
+
+  **Coverage:** 47 new unit tests (29 traversal engine, 18 converter) plus integration checks TG9 (conditional edges round-trip) and TG10 (the notification type is seeded). IT71 runs 10/10.
+
+  Two latent test failures fixed along the way, both of which were hiding: `flow-agent-type.test.ts` (18 parity tests) stopped collecting once the adapters pulled `core-entities` into its module graph, and IT71 had a metadata record but was **never joined to the integration suite**, so it would not have run in the deterministic tier at all.
+
+- 394d276: Phase 7 of the unified workflow DAG engine program (plan: PR #3456) — Track D, the trigger layer. Everything here closes a gap where something _claimed_ to work and did not.
+
+  **Entity-change triggers only bind where an agent can safely run.** A `WorkflowSpec` trigger passed its `invocationType` straight through, and `Validate` / `BeforeCreate` / `BeforeUpdate` / `BeforeDelete` are real invocation names — so a workflow could bind an unbounded agent run _inside_ a user's save, in the held transaction, with the power to abort it. Validation now refuses anything but the `After*` forms, and the shorthand an author writes (`Update`) resolves to `AfterUpdate` rather than drifting from the name the platform actually fires. That drift was live: the contract documented `Create | Update | Delete`, none of which the platform matches, so the first trigger ever saved through it failed to resolve.
+
+  **Trigger scope stopped being decorative.** `scopeEntityName` / `scopeRecordID` were declared, documented, accepted by validation — and then referenced nowhere in reconciliation. A workflow the author scoped to one record fired on _every_ record of the entity while the UI showed it as scoped. They now reconcile onto the binding's own `ScopeEntityID` / `ScopeRecordID`, which the engine's scope resolver already honored. `filter` is **refused** rather than accepted-and-ignored: narrowing by predicate needs the before/after values of a change, a contract that does not exist yet, and a workflow runs an agent — over-firing costs real money. Accepting it later is additive; the reverse would break specs already published against it.
+
+  **An entity may bind the same action more than once (`UQ_EntityAction_ActionID_EntityID` dropped).** The v5.37.x junction sweep added that constraint under a stated scope of _"pure junction tables — two foreign-key columns plus ID/Sequence/timestamps, with no other meaningful data columns."_ `EntityAction` never met it: even then it carried `Status`, `Sequence` and `LoggingMode` and owned three child collections. Three months later #3408 added `ScopeEntityID`/`ScopeRecordID` so a binding could attach to "this Deal Type" — a feature the constraint makes unusable, since one binding per (entity, action) means one scope, so "every Deal" and "this Deal Type" cannot coexist. It also forced a single param set, filter set and scope to be shared across _every_ event an action responds to, making "on create run agent X, on update run agent Y" unexpressible. `V202608080100__v6.1.x__Drop_EntityAction_Uniqueness` removes it with no replacement; a narrower index would still refuse two unscoped bindings differing only by invocation type. Nothing in the runtime assumed uniqueness — every accessor already returns a collection and `HandleEntityActions` already iterates — so this is schema-only. Each workflow now owns its own binding, matched on the agent it dispatches to plus its scope; reusing a shared row would have rewritten `AgentID` and silently repointed one workflow's trigger at another's agent.
+
+  **A self-trigger guard, because enrich-and-write-back is the normal shape.** "When a ticket changes, summarize it and store the summary" saves the ticket, which re-fires the action, forever. `EntityActionDispatchGuard` keys every automatic dispatch by `(entity action, entity, record)` and tracks origin through the async call tree with `AsyncLocalStorage`, so re-entry is detected however deep inside an agent run the write-back happens — no call site threads anything. Re-entry is **suppressed**, not deferred: queuing it would turn an infinite loop into an infinite sequence. A merely _overlapping_ save is a different problem with the same key, so it **coalesces** — latest wins, one pending rerun, and a burst of ten saves collapses to two runs instead of ten. Only after-hooks are guarded; `Validate` and `Before*` participate in the save and must neither be skipped nor deferred. Work that has detached from the async context (a durable task graph, a queued job) declares its origin explicitly through the new `EntitySaveOptions.OriginatingEntityActionIDs`.
+
+  **Scheduled-job notifications actually send.** `NotificationManager` logged `"Would send notification to user …"` while `NotificationEngine` sat one package away. It now delivers for real, and composes the two people who have a say: the job's `NotifyViaEmail` / `NotifyViaInApp` toggles are a **ceiling**, the recipient's preferences decide within it. Neither existing knob expressed that — `forceDeliveryChannels` would let a job override a recipient's opt-out, and omitting the toggles would let a type default fire a channel the job never asked for. `SendNotificationParams.allowedDeliveryChannels` is the new primitive; it can only subtract, which is what makes it safe to expose.
+
+  **"Execute Scheduled Job Now" runs the job.** It used to insert a `Status='Running'` run row and report success. Nothing consumed those rows — the poller selects jobs by _schedule_, never by pending run record — so the action left a row that said Running forever and ran nothing. It now executes through `SchedulingEngine`, and a failed job is a failed action rather than a successful insert. `Wait=false` starts it without blocking.
+
+  **The dispatcher has somewhere to deliver.** `StartTaskGraphDispatcher` constructed it with no continuation deliverer at all, so a finished graph logged its outcome, marked itself delivered, and said nothing to the conversation that asked for it. `TaskGraphContinuationDeliverer` posts the roll-up with per-step detail. `Reinvoke` stays unimplemented on purpose: a safe one needs the new agent run to remember it was a continuation at depth N so `MAX_REINVOKE_DEPTH` can stop the chain, and nothing durable records that — a cap that never trips is worse than degrading to a message.
+
+  **IT71 grows to 16 checks.** TG14 drives the save-to-binding round trip that Phase 6 owed; TG15 pins that a scoped trigger actually narrows; TG16 pins that two workflows on one entity keep separate bindings pointing at their own agents, and that re-saving finds its own row rather than adding a third. TG14 caught a second real bug on its first run — the invocation-type mismatch above — and TG16 is what surfaced the unique constraint.
+
+- 394d276: Phase 8 of the unified workflow DAG engine program (plan: PR #3456) — the remaining Track D mechanisms, plus the observability decision that had been open across three reviews.
+
+  **A live signal from the dispatcher.** The choice was between claim-store cache invalidation and semantic frames; frames won because a consumer should render "step 3 of 7 running" from the event itself rather than re-reading Task rows and diffing them to guess what changed. `TaskGraphObserver` emits `TaskStarted` / `TaskCompleted` / `TaskFailed` / `TaskBlocked` / `TaskAwaitingHuman` / `GraphSettled`, and MJServer publishes them on a new `taskGraphFrames(parentTaskId)` subscription.
+
+  Addressed by **`ParentTaskID`, deliberately not by session**: a durable graph outlives the tab that submitted it and may be started by a schedule with no session at all, so keying on the graph means "watch this workflow run" works for whoever is permitted to see it, whenever they arrive — including after a refresh, which a session-keyed push cannot survive. Emit points sit where the fact is already true: `TaskStarted` after the claim is held, `Task{Completed,Failed}` only once the guarded write lands, `GraphSettled` outside the continuation's once-only CAS. The observer is optional and its errors are swallowed in one place, because a frame is commentary on work and must never stall or fail a graph.
+
+  Delivery **fails closed**. A `parentTaskId` is discoverable, so without a connection-identity check anyone holding one could watch another user's workflow, per-step error messages included. Ownership rides on the frame — resolved once per graph and memoized, since a subscription filter runs per frame and synchronously, and a database round trip there would make watching a run cost more than running it. It lives in the parent's durable metadata rather than a column because `Task.UserID` already means "the person this task waits on"; setting it on a parent would make every graph look like a human task.
+
+  **`MAX_REINVOKE_DEPTH` finally compares against a real number.** Phase 3 shipped the cap and Phase 4 shipped the metadata carrying `reinvokeDepth`, but the value was permanently zero: `Submit` reads it from its caller, `BaseAgent` never passed one, and a reinvoked agent had no way to know it _was_ a continuation. Phase 7 therefore left `Reinvoke` unimplemented on purpose — a cap that never fires is worse than one continuation mode being unavailable, because the failure mode is an unbounded chain of real agent runs. `AIAgentRun.ContinuationDepth` closes the loop: the deliverer stamps depth + 1 on the run it starts, `BaseAgent` passes its own run's depth into any graph it submits, and the chain is bounded. `Reinvoke` degrades to posting whenever it cannot restart a turn (no submitting run, run or agent unloadable) and never throws, since the dispatcher calls it inside the delivery CAS.
+
+  **Scheduled jobs answer what to do about fire times they missed.** `MissedRunPolicy` — `RunOnce` (default), `RunAll`, `Skip`. The default is not a preference: `updateJobStatistics` already computed the next run from _now_, so a job whose `NextRunAt` had passed ran once and jumped forward. That is `RunOnce`, and defaulting to `Skip` would have silently stopped every existing job in every install from catching up. `RunAll` is safe to offer because its next run is computed from the occurrence just consumed, so a week-long outage walks one occurrence per poll tick rather than firing 168 jobs at once. "Missed" is defined cron-relatively — a _later_ occurrence has also come due — rather than by a grace window, which would misjudge a per-minute job after a short pause and a monthly job that is a week late in opposite directions.
+
+  The decision **fails open** throughout: it can only ever withhold a run the schedule already said was due, so an unparseable cron or a helper returning anything but a date lets the job through. And it is **synchronous** on purpose — it runs immediately before lock acquisition, where an added microtask reorders against the sweep's fire-and-forget cleanup; only the skip branch writes, and that is awaited separately.
+
+  **One-shot scheduling needed no new schedule shape.** `Status='Expired'` had been a declared value that nothing ever set. `isJobDue` already refused a job past its `EndAt`, so such a job stopped running on its own — but stayed `Active` forever, permanently inert, and kept driving `UpdatePollingInterval`, so "cron at T plus `EndAt` just after T" left the whole scheduler polling at that job's cadence for a job that would never run again. Retiring it is the fix; "run once at T" was already expressible. Deliberately narrow: only `Active`/`Pending` transition, because a `Paused` job was put there by a person, and only `EndAt` triggers it, since a cron always has a next occurrence and inferring exhaustion would be guessing.
+
+  **IT71 grows to 18.** TG17 asserts the new schema through the ORM rather than trusting the migration — the pair that drifted in Phase 4 when a migration applied but CodeGen ran against a stale definition. TG18 saves a job with `RunAll`, reloads it to prove the value survives the CHECK constraint, and saves a policy-less job to prove the `RunOnce` default.
+
+- 394d276: Follow-up to Phase 2 of the unified workflow DAG program (plan: PR #3456) — the task-graph control plane becomes **Remote Operations**, and the durable dispatcher actually starts.
+
+  **BREAKING: the `SubmitTaskGraph`, `CancelTaskGraph`, and `RetryTask` GraphQL mutations are removed**, one release after they were added. They shipped in Phase 2 as bespoke resolvers, which fixed the _durability_ problem — nothing awaits a whole workflow inside one request anymore — but left the _reachability_ problem exactly where it was: callable from the Explorer client and nothing else. That undercuts the program's own goal of letting agents **set up** workflows rather than only navigate to them.
+
+  Remote Operations are MJ's typed control plane, and the closest analogous substrate already uses them for precisely this shape of verb: Record Set Processing exposes `Run` / `Pause` / `Resume` / `Cancel` / `Get Run Status` entirely as Remote Operations. One registration is reachable from MCP (external agents), from an Action wrapper (internal agents), and from the UI, with the framework's authorization scopes applied uniformly rather than re-implemented per resolver.
+
+  The replacements are `TaskGraph.Submit`, `TaskGraph.Cancel`, `TaskGraph.RetryTask`, and `TaskGraph.GetStatus`. `GetStatus` is new — it has no mutation predecessor. It is the observation half of making execution durable: once nobody holds a request open, a caller re-attaching after a reload, an agent checking work it submitted, or an external MCP caller all need a way to ask "where is it?". Its rollup runs the same pure algorithm the dispatcher runs, so the reported status cannot disagree with the engine's own view.
+
+  There is deliberately no `TaskGraph.Pause`. The dispatcher has no pause concept — pausing a claimed task means deciding what happens to its claim, and inventing that here to round out a verb set would be guessing ahead of Phase 4.
+
+  **The durable dispatcher now starts.** Phase 2 landed `TaskGraphDispatcher` but nothing ever instantiated it, so a submitted graph persisted correctly and then sat in `Pending` forever — durable and inert, which is strictly worse than the client-driven path it replaced. MJServer now starts one instance per process after `listen()`, alongside the other boot-time reconcilers, keyed by hostname + pid so reconciliation can tell its own orphaned work from a peer's live work. It is gated on SQL Server because the provider factory mints a `SQLServerDataProvider`; the PostgreSQL branch lands with PG parity.
+
+  **The dispatcher self-registers with `ShutdownRegistry`** rather than making each host remember to stop it. A dispatcher still polling through a graceful shutdown would claim work the process is about to abandon — creating exactly the orphaned-claim state reconciliation exists to clean up.
+
+  The Angular conversation client now calls `TaskGraph.Submit` through the generic `ExecuteRemoteOperation` transport, so the hand-written GraphQL document is gone from the client as well.
+
+### Patch Changes
+
+- 394d276: Clean `dist` before building MJServer, so a deleted source file cannot strand a compiled orphan.
+
+  `tsc` only writes outputs — it never prunes them. When a source file is deleted, its previously-compiled `.js` survives in `dist/`, and because MJServer loads resolvers by glob, that orphan still gets imported at runtime. The build stays green (TypeScript compiles the current sources fine) and then the server dies on boot with an error pointing at a file that no longer exists in source.
+
+  This happened for real: the v6 legacy-retirement work deleted `src/resolvers/ReportResolver.ts`, but every developer with a pre-existing `dist/` kept `dist/resolvers/ReportResolver.js`, which still did `import { RunReport } from '@memberjunction/core'` — an export removed in the same change. Result: `SyntaxError: The requested module '@memberjunction/core' does not provide an export named 'RunReport'`, MJAPI refusing to start, and a confusing hunt because the offending file isn't in the repo. A fresh CI checkout was unaffected (empty `dist`), so published packages were never at risk — this is purely a local incremental-build trap.
+
+  Adding `"prebuild": "rimraf dist"` makes it structurally impossible. `rimraf` is already the convention for this in `MJCLI`, `CLICore`, and `MJCodeGenAPI`.
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/actions@6.1.0-edge.1
+  - @memberjunction/storage@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.1
+  - @memberjunction/generic-database-provider@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ai-agents@6.1.0-edge.1
+  - @memberjunction/ai-core-plus@6.1.0-edge.1
+  - @memberjunction/task-graph@6.1.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.1
+  - @memberjunction/postgresql-dataprovider@6.1.0-edge.1
+  - @memberjunction/scheduling-engine@6.1.0-edge.1
+  - @memberjunction/notifications@6.1.0-edge.1
+  - @memberjunction/scheduling-actions@6.1.0-edge.1
+  - @memberjunction/ai-vectordb@6.1.0-edge.1
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.1
+  - @memberjunction/ai-agent-manager@6.1.0-edge.1
+  - @memberjunction/ai-agent-manager-actions@6.1.0-edge.1
+  - @memberjunction/computer-use-engine@6.1.0-edge.1
+  - @memberjunction/actions-apollo@6.1.0-edge.1
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.1
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.1
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.1
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.1
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.1
+  - @memberjunction/core-actions@6.1.0-edge.1
+  - @memberjunction/codegen-lib@6.1.0-edge.1
+  - @memberjunction/aiengine@6.1.0-edge.1
+  - @memberjunction/search-engine@6.1.0-edge.1
+  - @memberjunction/esignature@6.1.0-edge.1
+  - @memberjunction/ai-engine-base@6.1.0-edge.1
+  - @memberjunction/clustering-engine@6.1.0-edge.1
+  - @memberjunction/computer-use@6.1.0-edge.1
+  - @memberjunction/tag-engine@6.1.0-edge.1
+  - @memberjunction/tag-engine-base@6.1.0-edge.1
+  - @memberjunction/ai-mcp-client@6.1.0-edge.1
+  - @memberjunction/ai-prompts@6.1.0-edge.1
+  - @memberjunction/ai-bridge-base@6.1.0-edge.1
+  - @memberjunction/ai-bridge-ringcentral@6.1.0-edge.1
+  - @memberjunction/ai-bridge-teams@6.1.0-edge.1
+  - @memberjunction/ai-bridge-twilio@6.1.0-edge.1
+  - @memberjunction/ai-bridge-vonage@6.1.0-edge.1
+  - @memberjunction/ai-bridge-server@6.1.0-edge.1
+  - @memberjunction/remote-browser-base@6.1.0-edge.1
+  - @memberjunction/remote-browser-cdp@6.1.0-edge.1
+  - @memberjunction/remote-browser-selfhost@6.1.0-edge.1
+  - @memberjunction/remote-browser-server@6.1.0-edge.1
+  - @memberjunction/ai-vector-sync@6.1.0-edge.1
+  - @memberjunction/api-keys@6.1.0-edge.1
+  - @memberjunction/actions-base@6.1.0-edge.1
+  - @memberjunction/auth-providers@6.1.0-edge.1
+  - @memberjunction/communication-types@6.1.0-edge.1
+  - @memberjunction/communication-engine@6.1.0-edge.1
+  - @memberjunction/entity-communications-base@6.1.0-edge.1
+  - @memberjunction/entity-communications-server@6.1.0-edge.1
+  - @memberjunction/communication-ms-graph@6.1.0-edge.1
+  - @memberjunction/communication-sendgrid@6.1.0-edge.1
+  - @memberjunction/component-registry-client-sdk@6.1.0-edge.1
+  - @memberjunction/credentials@6.1.0-edge.1
+  - @memberjunction/doc-utils@6.1.0-edge.1
+  - @memberjunction/encryption@6.1.0-edge.1
+  - @memberjunction/external-change-detection@6.1.0-edge.1
+  - @memberjunction/integration-engine@6.1.0-edge.1
+  - @memberjunction/integration-engine-base@6.1.0-edge.1
+  - @memberjunction/integration-schema-builder@6.1.0-edge.1
+  - @memberjunction/interactive-component-types@6.1.0-edge.1
+  - @memberjunction/lists@6.1.0-edge.1
+  - @memberjunction/livekit-room-server@6.1.0-edge.1
+  - @memberjunction/core-entities-server@6.1.0-edge.1
+  - @memberjunction/data-context@6.1.0-edge.1
+  - @memberjunction/data-context-server@6.1.0-edge.1
+  - @memberjunction/queue@6.1.0-edge.1
+  - @memberjunction/record-comparison@6.1.0-edge.1
+  - @memberjunction/redis-provider@6.1.0-edge.1
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.1
+  - @memberjunction/schema-engine@6.1.0-edge.1
+  - @memberjunction/server-extensions-core@6.1.0-edge.1
+  - @memberjunction/templates@6.1.0-edge.1
+  - @memberjunction/testing-engine@6.1.0-edge.1
+  - @memberjunction/testing-engine-base@6.1.0-edge.1
+  - @memberjunction/version-history@6.1.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.1
+  - @memberjunction/ai@6.1.0-edge.1
+  - @memberjunction/config@6.1.0-edge.1
+  - @memberjunction/integration-progress-artifacts@6.1.0-edge.1
+  - @memberjunction/lists-base@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+  - @memberjunction/sql-dialect@6.1.0-edge.1
+  - @memberjunction/scheduling-base-types@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- fe7bd9d: fix(server): correct the cache-refresh interval unit — the metadata cache was refreshing every ~50 hours instead of the configured 3 minutes. `databaseSettings.metadataCacheRefreshInterval` is milliseconds (default 180000 = 3 min), but MJServer passed it undivided into `SQLServerProviderConfigData`'s `checkRefreshIntervalSeconds` argument (seconds), and `SQLServerDataProvider` then scheduled `setInterval(RefreshIfNeeded, CheckRefreshIntervalSeconds * 1000)` → 180000 × 1000 ≈ 50 h, so the metadata cache effectively never auto-refreshed (the likely root cause of "stale metadata until MJAPI restart"). Fix (both required together): divide by 1000 at the two `MJServer/src/index.ts` call sites (matching the already-correct PostgreSQL siblings), and multiply `CheckRefreshIntervalSeconds` by 1000 where it is passed to `UserCache.Instance.Refresh` in `SQLServerDataProvider/src/config.ts` (that parameter is milliseconds) — otherwise fixing only the first half would make the user cache hammer the DB every 180 ms. After both, the metadata and user caches each refresh every 3 minutes, as configured.
+- 841e6ea: Harden several SQL text-building paths that substituted values into query strings without parameterization or escaping.
+
+  **`@memberjunction/server`** — `ReportResolver.CreateReportFromConversationDetailID` built its `WHERE` clause via direct string interpolation of the `ConversationDetailID` argument. It now binds the value through `mssql`'s parameterized `request.input(...)` as a `UniqueIdentifier`, consistent with the parameterization pattern already used elsewhere in the package, and gets GUID-format validation as a side effect.
+
+  **`@memberjunction/generic-database-provider`** — `GenericDatabaseProvider.CheckRecordRLS` built its primary-key `WHERE` clause without escaping embedded quotes in the key value, unlike the sibling `Load()` path a few lines above, which already escapes. The RLS-check path now mirrors `Load()`'s escaping so a primary key value containing a quote can't alter the query's structure.
+
+  **`@memberjunction/core`** — `RowLevelSecurityFilterInfo.MarkupFilterText` did two things that could weaken a row-level security filter: it let `undefined` user-property values through as the literal string `"undefined"`, and it never escaped quotes in substituted values. Both are fixed — `undefined` now falls through to the existing unresolved-token handling (same as `null` and object-typed values already did), and substituted values now have embedded single quotes doubled.
+
+  Behavior note for deployments with existing role-based RLS filters: equality-style filters (`Col = '{{UserX}}'`) are unaffected. Filters written in negation form (`<>`, `NOT IN`, `NOT LIKE`) against a user property that can be `undefined` previously matched more rows than intended (a permissive gap) and will now correctly match fewer — reviewed as: users may see fewer rows than before the upgrade, which is the deliberate direction of this fix, not a new restriction to work around.
+
+  **`@memberjunction/ng-react`** — `RuntimeUtilities.provider` was initialized directly from the global `Metadata.Provider` at class-field scope. The value was always overwritten before use by `buildUtilities()`'s existing `provider ?? Metadata.Provider` fallback, so this is a no-behavior-change cleanup that stops the class body from touching the global provider directly.
+
+- 0acf96e: Make the SearchScope permission resolver replaceable.
+
+  `SearchEngine` authorizes every search through `SearchScopePermissionResolver`, which answers from `__mj.SearchScopePermission` rows keyed by `UserID` or by one of the user's MJ Roles. That covers MJ's own permission model completely — but it is not the only shape a permission model can take, and until now it was the only one the search path could consult.
+
+  A consumer whose entitlements are neither a user nor an MJ Role has no row that can express them. Its grants are therefore invisible to the check that actually runs, and the failure is silent in the worst way: the grant is configured, an administrator can see it, and the search simply returns nothing. The resolver was a module-level singleton imported directly by `SearchEngine`, so the only remedies were to project the consumer's model into `SearchScopePermission` as derived per-user rows — permission state that can drift from its source — or to fork the search path.
+
+  This adds the seam that was missing:
+  - **`SearchScopePermissionResolverBase`** — the abstract contract registrations bind to.
+  - **`SEARCH_SCOPE_PERMISSION_RESOLVER_KEY`** — the ClassFactory key. There is exactly one resolver per deployment (a consumer _replaces_ the policy rather than selecting among several), so a single shared key is the right shape, and it keeps the registry free of the keyless-registration warning.
+  - **`GetSearchScopePermissionResolver()`** — returns the highest-priority registration, falling back to MJ's own.
+
+  **Every path that authorizes a scope now goes through the seam**, not just `SearchEngine`. This matters more than it sounds: a seam honoured on some paths and not others is worse than no seam, because the resulting behaviour is inconsistent rather than merely absent — the same grant authorizes a search issued one way and silently denies it issued another. The five call sites are `SearchEngine.searchOneScope`, `SearchKnowledgeResolver` (both the single-scope check and the visible-scope-list filter), `SearchKnowledgeStreamResolver`, and the `__Scoped_Search` core action. The last is the agent-facing path, so an override that did not reach it would be invisible to exactly the callers most likely to need it.
+
+  Resolution happens per call rather than being cached at module load. A registration made during application startup would otherwise be missed depending on import order — a failure mode that presents as "my resolver works in tests but not in the server", which is expensive to diagnose. The class is stateless and construction is trivial, so there is nothing to gain by caching.
+
+  The intended shape for an override is to subclass the stock resolver and compose with it, **passing no priority**:
+
+  ```ts
+  @RegisterClass(
+    SearchScopePermissionResolverBase,
+    SEARCH_SCOPE_PERMISSION_RESOLVER_KEY,
+  )
+  export class MyResolver extends SearchScopePermissionResolver {
+    public override async ResolveEffectivePermission(
+      input: ResolvePermissionInput,
+    ) {
+      const stock = await super.ResolveEffectivePermission(input);
+      if (stock.Allowed) return stock; // never narrow what MJ already granted
+      return this.myOwnGrantCheck(input); // only ever widen
+    }
+  }
+  ```
+
+  Subclassing is what orders the registration, and it does so more reliably than a number can. `ClassFactory.Register` treats an omitted priority as _one higher than the highest already registered for this (base, key)_, and a subclass cannot be defined without its parent module having loaded first — so MJ's registration always runs before the consumer's, and the consumer always lands above it. The ordering is a side effect of the language rather than a convention anyone has to remember.
+
+  A hardcoded priority forfeits that. Two consumers that pick the same number collide, `Register` warns, and resolution degrades to whichever was registered last — a load-order bug wearing the costume of a configuration value. The priority argument stays for cases where subclassing is genuinely impossible.
+
+  **Nothing changes for existing consumers.** MJ's resolver registers itself as the default, so behaviour is identical when nothing else is registered. `DefaultSearchScopePermissionResolver` is retained and still exported so existing imports keep compiling; it is marked `@deprecated` because it always yields MJ's own implementation and therefore bypasses any registered override.
+
+  The failure posture is unchanged and worth restating for anyone writing an override: `SearchEngine` treats a resolver throw as **denied**, never as allowed. An override that cannot reach its own store must not accidentally open a scope.
+
+  7 tests covering the default, the fallback, an honoured registration, late registration (imperative, because `@RegisterClass` evaluates at module load and so cannot demonstrate lateness), composition with `super`, the deprecated constant, and that a subclass of the stock resolver satisfies the base contract.
+
+- 8d0d45a: build: declare dependencies that npm's hoisting was silently supplying, as part of the monorepo's cutover to pnpm.
+
+  Under npm, a package could import a module it never declared and still resolve it, because npm flattens everything into the workspace-root `node_modules`. pnpm's strict, isolated linking gives a package only what it declares — so each of these was a latent bug that happened to work. They are fixed here independently of the package manager; nothing about the published API changes.
+
+  Added declarations: `@types/mssql` (codegen-lib, sqlserver-dataprovider, testing-cli, testing-integration, react-test-harness), `@types/pg` (codegen-lib), `@types/express` (messaging-adapters, server-extensions-core), `@types/fs-extra` (codegen-lib), `@types/babel__traverse` (react-linter), `ora` (ai-cli), `glob` (react-test-harness), `tslib` (ng-bootstrap, which compiles with `importHelpers`), `@auth0/auth0-spa-js` (ng-auth-services), `@memberjunction/core-entities` + `@memberjunction/global` + `@memberjunction/aiengine` (cli), and `@memberjunction/ng-react` (ng-explorer-core, reached from a generated file).
+
+  Two changes are more than a declaration:
+  - **`@memberjunction/server`**: `@types/express` moves `^4.17.25` → `^5.0.6`. The package declares `express@^5.2.1` at runtime, so it was only compiling because hoisting supplied the v5 types that six sibling packages declare. The types now match the express it actually runs.
+  - **`@memberjunction/ng-auth-services`**: `angularProviderFactory` gains an explicit `Provider[]` return type. Declaring `@auth0/auth0-spa-js` alone does not resolve TS2742 — the emitted declaration file still needed a nameable type rather than one inferred through a transitive package path.
+  - **`@memberjunction/scheduled-actions-server`**: drops `@types/axios`, a deprecated stub package that carries no type definitions; its presence made TypeScript auto-include it and then fail to find any types. axios ships its own.
+
+- 19ca0b4: Bind `statusUpdates` push-subscription delivery to the authenticated connection identity (fixes a session-hijack, B49).
+
+  The `statusUpdates` GraphQL subscription filtered only on the client-supplied `sessionId` (`payload.sessionId === args.sessionId`) and never checked it against the subscriber's authenticated identity. Because `sessionId` is a client-generated (per-tab) UUID persisted in browser storage, a subscriber who obtained another user's `sessionId` would receive their pushes (agent-run progress, MCP/test/remote-browser progress, notifications).
+
+  **Fix:** every push now carries the authenticated owner's user ID, and the subscription filter additionally requires it to match the subscriber CONNECTION's server-authenticated identity (`context.userPayload.userRecord.ID`, established once at WS connect and refreshed on token expiry). `sessionId` still routes a push to the right browser tab, but is no longer the trust anchor — knowing it is no longer sufficient. The filter fails closed (missing owner or connection identity → no delivery).
+
+  **Centralized so it can't regress:** all ~22 publish sites now route through a single `publishStatusUpdate(pubSub, { sessionId, ownerUserId, message })` helper (resolvers via the new `ResolverBase.PublishStatusUpdate` wrapper; non-resolver services/heartbeat call the helper directly). `ownerUserId` is a **required** field, so the compiler rejects any publish that omits identity — a future publisher physically cannot forget it. Also normalized three previously-malformed publishes that sent no `sessionId`. The security-critical filter is unit-tested in isolation.
+
+  `ownerUserId` is used only server-side by the filter and is deliberately not exposed on the client-facing `PushStatusNotification` (no user IDs leak to subscribers).
+
+- Updated dependencies [e4a6fa3]
+- Updated dependencies [cd520e2]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [fe7bd9d]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+- Updated dependencies [0acf96e]
+- Updated dependencies [8d0d45a]
+- Updated dependencies [1100077]
+- Updated dependencies [e76b195]
+- Updated dependencies [5c6e36c]
+  - @memberjunction/api-keys@6.1.0-edge.0
+  - @memberjunction/codegen-lib@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/actions@6.1.0-edge.0
+  - @memberjunction/actions-base@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.0
+  - @memberjunction/generic-database-provider@6.1.0-edge.0
+  - @memberjunction/search-engine@6.1.0-edge.0
+  - @memberjunction/core-actions@6.1.0-edge.0
+  - @memberjunction/server-extensions-core@6.1.0-edge.0
+  - @memberjunction/aiengine@6.1.0-edge.0
+  - @memberjunction/interactive-component-types@6.1.0-edge.0
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.0
+  - @memberjunction/ai-agent-manager-actions@6.1.0-edge.0
+  - @memberjunction/ai-agent-manager@6.1.0-edge.0
+  - @memberjunction/ai-agents@6.1.0-edge.0
+  - @memberjunction/ai-engine-base@6.1.0-edge.0
+  - @memberjunction/clustering-engine@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/tag-engine@6.1.0-edge.0
+  - @memberjunction/tag-engine-base@6.1.0-edge.0
+  - @memberjunction/ai-mcp-client@6.1.0-edge.0
+  - @memberjunction/computer-use-engine@6.1.0-edge.0
+  - @memberjunction/ai-prompts@6.1.0-edge.0
+  - @memberjunction/ai-bridge-base@6.1.0-edge.0
+  - @memberjunction/ai-bridge-ringcentral@6.1.0-edge.0
+  - @memberjunction/ai-bridge-teams@6.1.0-edge.0
+  - @memberjunction/ai-bridge-twilio@6.1.0-edge.0
+  - @memberjunction/ai-bridge-vonage@6.1.0-edge.0
+  - @memberjunction/ai-bridge-server@6.1.0-edge.0
+  - @memberjunction/remote-browser-base@6.1.0-edge.0
+  - @memberjunction/remote-browser-server@6.1.0-edge.0
+  - @memberjunction/ai-vector-sync@6.1.0-edge.0
+  - @memberjunction/actions-apollo@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.0
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.0
+  - @memberjunction/communication-types@6.1.0-edge.0
+  - @memberjunction/communication-engine@6.1.0-edge.0
+  - @memberjunction/entity-communications-base@6.1.0-edge.0
+  - @memberjunction/entity-communications-server@6.1.0-edge.0
+  - @memberjunction/notifications@6.1.0-edge.0
+  - @memberjunction/communication-ms-graph@6.1.0-edge.0
+  - @memberjunction/communication-sendgrid@6.1.0-edge.0
+  - @memberjunction/credentials@6.1.0-edge.0
+  - @memberjunction/doc-utils@6.1.0-edge.0
+  - @memberjunction/encryption@6.1.0-edge.0
+  - @memberjunction/external-change-detection@6.1.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.0
+  - @memberjunction/integration-engine@6.1.0-edge.0
+  - @memberjunction/integration-engine-base@6.1.0-edge.0
+  - @memberjunction/lists@6.1.0-edge.0
+  - @memberjunction/livekit-room-server@6.1.0-edge.0
+  - @memberjunction/core-entities-server@6.1.0-edge.0
+  - @memberjunction/data-context@6.1.0-edge.0
+  - @memberjunction/queue@6.1.0-edge.0
+  - @memberjunction/storage@6.1.0-edge.0
+  - @memberjunction/record-comparison@6.1.0-edge.0
+  - @memberjunction/scheduling-actions@6.1.0-edge.0
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.0
+  - @memberjunction/scheduling-engine@6.1.0-edge.0
+  - @memberjunction/templates@6.1.0-edge.0
+  - @memberjunction/testing-engine@6.1.0-edge.0
+  - @memberjunction/testing-engine-base@6.1.0-edge.0
+  - @memberjunction/version-history@6.1.0-edge.0
+  - @memberjunction/esignature@6.1.0-edge.0
+  - @memberjunction/computer-use@6.1.0-edge.0
+  - @memberjunction/remote-browser-cdp@6.1.0-edge.0
+  - @memberjunction/remote-browser-selfhost@6.1.0-edge.0
+  - @memberjunction/ai-vectordb@6.1.0-edge.0
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.0
+  - @memberjunction/auth-providers@6.1.0-edge.0
+  - @memberjunction/component-registry-client-sdk@6.1.0-edge.0
+  - @memberjunction/integration-schema-builder@6.1.0-edge.0
+  - @memberjunction/data-context-server@6.1.0-edge.0
+  - @memberjunction/postgresql-dataprovider@6.1.0-edge.0
+  - @memberjunction/redis-provider@6.1.0-edge.0
+  - @memberjunction/schema-engine@6.1.0-edge.0
+  - @memberjunction/ai@6.1.0-edge.0
+  - @memberjunction/config@6.1.0-edge.0
+  - @memberjunction/integration-progress-artifacts@6.1.0-edge.0
+  - @memberjunction/lists-base@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+  - @memberjunction/sql-dialect@6.1.0-edge.0
+  - @memberjunction/scheduling-base-types@6.1.0-edge.0
+
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-agent-manager-actions@6.0.0
+  - @memberjunction/ai-agent-manager@6.0.0
+  - @memberjunction/ai-agents@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/clustering-engine@6.0.0
+  - @memberjunction/computer-use@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/tag-engine@6.0.0
+  - @memberjunction/tag-engine-base@6.0.0
+  - @memberjunction/ai-mcp-client@6.0.0
+  - @memberjunction/computer-use-engine@6.0.0
+  - @memberjunction/ai-prompts@6.0.0
+  - @memberjunction/ai-bridge-base@6.0.0
+  - @memberjunction/ai-bridge-ringcentral@6.0.0
+  - @memberjunction/ai-bridge-teams@6.0.0
+  - @memberjunction/ai-bridge-twilio@6.0.0
+  - @memberjunction/ai-bridge-vonage@6.0.0
+  - @memberjunction/ai-bridge-server@6.0.0
+  - @memberjunction/remote-browser-base@6.0.0
+  - @memberjunction/remote-browser-cdp@6.0.0
+  - @memberjunction/remote-browser-selfhost@6.0.0
+  - @memberjunction/remote-browser-server@6.0.0
+  - @memberjunction/ai-vectordb@6.0.0
+  - @memberjunction/ai-vectors-pinecone@6.0.0
+  - @memberjunction/ai-vector-sync@6.0.0
+  - @memberjunction/api-keys@6.0.0
+  - @memberjunction/actions-apollo@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/actions-bizapps-accounting@6.0.0
+  - @memberjunction/actions-bizapps-crm@6.0.0
+  - @memberjunction/actions-bizapps-formbuilders@6.0.0
+  - @memberjunction/actions-bizapps-lms@6.0.0
+  - @memberjunction/actions-bizapps-social@6.0.0
+  - @memberjunction/core-actions@6.0.0
+  - @memberjunction/actions@6.0.0
+  - @memberjunction/auth-providers@6.0.0
+  - @memberjunction/codegen-lib@6.0.0
+  - @memberjunction/communication-types@6.0.0
+  - @memberjunction/communication-engine@6.0.0
+  - @memberjunction/entity-communications-base@6.0.0
+  - @memberjunction/entity-communications-server@6.0.0
+  - @memberjunction/notifications@6.0.0
+  - @memberjunction/communication-ms-graph@6.0.0
+  - @memberjunction/communication-sendgrid@6.0.0
+  - @memberjunction/component-registry-client-sdk@6.0.0
+  - @memberjunction/credentials@6.0.0
+  - @memberjunction/doc-utils@6.0.0
+  - @memberjunction/encryption@6.0.0
+  - @memberjunction/external-change-detection@6.0.0
+  - @memberjunction/generic-database-provider@6.0.0
+  - @memberjunction/graphql-dataprovider@6.0.0
+  - @memberjunction/integration-engine@6.0.0
+  - @memberjunction/integration-engine-base@6.0.0
+  - @memberjunction/integration-schema-builder@6.0.0
+  - @memberjunction/interactive-component-types@6.0.0
+  - @memberjunction/lists@6.0.0
+  - @memberjunction/livekit-room-server@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/core-entities-server@6.0.0
+  - @memberjunction/data-context@6.0.0
+  - @memberjunction/data-context-server@6.0.0
+  - @memberjunction/queue@6.0.0
+  - @memberjunction/storage@6.0.0
+  - @memberjunction/postgresql-dataprovider@6.0.0
+  - @memberjunction/record-comparison@6.0.0
+  - @memberjunction/redis-provider@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/scheduling-actions@6.0.0
+  - @memberjunction/scheduling-engine-base@6.0.0
+  - @memberjunction/scheduling-engine@6.0.0
+  - @memberjunction/schema-engine@6.0.0
+  - @memberjunction/search-engine@6.0.0
+  - @memberjunction/server-extensions-core@6.0.0
+  - @memberjunction/templates@6.0.0
+  - @memberjunction/testing-engine@6.0.0
+  - @memberjunction/testing-engine-base@6.0.0
+  - @memberjunction/version-history@6.0.0
+  - @memberjunction/esignature@6.0.0
+  - @memberjunction/ai-provider-bundle@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/config@6.0.0
+  - @memberjunction/integration-progress-artifacts@6.0.0
+  - @memberjunction/lists-base@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/sql-dialect@6.0.0
+  - @memberjunction/scheduling-base-types@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- c382605: Fix realtime relayed-tool dispatch for scoped anonymous magic-link sessions (#3371): delegated agent runs, co-agent observability writes (creation, transcript/tool-turn appends, usage accumulation, finalize), and recording uploads now execute under the system user once session ownership is proven — gated on MagicLinkScope, excluding public web-widget guests, and failing closed to the caller when no system user is available. The session's `allowedAgents` colleague union is now CanRun-gated against the original caller before dispatch, so elevation cannot widen agent authority, and delegated runs carry the visitor's id as `userId` so run attribution and context-memory scope stay the person's. Adds the IT68 scoped-anon-elevation deterministic integration bundle proving the permission contract on a live database.
+- Updated dependencies [c382605]
+- Updated dependencies [1e048ef]
+- Updated dependencies [a8fc549]
+  - @memberjunction/ai-agents@5.51.0
+  - @memberjunction/codegen-lib@5.51.0
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-agent-manager@5.51.0
+  - @memberjunction/core-actions@5.51.0
+  - @memberjunction/scheduling-engine@5.51.0
+  - @memberjunction/testing-engine@5.51.0
+  - @memberjunction/ai-agent-manager-actions@5.51.0
+  - @memberjunction/ai-engine-base@5.51.0
+  - @memberjunction/clustering-engine@5.51.0
+  - @memberjunction/computer-use@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/aiengine@5.51.0
+  - @memberjunction/tag-engine@5.51.0
+  - @memberjunction/tag-engine-base@5.51.0
+  - @memberjunction/ai-mcp-client@5.51.0
+  - @memberjunction/computer-use-engine@5.51.0
+  - @memberjunction/ai-prompts@5.51.0
+  - @memberjunction/ai-bridge-base@5.51.0
+  - @memberjunction/ai-bridge-ringcentral@5.51.0
+  - @memberjunction/ai-bridge-teams@5.51.0
+  - @memberjunction/ai-bridge-twilio@5.51.0
+  - @memberjunction/ai-bridge-vonage@5.51.0
+  - @memberjunction/ai-bridge-server@5.51.0
+  - @memberjunction/remote-browser-base@5.51.0
+  - @memberjunction/remote-browser-cdp@5.51.0
+  - @memberjunction/remote-browser-selfhost@5.51.0
+  - @memberjunction/remote-browser-server@5.51.0
+  - @memberjunction/ai-vectordb@5.51.0
+  - @memberjunction/ai-vectors-pinecone@5.51.0
+  - @memberjunction/ai-vector-sync@5.51.0
+  - @memberjunction/api-keys@5.51.0
+  - @memberjunction/actions-apollo@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/actions-bizapps-accounting@5.51.0
+  - @memberjunction/actions-bizapps-crm@5.51.0
+  - @memberjunction/actions-bizapps-formbuilders@5.51.0
+  - @memberjunction/actions-bizapps-lms@5.51.0
+  - @memberjunction/actions-bizapps-social@5.51.0
+  - @memberjunction/actions@5.51.0
+  - @memberjunction/auth-providers@5.51.0
+  - @memberjunction/communication-types@5.51.0
+  - @memberjunction/communication-engine@5.51.0
+  - @memberjunction/entity-communications-base@5.51.0
+  - @memberjunction/entity-communications-server@5.51.0
+  - @memberjunction/notifications@5.51.0
+  - @memberjunction/communication-ms-graph@5.51.0
+  - @memberjunction/communication-sendgrid@5.51.0
+  - @memberjunction/component-registry-client-sdk@5.51.0
+  - @memberjunction/credentials@5.51.0
+  - @memberjunction/doc-utils@5.51.0
+  - @memberjunction/encryption@5.51.0
+  - @memberjunction/external-change-detection@5.51.0
+  - @memberjunction/generic-database-provider@5.51.0
+  - @memberjunction/graphql-dataprovider@5.51.0
+  - @memberjunction/integration-engine@5.51.0
+  - @memberjunction/integration-engine-base@5.51.0
+  - @memberjunction/integration-schema-builder@5.51.0
+  - @memberjunction/interactive-component-types@5.51.0
+  - @memberjunction/lists@5.51.0
+  - @memberjunction/livekit-room-server@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/core-entities-server@5.51.0
+  - @memberjunction/data-context@5.51.0
+  - @memberjunction/data-context-server@5.51.0
+  - @memberjunction/queue@5.51.0
+  - @memberjunction/storage@5.51.0
+  - @memberjunction/postgresql-dataprovider@5.51.0
+  - @memberjunction/record-comparison@5.51.0
+  - @memberjunction/redis-provider@5.51.0
+  - @memberjunction/sqlserver-dataprovider@5.51.0
+  - @memberjunction/scheduling-actions@5.51.0
+  - @memberjunction/scheduling-engine-base@5.51.0
+  - @memberjunction/schema-engine@5.51.0
+  - @memberjunction/search-engine@5.51.0
+  - @memberjunction/server-extensions-core@5.51.0
+  - @memberjunction/templates@5.51.0
+  - @memberjunction/testing-engine-base@5.51.0
+  - @memberjunction/version-history@5.51.0
+  - @memberjunction/esignature@5.51.0
+  - @memberjunction/ai-provider-bundle@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/config@5.51.0
+  - @memberjunction/integration-progress-artifacts@5.51.0
+  - @memberjunction/lists-base@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/sql-dialect@5.51.0
+  - @memberjunction/scheduling-base-types@5.51.0
+
+## 5.50.0
+
+### Patch Changes
+
+- 623dfc5: Break CodeGen FK cycle between AIAgentRun, AIPromptRun, and ConversationDetail. Move SummaryPromptRunID from ConversationDetail to a new ConversationCompactionRun audit table. Remove AgentRunID from AIPromptRun (derivable via AIAgentRunStep.TargetLogID). Remove agentRunId from AIPromptParams and all write sites across the prompt/agent stack.
+- dd04a24: Declare phantom dependencies surfaced by strict installs: MJServer now declares `@types/express` (devDependency — express type imports across `src/`; pinned `^4.17.25` because that is the copy MJServer has always compiled against via its `@types/compression` dependency, and `express-rate-limit`'s handler types bind to it — the v5 types migration is a separate change) and `@memberjunction/integration-engine-base` (dependency — imported by `IntegrationDiscoveryResolver`); ng-action-gallery now declares `@memberjunction/ng-test-utils` (devDependency — imported by its DOM test). npm's hoisting hid these; strict package managers (pnpm) fail on them. No behavior change.
+- 764d6f6: Fix three client-reported issues (search coverage, Configure App dialog, default-app provisioning):
+  - **C3 — Search coverage:** decouple the per-entity fetch depth from the global `topK` budget in both `EntitySearchProvider` and `FullTextSearchProvider` (new tunable `PerEntityFetchDepth`, default 15), so multi-entity searches no longer starve individual entities of results. Also lower `MIN_TERM_LENGTH` from 3 to 2 across the engine and both providers so short queries (e.g. "US", "AI") are searchable.
+  - **F1 — Configure App dialog glitch:** the `[(ShowDialog)]` setter now emits `ShowDialogChange`, so the app-switcher's flag round-trips correctly; the dialog resets its app lists on open/close and reloads the user's applications on a deferred microtask (avoids `ExpressionChangedAfterItHasBeenCheckedError`). Removed the redundant double-drive in the app switcher.
+  - **F2 — Default-app provisioning (`Status = 'Active'` filter):** the JWT new-user provisioning path selected default applications with `DefaultForNewUser` but **without** the `Status = 'Active'` check that the client self-heal path already applied, so an inactive app flagged `DefaultForNewUser` could be provisioned onto new users there. Both paths now use a single shared selector, `UserInfoEngine.GetDefaultApplicationsForNewUser`, which filters to Active + `DefaultForNewUser` in `DefaultSequence` order — eliminating the drift.
+
+- dd04a24: Widen the zod pin from `~3.24.4` to `^3.25.0` so it satisfies `@modelcontextprotocol/sdk`'s peer requirement (`zod ^3.25 || ^4.0`). The old tilde pin has no overlap with the SDK's peer range, which breaks strict package managers (pnpm) and MJCLI's oclif manifest generation under strict installs. zod 3.25.x keeps the classic v3 API at the root import, so this is a version-range correction with no behavior change.
+- Updated dependencies [938ae80]
+- Updated dependencies [623dfc5]
+- Updated dependencies [54a037f]
+- Updated dependencies [8ce3356]
+- Updated dependencies [12691e3]
+- Updated dependencies [1afdc40]
+- Updated dependencies [ce6374c]
+- Updated dependencies [a3bd648]
+- Updated dependencies [c221553]
+- Updated dependencies [86832fa]
+- Updated dependencies [deb02b4]
+- Updated dependencies [0686d52]
+- Updated dependencies [c7b6710]
+- Updated dependencies [764d6f6]
+- Updated dependencies [408e4bf]
+- Updated dependencies [0ba33b3]
+- Updated dependencies [1e0008f]
+- Updated dependencies [03fc891]
+- Updated dependencies [76c0ffb]
+- Updated dependencies [dd04a24]
+  - @memberjunction/core-entities@5.50.0
+  - @memberjunction/core@5.50.0
+  - @memberjunction/ai-agents@5.50.0
+  - @memberjunction/ai-core-plus@5.50.0
+  - @memberjunction/ai-prompts@5.50.0
+  - @memberjunction/computer-use-engine@5.50.0
+  - @memberjunction/codegen-lib@5.50.0
+  - @memberjunction/ai@5.50.0
+  - @memberjunction/communication-types@5.50.0
+  - @memberjunction/communication-ms-graph@5.50.0
+  - @memberjunction/search-engine@5.50.0
+  - @memberjunction/core-entities-server@5.50.0
+  - @memberjunction/integration-engine@5.50.0
+  - @memberjunction/schema-engine@5.50.0
+  - @memberjunction/communication-sendgrid@5.50.0
+  - @memberjunction/actions-base@5.50.0
+  - @memberjunction/core-actions@5.50.0
+  - @memberjunction/ai-mcp-client@5.50.0
+  - @memberjunction/config@5.50.0
+  - @memberjunction/storage@5.50.0
+  - @memberjunction/testing-engine@5.50.0
+  - @memberjunction/ai-agent-manager-actions@5.50.0
+  - @memberjunction/ai-agent-manager@5.50.0
+  - @memberjunction/ai-engine-base@5.50.0
+  - @memberjunction/clustering-engine@5.50.0
+  - @memberjunction/aiengine@5.50.0
+  - @memberjunction/tag-engine@5.50.0
+  - @memberjunction/tag-engine-base@5.50.0
+  - @memberjunction/ai-bridge-base@5.50.0
+  - @memberjunction/ai-bridge-ringcentral@5.50.0
+  - @memberjunction/ai-bridge-teams@5.50.0
+  - @memberjunction/ai-bridge-twilio@5.50.0
+  - @memberjunction/ai-bridge-vonage@5.50.0
+  - @memberjunction/ai-bridge-server@5.50.0
+  - @memberjunction/remote-browser-base@5.50.0
+  - @memberjunction/remote-browser-server@5.50.0
+  - @memberjunction/ai-vector-sync@5.50.0
+  - @memberjunction/api-keys@5.50.0
+  - @memberjunction/actions-apollo@5.50.0
+  - @memberjunction/actions-bizapps-accounting@5.50.0
+  - @memberjunction/actions-bizapps-crm@5.50.0
+  - @memberjunction/actions-bizapps-formbuilders@5.50.0
+  - @memberjunction/actions-bizapps-lms@5.50.0
+  - @memberjunction/actions-bizapps-social@5.50.0
+  - @memberjunction/actions@5.50.0
+  - @memberjunction/communication-engine@5.50.0
+  - @memberjunction/entity-communications-base@5.50.0
+  - @memberjunction/entity-communications-server@5.50.0
+  - @memberjunction/notifications@5.50.0
+  - @memberjunction/credentials@5.50.0
+  - @memberjunction/doc-utils@5.50.0
+  - @memberjunction/encryption@5.50.0
+  - @memberjunction/external-change-detection@5.50.0
+  - @memberjunction/generic-database-provider@5.50.0
+  - @memberjunction/graphql-dataprovider@5.50.0
+  - @memberjunction/integration-engine-base@5.50.0
+  - @memberjunction/lists@5.50.0
+  - @memberjunction/livekit-room-server@5.50.0
+  - @memberjunction/data-context@5.50.0
+  - @memberjunction/queue@5.50.0
+  - @memberjunction/record-comparison@5.50.0
+  - @memberjunction/sqlserver-dataprovider@5.50.0
+  - @memberjunction/scheduling-actions@5.50.0
+  - @memberjunction/scheduling-engine-base@5.50.0
+  - @memberjunction/scheduling-engine@5.50.0
+  - @memberjunction/templates@5.50.0
+  - @memberjunction/testing-engine-base@5.50.0
+  - @memberjunction/version-history@5.50.0
+  - @memberjunction/esignature@5.50.0
+  - @memberjunction/computer-use@5.50.0
+  - @memberjunction/remote-browser-cdp@5.50.0
+  - @memberjunction/remote-browser-selfhost@5.50.0
+  - @memberjunction/ai-vectordb@5.50.0
+  - @memberjunction/ai-vectors-pinecone@5.50.0
+  - @memberjunction/auth-providers@5.50.0
+  - @memberjunction/component-registry-client-sdk@5.50.0
+  - @memberjunction/integration-schema-builder@5.50.0
+  - @memberjunction/interactive-component-types@5.50.0
+  - @memberjunction/data-context-server@5.50.0
+  - @memberjunction/postgresql-dataprovider@5.50.0
+  - @memberjunction/redis-provider@5.50.0
+  - @memberjunction/server-extensions-core@5.50.0
+  - @memberjunction/ai-provider-bundle@5.50.0
+  - @memberjunction/integration-progress-artifacts@5.50.0
+  - @memberjunction/lists-base@5.50.0
+  - @memberjunction/global@5.50.0
+  - @memberjunction/sql-dialect@5.50.0
+  - @memberjunction/scheduling-base-types@5.50.0
+
+## 5.49.0
+
+### Minor Changes
+
+- 70113b1: Align the integrations framework — resolution overlay, EM/EFM lifecycle, sync locking, watermark backfill, and the U1–U5/U7/U10/U11 upstream defects.
+
+  **Engine (`integration-engine`)**
+  - U1: `IntrospectSchema`/creation-pipeline mappings propagate `undefined` PK/FK flags instead of coercing to `false` — a sample's silence can no longer wipe a declared primary key (`SourceFieldInfo.IsPrimaryKey/IsForeignKey` widened to optional).
+  - Semantic overlay (`decideSemanticOverlay`): Description / DisplayName / IncrementalWatermarkField are external-wins-when-present, curated-fallback-when-silent (per-attribute overlay precedence).
+  - Content-hash basis: the content-hash match/write covers MAPPED fields only — a newly-appearing custom key no longer forces a row rewrite. Custom-key candidates + sizing statistics are aggregated in-memory per sync (`SyncResult.CustomKeyStats`, `foldCustomKeyStats`, `inferColumnTypeFromStats`) and flow to the promotion callback regardless of row skips. **Operational note (one-time):** because the content-hash basis becomes mapped-only, the first sync after this deploys re-hashes and re-writes every overflow-carrying row exactly once — a bounded one-time load spike plus Record-Changes churn — after which stored hashes converge and steady-state (skip-unchanged) writes resume.
+  - Maintenance lock (`AcquireMaintenanceLock`/`ReleaseMaintenanceLock`/`GetMaintenanceLock`): syncs refuse while a metadata refresh / schema evolution / RSU pipeline runs for the connection.
+  - U3: live sync progress is monotonic under concurrency (`RatchetProgressSnapshot`).
+  - U11: `IntrospectSchemaOptions.OnProgress` — determinate discovery progress (scanned/total).
+
+  **Server (`server`)**
+  - `IntegrationSchemaEvolution` is now the full re-resolution refresh: re-resolution → diff → removed objects' entity/field maps disabled (data kept) → changed objects' field maps reconciled + Pull watermarks reset (U10, backfills new columns) → new objects' tables created with entity maps born DISABLED (`autoEnableNewObjects` opts in) → RSU. Extended output: NewObjects/RemovedObjects/ChangedObjects/WatermarksReset.
+  - `IntegrationApplyAll`/`ApplyAllBatch`: `UnselectedAction` ('disable' default) — objects absent from the selection get their entity + field maps disabled; re-selection re-enables both. First-ever apply defaults to a FULL sync.
+  - U7: schedule creation is unique per (connection, job kind) — update-in-place instead of duplicates.
+  - U5: boot-time assert when RSU's additionalSchemaInfo write path diverges from CodeGen's read path.
+  - DAG exposure: `IntegrationListSourceObjects` items carry `DependsOn` parent names.
+  - U11: RSU status/progress expose CurrentStepName/StepIndex/StepTotal; pipeline steps carry StepIndex/StepTotal.
+
+  **SchemaEngine / schema-builder**
+  - additionalSchemaInfo per-table REPLACE semantics for soft FKs (`ClearForeignKeysForTables`) — a refresh's resolution replaces the prior run's FK entries for its tables.
+  - `RSUPendingWork`: `UnselectedAction` + `CreateDisabled` for the post-restart consumer; U11 step-index fields.
+
+  **CodeGenLib / PostgreSQLDataProvider**
+  - U2: `spUpdateExistingEntityFieldsFromSchema` honors `IsSoftPrimaryKey` on BOTH dialects (PG emitter + SQL Server migration) — schema sync no longer wipes resolved soft PKs.
+  - U4: a keyless entity now throws a named "has no primary key" error instead of emitting malformed record-change SQL.
+
+### Patch Changes
+
+- 5e93c10: Add `agent-memory-tests.ts` — a client-first, live-model integration suite covering the AI agent MEMORY lifecycle end-to-end over the GraphQL wire (`GraphQLAIClient` → live MJAPI).
+
+  The specific memories an LLM forms are nondeterministic, so every assertion is a deterministic predicate at the PROCESS level, isolated by a per-run marker so pre-existing `MJ: AI Agent Notes` rows can never satisfy it:
+  - **Formation** — memory-triggering convos produce notes with the in-flight write invariants (`Status='Provisional'`, `AuthorType='Agent'`, agent-scoped).
+  - **Hardening** — running the Memory Manager transitions those specific note IDs to `Active` with the 7-day `ExpiresAt` TTL cleared.
+  - **Injection** — a later agent run references those same note IDs in its run-step `memoryAttribution`, scoped to that run's window so the Memory Manager's own hardening steps cannot false-positive it.
+
+  Self-cleaning (every marker note is deleted in `finally`) and gated behind `RUN_AGENT_TESTS=1`; registered in the `run-all.ts` Live Model tier.
+
+- c5e4b9e: Agent conversation compaction: durable cross-turn summaries stored on the conversation (Sequence + SummaryPromptRunID, budget knobs on AIAgentType/AIAgent, Compaction run steps), conversation-history retrieval tools (getMessageBySequence, getMessagesByRange, searchConversation, summarizeRange), edit handling with OriginalMessageChanged flagging and a wired chat edit affordance, plus hardening fixes: failed message expansions now surface a reason to the model (breaks an unbounded retry loop), json5 ESM import fix restores the local JSON-repair tier, and SQLConverter no longer truncates PG column comments at escaped apostrophes.
+- 4c441dd: Close out every open cache-audit defect (B39–B44) plus the reachable differential throw found in adversarial round 3.
+  - **B40** — `CacheLocal` + `Aggregates` returned no aggregates at all, even on a cold miss. Three independent drops in one pipe: the client's cache-check input map omitted `Aggregates` from the request, the resolver's coreParams map omitted them again, and the engine's `stale` reply dropped the computed results. All three now forward; the client parses values back to native types. `client-cache` is 13/13 and now registered in the deterministic gate.
+  - **B39** — a `ViewID`-only `RunView` failed for _every_ caller (including the view's owner): the internal `MJ: User Views` lookup ran without a context user, and a miss fell through to `undefined` ("Entity undefined not found in metadata"). The user is now threaded through `EntityStatusCheck` → `GetEntityNameFromRunViewParams`, and a genuine miss throws an error naming the view and the cause.
+  - **B41** — the differential-merge decline path now performs a **real full fetch** (CacheLocal stripped + BypassCache, so re-entry into the smart-cache transport is structurally impossible) instead of throwing away the caller's whole batch; with that fallback in place, the `hasNarrowingSegment` guard is restored on `ApplyDifferentialUpdate`.
+  - **B42** — `OrderBy` (fingerprint segment [2]) joins the maintenance classifier: an in-place upsert appends out of order, so ordered slots invalidate on save (delete still removes in place — removal preserves relative order).
+  - **B43** — the RunQuery TTL cache-hit now checks `UserCanRun` before serving; the fingerprint carries no user segment, so user A's warmed slot was served to user B with no permission check. Deny or unresolvable metadata falls through to normal, authorized execution.
+  - **B44** — an every-field `Fields` list (the `entity_object` widening) now normalizes to `f:*` in the client fingerprint **only**, restoring in-place maintenance for the client's most common slot shape without touching what is fetched.
+
+  Also: the round-3 finding that the "unreachable" differential throw was in fact reachable (aggregate slots and defensive `MaxRows` caps both failed live) is fixed at the server seam — `RunViewsWithCacheCheck` no longer offers a differential for subset/aggregate-shaped params, falling back to the same full-refresh path its own validation already uses.
+
+- 0e52ff6: Add the `cache-gauntlet` integration bundle (CG1–CG6) — live coverage of the subset-slot × mutation cell that shipped two production cache bugs.
+
+  An audit of the 61 existing cache checks found the exact bug class had **no live coverage**: `S16` tests that `MaxRows` _fingerprints_ separately (slot identity), `S17` tests that a _filtered_ slot invalidates on save, and `S23` tests that an _unfiltered_ slot upserts in place — but nothing ever saved into a **subset** slot. Both #3195 (`totalRowCount` collapse) and #3199 (rows maintained in place) lived in that gap.
+
+  The bundle also pins the per-operation asymmetry that made #3199's delete half a _separate_ bug: filtered-DELETE is legitimately maintained in place (a deleted row matches no predicate), while subset-DELETE is not (removal shrinks the slot below the caller's limit). CG3 guards the legitimate half so a future over-correction doesn't needlessly invalidate it.
+
+  Verified to actually catch the regression: with `isSubsetFingerprint` neutered, CG1/CG2/CG4/CG5 go red while CG3 correctly stays green — the checks discriminate rather than firing indiscriminately.
+
+  Two adjacent gaps were investigated and are documented rather than silently left:
+  - **Cross-server invalidation is already covered** by the existing `cross-server-invalidation-tests.ts` rig (XS1/XS2), but it has **no subset-slot coverage** and is **not registered in `run-all.ts`**, so it can rot unnoticed.
+  - **Schema-drift staleness is now covered by CG6 — and it found a real defect (B38).** In-place maintenance (`UpsertSingleEntity`/`RemoveSingleEntity` → `storeCachedResults`) carries `totalRowCount` forward but **not `schemaHash`**, so a single save strips the hash; `isSchemaStaleCacheEntry` short-circuits on a missing hash and never fires for that slot again. Reproduced directly: cold read → `1bd8ea31`, after one SAVE → `NONE`. Schema-drift protection therefore only covers slots never written to. This is the same class of omission as #3195, which fixed `totalRowCount` on this exact write path. **CG6 is intentionally RED** pending the fix.
+
+- 1e5b9b2: Fix a structural defect in RunView cache maintenance classification, plus the two holes it caused.
+
+  Three shipped bugs (#3195 `totalRowCount`, #3199 rows, B38 `schemaHash`) were all symptoms of one root cause: `isFilteredFingerprint` inspected **only** fingerprint segment `[1]`, so segments appended later were silently classified as "safe to maintain in place":
+  - **H1** — a saved view's `WhereClause` lives on the VIEW, not in `params.ExtraFilter`, so the filter segment stays `_`. Its slot was upserted in place on save and served rows the view's own `WhereClause` excludes. Views are how users are shown a restricted row set, so this reads as a data/permission leak.
+  - **H3** — the per-user RLS predicate is appended as `rls:<hash>` after the filter segment is built. Same misclassification: a save by user A was upserted into user B's RLS-scoped slot, injecting a row B's predicate excludes. An RLS bypass.
+
+  `hasNarrowingSegment()` replaces the segment-`[1]` check with a **deny-by-default allowlist**: only `imr:` (which widens the set) and the connection suffix are treated as safe; everything else, _including unknown future segments_, is treated as narrowing. A new segment can now cost a cache refill, but can never silently serve wrong rows.
+
+  **H2** — aggregates were dropped by in-place maintenance, so a caller that asked for `COUNT(*)` got `Success: true` with no aggregate. The first fix attempt _carried the cached aggregate forward_ and was worse: it served `rows=7` alongside `COUNT(*)=6`. A caller can detect a missing aggregate; it cannot detect a stale one. Aggregate-bearing slots (`aggHash` segment) are now invalidated on **either** mutation, since the value is not derivable in JS. The delete branch previously bypassed classification entirely and now consults it.
+
+  **H4/H5** — `ApplyDifferentialUpdate` refuses to merge into subset, narrowing, or aggregate slots, invalidating instead. It recomputed `schemaHash` (stamping today's schema onto rows fetched under the old one, masking drift) and still shrank subset slots — the third instance of #3199, previously unpinned by any test.
+
+  **H6** — `cross-server-invalidation-tests.ts` documented that run-all included it behind `RUN_CROSS_SERVER=1`; that inclusion never existed, so it had never run in the gate. Now registered behind its documented gate.
+
+  New `cache-gauntlet` checks CG7 (view slot) and CG8 (aggregate consistency) pin H1 and H2 live; the unit slot-maintenance matrix gains view/aggregate rows plus deny-by-default property tests.
+
+- 3d0255b: Add server-free `./registry` and `./checks/*` subpath exports so client-first integration dispatchers stop loading server packages through the root barrel.
+
+  The barrel re-exports `./bootstrap` (server) plus every check module, so a client dispatcher reaching for `TestRunner`/`IntegrationCheckRegistry` transitively loaded `@memberjunction/core-entities-server` — and the ClassFactory then resolved entities to their SERVER subclasses (`MJTagScopeEntityServer`) instead of the client classes a browser loads. That silently defeated the point of client-first testing.
+
+  `./registry` exports only verified server-free primitives (runner, registry, check types, tiers, config — `check.ts`'s every import is `import type` and therefore erased). Client dispatchers pair it with `./client` plus a direct side-effect import of their own bundle via `./checks/*`, so only the intended checks register.
+
+  Verified: `MJ: Tag Scopes` now resolves to `MJTagScopeEntity` (was `MJTagScopeEntityServer`), and the registry contains only the dispatcher's own bundle.
+
+- 693973b: fix(server): accept GraphQL WS subscriptions on the default `GRAPHQL_ROOT_PATH`. The HTTP GraphQL endpoint is mounted with Express prefix matching (`app.use('/', …)` also serves `/graphql`), but the WebSocket upgrade handler required an exact pathname match — so a client whose WS URL ends in `/graphql` while the server ran on the default root path (`/`) had working HTTP but silently 400-rejected subscriptions. A shared `IsGraphQLWsPath` helper now treats `/graphql` as an alias of `/` (only when the root path is the default `/`), so custom non-default root paths (`/api`, etc.) still require an exact match and are unaffected.
+- 6c910ef: Dialect-aware query extraction with QuerySQL-triggered re-extraction, PG double-quoted identifier unwrapping in SQL parser, lazy-load QueryEngine in MJQuerySQLEntityServer, and suppress full_access scope probe from API key usage logs
+- 314f667: Stop silently truncating nested-child data in REST integration sync, plus two reliability fixes.
+  - **Nested-child completeness** — `DescendTemplateVars` now drains a parent's FULL paginated child collection instead of capping it at `ctx.BatchSize`. The outer batch size bounds how many PARENTS a call processes (resumable via the parent keyset, never mid-child), so applying it to the per-parent child fetch permanently dropped every record past the first batch with no bookmark to ever revisit it. Live-verified: Wild Apricot Donation/Event/Invoice/Payment (single-parent, capped at 200 each) and a Mailchimp list's full 501-member set now land completely.
+  - **Write-verification errors** — classify a create that returns no rows (`"no rows returned from SQL"`) as a distinct, non-retryable `WRITE_VERIFICATION_ERROR` instead of the retryable `DATABASE_ERROR` catch-all; retrying an identical write only reproduces the identical miss.
+  - **Narrower DATABASE_ERROR match** — the over-broad `"sql"` substring match was routing deterministic failures through retry-with-backoff for no reason; it now keys on real transient signals (deadlock / connection lost).
+  - **StartSync run-detection window** — extend the poll for the run record (fast first 2s, longer tail) so a large connector's synchronous setup (e.g. HubSpot's 168 entity maps) isn't misreported as "no run created" while it is genuinely syncing.
+
+- f1ab36f: Integration-test expansion Wave 1 — three new bundles (26 checks), all client-first where a client surface exists.
+
+  **`app-wiring` (10 checks, client-first)** — the "every shipped app is wired correctly" contract, parameterized over ALL applications so new apps inherit it automatically. Provider↔table parity, nav-item well-formedness, exactly-one-default-tab, **globally-unique DriverClass** (the catalog's latent risk #1), unique slugs, entity/role/settings link resolution, `CanAdmin ⇒ CanAccess`, agent-reference resolution, and non-Active apps excluded from new-user fan-out. Measured 25 apps / 77 nav items / **77 distinct DriverClass values, zero collisions**.
+
+  **`view-execution` (9 checks, client-first)** — the Viewing System data layer over the real wire: dynamic filter row-set equality (by PK set, not counts), Filter-JSON→WHERE compilation, ExtraFilter injection guard, `Fields` projection (+forced PK), OFFSET and keyset pagination completeness (no dup/gap), composite-PK keyset refusal, MaxRows/IgnoreMaxRows, and aggregates-vs-pagination.
+
+  **`metadata-consistency` (7 checks, server transport)** — metadata↔physical-DB audit sweeping all entities: generated views and CRUD procs exist, CHECK-constraint values match `EntityFieldValue`, FK indexes present, field sequences gapless and matching base-view column order, column descriptions, and SchemaInfo coverage/casing.
+
+  Also adds the `G5` static CI gate (`.github/scripts/check-driverclass-registrations.sh`) for DriverClass→Angular `@RegisterClass` resolution, which no server-side check can observe.
+
+  All three ship both parity siblings (tsx dispatcher + metadata IT record joined to the deterministic suite). Every collection-iterating check asserts its collection is non-empty first, so a failed load cannot pass vacuously.
+
+  **MC6 is a ratchet, not an absolute gate**: 270 core-schema columns predate the describe-every-column rule, so it fails only when that count _grows_. PK/FK columns are exempt per `migrations/CLAUDE.md` (correcting an initial 1003 false-positive count).
+
+- 4a03c37: Integration-test expansion Wave 2 — two new bundles (22 checks) covering the core write-side and the permission model.
+
+  **`entity-writes` (8 checks, client-first)** — Record-Change fidelity (exact before/after `ChangesJSON`, offenders identified by content not position), virtual-field capture on both INSERT and UPDATE, keyset `AfterKey` completeness over a real fixture set, keyset guardrail refusals each differing from a passing control by exactly one illegal ingredient, dedup-linger invalidation after save, UUID case-insensitive FK round-trip, `datetimeoffset` round-trip to the millisecond, and server-side `ValidateAsync` enforcement that survives `SkipAsyncValidation`.
+
+  **`permission-engine` (14 checks, client-first)** — provider fan-out from the `MJ: Permission Domains` catalog (every active row ClassFactory-resolves a matching provider), normalized `PermissionAction`/`GranteeType` vocabulary conformance, catalog↔provider capability agreement, unknown-domain fails **closed**, and the **two-access-path asymmetry** for Agents and Skills (cached helper open-by-default vs unified provider closed-by-default over the same table) — where the divergence itself is the assertion, so it cannot collapse silently. Plus grant-flips-the-default-off, permission collapse ordering, and two genuinely distinct identities proving a role-less user gets neither entity CRUD nor any of 13 authorizations.
+
+  Both bundles ship all parity siblings and register best-effort teardown for their mutation-tier checks.
+
+  Note: `permission-engine`'s PE13 is intentionally RED — it pins a confirmed defect where a single unresolvable provider breaks `GetAllUserPermissions` for every user. It is mutation-tier, so the default CI gate stays green.
+
+- de86aa5: Pin the MagicLink provisioned-external-user notice as a deliberate default-log line. Following the startup-notice cleanup that made the ephemeral-keypair and provider-registered messages verbose-only, this documents at the call site why the provisioning notice in `MagicLinkService.createScopedUser` is intentionally NOT verbose-gated — provisioning an external account via magic-link redemption is a security-relevant event that belongs in the default server log — and adds a unit test asserting it still emits with `MJ_VERBOSE` unset, so a future log-cleanup sweep cannot silently quiet it. No runtime behavior change.
+- 3355951: fix(server): stop logging routine unauthenticated requests as full stack traces. A request presenting no credentials at all (health check, CORS preflight-adjacent probe, or a client mid-auth-handshake) is routine and no longer produces a raw error/stack-trace dump — only genuinely exceptional auth failures (malformed/tampered tokens, invalid API keys, inactive users) still log in full. Also fixes the WebSocket connect path, where an absent `Authorization` param was coerced to the literal string `"undefined"` and mis-logged as `Invalid token payload` instead of taking the quiet missing-token path.
+- bc388e3: Realtime QA hardening — every finding from the adversarial audit of the driver-family consolidation (PR #3177) plus the broader co-agent architecture, fixed with regression tests (plan: `plans/complete/realtime-qa-hardening.md`).
+
+  **Regression fixes (A-items)** — bodyless provider `error` frames are recoverable again on raw-WS providers (adapter synthesizes the payload; transport failures stay fatal); `Capabilities.CanReconfigureTurnMode` is profile-gated (`supportsLiveReconfigure` — HuggingFace now truthfully reports false and `Reconfigure` no-ops); protected wire fields (`type`/`instructions`/`tools`) can no longer be overridden through the open Config bag (closing a strict-endpoint session.update kill vector) while the documented `audio` override remains; the client-direct minted `SessionConfig` now applies the residual bag with the same construction order as server-bridged (the two topologies are actually identical); deferred-config listener cleanup on early teardown; family-wide empty-transcript suppression; settle-handle + adapter buffer hygiene.
+
+  **Robustness (B-items)** — connect/readiness deadlines everywhere (client WS `connectTimeoutMs` covering open + `session.created`, with socket-death/`Disconnect` releasing the awaited `Connect`; server `configReadinessTimeoutMs` rejecting `WaitForConfigApplied` on silent endpoints without cancelling the deferred apply); stale-`response.done` protection (a cancelled turn's trailing done can't release the busy lock under a locally-initiated replacement); TRUE-barge-in drops queued tool-result auto-triggers (the model never speaks over a user who took the floor; delivery via the user's next turn); WebRTC remote-stream handlers cleared on Disconnect; WS sends gated on socket-open.
+
+  **Architecture (C-items)** — `realtime.session` tuning config (`effortLevel`/`parallelToolCalls`/`mcpTools`/`inputTranscriptionModel`) now flows config→bag→driver on BOTH topologies (`GetSessionTuningSettings`; the PR #3177 driver features are live end-to-end); per-modality usage detail (`RealtimeUsage.Input/OutputTokenDetails`) captured by the OpenAI driver, accumulated by the runner, and persisted on the realtime `AIPromptRun` for multi-channel cost attribution; HF proxy hardening (optional `MJ_REALTIME_PROXY_ALLOWED_ORIGINS` allowlist, upstream-open deadline, bounded pre-open buffer); the session runner observes the chained cancellation signal and performs bounded transport reconnects (default 1, `MaxTransportReconnects`); MCP approval requests are auto-DENIED so the turn continues instead of dead-air blocking; Gemini scrubs+warns on foreign OpenAI-protocol/transport keys (`REALTIME_SHARED_CONFIG_KEYS` exported from Core); `RealtimeTranscript.ReplacesPrevious` added for streamed-final providers.
+
+  Suite totals after the wave: ai-openai 147, ai-realtime-client 391, ai-agents 1653, ai-gemini 87, ai-xai 50, ai-huggingface 34, MJServer proxy 8 — all passing.
+
+  **Second-pass re-audit fixes**: a follow-up adversarial audit of the hardening itself found the C1 fix was inert (the new realtime.session field was never propagated through the effective-config resolver — now fixed with normalizeSession), plus untested edges introduced by the B2 counter (permanent wedge on a rejected response.create — now self-heals on the error frame), the C7 reconnect (abort/Stop race leaking a live session; stale call_id relayed to the fresh session; no re-entrancy/identity guard — all fixed), the client connect deadline (timer leak on synchronous socket-construction throw), reused-instance socket handling (old socket late close corrupting the new session), the C4 abort window (abort during StartSession lost), model not being a protected wire field, and ReplacesPrevious being ignored at the transcript-persist site. All fixed with regression + interaction-seam tests.
+
+  **Fifth-pass re-audit fixes**: a five-reviewer verification pass found one reachable correctness bug and closed two latent transcript fragilities. (1) The pass-4 client `onErrorFrame` fix cleared the pending narration kind only when no confirmed response was active, so a narration create rejected while a cancelled response drained mistagged the next delegated-answer turn as ephemeral (dropping its transcript) — the kind is now cleared unconditionally on the rejecting error. (2) The transcript in-flight-row bookkeeping moved to an `{id, open}` model so a turn that emits both an interim delta and repeated streamed completeds still collapses to one row, and a short assistant final no longer suppresses the next turn's interim streaming row. Coverage added for the `confirmedResponseActive` busy-lock guard and the per-turn `ReplacesPrevious` reset (xAI + HuggingFace).
+
+  **Fourth-pass re-audit fixes**: a four-reviewer pass found one regression from the third-pass work and several reachable pre-existing defects, all fixed with regression tests. (1) The third-pass usage un-gate let a trailing usage frame accumulate after `Stop()` and arm a post-finalize checkpoint timer — now gated on the runner lifecycle (`!stopped`) instead. (2) `RealtimeTranscript.ReplacesPrevious` is now wired END-TO-END: the shared server session flags the 2nd+ streamed user transcription completed (Grok streams repeated growing finals) and `persistRealtimeTranscript` uses status-disambiguated reuse, so server-bridged Grok/ElevenLabs no longer mint a duplicate `ConversationDetail` per caption (previously the flag was only ever set client-side). (3) The client `onErrorFrame` self-heal now clears the eager `responseActive`/narration phantom left by a rejected local `response.create` (a `confirmedResponseActive` flag distinguishes it from a live VAD turn) so `IsBusy` no longer wedges on compat endpoints. (4) The tool broker aborts EVERY concurrent delegation on barge-in (was: only the newest, orphaning the rest). (5) The HuggingFace server session declares its native 16 kHz sample rate (was: bridge fell back to 24 kHz into a 16 kHz pipeline). (6) A stuck delegate can no longer leak stale narration-burst timing across a reconnect (burst state reset decoupled from the delegation counter).
+
+  **Third-pass re-audit fixes**: a third adversarial pass against the latest `next` found three residual seams: (1) the C8 transcript-persist fix only bound the in-flight key on the INTERIM branch, so a FINALS-ONLY streamed provider (e.g. Grok user captions, ElevenLabs corrections) that never emits an interim delta still minted a duplicate `ConversationDetail` row per correction — the create+finalize branch now binds the key too; (2) the C7 reconnect blanket-zeroed the runner's shared `activeDelegations` counter, which — combined with each aborted delegation's self-decrementing `finally` — could double-decrement and steal a CONCURRENT post-reconnect delegation's narration burst; the reset is gone (frames self-unwind); (3) `OnUsage` was identity-gated like every other handler, so a trailing usage frame flushed on the just-dropped socket was silently discarded — usage is runner-GLOBAL (cumulative) and is now un-gated. Plus a bounded-worst-case characterization test for the S1 self-heal. All fixed with regression + interaction-seam tests.
+
+- 70c658c: Add configurable startup mode ('full' | 'task') for fast CLI/script boot. StartupManager.Startup() accepts startup options; 'task' mode skips all @RegisterForStartup engine pre-warm (engines lazy-load on first touch) while 'full' preserves existing behavior. Mode resolves via a shared four-level precedence chain (MJ_STARTUP_MODE env var > programmatic option > mj.config.cjs startup.mode > entry-point default). MJAPI defaults to 'full'; MJCLI, mj-sync, and CodeGen default to 'task'. Measured 14x CPU reduction on mj sync validate.
+- b5a8e3f: Fix Query Builder ad-hoc query results being capped at 100 rows with no working pager. The ad-hoc query resolver now paginates the first page (StartRow 0) and reports the true total row count via a COUNT(\*) query instead of a TOP-N cap, and the data grid no longer collapses value-identical rows from queries without an ID column. The artifact viewer title and grid toolbar now show the true total row count.
+- Updated dependencies [486b276]
+- Updated dependencies [463aa51]
+- Updated dependencies [c5e4b9e]
+- Updated dependencies [4c441dd]
+- Updated dependencies [1e5b9b2]
+- Updated dependencies [a8cb2b6]
+- Updated dependencies [13d9b8e]
+- Updated dependencies [88d707b]
+- Updated dependencies [7af258e]
+- Updated dependencies [7db8ef5]
+- Updated dependencies [a7733a9]
+- Updated dependencies [3b23275]
+- Updated dependencies [505c8b5]
+- Updated dependencies [ebe5b88]
+- Updated dependencies [a9ec419]
+- Updated dependencies [6c910ef]
+- Updated dependencies [42a680a]
+- Updated dependencies [88d707b]
+- Updated dependencies [48fa886]
+- Updated dependencies [314f667]
+- Updated dependencies [70113b1]
+- Updated dependencies [1a15bd2]
+- Updated dependencies [38c69a6]
+- Updated dependencies [7d6e8fb]
+- Updated dependencies [b64efd1]
+- Updated dependencies [d23aa89]
+- Updated dependencies [b52ffa8]
+- Updated dependencies [85575cf]
+- Updated dependencies [5473e9a]
+- Updated dependencies [38c220c]
+- Updated dependencies [bc388e3]
+- Updated dependencies [42fc86b]
+- Updated dependencies [373c5f6]
+- Updated dependencies [9c07270]
+- Updated dependencies [e945700]
+- Updated dependencies [1475e6c]
+- Updated dependencies [6d0ec83]
+- Updated dependencies [15e3017]
+- Updated dependencies [fc1c693]
+- Updated dependencies [70c658c]
+- Updated dependencies [9d6e3d9]
+- Updated dependencies [78a5e44]
+  - @memberjunction/codegen-lib@5.49.0
+  - @memberjunction/core@5.49.0
+  - @memberjunction/ai-agents@5.49.0
+  - @memberjunction/ai-core-plus@5.49.0
+  - @memberjunction/ai-prompts@5.49.0
+  - @memberjunction/core-entities@5.49.0
+  - @memberjunction/core-entities-server@5.49.0
+  - @memberjunction/graphql-dataprovider@5.49.0
+  - @memberjunction/generic-database-provider@5.49.0
+  - @memberjunction/global@5.49.0
+  - @memberjunction/communication-types@5.49.0
+  - @memberjunction/communication-engine@5.49.0
+  - @memberjunction/communication-sendgrid@5.49.0
+  - @memberjunction/communication-ms-graph@5.49.0
+  - @memberjunction/scheduling-engine@5.49.0
+  - @memberjunction/core-actions@5.49.0
+  - @memberjunction/auth-providers@5.49.0
+  - @memberjunction/actions@5.49.0
+  - @memberjunction/ai-vector-sync@5.49.0
+  - @memberjunction/ai@5.49.0
+  - @memberjunction/api-keys@5.49.0
+  - @memberjunction/integration-engine@5.49.0
+  - @memberjunction/schema-engine@5.49.0
+  - @memberjunction/integration-schema-builder@5.49.0
+  - @memberjunction/postgresql-dataprovider@5.49.0
+  - @memberjunction/testing-engine@5.49.0
+  - @memberjunction/testing-engine-base@5.49.0
+  - @memberjunction/ai-vectordb@5.49.0
+  - @memberjunction/ai-vectors-pinecone@5.49.0
+  - @memberjunction/search-engine@5.49.0
+  - @memberjunction/sqlserver-dataprovider@5.49.0
+  - @memberjunction/templates@5.49.0
+  - @memberjunction/ai-agent-manager-actions@5.49.0
+  - @memberjunction/ai-agent-manager@5.49.0
+  - @memberjunction/ai-engine-base@5.49.0
+  - @memberjunction/clustering-engine@5.49.0
+  - @memberjunction/computer-use@5.49.0
+  - @memberjunction/aiengine@5.49.0
+  - @memberjunction/tag-engine@5.49.0
+  - @memberjunction/tag-engine-base@5.49.0
+  - @memberjunction/ai-mcp-client@5.49.0
+  - @memberjunction/computer-use-engine@5.49.0
+  - @memberjunction/ai-bridge-base@5.49.0
+  - @memberjunction/ai-bridge-ringcentral@5.49.0
+  - @memberjunction/ai-bridge-teams@5.49.0
+  - @memberjunction/ai-bridge-twilio@5.49.0
+  - @memberjunction/ai-bridge-vonage@5.49.0
+  - @memberjunction/ai-bridge-server@5.49.0
+  - @memberjunction/remote-browser-base@5.49.0
+  - @memberjunction/remote-browser-cdp@5.49.0
+  - @memberjunction/remote-browser-selfhost@5.49.0
+  - @memberjunction/remote-browser-server@5.49.0
+  - @memberjunction/actions-apollo@5.49.0
+  - @memberjunction/actions-base@5.49.0
+  - @memberjunction/actions-bizapps-accounting@5.49.0
+  - @memberjunction/actions-bizapps-crm@5.49.0
+  - @memberjunction/actions-bizapps-formbuilders@5.49.0
+  - @memberjunction/actions-bizapps-lms@5.49.0
+  - @memberjunction/actions-bizapps-social@5.49.0
+  - @memberjunction/entity-communications-base@5.49.0
+  - @memberjunction/entity-communications-server@5.49.0
+  - @memberjunction/notifications@5.49.0
+  - @memberjunction/component-registry-client-sdk@5.49.0
+  - @memberjunction/credentials@5.49.0
+  - @memberjunction/doc-utils@5.49.0
+  - @memberjunction/encryption@5.49.0
+  - @memberjunction/external-change-detection@5.49.0
+  - @memberjunction/interactive-component-types@5.49.0
+  - @memberjunction/lists@5.49.0
+  - @memberjunction/livekit-room-server@5.49.0
+  - @memberjunction/data-context@5.49.0
+  - @memberjunction/data-context-server@5.49.0
+  - @memberjunction/queue@5.49.0
+  - @memberjunction/storage@5.49.0
+  - @memberjunction/record-comparison@5.49.0
+  - @memberjunction/redis-provider@5.49.0
+  - @memberjunction/scheduling-actions@5.49.0
+  - @memberjunction/scheduling-engine-base@5.49.0
+  - @memberjunction/server-extensions-core@5.49.0
+  - @memberjunction/version-history@5.49.0
+  - @memberjunction/esignature@5.49.0
+  - @memberjunction/integration-progress-artifacts@5.49.0
+  - @memberjunction/scheduling-base-types@5.49.0
+  - @memberjunction/ai-provider-bundle@5.49.0
+  - @memberjunction/config@5.49.0
+  - @memberjunction/lists-base@5.49.0
+  - @memberjunction/sql-dialect@5.49.0
+
+## 5.48.0
+
+### Minor Changes
+
+- c20723a: Add a self-hosted **HuggingFace speech-to-speech** realtime (voice) provider, sitting side-by-side with the cloud realtime providers (OpenAI, Gemini, ElevenLabs, AssemblyAI) with no host changes. It treats HuggingFace's open-source VAD → STT → LLM → TTS stack (in its OpenAI-Realtime-compatible `/v1/realtime` mode) as a `Realtime` model — private-by-design (audio never leaves owned infrastructure), cost-free, and component-swappable.
+
+  Because the endpoint is self-hosted, the shipped client-direct audio topology runs through a new provider-agnostic **MJAPI realtime proxy**: the driver mints a one-time ticket into a shared `RealtimeProxyRegistry` (`@memberjunction/ai`) and hands the browser a `wss://<mjapi-public>/realtime-proxy?ticket=…` URL, so the internal endpoint + auth never reach the browser and the box needs no browser-facing ingress. Adds the new `@memberjunction/ai-huggingface` driver package, the `HuggingFaceRealtimeClient` (`@memberjunction/ai-realtime-client`), the `RealtimeProxyServer` + single upgrade-router in `@memberjunction/server`, the class-registration manifest entry (`@memberjunction/server-bootstrap`), and the client-load wiring (`@memberjunction/ng-conversations`), plus the `Hugging Face` vendor + `HuggingFace Speech-to-Speech` model metadata (low PowerRank — opt-in). Additive only; endpoint/auth/sample-rate are deployment config.
+
+### Patch Changes
+
+- 09e1b4b: Fix Apply to my Form (resolve spec code, handle Pending overrides, improve # typeahead), auto-add app schemas to excludeSchemas on OpenApp install/upgrade, surface RenderedSQL through RunQueryResult and TestQuerySQL, strip ORDER BY before outer-wrapping unparseable SQL in MaxRows, fix lazy-config loader variable name collisions in codegen manifest, and add read-only provider support and missing SQL function keywords in PostgreSQL provider
+- 8a88366: Allowlist two legitimate global-provider references that were tripping the MultiProviderCompliance guard and holding `next` red. Comment-only change (no runtime or type impact): `context.ts`'s read-only-provider bootstrap pool-share (a verbatim twin of the already-blessed line at 746) and the `lists-tests.ts` integration-test harness now carry the documented `// global-provider-ok: <reason>` inline marker instead of being refactored — both are genuine single-provider/bootstrap uses, not per-provider request paths.
+- Updated dependencies [09e1b4b]
+- Updated dependencies [2143b98]
+- Updated dependencies [c20723a]
+- Updated dependencies [a94bd16]
+- Updated dependencies [bda123a]
+- Updated dependencies [f613d0d]
+  - @memberjunction/generic-database-provider@5.48.0
+  - @memberjunction/core@5.48.0
+  - @memberjunction/codegen-lib@5.48.0
+  - @memberjunction/postgresql-dataprovider@5.48.0
+  - @memberjunction/ai-agents@5.48.0
+  - @memberjunction/ai@5.48.0
+  - @memberjunction/lists@5.48.0
+  - @memberjunction/core-actions@5.48.0
+  - @memberjunction/core-entities@5.48.0
+  - @memberjunction/core-entities-server@5.48.0
+  - @memberjunction/sqlserver-dataprovider@5.48.0
+  - @memberjunction/ai-agent-manager-actions@5.48.0
+  - @memberjunction/ai-agent-manager@5.48.0
+  - @memberjunction/ai-engine-base@5.48.0
+  - @memberjunction/clustering-engine@5.48.0
+  - @memberjunction/computer-use@5.48.0
+  - @memberjunction/ai-core-plus@5.48.0
+  - @memberjunction/aiengine@5.48.0
+  - @memberjunction/tag-engine@5.48.0
+  - @memberjunction/tag-engine-base@5.48.0
+  - @memberjunction/ai-mcp-client@5.48.0
+  - @memberjunction/computer-use-engine@5.48.0
+  - @memberjunction/ai-prompts@5.48.0
+  - @memberjunction/ai-bridge-base@5.48.0
+  - @memberjunction/ai-bridge-ringcentral@5.48.0
+  - @memberjunction/ai-bridge-teams@5.48.0
+  - @memberjunction/ai-bridge-twilio@5.48.0
+  - @memberjunction/ai-bridge-vonage@5.48.0
+  - @memberjunction/ai-bridge-server@5.48.0
+  - @memberjunction/remote-browser-base@5.48.0
+  - @memberjunction/remote-browser-cdp@5.48.0
+  - @memberjunction/remote-browser-selfhost@5.48.0
+  - @memberjunction/remote-browser-server@5.48.0
+  - @memberjunction/ai-vectordb@5.48.0
+  - @memberjunction/ai-vectors-pinecone@5.48.0
+  - @memberjunction/ai-vector-sync@5.48.0
+  - @memberjunction/api-keys@5.48.0
+  - @memberjunction/actions-apollo@5.48.0
+  - @memberjunction/actions-base@5.48.0
+  - @memberjunction/actions-bizapps-accounting@5.48.0
+  - @memberjunction/actions-bizapps-crm@5.48.0
+  - @memberjunction/actions-bizapps-formbuilders@5.48.0
+  - @memberjunction/actions-bizapps-lms@5.48.0
+  - @memberjunction/actions-bizapps-social@5.48.0
+  - @memberjunction/actions@5.48.0
+  - @memberjunction/auth-providers@5.48.0
+  - @memberjunction/communication-types@5.48.0
+  - @memberjunction/communication-engine@5.48.0
+  - @memberjunction/entity-communications-base@5.48.0
+  - @memberjunction/entity-communications-server@5.48.0
+  - @memberjunction/notifications@5.48.0
+  - @memberjunction/communication-ms-graph@5.48.0
+  - @memberjunction/communication-sendgrid@5.48.0
+  - @memberjunction/component-registry-client-sdk@5.48.0
+  - @memberjunction/credentials@5.48.0
+  - @memberjunction/doc-utils@5.48.0
+  - @memberjunction/encryption@5.48.0
+  - @memberjunction/external-change-detection@5.48.0
+  - @memberjunction/graphql-dataprovider@5.48.0
+  - @memberjunction/integration-engine@5.48.0
+  - @memberjunction/integration-schema-builder@5.48.0
+  - @memberjunction/interactive-component-types@5.48.0
+  - @memberjunction/livekit-room-server@5.48.0
+  - @memberjunction/data-context@5.48.0
+  - @memberjunction/data-context-server@5.48.0
+  - @memberjunction/queue@5.48.0
+  - @memberjunction/storage@5.48.0
+  - @memberjunction/record-comparison@5.48.0
+  - @memberjunction/redis-provider@5.48.0
+  - @memberjunction/scheduling-actions@5.48.0
+  - @memberjunction/scheduling-engine-base@5.48.0
+  - @memberjunction/scheduling-engine@5.48.0
+  - @memberjunction/schema-engine@5.48.0
+  - @memberjunction/search-engine@5.48.0
+  - @memberjunction/server-extensions-core@5.48.0
+  - @memberjunction/templates@5.48.0
+  - @memberjunction/testing-engine@5.48.0
+  - @memberjunction/testing-engine-base@5.48.0
+  - @memberjunction/version-history@5.48.0
+  - @memberjunction/esignature@5.48.0
+  - @memberjunction/ai-provider-bundle@5.48.0
+  - @memberjunction/config@5.48.0
+  - @memberjunction/integration-progress-artifacts@5.48.0
+  - @memberjunction/lists-base@5.48.0
+  - @memberjunction/global@5.48.0
+  - @memberjunction/sql-dialect@5.48.0
+  - @memberjunction/scheduling-base-types@5.48.0
+
+## 5.47.0
+
+### Patch Changes
+
+- Updated dependencies [b216f2b]
+- Updated dependencies [06a1e44]
+- Updated dependencies [31da520]
+- Updated dependencies [92ecbf8]
+- Updated dependencies [f4dce92]
+- Updated dependencies [936a286]
+  - @memberjunction/core@5.47.0
+  - @memberjunction/sql-dialect@5.47.0
+  - @memberjunction/codegen-lib@5.47.0
+  - @memberjunction/postgresql-dataprovider@5.47.0
+  - @memberjunction/sqlserver-dataprovider@5.47.0
+  - @memberjunction/ai-agent-manager-actions@5.47.0
+  - @memberjunction/ai-agent-manager@5.47.0
+  - @memberjunction/ai-agents@5.47.0
+  - @memberjunction/ai-engine-base@5.47.0
+  - @memberjunction/clustering-engine@5.47.0
+  - @memberjunction/computer-use@5.47.0
+  - @memberjunction/ai-core-plus@5.47.0
+  - @memberjunction/aiengine@5.47.0
+  - @memberjunction/tag-engine@5.47.0
+  - @memberjunction/tag-engine-base@5.47.0
+  - @memberjunction/ai-mcp-client@5.47.0
+  - @memberjunction/computer-use-engine@5.47.0
+  - @memberjunction/ai-prompts@5.47.0
+  - @memberjunction/ai-bridge-base@5.47.0
+  - @memberjunction/ai-bridge-ringcentral@5.47.0
+  - @memberjunction/ai-bridge-teams@5.47.0
+  - @memberjunction/ai-bridge-twilio@5.47.0
+  - @memberjunction/ai-bridge-vonage@5.47.0
+  - @memberjunction/ai-bridge-server@5.47.0
+  - @memberjunction/remote-browser-base@5.47.0
+  - @memberjunction/remote-browser-cdp@5.47.0
+  - @memberjunction/remote-browser-selfhost@5.47.0
+  - @memberjunction/remote-browser-server@5.47.0
+  - @memberjunction/ai-vectordb@5.47.0
+  - @memberjunction/ai-vectors-pinecone@5.47.0
+  - @memberjunction/ai-vector-sync@5.47.0
+  - @memberjunction/api-keys@5.47.0
+  - @memberjunction/actions-apollo@5.47.0
+  - @memberjunction/actions-base@5.47.0
+  - @memberjunction/actions-bizapps-accounting@5.47.0
+  - @memberjunction/actions-bizapps-crm@5.47.0
+  - @memberjunction/actions-bizapps-formbuilders@5.47.0
+  - @memberjunction/actions-bizapps-lms@5.47.0
+  - @memberjunction/actions-bizapps-social@5.47.0
+  - @memberjunction/core-actions@5.47.0
+  - @memberjunction/actions@5.47.0
+  - @memberjunction/auth-providers@5.47.0
+  - @memberjunction/communication-types@5.47.0
+  - @memberjunction/communication-engine@5.47.0
+  - @memberjunction/entity-communications-base@5.47.0
+  - @memberjunction/entity-communications-server@5.47.0
+  - @memberjunction/notifications@5.47.0
+  - @memberjunction/communication-ms-graph@5.47.0
+  - @memberjunction/communication-sendgrid@5.47.0
+  - @memberjunction/component-registry-client-sdk@5.47.0
+  - @memberjunction/credentials@5.47.0
+  - @memberjunction/doc-utils@5.47.0
+  - @memberjunction/encryption@5.47.0
+  - @memberjunction/external-change-detection@5.47.0
+  - @memberjunction/generic-database-provider@5.47.0
+  - @memberjunction/graphql-dataprovider@5.47.0
+  - @memberjunction/integration-engine@5.47.0
+  - @memberjunction/integration-schema-builder@5.47.0
+  - @memberjunction/interactive-component-types@5.47.0
+  - @memberjunction/lists@5.47.0
+  - @memberjunction/livekit-room-server@5.47.0
+  - @memberjunction/core-entities@5.47.0
+  - @memberjunction/core-entities-server@5.47.0
+  - @memberjunction/data-context@5.47.0
+  - @memberjunction/data-context-server@5.47.0
+  - @memberjunction/queue@5.47.0
+  - @memberjunction/storage@5.47.0
+  - @memberjunction/record-comparison@5.47.0
+  - @memberjunction/redis-provider@5.47.0
+  - @memberjunction/scheduling-actions@5.47.0
+  - @memberjunction/scheduling-engine-base@5.47.0
+  - @memberjunction/scheduling-engine@5.47.0
+  - @memberjunction/schema-engine@5.47.0
+  - @memberjunction/search-engine@5.47.0
+  - @memberjunction/server-extensions-core@5.47.0
+  - @memberjunction/templates@5.47.0
+  - @memberjunction/testing-engine@5.47.0
+  - @memberjunction/testing-engine-base@5.47.0
+  - @memberjunction/version-history@5.47.0
+  - @memberjunction/esignature@5.47.0
+  - @memberjunction/ai-provider-bundle@5.47.0
+  - @memberjunction/ai@5.47.0
+  - @memberjunction/config@5.47.0
+  - @memberjunction/integration-progress-artifacts@5.47.0
+  - @memberjunction/lists-base@5.47.0
+  - @memberjunction/global@5.47.0
+  - @memberjunction/scheduling-base-types@5.47.0
+
+## 5.46.0
+
+### Minor Changes
+
+- ef3e802: feat(prompt-config): scope-aware prompt run-settings override (ScopedPromptConfig + resolver)
+
+  The run-settings sibling of `ScopedPromptPart`. Where `ScopedPromptPart` scope-overrides a
+  prompt's TEXT, `ScopedPromptConfig` scope-overrides a prompt's RUN SETTINGS — model/vendor, AI
+  configuration, sampling knobs (temperature/topP/topK/minP/penalties/seed/stopSequences),
+  response format, and effort level — for an `AIPrompt`, narrowed by the SAME polymorphic scope the
+  agent runtime already carries (`PrimaryScopeEntity`/`PrimaryScopeRecordID` + `SecondaryScopes`).
+  Any MJ app can tune which model a prompt runs on and how it samples, per scope, by editing rows.
+  - **Entity** `__mj.ScopedPromptConfig` — scope columns (mirroring `ScopedPromptPart`) + nullable
+    override columns; `Status`/`Priority`. Whole-row-wins by specificity (SecondaryScopes match >
+    PrimaryScopeRecord > global, tie-broken by `Priority`); each non-null column overrides the
+    prompt default, a NULL column inherits it.
+  - **`ScopedPromptConfigResolver`** (`@memberjunction/ai-agents`) — cached on `AIEngine`
+    (`ScopedPromptConfigs`); pluggable via `@RegisterClass`; resolves the single most-specific
+    in-scope config. `ApplyScopedPromptConfig` overlays it onto the run params
+    (model/vendor → `override`, configuration → `configurationId`, effort → `effortLevel`, sampling
+    knobs → `additionalParameters`).
+  - **`BaseAgent` wiring** — `preparePromptParams` resolves + applies the config using the run's
+    existing scope, right before the params are returned. **Runtime-explicit overrides still win.**
+  - `StopSequences` overlays as a trimmed `string[]` (the comma-delimited column is split before it
+    reaches `additionalParameters`, matching the runner's array contract — not the raw string).
+  - Unit tests for the resolver (cascade / priority / status / null-column inherit / runtime-wins,
+    plus the StopSequences-array and ResponseFormat mappings).
+  - **`@memberjunction/ai-prompts`** — two `AIPromptRunner` fixes:
+    1. **Response format override is honored** — the run now prefers `additionalParameters.responseFormat`
+       (set by `ApplyScopedPromptConfig`) over the prompt's own `ResponseFormat`, keeping `'Any'`-means-
+       silent semantics. Previously a `ScopedPromptConfig.ResponseFormat` was a no-op (the runner only
+       read `prompt.ResponseFormat`).
+    2. **`Messages` logging** — records caller-supplied `conversationMessages` to `AIPromptRun.Messages`
+       even without a template-rendered system prompt (previously dropped for the
+       `templateMessageRole='none'` path, leaving `Messages` null).
+
+### Patch Changes
+
+- d526470: Fix the MergeRecords GraphQL mutation end-to-end. Server: rehydrate the input's plain `{ KeyValuePairs }` objects into `CompositeKey` class instances before calling the provider (every merge previously failed with "request.SurvivingRecordCompositeKey.Values is not a function"), and correct the `RecordMergeLogID` / `RecordMergeDeletionLogID` output field types from `Int` to `String` — merge log IDs are uniqueidentifiers since the v2 GUID migration, so successful merges failed at response serialization of the `RecordMergeLogID` GUID. Core: `CompleteMergeLogging` now writes each deletion log's ID back into `RecordStatus[].RecordMergeDeletionLogID` (it was created but never returned, so the field was always null), and `RecordMergeDetailResult.RecordMergeDeletionLogID` is typed `string | null` to match the GUID it actually carries (was `number | null`).
+- Updated dependencies [d526470]
+- Updated dependencies [84fa44c]
+- Updated dependencies [33741fc]
+- Updated dependencies [ef3e802]
+  - @memberjunction/core@5.46.0
+  - @memberjunction/core-entities@5.46.0
+  - @memberjunction/ai-engine-base@5.46.0
+  - @memberjunction/aiengine@5.46.0
+  - @memberjunction/ai-agents@5.46.0
+  - @memberjunction/ai-prompts@5.46.0
+  - @memberjunction/ai-agent-manager-actions@5.46.0
+  - @memberjunction/ai-agent-manager@5.46.0
+  - @memberjunction/clustering-engine@5.46.0
+  - @memberjunction/computer-use@5.46.0
+  - @memberjunction/ai-core-plus@5.46.0
+  - @memberjunction/tag-engine@5.46.0
+  - @memberjunction/tag-engine-base@5.46.0
+  - @memberjunction/ai-mcp-client@5.46.0
+  - @memberjunction/computer-use-engine@5.46.0
+  - @memberjunction/ai-bridge-base@5.46.0
+  - @memberjunction/ai-bridge-ringcentral@5.46.0
+  - @memberjunction/ai-bridge-teams@5.46.0
+  - @memberjunction/ai-bridge-twilio@5.46.0
+  - @memberjunction/ai-bridge-vonage@5.46.0
+  - @memberjunction/ai-bridge-server@5.46.0
+  - @memberjunction/remote-browser-base@5.46.0
+  - @memberjunction/remote-browser-cdp@5.46.0
+  - @memberjunction/remote-browser-selfhost@5.46.0
+  - @memberjunction/remote-browser-server@5.46.0
+  - @memberjunction/ai-vectordb@5.46.0
+  - @memberjunction/ai-vectors-pinecone@5.46.0
+  - @memberjunction/ai-vector-sync@5.46.0
+  - @memberjunction/api-keys@5.46.0
+  - @memberjunction/actions-apollo@5.46.0
+  - @memberjunction/actions-base@5.46.0
+  - @memberjunction/actions-bizapps-accounting@5.46.0
+  - @memberjunction/actions-bizapps-crm@5.46.0
+  - @memberjunction/actions-bizapps-formbuilders@5.46.0
+  - @memberjunction/actions-bizapps-lms@5.46.0
+  - @memberjunction/actions-bizapps-social@5.46.0
+  - @memberjunction/core-actions@5.46.0
+  - @memberjunction/actions@5.46.0
+  - @memberjunction/auth-providers@5.46.0
+  - @memberjunction/codegen-lib@5.46.0
+  - @memberjunction/communication-types@5.46.0
+  - @memberjunction/communication-engine@5.46.0
+  - @memberjunction/entity-communications-base@5.46.0
+  - @memberjunction/entity-communications-server@5.46.0
+  - @memberjunction/notifications@5.46.0
+  - @memberjunction/communication-ms-graph@5.46.0
+  - @memberjunction/communication-sendgrid@5.46.0
+  - @memberjunction/component-registry-client-sdk@5.46.0
+  - @memberjunction/credentials@5.46.0
+  - @memberjunction/doc-utils@5.46.0
+  - @memberjunction/encryption@5.46.0
+  - @memberjunction/external-change-detection@5.46.0
+  - @memberjunction/generic-database-provider@5.46.0
+  - @memberjunction/graphql-dataprovider@5.46.0
+  - @memberjunction/integration-engine@5.46.0
+  - @memberjunction/integration-schema-builder@5.46.0
+  - @memberjunction/interactive-component-types@5.46.0
+  - @memberjunction/lists@5.46.0
+  - @memberjunction/livekit-room-server@5.46.0
+  - @memberjunction/core-entities-server@5.46.0
+  - @memberjunction/data-context@5.46.0
+  - @memberjunction/data-context-server@5.46.0
+  - @memberjunction/queue@5.46.0
+  - @memberjunction/storage@5.46.0
+  - @memberjunction/postgresql-dataprovider@5.46.0
+  - @memberjunction/record-comparison@5.46.0
+  - @memberjunction/redis-provider@5.46.0
+  - @memberjunction/sqlserver-dataprovider@5.46.0
+  - @memberjunction/scheduling-actions@5.46.0
+  - @memberjunction/scheduling-engine-base@5.46.0
+  - @memberjunction/scheduling-engine@5.46.0
+  - @memberjunction/schema-engine@5.46.0
+  - @memberjunction/search-engine@5.46.0
+  - @memberjunction/server-extensions-core@5.46.0
+  - @memberjunction/templates@5.46.0
+  - @memberjunction/testing-engine@5.46.0
+  - @memberjunction/testing-engine-base@5.46.0
+  - @memberjunction/version-history@5.46.0
+  - @memberjunction/esignature@5.46.0
+  - @memberjunction/ai-provider-bundle@5.46.0
+  - @memberjunction/ai@5.46.0
+  - @memberjunction/config@5.46.0
+  - @memberjunction/integration-progress-artifacts@5.46.0
+  - @memberjunction/lists-base@5.46.0
+  - @memberjunction/global@5.46.0
+  - @memberjunction/sql-dialect@5.46.0
+  - @memberjunction/scheduling-base-types@5.46.0
+
+## 5.45.1
+
+### Patch Changes
+
+- 572d219: Render agent final-response streaming in the conversation chat. Adds an optional `kind` discriminator to agent streaming chunks — `'final-response'` marks deltas of the user-facing reply — passed through the server's PubSub payload; the conversation client now routes those chunks, accumulates deltas service-side, renders the growing text in the message bubble, and reconciles with the saved final message on completion. Unmarked streams (e.g. Loop-agent JSON turn envelopes) keep today's behavior exactly (dropped), so agents that don't opt in are unaffected.
+- 108a1d3: Fix v5.45 migration bugs: dynamically resolve FK constraint name in APIKeyUsageLog cascade delete (SQL Server + PostgreSQL) and deactivate Skip agent instead of deleting it in Metadata Sync. Add commit-message version override (`[version:X.Y.Z]`) to publish workflow.
+- aedfe44: Fix magic-link redemption on PostgreSQL. The atomic single-use consume SQL was T-SQL-only, so redemption on PG failed with a syntax error and minted no session. buildConsumeInviteSQL is now dialect-aware
+- Updated dependencies [572d219]
+  - @memberjunction/ai-core-plus@5.45.1
+  - @memberjunction/ai-agent-manager-actions@5.45.1
+  - @memberjunction/ai-agent-manager@5.45.1
+  - @memberjunction/ai-agents@5.45.1
+  - @memberjunction/ai-engine-base@5.45.1
+  - @memberjunction/clustering-engine@5.45.1
+  - @memberjunction/aiengine@5.45.1
+  - @memberjunction/tag-engine@5.45.1
+  - @memberjunction/computer-use-engine@5.45.1
+  - @memberjunction/ai-prompts@5.45.1
+  - @memberjunction/ai-vector-sync@5.45.1
+  - @memberjunction/core-actions@5.45.1
+  - @memberjunction/codegen-lib@5.45.1
+  - @memberjunction/graphql-dataprovider@5.45.1
+  - @memberjunction/core-entities-server@5.45.1
+  - @memberjunction/scheduling-engine@5.45.1
+  - @memberjunction/templates@5.45.1
+  - @memberjunction/testing-engine@5.45.1
+  - @memberjunction/ai-vectors-pinecone@5.45.1
+  - @memberjunction/communication-ms-graph@5.45.1
+  - @memberjunction/generic-database-provider@5.45.1
+  - @memberjunction/queue@5.45.1
+  - @memberjunction/sqlserver-dataprovider@5.45.1
+  - @memberjunction/search-engine@5.45.1
+  - @memberjunction/communication-engine@5.45.1
+  - @memberjunction/notifications@5.45.1
+  - @memberjunction/ai-provider-bundle@5.45.1
+  - @memberjunction/postgresql-dataprovider@5.45.1
+  - @memberjunction/schema-engine@5.45.1
+  - @memberjunction/external-change-detection@5.45.1
+  - @memberjunction/entity-communications-server@5.45.1
+  - @memberjunction/integration-schema-builder@5.45.1
+  - @memberjunction/computer-use@5.45.1
+  - @memberjunction/ai@5.45.1
+  - @memberjunction/tag-engine-base@5.45.1
+  - @memberjunction/ai-mcp-client@5.45.1
+  - @memberjunction/ai-bridge-base@5.45.1
+  - @memberjunction/ai-bridge-ringcentral@5.45.1
+  - @memberjunction/ai-bridge-teams@5.45.1
+  - @memberjunction/ai-bridge-twilio@5.45.1
+  - @memberjunction/ai-bridge-vonage@5.45.1
+  - @memberjunction/ai-bridge-server@5.45.1
+  - @memberjunction/remote-browser-base@5.45.1
+  - @memberjunction/remote-browser-cdp@5.45.1
+  - @memberjunction/remote-browser-selfhost@5.45.1
+  - @memberjunction/remote-browser-server@5.45.1
+  - @memberjunction/ai-vectordb@5.45.1
+  - @memberjunction/api-keys@5.45.1
+  - @memberjunction/actions-apollo@5.45.1
+  - @memberjunction/actions-base@5.45.1
+  - @memberjunction/actions-bizapps-accounting@5.45.1
+  - @memberjunction/actions-bizapps-crm@5.45.1
+  - @memberjunction/actions-bizapps-formbuilders@5.45.1
+  - @memberjunction/actions-bizapps-lms@5.45.1
+  - @memberjunction/actions-bizapps-social@5.45.1
+  - @memberjunction/actions@5.45.1
+  - @memberjunction/auth-providers@5.45.1
+  - @memberjunction/communication-types@5.45.1
+  - @memberjunction/entity-communications-base@5.45.1
+  - @memberjunction/communication-sendgrid@5.45.1
+  - @memberjunction/component-registry-client-sdk@5.45.1
+  - @memberjunction/config@5.45.1
+  - @memberjunction/credentials@5.45.1
+  - @memberjunction/doc-utils@5.45.1
+  - @memberjunction/encryption@5.45.1
+  - @memberjunction/integration-engine@5.45.1
+  - @memberjunction/integration-progress-artifacts@5.45.1
+  - @memberjunction/interactive-component-types@5.45.1
+  - @memberjunction/lists-base@5.45.1
+  - @memberjunction/lists@5.45.1
+  - @memberjunction/livekit-room-server@5.45.1
+  - @memberjunction/core@5.45.1
+  - @memberjunction/core-entities@5.45.1
+  - @memberjunction/data-context@5.45.1
+  - @memberjunction/data-context-server@5.45.1
+  - @memberjunction/global@5.45.1
+  - @memberjunction/storage@5.45.1
+  - @memberjunction/record-comparison@5.45.1
+  - @memberjunction/redis-provider@5.45.1
+  - @memberjunction/sql-dialect@5.45.1
+  - @memberjunction/scheduling-actions@5.45.1
+  - @memberjunction/scheduling-engine-base@5.45.1
+  - @memberjunction/scheduling-base-types@5.45.1
+  - @memberjunction/server-extensions-core@5.45.1
+  - @memberjunction/testing-engine-base@5.45.1
+  - @memberjunction/version-history@5.45.1
+  - @memberjunction/esignature@5.45.1
+
+## 5.45.0
+
+### Minor Changes
+
+- 6125dcd: Skill activation governance & observability (v5.45): double activation gate (AISkill.ActivationMode × AIAgent.SkillActivationMode, both defaulting to RequestedOnly — self-activation requires Auto×Auto; /skill user requests unaffected) via new GetAutoActivatableSkillsForAgent; AIAgent.RequirePlanMode forces plan mode on every root run; AIAgentRun.PlanMode stamps plan-mode runs; plan-mode runs block skill activations after approval (re-plan required); AIAgentRunStep.Skills JSON records per-step AgentSkillInvocation provenance (activation type, gate values, agent-stated reason) on Skill/Prompt/Actions/Sub-Agent steps with native-grant precedence; agent-run UX gains a Plan Mode header chip, Skill/Plan step icons, per-step skill chips, and a Skills drill-in tab with provenance cards.
+- c1f2d3d: User Routines (P1.5): user-owned scheduled/monitoring routines that run an Agent, Action, or Prompt on a cron schedule. New UserRoutine/UserRoutineRecipient/UserRoutineRun schema; UserRoutineDispatcherDriver scheduled-job driver (1-minute sweep, claim-before-run, bounded concurrency, per-routine isolation, runs as the owner, Template-driven notifications with OnChange result-hash detection, RequestedSkillIDs pre-arming for Agent targets); pure UserRoutineProcessor schedule/notify primitives shared with MJUserRoutineEntityServer (NextRunAt on save, cron validation) and MJUserRoutineRecipientEntityServer (User-xor-Email); lazy non-startup UserRoutineEngine; new @memberjunction/ng-user-routines widget set (list/editor/history + command-center composite + slide-in, cancelable Before/After events, Agent-only creation with categorical ng-trees picker); conversations bottom-sidebar Routines section gated by ShowRoutines input AND entity-Read permission (hosted in both the generic workspace sidebar and Explorer's Chat wrapper); Routines Explorer app; pure cron preset/describe helpers now in @memberjunction/global (CronUtils); mj-tree gains a DefaultExpansion input ('first-level' | 'all' | 'none'); BaseScheduledJob gains IsHighFrequencyByDesign so by-design pollers (the routine dispatcher) opt out of the high-frequency cron warning; Agent-target routines run inside a dedicated per-routine Conversation (Application-scoped via the Routines app so it stays out of the default chat list; RunAgentInConversation writes proper user/assistant turns; standalone fallback when the app is absent); UserRoutine.ConversationID schema + open-conversation and open-execution-record event chains through the conversations hosts; server-side cascade delete (recipients + run bookkeeping) so routines that have run delete cleanly; agent picker is a compact mj-tree-dropdown (DefaultExpansion pass-through added); mj-slide-panel settles to transform:none when open so position:fixed descendants (dropdown panels) keep true viewport coordinates; time-relative sidebar/card/history text is snapshot-based (NG0100 fix); 16-test live integration suite + live Playwright E2E; Explorer notifications page rebuilt (day-grouped cards, sanitized HTML + Markdown message rendering with expand/collapse previews, snapshot relative times, removal of a test harness that created junk Conversations on Mark-All-Read) and the seeded routine notification template gains a compact Markdown Text body that the dispatcher now prefers for in-app delivery (the HTML document stays for email); new @memberjunction/ng-composer package extracts the conversations message composer (mention editor + dropdown + message input box) so the routine editor's InitialMessage field uses the mention editor without an ng-conversations dependency cycle — and the composer's mention/command triggers are PLUGGABLE: a generic ComposerTriggerProvider contract (TriggerChar/Key/Priority/GetSuggestions, generic MentionSuggestion with provider-supplied presets) with two supply modes (explicit [TriggerProviders] list, or ClassFactory discovery via @RegisterClass(ComposerTriggerProvider,'<key>') filtered by [ExcludedTriggerKeys]), leaving ng-composer with ZERO AI knowledge; the AI plugins moved to ng-conversations (composer-plugins: 'agent-mentions' '@' agents+users w/ configuration presets, 'record-mentions' '#' entities+queries, 'skill-commands' '/' skills — tree-shake-guarded by LoadComposerPlugins(); MentionAutocompleteService moved back to ng-conversations as a BaseSingleton engine shared by plugins and components) plus a new mj-ai-composer wrapped component that proxies the full mj-message-input-box surface with the AI triggers built in and familiar EnableAgentMentions/EnableEntityMentions/EnableSkillCommands convenience flags (the chat composer now uses it); the routine editor uses discovery mode with agent-mentions excluded.
+
+### Patch Changes
+
+- 21e33fe: Move Skip to a client-side Open App and remove server-embedded agent; scope-gate query/view/search resolvers with API-key scope authorization; add credential-store fallback for component registry keys; support Open App in-process lifecycle hooks with interactive prompts.
+- e370816: Fix external-data-source single-record `Load` through the GraphQL transport (Explorer full-record forms).
+
+  The generated single-record GraphQL query resolver ran `SELECT * FROM <baseView>` directly, which has no analogue for external-data-source entities — their data is proxied live from a remote system and no MJ view exists — so opening an external record's **full** form in Explorer failed (`InnerLoad returned false`), even though the grid (`RunView`) and the provider-level single-record `Load` already routed externally.
+  - **`@memberjunction/server`**: new `ResolverBase.LoadExternalRecordByKey` loads an external record by primary key through a `BaseEntity` object, which the data provider dispatches to the external read router (the same path the grid uses), applying the same RLS gate and row post-processing (field decryption / datetime normalization) as the MJ-DB path.
+  - **`@memberjunction/codegen-lib`**: the single-record resolver template now branches on `ExternalDataSourceID` — external entities call `LoadExternalRecordByKey`, while every MJ-DB entity keeps the identical `SELECT * FROM <baseView>` path (the branch is inert without the feature). Record-access audit logging (`AuditRecordAccess`) is preserved on the external branch.
+
+  Verified end-to-end in Explorer against a live PostgreSQL source — the full read-only record form now renders the remote row.
+
+- Updated dependencies [45d121b]
+- Updated dependencies [21e33fe]
+- Updated dependencies [b7cf50f]
+- Updated dependencies [19ec4b0]
+- Updated dependencies [f4f11fa]
+- Updated dependencies [e370816]
+- Updated dependencies [e370816]
+- Updated dependencies [f99cbc1]
+- Updated dependencies [11d5b4e]
+- Updated dependencies [fbee64c]
+- Updated dependencies [81a8aa2]
+- Updated dependencies [82ca89b]
+- Updated dependencies [b2927f1]
+- Updated dependencies [b18fcd0]
+- Updated dependencies [6125dcd]
+- Updated dependencies [ad9f4a3]
+- Updated dependencies [c1f2d3d]
+- Updated dependencies [0b1e009]
+- Updated dependencies [d461df0]
+  - @memberjunction/core@5.45.0
+  - @memberjunction/graphql-dataprovider@5.45.0
+  - @memberjunction/core-entities-server@5.45.0
+  - @memberjunction/codegen-lib@5.45.0
+  - @memberjunction/ai-agents@5.45.0
+  - @memberjunction/core-entities@5.45.0
+  - @memberjunction/generic-database-provider@5.45.0
+  - @memberjunction/integration-engine@5.45.0
+  - @memberjunction/ai-engine-base@5.45.0
+  - @memberjunction/aiengine@5.45.0
+  - @memberjunction/ai-core-plus@5.45.0
+  - @memberjunction/scheduling-engine@5.45.0
+  - @memberjunction/global@5.45.0
+  - @memberjunction/scheduling-engine-base@5.45.0
+  - @memberjunction/ai-agent-manager-actions@5.45.0
+  - @memberjunction/ai-agent-manager@5.45.0
+  - @memberjunction/clustering-engine@5.45.0
+  - @memberjunction/computer-use@5.45.0
+  - @memberjunction/tag-engine@5.45.0
+  - @memberjunction/tag-engine-base@5.45.0
+  - @memberjunction/ai-mcp-client@5.45.0
+  - @memberjunction/computer-use-engine@5.45.0
+  - @memberjunction/ai-prompts@5.45.0
+  - @memberjunction/ai-bridge-base@5.45.0
+  - @memberjunction/ai-bridge-ringcentral@5.45.0
+  - @memberjunction/ai-bridge-teams@5.45.0
+  - @memberjunction/ai-bridge-twilio@5.45.0
+  - @memberjunction/ai-bridge-vonage@5.45.0
+  - @memberjunction/ai-bridge-server@5.45.0
+  - @memberjunction/remote-browser-base@5.45.0
+  - @memberjunction/remote-browser-cdp@5.45.0
+  - @memberjunction/remote-browser-selfhost@5.45.0
+  - @memberjunction/remote-browser-server@5.45.0
+  - @memberjunction/ai-vectordb@5.45.0
+  - @memberjunction/ai-vectors-pinecone@5.45.0
+  - @memberjunction/ai-vector-sync@5.45.0
+  - @memberjunction/api-keys@5.45.0
+  - @memberjunction/actions-apollo@5.45.0
+  - @memberjunction/actions-base@5.45.0
+  - @memberjunction/actions-bizapps-accounting@5.45.0
+  - @memberjunction/actions-bizapps-crm@5.45.0
+  - @memberjunction/actions-bizapps-formbuilders@5.45.0
+  - @memberjunction/actions-bizapps-lms@5.45.0
+  - @memberjunction/actions-bizapps-social@5.45.0
+  - @memberjunction/core-actions@5.45.0
+  - @memberjunction/actions@5.45.0
+  - @memberjunction/auth-providers@5.45.0
+  - @memberjunction/communication-types@5.45.0
+  - @memberjunction/communication-engine@5.45.0
+  - @memberjunction/entity-communications-base@5.45.0
+  - @memberjunction/entity-communications-server@5.45.0
+  - @memberjunction/notifications@5.45.0
+  - @memberjunction/communication-ms-graph@5.45.0
+  - @memberjunction/communication-sendgrid@5.45.0
+  - @memberjunction/component-registry-client-sdk@5.45.0
+  - @memberjunction/credentials@5.45.0
+  - @memberjunction/doc-utils@5.45.0
+  - @memberjunction/encryption@5.45.0
+  - @memberjunction/external-change-detection@5.45.0
+  - @memberjunction/integration-schema-builder@5.45.0
+  - @memberjunction/interactive-component-types@5.45.0
+  - @memberjunction/lists@5.45.0
+  - @memberjunction/livekit-room-server@5.45.0
+  - @memberjunction/data-context@5.45.0
+  - @memberjunction/data-context-server@5.45.0
+  - @memberjunction/queue@5.45.0
+  - @memberjunction/storage@5.45.0
+  - @memberjunction/postgresql-dataprovider@5.45.0
+  - @memberjunction/record-comparison@5.45.0
+  - @memberjunction/redis-provider@5.45.0
+  - @memberjunction/sqlserver-dataprovider@5.45.0
+  - @memberjunction/scheduling-actions@5.45.0
+  - @memberjunction/schema-engine@5.45.0
+  - @memberjunction/search-engine@5.45.0
+  - @memberjunction/server-extensions-core@5.45.0
+  - @memberjunction/templates@5.45.0
+  - @memberjunction/testing-engine@5.45.0
+  - @memberjunction/testing-engine-base@5.45.0
+  - @memberjunction/version-history@5.45.0
+  - @memberjunction/esignature@5.45.0
+  - @memberjunction/ai@5.45.0
+  - @memberjunction/integration-progress-artifacts@5.45.0
+  - @memberjunction/scheduling-base-types@5.45.0
+  - @memberjunction/ai-provider-bundle@5.45.0
+  - @memberjunction/config@5.45.0
+  - @memberjunction/lists-base@5.45.0
+  - @memberjunction/sql-dialect@5.45.0
+
 ## 5.44.0
 
 ### Minor Changes
