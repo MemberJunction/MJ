@@ -1149,6 +1149,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     planMode?: boolean;
 
     /**
+     * When this run submits a task graph, seed `$.debug` on the parent at insert.
+     * `paused: true` is start-paused — nothing is claimed until Resume/Step.
+     * Must travel with the submit; Pause-after-submit races the first dispatcher poll.
+     */
+    taskGraphDebug?: { paused?: boolean };
+
+    /**
      * Skills the caller (typically an end user via a `/skill-name` mention in the composer)
      * explicitly requests be active for this run, identified by `AISkill.ID`. The framework
      * treats these as pre-activation hints: at run start each requested skill is activated
