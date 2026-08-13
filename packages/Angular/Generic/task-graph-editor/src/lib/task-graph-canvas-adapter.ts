@@ -300,12 +300,30 @@ function edgeId(fromTempId: string, toTempId: string): string {
  * single edit. Unknown ids fall back to the origin, which is also the correct starting state for a
  * graph that has never been laid out.
  */
+/**
+ * Debug overlay the run view hands the adapter. Paint only — the widget never calls an operation.
+ *
+ * Breakpoints and the paused-at step become badges. Overrides restyle connections (dotted, never
+ * dashed — dashed already means "this edge is conditional"). Held/forced edges stay visible even
+ * when a skip cascade would otherwise drop them, so the run history cannot lie about why a branch
+ * ran.
+ */
+export type TaskGraphDebugOverlay = {
+    breakpoints?: readonly string[];
+    pausedAtTaskID?: string | null;
+    edgeOverrides?: Readonly<Record<string, 'true' | 'false'>>;
+    /** Show the condition expression on the connection label, not just the word "if". */
+    showConditions?: boolean;
+};
+
 export function SpecToNodes(
     spec: TaskGraphSpec,
     runtime?: TaskGraphRuntimeStatus,
     positions?: ReadonlyMap<string, FlowPosition>,
+    debug?: TaskGraphDebugOverlay,
 ): FlowNode[] {
     const entryIds = new Set(GetEntryTempIds(spec));
+    const breakpoints = new Set(debug?.breakpoints ?? []);
 
     return (spec.tasks ?? []).map((task) => {
         const type = GetTaskNodeType(task);
@@ -319,6 +337,7 @@ export function SpecToNodes(
             Status: RuntimeStateToNodeStatus(runtime?.[task.tempId]),
             StatusMessage: task.description,
             IsStartNode: entryIds.has(task.tempId),
+            Badges: NodeDebugBadges(task.tempId, breakpoints, debug?.pausedAtTaskID),
             Position: known ? { ...known } : { X: 0, Y: 0 },
             Ports: [
                 { ID: InputPortID(task.tempId), Direction: 'input', Side: 'top', Multiple: true },
@@ -327,6 +346,32 @@ export function SpecToNodes(
             Data: { TempId: task.tempId },
         };
     });
+}
+
+/** Badge pills for an armed breakpoint and the step the graph actually stopped on. */
+export function NodeDebugBadges(
+    taskID: string,
+    breakpoints: ReadonlySet<string>,
+    pausedAtTaskID?: string | null,
+): FlowNode['Badges'] {
+    const badges: NonNullable<FlowNode['Badges']> = [];
+    if (pausedAtTaskID === taskID) {
+        badges.push({
+            Label: 'Paused here',
+            Value: 'paused',
+            Icon: 'fa-pause',
+            Color: 'var(--mj-brand-primary)',
+        });
+    }
+    if (breakpoints.has(taskID)) {
+        badges.push({
+            Label: 'Breakpoint',
+            Value: 'break',
+            Icon: 'fa-circle',
+            Color: 'var(--mj-status-error)',
+        });
+    }
+    return badges.length > 0 ? badges : undefined;
 }
 
 /**
@@ -371,7 +416,11 @@ function LoopBodyLabel(
  * validator reports them as `UnknownDependency`, and rendering a connection to nowhere would be a
  * second, worse way of saying the same thing.
  */
-export function SpecToConnections(spec: TaskGraphSpec, runtime?: TaskGraphRuntimeStatus): FlowConnection[] {
+export function SpecToConnections(
+    spec: TaskGraphSpec,
+    runtime?: TaskGraphRuntimeStatus,
+    debug?: TaskGraphDebugOverlay,
+): FlowConnection[] {
     const known = new Set((spec.tasks ?? []).map((t) => t.tempId));
     const connections: FlowConnection[] = [];
 
@@ -379,37 +428,56 @@ export function SpecToConnections(spec: TaskGraphSpec, runtime?: TaskGraphRuntim
         for (const dep of GetDependencies(task)) {
             if (!known.has(dep.tempId)) continue;
 
-            // RUN MODE DRAWS ONLY THE PATH TAKEN.
-            //
-            // An edge touching a step the workflow declined did not carry anything, and drawing it
-            // makes a conditional workflow look as though both branches ran. Both ENDS are checked:
-            // an edge out of a skipped step is as untravelled as one into it.
-            //
-            // Design mode keeps every edge, because there is no route yet — the graph is all the
-            // routes that COULD be taken, which is exactly what an author is arranging. `runtime`
-            // being present is what distinguishes the two, so the same function serves both.
-            if (runtime && (runtime[task.tempId] === 'Skipped' || runtime[dep.tempId] === 'Skipped')) continue;
+            const override = dep.id ? debug?.edgeOverrides?.[dep.id] : undefined;
+            const eitherSkipped = runtime
+                && (runtime[task.tempId] === 'Skipped' || runtime[dep.tempId] === 'Skipped');
+            // RUN MODE DRAWS ONLY THE PATH TAKEN — except an operator-forced edge, which must stay
+            // visible or the history lies about why a branch ran (or did not).
+            if (eitherSkipped && !override) continue;
 
-            const conditional = !!dep.condition?.trim();
-            connections.push({
-                ID: edgeId(dep.tempId, task.tempId),
-                // Reversed: dependsOn points back at the prerequisite, the drawn arrow points forward.
-                SourceNodeID: dep.tempId,
-                // Scoped to the node — see InputPortID/OutputPortID. Bare 'out'/'in' named a port
-                // that every node in the graph also had, so no connection could resolve one.
-                SourcePortID: OutputPortID(dep.tempId),
-                TargetNodeID: task.tempId,
-                TargetPortID: InputPortID(task.tempId),
-                Label: conditional ? 'if' : undefined,
-                LabelDetail: dep.condition ?? undefined,
-                LabelIcon: conditional ? 'fa-code-branch' : undefined,
-                Condition: dep.condition ?? undefined,
-                Style: conditional ? 'dashed' : 'solid',
-                Data: { FromTempId: dep.tempId, ToTempId: task.tempId },
-            });
+            connections.push(ProjectConnection(dep, task.tempId, override, debug?.showConditions === true));
         }
     }
     return connections;
+}
+
+/** One canvas connection, including the override styling that must never look like a real verdict. */
+export function ProjectConnection(
+    dep: TaskGraphDependency,
+    toTempId: string,
+    override?: 'true' | 'false',
+    showConditions: boolean = false,
+): FlowConnection {
+    const conditional = !!dep.condition?.trim();
+    const forced = override === 'true' || override === 'false';
+    const conditionLabel = dep.condition?.trim()
+        ? TruncateCondition(dep.condition.trim())
+        : undefined;
+
+    return {
+        ID: edgeId(dep.tempId, toTempId),
+        SourceNodeID: dep.tempId,
+        SourcePortID: OutputPortID(dep.tempId),
+        TargetNodeID: toTempId,
+        TargetPortID: InputPortID(toTempId),
+        Label: forced
+            ? (override === 'true' ? 'forced yes' : 'forced no')
+            : (conditional ? (showConditions && conditionLabel ? conditionLabel : 'if') : undefined),
+        LabelDetail: forced
+            ? `Operator set this path to ${override}${dep.condition ? ` — ${dep.condition}` : ''}`
+            : (dep.condition ?? undefined),
+        LabelIcon: forced ? 'fa-hand' : (conditional ? 'fa-code-branch' : undefined),
+        LabelIconColor: forced ? 'var(--mj-status-warning)' : undefined,
+        Condition: dep.condition ?? undefined,
+        // Dotted is the override; dashed is already "this edge is conditional".
+        Style: forced ? 'dotted' : (conditional ? 'dashed' : 'solid'),
+        Color: forced ? 'var(--mj-status-warning)' : undefined,
+        Data: { FromTempId: dep.tempId, ToTempId: toTempId, EdgeID: dep.id },
+    };
+}
+
+function TruncateCondition(text: string, max: number = 28): string {
+    return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
 /**

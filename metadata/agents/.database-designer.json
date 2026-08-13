@@ -191,7 +191,7 @@
             "ExecutionOrder": 3,
             "ExposeAsAction": false,
             "DriverClass": "DatabaseDesignerSchemaValidator",
-            "IconClass": "fa-solid fa-shield-check",
+            "IconClass": "fa-solid fa-shield-halved",
             "PayloadDownstreamPaths": [
               "*"
             ],
@@ -203,8 +203,8 @@
             "ID": "C041DFDD-28C8-4A6D-83A5-BFF399764B23"
           },
           "sync": {
-            "lastModified": "2026-04-20T17:13:55.749Z",
-            "checksum": "ce1f2273835c433f683b98ebd33af431f93d0fc4b36f3a0abb3704feba23d5a4"
+            "lastModified": "2026-08-13T14:54:20.149Z",
+            "checksum": "c6d9410355a0270b84b2131a6bdba9f1db29b07d068d82ee73f69168fd48b04c"
           }
         },
         {
