@@ -1035,11 +1035,24 @@ describe('PostgreSQLCodeGenProvider.quoteSQLForExecution', () => {
     });
 
     describe('constructs the tokenizer skips', () => {
-        it('leaves string literals, dollar-quoted bodies and __mj_ columns untouched', () => {
-            const sql = `SELECT 1 FROM t WHERE __mj_CreatedAt > now() AND x = 'a TestRun'`;
+        it('leaves string literals and dollar-quoted bodies untouched', () => {
+            const sql = `SELECT 1 FROM t WHERE x = 'a TestRun'`;
             expect(quote(sql)).toBe(sql);
             const body = '$func$ SELECT Name FROM t $func$';
             expect(quote(body)).toBe(body);
+        });
+
+        it('QUOTES the mixed-case framework columns, which used to be exempted', () => {
+            // This assertion previously ran the other way — `__mj_CreatedAt > now()` was expected
+            // to come back untouched — which pinned the very carve-out that made those five
+            // columns fold to lowercase and fail. They are ordinary columns.
+            expect(quote('SELECT 1 FROM t WHERE __mj_CreatedAt > now()'))
+                .toBe('SELECT 1 FROM t WHERE "__mj_CreatedAt" > now()');
+            expect(quote('SELECT t.__mj_UpdatedAt FROM __mj.Entity t'))
+                .toBe('SELECT t."__mj_UpdatedAt" FROM __mj."Entity" t');
+            // ...while the all-lowercase internals stay bare via the ordinary lowercase rule.
+            expect(quote('SELECT 1 FROM t WHERE __mj_deleted_at IS NULL'))
+                .toBe('SELECT 1 FROM t WHERE __mj_deleted_at IS NULL');
         });
 
         it('is idempotent', () => {

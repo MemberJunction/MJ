@@ -72,9 +72,19 @@ describe('PostgreSQLDataProvider.autoQuoteIdentifiers', () => {
             expect(quote('SELECT FROM WHERE AND OR')).toBe('SELECT FROM WHERE AND OR');
         });
 
-        it('does not quote the __mj_ prefixed timestamp columns', () => {
+        it('QUOTES the mixed-case __mj_ framework columns', () => {
+            // Inverted deliberately. This assertion used to pin the `__mj_` carve-out, which made
+            // the five mixed-case framework columns fold to lowercase and fail with
+            // `column "__mj_updatedat" does not exist` — the exact defect this quoting exists to
+            // prevent. They are ordinary columns and must quote.
             expect(quote('WHERE __mj_CreatedAt > now()'))
-                .toBe('WHERE __mj_CreatedAt > now()');
+                .toBe('WHERE "__mj_CreatedAt" > now()');
+            expect(quote('SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt FROM t'))
+                .toBe('SELECT MAX("__mj_UpdatedAt") AS "MaxUpdatedAt" FROM t');
+        });
+
+        it('still leaves all-lowercase __mj_ internals bare', () => {
+            expect(quote('WHERE __mj_deleted_at IS NULL')).toBe('WHERE __mj_deleted_at IS NULL');
         });
     });
 
