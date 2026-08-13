@@ -44,7 +44,18 @@ function connStrOf(provider: IMetadataProvider): string {
  */
 function maxUpdatedAtExpr(provider: IMetadataProvider): string {
     const quote = (provider as unknown as { QuoteIdentifier?: (n: string) => string }).QuoteIdentifier;
-    return `MAX(${quote ? quote.call(provider, '__mj_UpdatedAt') : '__mj_UpdatedAt'})`;
+    if (typeof quote !== 'function') {
+        // FAIL, don't fall back. The bare form is exactly the bug this helper exists to avoid, so
+        // substituting it turns a missing capability into a PostgreSQL-only
+        // `column "__mj_updatedat" does not exist` several frames away — and on SQL Server, where
+        // folding is case-insensitive, into a green run that proves nothing about the other
+        // dialect. A provider that cannot quote an identifier cannot run this check honestly.
+        throw new Error(
+            'aggregates-cache checks need a provider exposing QuoteIdentifier; ' +
+            `got ${provider?.constructor?.name ?? typeof provider} without one`
+        );
+    }
+    return `MAX(${quote.call(provider, '__mj_UpdatedAt')})`;
 }
 
 /** Always-true, column-AGNOSTIC, unique-per-tag predicate → a deterministic cold slot. */

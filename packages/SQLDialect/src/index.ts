@@ -19,6 +19,7 @@ export {
     AutoQuotePostgreSQLIdentifiers,
     PostgreSQLQuotingKeywords,
     PostgreSQLStructuralKeywords,
+    PostgreSQLContextualStructuralKeywords,
 } from './postgresqlAutoQuote.js';
 export {
     IsBooleanSQLType,

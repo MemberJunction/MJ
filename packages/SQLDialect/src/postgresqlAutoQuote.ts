@@ -115,9 +115,78 @@ export const PostgreSQLQuotingKeywords: ReadonlySet<string> = new Set([
  * this set case-insensitively. Do not add a word without keeping that guard green.
  */
 export const PostgreSQLStructuralKeywords: ReadonlySet<string> = new Set([
-    'AND', 'OR', 'NOT', 'IS', 'NULL', 'LIKE', 'IN', 'BETWEEN', 'EXISTS',
+    // Predicate vocabulary — a saved `OrderBy` of `Name Desc`, an `ExtraFilter` of `A=1 And B=2`.
+    'AND', 'OR', 'NOT', 'IS', 'NULL', 'LIKE', 'ILIKE', 'IN', 'BETWEEN', 'EXISTS',
     'ASC', 'DESC', 'NULLS', 'FIRST', 'LAST',
 ]);
+
+// A NOTE ON WHAT IS DELIBERATELY ABSENT FROM THE SET ABOVE.
+//
+// Widening this tier to the whole clause skeleton (`SELECT FROM WHERE JOIN AS ON BY DISTINCT
+// HAVING UNION INTERSECT EXCEPT LIMIT OFFSET CASE WHEN THEN ELSE END`) is tempting, because it
+// would let a stored `MJ: Queries` body written as `Select … From … Where …` parse. It was tried
+// and reverted, for two reasons that only show up when you look at the whole predicate:
+//
+//   1. This tier is matched case-INsensitively and is evaluated BEFORE the dot-qualification
+//      rule, so adding a word makes it unquotable *even as `alias.Column`* — the one form the
+//      rest of this module treats as an unambiguous identifier. A customer column named `Case`,
+//      `End`, `Limit` or `Offset` would fold, which is precisely the defect class this whole
+//      change exists to eliminate, reintroduced for 20 words.
+//   2. It does not actually deliver. `Cast(Amount As Decimal)` still fails (the type name quotes),
+//      `Insert Into Target (Name)` still fails, `Select Top 10` still fails. Mixed-case SQL needs
+//      a real parser, not a bigger denylist — so the widening paid the full price for a fraction
+//      of the benefit.
+//
+// Mixed-case SQL keywords beyond the predicate vocabulary are therefore a KNOWN LIMITATION: a
+// stored query body written `Select … From …` does not survive on PostgreSQL. Rewriting it in
+// upper case fixes it, and the error is a loud syntax error rather than silently wrong rows.
+
+/**
+ * Words that are structural **only when followed by a specific next word**, and ordinary
+ * quotable identifiers otherwise.
+ *
+ * This is how the two-word clause forms are covered without giving up column names. `Order` and
+ * `Group` are believable columns; `Order By` and `Group By` are not columns at all.
+ * `Left`/`Right`/`Full` are believable columns AND scalar functions; `Left Join` is neither.
+ * Gating on the following word separates the cases exactly, rather than trading one breakage for
+ * another — which is why this tier is safe to extend and {@link PostgreSQLStructuralKeywords}
+ * is not.
+ *
+ * Matched case-insensitively on both sides.
+ */
+
+/**
+ * Words that are structural **only when followed by a specific next word**, and ordinary
+ * quotable identifiers otherwise.
+ *
+ * This exists so the clause skeleton can be covered without giving up column names that
+ * genuinely occur. `Order` and `Group` are believable columns; `Order By` and `Group By` are
+ * not columns at all. `Left`/`Right`/`Full` are believable columns AND scalar functions;
+ * `Left Join` is neither. Gating on the following word separates the two cases exactly,
+ * rather than trading one breakage for another.
+ *
+ * Matched case-insensitively on both sides, like {@link PostgreSQLStructuralKeywords}.
+ */
+export const PostgreSQLContextualStructuralKeywords: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+    ['ORDER', new Set(['BY'])],
+    ['GROUP', new Set(['BY'])],
+    ['LEFT', new Set(['JOIN', 'OUTER'])],
+    ['RIGHT', new Set(['JOIN', 'OUTER'])],
+    ['FULL', new Set(['JOIN', 'OUTER'])],
+    ['INNER', new Set(['JOIN'])],
+    ['CROSS', new Set(['JOIN'])],
+    ['OUTER', new Set(['JOIN'])],
+]);
+
+/**
+ * Every word that appears on the RIGHT of a pair above — the only words for which the reverse
+ * lookup can possibly succeed. Gating on this makes the backwards scan run for three words
+ * instead of every word in the statement (measured: it is the whole of the tokenizer's ~2x
+ * worst-case slowdown on whitespace-heavy input).
+ */
+const PostgreSQLContextualFollowers: ReadonlySet<string> = new Set(
+    [...PostgreSQLContextualStructuralKeywords.values()].flatMap((s) => [...s]),
+);
 
 /**
  * Quotes mixed-case identifiers in a raw SQL string so PostgreSQL preserves their case.
@@ -154,6 +223,8 @@ export const PostgreSQLStructuralKeywords: ReadonlySet<string> = new Set([
  *
  * 1. ALL-CAPS and in {@link PostgreSQLQuotingKeywords} → keyword/type → do not quote
  * 2. In {@link PostgreSQLStructuralKeywords} (any case) → do not quote
+ * 2a. In {@link PostgreSQLContextualStructuralKeywords} AND followed by one of its permitted
+ *     next words (`Order By`, `Left Join`) → do not quote. Anywhere else, an identifier.
  * 3. Immediately followed by `(` and not preceded by `.` → function call → do not quote
  * 4. All-lowercase, or `__mj_`-prefixed → unchanged → do not quote
  * 5. Starts uppercase, or is preceded by `.` → identifier → QUOTE
@@ -174,19 +245,24 @@ export const PostgreSQLStructuralKeywords: ReadonlySet<string> = new Set([
  *
  * ## What is skipped
  *
- * String literals (with `''` escapes), dollar-quoted blocks (`$$`/`$tag$`), already-quoted
- * identifiers, square-bracketed SQL-Server-style identifiers, `@`-prefixed parameters, and
- * PG positional parameters (`$1`). Skipping already-quoted identifiers is what makes this
- * function **idempotent** — `f(f(x)) === f(x)`.
+ * String literals (with `''` escapes and `E`/`N`/`U&` prefixes), `--` line comments,
+ * `/* *\/` block comments (nested, as PostgreSQL specifies), dollar-quoted blocks
+ * (`$$`/`$tag$`), already-quoted identifiers (with `""` escapes), square-bracketed
+ * SQL-Server-style identifiers, `@`-prefixed parameters, and PG positional parameters (`$1`).
+ * Skipping already-quoted identifiers is what makes this function **idempotent** —
+ * `f(f(x)) === f(x)`.
  *
- * ## Known limitations (pre-existing; unchanged by the consolidation)
+ * ## Why comments are skipped rather than tolerated
  *
- * - `--` line comments and `/* *\/` block comments are not recognized, so PascalCase words
- *   inside a comment get quoted, and an apostrophe in a comment starts a string-literal scan.
- * - `E'...'` / `N'...'` prefixed literals tokenize the prefix as a word, yielding `"E"'...'`.
- * - `""` escapes inside an already-quoted identifier are not handled.
- *
- * These now live in exactly one place, which is the point — fix them here, not per provider.
+ * Comment handling is not cosmetic. The scanner is a parity machine: an apostrophe inside an
+ * unrecognized comment opens a string-literal scan that runs to the next `'`, which is the
+ * OPENING quote of a real literal. From there every literal and every code region swaps roles.
+ * Against this repository's own shipped query SQL that rewrote literal VALUES —
+ * `WHERE "StepType" = 'Prompt'` became `= '"Prompt"'`, and the `jsonb_build_object` keys in
+ * `get-conversation-complete.pg.sql` became `'"ID"'` — because line 10 of
+ * `calculate-ai-agent-run-cost.pg.sql` contains the word `doesn't` in a comment. Nothing
+ * throws; the query simply returns the wrong rows. `postgresqlAutoQuote.shippedQueries.test.ts`
+ * pins that whole file set as a no-op so it cannot come back.
  *
  * @param sql Raw SQL text.
  * @returns The same SQL with mixed-case identifiers double-quoted.
@@ -199,6 +275,20 @@ export function AutoQuotePostgreSQLIdentifiers(sql: string): string {
     while (i < len) {
         const ch = sql[i];
 
+        // Comments come FIRST. Every branch below this one is parity-sensitive, and a comment
+        // is the one region whose contents are guaranteed not to be SQL — see the module doc.
+        if (ch === '-' && sql[i + 1] === '-') {
+            i = skipLineComment(sql, i, len, result);
+            continue;
+        }
+        if (ch === '/' && sql[i + 1] === '*') {
+            i = skipBlockComment(sql, i, len, result);
+            continue;
+        }
+        if (ch === '{' && (sql[i + 1] === '{' || sql[i + 1] === '%' || sql[i + 1] === '#')) {
+            i = skipTemplatePlaceholder(sql, i, len, result);
+            continue;
+        }
         if (ch === "'") {
             i = skipSingleQuotedString(sql, i, len, result);
             continue;
@@ -220,6 +310,17 @@ export function AutoQuotePostgreSQLIdentifiers(sql: string): string {
             continue;
         }
         if (/[a-zA-Z_]/.test(ch)) {
+            // `E'…'` / `N'…'` / `U&'…'` are one literal, not a word followed by a literal.
+            // Tokenizing the prefix as a word emitted `"E"'…'`, which PG rejects.
+            const prefix = literalPrefixLength(sql, i, len);
+            if (prefix > 0) {
+                result.push(sql.substring(i, i + prefix));
+                // Only the E-form honours backslash escapes, so only it may treat `\'` as
+                // part of the literal rather than its terminator.
+                const backslashEscapes = sql[i] === 'E' || sql[i] === 'e';
+                i = skipSingleQuotedString(sql, i + prefix, len, result, backslashEscapes);
+                continue;
+            }
             i = processWord(sql, i, len, result);
             continue;
         }
@@ -231,11 +332,95 @@ export function AutoQuotePostgreSQLIdentifiers(sql: string): string {
     return result.join('');
 }
 
-/** Skips a single-quoted string literal, handling escaped quotes ('') */
-function skipSingleQuotedString(sql: string, start: number, len: number, result: string[]): number {
+/**
+ * Length of a string-literal prefix starting at `start`, or 0 when this is an ordinary word.
+ *
+ * Recognizes PostgreSQL's `E'…'` (C-style escapes) and `U&'…'` (Unicode escapes), plus T-SQL's
+ * `N'…'` which reaches this tokenizer in raw SQL fragments carried over from SQL Server.
+ */
+function literalPrefixLength(sql: string, start: number, len: number): number {
+    const ch = sql[start];
+    if ((ch === 'E' || ch === 'e' || ch === 'N' || ch === 'n') && sql[start + 1] === "'") return 1;
+    if ((ch === 'U' || ch === 'u') && sql[start + 1] === '&' && start + 2 < len && sql[start + 2] === "'") return 3;
+    return 0;
+}
+
+/** Closing delimiter for each Nunjucks opening delimiter. */
+const TEMPLATE_DELIMITERS: ReadonlyMap<string, string> = new Map([
+    ['{', '}}'],
+    ['%', '%}'],
+    ['#', '#}'],
+]);
+
+/**
+ * Skips a Nunjucks template tag — `{{ … }}`, `{% … %}`, `{# … #}`.
+ *
+ * `MJ: Queries` bodies are Nunjucks templates. `WHERE cd."ConversationID" = {{ ConversationID |
+ * sqlString }}` and `{% if AgentID %}` are both shipped shapes. The names inside the delimiters
+ * are PARAMETER names, matched exactly at render time; quoting one to `{{ "ConversationID" |
+ * sqlString }}` makes the lookup miss and the parameter never substitutes, so the query loses
+ * its filter and returns the unfiltered set. Rendering normally happens before `ExecuteSQL`, so
+ * this is defence in depth — but the cost is a dozen lines and the failure it prevents is silent.
+ */
+function skipTemplatePlaceholder(sql: string, start: number, len: number, result: string[]): number {
+    const closing = TEMPLATE_DELIMITERS.get(sql[start + 1]);
+    const close = closing ? sql.indexOf(closing, start + 2) : -1;
+    if (close === -1) {
+        // No closing delimiter. Consuming to end-of-input would silently emit every identifier
+        // after a stray `{{` unquoted — total, and invisible. Emit the two delimiter characters
+        // and resume normal scanning instead, which is the posture the dollar-quote branch
+        // already takes for a missing close tag.
+        result.push(sql.substring(start, start + 2));
+        return start + 2;
+    }
+    const end = close + 2;
+    result.push(sql.substring(start, end));
+    return end;
+}
+
+/** Skips a `--` line comment through to (but not including) its terminating newline. */
+function skipLineComment(sql: string, start: number, len: number, result: string[]): number {
+    let j = start + 2;
+    while (j < len && sql[j] !== '\n') j++;
+    result.push(sql.substring(start, j));
+    return j;
+}
+
+/**
+ * Skips a block comment. PostgreSQL block comments NEST, unlike the SQL standard's: an inner
+ * open marker must be matched by its own close marker before the outer comment ends, which is
+ * why this tracks depth rather than searching for the first close. An unterminated comment
+ * consumes the remainder of the input, which is what PostgreSQL itself does.
+ */
+function skipBlockComment(sql: string, start: number, len: number, result: string[]): number {
+    let j = start + 2;
+    let depth = 1;
+    while (j < len && depth > 0) {
+        if (sql[j] === '/' && sql[j + 1] === '*') { depth++; j += 2; }
+        else if (sql[j] === '*' && sql[j + 1] === '/') { depth--; j += 2; }
+        else j++;
+    }
+    result.push(sql.substring(start, j));
+    return j;
+}
+
+/**
+ * Skips a single-quoted string literal, handling `''` escapes.
+ *
+ * @param backslashEscapes true for an `E'…'` literal, where `\'` does not terminate the string.
+ */
+function skipSingleQuotedString(
+    sql: string,
+    start: number,
+    len: number,
+    result: string[],
+    backslashEscapes = false,
+): number {
     let j = start + 1;
     while (j < len) {
-        if (sql[j] === "'" && j + 1 < len && sql[j + 1] === "'") {
+        if (backslashEscapes && sql[j] === '\\' && j + 1 < len) {
+            j += 2;
+        } else if (sql[j] === "'" && j + 1 < len && sql[j + 1] === "'") {
             j += 2;
         } else if (sql[j] === "'") {
             j++;
@@ -282,11 +467,18 @@ function skipDollarQuotedBlock(sql: string, start: number, len: number, result: 
     return len;
 }
 
-/** Skips an already double-quoted identifier — this is what makes the tokenizer idempotent */
+/**
+ * Skips an already double-quoted identifier — this is what makes the tokenizer idempotent.
+ * A `""` pair inside the identifier is an escaped quote, not the close, so stopping at the
+ * first `"` would resume mid-identifier and quote the remainder as if it were code.
+ */
 function skipDoubleQuotedIdentifier(sql: string, start: number, len: number, result: string[]): number {
     let j = start + 1;
-    while (j < len && sql[j] !== '"') j++;
-    if (j < len) j++;
+    while (j < len) {
+        if (sql[j] === '"' && sql[j + 1] === '"') { j += 2; continue; }
+        if (sql[j] === '"') { j++; break; }
+        j++;
+    }
     result.push(sql.substring(start, j));
     return j;
 }
@@ -326,18 +518,105 @@ function processWord(sql: string, start: number, len: number, result: string[]):
     return j;
 }
 
+/**
+ * The next bare word after `from`, skipping whitespace only — an empty string when the next
+ * non-space character is not a word character. Deliberately does NOT skip comments: a word
+ * separated from its partner by a comment is not the two-word construct being matched.
+ */
+function nextWord(sql: string, from: number): string {
+    let i = from;
+    while (i < sql.length && /\s/.test(sql[i])) i++;
+    const start = i;
+    while (i < sql.length && /[a-zA-Z0-9_]/.test(sql[i])) i++;
+    return sql.substring(start, i);
+}
+
+/**
+ * The bare word immediately before `to`, skipping whitespace only — the mirror of
+ * {@link nextWord}. Empty when the preceding non-space character is not a word character, which
+ * is what keeps `t.Order` and `(Order` from pairing with whatever came before them.
+ *
+ * Empty in two further cases, both of which exist to make this the true mirror of the forward
+ * lookup rather than an approximation of it:
+ *
+ *   - **The word found is itself dot-qualified or already quoted** (`t.Order By`, `"Order" By`).
+ *     Those keys do not match forward — a dot-qualified key never reaches the contextual tier,
+ *     and a quoted one is not a word at all — so pairing backwards against them makes the two
+ *     directions disagree and breaks `f(f(x)) === f(x)`: pass 1 emits `t."Order" By`, pass 2 then
+ *     sees a quoted key, declines to pair, and emits `t."Order" "By"`.
+ *   - **The scan would cross into a `--` comment.** `nextWord` gets this for free (it starts on
+ *     the `-` and returns empty); backwards there is no such guard, so a line comment ending in
+ *     the word `order` would leave a real column named `By` on the next line unquoted — a fresh
+ *     instance of exactly the case-folding failure this module exists to prevent.
+ */
+function previousWord(sql: string, to: number): string {
+    let i = to - 1;
+    while (i >= 0 && /\s/.test(sql[i])) i--;
+    const end = i + 1;
+    while (i >= 0 && /[a-zA-Z0-9_]/.test(sql[i])) i--;
+    const before = i >= 0 ? sql[i] : '';
+    if (before === '.' || before === '"') return '';
+    // A newline between the found word and `to` means the word sits on an earlier line; if that
+    // line has an unclosed `--`, the word is comment text, not SQL.
+    const gap = sql.substring(end, to);
+    if (gap.includes('\n')) {
+        const lineStart = sql.lastIndexOf('\n', i) + 1;
+        if (sql.substring(lineStart, end).includes('--')) return '';
+    }
+    return sql.substring(i + 1, end);
+}
+
 /** True when a word must be emitted verbatim rather than quoted as an identifier. */
 function isBareWord(word: string, sql: string, start: number, end: number): boolean {
+    const precededByDot = start > 0 && sql[start - 1] === '.';
+
     // 1. Keywords, recognized ONLY in their ALL-CAPS form. An ALL-CAPS word that is not a
     //    keyword (`ID`, `URL`) falls through and is quoted as the identifier it is.
+    //
+    //    This tier runs BEFORE the dot rule below, and the ordering is load-bearing in one
+    //    direction only. Some entries in the keyword set exist *specifically* for their
+    //    dot-qualified form — `INFORMATION_SCHEMA.COLUMNS`, `.TABLES`, `.ROUTINES` — and the
+    //    catalog's real relation names are lower case, so quoting the right-hand half emits
+    //    `INFORMATION_SCHEMA."COLUMNS"`, which does not resolve. CodeGen executes that exact
+    //    SQL through `qsql()` on every PostgreSQL run (`manage-metadata.ts`, three call sites,
+    //    two of them unconditional), so quoting it turns a working run into a hard failure.
+    //    Because this tier is case-SENSITIVE it cannot swallow a mixed-case column: `Case` is
+    //    not `CASE`, so `e.Case` still reaches the dot rule and quotes.
     if (word === word.toUpperCase() && PostgreSQLQuotingKeywords.has(word)) {
         return true;
     }
-    // 2. Structural words, any case — the compatibility tier for externally authored SQL.
+    // 2. A dot-qualified word is a MEMBER REFERENCE — `alias.Column`, `schema.object`. No tier
+    //    BELOW this one may override that, because no SQL dialect has a structural keyword in
+    //    that position. Checking it ahead of the remaining tiers is what stops any word added to
+    //    the structural or contextual sets from making a legitimate column unquotable, which is
+    //    the failure mode this module exists to prevent and the one a widened structural tier
+    //    reintroduced.
+    if (precededByDot) {
+        return false;
+    }
+    // 3. Structural words, any case — the compatibility tier for externally authored SQL.
     if (PostgreSQLStructuralKeywords.has(word.toUpperCase())) {
         return true;
     }
-    const precededByDot = start > 0 && sql[start - 1] === '.';
+    // 2a. Structural only in front of a specific next word (`Order By`, `Left Join`). Anywhere
+    //     else these are ordinary identifiers and fall through to be quoted.
+    const followers = PostgreSQLContextualStructuralKeywords.get(word.toUpperCase());
+    if (followers && followers.has(nextWord(sql, end).toUpperCase())) {
+        return true;
+    }
+    // 2b. …and the FOLLOWER of such a pair is structural too. Leaving `Order` bare while quoting
+    //     `By` produces `Order "By" "Name"`, which is no more valid than the form it replaced —
+    //     the pair is one construct and both halves have to be recognized. This is the reverse
+    //     lookup: is the immediately preceding word a contextual key that permits this one?
+    //     It chains correctly through `Full Outer Join`, where `Outer` is both a follower of
+    //     `Full` and a key whose follower is `Join`.
+    const upper = word.toUpperCase();
+    if (PostgreSQLContextualFollowers.has(upper)) {
+        const precedingFollowers = PostgreSQLContextualStructuralKeywords.get(previousWord(sql, start).toUpperCase());
+        if (precedingFollowers && precedingFollowers.has(upper)) {
+            return true;
+        }
+    }
     // 3. Function call: immediately followed by `(`, and not dot-qualified (MJ's own stored
     //    procedures are dot-qualified with quoted mixed-case names and must stay quoted).
     if (sql[end] === '(' && !precededByDot) {

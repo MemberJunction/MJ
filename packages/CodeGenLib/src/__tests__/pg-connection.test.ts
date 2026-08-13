@@ -39,13 +39,19 @@ const initializeMock = vi.fn(async (_config: unknown) => {
 const closeMock = vi.fn(async () => { /* no-op */ });
 
 vi.mock('@memberjunction/postgresql-dataprovider', () => ({
-    PGConnectionManager: vi.fn(() => ({
-        Initialize: initializeMock,
-        Close: closeMock,
-        get Pool() {
-            return fakePool;
-        },
-    })),
+    // A FUNCTION EXPRESSION, not an arrow. `PGConnection` calls `new PGConnectionManager()`, and an
+    // arrow function has no [[Construct]] slot — under Vitest 4 that surfaces as
+    // "TypeError: () => ({…}) is not a constructor" on every test in this file. A function
+    // expression is constructible, and returning an object from it makes `new` yield that object.
+    PGConnectionManager: vi.fn(function () {
+        return {
+            Initialize: initializeMock,
+            Close: closeMock,
+            get Pool() {
+                return fakePool;
+            },
+        };
+    }),
 }));
 
 vi.mock('@memberjunction/global', () => ({

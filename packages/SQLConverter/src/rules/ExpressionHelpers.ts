@@ -114,10 +114,22 @@ export function StripComments(sql: string): string {
  * succeeds under the case-preserved name — leaving BOTH constraints on the table, so the original
  * narrower one keeps rejecting exactly the rows the migration was written to allow. Nothing fails
  * loudly; the only trace is one non-fatal error in the install log.
+ *
+ * The `IF EXISTS` exclusion is load-bearing, not defensive. `DROP CONSTRAINT IF EXISTS Foo` puts
+ * the keyword `IF` exactly where a constraint name otherwise sits, so the bare pattern captures
+ * `IF` as the name, sees an uppercase letter, and emits:
+ *
+ *     ALTER TABLE __mj."Foo" DROP CONSTRAINT "IF" EXISTS "CK_Foo_Bar";
+ *
+ * — which is a syntax error, on the one statement form whose whole purpose is to be safe to run.
+ * Four of the five T-SQL migrations in the repo using that syntax converted broken. It predates
+ * this rule's refactor, but this is the file that widened the pattern's reach to CREATE TABLE and
+ * separately added a path that EMITS `DROP CONSTRAINT IF EXISTS`, so the collision now round-trips
+ * through one module.
  */
 export function QuoteConstraintNames(sql: string): string {
   return transformCodeOnly(sql, (code) =>
-    code.replace(/\bCONSTRAINT\s+([A-Za-z_]\w*)\b/gi, (match, name: string) =>
+    code.replace(/\bCONSTRAINT\s+(?!IF\s+EXISTS\b)([A-Za-z_]\w*)\b/gi, (match, name: string) =>
       (/[A-Z]/.test(name) ? `CONSTRAINT "${name}"` : match)));
 }
 

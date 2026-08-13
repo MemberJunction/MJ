@@ -3,7 +3,7 @@
 --
 -- The PostgreSQL analog of migrations/R__RefreshMetadata.sql. Repeatable migrations
 -- run on EVERY `mj migrate` and are always included regardless of baseline; the
--- ${flyway:timestamp} below changes the checksum each run so Skyway always re-applies
+-- ${flyway:timestamp} below changes the checksum each run so Flyway always re-applies
 -- it (matching the SQL Server file's mechanism). It runs AFTER all versioned/baseline
 -- migrations, so it heals the final state of the whole migration set.
 --

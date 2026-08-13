@@ -114,6 +114,36 @@ export class ConditionalDDLRule implements IConversionRule {
   }
 
   /**
+   * The SQL Server catalog views that identify a guard as a CONSTRAINT-existence probe.
+   *
+   * A guard naming one of these is asking "does this constraint exist" and nothing more, which
+   * is precisely the question `DROP CONSTRAINT IF EXISTS` answers natively — so discarding it
+   * loses nothing.
+   */
+  private static readonly CONSTRAINT_CATALOG_VIEW =
+    /\bsys\.(check_constraints|key_constraints|foreign_keys|default_constraints)\b/i;
+
+  /**
+   * `sys.objects` is the GENERIC object catalog, so naming it proves nothing on its own.
+   *
+   * `IF EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'[__mj].[Legacy]') AND
+   * type in (N'U'))` is a TABLE-existence test — "if the legacy table is still here, drop the FK
+   * that points at it" — and discarding it makes PostgreSQL drop unconditionally while SQL Server
+   * does not. So a `sys.objects` guard only counts as a constraint probe when its predicate also
+   * restricts to constraint object types (`C` check, `F` foreign key, `UQ` unique, `PK` primary
+   * key, `D` default) or joins on `parent_object_id`, which only constraint rows carry meaningfully.
+   */
+  private static readonly OBJECTS_CONSTRAINT_PREDICATE =
+    /\bparent_object_id\b|\btype\s*(?:=|\bIN\b)\s*\(?\s*N?'(?:C|F|UQ|PK|D)'/i;
+
+  /** True when the guard is asking only "does this constraint exist". */
+  private static isConstraintExistenceProbe(guard: string): boolean {
+    if (ConditionalDDLRule.CONSTRAINT_CATALOG_VIEW.test(guard)) return true;
+    return /\bsys\.objects\b/i.test(guard)
+      && ConditionalDDLRule.OBJECTS_CONSTRAINT_PREDICATE.test(guard);
+  }
+
+  /**
    * Convert a guarded constraint drop to PG's native idempotent form:
    *
    *     IF EXISTS (SELECT 1 FROM sys.check_constraints cc JOIN ... WHERE cc.name = 'CK_X')
@@ -125,12 +155,19 @@ export class ConditionalDDLRule implements IConversionRule {
    *
    *     ALTER TABLE s."T" DROP CONSTRAINT IF EXISTS "CK_X";
    *
-   * The T-SQL guard exists only because SQL Server has no DROP CONSTRAINT IF EXISTS, so
-   * the whole catalog query is redundant on PG and its joins (sys.schemas / sys.tables)
-   * have no direct pg_constraint analogue worth reconstructing.
+   * Only a guard that PROBES THE CATALOG for the constraint is discarded. That form exists
+   * solely because SQL Server has no DROP CONSTRAINT IF EXISTS, so on PG it is redundant and
+   * its joins (sys.schemas / sys.tables) have no pg_constraint analogue worth reconstructing.
    *
-   * Returns null unless the guarded body consists solely of DROP CONSTRAINT statements,
-   * so anything richer keeps falling through to the generic DO-block conversion.
+   * Any other predicate is a real condition and is NOT ours to throw away — a guard like
+   * `IF EXISTS (SELECT 1 FROM [__mj].[Payment] WHERE [Status] = 'Legacy')` means the drop is
+   * conditional on data, and discarding it makes PostgreSQL drop unconditionally while SQL
+   * Server does not, diverging the two schemas with no error on either side. Gating on a
+   * catalog reference mirrors what tryConvertConditionalIndex already does with `sys.indexes`.
+   *
+   * Returns null unless the guard is a catalog probe AND the guarded body consists solely of
+   * DROP CONSTRAINT statements, so anything richer keeps falling through to the generic
+   * DO-block conversion (which comments out what it cannot express).
    */
   private tryConvertGuardedDropConstraint(sql: string): string | null {
     const ifMatch = sql.match(/IF\s+EXISTS\s*\(/i);
@@ -138,6 +175,9 @@ export class ConditionalDDLRule implements IConversionRule {
     const openPos = sql.indexOf('(', ifMatch.index);
     const closePos = ConditionalDDLRule.findCloseParen(sql, openPos);
     if (closePos < 0) return null;
+
+    const guard = sql.slice(openPos, closePos + 1);
+    if (!ConditionalDDLRule.isConstraintExistenceProbe(guard)) return null;
 
     const body = sql.slice(closePos + 1).replace(/^\s*BEGIN\b/i, '').replace(/\bEND\s*;?\s*$/i, '');
     const statements = body.split(';').map(s => s.trim()).filter(Boolean);
@@ -312,6 +352,23 @@ export class ConditionalDDLRule implements IConversionRule {
     // exactly the case the placeholder exists to serve. The placeholder is substituted as plain
     // text at apply time, so `${mjSchema}_BizAppsCommon` becomes `__mj_BizAppsCommon` unquoted and
     // folds to `__mj_bizappscommon` — the same thing every reference to it folds to.
+    //
+    // A schema with a RUNTIME producer is EXEMPT from the fold, because folding it here puts the
+    // two producers in disagreement and the runtime is the one a migration cannot correct.
+    // `__mj_UDT` is the whole of that set: `UDT_SCHEMA_NAME` in `AI/DatabaseDesigner/core` is the
+    // mixed-case literal, and every path that emits it quotes it — `CreateSchemaDDL`,
+    // `QuoteSchema`, and the schema-builder's `QuotePostgres` — so a live database holds
+    // `"__mj_UDT"` case-preserved and the Database Designer creates its tables there. Folding the
+    // CREATE would leave the Designer writing into a schema no migration made, and CodeGen's
+    // `vwSQLTablesAndEntities` joins `nspname = e."SchemaName"` case-sensitively, so metadata
+    // saying `__mj_UDT` would stop matching a folded `__mj_udt` and orphan every UDT entity from
+    // its table. Verified against the shipped corpus: `migrations-pg/` contains not one unquoted
+    // `__mj_udt` reference — all 272 other occurrences of the name are prose or JSON string
+    // content — so nothing in the migration set wants the folded spelling either.
+    const RUNTIME_CREATED_SCHEMAS = new Set(['__mj_UDT']);
+    if (RUNTIME_CREATED_SCHEMAS.has(schemaName)) {
+      return `CREATE SCHEMA IF NOT EXISTS "${schemaName}";`;
+    }
     const literalOnly = /^[A-Za-z_]\w*$/.test(schemaName);
     if (literalOnly) return `CREATE SCHEMA IF NOT EXISTS ${schemaName.toLowerCase()};`;
     if (isPlaceholderIdentifier(schemaName)) {

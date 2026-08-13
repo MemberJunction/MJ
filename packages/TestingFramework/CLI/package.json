@@ -37,14 +37,13 @@
     "debug": "^4.4.3",
     "cosmiconfig": "9.0.0",
     "dotenv": "17.2.4",
-    "mssql": "^12.2.0",
-    "@memberjunction/generic-database-provider": "6.1.0-edge.1"
+    "mssql": "^12.2.0"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
   },
   "optionalDependencies": {
-    "@memberjunction/postgresql-dataprovider": "6.1.0-edge.1"
+    "@memberjunction/postgresql-dataprovider": "6.1.0-edge.2"
   }
 }

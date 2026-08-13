@@ -92,6 +92,59 @@ END`;
       const result = convert(sql);
       expect(result).not.toContain('DROP CONSTRAINT IF EXISTS');
     });
+
+    it('should NOT discard a guard that is a data condition rather than a catalog probe', () => {
+      // The rewrite throws the guard away, which is only legitimate when the guard is asking
+      // "does this constraint exist" — the question SQL Server has no native form for. A guard
+      // on DATA is a real condition: discarding it drops the constraint unconditionally on
+      // PostgreSQL while SQL Server still drops it only for a database that has legacy rows,
+      // diverging the two schemas with no error on either side.
+      const sql = `IF EXISTS (SELECT 1 FROM [__mj].[Payment] WHERE [Status] = 'Legacy')
+BEGIN
+    ALTER TABLE [__mj].[Payment] DROP CONSTRAINT [CK_Payment_Status];
+END`;
+      const result = convert(sql);
+      expect(result).not.toContain('DROP CONSTRAINT IF EXISTS');
+      // Falls through to the generic path, which comments out what it cannot express — visible
+      // to whoever reads the migration, rather than silently wrong.
+      expect(result).toContain('-- SKIPPED');
+    });
+
+    it('should still discard a sys.objects guard that restricts to a constraint type', () => {
+      // The guard is commonly written as sys.objects WHERE type IN ('C','F','UQ') rather than
+      // against the constraint-specific view, and that is the same question.
+      const sql = `IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'CK_Payment_Status' AND type = 'C')
+BEGIN
+    ALTER TABLE [__mj].[Payment] DROP CONSTRAINT [CK_Payment_Status];
+END`;
+      const result = convert(sql);
+      expect(result).toContain('DROP CONSTRAINT IF EXISTS "CK_Payment_Status"');
+      expect(result).not.toContain('sys.objects');
+    });
+
+    it('should NOT discard a sys.objects guard that is a TABLE-existence test', () => {
+      // sys.objects is the GENERIC object catalog, so naming it proves nothing. This guard means
+      // "if the legacy table is still here, drop the FK that points at it" — a real condition.
+      // Discarding it drops the constraint unconditionally on PostgreSQL while SQL Server keeps
+      // it, and `DROP CONSTRAINT IF EXISTS` means neither side errors.
+      const sql = `IF EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'[__mj].[LegacyPayment]') AND type in (N'U'))
+BEGIN
+    ALTER TABLE [__mj].[Payment] DROP CONSTRAINT [FK_Payment_LegacyPayment];
+END`;
+      const result = convert(sql);
+      expect(result).not.toContain('DROP CONSTRAINT IF EXISTS');
+      expect(result).toContain('-- SKIPPED');
+    });
+
+    it('should discard a sys.objects guard that joins on parent_object_id', () => {
+      // Only constraint rows carry parent_object_id meaningfully, so this shape is unambiguous.
+      const sql = `IF EXISTS (SELECT 1 FROM sys.objects o WHERE o.name = 'CK_X' AND o.parent_object_id = OBJECT_ID(N'[__mj].[T]'))
+BEGIN
+    ALTER TABLE [__mj].[T] DROP CONSTRAINT [CK_X];
+END`;
+      const result = convert(sql);
+      expect(result).toContain('DROP CONSTRAINT IF EXISTS "CK_X"');
+    });
   });
 
   describe('conditional index conversion', () => {
@@ -383,16 +436,32 @@ BEGIN
     EXEC('CREATE SCHEMA [__mj_UDT]')
 END`;
       const result = convert(sql);
-      // Emitted UNQUOTED so PostgreSQL folds it to lowercase. T-SQL brackets carry no case
-      // meaning, so `[__mj_UDT]` is the same schema as an unbracketed `__mj_UDT` elsewhere in
-      // the migration set — and those unbracketed references fold. Quoting the CREATE would
-      // preserve the case and produce a SECOND, distinct schema that nothing else resolves to.
-      expect(result).toContain('CREATE SCHEMA IF NOT EXISTS __mj_udt;');
-      expect(result).not.toContain('"__mj_UDT"');
-      // Should NOT fall through to the DO $$ block path
-      expect(result).not.toContain('DO $$');
+      // `__mj_UDT` stays QUOTED — alone among mixed-case schemas — because it is the one schema
+      // with a producer OUTSIDE the migration set. The Database Designer creates it, and every
+      // table in it, through `UDT_SCHEMA_NAME`, quoted and case-preserved. Folding it here would
+      // leave the runtime writing into a schema no migration made, and would orphan every UDT
+      // entity from its table in `vwSQLTablesAndEntities`, which joins schema names
+      // case-sensitively. A live database already holds `"__mj_UDT"`; this matches it.
+      expect(result).toContain('CREATE SCHEMA IF NOT EXISTS "__mj_UDT";');
+      expect(result).not.toContain('__mj_udt');
+      // No reconciliation DDL is emitted for it either. A guard at this point lands in the
+      // converted output of the migration that CREATES the schema — the one file every affected
+      // database has already applied and Flyway will never re-run — so it could only ever fire on
+      // a database that does not need it.
+      expect(result).not.toContain('ALTER SCHEMA');
+      expect(result).not.toContain('pg_namespace');
+      // Should NOT fall through to the generic conditional-DDL path
       expect(result).not.toContain('sys.schemas');
-      expect(result).not.toContain('EXEC');
+      expect(result).not.toContain('EXEC(');
+    });
+
+    it('should emit a bare folded CREATE for the already-lowercase core schema', () => {
+      const sql = `IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = '__mj')
+BEGIN
+    EXEC('CREATE SCHEMA [__mj]')
+END`;
+      const result = convert(sql);
+      expect(result.trim()).toBe('CREATE SCHEMA IF NOT EXISTS __mj;');
     });
 
     it('should fold a mixed-case schema name to lowercase to match its unquoted references', () => {

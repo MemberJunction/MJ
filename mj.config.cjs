@@ -15,6 +15,26 @@
  */
 
 /** @type {import('@memberjunction/config').MJConfig} */
+/**
+ * The active database platform, with the same contract as `resolveDbPlatformFromEnv` in
+ * @memberjunction/generic-database-provider: case-insensitive, canonical values only, and a LOUD
+ * failure on legacy aliases rather than a silent fallback.
+ *
+ * Duplicated rather than imported because this is CommonJS config, read before any workspace
+ * package is built. Kept deliberately tiny so the two cannot drift far.
+ */
+function dbPlatform() {
+  const raw = process.env.DB_PLATFORM;
+  if (raw === undefined) return undefined;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === '') return undefined;
+  if (normalized === 'sqlserver' || normalized === 'postgresql') return normalized;
+  throw new Error(
+    `Invalid DB_PLATFORM value '${raw}'. Must be 'sqlserver' or 'postgresql' (case-insensitive). ` +
+      `Legacy aliases ('mssql', 'postgres', 'pg') are not supported.`
+  );
+}
+
 module.exports = {
   /**
    * ====================
@@ -40,14 +60,21 @@ module.exports = {
     checkModules: ['@memberjunction/integration-test-suite'],
   },
 
-  dbPlatform: process.env.DB_PLATFORM || 'sqlserver',
+  dbPlatform: dbPlatform() || 'sqlserver',
   dbHost: process.env.DB_HOST || 'localhost',
   // Default port follows the platform. With DB_PLATFORM unset this is the SQL Server default
   // exactly as before, so existing setups — including integration.yml, which sets neither
   // variable — are unaffected.
+  //
+  // Both lines resolve through `dbPlatform()` rather than reading the raw variable, so this file
+  // agrees with `resolveDbPlatformFromEnv`, which every other consumer uses. Reading it raw
+  // disagreed twice over: `Postgresql` fell through to 1433, and the legacy aliases `postgres` /
+  // `pg` — which the resolver rejects LOUDLY, precisely so a typo cannot route the wrong dialect at
+  // a real database — were silently accepted here as a platform string while still getting the SQL
+  // Server port. The resulting connection error points at the network, not at the typo.
   dbPort: process.env.DB_PORT
     ? parseInt(process.env.DB_PORT)
-    : (process.env.DB_PLATFORM === 'postgresql' ? 5432 : 1433),
+    : (dbPlatform() === 'postgresql' ? 5432 : 1433),
   dbDatabase: process.env.DB_DATABASE,
   dbUsername: process.env.DB_USERNAME,
   dbPassword: process.env.DB_PASSWORD,

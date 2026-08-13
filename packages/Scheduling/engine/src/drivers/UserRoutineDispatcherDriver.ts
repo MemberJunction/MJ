@@ -54,6 +54,16 @@ export interface UserRoutineDispatcherConfiguration extends ScheduledJobConfigur
 }
 
 /** Default bound on concurrent routine executions within a single dispatcher sweep. */
+/**
+ * Attempts to re-attach a run's execution linkage after the first save was rejected.
+ *
+ * The linkage columns are foreign keys to rows written fire-and-forget by the action/agent/prompt
+ * engines, so a rejection usually means "not inserted yet" rather than "does not exist". A few
+ * short, escalating waits cover that window without putting the sweep on the DB's critical path.
+ */
+const RUN_LINKAGE_ATTEMPTS = 3;
+const RUN_LINKAGE_RETRY_MS = 50;
+
 const DEFAULT_MAX_CONCURRENT_ROUTINES = 3;
 
 /** Name of the metadata-seeded default notification template (resolved BY NAME, never hardcoded ID). */
@@ -269,6 +279,14 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
      * Execute one claimed routine end-to-end: run row → target execution → run/routine
      * bookkeeping → notification decision + delivery. Never throws for target failures —
      * those are recorded on the run row; only run-row creation failures propagate.
+     *
+     * **Once the run row exists, this drives it to a TERMINAL status on every path.** The inner
+     * guard around `executeTarget` only ever covered target failures, so a throw from the
+     * bookkeeping that follows it — `finalizeRunRow`, `updateRoutineAfterRun`, notification
+     * delivery — escaped to the sweep's per-routine catch, which records `Failed` in its in-memory
+     * summary and returns. The row on disk stays `Running` forever: nothing reconciles it, the
+     * sweep reports success, and the routine looks like it is still executing long after the
+     * process that owned it exited. A run row that outlives its executor has to say so.
      */
     private async executeRoutine(
         routine: MJUserRoutineEntity,
@@ -277,6 +295,48 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         const contextUser = context.ContextUser;
         const run = await this.createRunRow(routine, contextUser);
         this.log(`Running routine "${routine.Name}" (${routine.TargetType} target)`, true);
+
+        try {
+            return await this.runAndRecord(routine, run, context);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.logError(`Routine "${routine.Name}" (${routine.ID}) failed after its run row was created`, error);
+
+            // ONLY drive a row that is still non-terminal. Everything after `finalizeRunRow` runs
+            // inside this scope — `updateRoutineAfterRun`, the notification save — so a throw from
+            // there arrives with `Status` already committed as `Success` alongside its
+            // ResultSummary and ResultHash, and `MJUserRoutine.LastRunStatus` possibly already
+            // agreeing. Overwriting it with `Failed` would rewrite a run that genuinely succeeded
+            // and put the run and its routine into disagreement — inventing the very status/disk
+            // mismatch this catch was added to eliminate.
+            if (run.Status !== 'Running') {
+                this.logError(
+                    `Run ${run.ID} already recorded '${run.Status}'; leaving it as-is. The failure above ` +
+                    `happened in the bookkeeping AFTER the outcome was committed.`
+                );
+                return { RoutineID: routine.ID, RunStatus: run.Status, Notified: false };
+            }
+
+            run.Status = 'Failed';
+            run.ErrorMessage = `Run bookkeeping failed: ${message}`;
+            run.CompletedAt = new Date();
+            if (!(await run.Save())) {
+                this.logError(
+                    `Run ${run.ID} is STUCK at Running — the failure could not be recorded: ` +
+                    `${run.LatestResult?.CompleteMessage ?? 'unknown'}`
+                );
+            }
+            return { RoutineID: routine.ID, RunStatus: 'Failed', Notified: false };
+        }
+    }
+
+    /** The body of {@link executeRoutine}, from target execution through notification delivery. */
+    private async runAndRecord(
+        routine: MJUserRoutineEntity,
+        run: MJUserRoutineRunEntity,
+        context: ScheduledJobExecutionContext
+    ): Promise<RoutineExecutionSummary> {
+        const contextUser = context.ContextUser;
 
         let outcome: RoutineTargetOutcome;
         try {
@@ -349,10 +409,65 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         run.AgentRunID = outcome.AgentRunID;
         run.PromptRunID = outcome.PromptRunID;
         run.ActionExecutionLogID = outcome.ActionExecutionLogID;
-        const saved = await run.Save();
-        if (!saved) {
-            this.logError(`Failed to finalize run ${run.ID}: ${run.LatestResult?.CompleteMessage ?? 'unknown'}`);
+        if (await run.Save()) {
+            return;
         }
+
+        // The run's own status must not be hostage to an OPTIONAL linkage. The three ID columns
+        // above are foreign keys to artifacts of the execution — the action log, the agent run, the
+        // prompt run — and any of them can fail to resolve (a log row cleaned up by an unrelated
+        // process, a cross-session write not yet visible). When that FK is what rejected the save,
+        // the previous behaviour logged and carried on: `Status` stayed 'Success' IN MEMORY, the
+        // caller reported success from that in-memory value, and the row on disk stayed 'Running'
+        // forever with nothing to reconcile it. Losing a link is a diagnostic loss; losing the
+        // status is a correctness one — so drop the links and record the outcome.
+        const firstFailure = run.LatestResult?.CompleteMessage ?? 'unknown';
+
+        // The usual cause is a RACE, not a bad ID. Action-execution logging is fire-and-forget:
+        // `ActionEngine` client-generates the log row's PK and returns it immediately, then INSERTs
+        // it off the critical path. So `outcome.ActionExecutionLogID` is a valid identifier for a
+        // row that may not exist YET — and writing it into a foreign key can lose that race, which
+        // is why this only shows up under load. Land the STATUS first (the correctness-bearing
+        // part), then re-attach the linkage once the INSERT has had a chance to land.
+        const linkage = {
+            AgentRunID: run.AgentRunID,
+            PromptRunID: run.PromptRunID,
+            ActionExecutionLogID: run.ActionExecutionLogID,
+        };
+        run.AgentRunID = null;
+        run.PromptRunID = null;
+        run.ActionExecutionLogID = null;
+        if (!(await run.Save())) {
+            throw new Error(
+                `Run ${run.ID} could not be finalized and is stuck at 'Running': ${run.LatestResult?.CompleteMessage ?? firstFailure}`
+            );
+        }
+
+        for (let attempt = 1; attempt <= RUN_LINKAGE_ATTEMPTS; attempt++) {
+            await new Promise((resolve) => setTimeout(resolve, RUN_LINKAGE_RETRY_MS * attempt));
+            run.AgentRunID = linkage.AgentRunID;
+            run.PromptRunID = linkage.PromptRunID;
+            run.ActionExecutionLogID = linkage.ActionExecutionLogID;
+            if (await run.Save()) {
+                return;
+            }
+            // Re-null so the next attempt starts from the persisted (unlinked) state rather than
+            // stacking a second rejected write on top of a dirty entity.
+            run.AgentRunID = null;
+            run.PromptRunID = null;
+            run.ActionExecutionLogID = null;
+        }
+
+        // Status is recorded; only the diagnostic linkage is missing. Say so and move on — losing a
+        // link is an observability loss, and blocking the sweep on it would be the worse trade.
+        run.ErrorMessage = [outcome.ErrorMessage, `execution linkage not attached: ${firstFailure}`]
+            .filter(Boolean).join(' | ');
+        await run.Save();
+        this.logError(
+            `Run ${run.ID} finalized WITHOUT execution linkage after ${RUN_LINKAGE_ATTEMPTS} attempt(s): ${firstFailure}`
+        );
+        return;
+
     }
 
     /** Roll the run outcome up onto the routine (LastRunAt / LastRunStatus / LastResultHash). */

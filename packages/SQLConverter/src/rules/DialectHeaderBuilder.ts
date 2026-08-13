@@ -39,6 +39,19 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Schema
+--
+-- The schema name is emitted UNQUOTED, so PostgreSQL folds it to lowercase. That is deliberate and
+-- self-consistent: everything downstream in a converted migration refers to it unquoted too, so
+-- both definition and lookup land on the same folded name.
+--
+-- DOWNSTREAM NOTE for the build engineer: a PostgreSQL database that was populated by an EARLIER
+-- converter — one that emitted a quoted, case-preserved name — already holds e.g.
+-- "__mj_BizAppsSecureMessaging". Re-converting against that database creates a SECOND, empty
+-- schema __mj_bizappssecuremessaging rather than reusing the existing one, because
+-- IF NOT EXISTS compares the folded name and finds no match. The repo's own committed
+-- migrations-pg files are unaffected (the only quoted CREATE SCHEMAs there are the four pg_dump
+-- baselines, which this path does not produce), so this is an open-app / downstream concern, not
+-- one for this repo's Flyway history.
 CREATE SCHEMA IF NOT EXISTS ${schema};
 SET search_path TO ${schema}, public;
 

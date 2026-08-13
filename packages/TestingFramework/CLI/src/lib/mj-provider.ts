@@ -225,12 +225,16 @@ async function initializePostgresProvider(cfg: ResolvedDbConfig): Promise<void> 
 /**
  * Populate UserCache from PG `vwUsers`/`vwUserRoles`.
  *
- * `UserCache.Refresh` takes an `mssql.ConnectionPool` and issues bracket-quoted T-SQL, so it cannot
- * serve PostgreSQL; it also swallows its own errors, which is why an unpopulated cache presents as
- * "no users" rather than as a failure. MJServer and MetadataSync each carry a private copy of this
- * for the same reason. Consolidating them behind something like `UserCache.RefreshFromRows` belongs
- * in the package that owns the cache and is filed separately — exporting it from the PostgreSQL
- * provider would force a PG→SQL-Server package dependency and drag `mssql` into PG-only installs.
+ * This path exists because the rows have to be stitched here: the `UserInfo[]` is built before
+ * there is a `DatabaseProviderBase` to hand `UserCache.Refresh`, and it also swallows its own
+ * errors, which is why an unpopulated cache presents as "no users" rather than as a failure.
+ * MJServer and MetadataSync each carry a private copy of this for the same reason; consolidating
+ * the three belongs in the package that owns the cache and is filed separately.
+ *
+ * The HAND-OFF, though, now goes through `UserCache.SetUsers` rather than assigning the private
+ * `_users` field by string index. That cast type-checked forever and failed silently — rename the
+ * field and the cache is never populated, with no compile error and the symptom surfacing
+ * arbitrarily far away. The public seam makes the rename a build error.
  */
 async function refreshUserCacheFromPG(provider: { ExecuteSQL: <T>(sql: string) => Promise<T[]> }, coreSchema: string): Promise<void> {
   const users = await provider.ExecuteSQL<Record<string, unknown>>(`SELECT * FROM "${coreSchema}"."vwUsers"`);
@@ -240,7 +244,7 @@ async function refreshUserCacheFromPG(provider: { ExecuteSQL: <T>(sql: string) =
     Metadata.Provider, // global-provider-ok: dedicated single-provider CLI process, just installed above
     { ...u, UserRoles: (roles ?? []).filter(r => UUIDsEqual(r.UserID as string, u.ID as string)) }
   ));
-  (UserCache.Instance as unknown as Record<string, unknown>)['_users'] = userInfos;
+  UserCache.Instance.SetUsers(userInfos);
 }
 
 export function getConnectionPool(): sql.ConnectionPool {
