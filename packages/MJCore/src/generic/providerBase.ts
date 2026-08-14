@@ -1284,6 +1284,38 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             this.IsServerCacheAllowedForEntity(param);
     }
 
+    /** True when the entity is a CodeGen materialized-query wrapper (materialized_vw*) whose snapshot is
+     * refreshed out-of-band — the same one IsServerCacheAllowedForEntity excludes from the server cache. */
+    protected isMaterializedWrapperEntity(param: RunViewParams): boolean {
+        if (!param.EntityName) {
+            return false;
+        }
+        const entity = this.EntityByName(param.EntityName);
+        return !!(entity?.VirtualEntity && entity.BaseView && entity.BaseView.toLowerCase().startsWith('materialized_vw'));
+    }
+
+    /**
+     * Write-side eligibility for the smart-cache-check (stamped) path. On the trusting SERVER this is
+     * exactly runViewCacheEligible — the server cache is kept fresh by BaseEntity events, so a
+     * server-cache-disallowed entity must never be slotted. On a CLIENT the slot is instead written with
+     * a maxUpdatedAt stamp and DB-revalidated per request, so the server Trust/event gate does NOT apply:
+     * a server-cache-disallowed entity (Trust=0 'MJ: Audit Logs', Record Changes, other caching-disabled)
+     * is still safely client-cacheable when stamped — folding runViewCacheEligible's server gate onto this
+     * path regressed that (integration check client-cache.C12). Materialized reads stay excluded on both
+     * (the out-of-band snapshot swap the stamp can't observe).
+     */
+    protected runViewCacheEligibleForWrite(param: RunViewParams): boolean {
+        if (this.TrustLocalCacheCompletely) {
+            return this.runViewCacheEligible(param);
+        }
+        return !param.BypassCache &&
+            !param.AfterKey &&
+            !IsMaterializedDataSource(param.DataSource) &&
+            param.ResultType !== 'count_only' &&
+            param.CacheLocal === true &&
+            !this.isMaterializedWrapperEntity(param);
+    }
+
     /**
      * SECURITY — decide whether the shared cache must be BYPASSED for a RunView that targets
      * a saved VIEW rather than a named entity (no `EntityName`), under a context user.
@@ -2617,7 +2649,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // BaseEntity event), count_only, AfterKey, BypassCache, cache-disallowed entities. On a client
             // (!TrustLocalCacheCompletely) runViewCacheEligible already implies CacheLocal===true, so this is
             // strictly a tightening — normal cacheable slots are unaffected.
-            if (this.runViewCacheEligible(param) && LocalCacheManager.Instance.IsInitialized) {
+            if (this.runViewCacheEligibleForWrite(param) && LocalCacheManager.Instance.IsInitialized) {
                 cacheable.push({ paramIndex: i, fingerprint: this.clientCacheFingerprint(param) });
             }
         }
@@ -2821,7 +2853,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             // Apply differential update to cache (runViewCacheEligible, not raw CacheLocal — see the
             // cacheable-gate note in prepareSmartCacheCheckParams; keeps Materialized/count_only/etc. out).
-            if (this.runViewCacheEligible(param) && checkResult.differentialData && LocalCacheManager.Instance.IsInitialized) {
+            if (this.runViewCacheEligibleForWrite(param) && checkResult.differentialData && LocalCacheManager.Instance.IsInitialized) {
                 const merged = await LocalCacheManager.Instance.ApplyDifferentialUpdate(
                     fingerprint,
                     param,
@@ -2888,7 +2920,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Update the local cache with fresh data (don't await - fire and forget for performance).
             // runViewCacheEligible, not raw CacheLocal — see the cacheable-gate note; a first-time
             // Materialized read reaches this 'stale' branch with fresh data and would otherwise be cached.
-            if (this.runViewCacheEligible(param) && checkResult.maxUpdatedAt && LocalCacheManager.Instance.IsInitialized) {
+            if (this.runViewCacheEligibleForWrite(param) && checkResult.maxUpdatedAt && LocalCacheManager.Instance.IsInitialized) {
                 const fingerprint = this.clientCacheFingerprint(param);
                 // Note: We don't await here to avoid blocking the response
                 // Cache update happens in background
