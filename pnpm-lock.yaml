@@ -14588,6 +14588,9 @@ importers:
       '@memberjunction/record-set-processor-base':
         specifier: 6.1.0-edge.2
         version: link:../../RecordSetProcessor/base
+      '@memberjunction/redis-provider':
+        specifier: 6.1.0-edge.2
+        version: link:../../RedisProvider
       '@memberjunction/scheduling-engine':
         specifier: 6.1.0-edge.2
         version: link:../../Scheduling/engine
@@ -14618,6 +14621,9 @@ importers:
       dotenv:
         specifier: 17.2.4
         version: 17.2.4
+      ioredis:
+        specifier: ^5.6.1
+        version: 5.10.0
       mssql:
         specifier: ^12.2.0
         version: 12.7.0

@@ -1,0 +1,26 @@
+<mj-collapsible-panel
+    SectionKey="formChrome"
+    SectionName="Form chrome"
+    Icon="fa-solid fa-table-columns"
+    [Form]="FormComponent"
+    [FormContext]="FormContext">
+    <div class="mj-form-chrome-editor">
+        <p class="mj-form-chrome-reason">
+            Weight of this relationship on the parent form. Auto uses the parent's
+            smart ranker (same-schema children stay top-level; cross-schema hang-ons
+            fold into More once the budget is exceeded).
+        </p>
+        <label class="mj-form-chrome-field">
+            <span>Form role</span>
+            <mj-dropdown
+                [Data]="Choices"
+                TextField="text"
+                ValueField="value"
+                [ValuePrimitive]="true"
+                [ngModel]="FormRole"
+                [Disabled]="!EditMode"
+                (ngModelChange)="OnRoleChange($event)">
+            </mj-dropdown>
+        </label>
+    </div>
+</mj-collapsible-panel>

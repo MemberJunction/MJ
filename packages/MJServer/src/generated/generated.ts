@@ -2196,16 +2196,23 @@ export class MJAction_ {
     
     @Field(() => [MJAction_])
     MJActions_ParentIDArray: MJAction_[]; // Link to MJActions
-    
+    // Relationship field to MJ_BizApps_Tasks: Task Notification Configs not generated: its GraphQL type is not declared in this file.
+
     @Field(() => [MJRecordProcess_])
     MJRecordProcesses_ActionIDArray: MJRecordProcess_[]; // Link to MJRecordProcesses
-    
+    // Relationship field to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+
     @Field(() => [MJAISkillAction_])
     MJAISkillActions_ActionIDArray: MJAISkillAction_[]; // Link to MJAISkillActions
     
     @Field(() => [MJTask_])
     MJTasks_ActionIDArray: MJTask_[]; // Link to MJTasks
-    
+    // Relationship field to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+
 }
 
 //****************************************************************************
@@ -2546,7 +2553,8 @@ export class MJActionResolver extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Actions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Tasks: Task Notification Configs not generated: its GraphQL type is not declared in this file.
+
     @FieldResolver(() => [MJRecordProcess_])
     async MJRecordProcesses_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Record Processes', userPayload);
@@ -2556,7 +2564,8 @@ export class MJActionResolver extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Processes', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+
     @FieldResolver(() => [MJAISkillAction_])
     async MJAISkillActions_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Skill Actions', userPayload);
@@ -2576,7 +2585,12 @@ export class MJActionResolver extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tasks', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+
     @Mutation(() => MJAction_)
     async CreateMJAction(
         @Arg('input', () => CreateMJActionInput) input: CreateMJActionInput,
@@ -31381,7 +31395,27 @@ export class MJCompany_ {
     
     @Field(() => [MJSignatureAccount_])
     MJSignatureAccounts_CompanyIDArray: MJSignatureAccount_[]; // Link to MJSignatureAccounts
-    
+    // Relationship field to MJ_BizApps_Accounting: Tax Liabilities not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: GL Accounts not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Intercompany Account Matches not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Intercompany Account Matches not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Journal Entry Sequences not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Journal Entries not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Company Tax Nexus not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Journal Entry Batches not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Accounting Company Profiles not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Payment Providers not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Products not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Promotions not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Order Company Policies not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Order Lines not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Product Categories not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Stored Value Accounts not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Payment Details not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Order Headers not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Subscriptions not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Payment Headers not generated: its GraphQL type is not declared in this file.
+
 }
 
 //****************************************************************************
@@ -31568,7 +31602,27 @@ export class MJCompanyResolver extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Accounts', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Accounting: Tax Liabilities not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: GL Accounts not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Intercompany Account Matches not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Intercompany Account Matches not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Journal Entry Sequences not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Journal Entries not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Company Tax Nexus not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Journal Entry Batches not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Accounting Company Profiles not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Payment Providers not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Products not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Promotions not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Order Company Policies not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Order Lines not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Product Categories not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Stored Value Accounts not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Payment Details not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Order Headers not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Subscriptions not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Payment Headers not generated: its GraphQL type is not declared in this file.
+
     @Mutation(() => MJCompany_)
     async CreateMJCompany(
         @Arg('input', () => CreateMJCompanyInput) input: CreateMJCompanyInput,
@@ -47511,6 +47565,9 @@ export class MJEntity_ {
     @Field(() => Boolean, {description: `When 1, this entity may have rows removed by DELETE statements that do not go through BaseEntity.Delete() — purge and retention routines, or integration sync reconciling a remote source. Default 0, meaning every delete is expected to flow through BaseEntity so that record-change tracking, entity actions, cascade handling and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, and additionally requires DeleteType = 'Hard' — a direct DELETE removes the row outright rather than setting DeletedAt, which would defeat soft delete.`}) 
     AllowDirectSQLDelete: boolean;
         
+    @Field({nullable: true, description: `Optional JSON configuration bag for this entity (shape = IEntityConfiguration). Nested UI.Form holds generated-form chrome: Layout (accordion | left-nav | auto) and AutoLeftNavAt. NULL / omitted keys = today's behavior (accordion; every DisplayInForm relationship is first-class). Expand by adding a property on the interface — no schema change. Anything the engine filters or joins on stays a column; anything the UI or a BaseFormPolicy consumes at render time belongs here.`}) 
+    Configuration?: string;
+        
     @Field({nullable: true, description: `Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.`}) 
     CodeName?: string;
         
@@ -47640,7 +47697,8 @@ export class MJEntity_ {
     
     @Field(() => [MJUser_])
     MJUsers_LinkedEntityIDArray: MJUser_[]; // Link to MJUsers
-    
+    // Relationship field to MJ_BizApps_Common: Address Links not generated: its GraphQL type is not declared in this file.
+
     @Field(() => [MJAccessControlRule_])
     MJAccessControlRules_EntityIDArray: MJAccessControlRule_[]; // Link to MJAccessControlRules
     
@@ -47724,10 +47782,12 @@ export class MJEntity_ {
     
     @Field(() => [MJProcessRunDetail_])
     MJProcessRunDetails_EntityIDArray: MJProcessRunDetail_[]; // Link to MJProcessRunDetails
-    
+    // Relationship field to MJ_BizApps_Tasks: Task Assignments not generated: its GraphQL type is not declared in this file.
+
     @Field(() => [MJProcessRun_])
     MJProcessRuns_EntityIDArray: MJProcessRun_[]; // Link to MJProcessRuns
-    
+    // Relationship field to MJ_BizApps_Tasks: Task Links not generated: its GraphQL type is not declared in this file.
+
     @Field(() => [MJRecordProcessWatermark_])
     MJRecordProcessWatermarks_EntityIDArray: MJRecordProcessWatermark_[]; // Link to MJRecordProcessWatermarks
     
@@ -47757,10 +47817,13 @@ export class MJEntity_ {
     
     @Field(() => [MJMaterializedResult_])
     MJMaterializedResults_SourceEntityIDArray: MJMaterializedResult_[]; // Link to MJMaterializedResults
-    
+    // Relationship field to MJ_BizApps_Accounting: GL Account Links not generated: its GraphQL type is not declared in this file.
+
     @Field(() => [MJMaterializedResult_])
     MJMaterializedResults_GeneratedEntityIDArray: MJMaterializedResult_[]; // Link to MJMaterializedResults
-    
+    // Relationship field to MJ_BizApps_Accounting: Journal Entries not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Order Line Price Components not generated: its GraphQL type is not declared in this file.
+
 }
 
 //****************************************************************************
@@ -47968,6 +48031,9 @@ export class CreateMJEntityInput {
 
     @Field(() => Boolean, { nullable: true })
     AllowDirectSQLDelete?: boolean;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -48179,6 +48245,9 @@ export class UpdateMJEntityInput {
 
     @Field(() => Boolean, { nullable: true })
     AllowDirectSQLDelete?: boolean;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -48603,7 +48672,8 @@ export class MJEntityResolverBase extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Users', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Common: Address Links not generated: its GraphQL type is not declared in this file.
+
     @FieldResolver(() => [MJAccessControlRule_])
     async MJAccessControlRules_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Access Control Rules', userPayload);
@@ -48883,7 +48953,8 @@ export class MJEntityResolverBase extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Run Details', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Tasks: Task Assignments not generated: its GraphQL type is not declared in this file.
+
     @FieldResolver(() => [MJProcessRun_])
     async MJProcessRuns_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Process Runs', userPayload);
@@ -48893,7 +48964,8 @@ export class MJEntityResolverBase extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Runs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Tasks: Task Links not generated: its GraphQL type is not declared in this file.
+
     @FieldResolver(() => [MJRecordProcessWatermark_])
     async MJRecordProcessWatermarks_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Record Process Watermarks', userPayload);
@@ -48993,7 +49065,8 @@ export class MJEntityResolverBase extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Materialized Results', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Accounting: GL Account Links not generated: its GraphQL type is not declared in this file.
+
     @FieldResolver(() => [MJMaterializedResult_])
     async MJMaterializedResults_GeneratedEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Materialized Results', userPayload);
@@ -49003,7 +49076,9 @@ export class MJEntityResolverBase extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Materialized Results', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Accounting: Journal Entries not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Order Line Price Components not generated: its GraphQL type is not declared in this file.
+
     @Mutation(() => MJEntity_)
     async CreateMJEntity(
         @Arg('input', () => CreateMJEntityInput) input: CreateMJEntityInput,
@@ -53960,6 +54035,9 @@ export class MJEntityRelationship_ {
     @Field({nullable: true, description: `Optional JSON policy object that declares this relationship as a first-class related-record collection, so CodeGen can emit a typed DeclareRelatedRecords(...) declaration on the entity subclass. Shape is IRelatedRecordCollectionConfig: Name (the generated property name, e.g. "Lines"), Load ('explicit' | 'immediate' | 'lazy' | 'never'), Source ('database' | 'cache'), ReadOnly, OnRemove ('delete' | 'orphan' | 'refuse'), OrderBy, Sequence ({ Field, From }), and ClearAfterSave. Source 'cache' reads the related records from whichever loaded BaseEngine already holds that entity, costing no query, and defaults ReadOnly to true because those are the engine's own instances; 'lazy' fills on first access and requires both. RelatedEntity and RelatedEntityJoinField are NOT repeated here — they are read from this row's own columns. NULL means the relationship is not a declared collection, which is the default and reproduces pre-6.2 behaviour exactly.`}) 
     RelatedRecordCollection?: string;
         
+    @Field({nullable: true, description: `Optional JSON configuration bag for this relationship (shape = IEntityRelationshipConfiguration). Nested UI.FormRole is Primary (first-class chrome) or Detail (parked in a More group). Distinct from RelatedRecordCollection (composite-graph policy), DisplayComponentConfiguration (selected display-component knobs), and AdditionalFieldsToInclude (join-field names) — those columns are owned by CodeGen for other jobs. NULL / omitted keys = today's behavior (the relationship is first-class when DisplayInForm is set).`}) 
+    Configuration?: string;
+        
     @Field() 
     @MaxLength(255)
     Entity: string;
@@ -54073,6 +54151,9 @@ export class CreateMJEntityRelationshipInput {
     @Field({ nullable: true })
     RelatedRecordCollection: string | null;
 
+    @Field({ nullable: true })
+    Configuration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -54151,6 +54232,9 @@ export class UpdateMJEntityRelationshipInput {
 
     @Field({ nullable: true })
     RelatedRecordCollection?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -57501,7 +57585,8 @@ export class MJFile_ {
     
     @Field(() => [MJMLModel_])
     MJMLModels_ArtifactFileIDArray: MJMLModel_[]; // Link to MJMLModels
-    
+    // Relationship field to MJ_BizApps_Accounting: Journal Entries not generated: its GraphQL type is not declared in this file.
+
 }
 
 //****************************************************************************
@@ -57710,7 +57795,8 @@ export class MJFileResolver extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: ML Models', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Accounting: Journal Entries not generated: its GraphQL type is not declared in this file.
+
     @Mutation(() => MJFile_)
     async CreateMJFile(
         @Arg('input', () => CreateMJFileInput) input: CreateMJFileInput,
@@ -77437,7 +77523,8 @@ export class MJRole_ {
     
     @Field(() => [MJConversationWidgetInstance_])
     MJConversationWidgetInstances_GuestRoleIDArray: MJConversationWidgetInstance_[]; // Link to MJConversationWidgetInstances
-    
+    // Relationship field to MJ_BizApps_Orders: Sales Rules not generated: its GraphQL type is not declared in this file.
+
 }
 
 //****************************************************************************
@@ -77718,7 +77805,8 @@ export class MJRoleResolver extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Widget Instances', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Orders: Sales Rules not generated: its GraphQL type is not declared in this file.
+
     @Mutation(() => MJRole_)
     async CreateMJRole(
         @Arg('input', () => CreateMJRoleInput) input: CreateMJRoleInput,
@@ -94275,7 +94363,8 @@ export class MJUser_ {
     
     @Field(() => [MJWorkspace_])
     MJWorkspaces_UserIDArray: MJWorkspace_[]; // Link to MJWorkspaces
-    
+    // Relationship field to MJ_BizApps_Common: People not generated: its GraphQL type is not declared in this file.
+
     @Field(() => [MJAIAgentNote_])
     MJAIAgentNotes_UserIDArray: MJAIAgentNote_[]; // Link to MJAIAgentNotes
     
@@ -94485,7 +94574,8 @@ export class MJUser_ {
     
     @Field(() => [MJAIAgentSession_])
     MJAIAgentSessions_UserIDArray: MJAIAgentSession_[]; // Link to MJAIAgentSessions
-    
+    // Relationship field to MJ_BizApps_Tasks: Task Notification Logs not generated: its GraphQL type is not declared in this file.
+
     @Field(() => [MJAIAgentSessionBridgeParticipant_])
     MJAIAgentSessionBridgeParticipants_UserIDArray: MJAIAgentSessionBridgeParticipant_[]; // Link to MJAIAgentSessionBridgeParticipants
     
@@ -94506,7 +94596,14 @@ export class MJUser_ {
     
     @Field(() => [MJUserRoutineRecipient_])
     MJUserRoutineRecipients_UserIDArray: MJUserRoutineRecipient_[]; // Link to MJUserRoutineRecipients
-    
+    // Relationship field to MJ_BizApps_Orders: Sales Authorities not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Order Headers not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Accounting Company Profiles not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Order Headers not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Journal Entry Batches not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Payment Lines not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Journal Entry Batches not generated: its GraphQL type is not declared in this file.
+
 }
 
 //****************************************************************************
@@ -94951,7 +95048,8 @@ export class MJUserResolverBase extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Workspaces', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Common: People not generated: its GraphQL type is not declared in this file.
+
     @FieldResolver(() => [MJAIAgentNote_])
     async MJAIAgentNotes_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Notes', userPayload);
@@ -95651,7 +95749,8 @@ export class MJUserResolverBase extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Sessions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Tasks: Task Notification Logs not generated: its GraphQL type is not declared in this file.
+
     @FieldResolver(() => [MJAIAgentSessionBridgeParticipant_])
     async MJAIAgentSessionBridgeParticipants_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Session Bridge Participants', userPayload);
@@ -95721,7 +95820,14 @@ export class MJUserResolverBase extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routine Recipients', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Orders: Sales Authorities not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Order Headers not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Accounting Company Profiles not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Order Headers not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Journal Entry Batches not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Payment Lines not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Journal Entry Batches not generated: its GraphQL type is not declared in this file.
+
     @Mutation(() => MJUser_)
     async CreateMJUser(
         @Arg('input', () => CreateMJUserInput) input: CreateMJUserInput,

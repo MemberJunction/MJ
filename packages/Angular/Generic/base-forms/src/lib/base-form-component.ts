@@ -30,6 +30,8 @@ import {
 } from './types/form-types';
 import { FormStateService } from './form-state.service';
 import { EntityFormConfig } from './types/entity-form-config';
+import { CollectFormPanelRegistrations } from './panel-slot/collect-form-panel-registrations';
+import { ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
 
 /**
  * Abstract base class for all entity record forms in MemberJunction.
@@ -551,6 +553,14 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       return {};
   }
 
+  /**
+   * One grid over several FKs to the same related entity (Bill-To OR Ship-To).
+   */
+  public BuildRelationshipViewParamsForJoinFields(relatedEntityName: string, joinFields: readonly string[]): RunViewParams {
+    if (!this.record) return {};
+    return EntityInfo.BuildRelationshipViewParamsForJoinFields(this.record, relatedEntityName, joinFields);
+  }
+
   public GetEntityRelationshipByRelatedEntityName(relatedEntityName: string, relatedEntityJoinField?: string): EntityRelationshipInfo | undefined {
     if (this.record) {
       const r = <BaseEntity>this.record;
@@ -748,10 +758,32 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       collapsibleSections: this.Config?.CollapsibleSections,
       enableRecordLinks: this.Config?.EnableRecordLinks,
       showRelatedEntities: this.Config?.ShowRelatedEntities,
-      hiddenSectionKeys: this.Config?.HiddenSectionKeys,
+      hiddenSectionKeys: this.resolveHiddenSectionKeys(),
       visibleSectionKeys: this.Config?.VisibleSectionKeys,
       allowSectionReorder: this.resolveAllowSectionReorder()
     };
+  }
+
+  /**
+   * Config HiddenSectionKeys plus section keys winning contributions asked
+   * to hide (related-entity claims and `replacesSectionKey` field panels).
+   */
+  private resolveHiddenSectionKeys(): string[] | undefined {
+    const claimed = this.contributionHiddenSectionKeys();
+    const configured = this.Config?.HiddenSectionKeys;
+    if (claimed.length === 0) return configured;
+    return [...(configured ?? []), ...claimed];
+  }
+
+  private contributionHiddenSectionKeys(): string[] {
+    const entity = this.record?.EntityInfo;
+    if (!entity) return [];
+    return ContributionHiddenSectionKeys(
+      entity.Name,
+      entity.RelatedEntities,
+      entity.ChildEntities.map((child) => child.ID),
+      CollectFormPanelRegistrations(),
+    );
   }
 
   /**
@@ -997,6 +1029,25 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       return this.formStateService.hasCustomSectionOrder(entityName);
     }
     return false;
+  }
+
+  public getMoreSectionKeys(): string[] {
+    const entityName = this.getEntityName();
+    if (!entityName) return [];
+    return this.formStateService.getMoreSectionKeys(entityName) ?? [];
+  }
+
+  public getFirstClassSectionKeys(): string[] {
+    const entityName = this.getEntityName();
+    if (!entityName) return [];
+    return this.formStateService.getFirstClassSectionKeys(entityName) ?? [];
+  }
+
+  public setChromeMembership(moreSectionKeys: string[], firstClassSectionKeys: string[]): void {
+    const entityName = this.getEntityName();
+    if (entityName) {
+      this.formStateService.setChromeMembership(entityName, moreSectionKeys, firstClassSectionKeys);
+    }
   }
 
   public getSectionDisplayOrder(sectionKey: string): number {
