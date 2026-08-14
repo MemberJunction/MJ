@@ -197,7 +197,9 @@ export class RunCommand {
                     const output = OutputFormatter.formatTestResult(iterationResult, format);
                     console.log(output);
 
-                    if (iterationResult.status !== 'Passed') {
+                    // 'Skipped' is not a failure — the run visibly didn't execute, which the
+                    // formatter already surfaces; only hard failures flip the exit code.
+                    if (iterationResult.status !== 'Passed' && iterationResult.status !== 'Skipped') {
                         allPassed = false;
                     }
                 }
@@ -223,8 +225,8 @@ export class RunCommand {
                 // Clean up resources
                 await closeMJProvider();
 
-                // Exit with appropriate code
-                process.exit(result.status === 'Passed' ? 0 : 1);
+                // Exit with appropriate code ('Skipped' is visible-but-not-failing)
+                process.exit(result.status === 'Passed' || result.status === 'Skipped' ? 0 : 1);
             }
 
         } catch (error) {

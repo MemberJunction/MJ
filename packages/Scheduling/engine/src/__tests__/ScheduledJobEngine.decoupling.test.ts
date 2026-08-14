@@ -804,6 +804,8 @@ describe('T11: ExecuteScheduledJobs awaits each job (synchronous semantics prese
 // ============================================================================
 
 describe('T12: Sproc atomicity (covered at DB level)', () => {
+    // KNOWN LIMITATION: sproc atomicity is only provable against a real DB; covered by
+    // the Phase 1 sqlcmd acceptance run described below.
     it.skip('SKIPPED — atomicity tested directly against DB during Phase 1 acceptance', () => {
         // Functional test of spAcquireScheduledJobLock + spReleaseScheduledJobLockIfTokenMatches
         // was performed via sqlcmd against SJOB_Fix DB as part of Phase 1 / M1 acceptance.

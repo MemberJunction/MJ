@@ -1,7 +1,10 @@
 import { MaterializedColumnSpec } from './codeGenDatabaseProvider';
 import { SQLParser, type SQLSelectColumn } from '@memberjunction/sql-parser';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
-import { isObject, nodeType, columnName, type AstNode } from './materializationSqlAst';
+import {
+    isObject, nodeType, qualifiedColumn, identifiersEqual, isSetOperationRoot, soleStatement,
+    type AstNode, type AstObject,
+} from './materializationSqlAst';
 
 /**
  * Result-shape + key analysis for query materialization (CodeGen materialization phase,
@@ -202,6 +205,19 @@ export function qualifyParameterizedQuery(opts: {
      * Phase-2 enablement switch (finalize the read-time predicate injection first).
      */
     allowRowFilterBroad?: boolean;
+    /**
+     * The query's **rendered** SQL (a concrete instance — parameters already substituted). REQUIRED to
+     * qualify a `RowFilter` param: the verifier reports `filterColumn` as a BARE column name, and matching
+     * that name against the output-column list alone cannot tell `o.Status` (the predicate) apart from
+     * `c.Status` (the projected output) in a join, nor `BillRegion` (an alias over `ShipRegion`) apart from
+     * a real `BillRegion` column. Both mis-matches produce a materialized read that filters on a DIFFERENT
+     * column than the live query, with no error and no count-guard signal. See
+     * {@link proveFilterColumnBinding}. When omitted, RowFilter params are REFUSED (fail closed, §10) —
+     * the query stays live-only, which is always correct.
+     */
+    sql?: string;
+    /** Dialect used to parse {@link sql}. Required alongside it; RowFilter params refuse without both. */
+    dialect?: SQLParserDialect;
 }): ParamQualification {
     const { queryName, params, outputColumns } = opts;
     const allowPerValueCache = opts.allowPerValueCache ?? false;
@@ -252,6 +268,17 @@ export function qualifyParameterizedQuery(opts: {
         if (p.filterKind !== expectedKind) {
             return refuse(`query "${queryName}" param "${p.name}" operator "${op}" expects a ${expectedKind} value but the verifier reported "${p.filterKind ?? '(none)'}" — refusing under uncertainty`);
         }
+        // Qualifier-aware binding proof: the predicate's SOURCE column must provably be the very column the
+        // identically-named materialized OUTPUT column carries. A bare-name match is not that proof (join
+        // collision / alias rebinding) — and neither is broad-render's removal count, which is exactly 1 in
+        // both wrong cases. Without the rendered SQL there is nothing to prove it with → refuse (§10).
+        if (!opts.sql || !opts.dialect) {
+            return refuse(`query "${queryName}" param "${p.name}" filters on "${p.filterColumn}" but no rendered SQL was supplied to prove that predicate binds to the materialized output column of the same name — refusing under uncertainty (the query stays live-only)`);
+        }
+        const binding = proveFilterColumnBinding({ sql: opts.sql, dialect: opts.dialect, filterColumn: p.filterColumn });
+        if (!binding.provable) {
+            return refuse(`query "${queryName}" param "${p.name}" filters on "${p.filterColumn}" but that predicate cannot be proven to bind to the materialized output column of the same name: ${binding.reason} — a materialized read would filter a different column than the live query. Refusing (the query stays live-only).`);
+        }
         rowFilterColumns.push(p.filterColumn);
         readFilterSpec.push({ column: p.filterColumn, operator: op, paramName: p.name, kind: expectedKind });
     }
@@ -272,17 +299,197 @@ export function qualifyParameterizedQuery(opts: {
 
 // AST-walking primitives are shared with the param verifier + broad-render via ./materializationSqlAst
 // (single source of truth — see that module's header). extractGroupByTerms is GROUP-BY-specific and stays here.
-/** Extracts the top-level GROUP BY term nodes, normalizing node-sql-parser's dialect-varying shapes. */
-function extractGroupByTerms(sql: string, dialect: SQLParserDialect): AstNode[] {
-    const parsed = SQLParser.Astify(sql, dialect);
-    if (!parsed.astParsed || parsed.ast == null) return [];
-    const stmt = Array.isArray(parsed.ast) ? (parsed.ast.length === 1 ? parsed.ast[0] : null) : parsed.ast;
-    if (!isObject(stmt)) return [];
+/**
+ * Extracts the top-level GROUP BY term nodes, normalizing node-sql-parser's dialect-varying shapes.
+ * Returns `[]` (→ no key → full rebuild) for anything it cannot read as a single plain SELECT's GROUP BY.
+ *
+ * **Set-operation refusal (soundness-critical).** A `UNION` / `UNION ALL` / `EXCEPT` / `INTERSECT` parses to
+ * a SINGLE `select` root carrying `set_op`/`_next`, whose `groupby` and `columns` describe **only the first
+ * branch** (see {@link isSetOperationRoot}). Reading that root would report the first branch's grouping
+ * columns as the key of the WHOLE query — but the combined result legitimately contains one row per
+ * (branch × group), so those "key" columns are NOT unique across the result. The caller would then hash the
+ * key into the surrogate PK and pick the MERGE-upsert Incremental path, where the branches collide on the
+ * same hash and one silently overwrites the other — permanently wrong aggregates with no error. Refuse.
+ */
+function extractGroupByTerms(stmt: AstObject): AstNode[] {
     const gb = stmt.groupby;
     if (isObject(gb) && Array.isArray(gb.columns)) return gb.columns; // observed shape: { columns: [...] }
     if (Array.isArray(gb)) return gb; // some dialects emit a bare array
     if (isObject(gb) && Array.isArray(gb.value)) return gb.value; // …or { value: [...] }
     return [];
+}
+
+/**
+ * Parses `sql` and returns its sole plain-SELECT statement root, or null when that is not what it is —
+ * unparseable, multi-statement, a non-SELECT, or a SET OPERATION (see {@link isSetOperationRoot}, whose
+ * first-branch-only view every analyzer here must refuse). Every analyzer in this module goes through
+ * this one gate so no future reader can reintroduce a bare `ast[0]` set-op blind spot.
+ */
+function parseSoleSelectRoot(sql: string, dialect: SQLParserDialect): AstObject | null {
+    const parsed = SQLParser.Astify(sql, dialect);
+    if (!parsed.astParsed || parsed.ast == null) return null;
+    const stmt = soleStatement(parsed.ast);
+    if (!isObject(stmt) || nodeType(stmt) !== 'select') return null;
+    if (isSetOperationRoot(stmt)) return null;
+    return stmt;
+}
+
+/** Number of relations in a SELECT's FROM clause (each JOIN / comma source counts). 0 when unreadable. */
+function fromSourceCount(stmt: AstObject): number {
+    return Array.isArray(stmt.from) ? stmt.from.length : 0;
+}
+
+/**
+ * Whether a SELECT-list column reference and another reference to the same bare name (a GROUP BY term, a
+ * WHERE predicate operand) provably denote the SAME source column.
+ *
+ * With a SINGLE FROM relation, every reference to a given name necessarily resolves to that one relation,
+ * so the qualifier carries no information and the bare-name match is already a proof. With a JOIN the bare
+ * name is ambiguous — `o.Status` and `c.Status` are different columns — so BOTH sides must carry the same
+ * explicit qualifier; an unqualified reference on either side is unprovable and refuses (§10).
+ */
+function sourceRefsMatch(selectQualifier: string | null, refQualifier: string | null, singleSource: boolean): boolean {
+    if (singleSource) return true;
+    return identifiersEqual(selectQualifier, refQualifier);
+}
+
+/** Verdict of {@link proveFilterColumnBinding}: provable, or refused with the precise reason. */
+export interface FilterColumnBindingProof {
+    /** True ONLY when the predicate column is proven to be the same source column the output column carries. */
+    provable: boolean;
+    /** When not provable, the precise reason (logged; never guessed past). */
+    reason?: string;
+}
+
+/**
+ * Collects the table qualifiers of every reference to `column` inside an AST subtree, in encounter order.
+ * A `null` entry means an unqualified reference. Used to read the WHERE clause's view of a filter column.
+ */
+function collectColumnQualifiers(node: AstNode, column: string, found: (string | null)[]): void {
+    if (Array.isArray(node)) {
+        for (const child of node) collectColumnQualifiers(child, column, found);
+        return;
+    }
+    if (!isObject(node)) return;
+    const qc = qualifiedColumn(node);
+    if (qc != null) {
+        if (identifiersEqual(qc.column, column)) found.push(qc.qualifier);
+        return; // a column_ref has no further column_ref descendants
+    }
+    for (const [k, v] of Object.entries(node)) {
+        if (k !== 'loc') collectColumnQualifiers(v, column, found);
+    }
+}
+
+/**
+ * Proves that a verified row-filter predicate on `filterColumn` refers to **exactly** the materialized
+ * output column of that same name — the gap a bare-name `outputColumns.includes(filterColumn)` check leaves
+ * open, and which nothing downstream can close.
+ *
+ * Two silently-wrong-data cases motivate it, both of which pass every existing guard (in particular the
+ * broad-render count guard, since exactly ONE predicate is stripped in each):
+ *
+ *  - **Join collision** — `SELECT o.ID, c.Status FROM Orders o JOIN Customers c … WHERE o.Status = {{s}}`.
+ *    The output `Status` is the CUSTOMER's; the predicate is the ORDER's. The materialized read emits
+ *    `WHERE [Status] = @p0` against the customer's value.
+ *  - **Alias rebinding** — `SELECT ID, ShipRegion AS BillRegion FROM Orders WHERE BillRegion = {{r}}` on a
+ *    table that has BOTH columns. The materialized `BillRegion` column holds `ShipRegion` values, so the
+ *    read filters `ShipRegion = 'East'` while live filters `BillRegion = 'East'`.
+ *
+ * Refuses (never guesses) unless ALL of the following hold — falling back to the live query, always correct:
+ *  1. `sql` parses to a single plain SELECT (not multi-statement, not a set operation — a `UNION` root
+ *     exposes only its first branch, so nothing about the whole result can be proven from it);
+ *  2. the SELECT list is readable and not a wildcard (`SELECT *` hides the real output↔source mapping);
+ *  3. exactly ONE output column is named `filterColumn` (two would make the read-time predicate ambiguous);
+ *  4. that output column is a plain column reference, not a computed expression;
+ *  5. it projects the SAME source column name (no alias rebinding);
+ *  6. the WHERE clause references `filterColumn` under a single, consistent qualifier; and
+ *  7. that qualifier provably denotes the same relation as the output column's — trivially true for a
+ *     single-relation FROM, otherwise both must carry the same explicit qualifier ({@link sourceRefsMatch}).
+ *
+ * Pure — no DB/IO.
+ */
+export function proveFilterColumnBinding(opts: {
+    /** The query's RENDERED SQL (parameters substituted), still carrying the row-filter predicate. */
+    sql: string;
+    /** Dialect to parse with. */
+    dialect: SQLParserDialect;
+    /** The verifier-reported bare filter column name. */
+    filterColumn: string;
+}): FilterColumnBindingProof {
+    const { sql, dialect, filterColumn } = opts;
+    const refuse = (reason: string): FilterColumnBindingProof => ({ provable: false, reason });
+    if (!sql || sql.trim().length === 0) return refuse('no rendered SQL to analyze');
+
+    let root: AstObject | null;
+    let selectCols: SQLSelectColumn[];
+    try {
+        root = parseSoleSelectRoot(sql, dialect);
+        selectCols = SQLParser.ExtractSelectColumns(sql, dialect);
+    } catch {
+        return refuse('the rendered SQL could not be parsed');
+    }
+    if (root == null) {
+        return refuse('the rendered SQL is not a single plain SELECT (multi-statement, non-SELECT, or a UNION/EXCEPT/INTERSECT whose branches are not all visible)');
+    }
+    const outputCheck = resolveProvableOutputColumn(selectCols, filterColumn);
+    if (!outputCheck.provable) return refuse(outputCheck.reason);
+    const output = outputCheck.column;
+
+    const qualifiers: (string | null)[] = [];
+    collectColumnQualifiers(root.where, filterColumn, qualifiers);
+    if (qualifiers.length === 0) {
+        return refuse(`the WHERE clause of the rendered SQL has no reference to a column named "${filterColumn}"`);
+    }
+    const distinct = new Set(qualifiers.map((q) => (q == null ? '' : q.trim().toLowerCase())));
+    if (distinct.size > 1) {
+        return refuse(`the WHERE clause references "${filterColumn}" under ${distinct.size} different table qualifiers — the parameter's predicate cannot be attributed to one of them`);
+    }
+    const predicateQualifier = qualifiers[0];
+
+    const singleSource = fromSourceCount(root) === 1;
+    if (!singleSource && (predicateQualifier == null || output.TableQualifier == null)) {
+        return refuse(`the query reads ${fromSourceCount(root)} relations and the ${predicateQualifier == null ? 'WHERE predicate on' : 'SELECT-list projection of'} "${filterColumn}" is unqualified, so the name cannot be attributed to a single source`);
+    }
+    if (!sourceRefsMatch(output.TableQualifier, predicateQualifier, singleSource)) {
+        return refuse(`the WHERE predicate filters "${predicateQualifier}.${filterColumn}" but the output column "${filterColumn}" projects "${output.TableQualifier}.${filterColumn}" — a different source column`);
+    }
+    return { provable: true };
+}
+
+/** Either the proven output column, or the reason the projection could not be proven. */
+type OutputColumnResolution =
+    | { provable: true; column: SQLSelectColumn }
+    | { provable: false; reason: string };
+
+/**
+ * Resolves the single SELECT-list output column that a read-time filter on `filterColumn` would target,
+ * or the reason it is not provably that source column (wildcard projection, duplicate/absent name,
+ * computed expression, or an alias rebinding a differently-named source column).
+ */
+function resolveProvableOutputColumn(selectCols: SQLSelectColumn[], filterColumn: string): OutputColumnResolution {
+    const no = (reason: string): OutputColumnResolution => ({ provable: false, reason });
+    if (!selectCols || selectCols.length === 0) {
+        return no('the SELECT list could not be read');
+    }
+    if (selectCols.some((c) => c.OutputName === '*')) {
+        return no('the query projects a wildcard (SELECT *), so the output-to-source column mapping is unknown');
+    }
+    const matches = selectCols.filter((c) => identifiersEqual(c.OutputName, filterColumn));
+    if (matches.length === 0) {
+        return no(`no SELECT-list output column is named "${filterColumn}"`);
+    }
+    if (matches.length > 1) {
+        return no(`the SELECT list projects ${matches.length} output columns named "${filterColumn}"`);
+    }
+    const output = matches[0];
+    if (output.IsExpression) {
+        return no(`the output column "${filterColumn}" is a computed expression, not a plain projection of a source column`);
+    }
+    if (!identifiersEqual(output.SourceColumn, filterColumn)) {
+        return no(`the output column "${filterColumn}" is an ALIAS over source column "${output.SourceColumn}", so filtering the materialized "${filterColumn}" is not the same predicate as the live "${filterColumn}"`);
+    }
+    return { provable: true, column: output };
 }
 
 /**
@@ -310,26 +517,34 @@ export function detectAggregationKeyColumns(opts: {
     // be at least one aggregate measure; (3) every grouping column must map to exactly one PROJECTED output
     // column (so the key is expressible in the materialized table — a grouped-but-unprojected column would
     // make the surrogate key too narrow and collide).
-    let groupByTerms: AstNode[];
+    let root: AstObject | null;
     let selectCols: SQLSelectColumn[];
     try {
-        groupByTerms = extractGroupByTerms(sql, dialect);
+        root = parseSoleSelectRoot(sql, dialect);
         selectCols = SQLParser.ExtractSelectColumns(sql, dialect);
     } catch {
         return null; // unparseable → not keyed (safe: synthetic surrogate + full rebuild)
     }
+    if (root == null) return null; // multi-statement / non-SELECT / set operation → refuse
+    const groupByTerms = extractGroupByTerms(root);
     if (groupByTerms.length === 0 || !selectCols || selectCols.length === 0) return null;
     if (groupByTerms.some((t) => nodeType(t) !== 'column_ref')) return null; // expression grouping → bail
     if (!selectCols.some((c) => c.IsExpression)) return null; // no aggregate measure → not an aggregation
 
+    // (4) A grouping term is matched to a projected output column by SOURCE COLUMN NAME — which is ambiguous
+    // across a join (`GROUP BY o.Region` vs. a projected `c.Region` are different columns). Require the table
+    // qualifiers to agree whenever there is more than one FROM relation; see sourceRefsMatch.
+    const singleSource = fromSourceCount(root) === 1;
     const fieldByOutput = new Map(fields.map((f) => [f.Name.trim().toLowerCase(), f]));
     const key: { name: string; type: string }[] = [];
     for (const term of groupByTerms) {
-        const gbName = columnName(term);
-        if (gbName == null) return null;
+        const gb = qualifiedColumn(term);
+        if (gb == null) return null;
         // The projected (non-expression) SELECT column whose pre-alias source column IS this grouping column.
         const projected = selectCols.filter(
-            (c) => !c.IsExpression && c.SourceColumn.trim().toLowerCase() === gbName.trim().toLowerCase(),
+            (c) => !c.IsExpression
+                && identifiersEqual(c.SourceColumn, gb.column)
+                && sourceRefsMatch(c.TableQualifier, gb.qualifier, singleSource),
         );
         if (projected.length !== 1) return null; // unprojected (0) or ambiguous (>1) → bail
         const f = fieldByOutput.get(projected[0].OutputName.trim().toLowerCase());

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderComponentFixture, query, text, hasClass } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, text, hasClass, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
 import { TestStatusBadgeComponent } from './test-status-badge.component';
 
 // Module-declared (standalone: false) leaf — configured purely via @Input.
@@ -65,5 +65,13 @@ describe('TestStatusBadgeComponent (DOM)', () => {
       inputs: { status },
     });
     expect(hasClass(fixture, '.test-status-badge', cls)).toBe(true);
+  });
+
+  it('has no axe accessibility violations (jsdom-safe rule set)', async () => {
+    const fixture = renderComponentFixture(TestStatusBadgeComponent, {
+      declarations: [TestStatusBadgeComponent],
+      inputs: { status: 'Passed' },
+    });
+    await ExpectNoAxeViolations(fixture);
   });
 });
