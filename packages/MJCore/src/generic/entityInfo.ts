@@ -2616,6 +2616,35 @@ export class EntityInfo extends BaseInfo {
 
         return params;
     }
+
+    /**
+     * One related-entity grid over several join fields (Bill-To OR Ship-To).
+     * New records still default to the first join field.
+     */
+    public static BuildRelationshipViewParamsForJoinFields(
+        record: BaseEntity,
+        relatedEntityName: string,
+        joinFields: readonly string[],
+    ): RunViewParams {
+        const fields = joinFields.map((f) => f.trim()).filter((f) => f.length > 0);
+        if (fields.length === 0) return { EntityName: relatedEntityName };
+        if (fields.length === 1) {
+            const rel = record.EntityInfo.RelatedEntities.find((r) =>
+                r.RelatedEntity.trim().toLowerCase() === relatedEntityName.trim().toLowerCase()
+                && r.RelatedEntityJoinField.trim().toLowerCase() === fields[0].toLowerCase(),
+            );
+            if (rel) return EntityInfo.BuildRelationshipViewParams(record, rel);
+        }
+
+        const firstKey = record.FirstPrimaryKey;
+        const keyValue = firstKey.Value;
+        const quotes = keyValue && firstKey.NeedsQuotes ? "'" : '';
+        const clauses = fields.map((field) => `[${field}] = ${quotes}${keyValue}${quotes}`);
+        return {
+            EntityName: relatedEntityName,
+            ExtraFilter: clauses.join(' OR '),
+        };
+    }
     
     /**
      * Builds a simple javascript object that will pre-populate a new record in the related entity with values that link back to the specified record. 

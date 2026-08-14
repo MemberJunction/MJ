@@ -27,7 +27,14 @@ export const RELATED_ROLE_SCORE = {
     SameSchema: 100,
     OneToMany: 50,
     BeforeFieldTabs: 40,
-    SequenceBase: 100,
+    /**
+     * Cap for the inbound-relationship hub boost. A related entity that many
+     * other entities point at (Order Headers) outranks a satellite with two
+     * incoming keys (Task Activities). Applied as `min(cap, 20 * log2(count))`.
+     */
+    InboundHubCap: 120,
+    CreatedByJoin: -90,
+    SatelliteName: -70,
     PlatformSchema: -80,
 } as const;
 
@@ -106,6 +113,11 @@ export interface RelatedFormRoleCandidate {
     Type?: string | null;
     Sequence?: number | null;
     Configuration?: string | null;
+    /**
+     * How many EntityRelationships across metadata point at this related
+     * entity. Runtime-only — the ranker uses it as graph in-degree.
+     */
+    InboundRelationshipCount?: number | null;
 }
 
 export interface RelatedFormRoleAssignment {
@@ -170,7 +182,9 @@ export function ScoreRelatedFormRole(
     if (candidate.DisplayLocation === 'Before Field Tabs') {
         score += RELATED_ROLE_SCORE.BeforeFieldTabs;
     }
-    score += sequenceBoost(candidate.Sequence);
+    score += inboundHubBoost(candidate.InboundRelationshipCount);
+    score += createdByJoinPenalty(candidate.RelatedEntityJoinField);
+    score += satelliteNamePenalty(candidate.RelatedEntity);
     if (isPlatformSchema(candidate.RelatedEntitySchemaName) && !isPlatformSchema(parentSchemaName)) {
         score += RELATED_ROLE_SCORE.PlatformSchema;
     }
@@ -286,9 +300,28 @@ function isOneToMany(candidate: RelatedFormRoleCandidate): boolean {
     return type === 'ONE TO MANY';
 }
 
-function sequenceBoost(sequence: number | null | undefined): number {
-    const seq = effectiveSequence(sequence);
-    return Math.max(0, RELATED_ROLE_SCORE.SequenceBase - seq);
+function inboundHubBoost(count: number | null | undefined): number {
+    if (count == null || count <= 2) return 0;
+    return Math.min(
+        RELATED_ROLE_SCORE.InboundHubCap,
+        Math.round(20 * Math.log2(count)),
+    );
+}
+
+function createdByJoinPenalty(joinField: string | null | undefined): number {
+    const field = (joinField ?? '').trim();
+    if (/^(CreatedBy|UpdatedBy|DeletedBy|OwnedBy)/i.test(field)) {
+        return RELATED_ROLE_SCORE.CreatedByJoin;
+    }
+    return 0;
+}
+
+function satelliteNamePenalty(relatedEntity: string | null | undefined): number {
+    const name = (relatedEntity ?? '').toLowerCase();
+    if (/(activit|comment|log|notification|exemption|intent|assignment|dependenc|decision|tag link|stored value|payment method|entitlement|promotion code)/.test(name)) {
+        return RELATED_ROLE_SCORE.SatelliteName;
+    }
+    return 0;
 }
 
 function effectiveSequence(sequence: number | null | undefined): number {

@@ -116,19 +116,38 @@
                  (click)="OnMoreFolderToggle()"
                  (keydown.enter)="OnMoreFolderToggle()"
                  (keydown.space)="$event.preventDefault(); OnMoreFolderToggle()">
+              <span class="mj-forms-chrome-rail-handle is-spacer" aria-hidden="true"></span>
               <i [class]="MoreExpanded ? 'fa-solid fa-folder-open' : 'fa-solid fa-folder'"></i>
               <span class="mj-forms-chrome-rail-label">{{ more.Title }}</span>
-              <span class="mj-forms-chrome-rail-count">{{ more.SectionKeys.length }}</span>
+              <i class="fa-solid mj-forms-chrome-rail-more-toggle"
+                 [class.fa-minus]="MoreExpanded"
+                 [class.fa-plus]="!MoreExpanded"
+                 aria-hidden="true"></i>
             </div>
             @if (MoreExpanded) {
+              <div class="mj-forms-chrome-rail-more-tree">
               @for (child of ChromeMoreItems; track child.Key) {
                 <div class="mj-forms-chrome-rail-item is-more-child"
                      role="button"
                      tabindex="0"
                      [class.is-active]="ChromeActiveGroupKey === child.Key"
+                     [class.is-drag-over]="RailDragOverKey === child.Key"
                      (click)="OnChromeGroupActivate(child.Key)"
                      (keydown.enter)="OnChromeGroupActivate(child.Key)"
-                     (keydown.space)="$event.preventDefault(); OnChromeGroupActivate(child.Key)">
+                     (keydown.space)="$event.preventDefault(); OnChromeGroupActivate(child.Key)"
+                     (dragover)="OnRailDragOver($event, child.Key)"
+                     (dragleave)="OnRailDragLeave($event, child.Key)"
+                     (drop)="OnRailDrop($event, child.Key)">
+                  @if (ChromeReorderAllowed) {
+                    <span class="mj-forms-chrome-rail-handle"
+                          title="Drag to reorder"
+                          draggable="true"
+                          (dragstart)="OnRailDragStart($event, child.Key)"
+                          (dragend)="OnRailDragEnd()"
+                          (click)="$event.stopPropagation()">
+                      <i class="fa-solid fa-grip-vertical"></i>
+                    </span>
+                  }
                   <i [class]="child.Icon"></i>
                   <span class="mj-forms-chrome-rail-label">{{ child.Title }}</span>
                   @let childCount = ChromeGroupRowCount(child);
@@ -138,6 +157,7 @@
                   }
                 </div>
               }
+              </div>
             }
           }
         </nav>
@@ -170,15 +190,20 @@
           instead of at their preferred position.
         -->
         @if (ShowMoreToggle) {
-          <button type="button"
-                  class="mj-forms-more-toggle"
-                  [class.is-expanded]="MoreExpanded"
-                  (click)="OnMoreToggle()">
-            <i class="fa-solid fa-ellipsis"></i>
-            <span>More</span>
-            <span class="mj-forms-more-count">{{ MoreCount }}</span>
-            <i class="fa-solid" [class.fa-chevron-down]="MoreExpanded" [class.fa-chevron-right]="!MoreExpanded"></i>
-          </button>
+          <div class="mj-forms-more-overflow" [class.is-expanded]="MoreExpanded">
+            <button type="button"
+                    class="mj-forms-more-overflow-toggle"
+                    (click)="OnMoreToggle()">
+              <i [class]="MoreExpanded ? 'fa-solid fa-folder-open' : 'fa-solid fa-folder'"></i>
+              <span class="mj-forms-more-overflow-label">{{ MoreExpanded ? 'Hide more' : 'More' }}</span>
+              @if (!MoreExpanded && MorePreview) {
+                <span class="mj-forms-more-overflow-preview">{{ MorePreview }}</span>
+              }
+              <i class="fa-solid"
+                 [class.fa-chevron-down]="MoreExpanded"
+                 [class.fa-chevron-right]="!MoreExpanded"></i>
+            </button>
+          </div>
         }
 
         @if (Record && FormComponent) {
@@ -264,8 +289,11 @@
 <mj-section-manager
   [Sections]="SectionManagerItems"
   [SectionOrder]="SectionManagerOrder"
+  [MoreSectionKeys]="SectionManagerMoreKeys"
+  [LockedMoreKeys]="SectionManagerLockedMoreKeys"
   [Visible]="ShowSectionManager"
   (SectionOrderChange)="OnSectionOrderChange($event)"
+  (MembershipChange)="OnChromeMembershipChange($event)"
   (ResetRequested)="OnSectionManagerReset()"
   (Closed)="OnSectionManagerClosed()">
 </mj-section-manager>

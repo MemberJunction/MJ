@@ -85,6 +85,11 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
      * is not a collapsible panel. Must name a concrete `entity` (not `'*'`).
      */
     replacesSectionKey?: string;
+    /**
+     * Pin this contribution to a chrome bucket instead of its own rail item.
+     * `'details'` — leftover own-fields group. `'more'` — overflow folder.
+     */
+    chromeGroup?: 'details' | 'more';
 }
 
 /**

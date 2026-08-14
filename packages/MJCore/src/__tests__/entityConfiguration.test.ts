@@ -114,6 +114,39 @@ describe('ScoreRelatedFormRole', () => {
         expect(score).toBeGreaterThan(0);
     });
 
+    it('boosts a hub entity with many inbound relationships over a satellite', () => {
+        const orders = ScoreRelatedFormRole(candidate({
+            ID: 'hub',
+            RelatedEntity: 'MJ_BizApps_Orders: Order Headers',
+            RelatedEntitySchemaName: ORDERS,
+            InboundRelationshipCount: 22,
+        }), COMMON);
+        const activities = ScoreRelatedFormRole(candidate({
+            ID: 'sat',
+            RelatedEntity: 'MJ_BizApps_Tasks: Task Activities',
+            RelatedEntitySchemaName: 'MJ_BizApps_Tasks',
+            InboundRelationshipCount: 2,
+        }), COMMON);
+        expect(orders).toBeGreaterThan(activities);
+    });
+
+    it('penalizes CreatedBy join fields and activity/log satellites', () => {
+        const created = ScoreRelatedFormRole(candidate({
+            ID: 'cb',
+            RelatedEntity: 'MJ_BizApps_Tasks: Tasks',
+            RelatedEntityJoinField: 'CreatedByPersonID',
+            RelatedEntitySchemaName: 'MJ_BizApps_Tasks',
+        }), COMMON);
+        const billed = ScoreRelatedFormRole(candidate({
+            ID: 'bt',
+            RelatedEntity: 'MJ_BizApps_Orders: Order Headers',
+            RelatedEntityJoinField: 'BillToPersonID',
+            RelatedEntitySchemaName: ORDERS,
+            InboundRelationshipCount: 16,
+        }), COMMON);
+        expect(billed).toBeGreaterThan(created);
+    });
+
     it('treats a JoinView as not 1:N', () => {
         const one = ScoreRelatedFormRole(candidate({
             ID: '6',

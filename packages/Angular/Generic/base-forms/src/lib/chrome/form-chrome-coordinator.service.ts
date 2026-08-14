@@ -25,18 +25,27 @@ export class FormChromeCoordinator {
     }
 
     public IsRelatedSectionVisible(sectionKey: string): boolean {
-        const role = this.Spec.RelatedRoles.get(sectionKey);
-        if (role !== 'Detail') {
-            return this.isLeftNavVisible(sectionKey);
+        if (this.Spec.Layout === 'accordion') {
+            return this.IsAccordionSectionVisible(sectionKey);
         }
-        if (this.Spec.Layout === 'left-nav') {
-            return this.isLeftNavVisible(sectionKey);
-        }
-        return this.MoreExpanded;
+        return this.isLeftNavVisible(sectionKey);
     }
 
     public IsFirstClassSectionVisible(sectionKey: string): boolean {
+        if (this.Spec.Layout === 'accordion') {
+            return this.IsAccordionSectionVisible(sectionKey);
+        }
         return this.isLeftNavVisible(sectionKey);
+    }
+
+    /**
+     * Accordion hides every More member — field panels included — until
+     * the overflow footer is expanded. Left-nav does not use this.
+     */
+    public IsAccordionSectionVisible(sectionKey: string): boolean {
+        if (this.Spec.Layout !== 'accordion') return true;
+        if (this.Spec.MoreSectionKeys.includes(sectionKey)) return this.MoreExpanded;
+        return true;
     }
 
     public SetActiveGroup(groupKey: string): void {

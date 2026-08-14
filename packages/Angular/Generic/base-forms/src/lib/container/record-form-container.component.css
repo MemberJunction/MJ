@@ -89,7 +89,8 @@ mj-record-form-container {
 /* Left-nav: only the active rail item is in the body. Slot-mounted
    panels never inject the container coordinator, so host classes set
    from the container are the hide/show channel that always reaches them. */
-.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-hidden {
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-hidden,
+.mj-forms-layout--accordion mj-collapsible-panel.mj-chrome-hidden {
   display: none;
 }
 
@@ -152,45 +153,60 @@ mj-record-form-container {
 
 /* Hide related entity panels in edit mode (variant host class on mj-collapsible-panel) */
 .mj-forms-panels--edit-mode .mj-panel--related-entity,
-.mj-forms-panels--edit-mode .mj-forms-more-toggle {
+.mj-forms-panels--edit-mode .mj-forms-more-overflow {
   display: none;
 }
 
-/* Detail related grids sort after the More toggle */
-mj-collapsible-panel.mj-form-role-detail {
+/* Detail / More panels sort after the overflow footer */
+mj-collapsible-panel.mj-form-role-detail,
+mj-collapsible-panel.mj-form-role-more {
   order: 8500;
 }
 
-.mj-forms-more-toggle {
+.mj-forms-more-overflow {
   order: 8400;
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--mj-border-subtle);
+}
+
+.mj-forms-more-overflow-toggle {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 14px 18px;
-  border: 1px solid var(--mj-border-default);
-  border-radius: var(--mj-radius-md);
-  background: var(--mj-bg-surface-card);
-  color: var(--mj-text-primary);
+  padding: 6px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--mj-text-muted);
   font-size: var(--mj-text-sm);
-  font-weight: var(--mj-font-semibold);
   cursor: pointer;
   text-align: left;
 }
 
-.mj-forms-more-toggle:hover {
-  background: var(--mj-bg-surface-hover);
+.mj-forms-more-overflow-toggle:hover {
+  color: var(--mj-text-secondary);
 }
 
-.mj-forms-more-count {
+.mj-forms-more-overflow-label {
+  font-weight: var(--mj-font-semibold);
+}
+
+.mj-forms-more-overflow-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--mj-text-disabled);
+  font-weight: var(--mj-font-normal);
+}
+
+.mj-forms-more-overflow-toggle .fa-chevron-right,
+.mj-forms-more-overflow-toggle .fa-chevron-down {
   margin-left: auto;
-  min-width: 1.5rem;
-  padding: 0 8px;
-  border-radius: var(--mj-radius-full);
-  background: var(--mj-bg-surface-sunken);
-  color: var(--mj-text-secondary);
-  font-size: var(--mj-text-xs);
-  text-align: center;
 }
 
 .mj-forms-chrome-rail {
@@ -242,7 +258,7 @@ mj-collapsible-panel.mj-form-role-detail {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 0;
+  width: 14px;
   height: 18px;
   margin-left: -4px;
   color: var(--mj-text-muted);
@@ -250,13 +266,18 @@ mj-collapsible-panel.mj-form-role-detail {
   opacity: 0;
   overflow: hidden;
   flex-shrink: 0;
-  transition: width var(--mj-transition-base, 0.15s) ease, opacity var(--mj-transition-base, 0.15s) ease;
+  transition: opacity var(--mj-transition-base, 0.15s) ease;
 }
 
 .mj-forms-chrome-rail-item:hover .mj-forms-chrome-rail-handle,
 .mj-forms-chrome-rail-item.is-active .mj-forms-chrome-rail-handle {
-  width: 14px;
   opacity: 1;
+}
+
+.mj-forms-chrome-rail-handle.is-spacer {
+  opacity: 0;
+  pointer-events: none;
+  cursor: default;
 }
 
 .mj-forms-chrome-rail-handle:hover {
@@ -268,11 +289,52 @@ mj-collapsible-panel.mj-form-role-detail {
 }
 
 .mj-forms-chrome-rail-item.is-more-folder {
-  margin-top: 4px;
+  position: relative;
+  margin-top: 14px;
+  padding-top: 14px;
+  color: var(--mj-text-muted);
+  border-radius: 0;
+}
+
+.mj-forms-chrome-rail-item.is-more-folder::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 8px;
+  right: 8px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--mj-border-strong) 18%,
+    var(--mj-border-strong) 82%,
+    transparent 100%
+  );
+}
+
+.mj-forms-chrome-rail-item.is-more-folder:hover {
+  background: transparent;
+  color: var(--mj-text-secondary);
+}
+
+.mj-forms-chrome-rail-item.is-more-folder.is-expanded {
+  color: var(--mj-text-secondary);
+}
+
+.mj-forms-chrome-rail-more-toggle {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--mj-text-muted);
+}
+
+.mj-forms-chrome-rail-more-tree {
+  margin-left: 22px;
+  padding-left: 6px;
+  border-left: 1px solid var(--mj-border-subtle);
 }
 
 .mj-forms-chrome-rail-item.is-more-child {
-  padding-left: 28px;
+  padding-left: 8px;
 }
 
 .mj-forms-chrome-rail-count.is-zero {

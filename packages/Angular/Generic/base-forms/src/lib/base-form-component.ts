@@ -553,6 +553,14 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       return {};
   }
 
+  /**
+   * One grid over several FKs to the same related entity (Bill-To OR Ship-To).
+   */
+  public BuildRelationshipViewParamsForJoinFields(relatedEntityName: string, joinFields: readonly string[]): RunViewParams {
+    if (!this.record) return {};
+    return EntityInfo.BuildRelationshipViewParamsForJoinFields(this.record, relatedEntityName, joinFields);
+  }
+
   public GetEntityRelationshipByRelatedEntityName(relatedEntityName: string, relatedEntityJoinField?: string): EntityRelationshipInfo | undefined {
     if (this.record) {
       const r = <BaseEntity>this.record;
@@ -1021,6 +1029,25 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       return this.formStateService.hasCustomSectionOrder(entityName);
     }
     return false;
+  }
+
+  public getMoreSectionKeys(): string[] {
+    const entityName = this.getEntityName();
+    if (!entityName) return [];
+    return this.formStateService.getMoreSectionKeys(entityName) ?? [];
+  }
+
+  public getFirstClassSectionKeys(): string[] {
+    const entityName = this.getEntityName();
+    if (!entityName) return [];
+    return this.formStateService.getFirstClassSectionKeys(entityName) ?? [];
+  }
+
+  public setChromeMembership(moreSectionKeys: string[], firstClassSectionKeys: string[]): void {
+    const entityName = this.getEntityName();
+    if (entityName) {
+      this.formStateService.setChromeMembership(entityName, moreSectionKeys, firstClassSectionKeys);
+    }
   }
 
   public getSectionDisplayOrder(sectionKey: string): number {

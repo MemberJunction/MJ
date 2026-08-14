@@ -27,7 +27,7 @@ import type { FormContributionWinner } from './form-contribution';
                     [Params]="FormComponent.BuildRelationshipViewParamsByEntityName(Contribution.RelatedEntity!, Contribution.RelatedJoinField)"
                     [NewRecordValues]="FormComponent.NewRecordValues(Contribution.RelatedEntity!)"
                     [AllowLoad]="FormComponent.IsSectionExpanded(Contribution.BakedSectionKey)"
-                    [ShowToolbar]="false"
+                    [ShowToolbar]="true"
                     (Navigate)="FormComponent.OnFormNavigate($event)"
                     (AfterDataLoad)="onDataLoad($event)">
                 </mj-explorer-entity-data-grid>
