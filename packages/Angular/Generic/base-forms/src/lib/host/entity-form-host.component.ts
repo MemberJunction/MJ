@@ -115,9 +115,16 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   @Input() SectionName: string | null = null;
 
   private _editMode: boolean | null = null;
-  /** Force edit mode. When omitted, new records start in edit, existing in read. */
+  /**
+   * Force edit mode. When omitted, new records start in edit, existing in read.
+   * Changes after mount are pushed onto the live form so an embed stays
+   * aligned with its parent (e.g. an order going in/out of edit).
+   */
   @Input()
-  set EditMode(value: boolean | null) { this._editMode = value; }
+  set EditMode(value: boolean | null) {
+    this._editMode = value;
+    this.syncMountedEditMode();
+  }
   get EditMode(): boolean | null { return this._editMode; }
 
   /** Per-instance form presentation config (toolbar, sections, width, links). */
@@ -277,7 +284,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       instance.record = record;
       instance.userPermissions = permissions;
       instance.Config = this.effectiveConfigFor(record);
-      instance.EditMode = this._editMode ?? this.Config?.StartInEditMode ?? !record.IsSaved;
+      instance.EditMode = this.resolveInitialEditMode(record);
 
       this.applyVariants(instance, resolution, entityName);
       this.subscribeToFormEvents(instance);
@@ -292,6 +299,9 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
     } finally {
       this.loading = false;
       this.cdr.detectChanges();
+      // Child ngOnInit StartEditMode() for unsaved records can overwrite the
+      // assignment above — re-apply the bound parent mode after that runs.
+      this.syncMountedEditMode();
     }
   }
 
@@ -341,10 +351,33 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
     const instance = ref.instance as BaseFormSectionComponent & { userPermissions?: unknown };
     instance.record = record;
     instance.userPermissions = permissions;
-    instance.EditMode = this._editMode ?? this.Config?.StartInEditMode ?? !record.IsSaved;
+    instance.EditMode = this.resolveInitialEditMode(record);
 
     this.RecordReady.emit(record);
     this.LoadComplete.emit();
+    this.syncMountedEditMode();
+  }
+
+  private resolveInitialEditMode(record: BaseEntity): boolean {
+    return this._editMode ?? this.Config?.StartInEditMode ?? !record.IsSaved;
+  }
+
+  /**
+   * Push the bound {@link EditMode} onto the mounted form/section. No-op when
+   * the input is unset — then the form keeps whatever `resolveInitialEditMode`
+   * (and the child's own ngOnInit) decided.
+   */
+  private syncMountedEditMode(): void {
+    if (this._editMode == null) return;
+    const formRef = this._formComponentRef;
+    const form = formRef?.instance;
+    if (form && form.EditMode !== this._editMode) {
+      if (this._editMode) form.StartEditMode();
+      else form.EndEditMode();
+      formRef.changeDetectorRef.detectChanges();
+    }
+    const section = this._sectionRef?.instance;
+    if (section) section.EditMode = this._editMode;
   }
 
   /** Resolve the BaseEntity to bind: the supplied instance, or a freshly loaded/new one. */

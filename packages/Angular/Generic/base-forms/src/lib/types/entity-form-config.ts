@@ -80,6 +80,14 @@ export interface EntityFormConfig {
    * records in edit mode and existing records in read mode.
    */
   StartInEditMode?: boolean;
+
+  /**
+   * Hide panels tagged `Variant="inherited"` (IS-A parent fields). Used when
+   * the form is embedded inside the parent record so those fields are already
+   * on screen. Does not mutate the form design — the panels stay in the
+   * template and are hidden at runtime.
+   */
+  HideInheritedSections?: boolean;
 }
 
 /**
@@ -156,6 +164,7 @@ export interface SectionVisibilityRules {
   showRelatedEntities?: boolean;
   hiddenSectionKeys?: string[];
   visibleSectionKeys?: string[];
+  hideInheritedSections?: boolean;
 }
 
 /**
@@ -178,5 +187,6 @@ export function IsFormSectionHidden(
     return true;
   }
   if (config.showRelatedEntities === false && variant === 'related-entity') return true;
+  if (config.hideInheritedSections === true && variant === 'inherited') return true;
   return false;
 }

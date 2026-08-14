@@ -108,6 +108,8 @@ export interface FormContext {
   showRelatedEntities?: boolean;
   hiddenSectionKeys?: string[];
   visibleSectionKeys?: string[];
+  /** Hide panels tagged Variant="inherited" (IS-A parent fields). */
+  hideInheritedSections?: boolean;
 }
 
 /**

@@ -110,4 +110,16 @@ describe('IsFormSectionHidden', () => {
     const cfg: SectionVisibilityRules = { visibleSectionKeys: ['details'] };
     expect(IsFormSectionHidden(cfg, 'orders', related)).toBe(true);
   });
+
+  it('hides inherited panels when hideInheritedSections is true', () => {
+    const cfg: SectionVisibilityRules = { hideInheritedSections: true };
+    expect(IsFormSectionHidden(cfg, 'orderLines', 'inherited')).toBe(true);
+    expect(IsFormSectionHidden(cfg, 'attendeeInformation', 'default')).toBe(false);
+  });
+
+  it('hides the IS-A parent panel by section key even when Variant is missing', () => {
+    const cfg: SectionVisibilityRules = { hiddenSectionKeys: ['systemMetadata', 'orderLines'] };
+    expect(IsFormSectionHidden(cfg, 'orderLines', 'default')).toBe(true);
+    expect(IsFormSectionHidden(cfg, 'attendeeInformation', 'default')).toBe(false);
+  });
 });

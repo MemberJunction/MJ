@@ -750,6 +750,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       showRelatedEntities: this.Config?.ShowRelatedEntities,
       hiddenSectionKeys: this.Config?.HiddenSectionKeys,
       visibleSectionKeys: this.Config?.VisibleSectionKeys,
+      hideInheritedSections: this.Config?.HideInheritedSections,
       allowSectionReorder: this.resolveAllowSectionReorder()
     };
   }
