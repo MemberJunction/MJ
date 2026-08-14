@@ -49,7 +49,9 @@ vi.mock('@memberjunction/ai', async () => {
     const { IsTranscriptContinuation } = await import('../../../../Core/src/generic/transcriptContinuation');
     // Same reasoning for ResolveResponseDoneUsage — PURE and dependency-free, and it encodes the
     // provider-specific rule for WHERE usage lives on a response.done frame (xAI puts it at the
-    // top level, OpenAI under response.usage). The real implementation is the thing under test.
+    // top level, OpenAI under response.usage). Stubbing it would let this test restate that rule
+    // and drift from reality, which is how the xAI top-level-usage bug survived here in the first
+    // place — so the real implementation is the thing under test.
     const { ResolveResponseDoneUsage } = await import('../../../../Core/src/generic/realtimeUsage');
     return { BaseModel, BaseRealtimeModel, BaseLLM, BaseEmbeddings, BaseAudioGenerator, BaseImageGenerator, ErrorAnalyzer, RealtimeDiagLog, IsTranscriptContinuation, ResolveResponseDoneUsage };
 });

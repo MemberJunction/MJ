@@ -29,31 +29,234 @@ import * as path from 'path';
 /**
  * CLIENT CONTRACTS
  *
- * These define the fields that client code MUST send for each InputType.
- * When you add a new required field to a server InputType:
+ * These define the fields that client code sends for each InputType the
+ * GraphQLDataProvider puts on the wire. When you add a new REQUIRED field to a
+ * server InputType:
  * 1. Update the client code to send the field
  * 2. Add the field name to the corresponding contract below
+ *
+ * Each entry names the server file that owns the @InputType so the generic
+ * drift gate below can parse it. `fields` lists what the client always sends;
+ * conditionally-sent optional fields (e.g. MaxRows only when provided) are noted
+ * but only become gate failures if the server ever makes them required.
  *
  * This explicit contract approach is more reliable than parsing client code.
  */
 const CLIENT_CONTRACTS: Record<string, {
     description: string;
+    serverFile: string;
     clientFile: string;
     clientLocation: string;
     fields: string[];
 }> = {
     DeleteOptionsInput: {
         description: 'Options for entity delete operations',
+        serverFile: 'packages/MJServer/src/generic/DeleteOptionsInput.ts',
         clientFile: 'graphQLDataProvider.ts',
-        clientLocation: 'Delete() method, vars["options___"] assignment (~line 1665)',
+        clientLocation: 'Delete() method, vars["options___"] assignment',
         fields: [
             'SkipEntityAIActions',
             'SkipEntityActions',
             'ReplayOnly',
             'IsParentEntityDelete'
         ]
+    },
+    RestoreContextInput: {
+        description: 'Restore-lineage context mirrored onto Create/Update mutation inputs as RestoreContext___',
+        serverFile: 'packages/MJServer/src/generic/RestoreContextInput.ts',
+        clientFile: 'graphQLDataProvider.ts',
+        clientLocation: 'Save() method, vars.input["RestoreContext___"] assignment',
+        fields: [
+            'SourceChangeID',
+            'Reason'
+        ]
+    },
+    KeyValuePairInput: {
+        description: 'Key/value pairs sent as OldValues___ on Update mutations for concurrency checking',
+        serverFile: 'packages/MJServer/src/generic/KeyValuePairInput.ts',
+        clientFile: 'graphQLDataProvider.ts',
+        clientLocation: 'Save() method, vars.input["OldValues___"] entries',
+        fields: [
+            'Key',
+            'Value'
+        ]
+    },
+    KeyValuePairInputType: {
+        description: 'Field-name/value pairs inside CompositeKeyInputType (AfterKey cursors, GetRecordDependencies, record names)',
+        serverFile: 'packages/MJServer/src/generic/KeyInputOutputTypes.ts',
+        clientFile: 'graphQLDataProvider.ts',
+        clientLocation: 'ensureKeyValuePairValueIsString() + AfterKey serialization in InternalRunViews/RunViewsWithCacheCheck',
+        fields: [
+            'FieldName',
+            'Value'
+        ]
+    },
+    CompositeKeyInputType: {
+        description: 'Composite primary-key wrapper (AfterKey keyset cursors, dependency/record-name lookups)',
+        serverFile: 'packages/MJServer/src/generic/KeyInputOutputTypes.ts',
+        clientFile: 'graphQLDataProvider.ts',
+        clientLocation: 'AfterKey serialization + GetRecordDependencies/GetRecordDuplicates vars',
+        fields: [
+            'KeyValuePairs'
+        ]
+    },
+    RunViewByIDInput: {
+        description: 'Saved-view-by-ID RunView execution',
+        serverFile: 'packages/MJServer/src/generic/RunViewResolver.ts',
+        clientFile: 'graphQLDataProvider.ts',
+        clientLocation: 'InternalRunView()/InternalRunViews() ViewID branch innerParams',
+        fields: [
+            'ViewID',
+            'ExtraFilter',
+            'OrderBy',
+            'UserSearchString',
+            'Fields',
+            'IgnoreMaxRows',
+            'ForceAuditLog',
+            'ResultType',
+            'ExcludeUserViewRunID',
+            'ExcludeDataFromAllPriorViewRuns',
+            'OverrideExcludeFilter',
+            'SaveViewResults'
+            // Conditionally sent: MaxRows, StartRow, AfterKey, AuditLogDescription, BypassCache, Aggregates
+        ]
+    },
+    RunViewByNameInput: {
+        description: 'Saved-view-by-name RunView execution',
+        serverFile: 'packages/MJServer/src/generic/RunViewResolver.ts',
+        clientFile: 'graphQLDataProvider.ts',
+        clientLocation: 'InternalRunView()/InternalRunViews() ViewName branch innerParams',
+        fields: [
+            'ViewName',
+            'ExtraFilter',
+            'OrderBy',
+            'UserSearchString',
+            'Fields',
+            'IgnoreMaxRows',
+            'ForceAuditLog',
+            'ResultType',
+            'ExcludeUserViewRunID',
+            'ExcludeDataFromAllPriorViewRuns',
+            'OverrideExcludeFilter',
+            'SaveViewResults'
+            // Conditionally sent: MaxRows, StartRow, AfterKey, AuditLogDescription, BypassCache, Aggregates
+        ]
+    },
+    RunDynamicViewInput: {
+        description: 'Dynamic (EntityName-based) RunView execution',
+        serverFile: 'packages/MJServer/src/generic/RunViewResolver.ts',
+        clientFile: 'graphQLDataProvider.ts',
+        clientLocation: 'InternalRunView()/InternalRunViews() dynamic branch innerParams',
+        fields: [
+            'EntityName',
+            'ExtraFilter',
+            'OrderBy',
+            'UserSearchString',
+            'Fields',
+            'IgnoreMaxRows',
+            'ForceAuditLog',
+            'ResultType'
+            // Conditionally sent: MaxRows, StartRow, AfterKey, AuditLogDescription, BypassCache, Aggregates
+        ]
+    },
+    RunViewGenericInput: {
+        description: 'Batched RunViews execution (one entry per view in the batch)',
+        serverFile: 'packages/MJServer/src/generic/RunViewResolver.ts',
+        clientFile: 'graphQLDataProvider.ts',
+        clientLocation: 'InternalRunViews() innerParams array',
+        fields: [
+            'EntityName',
+            'ViewID',
+            'ViewName',
+            'ExtraFilter',
+            'OrderBy',
+            'UserSearchString',
+            'Fields',
+            'IgnoreMaxRows',
+            'ForceAuditLog',
+            'ResultType'
+            // Conditionally sent: MaxRows, StartRow, AfterKey, AuditLogDescription, BypassCache, Aggregates,
+            // and saved-view extras (ExcludeUserViewRunID, ExcludeDataFromAllPriorViewRuns, OverrideExcludeFilter, SaveViewResults)
+        ]
+    },
+    AggregateExpressionInput: {
+        description: 'Aggregate expressions attached to RunView requests',
+        serverFile: 'packages/MJServer/src/generic/RunViewResolver.ts',
+        clientFile: 'graphQLDataProvider.ts',
+        clientLocation: 'InternalRunView()/InternalRunViews()/RunViewsWithCacheCheck() Aggregates mapping',
+        fields: [
+            'expression',
+            'alias'
+        ]
+    },
+    RunViewCacheStatusInput: {
+        description: 'Client cache fingerprint for smart cache validation of a view',
+        serverFile: 'packages/MJServer/src/generic/RunViewResolver.ts',
+        clientFile: 'graphQLDataProvider.ts',
+        clientLocation: 'RunViewsWithCacheCheck() cacheStatus mapping',
+        fields: [
+            'maxUpdatedAt',
+            'rowCount'
+        ]
+    },
+    RunViewWithCacheCheckInput: {
+        description: 'Per-view envelope for the batched smart-cache-check query',
+        serverFile: 'packages/MJServer/src/generic/RunViewResolver.ts',
+        clientFile: 'graphQLDataProvider.ts',
+        clientLocation: 'RunViewsWithCacheCheck() input mapping',
+        fields: [
+            'params',
+            'cacheStatus'
+        ]
+    },
+    RunQueryInput: {
+        description: 'Batched RunQueries execution (one entry per query in the batch)',
+        serverFile: 'packages/MJServer/src/resolvers/QueryResolver.ts',
+        clientFile: 'graphQLDataProvider.ts',
+        clientLocation: 'InternalRunQueries() input mapping',
+        fields: [
+            'QueryID',
+            'QueryName',
+            'CategoryID',
+            'CategoryPath',
+            'Parameters',
+            'MaxRows',
+            'StartRow',
+            'ForceAuditLog',
+            'AuditLogDescription',
+            'Enrichment'
+        ]
+    },
+    RunQueryCacheStatusInput: {
+        description: 'Client cache fingerprint for smart cache validation of a query',
+        serverFile: 'packages/MJServer/src/resolvers/QueryResolver.ts',
+        clientFile: 'graphQLDataProvider.ts',
+        clientLocation: 'RunQueriesWithCacheCheck() cacheStatus mapping',
+        fields: [
+            'maxUpdatedAt',
+            'rowCount'
+        ]
+    },
+    RunQueryWithCacheCheckInput: {
+        description: 'Per-query envelope for the batched smart-cache-check query',
+        serverFile: 'packages/MJServer/src/resolvers/QueryResolver.ts',
+        clientFile: 'graphQLDataProvider.ts',
+        clientLocation: 'RunQueriesWithCacheCheck() input mapping',
+        fields: [
+            'params',
+            'cacheStatus'
+        ]
+    },
+    AdhocQueryInput: {
+        description: 'Ad-hoc SQL execution via ExecuteAdhocQuery',
+        serverFile: 'packages/MJServer/src/resolvers/AdhocQueryResolver.ts',
+        clientFile: 'graphQLDataProvider.ts',
+        clientLocation: 'RunAdhocQuery() input construction',
+        fields: [
+            'SQL'
+            // Conditionally sent: TimeoutSeconds, MaxRows, StartRow
+        ]
     }
-    // Add more InputType contracts here as needed
 };
 
 /**
@@ -75,8 +278,104 @@ interface InputTypeDefinition {
 }
 
 /**
+ * Given `content[index]` is a quote character (' " or `), returns the index just
+ * AFTER the matching closing quote, honoring backslash escapes.
+ */
+function skipStringLiteral(content: string, index: number): number {
+    const quote = content[index];
+    let i = index + 1;
+    while (i < content.length) {
+        const ch = content[i];
+        if (ch === '\\') {
+            i += 2;
+            continue;
+        }
+        if (ch === quote) {
+            return i + 1;
+        }
+        i++;
+    }
+    return i;
+}
+
+/**
+ * Given `content[openParenIndex]` is '(', returns the index of the balancing ')'.
+ * Parentheses inside string literals are ignored. Returns -1 if unbalanced.
+ */
+function findBalancedCloseParen(content: string, openParenIndex: number): number {
+    let depth = 0;
+    let i = openParenIndex;
+    while (i < content.length) {
+        const ch = content[i];
+        if (ch === "'" || ch === '"' || ch === '`') {
+            i = skipStringLiteral(content, i);
+            continue;
+        }
+        if (ch === '(') {
+            depth++;
+        } else if (ch === ')') {
+            depth--;
+            if (depth === 0) {
+                return i;
+            }
+        }
+        i++;
+    }
+    return -1;
+}
+
+/**
+ * Extracts every `@Field(...)`-decorated property from a class body.
+ *
+ * Uses a balanced-paren scan for the decorator arguments rather than a regex —
+ * type-graphql decorators routinely contain nested parens and parenthesized text
+ * inside description strings (e.g. `"SUM(OrderTotal)"`), which a regex-based scan
+ * terminates early on, mis-attributing `nullable: true` and inventing phantom
+ * fields out of option-object keys.
+ */
+function extractFieldsFromClassBody(classBody: string): InputTypeField[] {
+    const fields: InputTypeField[] = [];
+    let searchFrom = 0;
+    for (;;) {
+        const decoratorStart = classBody.indexOf('@Field(', searchFrom);
+        if (decoratorStart === -1) {
+            break;
+        }
+        const openParen = decoratorStart + '@Field'.length;
+        const closeParen = findBalancedCloseParen(classBody, openParen);
+        if (closeParen === -1) {
+            break;
+        }
+        searchFrom = closeParen + 1;
+
+        const decoratorContent = classBody.substring(openParen + 1, closeParen);
+        // The decorated property declaration immediately follows the decorator
+        // (whitespace only in between): `Name?: Type;`
+        const rest = classBody.substring(closeParen + 1);
+        const propertyMatch = rest.match(/^\s*(?:public\s+|readonly\s+)?(\w+)\??\s*:\s*([\w.]+)/);
+        if (!propertyMatch) {
+            continue;
+        }
+
+        const fieldName = propertyMatch[1];
+        const fieldType = propertyMatch[2];
+        if (fieldName === 'constructor' || fieldType === 'void') {
+            continue;
+        }
+
+        fields.push({
+            name: fieldName,
+            type: fieldType,
+            // Nullability in the GraphQL schema comes from the DECORATOR options,
+            // not from the TypeScript `?` — mirror type-graphql's semantics.
+            required: !/nullable\s*:\s*true/.test(decoratorContent),
+        });
+    }
+    return fields;
+}
+
+/**
  * Extract @InputType() decorated classes and their @Field() properties from a TypeScript file.
- * Uses regex parsing - works reliably for the standardized type-graphql decorator format.
  *
  * @param filePath - Path to the TypeScript file
  * @returns Array of InputType definitions found in the file
@@ -85,43 +384,15 @@ function extractInputTypesFromFile(filePath: string): InputTypeDefinition[] {
     const content = fs.readFileSync(filePath, 'utf-8');
     const inputTypes: InputTypeDefinition[] = [];
 
-    // Match @InputType() decorated classes
+    // Match @InputType() decorated classes; the body runs to the first `}` at column 0
     const classPattern = /@InputType\(\)\s*(?:export\s+)?class\s+(\w+)\s*\{([\s\S]*?)\n\}/g;
 
     let classMatch: RegExpExecArray | null;
     while ((classMatch = classPattern.exec(content)) !== null) {
-        const className = classMatch[1];
-        const classBody = classMatch[2];
-
-        const fields: InputTypeField[] = [];
-
-        // Match @Field() decorated properties
-        const fieldPattern = /@Field\(([^)]*(?:\([^)]*\)[^)]*)*)\)[\s\S]*?(\w+)(?:\?)?:\s*(\w+)/g;
-
-        let fieldMatch: RegExpExecArray | null;
-        while ((fieldMatch = fieldPattern.exec(classBody)) !== null) {
-            const fieldDecorator = fieldMatch[1];
-            const fieldName = fieldMatch[2];
-            const fieldType = fieldMatch[3];
-
-            if (fieldName === 'constructor' || fieldType === 'void') {
-                continue;
-            }
-
-            const isNullable = fieldDecorator.includes('nullable: true') ||
-                               fieldDecorator.includes('nullable:true');
-
-            fields.push({
-                name: fieldName,
-                type: fieldType,
-                required: !isNullable
-            });
-        }
-
         inputTypes.push({
-            name: className,
-            fields,
-            filePath
+            name: classMatch[1],
+            fields: extractFieldsFromClassBody(classMatch[2]),
+            filePath,
         });
     }
 
@@ -277,6 +548,69 @@ describe('GraphQL Schema Synchronization', () => {
         });
     });
 
+    // ────────────────────────────────────────────────────────────────────
+    // Generic drift gate: EVERY InputType the client sends is contracted.
+    // Adding a REQUIRED field to any of these server InputTypes without
+    // updating the client (and the contract above) fails here.
+    // ────────────────────────────────────────────────────────────────────
+    describe.each(Object.entries(CLIENT_CONTRACTS))('%s contract', (inputTypeName, contract) => {
+        const serverFilePath = path.join(MJ_ROOT, contract.serverFile);
+        const serverAvailable = fs.existsSync(serverFilePath);
+
+        it('parses the server InputType with at least one field', () => {
+            if (!serverAvailable) {
+                console.warn(`Skipping ${inputTypeName}: ${serverFilePath} not found`);
+                return;
+            }
+            const serverType = extractInputTypesFromFile(serverFilePath).find(t => t.name === inputTypeName);
+            expect(serverType, `@InputType ${inputTypeName} not found in ${contract.serverFile}`).toBeDefined();
+            expect(serverType!.fields.length).toBeGreaterThan(0);
+        });
+
+        it('covers every server-required field in the client contract', () => {
+            if (!serverAvailable) {
+                return;
+            }
+            const serverType = extractInputTypesFromFile(serverFilePath).find(t => t.name === inputTypeName);
+            expect(serverType).toBeDefined();
+
+            const requiredServerFields = serverType!.fields
+                .filter(f => f.required)
+                .map(f => f.name);
+            const missingFromContract = requiredServerFields.filter(f => !contract.fields.includes(f));
+
+            if (missingFromContract.length > 0) {
+                throw new Error(
+                    `SCHEMA DRIFT DETECTED!\n\n` +
+                    `Server ${inputTypeName} has required fields not in the client contract:\n` +
+                    `  Missing: ${missingFromContract.join(', ')}\n\n` +
+                    `To fix:\n` +
+                    `1. Update ${contract.clientFile} at ${contract.clientLocation}\n` +
+                    `   to send these fields with appropriate values\n` +
+                    `2. Add the field names to CLIENT_CONTRACTS['${inputTypeName}'].fields in schema-sync.test.ts`
+                );
+            }
+            expect(missingFromContract).toEqual([]);
+        });
+
+        it('only contracts fields that exist on the server InputType', () => {
+            if (!serverAvailable) {
+                return;
+            }
+            const serverType = extractInputTypesFromFile(serverFilePath).find(t => t.name === inputTypeName);
+            expect(serverType).toBeDefined();
+
+            // A contract field the server no longer defines means the client is sending
+            // a field the schema will REJECT ("Unknown field") — that's drift too.
+            const serverFieldNames = serverType!.fields.map(f => f.name);
+            const unknownInContract = contract.fields.filter(f => !serverFieldNames.includes(f));
+            expect(
+                unknownInContract,
+                `CLIENT_CONTRACTS['${inputTypeName}'] lists fields the server InputType no longer defines: ${unknownInContract.join(', ')}`
+            ).toEqual([]);
+        });
+    });
+
     describe('Server InputType Parsing', () => {
         it('should correctly parse DeleteOptionsInput from server', () => {
             const serverPath = path.join(MJ_ROOT, 'packages/MJServer/src/generic/DeleteOptionsInput.ts');
@@ -295,6 +629,45 @@ describe('GraphQL Schema Synchronization', () => {
             types[0].fields.forEach(field => {
                 expect(field.required).toBe(true);
             });
+        });
+
+        it('honors decorator nullability over TypeScript optionality and survives nested parens in descriptions', () => {
+            const serverPath = path.join(MJ_ROOT, 'packages/MJServer/src/generic/RunViewResolver.ts');
+            if (!fs.existsSync(serverPath)) {
+                return;
+            }
+
+            const types = extractInputTypesFromFile(serverPath);
+            const aggregate = types.find(t => t.name === 'AggregateExpressionInput');
+            expect(aggregate).toBeDefined();
+            // `expression` has a description containing "SUM(OrderTotal)" etc. — the balanced
+            // scanner must not terminate the decorator early or invent phantom fields.
+            expect(aggregate!.fields.map(f => f.name).sort()).toEqual(['alias', 'expression']);
+            expect(aggregate!.fields.find(f => f.name === 'expression')!.required).toBe(true);
+            expect(aggregate!.fields.find(f => f.name === 'alias')!.required).toBe(false);
+
+            const byID = types.find(t => t.name === 'RunViewByIDInput');
+            expect(byID).toBeDefined();
+            // Exactly one required field (ViewID) — everything else is decorator-nullable
+            expect(byID!.fields.filter(f => f.required).map(f => f.name)).toEqual(['ViewID']);
+            // No phantom fields from decorator option objects
+            expect(byID!.fields.map(f => f.name)).not.toContain('nullable');
+            expect(byID!.fields.map(f => f.name)).not.toContain('description');
+        });
+
+        it('parses nested InputType references (RunViewWithCacheCheckInput.params)', () => {
+            const serverPath = path.join(MJ_ROOT, 'packages/MJServer/src/generic/RunViewResolver.ts');
+            if (!fs.existsSync(serverPath)) {
+                return;
+            }
+
+            const types = extractInputTypesFromFile(serverPath);
+            const wrapper = types.find(t => t.name === 'RunViewWithCacheCheckInput');
+            expect(wrapper).toBeDefined();
+            expect(wrapper!.fields).toEqual([
+                { name: 'params', type: 'RunDynamicViewInput', required: true },
+                { name: 'cacheStatus', type: 'RunViewCacheStatusInput', required: false },
+            ]);
         });
     });
 });
