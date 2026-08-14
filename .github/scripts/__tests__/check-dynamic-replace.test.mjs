@@ -1,4 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   findViolations,
   classifyReplacementArg,
@@ -7,6 +12,40 @@ import {
 } from '../check-dynamic-replace.mjs';
 
 const linesOf = (v) => v.map((x) => x.line);
+
+const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), '..', 'check-dynamic-replace.mjs');
+
+/**
+ * Build a throwaway repo with the gate installed at its own `.github/scripts/`
+ * path. The gate resolves REPO_ROOT from `import.meta.url`, not from cwd, so it
+ * must be COPIED in — running the real one with `cwd` set would still scan MJ.
+ */
+function makeRepo(prefix) {
+  const repo = mkdtempSync(join(tmpdir(), prefix));
+  const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' });
+  mkdirSync(join(repo, '.github', 'scripts'), { recursive: true });
+  copyFileSync(SCRIPT, join(repo, '.github', 'scripts', 'check-dynamic-replace.mjs'));
+  mkdirSync(join(repo, 'packages', 'x'), { recursive: true });
+  git('init', '-q', '.');
+  git('config', 'user.email', 't@t');
+  git('config', 'user.name', 't');
+  return { repo, git };
+}
+
+function runGate(repo, args, env = {}) {
+  try {
+    return {
+      code: 0,
+      output: execFileSync('node', [join(repo, '.github', 'scripts', 'check-dynamic-replace.mjs'), ...args], {
+        cwd: repo,
+        encoding: 'utf8',
+        env: { ...process.env, ...env },
+      }),
+    };
+  } catch (err) {
+    return { code: err.status, output: `${err.stdout ?? ''}${err.stderr ?? ''}` };
+  }
+}
 
 describe('classifyReplacementArg', () => {
   it.each([
@@ -214,5 +253,126 @@ describe('findViolations', () => {
   it('does not mistake an object-literal brace for the end of an interpolation', () => {
     const src = 'const s = `${fn({ a: 1 })} tail`;\nb.replace(p, value);';
     expect(linesOf(findViolations(src))).toEqual([2]);
+  });
+});
+
+// ─── large diffs (#3769 follow-up) ────────────────────────────────
+//
+// `git diff --unified=0` over a real PR routinely runs to megabytes — the
+// materialization PR (#3735) alone produced 897 KB. `execFileSync` buffers the
+// whole thing and its default `maxBuffer` is 1 MiB, so the gate died with a raw
+// `spawnSync git ENOBUFS` stack and exit 1: an unrelated PR turned red, and the
+// message pointed at Node internals rather than at anything the author did.
+
+describe('large diffs', () => {
+  const repos = [];
+  afterAll(() => repos.forEach((r) => rmSync(r, { recursive: true, force: true })));
+
+  /** A source file with no `.replace(` in it, sized to blow past a buffer limit. */
+  const filler = (bytes) => {
+    const line = `export const pad${'x'.repeat(40)} = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';\n`;
+    return line.repeat(Math.ceil(bytes / line.length));
+  };
+
+  it('reports a verdict instead of crashing when the diff exceeds 1 MiB', () => {
+    const { repo, git } = makeRepo('dyn-replace-big-');
+    repos.push(repo);
+    writeFileSync(join(repo, 'packages', 'x', 'a.ts'), 'export const a = 1;\n');
+    git('add', '-A');
+    git('commit', '-qm', 'base');
+    git('branch', '-M', 'next');
+    git('checkout', '-qb', 'feat');
+    // ~2 MiB of added lines — comfortably over the 1 MiB default.
+    writeFileSync(join(repo, 'packages', 'x', 'big.ts'), filler(2 * 1024 * 1024));
+    git('add', '-A');
+    git('commit', '-qm', 'feat');
+
+    const { code, output } = runGate(repo, ['--base', 'next']);
+
+    expect(output).not.toContain('ENOBUFS');
+    expect(output).toContain('clean');
+    expect(code).toBe(0);
+  });
+
+  /**
+   * The buffer is generous but finite. When it IS exhausted the gate must say so
+   * and exit non-zero — never print "clean", which would report a pass over a
+   * scope it never actually read. Same doctrine as an unresolvable base ref.
+   */
+  it('fails loudly rather than reporting a pass when the diff exceeds the buffer', () => {
+    const { repo, git } = makeRepo('dyn-replace-cap-');
+    repos.push(repo);
+    writeFileSync(join(repo, 'packages', 'x', 'a.ts'), 'export const a = 1;\n');
+    git('add', '-A');
+    git('commit', '-qm', 'base');
+    git('branch', '-M', 'next');
+    git('checkout', '-qb', 'feat');
+    writeFileSync(join(repo, 'packages', 'x', 'big.ts'), filler(256 * 1024));
+    git('add', '-A');
+    git('commit', '-qm', 'feat');
+
+    // Squeeze the cap below the diff size rather than generating gigabytes.
+    const { code, output } = runGate(repo, ['--base', 'next'], { MJ_GIT_MAX_BUFFER: '4096' });
+
+    expect(output).not.toContain('clean');
+    expect(output).toMatch(/too large|exceeds|buffer/i);
+    expect(code).toBe(2);
+  });
+});
+
+// ─── direct-invocation detection (#3769 follow-up) ────────────────
+//
+// `invokedDirectly` compared `fileURLToPath(import.meta.url)` to `process.argv[1]`
+// as raw strings. Node resolves symlinks when loading an ES module, so the former
+// is the physical path while the latter keeps whatever the caller typed — on macOS
+// `os.tmpdir()` alone splits them (`/var/…` vs `/private/var/…`). The comparison
+// then decided "imported", and the gate printed nothing and exited 0: a silent
+// pass, the single outcome this script must never produce.
+
+describe('direct invocation', () => {
+  const repos = [];
+  afterAll(() => repos.forEach((r) => rmSync(r, { recursive: true, force: true })));
+
+  it('runs when invoked through a path that is not already a realpath', () => {
+    const { repo } = makeRepo('dyn-replace-symlink-');
+    repos.push(repo);
+    const { output } = runGate(repo, ['--help']);
+    expect(output).toContain('Usage:');
+  });
+});
+
+// ─── JSX (#3769 follow-up) ────────────────────────────────────────
+//
+// `.tsx`/`.jsx` are in SOURCE_EXTENSIONS, so the gate claims to cover them. But
+// the `/` of a closing tag sits right after `<`, which `isRegexPosition` read as
+// a regex opener — the scan then blanked everything from there to the next `/`
+// or newline. Any `.replace(` later on that line vanished, silently, in exactly
+// the file type React code lives in.
+
+describe('JSX', () => {
+  it('flags a dynamic replace after a closing tag on the same line', () => {
+    const src = 'return <p><b>{label}</b>{body.replace(re, userValue)}</p>;';
+    expect(findViolations(src)).toHaveLength(1);
+  });
+
+  it('flags a dynamic replace after a fragment close', () => {
+    const src = 'return <><Row /></>; const s = tpl.replace(re, userValue);';
+    expect(findViolations(src)).toHaveLength(1);
+  });
+
+  it('flags a dynamic replace inside a prop after a sibling closing tag', () => {
+    const src = 'return <div><A /></div><B x={s.replace(re, userValue)} />;';
+    expect(findViolations(src)).toHaveLength(1);
+  });
+
+  it('still accepts a replacement function in the same shape', () => {
+    const src = 'return <p><b>{label}</b>{body.replace(re, () => userValue)}</p>;';
+    expect(findViolations(src)).toHaveLength(0);
+  });
+
+  /** The `<` heuristic must not cost us real regex detection elsewhere. */
+  it('still treats a regex literal after a comparison as a regex', () => {
+    const src = 'if (a < /x,y/.source.length) { s.replace(p, value); }';
+    expect(findViolations(src)).toHaveLength(1);
   });
 });

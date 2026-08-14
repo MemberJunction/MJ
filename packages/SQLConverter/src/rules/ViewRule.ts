@@ -222,6 +222,11 @@ export class ViewRule implements IConversionRule {
     // Handles cases where convertIdentifiers already quoted [Col] → "Col". Same gate as above:
     // quote the reference only when the alias's own definition is case-preserved.
     sql = sql.replace(/\b([A-Za-z]\w*)\."(\w+)"/g, (match, alias: string) => {
+      // `alias` is captured by `([A-Za-z]\w*)` above, so it is word characters
+      // only and can never contain `$` — the replacement has no `$` for
+      // expansion to act on. Marked because the #3171 gate cannot see that
+      // constraint, and would otherwise fail the next PR to touch this line.
+      // safe-replace: alias is \w-only by construction, so the replacement is $-free
       return quotedAliases.has(alias) ? match.replace(`${alias}.`, `"${alias}".`) : match;
     });
     return sql;

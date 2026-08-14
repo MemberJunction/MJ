@@ -38,7 +38,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync, existsSync, statSync, readdirSync } from 'node:fs';
+import { readFileSync, existsSync, statSync, readdirSync, realpathSync } from 'node:fs';
 import { join, extname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -58,6 +58,22 @@ const SKIP_DIR_SEGMENTS = [
 ];
 
 /**
+ * Ceiling on what we'll buffer from a single git invocation.
+ *
+ * `execFileSync` buffers the child's whole stdout and defaults to just 1 MiB —
+ * far under what this gate asks for. `git diff --unified=0` over a real PR runs
+ * to megabytes (the materialization PR, #3735, produced 897 KB on its own), and
+ * once the default was exceeded the gate died with a raw `spawnSync git ENOBUFS`
+ * stack and exit 1: an unrelated PR turned red, pointing at Node internals
+ * rather than at anything its author wrote. 256 MiB is far above any plausible
+ * diff while still being a bound rather than "however much RAM there is".
+ *
+ * Overridable only so the exceeded-the-cap path stays testable without
+ * generating a quarter-gigabyte of diff.
+ */
+const GIT_MAX_BUFFER = Number(process.env.MJ_GIT_MAX_BUFFER) || 256 * 1024 * 1024;
+
+/**
  * Runs git with `core.quotePath=false` and `-C REPO_ROOT`, matching
  * `check-changeset-bump.mjs`. Without quotePath, git C-quotes any path holding
  * non-ASCII bytes (`"metadata/caf\303\251.json"`), and that file is then
@@ -66,6 +82,7 @@ const SKIP_DIR_SEGMENTS = [
 function git(args) {
   return execFileSync('git', ['-C', REPO_ROOT, '-c', 'core.quotePath=false', ...args], {
     encoding: 'utf8',
+    maxBuffer: GIT_MAX_BUFFER,
   });
 }
 
@@ -84,6 +101,12 @@ function isRegexPosition(source, index) {
   while (k >= 0 && /\s/.test(source[k])) k--;
   if (k < 0) return true;
   const prev = source[k];
+  // `</` with nothing between is a JSX closing tag, never a regex: no real JS or
+  // TS writes `a</re/`, but every `.tsx` file writes `</div>`. Without this, the
+  // `/` opened a "regex" that ran to the next `/` or newline, blanking the rest
+  // of the line — so a `.replace(p, value)` sitting after a closing tag was
+  // silently skipped in the one file type that is mostly closing tags.
+  if (prev === '<' && k === index - 1) return false;
   if ('(,=:[!&|?{};+-*%^~<>'.includes(prev)) return true;
   const word = /([A-Za-z_$]+)$/.exec(source.slice(0, k + 1));
   return word
@@ -350,7 +373,22 @@ function changedLines(baseRef) {
   }
 
   const touched = new Map();
-  const diff = git(['diff', '--unified=0', '--diff-filter=ACMR', mergeBase]);
+  let diff;
+  try {
+    diff = git(['diff', '--unified=0', '--diff-filter=ACMR', mergeBase]);
+  } catch (err) {
+    // Same doctrine as an unresolvable base: a gate that can't read its own
+    // scope must say so, not print "clean" over a diff it never saw.
+    if (err.code === 'ENOBUFS') {
+      console.error(
+        `✗ check-dynamic-replace: the diff against '${mergeBase}' is too large to buffer\n` +
+        `  (cap ${GIT_MAX_BUFFER} bytes, set MJ_GIT_MAX_BUFFER to raise it). Refusing to\n` +
+        `  report a pass over a scope that was never read.`,
+      );
+      process.exit(2);
+    }
+    throw err;
+  }
   let current = null;
   for (const line of diff.split('\n')) {
     const fileMatch = /^\+\+\+ b\/(.+)$/.exec(line);
@@ -448,6 +486,29 @@ function main(argv) {
   return 0;
 }
 
-const invokedDirectly =
-  process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
-if (invokedDirectly) process.exit(main(process.argv.slice(2)));
+/**
+ * Was this file run as the entry point, or merely imported (by its own tests)?
+ *
+ * Both sides are resolved through `realpathSync` first. Node follows symlinks
+ * when it loads an ES module, so `import.meta.url` is the PHYSICAL path while
+ * `process.argv[1]` keeps whatever the caller typed. Comparing them as raw
+ * strings therefore answers "imported" for any invocation through a symlink —
+ * on macOS a path under `os.tmpdir()` is enough (`/var/…` vs `/private/var/…`),
+ * and a repo checked out beneath a symlinked directory does it on every run.
+ * The gate then printed nothing, exited 0, and read as a pass: the one outcome
+ * this script must never produce.
+ */
+function isEntryPoint() {
+  if (!process.argv[1]) return false;
+  // A path that cannot be resolved is not this file; compare what we were given.
+  const resolved = (p) => {
+    try {
+      return realpathSync(p);
+    } catch {
+      return p;
+    }
+  };
+  return resolved(fileURLToPath(import.meta.url)) === resolved(process.argv[1]);
+}
+
+if (isEntryPoint()) process.exit(main(process.argv.slice(2)));
