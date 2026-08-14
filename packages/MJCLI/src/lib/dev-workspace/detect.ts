@@ -8,21 +8,26 @@
  * A sibling directory of the parent qualifies as a candidate when it has a root
  * `package.json` AND any of:
  *  - it carries an `mj-app.json` (an Open App repo),
- *  - any package.json one level under its `packages/` dir mentions the
- *    `@mj-biz-apps/` scope in its own name or dependency sections — such a repo
- *    either publishes into that scope or consumes it, which is exactly what
- *    makes linking it locally worthwhile,
+ *  - any package its workspace globs enumerate mentions the `@mj-biz-apps/`
+ *    scope in its own name or dependency sections — such a repo either publishes
+ *    into that scope or consumes it, which is exactly what makes linking it
+ *    locally worthwhile,
  *  - it is the MJ monorepo (root package name `memberjunction-workspace`).
  *
  * Each member's own `pnpm-workspace.yaml` is read here too: its `packages:` globs
- * (filtered to packages-rooted ones) become the member's {@link CandidateRepo.WorkspaceGlobs},
- * so a repo that nests its packages (the MJ monorepo declares 42 globs) contributes
- * all of them to the generated workspace instead of a hardcoded `packages/*` (#3795).
+ * (positives filtered to packages-rooted ones) become the member's
+ * {@link CandidateRepo.WorkspaceGlobs}, so a repo that nests its packages (the MJ
+ * monorepo declares 42 globs) contributes all of them to the generated workspace
+ * instead of a hardcoded `packages/*` (#3795). Those same globs drive the package
+ * ENUMERATION here, so nested packages feed the family `workspace:*` overrides —
+ * one-level enumeration would see 59 of MJ's 307 packages. The member's committed
+ * lockfile is loaded here too (see `lockfile.ts`).
  *
  * @module lib/dev-workspace/detect
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { ReadMemberLockfile } from './lockfile.js';
 import type { CandidateReason, CandidateRepo, MemberPackageInfo, MemberPackageJson, WorkspaceGlobsSource } from './types.js';
 
 /** Root package name that identifies the MJ monorepo checkout. */
@@ -34,6 +39,8 @@ export const DEFAULT_WORKSPACE_GLOBS: readonly string[] = ['packages/*'];
 /** Hard caps so every walk is bounded; hitting one is an error, not a truncation. */
 const MAX_SIBLING_DIRS = 500;
 const MAX_PACKAGES_PER_REPO = 1000;
+/** Directory-visit cap for one repo's recursive `**` glob walks. */
+const MAX_GLOB_WALK_DIRS = 30_000;
 /** Longest member pnpm-workspace.yaml we will parse (a bigger file is not plausibly one). */
 const MAX_MEMBER_WORKSPACE_YAML_BYTES = 1_000_000;
 
@@ -54,20 +61,107 @@ function readJsonFile(filePath: string): MemberPackageJson | null {
   }
 }
 
-/** Loads every package.json one level under a repo's `packages/` dir (bounded). */
-function loadRepoPackages(repoPath: string): MemberPackageInfo[] {
-  const packagesDir = path.join(repoPath, 'packages');
-  if (!existsSync(packagesDir) || !statSync(packagesDir).isDirectory()) return [];
-  const entries = readdirSync(packagesDir, { withFileTypes: true }).filter((e) => e.isDirectory());
-  if (entries.length > MAX_PACKAGES_PER_REPO) {
-    throw new Error(`${packagesDir} has ${entries.length} entries — over the ${MAX_PACKAGES_PER_REPO} cap; not a plausible packages dir`);
+/**
+ * Converts a workspace glob to an anchored RegExp over repo-relative paths:
+ * `*` matches within one segment; `**` matches across `/` INCLUDING zero
+ * segments (globstar-zero, as fast-glob/pnpm behave) — so a `!**\/dist\/**`
+ * guard rejects `packages/a/dist` itself, not only paths beneath it.
+ * Exported for tests.
+ */
+export function GlobToRegExp(glob: string): RegExp {
+  const escaped = glob.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = escaped
+    .replace(/\/\*\*/g, '<SLASH_GLOBSTAR>')
+    .replace(/\*\*\//g, '<GLOBSTAR_SLASH>')
+    .replace(/\*\*/g, '<GLOBSTAR>')
+    .replace(/\*/g, '[^/]*')
+    .replace(/<SLASH_GLOBSTAR>/g, '(?:/.*)?')
+    .replace(/<GLOBSTAR_SLASH>/g, '(?:.*/)?')
+    .replace(/<GLOBSTAR>/g, '.*');
+  return new RegExp(`^${pattern}$`);
+}
+
+/** True when any of the negation regexes rejects this repo-relative path. */
+function isNegated(relPath: string, negations: readonly RegExp[]): boolean {
+  return negations.some((negation) => negation.test(relPath));
+}
+
+/** Lists immediate subdirectories of a dir, skipping dot-dirs and node_modules. */
+function childDirs(dirPath: string): string[] {
+  if (!existsSync(dirPath) || !statSync(dirPath).isDirectory()) return [];
+  return readdirSync(dirPath, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules')
+    .map((e) => e.name);
+}
+
+/** Recursively collects package dirs under `base` for a `base/**` glob (bounded walk). */
+function walkRecursiveGlob(repoPath: string, base: string, negations: readonly RegExp[]): string[] {
+  const found: string[] = [];
+  const stack = [base];
+  let visited = 0;
+  while (stack.length > 0) {
+    const rel = stack.pop()!;
+    if (++visited > MAX_GLOB_WALK_DIRS) {
+      throw new Error(`Glob walk under ${path.join(repoPath, base)} exceeded ${MAX_GLOB_WALK_DIRS} directories — not a plausible packages tree`);
+    }
+    if (rel !== base && !isNegated(rel, negations) && existsSync(path.join(repoPath, rel, 'package.json'))) {
+      found.push(rel);
+    }
+    for (const child of childDirs(path.join(repoPath, rel))) {
+      stack.push(`${rel}/${child}`);
+    }
+  }
+  return found;
+}
+
+/**
+ * Expands one positive glob to package-dir paths relative to the repo root.
+ * Supported shapes (100% of those observed in the wild): a fixed path, a
+ * trailing `/*` (one level), a trailing `/**` (recursive). Anything else is
+ * refused — returned as unsupported so the command reports it, never silent.
+ */
+function expandPositiveGlob(repoPath: string, glob: string, negations: readonly RegExp[]): { Dirs: string[]; Unsupported: boolean } {
+  const hasPackageJson = (rel: string): boolean => existsSync(path.join(repoPath, rel, 'package.json'));
+  if (!glob.includes('*')) {
+    const keep = !isNegated(glob, negations) && hasPackageJson(glob);
+    return { Dirs: keep ? [glob] : [], Unsupported: false };
+  }
+  if (glob.endsWith('/*') && !glob.slice(0, -2).includes('*')) {
+    const base = glob.slice(0, -2);
+    const dirs = childDirs(path.join(repoPath, base))
+      .map((child) => `${base}/${child}`)
+      .filter((rel) => !isNegated(rel, negations) && hasPackageJson(rel));
+    return { Dirs: dirs, Unsupported: false };
+  }
+  if (glob.endsWith('/**') && !glob.slice(0, -3).includes('*')) {
+    return { Dirs: walkRecursiveGlob(repoPath, glob.slice(0, -3), negations), Unsupported: false };
+  }
+  return { Dirs: [], Unsupported: true };
+}
+
+/**
+ * Enumerates every package the member's own workspace globs cover — nested dirs
+ * included, so the family `workspace:*` overrides see all of MJ's 307 packages,
+ * not the 59 a one-level scan finds. Bounded; over-cap throws.
+ */
+function loadRepoPackages(repoPath: string, globs: readonly string[]): { Packages: MemberPackageInfo[]; UnsupportedGlobs: string[] } {
+  const negations = globs.filter((g) => g.startsWith('!')).map((g) => GlobToRegExp(g.slice(1)));
+  const unsupported: string[] = [];
+  const seen = new Set<string>();
+  for (const glob of globs.filter((g) => !g.startsWith('!'))) {
+    const expanded = expandPositiveGlob(repoPath, glob, negations);
+    if (expanded.Unsupported) unsupported.push(glob);
+    for (const dir of expanded.Dirs) seen.add(dir);
+  }
+  if (seen.size > MAX_PACKAGES_PER_REPO) {
+    throw new Error(`${repoPath} globs enumerate ${seen.size} packages — over the ${MAX_PACKAGES_PER_REPO} cap; not a plausible member repo`);
   }
   const packages: MemberPackageInfo[] = [];
-  for (const entry of entries) {
-    const pkgJson = readJsonFile(path.join(packagesDir, entry.name, 'package.json'));
-    if (pkgJson !== null) packages.push({ DirName: entry.name, PackageJson: pkgJson });
+  for (const rel of [...seen].sort()) {
+    const pkgJson = readJsonFile(path.join(repoPath, rel, 'package.json'));
+    if (pkgJson !== null) packages.push({ RelPath: rel, PackageJson: pkgJson });
   }
-  return packages;
+  return { Packages: packages, UnsupportedGlobs: unsupported };
 }
 
 /** Matches one YAML block-list entry at ANY indent (zero included): `- value`, `- 'value'`, `- "value"`, optional trailing comment. */
@@ -218,15 +312,17 @@ export function LoadRepo(parentDir: string, dirName: string): CandidateRepo | nu
   const repoPath = path.join(parentDir, dirName);
   const rootPkg = readJsonFile(path.join(repoPath, 'package.json'));
   if (rootPkg === null) return null;
-  const packages = loadRepoPackages(repoPath);
-  const turboPath = path.join(repoPath, 'turbo.json');
   const workspaceGlobs = loadWorkspaceGlobs(repoPath);
+  const enumerated = loadRepoPackages(repoPath, workspaceGlobs.Globs);
+  const turboPath = path.join(repoPath, 'turbo.json');
   return {
     Name: dirName,
     Path: repoPath,
-    Reasons: detectReasons(repoPath, rootPkg, packages),
+    Reasons: detectReasons(repoPath, rootPkg, enumerated.Packages),
     RootPackageJson: rootPkg,
-    Packages: packages,
+    Packages: enumerated.Packages,
+    UnsupportedGlobs: enumerated.UnsupportedGlobs,
+    Lockfile: ReadMemberLockfile(repoPath),
     TurboJson: existsSync(turboPath) ? readFileSync(turboPath, 'utf8') : null,
     WorkspaceGlobs: workspaceGlobs.Globs,
     WorkspaceGlobsSource: workspaceGlobs.Source,

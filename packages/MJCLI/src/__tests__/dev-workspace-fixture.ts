@@ -19,6 +19,14 @@ export interface FixtureRepoSpec {
   TurboJson?: string;
   /** Raw contents of the repo's own pnpm-workspace.yaml. */
   PnpmWorkspaceYaml?: string;
+  /** Raw contents of a committed pnpm-lock.yaml. */
+  PnpmLock?: string;
+  /** Raw contents of a committed package-lock.json. */
+  NpmLock?: string;
+  /** Extra files keyed by repo-relative path (parent dirs auto-created) — patches, nested manifests, etc. */
+  Files?: Record<string, string>;
+  /** Repo-relative dirs to create as fake standalone-install `node_modules` trees (each gets a marker file). */
+  NodeModulesDirs?: string[];
   /** Create a .git directory (marks the dir as a git repo root). */
   GitDir?: boolean;
 }
@@ -51,6 +59,22 @@ function writeFixtureRepo(repoDir: string, spec: FixtureRepoSpec): void {
   }
   if (spec.PnpmWorkspaceYaml !== undefined) {
     writeFileSync(path.join(repoDir, 'pnpm-workspace.yaml'), spec.PnpmWorkspaceYaml, 'utf8');
+  }
+  if (spec.PnpmLock !== undefined) {
+    writeFileSync(path.join(repoDir, 'pnpm-lock.yaml'), spec.PnpmLock, 'utf8');
+  }
+  if (spec.NpmLock !== undefined) {
+    writeFileSync(path.join(repoDir, 'package-lock.json'), spec.NpmLock, 'utf8');
+  }
+  for (const [relPath, content] of Object.entries(spec.Files ?? {})) {
+    const filePath = path.join(repoDir, relPath);
+    mkdirSync(path.dirname(filePath), { recursive: true });
+    writeFileSync(filePath, content, 'utf8');
+  }
+  for (const relDir of spec.NodeModulesDirs ?? []) {
+    const dir = path.join(repoDir, relDir);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, '.marker'), 'fixture', 'utf8');
   }
   if (spec.GitDir === true) {
     mkdirSync(path.join(repoDir, '.git'), { recursive: true });

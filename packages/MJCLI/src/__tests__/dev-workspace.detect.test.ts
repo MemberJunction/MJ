@@ -84,7 +84,7 @@ describe('DetectCandidates', () => {
     const [candidate] = DetectCandidates(parent);
     expect(candidate.RootPackageJson.devDependencies).toEqual({ turbo: '^2.5.0' });
     expect(candidate.Packages).toHaveLength(1);
-    expect(candidate.Packages[0].DirName).toBe('Entities');
+    expect(candidate.Packages[0].RelPath).toBe('packages/Entities');
     expect(candidate.TurboJson).toBe('{"tasks":{}}');
     expect(candidate.Path).toBe(path.join(parent, 'bizapps-x'));
   });
@@ -152,6 +152,53 @@ describe('LoadRepo', () => {
     const loaded = LoadRepo(parent, 'MJ')!;
     expect(loaded.WorkspaceGlobs).toEqual(['packages/*', 'packages/AI/*', 'packages/Angular/Explorer/*', 'packages/AI/AICLI']);
     expect(loaded.WorkspaceGlobsSource).toBe('member-workspace-yaml');
+    // enumeration follows the member's OWN globs — the nested package is seen (it feeds workspace:* overrides)
+    expect(loaded.Packages.map((p) => p.RelPath)).toEqual(['packages/AI/Engine', 'packages/MJCore']);
+  });
+
+  it('expands a recursive packages/** glob, honoring a !**/dist/** negation', () => {
+    parent = CreateFixtureParent({
+      mjc: {
+        RootPackageJson: { name: 'mjc' },
+        PnpmWorkspaceYaml: "packages:\n  - 'packages/**'\n  - '!**/dist/**'\n",
+        Files: {
+          'packages/a/package.json': '{ "name": "a-pkg" }',
+          'packages/a/dist/package.json': '{ "name": "a-pkg" }', // build-output copy — the guard excludes it
+          'packages/group/deep/b/package.json': '{ "name": "b-pkg" }',
+        },
+      },
+    });
+    const loaded = LoadRepo(parent, 'mjc')!;
+    expect(loaded.Packages.map((p) => p.RelPath)).toEqual(['packages/a', 'packages/group/deep/b']);
+    expect(loaded.UnsupportedGlobs).toEqual([]);
+  });
+
+  it('refuses an unsupported glob shape LOUDLY via UnsupportedGlobs — never a silent miss', () => {
+    parent = CreateFixtureParent({
+      odd: {
+        RootPackageJson: { name: 'odd' },
+        PnpmWorkspaceYaml: "packages:\n  - 'packages/*/nested'\n  - 'packages/*'\n",
+        Packages: { Entities: { name: 'e' } },
+      },
+    });
+    const loaded = LoadRepo(parent, 'odd')!;
+    expect(loaded.UnsupportedGlobs).toEqual(['packages/*/nested']);
+    expect(loaded.Packages.map((p) => p.RelPath)).toEqual(['packages/Entities']); // supported globs still expand
+  });
+
+  it('loads the committed lockfile when one exists, null otherwise', () => {
+    parent = CreateFixtureParent({
+      locked: {
+        RootPackageJson: { name: 'locked' },
+        PnpmLock: "lockfileVersion: '9.0'\n\nimporters:\n\n  .:\n    dependencies:\n      chalk:\n        specifier: ^5.3.0\n        version: 5.6.2\n",
+      },
+      bare: { RootPackageJson: { name: 'bare' } },
+    });
+    const locked = LoadRepo(parent, 'locked')!;
+    const lockfile = locked.Lockfile;
+    if (lockfile?.Kind !== 'pnpm') throw new Error(`expected a pnpm lockfile, got ${lockfile?.Kind}`);
+    expect(lockfile.Direct).toEqual([{ Name: 'chalk', Version: '5.6.2' }]);
+    expect(LoadRepo(parent, 'bare')!.Lockfile).toBeNull();
   });
 
   it('loads an mjcentral-shaped member: dist-guard negations kept, later top-level keys ignored', () => {

@@ -37,9 +37,13 @@
  *
  * @module lib/dev-workspace/build
  */
+import { DeriveLockfilePins, type LockfilePinsResult } from './lockfile.js';
 import type {
   CandidateRepo,
   DevDepConflict,
+  DuplicateFamilyPackage,
+  PackageExtension,
+  ParentManifestReport,
   RootPackageJsonResult,
   TurboJsonResult,
   WorkspaceSentinel,
@@ -101,7 +105,18 @@ export const SHELL_PROVIDED_PEERS: ReadonlyArray<{ Library: string; Peers: reado
   },
 ];
 
-/** Peer bridge block for older published MJ copies still in the tree. */
+/**
+ * Peer bridge baseline for older published MJ copies still in the tree.
+ *
+ * Verified 2026-08-13 against the MJ monorepo root: the five `allowedVersions`
+ * rules match MJ's own `pnpm.peerDependencyRules` exactly; `ignoreMissing:
+ * ['axios']` is generator-only, for older published MJ copies a parent may still
+ * resolve. The baseline stays hardcoded (rather than read from MJ) because a
+ * parent whose members declare no rules still needs the proven bridge — and any
+ * member-declared `peerDependencyRules` are UNIONED ON TOP of it by
+ * {@link ResolveMemberPnpmBlocks}, so MJ's rules can evolve without a generator
+ * release as long as MJ is a member.
+ */
 export const PEER_DEPENDENCY_RULES = {
   allowedVersions: {
     'nunjucks>chokidar': '5',
@@ -233,21 +248,60 @@ export function CompareVersionStrings(a: string, b: string): number {
   return 0;
 }
 
-/**
- * Unions every member repo's root devDependencies. Conflict rule: highest base
- * version wins; ties keep the first seen. EVERY conflict is returned so the
- * command can log it — the resolver never picks silently.
- */
-export function ResolveDevDependencyUnion(members: readonly CandidateRepo[]): {
+/** Result of the devDependency union: the deps plus everything it dropped or transformed. */
+export interface DevDependencyUnionResult {
   DevDependencies: Record<string, string>;
   Conflicts: DevDepConflict[];
-} {
+  /** `@types/*` names excluded entirely — two copies of one @types package is a guaranteed nominal-type break. */
+  SkippedTypes: string[];
+  /** `workspace:` specifiers on packages NO member provides — unresolvable at the parent, dropped. */
+  DroppedWorkspace: Array<{ Package: string; Repo: string }>;
+}
+
+/**
+ * Classifies one member devDep for the union: kept as-is, rewritten to
+ * `workspace:*` (member-provided names — local source beats registry pins), or
+ * dropped (`@types/*`; `workspace:` on a package no member provides).
+ */
+function classifyDevDep(
+  name: string,
+  version: string,
+  repo: string,
+  familyNames: ReadonlySet<string>,
+  result: Pick<DevDependencyUnionResult, 'SkippedTypes' | 'DroppedWorkspace'>
+): { Repo: string; Version: string } | null {
+  if (name.startsWith('@types/')) {
+    if (!result.SkippedTypes.includes(name)) result.SkippedTypes.push(name);
+    return null; // the field's @types/mssql 9.1.8+9.1.11 nominal-type break — never union @types
+  }
+  if (familyNames.has(name)) {
+    return { Repo: `workspace member (declared by ${repo})`, Version: 'workspace:*' };
+  }
+  if (version.startsWith('workspace:')) {
+    result.DroppedWorkspace.push({ Package: name, Repo: repo });
+    return null; // meaningless at the parent when nothing provides the package
+  }
+  return { Repo: repo, Version: version };
+}
+
+/**
+ * Unions every member repo's root devDependencies. Conflict rule: highest base
+ * version wins; ties keep the first seen. EVERY conflict, skip, and drop is
+ * returned so the command can log it — the resolver never decides silently.
+ * `familyNames` = package names provided by workspace members; those become
+ * `workspace:*` (local ALWAYS beats a registry pin — field finding on #3795).
+ */
+export function ResolveDevDependencyUnion(
+  members: readonly CandidateRepo[],
+  familyNames: ReadonlySet<string> = new Set()
+): DevDependencyUnionResult {
   const chosen = new Map<string, { Repo: string; Version: string }>();
   const conflicts = new Map<string, DevDepConflict>();
+  const result: Pick<DevDependencyUnionResult, 'SkippedTypes' | 'DroppedWorkspace'> = { SkippedTypes: [], DroppedWorkspace: [] };
   for (const member of [...members].sort((a, b) => a.Name.localeCompare(b.Name))) {
-    const devDeps = member.RootPackageJson.devDependencies ?? {};
-    for (const [name, version] of Object.entries(devDeps)) {
-      recordDevDep(chosen, conflicts, name, { Repo: member.Name, Version: version });
+    for (const [name, version] of Object.entries(member.RootPackageJson.devDependencies ?? {})) {
+      const candidate = classifyDevDep(name, version, member.Name, familyNames, result);
+      if (candidate !== null) recordDevDep(chosen, conflicts, name, candidate);
     }
   }
   for (const [name, version] of Object.entries(BASELINE_DEV_DEPENDENCIES)) {
@@ -257,7 +311,7 @@ export function ResolveDevDependencyUnion(members: readonly CandidateRepo[]): {
   for (const name of [...chosen.keys()].sort()) {
     union[name] = chosen.get(name)!.Version;
   }
-  return { DevDependencies: union, Conflicts: [...conflicts.values()] };
+  return { DevDependencies: union, Conflicts: [...conflicts.values()], ...result };
 }
 
 /** Applies one member's devDep declaration to the union, recording any conflict. */
@@ -309,27 +363,258 @@ function workspaceName(parentDirName: string): string {
 }
 
 /**
- * Builds the private parent `package.json`: pnpm pin, member devDependency union,
- * and the proven peerDependencyRules bridge block.
+ * Collects every package name the workspace members provide, from the members'
+ * OWN package enumerations. These names get `workspace:*` overrides in the
+ * parent manifest so local source ALWAYS beats registry copies — the field
+ * measured 1,898 registry shadow copies of family packages before forcing local
+ * with 367 `workspace:*` overrides (#3795 addendum). Duplicate providers are
+ * returned for loud reporting: the link target for a duplicated name is decided
+ * by sort order, silently.
+ */
+export function CollectFamilyPackages(members: readonly CandidateRepo[]): {
+  Names: string[];
+  Duplicates: DuplicateFamilyPackage[];
+} {
+  const providers = new Map<string, Set<string>>();
+  for (const member of [...members].sort((a, b) => (a.Name < b.Name ? -1 : a.Name > b.Name ? 1 : 0))) {
+    for (const pkg of member.Packages) {
+      const name = pkg.PackageJson.name;
+      if (name === undefined || name.length === 0) continue;
+      const repos = providers.get(name) ?? new Set<string>();
+      repos.add(member.Name);
+      providers.set(name, repos);
+    }
+  }
+  const duplicates: DuplicateFamilyPackage[] = [];
+  for (const [name, repos] of providers) {
+    if (repos.size > 1) duplicates.push({ Package: name, Repos: [...repos].sort() });
+  }
+  return { Names: [...providers.keys()].sort(), Duplicates: duplicates.sort((a, b) => (a.Package < b.Package ? -1 : 1)) };
+}
+
+/** Records a first-member-wins value, reporting any differing later declaration as a conflict. */
+function recordFirstWins(
+  chosen: Map<string, { Repo: string; Version: string }>,
+  conflicts: Map<string, DevDepConflict>,
+  key: string,
+  candidate: { Repo: string; Version: string }
+): void {
+  const incumbent = chosen.get(key);
+  if (!incumbent) {
+    chosen.set(key, candidate);
+    return;
+  }
+  if (incumbent.Version === candidate.Version) return;
+  const existing = conflicts.get(key);
+  if (existing) {
+    existing.Losers.push(candidate);
+  } else {
+    conflicts.set(key, { Package: key, Winner: incumbent, Losers: [candidate] });
+  }
+}
+
+/** The unioned member pnpm blocks, ready for the parent manifest. */
+export interface MemberPnpmBlocksResult {
+  Overrides: Record<string, string>;
+  /** `pkg@version` -> patch path RE-ROOTED to `<member>/<path>`. */
+  PatchedDependencies: Record<string, string>;
+  PackageExtensions: Record<string, PackageExtension>;
+  PeerAllowedVersions: Record<string, string>;
+  PeerIgnoreMissing: string[];
+  Conflicts: DevDepConflict[];
+  Patches: Array<{ Package: string; Path: string; Repo: string }>;
+}
+
+/** Sorted shallow copy of a record by key (codepoint order — deterministic across locales). */
+function sortedRecord<T>(record: Record<string, T>): Record<string, T> {
+  const sorted: Record<string, T> = {};
+  for (const key of Object.keys(record).sort()) sorted[key] = record[key];
+  return sorted;
+}
+
+/**
+ * Hoists every member's `pnpm` block into one parent-manifest block. pnpm honors
+ * NONE of these at a member (finding 2 on #3795: the field workspace ran
+ * unpatched type-graphql and lost MJ's 26 pins until this was done by hand).
+ * Rules, all deterministic over codepoint-sorted member names:
+ *  - overrides: higher base version wins where comparable, first member wins
+ *    otherwise (npm-alias values never parse) — every conflict reported;
+ *  - patchedDependencies: paths re-rooted to `<member>/<path>`; first member
+ *    wins a same-key conflict (two patches cannot merge) — reported;
+ *  - packageExtensions: first member wins a differing same-key block — reported;
+ *  - peerDependencyRules: allowedVersions first-wins with conflicts reported,
+ *    ignoreMissing set-unioned.
+ */
+export function ResolveMemberPnpmBlocks(members: readonly CandidateRepo[]): MemberPnpmBlocksResult {
+  const overrides = new Map<string, { Repo: string; Version: string }>();
+  const patches = new Map<string, { Repo: string; Version: string }>();
+  const extensionMeta = new Map<string, { Repo: string; Version: string }>();
+  const extensionValues = new Map<string, PackageExtension>();
+  const peerAllowed = new Map<string, { Repo: string; Version: string }>();
+  const conflicts = new Map<string, DevDepConflict>();
+  const ignoreMissing = new Set<string>();
+  for (const member of [...members].sort((a, b) => (a.Name < b.Name ? -1 : a.Name > b.Name ? 1 : 0))) {
+    const block = member.RootPackageJson.pnpm ?? {};
+    for (const [name, version] of Object.entries(block.overrides ?? {})) {
+      recordDevDep(overrides, conflicts, name, { Repo: member.Name, Version: version });
+    }
+    for (const [pkg, patchPath] of Object.entries(block.patchedDependencies ?? {})) {
+      recordFirstWins(patches, conflicts, pkg, { Repo: member.Name, Version: `${member.Name}/${patchPath}` });
+    }
+    for (const [pkg, extension] of Object.entries(block.packageExtensions ?? {})) {
+      recordFirstWins(extensionMeta, conflicts, pkg, { Repo: member.Name, Version: JSON.stringify(extension) });
+      if (!extensionValues.has(pkg)) extensionValues.set(pkg, extension); // mirrors first-wins
+    }
+    for (const [rule, range] of Object.entries(block.peerDependencyRules?.allowedVersions ?? {})) {
+      recordFirstWins(peerAllowed, conflicts, rule, { Repo: member.Name, Version: range });
+    }
+    for (const name of block.peerDependencyRules?.ignoreMissing ?? []) {
+      ignoreMissing.add(name);
+    }
+  }
+  return {
+    Overrides: sortedRecord(Object.fromEntries([...overrides].map(([k, v]) => [k, v.Version]))),
+    PatchedDependencies: sortedRecord(Object.fromEntries([...patches].map(([k, v]) => [k, v.Version]))),
+    PackageExtensions: sortedRecord(Object.fromEntries(extensionValues)),
+    PeerAllowedVersions: sortedRecord(Object.fromEntries([...peerAllowed].map(([k, v]) => [k, v.Version]))),
+    PeerIgnoreMissing: [...ignoreMissing].sort(),
+    Conflicts: [...conflicts.values()],
+    Patches: [...patches].map(([pkg, v]) => ({ Package: pkg, Path: v.Version, Repo: v.Repo })).sort((a, b) => (a.Package < b.Package ? -1 : 1)),
+  };
+}
+
+/** The bare package name of an override key: `chalk@^5` -> `chalk`, `@types/node@^4` -> `@types/node`. */
+function overrideKeyName(key: string): string {
+  const at = key.lastIndexOf('@');
+  return at <= 0 ? key : key.slice(0, at);
+}
+
+/** Removes every pin entry (plain or per-major selector) for a name; records what was displaced. */
+function displacePinsForName(overrides: Record<string, string>, name: string, newValue: string, superseded: Set<string>): void {
+  for (const key of Object.keys(overrides)) {
+    if (overrideKeyName(key) !== name && key !== name) continue;
+    if (overrides[key] !== newValue) superseded.add(key);
+    delete overrides[key];
+  }
+}
+
+/**
+ * Layers the three override sources into the parent `pnpm.overrides`, weakest
+ * first: lockfile-derived pins < explicit member overrides < family
+ * `workspace:*` (local source always wins). A member's or family's whole-name
+ * entry displaces every per-major pin selector for that name (a plain key and
+ * a `name@^N` selector must not fight). Displacements are returned so the
+ * command reports them — nothing is overwritten silently.
+ */
+export function AssembleParentOverrides(
+  lockfilePins: Record<string, string>,
+  memberOverrides: Record<string, string>,
+  familyNames: readonly string[]
+): { Overrides: Record<string, string>; SupersededPins: string[] } {
+  const overrides: Record<string, string> = { ...lockfilePins };
+  const superseded = new Set<string>();
+  for (const [key, version] of Object.entries(memberOverrides)) {
+    if (overrideKeyName(key) === key) {
+      // whole-name member override displaces every per-major pin selector for the name
+      displacePinsForName(overrides, key, version, superseded);
+    } else if (key in overrides && overrides[key] !== version) {
+      superseded.add(key); // range-scoped member override displaces only its own selector
+    }
+    overrides[key] = version;
+  }
+  for (const name of familyNames) {
+    displacePinsForName(overrides, name, 'workspace:*', superseded);
+    overrides[name] = 'workspace:*';
+  }
+  return { Overrides: sortedRecord(overrides), SupersededPins: [...superseded].sort() };
+}
+
+/** Builds the manifest's `pnpm` block from the assembled parts, omitting empty sections. */
+function buildPnpmBlock(
+  overrides: Record<string, string>,
+  blocks: MemberPnpmBlocksResult
+): Record<string, unknown> {
+  const peerDependencyRules = {
+    allowedVersions: sortedRecord({ ...PEER_DEPENDENCY_RULES.allowedVersions, ...blocks.PeerAllowedVersions }),
+    ignoreMissing: [...new Set([...PEER_DEPENDENCY_RULES.ignoreMissing, ...blocks.PeerIgnoreMissing])].sort(),
+  };
+  const block: Record<string, unknown> = { peerDependencyRules };
+  if (Object.keys(overrides).length > 0) block.overrides = overrides;
+  if (Object.keys(blocks.PatchedDependencies).length > 0) {
+    block.patchedDependencies = blocks.PatchedDependencies;
+    // A member patch is keyed to pkg@version; when the parent graph never resolves
+    // that exact version, pnpm hard-fails the WHOLE install with ERR_PNPM_UNUSED_PATCH.
+    // One member's stale patch must not brick every member's workspace — allow it,
+    // and rely on the assembly report, which names every hoisted patch.
+    block.allowUnusedPatches = true;
+  }
+  if (Object.keys(blocks.PackageExtensions).length > 0) block.packageExtensions = blocks.PackageExtensions;
+  return block;
+}
+
+/**
+ * Builds the private parent `package.json`: pnpm pin, the cleaned member
+ * devDependency union, and the full absorbed `pnpm` block — member overrides and
+ * patches hoisted, lockfile-derived pins, and `workspace:*` overrides for every
+ * member-provided package. Every decision lands in the returned Report.
  */
 export function BuildRootPackageJson(parentDirName: string, members: readonly CandidateRepo[]): RootPackageJsonResult {
   if (members.length === 0) {
     throw new Error('BuildRootPackageJson requires at least one member repo');
   }
-  const { DevDependencies, Conflicts } = ResolveDevDependencyUnion(members);
+  const family = CollectFamilyPackages(members);
+  const union = ResolveDevDependencyUnion(members, new Set(family.Names));
+  const pins = DeriveLockfilePins(
+    members.flatMap((m) => (m.Lockfile !== null && m.Lockfile.Kind !== 'unsupported' ? [{ Repo: m.Name, Lockfile: m.Lockfile }] : [])),
+    new Set(family.Names)
+  );
+  const blocks = ResolveMemberPnpmBlocks(members);
+  const assembled = AssembleParentOverrides(pins.Pins, blocks.Overrides, family.Names);
   const { Pin, Source } = ResolvePnpmPin(members);
   const manifest = {
     name: workspaceName(parentDirName),
     private: true,
     packageManager: Pin,
-    devDependencies: DevDependencies,
-    pnpm: { peerDependencyRules: PEER_DEPENDENCY_RULES },
+    devDependencies: union.DevDependencies,
+    pnpm: buildPnpmBlock(assembled.Overrides, blocks),
   };
   return {
     Content: `${JSON.stringify(manifest, null, 2)}\n`,
-    Conflicts,
+    Conflicts: union.Conflicts,
     PinSource: Source,
     Pin,
+    Report: buildManifestReport(members, family, union, pins, blocks, assembled.SupersededPins),
+  };
+}
+
+/** Assembles the absorption report — one place, so nothing the build decided goes unreported. */
+function buildManifestReport(
+  members: readonly CandidateRepo[],
+  family: { Names: string[]; Duplicates: DuplicateFamilyPackage[] },
+  union: DevDependencyUnionResult,
+  pins: LockfilePinsResult,
+  blocks: MemberPnpmBlocksResult,
+  supersededPins: string[]
+): ParentManifestReport {
+  const lockfileSkips = members.flatMap((m) =>
+    m.Lockfile !== null && m.Lockfile.Kind !== 'unsupported' ? m.Lockfile.Skipped.map((skip) => ({ Repo: m.Name, Skip: skip })) : []
+  );
+  const unsupportedLockfiles = members.flatMap((m) =>
+    m.Lockfile !== null && m.Lockfile.Kind === 'unsupported' ? [{ Repo: m.Name, File: m.Lockfile.File, Version: m.Lockfile.Version }] : []
+  );
+  return {
+    LockfilePinCount: Object.keys(pins.Pins).length,
+    PinConflicts: pins.Conflicts,
+    LockfileSkips: lockfileSkips,
+    UnsupportedLockfiles: unsupportedLockfiles,
+    HoistedOverrideCount: Object.keys(blocks.Overrides).length,
+    BlockConflicts: blocks.Conflicts,
+    Patches: blocks.Patches,
+    FamilyOverrideCount: family.Names.length,
+    DuplicateFamilyPackages: family.Duplicates,
+    SkippedTypesDevDeps: [...union.SkippedTypes].sort(),
+    DroppedWorkspaceDevDeps: union.DroppedWorkspace,
+    SupersededPins: supersededPins,
   };
 }
 
