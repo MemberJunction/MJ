@@ -18,6 +18,7 @@ import { BaseFormComponent } from '../base-form-component';
 import { FormContext } from '../types/form-types';
 import { BaseFormPanel, FormPanelRegistrationMetadata, FormPanelSlot } from './base-form-panel';
 import { FormSlotCoordinator } from './form-slot-coordinator.service';
+import { CollapseFormPanelRegistrations } from './form-contribution';
 
 /**
  * `<mj-form-panel-slot>` — dynamic slot host that discovers and mounts every
@@ -155,7 +156,13 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
         //    to their literal slot.
         const orphans = this.findOrphans();
 
-        const all = [...direct, ...orphans];
+        const all = CollapseFormPanelRegistrations(
+            [...direct, ...orphans].map((reg) => ({
+                Priority: reg.Priority,
+                Metadata: (reg.Metadata ?? { entity: this.Entity, slot: this.Slot }) as FormPanelRegistrationMetadata,
+                Registration: reg,
+            })),
+        ).map((row) => row.Registration);
         if (all.length === 0) {
             this.remountDepth--;
             return;

@@ -123,6 +123,28 @@ describe('evaluateAndHoldDriftRow — fail-closed read-grant revoke on hold', ()
         expect(mm.revokeCalls).toHaveLength(0);
     });
 
+    it('FAILS CLOSED on a query mat whose MaterializedResultQuery link vanished (source query deleted) — revoke + hold', async () => {
+        // spDeleteQuery cascade-deletes the join row, but the MaterializedResult, the minted entity, its read
+        // grants and the populated table all survive. With a NULL SourceQueryID the C1/C2 re-checks were both
+        // unreachable and the Query fact-gatherer returned all-empty ⇒ {drift:false} ⇒ Status stayed 'Active',
+        // so the revoke+hold guard could never fire again and the unscoped snapshot served indefinitely.
+        mm.rlsSafe = true;
+        mm.facts = QUERY_NO_DRIFT; // exactly what the old path computed for an orphaned row
+        const held = await mm.run({ ID: 'm6', SourceType: 'Query', SourceQueryID: null, GeneratedEntityID: 'gen-6', TableName: 'materialized_Orphan' });
+        expect(held).toBe(true);
+        expect(mm.revokeCalls).toHaveLength(1);
+        expect(mm.revokeCalls[0].entityId).toBe('gen-6');
+        expect(mm.revokeCalls[0].reason).toMatch(/MaterializedResultQuery link is gone/i);
+    });
+
+    it('still holds an orphaned query mat that has no minted entity id (nothing to revoke, but it stops serving)', async () => {
+        mm.rlsSafe = true;
+        mm.facts = QUERY_NO_DRIFT;
+        const held = await mm.run({ ID: 'm7', SourceType: 'Query', SourceQueryID: undefined, GeneratedEntityID: null, TableName: 'materialized_Orphan2' });
+        expect(held).toBe(true);
+        expect(mm.revokeCalls).toHaveLength(0);
+    });
+
     it('still revokes on the C1 RLS-drift branch (regression guard — the pre-existing revoke path is intact)', async () => {
         mm.rlsSafe = false; // source now RLS-unsafe
         mm.facts = QUERY_NO_DRIFT; // irrelevant — the RLS branch returns before the shape check

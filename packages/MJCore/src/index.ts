@@ -25,6 +25,7 @@ export * from "./generic/providerBase";
 export * from "./generic/baseRemotableOperation";
 export * from "./generic/remoteOperationDispatch";
 export * from "./generic/entityInfo";
+export * from "./generic/entityConfiguration";
 export * from "./generic/externalDataSourceTypes";
 export * from "./generic/externalDataSourceReadRouter";
 export * from "./generic/securityInfo";
