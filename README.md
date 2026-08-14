@@ -1,8 +1,8 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./MJ_logo_dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="./MJ_logo.webp">
-    <img alt="MemberJunction" src="./MJ_logo.webp" width="400">
+    <source media="(prefers-color-scheme: dark)" srcset="./MJ_logo_wide_dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="./MJ_logo_wide.png">
+    <img alt="MemberJunction" src="./MJ_logo_wide.png" width="420">
   </picture>
 </p>
 
