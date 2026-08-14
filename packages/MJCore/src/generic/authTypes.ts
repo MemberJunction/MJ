@@ -154,8 +154,13 @@ export interface PublicAuthProviderInfo {
   /** Provider domain (e.g. an Auth0/Okta tenant domain). */
   domain?: string;
 
-  /** Space-delimited OAuth scopes to request. */
-  scopes?: string;
+  /**
+   * OAuth scopes to request, already parsed. The server splits the row's delimited `Scopes`
+   * column once at the trust boundary, so every consumer — the browser drivers hand this
+   * straight to SDK config typed `string[]` — receives ready-to-use values instead of
+   * re-deriving the delimiter convention.
+   */
+  scopes?: string[];
 
   /** Driver-specific browser settings (redirect URI, API hostname, region, ...). */
   clientConfiguration?: PublicAuthProviderClientConfig;

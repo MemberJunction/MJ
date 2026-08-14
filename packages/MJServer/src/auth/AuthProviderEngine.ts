@@ -13,7 +13,6 @@ import {
   BaseEngine,
   BaseEnginePropertyConfig,
   LogError,
-  LogStatus,
   LogStatusEx,
   RegisterForStartup,
   UserInfo,
@@ -117,24 +116,6 @@ export class AuthProviderEngine extends BaseEngine<AuthProviderEngine> {
   }
 
   /**
-   * Reloads the catalog and re-registers every provider.
-   *
-   * Required because the factory caches issuer→provider resolutions: editing a row would
-   * otherwise keep serving the old configuration until the process restarted, which would make
-   * the admin UI misleading. `factory.clear()` drops those caches, and providers declared in
-   * `mj.config.cjs` are re-registered by the caller afterwards.
-   *
-   * @returns the number of providers registered from metadata after the refresh.
-   */
-  public async Refresh(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<number> {
-    await this.Config(true, contextUser, provider);
-    AuthProviderFactory.Instance.clear();
-    const count = await this.RegisterAll(contextUser);
-    LogStatus(`[Auth] Provider catalog refreshed — ${count} provider(s) registered from metadata.`);
-    return count;
-  }
-
-  /**
    * Projects a catalog row onto the runtime {@link AuthProviderConfig} the driver expects.
    *
    * `AdditionalConfiguration` is spread FIRST so that the modelled columns win over anything a
@@ -157,9 +138,20 @@ export class AuthProviderEngine extends BaseEngine<AuthProviderEngine> {
     if (row.Issuer) config.issuer = row.Issuer;
     if (row.Audience) config.audience = row.Audience;
     if (row.JWKSUri) config.jwksUri = row.JWKSUri;
-    if (row.Scopes) config.scopes = row.Scopes.split(/[\s,]+/).filter((s) => s.length > 0);
+    if (row.Scopes) config.scopes = this.parseScopes(row.Scopes);
 
     return config;
+  }
+
+  /**
+   * Splits the delimited `Scopes` column into the parsed list both projections publish.
+   *
+   * This is the single home of the delimiter convention: `buildProviderConfig` and
+   * `GetPublicCatalog` must agree on it, or the server would validate tokens against one scope
+   * set while telling the browser to request another.
+   */
+  private parseScopes(raw: string | null): string[] {
+    return raw ? raw.split(/[\s,]+/).filter((s) => s.length > 0) : [];
   }
 
   /**
@@ -226,7 +218,11 @@ export class AuthProviderEngine extends BaseEngine<AuthProviderEngine> {
       if (row.ClientID) info.clientId = row.ClientID;
       if (row.Issuer) info.issuer = row.Issuer;
       if (row.Domain) info.domain = row.Domain;
-      if (row.Scopes) info.scopes = row.Scopes;
+
+      // Published pre-parsed so the browser never re-derives the delimiter convention —
+      // the drivers hand this straight to SDK config typed string[].
+      const scopes = this.parseScopes(row.Scopes);
+      if (scopes.length > 0) info.scopes = scopes;
 
       const clientConfig = this.parseJsonColumn(row.ClientConfiguration, row.Name, 'ClientConfiguration');
       if (Object.keys(clientConfig).length > 0) {

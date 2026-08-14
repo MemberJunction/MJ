@@ -90,6 +90,52 @@ export async function initializeAuthProvidersFromMetadata(contextUser?: UserInfo
 }
 
 /**
+ * Rebuilds the provider registry from scratch: config-declared providers first, then the
+ * metadata catalog layered on top — the same two-source order as startup.
+ *
+ * This is THE entry point for reacting to a catalog edit at runtime (an admin page's Save
+ * button, a future invalidation hook). A full rebuild is required because the factory caches
+ * issuer→provider resolutions, so an edited row would otherwise keep serving its old
+ * configuration until the process restarted. It lives here rather than on `AuthProviderEngine`
+ * because a bare `factory.clear()` + metadata re-registration would silently drop everything
+ * the config path registered — magic-link included — and no caller should have to know to put
+ * those back. `initializeAuthProviders()` clears the factory itself, so no separate clear step
+ * exists for a caller to forget.
+ *
+ * **Failure policy: abort-before-mutate.** Everything that can throw — the catalog reload and
+ * the permission probe on its result — runs BEFORE the factory is touched, so a failed refresh
+ * leaves the registry serving the previous (stale but complete) provider set and surfaces the
+ * error to the caller. This is deliberately the opposite of `initializeAuthProvidersFromMetadata`,
+ * which swallows metadata failures: at boot there is no previous registry to preserve and a
+ * metadata problem must not become a lockout, while at refresh time there is one and the caller
+ * (an admin UI) wants the error. That difference in failure policy is why this function does not
+ * simply delegate to its sibling.
+ *
+ * Known limitation, acceptable for an admin-triggered operation: metadata providers are absent
+ * from the registry for the duration of `RegisterAll`'s per-row config builds (config-declared
+ * providers are restored synchronously). A request bearing a metadata-declared IdP's token in
+ * that window is rejected. If a caller ever needs an atomic swap, build the configs first and
+ * register them in one synchronous pass.
+ *
+ * @returns the number of providers registered from metadata after the refresh.
+ */
+export async function refreshAuthProviders(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<number> {
+  await AuthProviderEngine.Instance.Config(true, contextUser, provider);
+
+  // Probe the reloaded catalog BEFORE clearing anything: reading Providers throws
+  // PermissionConstrainedError when the load was skipped for permission reasons, and that
+  // failure must abort the refresh while the registry is still intact.
+  const pendingRows = AuthProviderEngine.Instance.Providers.length;
+
+  initializeAuthProviders();
+  const count = await AuthProviderEngine.Instance.RegisterAll(contextUser);
+  LogStatus(
+    `[Auth] Provider registry refreshed — ${count} of ${pendingRows} metadata provider(s) registered on top of the config-declared set.`
+  );
+  return count;
+}
+
+/**
  * Reports whether any provider is registered, from either source, and logs a diagnostic when none
  * is.
  *

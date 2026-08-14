@@ -18,7 +18,7 @@
   {
     "fields": {
       "Name": "Microsoft Entra ID",
-      "Description": "Microsoft Entra ID (formerly Azure AD) via MSAL. Set ClientID to the app registration's Application (client) ID and Issuer to https://login.microsoftonline.com/<tenantId>/v2.0. The browser driver reads CLIENT_ID / CLIENT_AUTHORITY rather than the prefixed convention, so it supplies its own catalog mapping.",
+      "Description": "Microsoft Entra ID (formerly Azure AD) via MSAL. Set ClientID to the app registration's Application (client) ID and Issuer to https://login.microsoftonline.com/<tenantId>/v2.0. The browser driver reads CLIENT_ID / CLIENT_AUTHORITY rather than the prefixed convention, so it supplies its own catalog mapping: the MSAL authority is derived from Issuer by stripping the trailing /v2.0, or set an authority key in ClientConfiguration to override it.",
       "DriverClass": "msal",
       "Status": "Inactive",
       "IsDefault": false,

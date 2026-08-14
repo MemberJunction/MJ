@@ -176,6 +176,16 @@ describe('AuthProviderEngine.GetPublicCatalog', () => {
     expect(JSON.stringify(info)).not.toContain('sk_live_SECRET');
   });
 
+  it('publishes scopes pre-parsed as an array, never the raw delimited column', () => {
+    const [info] = engineWith([row({ Name: 'Okta', DriverClass: 'okta', Scopes: 'openid, profile email' })]).GetPublicCatalog();
+    expect(info.scopes).toEqual(['openid', 'profile', 'email']);
+  });
+
+  it('omits scopes entirely for a whitespace-only Scopes column', () => {
+    const [info] = engineWith([row({ Name: 'Okta', DriverClass: 'okta', Scopes: '   ' })]).GetPublicCatalog();
+    expect(info.scopes).toBeUndefined();
+  });
+
   it('treats malformed ClientConfiguration as absent rather than failing the catalog', () => {
     const [info] = engineWith([row({ Name: 'Broken', DriverClass: 'okta', ClientConfiguration: '{not json' })]).GetPublicCatalog();
     expect(info.clientConfiguration).toBeUndefined();

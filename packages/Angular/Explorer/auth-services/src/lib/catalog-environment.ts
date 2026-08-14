@@ -48,11 +48,20 @@ function environmentPrefix(driverClass: string): string {
  * supplies `EnvironmentFromCatalog`.
  *
  * Only defined values are emitted, so a catalog row never blanks out a key the app's compiled
- * environment legitimately supplies.
+ * environment legitimately supplies. `clientConfiguration` entries are projected FIRST so the
+ * modelled columns win a key collision — the same precedence the server enforces in
+ * `buildProviderConfig`, where a blob must not silently redefine a described, reviewable column
+ * (`{"scopes": "..."}` in the blob would otherwise clobber the parsed `Scopes` column).
  */
 export function buildGenericEnvironmentOverlay(info: PublicAuthProviderInfo): Record<string, unknown> {
   const prefix = environmentPrefix(info.driverClass);
   const overlay: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(info.clientConfiguration ?? {})) {
+    if (value !== null && value !== undefined) {
+      overlay[`${prefix}_${camelToUpperSnake(key)}`] = value;
+    }
+  }
 
   if (info.clientId) {
     overlay[`${prefix}_CLIENTID`] = info.clientId;
@@ -60,17 +69,16 @@ export function buildGenericEnvironmentOverlay(info: PublicAuthProviderInfo): Re
   if (info.domain) {
     overlay[`${prefix}_DOMAIN`] = info.domain;
   }
-  if (info.scopes) {
+  if (Array.isArray(info.scopes) && info.scopes.length > 0) {
+    // The catalog publishes scopes pre-parsed (the server splits the delimited column at the
+    // trust boundary). The drivers that read this key — Okta and Cognito — hand it straight to
+    // SDK config typed `string[]`. The Array.isArray guard keeps a malformed or older server's
+    // string value from reaching those SDKs: this module runs at bootstrap, where the contract
+    // is degrade-to-compiled-environment, never throw.
     overlay[`${prefix}_SCOPES`] = info.scopes;
   }
   if (info.issuer) {
     overlay[`${prefix}_ISSUER`] = info.issuer;
-  }
-
-  for (const [key, value] of Object.entries(info.clientConfiguration ?? {})) {
-    if (value !== null && value !== undefined) {
-      overlay[`${prefix}_${camelToUpperSnake(key)}`] = value;
-    }
   }
 
   return overlay;
