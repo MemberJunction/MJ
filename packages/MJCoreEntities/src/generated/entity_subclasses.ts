@@ -77760,8 +77760,8 @@ export class MJEncryptionKeyEntity extends BaseEntity<MJEncryptionKeyEntityType>
  */
 export interface MJEntityEntity_IEntityConfiguration {
     /**
-     * Presentation / chrome. Null = host defaults (accordion, every
-     * `DisplayInForm` relationship is first-class).
+     * Presentation / chrome. Null = host defaults (`Layout: auto`,
+     * `RelatedRolePolicy: smart`).
      */
     UI?: MJEntityEntity_IEntityUIConfiguration;
 }
@@ -77805,6 +77805,26 @@ export interface MJEntityEntity_IEntityFormConfiguration {
      * Defaults to 8. Ignored for an explicit `'accordion'` or `'left-nav'`.
      */
     AutoLeftNavAt?: number;
+
+    /**
+     * How omitted `FormRole` on a relationship is resolved.
+     *
+     * - `'keep-all-primary'` — every `DisplayInForm` related grid stays first-class (today).
+     * - `'smart'` — budgeted ranker: same-schema 1:N / collections / custom
+     *   display components stay top-level; cross-schema hang-ons and platform
+     *   plumbing fold into More once the untagged pool exceeds
+     *   {@link PrimaryRelatedBudget}. **Not** "everything in More".
+     *
+     * Omit to treat as `'smart'`.
+     */
+    RelatedRolePolicy?: 'keep-all-primary' | 'smart';
+
+    /**
+     * Max untagged related grids that stay first-class when
+     * {@link RelatedRolePolicy} is `'smart'`. Default 6. Explicit
+     * `FormRole: 'Primary'` punches are never capped by this number.
+     */
+    PrimaryRelatedBudget?: number;
 }
 
 /**
@@ -83816,8 +83836,9 @@ export interface MJEntityRelationshipEntity_IRelatedRecordCollectionConfig {
  * - `DisplayComponentConfiguration` — knobs for the selected display component
  * - `AdditionalFieldsToInclude` — join-field name list
  *
- * **NULL / `{}` / omitted keys = today's behavior.** Every `DisplayInForm`
- * relationship stays a first-class accordion section.
+ * **NULL / `{}` / omitted keys = Auto.** The parent entity's
+ * `RelatedRolePolicy` ranker decides Primary vs Detail. Explicit
+ * `FormRole` always wins.
  *
  * Expand by adding a property here — no schema migration.
  *
@@ -83826,7 +83847,7 @@ export interface MJEntityRelationshipEntity_IRelatedRecordCollectionConfig {
 export interface MJEntityRelationshipEntity_IEntityRelationshipConfiguration {
     /**
      * Presentation / chrome for this relationship on the parent form.
-     * Null = first-class section (today).
+     * Null = the parent entity's related-role ranker decides.
      */
     UI?: MJEntityRelationshipEntity_IEntityRelationshipUIConfiguration;
 }
@@ -83842,10 +83863,13 @@ export interface MJEntityRelationshipEntity_IEntityRelationshipUIConfiguration {
     /**
      * Weight of this relationship in the parent form's chrome.
      *
-     * - `'Primary'` — first-class (own accordion, or its own left-nav item).
-     * - `'Detail'` — parked in a "More" group (one accordion, or one rail item).
+     * - `'Primary'` — always first-class (own accordion / rail item). Punches
+     *   through the parent entity's {@link IEntityFormConfiguration.PrimaryRelatedBudget}.
+     * - `'Detail'` — always parked in More.
      *
-     * Omit to treat as `'Primary'`, which is today's behavior.
+     * Omit to let the parent entity's `RelatedRolePolicy` ranker decide.
+     * Default policy is `'smart'` — same-schema children stay top-level;
+     * cross-schema hang-ons fold once the budget is exceeded. Not "all More".
      *
      * Field panels already have this idea via `EntityField.GeneratedFormSection`.
      * Do not add a parallel column on `EntityField`.

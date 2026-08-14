@@ -5,7 +5,10 @@ How a generated entity form decides **layout** (accordion vs left rail) and
 [`form-contributions.md`](form-contributions.md): contributions decide *what*
 is on the form; this decides *how the container arranges it*.
 
-Status: **migration written, waiting on review** before apply + CodeGen.
+Status: **runtime shipped.** Schema + JSONType bags are on `an-form-contributions`.
+Chrome ranker + More grouping + Layout auto live in `@memberjunction/core` /
+`@memberjunction/ng-base-forms`. Explicit `FormRole` still wins; omitted
+`FormRole` is Auto (budgeted ranker), not "everything in More".
 
 ## Locked names
 
@@ -20,6 +23,10 @@ Status: **migration written, waiting on review** before apply + CodeGen.
 
 `NULL` / `{}` / omitted keys = today’s accordion, every `DisplayInForm`
 relationship first-class. Nothing is required of any app.
+
+Left-nav is a rail, not accordion-on-the-side: pinned identity header,
+one selected group in the body locked open, field panels grouped as
+**Details**, same-title related grids merged, Detail related in **More**.
 
 ## The pain
 
@@ -68,6 +75,8 @@ interface IEntityUIConfiguration {
 interface IEntityFormConfiguration {
     Layout?: 'accordion' | 'left-nav' | 'auto'; // omit = auto
     AutoLeftNavAt?: number;                     // omit = 8
+    RelatedRolePolicy?: 'keep-all-primary' | 'smart'; // omit = smart
+    PrimaryRelatedBudget?: number;              // omit = 6; untagged pool only
 }
 
 // EntityRelationship.Configuration
@@ -75,7 +84,7 @@ interface IEntityRelationshipConfiguration {
     UI?: IEntityRelationshipUIConfiguration;
 }
 interface IEntityRelationshipUIConfiguration {
-    FormRole?: 'Primary' | 'Detail';            // omit = Primary
+    FormRole?: 'Primary' | 'Detail';            // omit = Auto (parent ranker)
 }
 ```
 

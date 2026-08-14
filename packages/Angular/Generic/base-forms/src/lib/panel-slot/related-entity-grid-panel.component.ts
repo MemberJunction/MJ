@@ -17,7 +17,7 @@ import type { FormContributionWinner } from './form-contribution';
         <mj-collapsible-panel
             [SectionKey]="Contribution.BakedSectionKey"
             [SectionName]="Contribution.DisplayName"
-            Icon="fa fa-table"
+            [Icon]="GridIcon"
             Variant="related-entity"
             [Form]="FormComponent"
             [FormContext]="FormContext"
@@ -44,5 +44,12 @@ export class RelatedEntityGridPanelComponent {
 
     public onDataLoad(event: AfterDataLoadEventArgs): void {
         this.FormComponent.SetSectionRowCount(this.Contribution.BakedSectionKey, event.totalRowCount);
+    }
+
+    public get GridIcon(): string {
+        const name = this.Contribution.RelatedEntity;
+        if (!name) return 'fa fa-table';
+        const icon = this.FormComponent.ProviderToUse.EntityByName(name)?.Icon?.trim();
+        return icon || 'fa fa-table';
     }
 }

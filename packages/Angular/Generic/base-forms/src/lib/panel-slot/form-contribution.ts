@@ -119,7 +119,8 @@ export function RelatedEntitySectionKey(
 
 export function RelationshipDisplayName(relationship: FormContributionRelationship): string {
     const named = relationship.DisplayName?.trim();
-    return named && named.length > 0 ? named : relationship.RelatedEntity;
+    const raw = named && named.length > 0 ? named : relationship.RelatedEntity;
+    return raw.replace(/^[A-Za-z][A-Za-z0-9_]*:\s+/, '').trim() || raw;
 }
 
 function isIsaChild(relationship: FormContributionRelationship, isaChildIds: readonly string[]): boolean {
@@ -161,10 +162,14 @@ function applicableRegistrations(
     });
 }
 
-function collapseRegistrations(
-    registrations: readonly FormContributionRegistration[],
-): Map<string, FormContributionRegistration> {
-    const winners = new Map<string, FormContributionRegistration>();
+/**
+ * Last-wins collapse by contributionKey (or derived related key).
+ * Highest Priority keeps the slot. Registrations without a key never collapse.
+ */
+export function CollapseFormPanelRegistrations<T extends { Priority: number; Metadata: FormPanelRegistrationMetadata }>(
+    registrations: readonly T[],
+): T[] {
+    const winners = new Map<string, T>();
     let uniqueIndex = 0;
     for (const reg of registrations) {
         const key = ResolveContributionKey(reg.Metadata) || `__unique:${uniqueIndex++}`;
@@ -172,6 +177,17 @@ function collapseRegistrations(
         if (!incumbent || reg.Priority > incumbent.Priority) {
             winners.set(key, reg);
         }
+    }
+    return [...winners.values()];
+}
+
+function collapseRegistrations(
+    registrations: readonly FormContributionRegistration[],
+): Map<string, FormContributionRegistration> {
+    const winners = new Map<string, FormContributionRegistration>();
+    for (const reg of CollapseFormPanelRegistrations(registrations)) {
+        const key = ResolveContributionKey(reg.Metadata) || `${reg.Metadata.entity}:${reg.Metadata.slot}:${reg.Priority}`;
+        winners.set(key, reg);
     }
     return winners;
 }

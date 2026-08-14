@@ -18,8 +18,8 @@
  */
 export interface IEntityConfiguration {
     /**
-     * Presentation / chrome. Null = host defaults (accordion, every
-     * `DisplayInForm` relationship is first-class).
+     * Presentation / chrome. Null = host defaults (`Layout: auto`,
+     * `RelatedRolePolicy: smart`).
      */
     UI?: IEntityUIConfiguration;
 }
@@ -63,4 +63,24 @@ export interface IEntityFormConfiguration {
      * Defaults to 8. Ignored for an explicit `'accordion'` or `'left-nav'`.
      */
     AutoLeftNavAt?: number;
+
+    /**
+     * How omitted `FormRole` on a relationship is resolved.
+     *
+     * - `'keep-all-primary'` — every `DisplayInForm` related grid stays first-class (today).
+     * - `'smart'` — budgeted ranker: same-schema 1:N / collections / custom
+     *   display components stay top-level; cross-schema hang-ons and platform
+     *   plumbing fold into More once the untagged pool exceeds
+     *   {@link PrimaryRelatedBudget}. **Not** "everything in More".
+     *
+     * Omit to treat as `'smart'`.
+     */
+    RelatedRolePolicy?: 'keep-all-primary' | 'smart';
+
+    /**
+     * Max untagged related grids that stay first-class when
+     * {@link RelatedRolePolicy} is `'smart'`. Default 6. Explicit
+     * `FormRole: 'Primary'` punches are never capped by this number.
+     */
+    PrimaryRelatedBudget?: number;
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { FormPanelRegistrationMetadata, FormPanelSlot } from '../base-form-panel';
 import {
+    CollapseFormPanelRegistrations,
     ContributionHiddenSectionKeys,
     FormSectionCamelCase,
     RelatedContributionKey,
@@ -294,6 +295,24 @@ describe('ResolveFormContributions', () => {
         expect(winner?.Slot).toBe('before-fields');
         expect(winner?.ReplacesSectionKey).toBe('details');
         expect(result.StockGrids).toEqual([]);
+    });
+
+    it('two headers with the same contributionKey last-wins by Priority', () => {
+        const common = reg({
+            entity: PEOPLE,
+            slot: 'before-fields',
+            contributionKey: 'header',
+            replacesSectionKey: 'personalIdentity',
+        }, 0);
+        const orders = reg({
+            entity: PEOPLE,
+            slot: 'before-fields',
+            contributionKey: 'header',
+            replacesSectionKey: 'personalIdentity',
+        }, 10);
+        const collapsed = CollapseFormPanelRegistrations([common, orders]);
+        expect(collapsed).toHaveLength(1);
+        expect(collapsed[0].Priority).toBe(10);
     });
 
     it('two extras without a contributionKey do not collapse', () => {

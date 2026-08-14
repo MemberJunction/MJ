@@ -68,3 +68,9 @@ export * from './lib/panel-slot/collect-form-panel-registrations';
 export * from './lib/panel-slot/form-contributions.component';
 export * from './lib/panel-slot/related-entity-grid-panel.component';
 export * from './lib/interactive-form/interactive-form.component';
+
+// Form chrome (accordion / left-nav / More grouping)
+export * from './lib/chrome/form-chrome';
+export * from './lib/chrome/base-form-policy';
+export * from './lib/chrome/resolve-form-chrome';
+export * from './lib/chrome/form-chrome-coordinator.service';

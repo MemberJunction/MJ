@@ -12,8 +12,9 @@
  * - `DisplayComponentConfiguration` — knobs for the selected display component
  * - `AdditionalFieldsToInclude` — join-field name list
  *
- * **NULL / `{}` / omitted keys = today's behavior.** Every `DisplayInForm`
- * relationship stays a first-class accordion section.
+ * **NULL / `{}` / omitted keys = Auto.** The parent entity's
+ * `RelatedRolePolicy` ranker decides Primary vs Detail. Explicit
+ * `FormRole` always wins.
  *
  * Expand by adding a property here — no schema migration.
  *
@@ -22,7 +23,7 @@
 export interface IEntityRelationshipConfiguration {
     /**
      * Presentation / chrome for this relationship on the parent form.
-     * Null = first-class section (today).
+     * Null = the parent entity's related-role ranker decides.
      */
     UI?: IEntityRelationshipUIConfiguration;
 }
@@ -38,10 +39,13 @@ export interface IEntityRelationshipUIConfiguration {
     /**
      * Weight of this relationship in the parent form's chrome.
      *
-     * - `'Primary'` — first-class (own accordion, or its own left-nav item).
-     * - `'Detail'` — parked in a "More" group (one accordion, or one rail item).
+     * - `'Primary'` — always first-class (own accordion / rail item). Punches
+     *   through the parent entity's {@link IEntityFormConfiguration.PrimaryRelatedBudget}.
+     * - `'Detail'` — always parked in More.
      *
-     * Omit to treat as `'Primary'`, which is today's behavior.
+     * Omit to let the parent entity's `RelatedRolePolicy` ranker decide.
+     * Default policy is `'smart'` — same-schema children stay top-level;
+     * cross-schema hang-ons fold once the budget is exceeded. Not "all More".
      *
      * Field panels already have this idea via `EntityField.GeneratedFormSection`.
      * Do not add a parallel column on `EntityField`.

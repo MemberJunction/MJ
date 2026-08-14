@@ -390,6 +390,47 @@ Extra pane. Does not replace anything. Generated subscription fields stay.
 
 Orders' full custom form already wraps `<mj-record-form-container>` and emits `before-fields`. A contribution registered for Order Headers still mounts there. You do **not** have to replace the whole form to get a hero — start with B, grow to a custom form only when the line editor / tab strip demand it.
 
+### 7d. Form chrome — accordion, left-nav, and More
+
+Contributions decide *what* is on the form. Chrome decides *how the container
+arranges it*. Metadata is the floor; an optional `BaseFormPolicy` is the last-wins
+override. Plan: [`/plans/form-chrome-policy.md`](../plans/form-chrome-policy.md).
+
+`Entity.Configuration.UI.Form`:
+
+- `Layout`: `'accordion'` | `'left-nav'` | `'auto'` (omit = auto)
+- `AutoLeftNavAt`: first-class section count that flips auto to left-nav (omit = 8)
+- `RelatedRolePolicy`: `'smart'` (default) or `'keep-all-primary'`
+- `PrimaryRelatedBudget`: max untagged related grids that stay first-class under smart (omit = 6)
+
+`EntityRelationship.Configuration.UI.FormRole`:
+
+- `'Primary'` — always top-level (punches through the budget)
+- `'Detail'` — always parked in one More group
+- omit — the parent entity's ranker decides
+
+**Smart is not "everything in More."** Same-schema 1:N children, declared
+collections, and custom display components stay first-class. Cross-schema
+hang-ons and `__mj` plumbing fold only after the untagged pool exceeds the
+budget. A form with 4 related grids is unchanged.
+
+`BaseFormPolicy` registers with `{ metadata: { entity } }` and may return a
+full chrome spec. Cancelable `BeforeLayoutResolve` / `BeforeSectionActivate`
+live on the container.
+
+**Left-nav is not accordion-on-the-side.** The rail picks one group; the body
+shows only that group. Selected content has **no accordion chrome** (the rail
+is the header) and related grids fill the remaining height. **More** is a
+folder on the rail — click to expand sub-nodes, then pick one item like any
+other rail entry. Field panels collapse into one **Details** item. Related
+Primary grids stay first-class (same-title grids merge). `System Metadata`
+and Detail related always sit in More. Rail items use the same icon as the
+accordion header (entity `Icon` when present) and show related-grid row
+counts after they load. Users reorder first-class items by dragging the
+rail grip (or Manage Sections / reset in the toolbar). Section search
+filters the rail the same way it filters accordion panels. The centered /
+full-width toolbar toggle still applies.
+
 ### 7b. Render a single section standalone (`SectionName`)
 
 To render just **one** registered `BaseFormSectionComponent` (`@RegisterClass(BaseFormSectionComponent, '<Entity>.<Section>')`) — e.g. a compact quick-edit — pass `SectionName`:

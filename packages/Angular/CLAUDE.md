@@ -608,6 +608,8 @@ Write a standalone Angular component that extends `BaseFormPanel`, decorate it w
 
 To **replace** a related-entity grid (or supply one when another OpenApp's relationship was not baked into this form), add `relatedEntity` and optional `relatedJoinField` to the metadata bag. To **replace a field panel** (or drop a hero that is not a collapsible panel), set `slot: 'before-fields'` and `replacesSectionKey: 'details'` (the CodeGen `SectionKey`). The composer hides the baked panel and mounts yours. Highest ClassFactory `Priority` wins when two apps claim the same `contributionKey`. See [PANELS.md](Generic/base-forms/PANELS.md), [Forms Architecture §7c](../../guides/FORMS_ARCHITECTURE_GUIDE.md#7c-form-contributions--add-replace-or-fill-in-no-regen), and [`/plans/form-contributions.md`](../../plans/form-contributions.md).
 
+Related grids are **not** all parked in More. The container ranks `DisplayInForm` relationships (`Entity.Configuration.UI.Form.RelatedRolePolicy`, default `'smart'`) and only folds the overflow. Explicit `EntityRelationship.Configuration.UI.FormRole` (`Primary` / `Detail`) always wins. Optional `BaseFormPolicy` is the last-wins chrome override. See [Forms Architecture §7d](../../guides/FORMS_ARCHITECTURE_GUIDE.md#7d-form-chrome--accordion-left-nav-and-more).
+
 **Use when** the generated form's layout is fine, you just want to add governance widgets, typed-config panels, type-conditional sections, or any standalone UI. The generated form keeps regenerating freely; your panels mount alongside.
 
 **Full authoring guide**: [`packages/Angular/Generic/base-forms/PANELS.md`](Generic/base-forms/PANELS.md) — slot positions, fallback chain, multiple-panels-per-slot ordering, composition (reusing panels outside the form), CodeGen requirement.

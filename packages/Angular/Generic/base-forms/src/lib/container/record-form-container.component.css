@@ -29,6 +29,9 @@ mj-record-form-container {
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--mj-bg-page);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* ============================================
@@ -40,6 +43,8 @@ mj-record-form-container {
   margin: 0 auto;
   width: 100%;
   box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
 }
 
 /* Widen max-width when ISA side panel is present */
@@ -60,6 +65,82 @@ mj-record-form-container {
   align-items: flex-start;
 }
 
+.mj-forms-panels-container:has(.mj-forms-layout--left-nav) {
+  padding: 16px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+/* Centered left-nav keeps the form column at the same 920px as accordion,
+   plus the rail. Full-width still uses .mj-forms-panels--full-width. */
+.mj-forms-panels-container:has(.mj-forms-layout--left-nav):not(.mj-forms-panels--full-width) {
+  max-width: 1160px;
+}
+
+.mj-forms-layout--left-nav {
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+  gap: 16px;
+}
+
+/* Left-nav: only the active rail item is in the body. Slot-mounted
+   panels never inject the container coordinator, so host classes set
+   from the container are the hide/show channel that always reaches them. */
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-hidden {
+  display: none;
+}
+
+/* Selected item: no accordion chrome — the rail is the header. */
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-show .mj-forms-panel-header {
+  display: none;
+}
+
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-show .mj-forms-panel {
+  box-shadow: none;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+}
+
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-show .mj-forms-panel-body--collapsed {
+  max-height: none;
+  padding: 0;
+  opacity: 1;
+}
+
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-chrome-show .mj-forms-panel-content {
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+}
+
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-panel--related-entity.mj-chrome-show {
+  flex: 1 1 auto;
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+}
+
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-panel--related-entity.mj-chrome-show .mj-forms-panel,
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-panel--related-entity.mj-chrome-show .mj-forms-panel-body,
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-panel--related-entity.mj-chrome-show .mj-forms-panel-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mj-forms-layout--left-nav .mj-forms-all-panels {
+  gap: 0;
+}
+
+.mj-forms-layout--left-nav .biz-hero {
+  margin-bottom: 4px;
+}
+
 /* All panels in a single flex container — CSS order drives sequencing */
 .mj-forms-all-panels {
   display: flex;
@@ -70,8 +151,168 @@ mj-record-form-container {
 }
 
 /* Hide related entity panels in edit mode (variant host class on mj-collapsible-panel) */
-.mj-forms-panels--edit-mode .mj-panel--related-entity {
+.mj-forms-panels--edit-mode .mj-panel--related-entity,
+.mj-forms-panels--edit-mode .mj-forms-more-toggle {
   display: none;
+}
+
+/* Detail related grids sort after the More toggle */
+mj-collapsible-panel.mj-form-role-detail {
+  order: 8500;
+}
+
+.mj-forms-more-toggle {
+  order: 8400;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 18px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-primary);
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  cursor: pointer;
+  text-align: left;
+}
+
+.mj-forms-more-toggle:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.mj-forms-more-count {
+  margin-left: auto;
+  min-width: 1.5rem;
+  padding: 0 8px;
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+  font-size: var(--mj-text-xs);
+  text-align: center;
+}
+
+.mj-forms-chrome-rail {
+  flex: 0 0 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  padding: 4px;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-md);
+}
+
+.mj-forms-chrome-rail-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--mj-radius-sm);
+  background: transparent;
+  color: var(--mj-text-secondary);
+  font-size: var(--mj-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.mj-forms-chrome-rail-item:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.mj-forms-chrome-rail-item.is-active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  font-weight: var(--mj-font-semibold);
+}
+
+.mj-forms-chrome-rail-item.is-drag-over {
+  outline: 1px dashed var(--mj-border-focus);
+  outline-offset: -1px;
+}
+
+.mj-forms-chrome-rail-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 0;
+  height: 18px;
+  margin-left: -4px;
+  color: var(--mj-text-muted);
+  cursor: grab;
+  opacity: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: width var(--mj-transition-base, 0.15s) ease, opacity var(--mj-transition-base, 0.15s) ease;
+}
+
+.mj-forms-chrome-rail-item:hover .mj-forms-chrome-rail-handle,
+.mj-forms-chrome-rail-item.is-active .mj-forms-chrome-rail-handle {
+  width: 14px;
+  opacity: 1;
+}
+
+.mj-forms-chrome-rail-handle:hover {
+  color: var(--mj-brand-primary);
+}
+
+.mj-forms-chrome-rail-handle:active {
+  cursor: grabbing;
+}
+
+.mj-forms-chrome-rail-item.is-more-folder {
+  margin-top: 4px;
+}
+
+.mj-forms-chrome-rail-item.is-more-child {
+  padding-left: 28px;
+}
+
+.mj-forms-chrome-rail-count.is-zero {
+  opacity: 0.55;
+}
+
+.mj-forms-chrome-rail-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-forms-chrome-rail-count {
+  min-width: 1.25rem;
+  padding: 0 6px;
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-xs);
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .mj-forms-layout--left-nav {
+    flex-direction: column;
+  }
+
+  .mj-forms-chrome-rail {
+    flex: 1 1 auto;
+    width: 100%;
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .mj-forms-chrome-rail-item {
+    width: auto;
+  }
 }
 
 /* ============================================

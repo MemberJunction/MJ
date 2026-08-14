@@ -70,8 +70,78 @@
        [class.mj-forms-panels--full-width]="EffectiveWidthMode === 'full-width'"
        [class.mj-forms-panels--edit-mode]="EffectiveEditMode"
        [class.mj-forms-panels--has-isa-panel]="HasIsaRelatedItems">
-    <!-- Flex row: form panels on left, ISA side panel on right -->
-    <div class="mj-forms-layout-row">
+    <!-- Flex row: optional left-nav + form panels + ISA side panel -->
+    <div class="mj-forms-layout-row"
+         [class.mj-forms-layout--left-nav]="ChromeLayout === 'left-nav'"
+         [class.mj-forms-layout--accordion]="ChromeLayout === 'accordion'"
+         [class.mj-forms-layout--more]="IsChromeMoreActive">
+      @if (ChromeLayout === 'left-nav' && ChromeGroups.length > 1) {
+        <nav class="mj-forms-chrome-rail" aria-label="Form sections">
+          @for (group of ChromeFirstClassGroups; track group.Key) {
+            <div class="mj-forms-chrome-rail-item"
+                 role="button"
+                 tabindex="0"
+                 [class.is-active]="ChromeActiveGroupKey === group.Key"
+                 [class.is-drag-over]="RailDragOverKey === group.Key"
+                 (click)="OnChromeGroupActivate(group.Key)"
+                 (keydown.enter)="OnChromeGroupActivate(group.Key)"
+                 (keydown.space)="$event.preventDefault(); OnChromeGroupActivate(group.Key)"
+                 (dragover)="OnRailDragOver($event, group.Key)"
+                 (dragleave)="OnRailDragLeave($event, group.Key)"
+                 (drop)="OnRailDrop($event, group.Key)">
+              @if (ChromeReorderAllowed) {
+                <span class="mj-forms-chrome-rail-handle"
+                      title="Drag to reorder"
+                      draggable="true"
+                      (dragstart)="OnRailDragStart($event, group.Key)"
+                      (dragend)="OnRailDragEnd()"
+                      (click)="$event.stopPropagation()">
+                  <i class="fa-solid fa-grip-vertical"></i>
+                </span>
+              }
+              <i [class]="group.Icon"></i>
+              <span class="mj-forms-chrome-rail-label">{{ group.Title }}</span>
+              @let rowCount = ChromeGroupRowCount(group);
+              @if (rowCount != null) {
+                <span class="mj-forms-chrome-rail-count"
+                      [class.is-zero]="rowCount === 0">{{ rowCount }}</span>
+              }
+            </div>
+          }
+          @if (ChromeMoreFolder; as more) {
+            <div class="mj-forms-chrome-rail-item is-more-folder"
+                 role="button"
+                 tabindex="0"
+                 [class.is-expanded]="MoreExpanded"
+                 (click)="OnMoreFolderToggle()"
+                 (keydown.enter)="OnMoreFolderToggle()"
+                 (keydown.space)="$event.preventDefault(); OnMoreFolderToggle()">
+              <i [class]="MoreExpanded ? 'fa-solid fa-folder-open' : 'fa-solid fa-folder'"></i>
+              <span class="mj-forms-chrome-rail-label">{{ more.Title }}</span>
+              <span class="mj-forms-chrome-rail-count">{{ more.SectionKeys.length }}</span>
+            </div>
+            @if (MoreExpanded) {
+              @for (child of ChromeMoreItems; track child.Key) {
+                <div class="mj-forms-chrome-rail-item is-more-child"
+                     role="button"
+                     tabindex="0"
+                     [class.is-active]="ChromeActiveGroupKey === child.Key"
+                     (click)="OnChromeGroupActivate(child.Key)"
+                     (keydown.enter)="OnChromeGroupActivate(child.Key)"
+                     (keydown.space)="$event.preventDefault(); OnChromeGroupActivate(child.Key)">
+                  <i [class]="child.Icon"></i>
+                  <span class="mj-forms-chrome-rail-label">{{ child.Title }}</span>
+                  @let childCount = ChromeGroupRowCount(child);
+                  @if (childCount != null) {
+                    <span class="mj-forms-chrome-rail-count"
+                          [class.is-zero]="childCount === 0">{{ childCount }}</span>
+                  }
+                </div>
+              }
+            }
+          }
+        </nav>
+      }
       <!-- All panels in a single flex container — CSS order drives sequencing -->
       <div class="mj-forms-all-panels">
         <ng-content></ng-content>
@@ -99,6 +169,18 @@
           template still see every panel; they just render at the bottom
           instead of at their preferred position.
         -->
+        @if (ShowMoreToggle) {
+          <button type="button"
+                  class="mj-forms-more-toggle"
+                  [class.is-expanded]="MoreExpanded"
+                  (click)="OnMoreToggle()">
+            <i class="fa-solid fa-ellipsis"></i>
+            <span>More</span>
+            <span class="mj-forms-more-count">{{ MoreCount }}</span>
+            <i class="fa-solid" [class.fa-chevron-down]="MoreExpanded" [class.fa-chevron-right]="!MoreExpanded"></i>
+          </button>
+        }
+
         @if (Record && FormComponent) {
           <mj-form-panel-slot
             [Entity]="Record.EntityInfo.Name"
