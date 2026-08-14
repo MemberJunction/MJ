@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/global",
   "type": "module",
-  "version": "6.1.0-edge.1",
+  "version": "6.1.0-edge.2",
   "description": "MemberJunction: Global Object - Needed for ALL other MJ components",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,6 +22,7 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
+    "acorn": "^8.15.0",
     "lodash": "^4.17.23",
     "rxjs": "^7.8.2",
     "uuid": "^13.0.0"

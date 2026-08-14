@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, IMetadataProvider, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { ChatMessage } from "@memberjunction/ai";
-import { NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
+import { NormalizeUUID, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
 import {
     MJConversationEntity,
@@ -2124,8 +2124,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             if (a.IsPinned && !b.IsPinned) return -1;
             if (!a.IsPinned && b.IsPinned) return 1;
             // Then by updated date descending
-            const aTime = a.__mj_UpdatedAt?.getTime() ?? 0;
-            const bTime = b.__mj_UpdatedAt?.getTime() ?? 0;
+            const aTime = ToEpochMs(a.__mj_UpdatedAt);
+            const bTime = ToEpochMs(b.__mj_UpdatedAt);
             return bTime - aTime;
         });
     }

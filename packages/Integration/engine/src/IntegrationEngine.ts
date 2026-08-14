@@ -1,4 +1,6 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogStatusEx, Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { RunOwnershipLostError, RunOwnershipService, type TerminalRunStatus } from './RunOwnershipService.js';
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import type {
@@ -56,6 +58,26 @@ import type { BaseIntegrationConnector, FetchContext, FetchBatchResult } from '.
 
 /** Default batch size for fetching records from external systems */
 const DEFAULT_BATCH_SIZE = 200;
+
+/**
+ * Per-run execution context carried through the engine's async call chain via
+ * AsyncLocalStorage (PR 1 item 7 — per-run connections and write chains; no shared
+ * `_provider` instance state).
+ */
+interface EngineRunContext {
+    /** The run's own provider. Every helper inside the run resolves ProviderToUse from here. */
+    provider: IMetadataProvider;
+    /** Durable-run ownership (claim/lease/fence) — set once the run row is claimed. */
+    ownership?: RunOwnershipService;
+    /** Local abort plumbing, driven by the DB cancel/fence signals + heartbeat loss. */
+    abortController: AbortController;
+    /** Monotonic local progress snapshot, persisted (throttled) to the run row's ProgressJSON. */
+    progressSnapshot: SyncProgressSnapshot;
+    /** True once a cooperative cancel (CancelRequestedAt) has been observed. */
+    cancelRequested: boolean;
+    /** True once a boundary/heartbeat discovered the lease was reclaimed — writes must stop. */
+    ownershipLost: boolean;
+}
 
 /**
  * Hard ceiling on records the opt-in partitionReconcile (Merkle) mode may accumulate in RAM
@@ -274,8 +296,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     private readonly matchEngine = new MatchEngine();
     private readonly watermarkService = new WatermarkService();
 
-    /** Optional provider override; falls back to Metadata.Provider when not set. */
-    private _provider?: IMetadataProvider;
+    /**
+     * Per-run execution context (PR 1 item 7). Each run carries its OWN provider,
+     * ownership service and abort plumbing through the async call chain — there is
+     * deliberately NO shared `_provider` instance field, because a last-writer-wins
+     * provider was the reason concurrent runs could write through each other's
+     * connection. AsyncLocalStorage propagates the context to every helper the run
+     * calls without threading a parameter through ~20 private signatures.
+     */
+    private static readonly runContext = new AsyncLocalStorage<EngineRunContext>();
+
+    /** The current run's context, when called from inside a sync run. */
+    private get currentRunContext(): EngineRunContext | undefined {
+        return IntegrationEngine.runContext.getStore();
+    }
 
     /**
      * Server-registered hook for post-sync custom-column promotion (gaps.md §2 / M2). The
@@ -290,9 +324,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         this.postSyncSchemaPromotionCallback = callback;
     }
 
-    /** Returns the active provider — explicit override if set, otherwise the global default. */
+    /** Returns the active provider — the current run's own provider when inside a run, otherwise the global default. */
     protected get ProviderToUse(): IMetadataProvider {
-        return this._provider ?? Metadata.Provider;
+        return this.currentRunContext?.provider ?? Metadata.Provider;
     }
 
     /** In-process lock map to prevent concurrent syncs for the same CompanyIntegration */
@@ -331,49 +365,222 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 
     /**
-     * Per-engine async mutex serializing the DB-WRITE section across concurrently-synced streams.
-     * When a layer runs multiple entity maps in parallel (syncConcurrency > 1), they all share ONE
-     * provider connection whose transaction state is singular — so concurrent BeginTransaction /
-     * SavePoint / Commit calls corrupt each other ("Transaction has not begun", "Cannot roll back
-     * SavePoint"). The fetch phase stays parallel (the real throughput win — it's network-bound);
-     * only the per-batch write transaction is serialized through this lock. Keyed per engine
-     * instance, which owns the shared provider.
+     * Async mutexes serializing the DB-WRITE section, keyed PER PROVIDER (PR 1 item 7 —
+     * per-run write chains). A provider connection's transaction state is singular, so
+     * concurrent BeginTransaction / SavePoint / Commit calls through the SAME provider
+     * corrupt each other ("Transaction has not begun", "Cannot roll back SavePoint") —
+     * whether the writers are parallel streams within one run OR two different runs that
+     * happen to share a provider instance. Keying the mutex on the provider makes the
+     * serialization boundary exactly the hazard boundary: runs on their own providers
+     * write fully in parallel; anything sharing a connection is serialized. The fetch
+     * phase stays parallel (the real throughput win — it's network-bound). WeakMap so a
+     * retired provider's chain entry is collectable.
      */
-    private _writeChain: Promise<unknown> = Promise.resolve();
+    private static readonly writeChains = new WeakMap<IMetadataProvider, { chain: Promise<unknown> }>();
     private runWriteExclusive<T>(fn: () => Promise<T>): Promise<T> {
+        const provider = this.ProviderToUse;
+        let holder = IntegrationEngine.writeChains.get(provider);
+        if (!holder) {
+            holder = { chain: Promise.resolve() };
+            IntegrationEngine.writeChains.set(provider, holder);
+        }
         // Run fn after the prior write completes (whether it resolved or rejected); keep the chain
         // alive past failures so one errored batch never deadlocks subsequent writers.
-        const run = this._writeChain.then(() => fn(), () => fn());
-        this._writeChain = run.then(() => undefined, () => undefined);
+        const run = holder.chain.then(() => fn(), () => fn());
+        holder.chain = run.then(() => undefined, () => undefined);
         return run;
     }
 
-    /** Abort controllers for cancelling running syncs */
-    private static readonly _abortControllers = new Map<string, AbortController>();
-
-    /** Live sync progress — updated on every batch for ALL syncs regardless of caller */
-    private static readonly _syncProgress = new Map<string, SyncProgressSnapshot>();
-
-    /** Read current sync progress for a connector. Returns undefined if no sync is running. */
-    public static GetSyncProgress(companyIntegrationID: string): SyncProgressSnapshot | undefined {
-        return IntegrationEngine._syncProgress.get(companyIntegrationID.toLowerCase());
+    /**
+     * Fence check at a batch boundary, BEFORE any write (PR 1 item 3). One SELECT of the run's
+     * ownership columns: if the fence has moved (the stale sweep or another worker reclaimed the
+     * run) throw RunOwnershipLostError so the loop aborts WITHOUT writing this batch; if a
+     * cross-process cancel was requested, trip the run's abort controller so the loop winds down
+     * through the normal cancel path. A caller with no ownership context (e.g. unit tests driving
+     * internals directly) is a no-op.
+     */
+    private async assertOwnershipAtBoundary(): Promise<void> {
+        const ctx = this.currentRunContext;
+        if (!ctx?.ownership) return;
+        const check = await ctx.ownership.CheckBoundary();
+        if (!check.Owned) {
+            ctx.ownershipLost = true;
+            ctx.abortController.abort();
+            throw new RunOwnershipLostError(ctx.ownership.RunID, 'fence moved at batch boundary — run was reclaimed by another process');
+        }
+        if (check.CancelRequested && !ctx.cancelRequested) {
+            ctx.cancelRequested = true;
+            ctx.abortController.abort();
+        }
     }
 
-    /** Cancel a running sync for a connector. Returns true if a sync was found and signalled. */
-    public static CancelSync(companyIntegrationID: string): boolean {
-        const key = companyIntegrationID.toLowerCase();
-        const controller = IntegrationEngine._abortControllers.get(key);
-        if (controller) {
-            console.log(`[IntegrationEngine] Cancelling sync for ${companyIntegrationID}`);
-            controller.abort();
-            return true;
+    /**
+     * One-time-per-method deprecation notice. Repeating it on every call would flood the
+     * log of a caller that polls progress on a timer, which is the usual usage.
+     */
+    private static readonly _deprecationNoticesEmitted = new Set<string>();
+    private static noteDeprecated(oldName: string, replacement: string): void {
+        if (IntegrationEngine._deprecationNoticesEmitted.has(oldName)) {
+            return;
         }
+        IntegrationEngine._deprecationNoticesEmitted.add(oldName);
+        console.warn(
+            `IntegrationEngine.${oldName}() is deprecated and no longer functional: sync progress and ` +
+            `cancellation now live on the CompanyIntegrationRun row so they are visible across processes, ` +
+            `and the in-process map this method read no longer exists. Use ${replacement}() instead.`
+        );
+    }
+
+    /**
+     * @deprecated Superseded by {@link IntegrationEngine.GetSyncProgressAsync}, which reads
+     * the run row and therefore sees runs owned by ANY process.
+     *
+     * Retained with its original signature so a published consumer does not break on a
+     * minor upgrade. It cannot be made to work: the static map it used to read was removed
+     * when progress moved to the database, and a synchronous method cannot query it. It
+     * returns `undefined` — the same value it returned when no run was in progress — and
+     * logs once explaining the replacement.
+     */
+    public static GetSyncProgress(_companyIntegrationID: string): SyncProgressSnapshot | undefined {
+        IntegrationEngine.noteDeprecated('GetSyncProgress', 'GetSyncProgressAsync');
+        return undefined;
+    }
+
+    /**
+     * @deprecated Superseded by {@link IntegrationEngine.CancelSyncAsync}, which records the
+     * cancel on the run row so the owning process observes it at its next batch boundary.
+     *
+     * Retained with its original signature for published consumers. Returns `false` —
+     * truthfully reporting that it cancelled nothing — rather than pretending to succeed,
+     * so a caller branching on the result is not silently misled.
+     */
+    public static CancelSync(_companyIntegrationID: string): boolean {
+        IntegrationEngine.noteDeprecated('CancelSync', 'CancelSyncAsync');
         return false;
     }
 
-    /** Get all active sync progress entries */
+    /**
+     * @deprecated No direct replacement. Query `MJ: Company Integration Runs` for rows whose
+     * Status is `In Progress` or `Queued` and read their `ProgressJSON`, which is what
+     * {@link IntegrationEngine.GetSyncProgressAsync} does for a single connector.
+     *
+     * Retained with its original signature for published consumers; returns an empty map.
+     */
     public static GetAllSyncProgress(): Map<string, SyncProgressSnapshot> {
-        return new Map(IntegrationEngine._syncProgress);
+        IntegrationEngine.noteDeprecated('GetAllSyncProgress', 'GetSyncProgressAsync');
+        return new Map<string, SyncProgressSnapshot>();
+    }
+
+    /**
+     * Read current sync progress for a connector FROM THE DATABASE (PR 1 item 4 —
+     * progress lives on the run row, so it is visible from ANY process, not just the
+     * one executing the sync). Returns undefined when no live run exists. A run is
+     * "live" when Status is In Progress/Queued AND its lease has not expired — an
+     * expired lease means the owner died and the snapshot is stale history, not
+     * progress.
+     */
+    public static async GetSyncProgressAsync(
+        companyIntegrationID: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<SyncProgressSnapshot | undefined> {
+        // Server-side providers are DatabaseProviderBase (which implements IRunViewProvider);
+        // same narrowing the engine uses for the ownership sprocs.
+        const rv = new RunView(provider as DatabaseProviderBase | undefined);
+        const result = await rv.RunView<{ ProgressJSON: string | null; LeaseExpiresAt: string | Date | null; StartedAt: string | Date }>({
+            EntityName: 'MJ: Company Integration Runs',
+            ExtraFilter: `CompanyIntegrationID='${companyIntegrationID.replace(/'/g, "''")}' AND Status IN ('In Progress','Queued')`,
+            OrderBy: 'StartedAt DESC',
+            Fields: ['ProgressJSON', 'LeaseExpiresAt', 'StartedAt'],
+            MaxRows: 1,
+            ResultType: 'simple',
+            BypassCache: true, // live liveness/progress read — must see the current row
+        }, contextUser);
+        const row = result.Success ? result.Results?.[0] : undefined;
+        if (!row) return undefined;
+        if (row.LeaseExpiresAt != null && new Date(row.LeaseExpiresAt).getTime() < Date.now()) {
+            return undefined; // owner's lease lapsed — not live progress
+        }
+        if (!row.ProgressJSON) return undefined;
+        try {
+            const snapshot = JSON.parse(row.ProgressJSON) as SyncProgressSnapshot & { StartedAt: string | Date };
+            return { ...snapshot, StartedAt: new Date(snapshot.StartedAt) };
+        } catch {
+            return undefined; // corrupt snapshot — treat as no progress rather than throwing at a poller
+        }
+    }
+
+    /**
+     * Request cancellation of a running (or queued) sync by stamping
+     * CancelRequestedAt on the live run row (PR 1 item 4 — the DATABASE is the single
+     * source of cancellation truth, so a cancel issued in ANY process reaches the
+     * owner). The owner observes the stamp at its next batch boundary / lease renewal
+     * and stops after the current batch. Returns true when a live run row was stamped.
+     */
+    public static async CancelSyncAsync(
+        companyIntegrationID: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<boolean> {
+        const p = (provider ?? Metadata.Provider) as DatabaseProviderBase;
+        const d = p.Dialect;
+        const schema = d.QuoteIdentifier(p.MJCoreSchemaName);
+        const table = d.QuoteIdentifier('CompanyIntegrationRun');
+        const ciCol = d.QuoteIdentifier('CompanyIntegrationID');
+        const statusCol = d.QuoteIdentifier('Status');
+        const cancelCol = d.QuoteIdentifier('CancelRequestedAt');
+        const placeholder = p.BuildParameterPlaceholder(0);
+        // One UPDATE, no select-then-update: stamp every un-stamped live run for this CI.
+        const rows = await p.ExecuteSQL<{ ID: string }>(
+            `UPDATE ${schema}.${table} SET ${cancelCol} = ${d.CurrentTimestampUTC()} ` +
+            `WHERE ${ciCol} = ${placeholder} AND ${statusCol} IN ('In Progress','Queued') AND ${cancelCol} IS NULL`,
+            [companyIntegrationID],
+            { isMutation: true, description: 'CancelSync — stamp CancelRequestedAt' },
+            contextUser
+        );
+        console.log(`[IntegrationEngine] Cancel requested for ${companyIntegrationID} (DB stamp)`);
+        // ExecuteSQL result shape for UPDATE differs per driver; a thrown error is the failure
+        // signal. Verify via a cheap read so the caller gets an honest "was anything live?".
+        void rows;
+        const check = await p.ExecuteSQL<{ N: number }>(
+            `SELECT COUNT(*) AS N FROM ${schema}.${table} WHERE ${ciCol} = ${placeholder} ` +
+            `AND ${statusCol} IN ('In Progress','Queued') AND ${cancelCol} IS NOT NULL`,
+            [companyIntegrationID],
+            { isMutation: false, description: 'CancelSync — verify stamp' },
+            contextUser
+        );
+        return Number(check?.[0]?.N ?? 0) > 0;
+    }
+
+    /**
+     * Worker-mode poll (PR 1 item 8): the oldest claimable `Queued` runs. A row is claimable
+     * when it is unowned or its lease has lapsed — a Queued row with a LIVE lease is being
+     * started by another worker right now and must not be returned. This is only a
+     * *candidate* list; {@link ExecuteQueuedRun}'s atomic claim is what actually grants
+     * exclusivity, so two workers polling simultaneously is safe by construction.
+     */
+    public static async PollQueuedRuns(
+        contextUser: UserInfo,
+        maxRows: number,
+        provider?: IMetadataProvider
+    ): Promise<Array<{ ID: string; CompanyIntegrationID: string }>> {
+        const p = (provider ?? Metadata.Provider) as DatabaseProviderBase;
+        const now = p.Dialect.CurrentTimestampUTC();
+        const rv = new RunView(p);
+        const result = await rv.RunView<{ ID: string; CompanyIntegrationID: string }>({
+            EntityName: 'MJ: Company Integration Runs',
+            ExtraFilter: `Status='Queued' AND (OwnerToken IS NULL OR LeaseExpiresAt IS NULL OR LeaseExpiresAt < ${now})`,
+            OrderBy: 'StartedAt ASC',
+            Fields: ['ID', 'CompanyIntegrationID'],
+            MaxRows: maxRows,
+            ResultType: 'simple',
+            BypassCache: true, // queue read — must see the current rows
+        }, contextUser);
+        if (!result.Success) {
+            console.warn(`[IntegrationEngine] Queue poll failed: ${result.ErrorMessage}`);
+            return [];
+        }
+        return result.Results ?? [];
     }
 
     /**
@@ -400,13 +607,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * Call this once during MJAPI startup after metadata is loaded.
      */
     public async ResumeOrphanedSyncs(contextUser: UserInfo, provider?: IMetadataProvider): Promise<void> {
-        if (provider) this._provider = provider;
+        const prov = provider ?? Metadata.Provider;
         await IntegrationEngineBase.Instance.Config(false, contextUser, provider);
 
+        // Liveness pre-screen (PR 1 item 6): an 'In Progress' run with a LIVE lease belongs to a
+        // healthy process — possibly another worker — and must not be adopted. Only unowned runs or
+        // runs whose lease has lapsed are orphan CANDIDATES. The claim sproc below re-evaluates the
+        // same predicate atomically, so this filter is a cheap pre-screen, not the correctness gate.
+        const dialect = (prov as DatabaseProviderBase).Dialect;
         const rv = new RunView();
         const orphanedRuns = await rv.RunView<MJCompanyIntegrationRunEntity>({
             EntityName: 'MJ: Company Integration Runs',
-            ExtraFilter: `Status='In Progress'`,
+            ExtraFilter: `Status='In Progress' AND (OwnerToken IS NULL OR LeaseExpiresAt IS NULL OR LeaseExpiresAt < ${dialect.CurrentTimestampUTC()})`,
             ResultType: 'entity_object',
             BypassCache: true, // resume must see the live in-progress runs, not a stale cache
         }, contextUser);
@@ -438,7 +650,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             let resumeResult: SyncResult | undefined;
             IntegrationEngine.activeSyncs.set(lockKey, new Promise<SyncResult>(res => { resolveResumeLock = res; }));
 
+            const ownership = new RunOwnershipService(prov as DatabaseProviderBase, runID, undefined, contextUser);
             try {
+                // CLAIM BEFORE ADOPTING (PR 1 item 6): a single atomic UPDATE that succeeds only if the
+                // run is still unowned/lapsed. Zero rows = another worker adopted it between our RunView
+                // and now — skip, never double-run. A successful claim BUMPS the fence, so if the
+                // original owner is actually alive-but-slow it aborts at its next boundary check
+                // without writing: the sweep-reclaim is itself the abort signal for the abandoned owner.
+                const claimed = await ownership.Claim();
+                if (!claimed) {
+                    console.log(`[IntegrationEngine] Skipping resume of run ${runID.substring(0, 8)} — claim lost (another worker adopted it)`);
+                    continue;
+                }
+
                 // Find which entity MAPS already completed SUCCESSFULLY in this run. We correlate
                 // by EntityMapID (parsed from the detail's RecordID, stamped by CreateRunDetail),
                 // not EntityID — two maps can target the same MJ Entity, so keying on EntityID
@@ -469,8 +693,26 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     `(${completedMapIDs.size} entity maps already completed)`
                 );
 
+                // Recover what this run was ASKED to do. Without this the resume rebuilds config from
+                // the CompanyIntegration alone, so an adopted run silently loses its options — most
+                // damagingly FullSync, which exists precisely to distrust the watermark. An adopted
+                // full sync would resume incrementally, fetch nothing, and report Success.
+                // Unparseable/absent ConfigData falls back to defaults rather than refusing to resume.
+                let resumeOptions: IntegrationSyncOptions | undefined;
+                let resumeTriggerType: SyncTriggerType = 'Scheduled';
+                try {
+                    const cfg = JSON.parse(run.ConfigData ?? '{}') as { triggerType?: SyncTriggerType; options?: IntegrationSyncOptions | null };
+                    resumeOptions = cfg.options ?? undefined;
+                    if (cfg.triggerType) resumeTriggerType = cfg.triggerType;
+                } catch {
+                    console.warn(`[IntegrationEngine] Run ${runID.substring(0, 8)} has unparseable ConfigData; resuming with defaults`);
+                }
+                if (resumeOptions?.FullSync) {
+                    console.log(`[IntegrationEngine] Run ${runID.substring(0, 8)} was a FULL sync — resuming as full, not incremental`);
+                }
+
                 // Load config and filter to only remaining entity maps (by map ID)
-                const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser);
+                const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, resumeOptions);
                 const remainingMaps = config.entityMaps.filter(
                     em => !completedMapIDs.has(em.ID.toLowerCase())
                 );
@@ -479,7 +721,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     console.log(`[IntegrationEngine] All entity maps completed for run ${runID.substring(0, 8)}, marking as Success`);
                     run.EndedAt = new Date();
                     run.Status = 'Success';
+                    ownership.SyncEntityOwnershipFields(run); // full-row save must not clobber the live claim
                     await run.Save();
+                    await ownership.Release('Success');
                     continue;
                 }
 
@@ -488,10 +732,45 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // Replace entityMaps with only the remaining ones
                 config.entityMaps = remainingMaps;
 
-                // Execute remaining maps using the existing run record
-                const result = await this.ExecuteEntityMaps(config, run, contextUser);
-                result.RunID = runID;
-                await this.FinalizeRun(run, result, contextUser);
+                // Execute remaining maps inside a per-run context: the resume gets its own provider
+                // binding, abort controller, and ownership — identical to a fresh RunSync — so the
+                // heartbeat renews the lease, the batch boundaries fence-check, and FinalizeRun
+                // syncs ownership fields + releases, all through the SAME code paths.
+                const abortController = new AbortController();
+                const progressSnapshot: SyncProgressSnapshot = {
+                    StartedAt: new Date(),
+                    CurrentEntity: '',
+                    EntityMapsTotal: remainingMaps.length,
+                    EntityMapsCompleted: 0,
+                    RecordsProcessed: 0,
+                    RecordsCreated: 0,
+                    RecordsUpdated: 0,
+                    RecordsErrored: 0,
+                    // The run's OWN trigger type, recovered above — not a hardcoded 'Scheduled'. This is
+                    // what IntegrationGetSyncProgress reports back ("Sync in progress (Manual)"), so a
+                    // hardcoded value mislabels every adopted run.
+                    TriggerType: resumeTriggerType,
+                };
+                const runCtx: EngineRunContext = {
+                    provider: prov,
+                    ownership,
+                    abortController,
+                    progressSnapshot,
+                    cancelRequested: false,
+                    ownershipLost: false,
+                };
+                ownership.StartHeartbeat({
+                    onLost: () => { runCtx.ownershipLost = true; abortController.abort(); },
+                    onCancelRequested: () => { runCtx.cancelRequested = true; abortController.abort(); },
+                    progressSupplier: () => JSON.stringify(progressSnapshot),
+                });
+
+                const result = await IntegrationEngine.runContext.run(runCtx, async () => {
+                    const r = await this.ExecuteEntityMaps(config, run, contextUser, undefined, abortController.signal);
+                    r.RunID = runID;
+                    await this.FinalizeRun(run, r, contextUser);
+                    return r;
+                });
                 resumeResult = result;
 
                 console.log(
@@ -503,12 +782,21 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 const errMsg = err instanceof Error ? err.message : String(err);
                 console.error(`[IntegrationEngine] Failed to resume run ${runID.substring(0, 8)}: ${errMsg}`);
 
-                // Mark as failed so it doesn't get picked up again
-                run.EndedAt = new Date();
-                run.Status = 'Failed';
-                run.ErrorLog = JSON.stringify([{ ErrorMessage: `Resume failed: ${errMsg}` }]);
-                await run.Save();
+                if (err instanceof RunOwnershipLostError) {
+                    // We were fenced out mid-resume — the NEW owner now owns the run row.
+                    // Writing 'Failed' here would clobber the live holder's state.
+                    console.warn(`[IntegrationEngine] Resume of run ${runID.substring(0, 8)} lost ownership — leaving the run row to its new owner`);
+                } else {
+                    // Mark as failed so it doesn't get picked up again
+                    run.EndedAt = new Date();
+                    run.Status = 'Failed';
+                    run.ErrorLog = JSON.stringify([{ ErrorMessage: `Resume failed: ${errMsg}` }]);
+                    ownership.SyncEntityOwnershipFields(run);
+                    await run.Save();
+                    try { await ownership.Release('Failed'); } catch { /* lease will simply expire */ }
+                }
             } finally {
+                ownership.StopHeartbeat();
                 // Release the C1 lock + unblock any RunSync that began awaiting this resume (RunSync returns
                 // `existing`). Resolve with the real result when we have one, else a benign empty result so no
                 // waiter hangs. Promise resolve is idempotent and the early-exit `continue` also lands here.
@@ -543,7 +831,123 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         options?: IntegrationSyncOptions,
         provider?: IMetadataProvider
     ): Promise<SyncResult> {
-        if (provider) this._provider = provider;
+        return this.runWithOwnedContext(companyIntegrationID, contextUser, triggerType, onProgress, onNotification, options, provider);
+    }
+
+    /**
+     * Worker-mode enqueue (PR 1 item 8): create the run row with `Status='Queued'` and
+     * return its ID immediately, without executing anything. A worker process picks it up
+     * via {@link ExecuteQueuedRun}; the claim sproc provides the mutual exclusion, so any
+     * number of workers can poll the same queue safely.
+     *
+     * The trigger type and sync options are persisted on the run's `ConfigData` so the
+     * worker executes exactly what the caller asked for, in a different process.
+     */
+    public async EnqueueSync(
+        companyIntegrationID: string,
+        contextUser: UserInfo,
+        triggerType: SyncTriggerType = 'Manual',
+        options?: IntegrationSyncOptions,
+        provider?: IMetadataProvider
+    ): Promise<string> {
+        const md = provider ?? Metadata.Provider;
+        const run = await md.GetEntityObject<MJCompanyIntegrationRunEntity>('MJ: Company Integration Runs', contextUser);
+        run.NewRecord();
+        run.CompanyIntegrationID = companyIntegrationID;
+        run.RunByUserID = contextUser.ID;
+        run.StartedAt = new Date();
+        run.Status = 'Queued';
+        run.TotalRecords = 0;
+        run.ConfigData = JSON.stringify({ triggerType, options: options ?? null });
+        if (options?.ScheduledJobRunID) {
+            run.Set('ScheduledJobRunID', options.ScheduledJobRunID);
+        }
+        if (!(await run.Save())) {
+            throw new Error(`Failed to enqueue sync run: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        console.log(`[IntegrationEngine] Enqueued run ${run.ID} for ${companyIntegrationID} (${triggerType})`);
+        return run.ID;
+    }
+
+    /**
+     * Worker-mode execution (PR 1 item 8): take a `Queued` run row, claim it, and execute
+     * it in THIS process. Returns a failed result (without side effects) when the run is
+     * no longer queued or when another worker won the claim — losing the race is normal
+     * and must never be treated as an error condition by the caller's poll loop.
+     */
+    public async ExecuteQueuedRun(
+        runID: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<SyncResult> {
+        const md = provider ?? Metadata.Provider;
+        const run = await md.GetEntityObject<MJCompanyIntegrationRunEntity>('MJ: Company Integration Runs', contextUser);
+        if (!(await run.Load(runID))) {
+            return this.emptyFailedResult(`Queued run ${runID} not found`);
+        }
+        if (run.Status !== 'Queued') {
+            return this.emptyFailedResult(`Run ${runID} is '${run.Status}', not 'Queued' — another worker already took it`);
+        }
+        // A cancel issued while the run was still QUEUED must stop it here. CancelSync stamps
+        // both 'In Progress' and 'Queued' rows, but the only consumer of the stamp is the
+        // running loop's batch-boundary / lease-renewal check — a queued run has no loop yet,
+        // so without this gate the worker claims the cancelled row moments later and executes
+        // it to completion. Verified live: run E3F51F9A was stamped CancelRequestedAt at
+        // 15:50:46.643 and still finished Status='Success' at 15:50:48.646.
+        // Finalize the same way an aborted in-flight run finalizes (FinalizeRun): 'Cancelled'
+        // with an explicit ErrorLog carrying the reason.
+        if (run.CancelRequestedAt != null) {
+            run.EndedAt = new Date();
+            run.Status = 'Cancelled';
+            run.ErrorLog = 'Sync cancelled by user before it started';
+            if (!(await run.Save())) {
+                console.warn(`[IntegrationEngine] Could not finalize cancelled queued run ${runID}: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+            console.log(`[IntegrationEngine] Queued run ${runID} was cancelled before start — not executing`);
+            return this.emptyFailedResult('Sync cancelled by user before it started');
+        }
+
+        let triggerType: SyncTriggerType = 'Scheduled';
+        let options: IntegrationSyncOptions | undefined;
+        try {
+            const config = JSON.parse(run.ConfigData ?? '{}') as { triggerType?: SyncTriggerType; options?: IntegrationSyncOptions | null };
+            if (config.triggerType) triggerType = config.triggerType;
+            options = config.options ?? undefined;
+        } catch {
+            // A run whose ConfigData we can't read still executes — with defaults, not silently skipped.
+            console.warn(`[IntegrationEngine] Run ${runID} has unparseable ConfigData; executing with defaults`);
+        }
+
+        return this.runWithOwnedContext(
+            run.CompanyIntegrationID, contextUser, triggerType, undefined, undefined, options, provider, run
+        );
+    }
+
+    /** A zero-work failed SyncResult — used for refusals that must not look like partial work. */
+    private emptyFailedResult(message: string): SyncResult {
+        return {
+            Success: false, ErrorMessage: message, RecordsProcessed: 0, RecordsCreated: 0,
+            RecordsUpdated: 0, RecordsDeleted: 0, RecordsErrored: 0, RecordsSkipped: 0,
+            Errors: [], EntityMapResults: [], Duration: 0,
+        };
+    }
+
+    /**
+     * Shared body of {@link RunSync} and {@link ExecuteQueuedRun}: acquires the per-connection
+     * concurrency lock, establishes the per-run AsyncLocalStorage context (own provider, own
+     * abort controller, own progress snapshot) and executes. `existingRun` is supplied by the
+     * worker path so a queued row is executed rather than a new row created.
+     */
+    private async runWithOwnedContext(
+        companyIntegrationID: string,
+        contextUser: UserInfo,
+        triggerType: SyncTriggerType,
+        onProgress: OnProgressCallback | undefined,
+        onNotification: OnNotificationCallback | undefined,
+        options: IntegrationSyncOptions | undefined,
+        provider: IMetadataProvider | undefined,
+        existingRun?: MJCompanyIntegrationRunEntity
+    ): Promise<SyncResult> {
         const lockKey = companyIntegrationID.toLowerCase();
         const existing = IntegrationEngine.activeSyncs.get(lockKey);
         if (existing) {
@@ -566,10 +970,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             };
         }
 
-        // Initialize abort controller and progress tracking
+        // Per-run context (PR 1 item 7): the run's OWN provider (captured, never stored on
+        // the engine), a local abort controller (plumbing driven by the DB cancel/fence
+        // signals — never a cross-process source of truth), and a local progress snapshot
+        // that the ownership service persists to ProgressJSON on the run row.
         const abortController = new AbortController();
-        IntegrationEngine._abortControllers.set(lockKey, abortController);
-        IntegrationEngine._syncProgress.set(lockKey, {
+        const progressSnapshot: SyncProgressSnapshot = {
             StartedAt: new Date(),
             CurrentEntity: '',
             EntityMapsTotal: 0,
@@ -579,28 +985,37 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             RecordsUpdated: 0,
             RecordsErrored: 0,
             TriggerType: triggerType,
-        });
+        };
+        const runCtx: EngineRunContext = {
+            provider: provider ?? Metadata.Provider,
+            abortController,
+            progressSnapshot,
+            cancelRequested: false,
+            ownershipLost: false,
+        };
 
         // Wrap caller's onProgress with internal tracking. U3 — MONOTONIC: with
         // syncConcurrency > 1 the per-map events arrive out of order (map 3 can emit after
         // map 7), so raw assignment made the progress bar go BACKWARDS. The snapshot is a
-        // high-water mark, so only ever ratchet the counters upward.
+        // high-water mark, so only ever ratchet the counters upward. The snapshot is
+        // persisted to the run row's ProgressJSON (throttled) so readers in ANY process see it.
         const wrappedProgress: OnProgressCallback = (progress) => {
-            const entry = IntegrationEngine._syncProgress.get(lockKey);
-            if (entry) IntegrationEngine.RatchetProgressSnapshot(entry, progress);
+            IntegrationEngine.RatchetProgressSnapshot(progressSnapshot, progress);
+            void runCtx.ownership?.WriteProgress(JSON.stringify(progressSnapshot));
             if (onProgress) onProgress(progress);
         };
 
-        const syncPromise = this.executeSyncInternal(
-            companyIntegrationID, contextUser, triggerType, wrappedProgress, onNotification, options, abortController.signal
-        );
+        // Enter the AsyncLocalStorage scope — every helper the run calls resolves
+        // ProviderToUse / write chain / ownership from THIS context, isolated per run.
+        const syncPromise = IntegrationEngine.runContext.run(runCtx, () => this.executeSyncInternal(
+            companyIntegrationID, contextUser, triggerType, wrappedProgress, onNotification, options, abortController.signal, existingRun
+        ));
         IntegrationEngine.activeSyncs.set(lockKey, syncPromise);
         try {
             return await syncPromise;
         } finally {
             IntegrationEngine.activeSyncs.delete(lockKey);
-            IntegrationEngine._abortControllers.delete(lockKey);
-            IntegrationEngine._syncProgress.delete(lockKey);
+            runCtx.ownership?.StopHeartbeat();
         }
     }
 
@@ -614,7 +1029,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         onProgress?: OnProgressCallback,
         onNotification?: OnNotificationCallback,
         options?: IntegrationSyncOptions,
-        abortSignal?: AbortSignal
+        abortSignal?: AbortSignal,
+        existingRun?: MJCompanyIntegrationRunEntity
     ): Promise<SyncResult> {
         const startTime = Date.now();
         const logger = new SyncLogger({ ciId: companyIntegrationID, integration: null });
@@ -654,6 +1070,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (config.companyIntegration.IsActive === false) {
             const message = 'Connector is deactivated (IsActive=false); sync not started';
             logger.emit('sync.warning', { reason: 'deactivated', message });
+            // A queued row must not sit in the queue forever being re-polled by every worker.
+            if (existingRun) {
+                existingRun.Status = 'Failed';
+                existingRun.ErrorLog = message;
+                existingRun.EndedAt = new Date();
+                if (!(await existingRun.Save())) {
+                    console.warn(`[IntegrationEngine] Failed to fail-out deactivated queued run ${existingRun.ID}: ${existingRun.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+            }
             return {
                 Success: false,
                 ErrorMessage: message,
@@ -669,8 +1094,61 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             };
         }
 
-        const run = await this.CreateRunRecord(config.companyIntegration, triggerType, contextUser, options?.ScheduledJobRunID);
+        // Worker mode executes a row that already exists (Status='Queued'); the direct path creates one.
+        const run = existingRun ?? await this.CreateRunRecord(config.companyIntegration, triggerType, contextUser, options?.ScheduledJobRunID, options);
         logger.attachRunId(run.ID);
+
+        // ── Durable-run ownership (PR 1 item 3): claim before the first batch. ──
+        // The claim is ONE atomic UPDATE (unowned OR expired lease) that bumps FenceToken;
+        // zero rows back means another process owns this run and we must not proceed.
+        // Renewal runs from a TIMER at ~lease/3 (not the batch loop) so a long batch never
+        // looks dead; the lease is max(default, MaxRuntimeMinutes) so a configured long run
+        // only ever EXTENDS protection. The heartbeat's renewal result doubles as the
+        // cross-process cancel poll.
+        const runCtx = this.currentRunContext;
+        if (runCtx) {
+            const ownership = new RunOwnershipService(
+                runCtx.provider as DatabaseProviderBase,
+                run.ID,
+                options?.MaxRuntimeMinutes ?? undefined,
+                contextUser
+            );
+            const claimed = await ownership.Claim();
+            if (!claimed) {
+                const message = `Run ${run.ID} could not be claimed — another process holds a live lease. Not proceeding.`;
+                logger.emit('sync.warning', { reason: 'claim-lost', message });
+                return {
+                    Success: false, ErrorMessage: message, RecordsProcessed: 0, RecordsCreated: 0,
+                    RecordsUpdated: 0, RecordsDeleted: 0, RecordsErrored: 0, RecordsSkipped: 0,
+                    Errors: [], EntityMapResults: [], Duration: Date.now() - startTime, RunID: run.ID,
+                };
+            }
+            runCtx.ownership = ownership;
+
+            // Worker mode: the claim is what promotes a Queued row to In Progress. Doing it
+            // AFTER the claim (never before) means a worker that loses the race never touches
+            // the row, so the winner's status is the only one written.
+            if (existingRun && existingRun.Status === 'Queued') {
+                existingRun.Status = 'In Progress';
+                existingRun.StartedAt = new Date();
+                ownership.SyncEntityOwnershipFields(existingRun);
+                if (!(await existingRun.Save())) {
+                    console.warn(`[IntegrationEngine] Failed to mark claimed run ${existingRun.ID} In Progress: ${existingRun.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+            }
+
+            ownership.StartHeartbeat({
+                onLost: () => {
+                    runCtx.ownershipLost = true;
+                    runCtx.abortController.abort();
+                },
+                onCancelRequested: () => {
+                    runCtx.cancelRequested = true;
+                    runCtx.abortController.abort();
+                },
+                progressSupplier: () => JSON.stringify(runCtx.progressSnapshot),
+            });
+        }
 
         // Durable, queryable, restart-surviving artifact stream for this sync. runID is
         // the CompanyIntegrationRun.ID so the JSONL artifact cross-correlates with the run
@@ -733,6 +1211,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         } catch (err) {
             const errMsg = err instanceof Error ? err.message : String(err);
             logger.emit('sync.run.fail', { error: errMsg, durationMs: Date.now() - startTime });
+            // Ownership lost (fence moved / lease reclaimed): the run row now belongs to
+            // ANOTHER process — writing a terminal status to it here would clobber the new
+            // owner's state. Stop everything locally and walk away without touching the row.
+            const ctx = this.currentRunContext;
+            if (err instanceof RunOwnershipLostError || ctx?.ownershipLost) {
+                ctx?.ownership?.StopHeartbeat();
+                await this.finalizeSyncProgress(progress, 'failed', errMsg);
+                console.warn(`[IntegrationEngine] Run ${run.ID} ownership lost — aborted without writing the run row.`);
+                return {
+                    Success: false, ErrorMessage: errMsg, RecordsProcessed: 0, RecordsCreated: 0,
+                    RecordsUpdated: 0, RecordsDeleted: 0, RecordsErrored: 0, RecordsSkipped: 0,
+                    Errors: [], EntityMapResults: [], Duration: Date.now() - startTime, RunID: run.ID,
+                };
+            }
             await this.finalizeSyncProgress(progress, 'failed', errMsg);
             await this.FailRun(run, err, contextUser, onNotification);
             throw err;
@@ -926,7 +1418,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         companyIntegration: MJCompanyIntegrationEntity,
         triggerType: SyncTriggerType,
         contextUser: UserInfo,
-        scheduledJobRunID?: string
+        scheduledJobRunID?: string,
+        options?: IntegrationSyncOptions
     ): Promise<MJCompanyIntegrationRunEntity> {
         const md = this.ProviderToUse;
         const run = await md.GetEntityObject<MJCompanyIntegrationRunEntity>(
@@ -939,7 +1432,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         run.StartedAt = new Date();
         run.Status = 'In Progress';
         run.TotalRecords = 0;
-        run.ConfigData = JSON.stringify({ triggerType });
+        // Persist the OPTIONS alongside the trigger type, in the same shape EnqueueSync writes.
+        // Without them a run that outlives its process loses what it was asked to do: ResumeOrphanedSyncs
+        // rebuilds config from the CompanyIntegration alone, so an adopted `FullSync` run silently
+        // resumed as an incremental one — re-fetching nothing and reporting Success, which is the
+        // opposite of what a full sync is requested for (repairing drift, re-pulling after a remap).
+        run.ConfigData = JSON.stringify({ triggerType, options: options ?? null });
 
         // Link to scheduled job run if triggered by the scheduler.
         // Use Set() because the ScheduledJobRunID column won't exist on the
@@ -1019,6 +1517,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 this.checkSecondLayerEmpty(entityMap, mapResult, depGraph, processedByIoId, ioNameById, ioCategoryById, logger);
                 return { ok: mapResult.Success, throttled: mapResult.Throttled === true };
             } catch (err) {
+                // Ownership loss is NOT a per-map failure to record-and-continue: continuing to the
+                // next map would keep writing after another process claimed the run — the exact
+                // split-brain the fence prevents. Propagate so the whole sync aborts immediately.
+                if (err instanceof RunOwnershipLostError) throw err;
                 const objName = entityMap.ExternalObjectName ?? entityMap.ID;
                 const errMsg = err instanceof Error ? err.message : String(err);
                 console.error(`[IntegrationEngine] Entity map '${objName}' failed: ${errMsg}`);
@@ -1889,6 +2391,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     );
                 }
             }
+            // Batch boundary: verify we STILL own the run before this batch's writes begin.
+            // Throws RunOwnershipLostError (aborting with nothing written) if the fence moved.
+            await this.assertOwnershipAtBoundary();
+
             // Serialize the match READ too (record-map / PK lookups). On a shared provider connection
             // a read routes through whatever transaction is active, so a match read in this stream
             // collides with another concurrent stream's in-flight write transaction ("Transaction has
@@ -2063,6 +2569,25 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // last ordering key so the next run resumes the seek from here instead of restarting.
             await this.runWriteExclusive(() => this.watermarkService.SaveKeysetPosition(entityMapID, currentAfterKey, contextUser));
             result.WatermarkAfter = currentAfterKey;
+        } else if (!hadFetchGap && currentWatermark && currentWatermark !== initialWatermark) {
+            // A WATERMARK-based connector stopped early (cancel / safety limit / duplicate batch /
+            // schema-not-generated / unskippable fetch error) but whole batches DID complete. Persist the
+            // max watermark seen so the next run resumes from there instead of re-fetching everything
+            // since the last clean run — the counterpart of the keyset branch above, which until now was
+            // the ONLY early-stop that saved its position. The cancel log has always said "saving
+            // watermark"; for a non-keyset connector it previously saved nothing.
+            //
+            // Safe because currentWatermark only ever advances at the END of a fully-applied batch
+            // (§10, after ApplyRecords) — every early-exit `break` above happens before that, so this
+            // value can never point past a record that wasn't written.
+            //
+            // Deliberately NOT wall-clock "now", even for a full sync: coverage is partial, so advancing
+            // past the point actually reached would skip the (reached, now] window permanently. And
+            // deliberately NOT when hadFetchGap — a skipped page leaves a HOLE behind this watermark,
+            // which is why that path holds it for a full re-fetch next run.
+            const partialWatermark = currentWatermark;
+            await this.runWriteExclusive(() => this.watermarkService.Update(entityMapID, partialWatermark, contextUser, 'Pull'));
+            result.WatermarkAfter = partialWatermark;
         }
 
         // Orphan detection: delete/tombstone MJ records whose external counterpart no longer exists.
@@ -2206,7 +2731,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         let firstErrorChangeAt: string | null = null; // min ChangedAt among failed pushes
         const successfulChangeAts: string[] = [];
 
+        let recordsSinceBoundary = 0;
         for (const change of changedRecords) {
+            // Push has no natural batch, so impose a fence boundary every MaxBatchSize records:
+            // a reclaimed run must stop writing to the VENDOR promptly, not at end-of-map. The
+            // check sits OUTSIDE the per-record try so RunOwnershipLostError propagates (the
+            // per-record catch must never swallow it). A cross-process cancel trips the abort
+            // signal, honored at the top of each iteration.
+            if (recordsSinceBoundary === 0) await this.assertOwnershipAtBoundary();
+            if (++recordsSinceBoundary >= this.MaxBatchSize) recordsSinceBoundary = 0;
+            if (_abortSignal?.aborted) break;
             result.RecordsProcessed++;
             try {
                 await this.PushSingleRecord(change, config, entityMap, pushFieldMaps, result, contextUser, logger);
@@ -2920,6 +3454,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     result.RecordsSkipped += recs.length;
                     continue;
                 }
+                // Partition boundary = a batch boundary: fence-check before this partition's writes.
+                await this.assertOwnershipAtBoundary();
+
                 // D3: serialize the match READ through the same write-mutex the non-partition path uses
                 // (~line 1644). matchEngine.Resolve reads existing MJ rows on the SHARED provider
                 // connection, so when streams run in parallel (syncConcurrency>1) it must not interleave
@@ -4349,22 +4886,36 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): Promise<void> {
         run.EndedAt = new Date();
         run.TotalRecords = result.RecordsProcessed;
-        // A user/system-cancelled run must NOT be recorded as 'Success' — that hides the
-        // cancellation in run history (indistinguishable from a clean completion) and is wrong
-        // for any downstream cadence/health logic. Until a first-class 'Cancelled' status value
-        // exists on CompanyIntegrationRun (Status value list is Pending/In Progress/Success/Failed),
-        // finalize an aborted run as 'Failed' with an explicit ErrorLog. The durable progress
-        // artifact additionally carries exitReason='aborted' (see finalizeSyncProgress) so a stopped
-        // run stays distinguishable from a real failure over GraphQL.
+        // A cancelled run is neither a success nor a failure, and 'Cancelled' is now a first-class
+        // value in the Status list — so record it as itself. Previously this had to be 'Failed' with
+        // an explanatory ErrorLog, which meant every health/cadence consumer counted deliberate
+        // cancellations as errors unless it string-matched that text. The ErrorLog is still written
+        // (it carries the reason), and the durable progress artifact still carries
+        // exitReason='aborted' (see finalizeSyncProgress).
+        // Held in a local so the release below sends the SAME value. Deriving it there from
+        // `run.Status` with a two-way test collapsed everything non-Success to 'Failed', which would
+        // have overwritten 'Cancelled' in the release UPDATE — the sproc assigns Status = @FinalStatus,
+        // so the row's carefully-set status would be undone one statement later.
+        let terminalStatus: TerminalRunStatus;
         if (aborted) {
-            run.Status = 'Failed';
+            terminalStatus = 'Cancelled';
             run.ErrorLog = result.ErrorMessage ?? 'Sync cancelled by user';
         } else {
-            run.Status = result.RecordsErrored > 0 ? 'Failed' : 'Success';
+            terminalStatus = result.RecordsErrored > 0 ? 'Failed' : 'Success';
             if (result.Errors.length > 0) {
                 run.ErrorLog = JSON.stringify(result.Errors.slice(0, 100));
             }
         }
+        run.Status = terminalStatus;
+        // The generated spUpdate writes EVERY column from the entity's in-memory state.
+        // This run entity was loaded BEFORE the claim, so without a sync its ownership
+        // columns (FenceToken 0, OwnerToken null, stale lease) would clobber the DB's live
+        // values on save — silently un-fencing the run. Sync them to the service's
+        // last-known-authoritative values first; Release() below then clears ownership
+        // atomically (token-checked, so a stale holder's release no-ops).
+        const ownership = this.currentRunContext?.ownership;
+        ownership?.SyncEntityOwnershipFields(run);
+
         // Retry the finalize save: a failed save leaves the run 'In Progress', which ResumeOrphanedSyncs
         // re-queues on next startup → the whole sync re-runs (re-fetch + re-apply). Worth a few retries to
         // make the terminal status durable. Both a thrown infra error and a `false` logical-failure retry.
@@ -4383,6 +4934,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 `${saveErr instanceof Error ? saveErr.message : String(saveErr)}. ` +
                 `Run may remain 'In Progress' and be re-queued as orphaned on next startup.`
             );
+        }
+
+        // Terminal release: clear OwnerToken/LeaseExpiresAt and (re-)stamp the final status
+        // in one token-checked statement, so the row is immediately claimable-clean.
+        if (ownership) {
+            try {
+                await ownership.Release(terminalStatus);
+            } catch (releaseErr) {
+                console.warn(`[IntegrationEngine] Run ${run.ID} release failed (non-fatal — lease will simply expire): ${releaseErr instanceof Error ? releaseErr.message : String(releaseErr)}`);
+            }
         }
 
         if (onNotification) {
@@ -4459,7 +5020,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         run.EndedAt = new Date();
         run.Status = 'Failed';
         run.ErrorLog = err instanceof Error ? err.message : String(err);
+        // Same full-row-save hazard as FinalizeRun: sync the in-memory ownership columns to the
+        // claim's live values before Save, then release (token-checked — a fenced-out holder no-ops).
+        const ownership = this.currentRunContext?.ownership;
+        ownership?.SyncEntityOwnershipFields(run);
         await run.Save();
+        if (ownership) {
+            try { await ownership.Release('Failed'); } catch { /* non-fatal — lease will expire */ }
+        }
 
         if (onNotification) {
             const failResult: SyncResult = {
@@ -4595,7 +5163,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 CompanyIntegrationID: companyIntegrationID,
                 ContextUser: contextUser,
                 SyncedEntityNames: syncedEntityNames,
-                Provider: this._provider,
+                Provider: this.currentRunContext?.provider,
                 // The run's in-memory custom-key candidates — needed because the
                 // overflow-column scan alone under-reports once the hash basis excludes
                 // overflow (skipped rows never write their overflow JSON).

@@ -60,6 +60,7 @@ import { PromptComponentResolver, InjectScopedPromptParts } from './prompt-compo
 import { ScopedPromptConfigResolver, ApplyScopedPromptConfig } from './scoped-prompt-config-resolver';
 import { AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
 import {
+    StringifyForPersistence,
     AIPromptParams,
     AIPromptRunResult,
     ChildPromptParam,
@@ -8040,8 +8041,16 @@ The context is now within limits. Please retry your request with the recovered c
         }
         
         // Set StartingPayload if we have a payload (either from params or auto-populated)
+        //
+        // Sanitized, because this is a CALLER-supplied object going into a database row. The same
+        // write on the task-graph path threw `Converting circular structure to JSON` the first time
+        // a real context held a socket, killing the run before a step executed — and a payload that
+        // happens to serialize is the worse case, since whatever it holds (credentials, endpoints)
+        // then lives in a row that outlives the run. Drops are logged rather than swallowed.
         if (modifiedParams.payload) {
-            this._agentRun.StartingPayload = JSON.stringify(modifiedParams.payload);
+            const sanitized = StringifyForPersistence(modifiedParams.payload, 'payload');
+            this._agentRun.StartingPayload = sanitized.JSON;
+            this.warnAboutDroppedValues('StartingPayload', sanitized.DroppedPaths, params);
         }
         
         // Set new fields from ExecuteAgentParams
@@ -8055,7 +8064,11 @@ The context is now within limits. Please retry your request with the recovered c
             this._agentRun.OverrideVendorID = params.override.vendorId;
         }
         if (params.data) {
-            this._agentRun.Data = JSON.stringify(params.data);
+            // Same hazard, same treatment — `data` is as caller-supplied as `payload`, and this
+            // write is what persists it for anything reading the run afterwards.
+            const sanitized = StringifyForPersistence(params.data, 'data');
+            this._agentRun.Data = sanitized.JSON;
+            this.warnAboutDroppedValues('Data', sanitized.DroppedPaths, params);
         }
         this._agentRun.Verbose = params.verbose || false;
 
@@ -8288,6 +8301,25 @@ The context is now within limits. Please retry your request with the recovered c
      * @param params - Step creation parameters
      * @returns {Promise<MJAIAgentRunStepEntityExtended>} - The created step entity
      */
+    /**
+     * Says out loud what did not make it into a persisted column.
+     *
+     * A silently dropped value is the failure one layer down from the crash this prevents: a
+     * reader hunting a field the writer discarded, or a condition reading absent-data and taking a
+     * branch nobody can explain. Warn, never throw — a value that cannot be written down is not a
+     * reason to fail a run that is otherwise fine.
+     */
+    protected warnAboutDroppedValues(column: string, droppedPaths: string[], params: ExecuteAgentParams): void {
+        if (droppedPaths.length === 0) return;
+        this.logStatus(
+            `⚠️ ${droppedPaths.length} value(s) were not persistable and were left out of ` +
+            `${column}: ${droppedPaths.join(', ')}. Class instances, connections and circular ` +
+            `references are dropped on purpose — pass plain JSON for anything that must be readable later.`,
+            true,
+            params,
+        );
+    }
+
     protected async createStepEntity(params: {
         stepType: MJAIAgentRunStepEntityExtended["StepType"];
         stepName: string;
@@ -11965,6 +11997,12 @@ The context is now within limits. Please retry your request with the recovered c
             // MAX_REINVOKE_DEPTH never fires — a graph reinvoking an agent that emits a graph would
             // run forever.
             ReinvokeDepth: this._agentRun?.ContinuationDepth ?? 0,
+            // The invocation's own parameters, for the flow dialect's `data`/`context` condition
+            // roots (R3-3). The walker read these straight off `ExecuteAgentParams`; the compiled
+            // path carried neither, so every documented `data.x` condition evaluated against the
+            // origin step's output, found nothing, and silently took the other branch.
+            Invocation: { Data: params.data, Context: params.context },
+            Debug: params.taskGraphDebug?.paused ? { paused: true } : undefined,
             ContextUser: params.contextUser,
             Provider: this.ProviderToUse
         });

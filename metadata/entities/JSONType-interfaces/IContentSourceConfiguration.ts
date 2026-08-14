@@ -63,6 +63,42 @@ export interface IContentSourceConfiguration {
      */
     VectorMetadata?: IContentSourceVectorMetadataConfig;
     /**
+     * The MJ entity this source's VECTORS resolve to, for search attribution. Optional; when unset,
+     * attribution falls back to the index's Entity Documents exactly as before.
+     *
+     * Why this exists. `SearchEngine` groups results by `EntityName` and evaluates THAT entity's
+     * CanRead/RLS, so a match it cannot name is dropped rather than shown unlabelled. A source whose
+     * vectors carry minimal metadata (`VectorMetadata.FieldStrategy: 'explicit'`) has no `Entity`
+     * key to read, and a source populated outside MJ's pipeline has no Entity Document either —
+     * this is how such a source states the answer once instead of paying for it per vector.
+     *
+     * Distinct from the `EntityID` **column**, which is the entity an Entity-type source pulls
+     * records *from* and is null for file/RSS/website sources. This is the entity its vectors *are*.
+     *
+     * Set it to an **ISA extension** rather than the base entity when that is where row-level
+     * security lives: attribution decides which entity's RLS is applied, so naming the base entity
+     * of an extension evaluates the wrong rules.
+     *
+     * One declaration names one entity, so it is only meaningful when a source's vectors are all at
+     * the same level. Under `ChunkTextStorage: 'mixed'` a source emits ContentItem-level vectors for
+     * single-chunk items and ContentItemChunk-level vectors for the rest — two different entities —
+     * so leave this unset there and let per-vector `Entity` metadata carry it.
+     *
+     * Setting this also changes what gets WRITTEN — with `FieldStrategy: 'explicit'`, new vectors omit
+     * `Entity` and carry `ContentSourceID` instead, so the entity name lives in one place rather than on
+     * every vector. That additionally requires `ChunkTextStorage: 'alwaysChunk'`,
+     * `VectorIDStrategy: 'recordId'`, and a name here resolving to `MJ: Content Item Chunks` or a
+     * subtype. Anything unmet and `Entity` is written anyway, because a match search cannot attribute is
+     * dropped by the permission filter rather than returned unlabelled — `'mixed'` would need two names,
+     * `'hash'` leaves no recoverable record id, and a declaration naming the ITEM entity would point
+     * search at a table holding none of these ids.
+     *
+     * Note that last one when row-level security is your reason for declaring an extension: under
+     * `'alwaysChunk'` the vectors are chunk rows, so the extension has to extend the CHUNK entity.
+     * Existing vectors are untouched and keep resolving through their stored key.
+     */
+    VectorEntityName?: string;
+    /**
      * Lower confidence band (0.0-1.0) that routes a semantic match into the human-in-the-loop
      * `MJ:Tag Suggestions` queue instead of auto-applying or auto-creating. A score `s` is
      * routed as: `s >= TagMatchThreshold` → apply; `SuggestThreshold <= s < TagMatchThreshold`
