@@ -105,7 +105,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['client-cache', ClientCacheChecks, 13],
         ['runquery-cache', RunQueryCacheChecks, 12], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20
         // RLS1–RLS10 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters) share one bundle
-        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks], 15],
+        ['rls-isolation', [...RlsIsolationChecks, ...KeyRowFilterChecks], 16],
         ['rls-isolation-client', RlsIsolationClientChecks, 1],
         ['record-process', RecordProcessChecks, 12],
         ['record-process-facade', RecordProcessFacadeChecks, 2],
@@ -256,7 +256,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'remote-op-ai-authoring': 3,
         'remote-op-wire-progress': 1,
         'remote-operations': 7,
-        'rls-isolation': 15,
+        'rls-isolation': 16,
         'rls-isolation-client': 1,
         'runquery-cache': 12,
         'runquery-catalog': 6,
