@@ -19,9 +19,25 @@ type FakePermission = { ReadRLSFilterID?: string | null };
 type FakeEntity = { Name: string; Permissions: FakePermission[]; ID?: string; SchemaName?: string; BaseView?: string; BaseTable?: string };
 
 class TestableRLS extends ManageMetadataBase {
+    constructor() {
+        super();
+        // The gate composes TWO row-restriction layers: role RLS and API-key row filters. The API-key layer is
+        // enumerated from the DB once per CodeGen run and defaults to 'unknown' (⇒ every entity is treated as
+        // restricted, so the gate fails CLOSED on an unloaded cache). These fixtures exercise the role-RLS +
+        // under-linking layers against no DB, so declare the key layer as "loaded, and this deployment configures
+        // no API-key row filters". `seedAPIKeyRowFilterTargets` below drives the key layer explicitly.
+        this.apiKeyRowFilterTargets = new Set<string>();
+    }
+
     /** Override the platform dialect so the P1 SQL-parsing branch works on a bare instance (no DB provider). */
     protected get dialect(): SQLDialect {
         return new SQLServerDialect();
+    }
+
+    /** Test seam for the API-key row-filter layer: the entity names bound by an APIKeyScope /
+     *  APIApplicationScope row filter, or 'unknown' to simulate "could not be enumerated". */
+    public seedAPIKeyRowFilterTargets(targets: ReadonlySet<string> | 'unknown'): void {
+        this.apiKeyRowFilterTargets = targets;
     }
 
     /** Exposes the protected guard, taking a structural stub for the entity-by-id lookup. The optional `sql`
@@ -38,9 +54,14 @@ class TestableRLS extends ManageMetadataBase {
         return this.assessQuerySourceRLSSafety(md, ids, sql);
     }
 
-    /** Exposes the RLS detector the base-view leak gate (Leak 1) uses to refuse external RLS mirrors. */
+    /** Exposes the ROLE-RLS layer (one input to the composite gate below). */
     public hasRLS(entity: FakeEntity): boolean {
         return this.entityHasRowLevelSecurity(entity as unknown as EntityInfo);
+    }
+
+    /** Exposes the COMPOSITE row-restriction gate every materialization gate calls. */
+    public hasRestriction(entity: FakeEntity): boolean {
+        return this.entityHasRowLevelRestriction(entity as unknown as EntityInfo);
     }
 }
 
@@ -212,5 +233,70 @@ describe('entityHasRowLevelSecurity — base-view leak-gate RLS detector', () =>
 
     it('is FALSE for an entity with no permissions at all', () => {
         expect(mm.hasRLS({ Name: 'Orders', Permissions: [] })).toBe(false);
+    });
+});
+
+/**
+ * Tests for `entityHasRowLevelRestriction` — THE gate every materialization check calls. It composes BOTH
+ * row-restriction layers MJ enforces (see `EntityInfo.GetEffectiveRowFilterWhereClause`): role RLS AND API-key
+ * row filters. The key layer matters because an entity bound ONLY by an API-key row filter carries no
+ * `ReadRLSFilterID` — the role-only predicate judges it unprotected, CodeGen mints a materialized entity with a
+ * NEW EntityID, and the key's EntityID-keyed binding stops matching, handing the principal a full unscoped
+ * snapshot of rows it cannot read live.
+ */
+describe('entityHasRowLevelRestriction — composite (role RLS + API-key row filter) gate', () => {
+    let mm: TestableRLS;
+    beforeEach(() => { mm = new TestableRLS(); });
+
+    const plain: FakeEntity = { Name: 'Orders', Permissions: [] };
+
+    it('is FALSE when neither layer restricts the entity (the only materializable case)', () => {
+        expect(mm.hasRestriction(plain)).toBe(false);
+    });
+
+    it('is TRUE from the ROLE layer alone (unchanged behavior)', () => {
+        expect(mm.hasRestriction({ Name: 'Salaries', Permissions: [{ ReadRLSFilterID: 'rls-1' }] })).toBe(true);
+    });
+
+    it('is TRUE from the API-KEY layer alone — the fail-open hole this gate closes', () => {
+        // No ReadRLSFilterID anywhere: role-only detection would call this materializable.
+        mm.seedAPIKeyRowFilterTargets(new Set(['orders']));
+        expect(mm.hasRLS(plain)).toBe(false); // role layer sees nothing…
+        expect(mm.hasRestriction(plain)).toBe(true); // …the composite gate refuses
+    });
+
+    it('matches the API-key target case- and whitespace-insensitively', () => {
+        mm.seedAPIKeyRowFilterTargets(new Set(['orders']));
+        expect(mm.hasRestriction({ Name: '  ORDERS ', Permissions: [] })).toBe(true);
+    });
+
+    it('does NOT restrict an entity that no API-key filter targets', () => {
+        mm.seedAPIKeyRowFilterTargets(new Set(['salaries']));
+        expect(mm.hasRestriction(plain)).toBe(false);
+    });
+
+    it('FAILS CLOSED when the API-key layer could not be enumerated (unknown ⇒ every entity restricted)', () => {
+        mm.seedAPIKeyRowFilterTargets('unknown');
+        expect(mm.hasRestriction(plain)).toBe(true);
+    });
+});
+
+/** The query gate must inherit the same composite detection — an API-key-filtered SOURCE entity makes a query
+ *  unsafe to materialize even though it carries no ReadRLSFilterID. */
+describe('assessQuerySourceRLSSafety — API-key row-filter layer', () => {
+    let mm: TestableRLS;
+    beforeEach(() => { mm = new TestableRLS(); });
+
+    it('REFUSES a query whose source is bound only by an API-key row filter (no ReadRLSFilterID present)', () => {
+        mm.seedAPIKeyRowFilterTargets(new Set(['salaries']));
+        const v = mm.assess({ e1: { Name: 'Salaries', Permissions: [{ ReadRLSFilterID: null }] } }, ['e1']);
+        expect(v.safe).toBe(false);
+        expect(v.reason).toContain('"Salaries"');
+    });
+
+    it('REFUSES everything when the API-key layer could not be enumerated (fail closed)', () => {
+        mm.seedAPIKeyRowFilterTargets('unknown');
+        const v = mm.assess({ e1: { Name: 'Orders', Permissions: [] } }, ['e1']);
+        expect(v.safe).toBe(false);
     });
 });

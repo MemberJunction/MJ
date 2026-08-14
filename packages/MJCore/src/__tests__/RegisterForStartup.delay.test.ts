@@ -1,14 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { StartupManager, IStartupSink } from '../generic/RegisterForStartup';
-import { IMetadataProvider } from '../generic/interfaces';
+import { ILocalStorageProvider, IMetadataProvider } from '../generic/interfaces';
 import { UserInfo } from '../generic/securityInfo';
 
-// Mock storage provider needed by LocalCacheManager initialization
+// Mock storage provider needed by LocalCacheManager initialization — partial double,
+// seam-cast to the interface the consumer expects.
 const mockStorageProvider = {
     GetItems: () => Promise.resolve([]),
     SetItems: () => Promise.resolve(),
     RemoveItems: () => Promise.resolve(),
-} as any;
+} as unknown as ILocalStorageProvider;
 
 const mockMetadataProvider = {
     LocalStorageProvider: mockStorageProvider,
