@@ -14,7 +14,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('../config.js', () => ({ configInfo: {} }));
 
 const mockUsers: Array<{ ID: string; Email: string }> = [];
-vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
+// UserCache lives in generic-database-provider, not sqlserver-dataprovider — it moved there in the
+// platform split. Mocking the old package silently left the service reading the REAL (empty) cache,
+// so all 13 tests failed on "System user not found" rather than on anything they were asserting.
+vi.mock('@memberjunction/generic-database-provider', () => ({
     UserCache: {
         get Users() { return mockUsers; },
         Instance: { get Users() { return mockUsers; } },
