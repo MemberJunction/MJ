@@ -78,14 +78,6 @@ vi.mock('@memberjunction/core', () => ({
         Set(_field: string, _val: unknown) {}
     },
     LogError: vi.fn(),
-    // Real implementation, not a stub: the fallback-cache sorts under test call this to survive
-    // string dates, so a stubbed version would test nothing. Kept in sync by MJCore's own
-    // util.toEpochMs.test.ts, which pins the contract this mirrors.
-    ToEpochMs: (value: Date | string | number | null | undefined): number => {
-        if (value == null) return 0;
-        const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
-        return Number.isNaN(ms) ? 0 : ms;
-    },
     Metadata: class Metadata {},
     UserInfo: class UserInfo {},
     IMetadataProvider: class IMetadataProvider {},
@@ -195,6 +187,16 @@ vi.mock('@memberjunction/global', () => {
             if (a == null && b == null) return true;
             if (a == null || b == null) return false;
             return a.trim().toUpperCase() === b.trim().toUpperCase();
+        },
+        // Real implementation, not a stub: the fallback-cache sorts under test call this to
+        // survive string dates, so a stubbed version would test nothing. This mock hand-rolls
+        // the module (rather than spreading importOriginal) to avoid pulling in the heavy
+        // singletons, so the copy is unavoidable here — MJGlobal's own util.toEpochMs.test.ts
+        // is what pins the contract this mirrors.
+        ToEpochMs: (value: Date | string | number | null | undefined): number => {
+            if (value == null) return 0;
+            const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
+            return Number.isNaN(ms) ? 0 : ms;
         },
     };
 });

@@ -173,6 +173,14 @@ vi.mock('@memberjunction/global', () => {
     }
     return {
         BaseSingleton,
+        // Real implementation, not a stub: the engine's date comparisons rely on it to survive
+        // string-dated rows, so a stub would test nothing. MJGlobal's own util.toEpochMs.test.ts
+        // pins the contract this mirrors.
+        ToEpochMs: (value: Date | string | number | null | undefined): number => {
+            if (value == null) return 0;
+            const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
+            return Number.isNaN(ms) ? 0 : ms;
+        },
         MJGlobal: {
             Instance: {
                 ClassFactory: {

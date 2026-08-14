@@ -5,7 +5,7 @@
 
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJScheduledJobEntity, MJScheduledJobTypeEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { ToEpochMs, UUIDsEqual } from '@memberjunction/global';
 import { Observable, Subject } from 'rxjs';
 
 /**
@@ -167,7 +167,7 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
                 continue;
             }
 
-            const timeUntilNext = Math.max(0, job.NextRunAt.getTime() - now);
+            const timeUntilNext = Math.max(0, ToEpochMs(job.NextRunAt) - now);
             if (timeUntilNext < minInterval) {
                 minInterval = timeUntilNext;
             }

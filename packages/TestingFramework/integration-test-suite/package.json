@@ -46,6 +46,7 @@
     "@memberjunction/query-processor": "6.1.0-edge.2",
     "@memberjunction/record-set-processor": "6.1.0-edge.2",
     "@memberjunction/record-set-processor-base": "6.1.0-edge.2",
+    "@memberjunction/redis-provider": "6.1.0-edge.2",
     "@memberjunction/scheduling-engine": "6.1.0-edge.2",
     "@memberjunction/search-engine": "6.1.0-edge.2",
     "@memberjunction/generic-database-provider": "6.1.0-edge.2",
@@ -55,6 +56,7 @@
     "@memberjunction/templates-base-types": "6.1.0-edge.2",
     "@memberjunction/testing-integration": "6.1.0-edge.2",
     "dotenv": "17.2.4",
+    "ioredis": "^5.6.1",
     "mssql": "^12.2.0"
   },
   "devDependencies": {

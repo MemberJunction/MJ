@@ -108,13 +108,6 @@ vi.mock('@memberjunction/core', () => {
                 return rows;
             }
         ),
-        // Real implementation, not a stub: sortConversations calls this to survive string dates,
-        // so a stub would test nothing. MJCore's util.toEpochMs.test.ts pins the contract.
-        ToEpochMs: (value: Date | string | number | null | undefined): number => {
-            if (value == null) return 0;
-            const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
-            return Number.isNaN(ms) ? 0 : ms;
-        },
         UserInfo: class MockUserInfo {
             ID = 'user-1';
         },

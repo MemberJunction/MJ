@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { ToEpochMs } from '../generic/util';
+import { ToEpochMs } from '../util';
 
 /**
- * `ToEpochMs` is the shared guard behind every agent-context date comparator, so its contract
+ * `ToEpochMs` is the shared guard behind every framework date comparator, so its contract
  * is pinned directly here rather than only through those call sites.
  *
  * The contract that matters to a comparator: ALWAYS return a finite number. A comparator that
