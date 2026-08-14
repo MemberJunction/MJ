@@ -21,6 +21,17 @@ class StubInnerGrid {
   @Input() NewRecordValues: Record<string, unknown> = {};
   @Input() AllowLoad = false;
   @Input() ShowToolbar = false;
+  @Input() ShowSearch = true;
+  @Input() ShowNewButton = true;
+  @Input() ShowRefreshButton = true;
+  @Input() ShowExportButton = true;
+  @Input() ShowDeleteButton = false;
+  @Input() ShowCompareButton = false;
+  @Input() ShowMergeButton = false;
+  @Input() ShowAddToListButton = false;
+  @Input() ShowDuplicateSearchButton = false;
+  @Input() ShowCommunicationButton = false;
+  @Input() ShowRecycleBin = true;
   @Input() Height: unknown;
   @Input() ToolbarConfig: unknown;
   @Input() SelectionMode = '';
@@ -47,8 +58,41 @@ describe('ExplorerEntityDataGridComponent (DOM)', () => {
     const g = inner(f);
     expect(g.Params).toBe(PARAMS);
     expect(g.ShowToolbar).toBe(true);
+    expect(g.ShowSearch).toBe(true);
+    expect(g.ShowNewButton).toBe(true);
+    expect(g.ShowRefreshButton).toBe(true);
+    expect(g.ShowExportButton).toBe(true);
     expect(g.SelectionMode).toBe('multiple');
     expect(g.AllowColumnToggle).toBe(false);
+  });
+
+  it('forwards toolbar chrome so a related list can hide search, buttons, or the whole bar', () => {
+    const g = inner(render({
+      ShowToolbar: false,
+      ShowSearch: false,
+      ShowNewButton: false,
+      ShowRefreshButton: false,
+      ShowExportButton: false,
+      ShowDeleteButton: true,
+      ShowCompareButton: true,
+      ShowMergeButton: true,
+      ShowAddToListButton: true,
+      ShowDuplicateSearchButton: true,
+      ShowCommunicationButton: true,
+      ShowRecycleBin: false,
+    }));
+    expect(g.ShowToolbar).toBe(false);
+    expect(g.ShowSearch).toBe(false);
+    expect(g.ShowNewButton).toBe(false);
+    expect(g.ShowRefreshButton).toBe(false);
+    expect(g.ShowExportButton).toBe(false);
+    expect(g.ShowDeleteButton).toBe(true);
+    expect(g.ShowCompareButton).toBe(true);
+    expect(g.ShowMergeButton).toBe(true);
+    expect(g.ShowAddToListButton).toBe(true);
+    expect(g.ShowDuplicateSearchButton).toBe(true);
+    expect(g.ShowCommunicationButton).toBe(true);
+    expect(g.ShowRecycleBin).toBe(false);
   });
 
   it('passes EffectiveAllowLoad=true to the inner grid when AllowLoad and not deferring', () => {
