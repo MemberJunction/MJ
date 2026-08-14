@@ -13,6 +13,7 @@ import { CLIPluginRegistry } from '@memberjunction/cli-core';
 import {
   DEV_DOMAIN_USAGE,
   DEV_WORKSPACE_CLEAN_USAGE,
+  DEV_WORKSPACE_DOCTOR_USAGE,
   DEV_WORKSPACE_STATUS_USAGE,
   DEV_WORKSPACE_USAGE,
   RegisterDevWorkspaceUsage,
@@ -21,10 +22,11 @@ import { WORKSPACE_DIR_ENV_VAR } from '../lib/dev-workspace/dir-flag.js';
 import { LIGHT_COMMANDS } from '../light-commands.js';
 
 describe('dev domain usage declarations', () => {
-  it('declares all three commands under the dev domain', () => {
+  it('declares all four commands under the dev domain', () => {
     expect(DEV_DOMAIN_USAGE.map((u) => u.command)).toEqual([
       'dev:workspace',
       'dev:workspace:status',
+      'dev:workspace:doctor',
       'dev:workspace:clean',
     ]);
     for (const usage of DEV_DOMAIN_USAGE) {
@@ -83,6 +85,19 @@ describe('dev domain usage declarations', () => {
     );
   });
 
+  it('teaches doctor: the non-zero exit, the census, and what a standalone install actually is', () => {
+    const text = DEV_WORKSPACE_DOCTOR_USAGE.description ?? '';
+    expect(text).toMatch(/read-only/i);
+    expect(text).toMatch(/exits non-zero/i);
+    expect(text).toContain('@angular/core');
+    expect(text).toContain('@memberjunction/global');
+    expect(text).toContain('one-copy census');
+    // the trap: a plain member node_modules is NOT a standalone install
+    expect(text).toContain('.package-lock.json');
+    expect(text).toMatch(/NOT the plain node_modules/);
+    expect(DEV_WORKSPACE_DOCTOR_USAGE.flags?.map((f) => f.name)).toEqual(['--dir']);
+  });
+
   it('marks status as read-only and mentions the dir-resolution report', () => {
     const text = DEV_WORKSPACE_STATUS_USAGE.description ?? '';
     expect(text).toMatch(/read-only/i);
@@ -100,6 +115,7 @@ describe('dev domain usage declarations', () => {
     expect(DEV_WORKSPACE_USAGE.runtime.class).toBe('variable');
     expect(DEV_WORKSPACE_USAGE.runtime.note).toMatch(/pnpm install/);
     expect(DEV_WORKSPACE_STATUS_USAGE.runtime.class).toBe('fast');
+    expect(DEV_WORKSPACE_DOCTOR_USAGE.runtime.class).toBe('fast');
     expect(DEV_WORKSPACE_CLEAN_USAGE.runtime.class).toBe('moderate');
   });
 });
@@ -111,6 +127,7 @@ describe('dev domain registration with the usage registry', () => {
     expect(detail.commands.map((c) => c.command).sort()).toEqual([
       'dev:workspace',
       'dev:workspace:clean',
+      'dev:workspace:doctor',
       'dev:workspace:status',
     ]);
   });
@@ -129,7 +146,7 @@ describe('dev domain registration with the usage registry', () => {
     RegisterDevWorkspaceUsage();
     RegisterDevWorkspaceUsage();
     const detail = CLIPluginRegistry.BuildDomainDetail('dev');
-    expect(detail.commands).toHaveLength(3);
+    expect(detail.commands).toHaveLength(4);
   });
 });
 
