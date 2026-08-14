@@ -256,6 +256,25 @@ jobs:
           </html>
           EOF
 
+          # /mjcertified is a stable front-door URL: the BUSL's Additional Use
+          # Grant points at the MemberJunction Certified Program by name, so the
+          # program page needs a version-independent address that answers 200.
+          # The 404 forwarder below would also land it, but only after serving a
+          # 404 status — wrong for a page the license refers to.
+          mkdir -p dist/mjcertified
+          cat > dist/mjcertified/index.html <<EOF
+          <!doctype html>
+          <html lang="en">
+          <head>
+          <meta charset="utf-8">
+          <meta http-equiv="refresh" content="0; url=/$DEFAULT/mjcertified/">
+          <link rel="canonical" href="https://docs.memberjunction.org/$DEFAULT/mjcertified/">
+          <title>MemberJunction Certified Program</title>
+          </head>
+          <body><a href="/$DEFAULT/mjcertified/">MemberJunction Certified Program</a></body>
+          </html>
+          EOF
+
           # Sitewide 404 (GitHub Pages serves only the root one). Forwards
           # legacy pre-versioning URLs (/guides/x/, /api/…, old root TypeDoc
           # deep links) into the default set; a path already carrying a /vN

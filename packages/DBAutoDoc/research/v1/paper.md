@@ -25,7 +25,7 @@ DBAutoDoc's central insight is that schema understanding is fundamentally an ite
 
 The system makes four concrete contributions: (1) an iterative context-propagation algorithm that refines table and column descriptions by re-analyzing each schema object in light of its neighbors' most recent descriptions; (2) a tiered statistical pipeline for primary key and foreign key discovery with a bidirectional feedback loop between LLM-generated semantic context and statistical candidate scoring; (3) a dual-layer human knowledge injection mechanism that distinguishes verified ground truth from exploratory seed context; and (4) a multi-criterion convergence detector that combines description stability windows, per-column confidence thresholds, and semantic change magnitude.
 
-On a suite of benchmark databases, DBAutoDoc achieved overall weighted scores of 96.1% across two model families (Gemini and Anthropic) using a composite metric that weights key discovery accuracy (FK F1 at 35%, PK F1 at 30%) more heavily than description coverage (table descriptions at 20%, column descriptions at 15%). Ablation analysis demonstrates that the deterministic pipeline contributes a 23-point F1 improvement over LLM-only FK detection, confirming that the system's contribution is substantial and independent of LLM pre-training knowledge. The system reached convergence in 2 iterations on average at a cost of approximately \$0.70 per 100 tables -- a reduction of more than 99.5% relative to manual expert documentation. DBAutoDoc is released as open-source software with all evaluation configurations and prompt templates included for full reproducibility.
+On a suite of benchmark databases, DBAutoDoc achieved overall weighted scores of 96.1% across two model families (Gemini and Anthropic) using a composite metric that weights key discovery accuracy (FK F1 at 35%, PK F1 at 30%) more heavily than description coverage (table descriptions at 20%, column descriptions at 15%). Ablation analysis demonstrates that the deterministic pipeline contributes a 23-point F1 improvement over LLM-only FK detection, confirming that the system's contribution is substantial and independent of LLM pre-training knowledge. The system reached convergence in 2 iterations on average at a cost of approximately \$0.70 per 100 tables -- a reduction of more than 99.5% relative to manual expert documentation. DBAutoDoc is released as source-available software with all evaluation configurations and prompt templates included for full reproducibility.
 
 ---
 
@@ -61,7 +61,7 @@ We summarize the contributions of this paper:
 
 4. **Multi-criterion convergence detection.** A convergence detector combining description stability windows, per-column confidence thresholds, and semantic change magnitude to determine when further iteration yields diminishing returns.
 
-5. **Cost analysis and open-source release.** A demonstration that DBAutoDoc reduces documentation cost by more than 99.5% relative to manual analysis, with full release as open-source software including benchmark configurations, evaluation scripts, and prompt templates.
+5. **Cost analysis and public release.** A demonstration that DBAutoDoc reduces documentation cost by more than 99.5% relative to manual analysis, with full release as source-available software including benchmark configurations, evaluation scripts, and prompt templates.
 
 ### 1.5 Paper Organization
 
@@ -579,7 +579,7 @@ Token efficiency varies by model: Sonnet 4.6 / Opus 4.6 used only 471K tokens (7
 
 ### 7.7 Reproducibility
 
-All benchmark results can be reproduced using the open-source release. The complete reproduction procedure is:
+All benchmark results can be reproduced using the public release. The complete reproduction procedure is:
 
 ```bash
 # 1. Install DBAutoDoc
@@ -677,7 +677,7 @@ Empirical evaluation demonstrates 95.0% F1 on primary key detection and 94.2% F1
 
 The central finding is that *treating schema documentation as an iterative learning problem* rather than a one-shot extraction task produces substantially better results. Neither the statistical approach alone nor the LLM approach alone achieves the quality of their combination in a bidirectional feedback loop.
 
-DBAutoDoc is released as open-source software under the MIT License as part of the MemberJunction platform, with all benchmark configurations, prompt templates, and evaluation scripts included for full reproducibility. The repository is available at `https://github.com/MemberJunction/MJ`.
+DBAutoDoc is released as source-available software under the BUSL License as part of the MemberJunction platform, with all benchmark configurations, prompt templates, and evaluation scripts included for full reproducibility. The repository is available at `https://github.com/MemberJunction/MJ`.
 
 ---
 
@@ -774,7 +774,7 @@ Each run used AdventureWorks2022 (stripped) with Gemini 3 Flash / 3.1 Pro, 2 ite
 
 ## Appendix D: Prompt Templates
 
-DBAutoDoc uses 13 prompt templates, all version-controlled in the open-source repository. Key templates:
+DBAutoDoc uses 13 prompt templates, all version-controlled in the public repository. Key templates:
 
 | Template | Purpose | Scope |
 |----------|---------|-------|
