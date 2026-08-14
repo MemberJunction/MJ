@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { IMetadataProvider, UserInfo, LogError, LogStatus, EntityInfo, ExternalDataSourceReadRouter, RunView } from '@memberjunction/core';
 import { MJMaterializedResultEntity, MJQueryEntity } from '@memberjunction/core-entities';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, ResolveSingleEntityResourceTarget, UUIDsEqual } from '@memberjunction/global';
 import { SQLParser } from '@memberjunction/sql-parser';
 import { GetDialect, DatabasePlatform } from '@memberjunction/sql-dialect';
 
@@ -858,10 +858,11 @@ export class MaterializationRefresher {
      * Enumerates the entities carrying an API-key row filter, cached for this refresher's lifetime (the gate
      * runs per materialization; the fence changes far more slowly than a sweep).
      *
-     * Mirrors CodeGen's enumeration contract exactly: entity NAMES, trimmed and lowercased, taken from the
-     * `ResourcePattern` of scope rows that carry a `RowFilterID`. A pattern that cannot be resolved to one
-     * exact entity — blank, or wildcard/list (`*`, `%`, `,`) — collapses the WHOLE set to `'unknown'`, since
-     * a rule we cannot map may well name the entity we are about to mirror. Any read failure does the same.
+     * Mirrors CodeGen's enumeration contract exactly, because it shares the rule rather than restating it:
+     * entity NAMES normalized by {@link ResolveSingleEntityResourceTarget}, taken from the `ResourcePattern`
+     * of scope rows that carry a `RowFilterID`. A pattern that function cannot resolve to one exact entity
+     * collapses the WHOLE set to `'unknown'`, since a rule we cannot map may well name the entity we are
+     * about to mirror. Any read failure does the same.
      */
     private async loadAPIKeyRowFilterTargets(provider: IMetadataProvider, contextUser: UserInfo): Promise<ReadonlySet<string> | 'unknown'> {
         if (this._apiKeyRowFilterTargets !== null) return this._apiKeyRowFilterTargets;
@@ -884,16 +885,17 @@ export class MaterializationRefresher {
                 if (!res.Success) throw new Error(`${entityName}: ${res.ErrorMessage}`);
                 for (const row of res.Results ?? []) {
                     const pattern = (row.ResourcePattern ?? '').trim();
-                    // Superset of what IsExactResourceName (rowFilterValidation.ts) rejects at save time — `*`,
-                    // `?`, `,` — plus `%` as an extra fail-closed. Omitting `?` would fail OPEN: `Sk?p` would be
-                    // stored as a literal target name, match no entity, and the entity it fences would read as
-                    // unrestricted. Kept character-identical to CodeGen's copy in manage-metadata.ts.
-                    if (pattern.length === 0 || /[*%,?]/.test(pattern)) {
+                    // SHARED with CodeGen's identical gate (ResolveSingleEntityResourceTarget in
+                    // @memberjunction/global) rather than copied. These two enumerations must agree exactly —
+                    // a copy that drifts open in either one silently re-opens the leak the other closes, and
+                    // nothing in the build would catch the divergence.
+                    const target = ResolveSingleEntityResourceTarget(pattern);
+                    if (target === null) {
                         LogError(`MaterializationRefresher: an API-key scope rule with a row filter has an unmappable ResourcePattern ("${pattern}") — it cannot be resolved to one entity, so EVERY entity is treated as row-restricted for refresh (fail closed). Fix the rule to name one exact entity.`);
                         this._apiKeyRowFilterTargets = 'unknown';
                         return this._apiKeyRowFilterTargets;
                     }
-                    targets.add(pattern.toLowerCase());
+                    targets.add(target);
                 }
             }
             this._apiKeyRowFilterTargets = targets;

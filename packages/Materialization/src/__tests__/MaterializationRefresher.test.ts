@@ -919,25 +919,7 @@ describe('MaterializationRefresher.entityHasRowLevelRestriction (both fence laye
     });
 });
 
-/**
- * The pattern rule that decides whether a scope row maps to one entity. Kept a superset of
- * IsExactResourceName (rowFilterValidation.ts), which rejects `*`, `?` and `,` at save time. `?` matters:
- * omitting it fails OPEN — the pattern would be stored as a literal target name, match no entity, and the
- * entity it was meant to fence would read as unrestricted.
- */
-describe('API-key ResourcePattern mappability rule (fail-closed superset of IsExactResourceName)', () => {
-    const UNMAPPABLE = /[*%,?]/;
-    const mappable = (p: string) => p.trim().length > 0 && !UNMAPPABLE.test(p.trim());
-
-    it('treats every wildcard/list form the save-time validator rejects as unmappable', () => {
-        for (const p of ['*', 'Sk*p', 'Sk?p', 'A,B', '  ', '']) expect(mappable(p)).toBe(false);
-    });
-
-    it('also refuses the SQL wildcard % , which the save-time validator does not police', () => {
-        expect(mappable('Sk%p')).toBe(false);
-    });
-
-    it('accepts an exact entity name, including one with spaces', () => {
-        for (const p of ['Salaries', 'MJ: AI Agent Runs', '  Salaries  ']) expect(mappable(p)).toBe(true);
-    });
-});
+// The ResourcePattern mappability rule this refresher's enumeration depends on lives in
+// @memberjunction/global (ResolveSingleEntityResourceTarget), shared verbatim with CodeGen's identical
+// gate rather than restated here, and is tested against the real implementation in
+// packages/MJGlobal/src/__tests__/ResourcePatternUtils.test.ts.

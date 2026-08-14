@@ -29,7 +29,7 @@ import {
 } from "./search-guardrails";
 import { mapExternalNativeTypeToMJ } from "../Misc/externalTypeMapping";
 import { SQLParser } from "@memberjunction/sql-parser";
-import { createDisplayName, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
+import { createDisplayName, generatePluralName, MJGlobal, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
 
 import * as fs from 'fs';
@@ -2507,20 +2507,11 @@ export class ManageMetadataBase {
     * metadataSupportObjects.ts). Cross-platform via INFORMATION_SCHEMA; cached for the run (the schema
     * cannot change mid-run).
     */
-   private _entityHasExternalDataSourceColumn: boolean | null = null;
    protected async entityHasExternalDataSourceColumn(pool: CodeGenConnection): Promise<boolean> {
-      if (this._entityHasExternalDataSourceColumn === null) {
-         // Check the VIEW the gated queries actually read (vwEntities), not the base Entity table — a
-         // schema where the table has the column but the view wasn't refreshed to expose it would still
-         // throw. (Matches the PG guard in metadataSupportObjects.ts, which also checks the view.)
-         const sql = `SELECT COUNT(*) AS ColExists FROM INFORMATION_SCHEMA.COLUMNS ` +
-                     `WHERE TABLE_SCHEMA = '${mj_core_schema()}' AND TABLE_NAME = 'vwEntities' AND COLUMN_NAME = 'ExternalDataSourceID'`;
-         const result = await this.runQuery(pool, sql);
-         const row = (result.recordset?.[0] ?? {}) as Record<string, unknown>;
-         const cnt = row.ColExists ?? row.colexists ?? 0;
-         this._entityHasExternalDataSourceColumn = Number(cnt) > 0;
-      }
-      return this._entityHasExternalDataSourceColumn;
+      // Check the VIEW the gated queries actually read (vwEntities), not the base Entity table — a
+      // schema where the table has the column but the view wasn't refreshed to expose it would still
+      // throw. (Matches the PG guard in metadataSupportObjects.ts, which also checks the view.)
+      return await this.columnExistsInCoreSchema(pool, 'vwEntities', 'ExternalDataSourceID');
    }
 
    /**
@@ -2529,17 +2520,8 @@ export class ManageMetadataBase {
     * on a DB without it (PostgreSQL today) the column is absent and any raw SQL referencing it aborts the
     * CodeGen run. processQueryMaterializations gates its ExternalDataSourceID reference on this. Cached per run.
     */
-   private _queryHasExternalDataSourceColumn: boolean | null = null;
    protected async queryHasExternalDataSourceColumn(pool: CodeGenConnection): Promise<boolean> {
-      if (this._queryHasExternalDataSourceColumn === null) {
-         const sql = `SELECT COUNT(*) AS ColExists FROM INFORMATION_SCHEMA.COLUMNS ` +
-                     `WHERE TABLE_SCHEMA = '${mj_core_schema()}' AND TABLE_NAME = 'Query' AND COLUMN_NAME = 'ExternalDataSourceID'`;
-         const result = await this.runQuery(pool, sql);
-         const row = (result.recordset?.[0] ?? {}) as Record<string, unknown>;
-         const cnt = row.ColExists ?? row.colexists ?? 0;
-         this._queryHasExternalDataSourceColumn = Number(cnt) > 0;
-      }
-      return this._queryHasExternalDataSourceColumn;
+      return await this.columnExistsInCoreSchema(pool, 'Query', 'ExternalDataSourceID');
    }
 
    /**
@@ -2548,17 +2530,8 @@ export class ManageMetadataBase {
     * yet (e.g. the PostgreSQL parallel world's object-availability lag) — same defensive pattern as
     * queryHasExternalDataSourceColumn. Cached per run.
     */
-   private _queryHasIsMaterializedColumn: boolean | null = null;
    protected async queryHasIsMaterializedColumn(pool: CodeGenConnection): Promise<boolean> {
-      if (this._queryHasIsMaterializedColumn === null) {
-         const sql = `SELECT COUNT(*) AS ColExists FROM INFORMATION_SCHEMA.COLUMNS ` +
-                     `WHERE TABLE_SCHEMA = '${mj_core_schema()}' AND TABLE_NAME = 'Query' AND COLUMN_NAME = 'IsMaterialized'`;
-         const result = await this.runQuery(pool, sql);
-         const row = (result.recordset?.[0] ?? {}) as Record<string, unknown>;
-         const cnt = row.ColExists ?? row.colexists ?? 0;
-         this._queryHasIsMaterializedColumn = Number(cnt) > 0;
-      }
-      return this._queryHasIsMaterializedColumn;
+      return await this.columnExistsInCoreSchema(pool, 'Query', 'IsMaterialized');
    }
 
    /**
@@ -6446,9 +6419,10 @@ export class ManageMetadataBase {
     * Resolution rules (all biased fail-closed):
     *  - The `RowFilterID` column absent on a scope table ⇒ that binding layer cannot exist on this database
     *    (pre-v6 schema / the PostgreSQL parallel world) ⇒ contributes nothing. This is CORRECT, not fail-open.
-    *  - A filtered rule's `ResourcePattern` must name ONE exact entity (enforced at rule save). A filtered rule
-    *    with a NULL/blank pattern, or one carrying a wildcard/list (`*`, `%`, `,`), cannot be mapped to a single
-    *    entity, so the whole set collapses to `'unknown'` — every entity is then treated as restricted.
+    *  - A filtered rule's `ResourcePattern` must name ONE exact entity (enforced at rule save). Mappability is
+    *    decided by {@link ResolveSingleEntityResourceTarget}, shared verbatim with the runtime refresher's
+    *    identical gate; a rule it cannot resolve collapses the whole set to `'unknown'` — every entity is then
+    *    treated as restricted.
     *  - Any error enumerating the rules ⇒ `'unknown'` (never a silently-empty set).
     * Permission type is deliberately NOT narrowed to `Read`: mapping a scope rule to a permission type requires
     * the APIScope path taxonomy that lives outside CodeGen, and over-restriction here is harmless.
@@ -6466,20 +6440,21 @@ export class ManageMetadataBase {
             for (const row of res.recordset ?? []) {
                const r = row as CodeGenQueryRow;
                const pattern = ((r.ResourcePattern ?? r.resourcepattern) as string | null) ?? '';
-               const trimmed = pattern.trim();
-               // Superset of what IsExactResourceName (rowFilterValidation.ts) rejects at save time — `*`, `?`,
-               // `,` — plus `%` as an extra fail-closed. Omitting `?` would fail OPEN: `Sk?p` would be stored as
-               // a literal target name, match no entity, and the entity it fences would read as unrestricted.
-               if (trimmed.length === 0 || /[*%,?]/.test(trimmed)) {
+               // The mappability rule is SHARED with the runtime refresher's identical gate
+               // (ResolveSingleEntityResourceTarget in @memberjunction/global) rather than copied. The two
+               // gates must agree exactly: a copy that drifts open here silently re-opens the leak the
+               // runtime gate closes, and vice versa — with nothing in the build to notice.
+               const target = ResolveSingleEntityResourceTarget(pattern);
+               if (target === null) {
                   logError(
                      `    > API-key row-filter enumeration: a filtered scope rule in ${table} has an unmappable ResourcePattern ` +
-                     `("${trimmed}") — it cannot be resolved to a single entity, so EVERY entity is treated as row-restricted ` +
+                     `("${pattern.trim()}") — it cannot be resolved to a single entity, so EVERY entity is treated as row-restricted ` +
                      `for materialization this run (fail closed). Fix the rule to name one exact entity.`,
                   );
                   this.apiKeyRowFilterTargets = 'unknown';
                   return;
                }
-               targets.add(trimmed.toLowerCase());
+               targets.add(target);
             }
          }
          this.apiKeyRowFilterTargets = targets;
@@ -6492,8 +6467,13 @@ export class ManageMetadataBase {
       }
    }
 
-   /** Cached INFORMATION_SCHEMA column-existence probe against the MJ core schema. Generalizes the
-    *  hand-rolled probes above so new gates don't each hand-roll another one. */
+   /**
+    * THE cached INFORMATION_SCHEMA column-existence probe against the MJ core schema — cross-platform, and
+    * cached for the run (the schema cannot change mid-run). Every column gate in this class routes through
+    * it: {@link entityHasExternalDataSourceColumn}, {@link queryHasExternalDataSourceColumn},
+    * {@link queryHasIsMaterializedColumn} and {@link loadAPIKeyRowFilterTargets} are each a one-line call,
+    * so a new gate has no reason to hand-roll a fourth copy of the same query and its own cache field.
+    */
    private _coreSchemaColumnExists = new Map<string, boolean>();
    protected async columnExistsInCoreSchema(pool: CodeGenConnection, table: string, column: string): Promise<boolean> {
       const key = `${table}.${column}`.toLowerCase();
