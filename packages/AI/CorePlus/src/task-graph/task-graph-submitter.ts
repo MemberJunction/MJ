@@ -20,6 +20,7 @@
 import { MJGlobal } from '@memberjunction/global';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type { TaskGraphSpec } from './task-graph-spec';
+import { SanitizeForPersistence } from '../safe-persist';
 
 /** Everything a submitter needs beyond the graph itself. */
 export type TaskGraphSubmitRequest = {
@@ -56,8 +57,20 @@ export type TaskGraphSubmitRequest = {
      * process that accepted the graph.
      */
     Invocation?: TaskGraphInvocationEnvelope;
+    /**
+     * Seed `$.debug` on the parent row at insert. `paused: true` is start-paused — the dispatcher
+     * must not claim until Resume/Step. Written with the row because Pause-after-submit races the
+     * first poll.
+     */
+    Debug?: TaskGraphStartDebug;
     ContextUser: UserInfo;
     Provider: IMetadataProvider;
+};
+
+/** What a Debug-workflow start may seed on the graph. Breakpoints need task IDs, which do not exist
+ *  until children persist — so Submit honors `paused` only. */
+export type TaskGraphStartDebug = {
+    paused?: boolean;
 };
 
 /**
@@ -149,3 +162,39 @@ export function SuppressTaskGraphSubmission(reason: string): void {
 export function TaskGraphSubmissionSuppressedBecause(): string | null {
     return submissionSuppressedBecause;
 }
+
+/**
+ * Reduces an invocation envelope to what is safe to persist and read back later.
+ *
+ * The rules and the reasoning live in {@link SanitizeForPersistence}; this adds the one thing
+ * specific to an envelope: an envelope whose every field was dropped is NO envelope, not an empty
+ * one. Writing `{}` would tell the dispatcher the `data`/`context` roots exist and are empty, so a
+ * `data.x` condition would read as absent-data and take a branch, where "nothing was carried" is
+ * the honest answer.
+ */
+export function SanitizeInvocationEnvelope(
+    envelope: TaskGraphInvocationEnvelope | undefined,
+): SanitizedInvocation {
+    if (!envelope) return { Envelope: undefined, DroppedPaths: [] };
+
+    const data = SanitizeForPersistence(envelope.Data, 'data');
+    const context = SanitizeForPersistence(envelope.Context, 'context');
+    const dropped = [...data.DroppedPaths, ...context.DroppedPaths];
+
+    if (data.Value === undefined && context.Value === undefined) {
+        return { Envelope: undefined, DroppedPaths: dropped };
+    }
+    return {
+        Envelope: {
+            ...(data.Value === undefined ? {} : { Data: data.Value }),
+            ...(context.Value === undefined ? {} : { Context: context.Value }),
+        },
+        DroppedPaths: dropped,
+    };
+}
+
+/** What a sanitization pass kept for an invocation, and what it refused to keep. */
+export type SanitizedInvocation = {
+    Envelope: TaskGraphInvocationEnvelope | undefined;
+    DroppedPaths: string[];
+};
