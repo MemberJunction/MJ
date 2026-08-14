@@ -15,7 +15,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ComputerUseEngine } from '../engine/ComputerUseEngine.js';
 import { ControllerPromptRequest, JudgePromptRequest } from '../types/controller.js';
-import type { RunComputerUseParams } from '../types/index.js';
+import type { RunComputerUseParams } from '../types/params.js';
 
 /** `$` before an ordinary character is NOT special — that case must keep working too. */
 const HOSTILE = ['a$$b', 'a$&b', 'a$`b', "a$'b", 'a$1b', 'a$b', "x$&$`$'$$y"];
