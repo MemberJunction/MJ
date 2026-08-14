@@ -342,6 +342,22 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     return this.Panels.filter(p => p.IsVisible).length;
   }
 
+  /**
+   * SectionKeys of related-entity panels projected into the container
+   * (CodeGen-baked or hand-written). View-children we mount as fill-ins are
+   * not in this ContentChildren list.
+   */
+  get BakedRelatedSectionKeys(): string[] {
+    if (!this.Panels) return [];
+    return this.Panels
+      .filter((panel) => panel.Variant === 'related-entity' && !!panel.SectionKey)
+      .map((panel) => panel.SectionKey);
+  }
+
+  get EffectiveShowRelatedEntities(): boolean {
+    return this.fc?.Config?.ShowRelatedEntities !== false;
+  }
+
   get ExpandedSectionCount(): number {
     if (this.fc?.getExpandedCount) {
       return this.fc.getExpandedCount();

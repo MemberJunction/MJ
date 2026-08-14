@@ -77,6 +77,21 @@
         <ng-content></ng-content>
 
         <!--
+          Fill-in related grids for DisplayInForm relationships the template
+          did not bake and no registered panel claimed. Claimed / extra panels
+          still mount via mj-form-panel-slot. See plans/form-contributions.md.
+        -->
+        @if (Record && FormComponent) {
+          <mj-form-contributions
+            [Record]="Record"
+            [FormComponent]="FormComponent"
+            [FormContext]="FormComponent.formContext"
+            [BakedSectionKeys]="BakedRelatedSectionKeys"
+            [ShowRelatedEntities]="EffectiveShowRelatedEntities">
+          </mj-form-contributions>
+        }
+
+        <!--
           Container-provided fallback slot. ALWAYS present — last in document
           order — so any panel whose registered slot isn't found in the current
           form falls through here via FormSlotCoordinator's chain. Downstream

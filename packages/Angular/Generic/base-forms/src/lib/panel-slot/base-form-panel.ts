@@ -60,6 +60,24 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
     entity: string;
     slot: FormPanelSlot;
     sortKey?: number;
+    /**
+     * Identity for last-wins collapse. Two registrations with the same key
+     * compete; highest ClassFactory `Priority` wins. Omit to derive:
+     * `related:${relatedEntity}:${relatedJoinField}` when claiming a
+     * relationship, otherwise the registration is unique and never collapses.
+     */
+    contributionKey?: string;
+    /**
+     * When set, this panel **replaces** the default related-entity grid for
+     * that relationship on `entity`'s form. The baked CodeGen panel (if any)
+     * is hidden; the stock fill-in grid is not mounted.
+     */
+    relatedEntity?: string;
+    /**
+     * Disambiguates two FKs to the same related entity (BillTo vs ShipTo).
+     * Compared after stripping wrapping `[]`.
+     */
+    relatedJoinField?: string;
 }
 
 /**

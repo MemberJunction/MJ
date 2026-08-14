@@ -30,6 +30,8 @@ import {
 } from './types/form-types';
 import { FormStateService } from './form-state.service';
 import { EntityFormConfig } from './types/entity-form-config';
+import { CollectFormPanelRegistrations } from './panel-slot/collect-form-panel-registrations';
+import { ClaimedRelatedSectionKeys } from './panel-slot/form-contribution';
 
 /**
  * Abstract base class for all entity record forms in MemberJunction.
@@ -748,10 +750,32 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       collapsibleSections: this.Config?.CollapsibleSections,
       enableRecordLinks: this.Config?.EnableRecordLinks,
       showRelatedEntities: this.Config?.ShowRelatedEntities,
-      hiddenSectionKeys: this.Config?.HiddenSectionKeys,
+      hiddenSectionKeys: this.resolveHiddenSectionKeys(),
       visibleSectionKeys: this.Config?.VisibleSectionKeys,
       allowSectionReorder: this.resolveAllowSectionReorder()
     };
+  }
+
+  /**
+   * Config HiddenSectionKeys plus CodeGen section keys for related-entity
+   * panels a registered contribution has claimed (so the baked grid hides).
+   */
+  private resolveHiddenSectionKeys(): string[] | undefined {
+    const claimed = this.claimedRelatedSectionKeys();
+    const configured = this.Config?.HiddenSectionKeys;
+    if (claimed.length === 0) return configured;
+    return [...(configured ?? []), ...claimed];
+  }
+
+  private claimedRelatedSectionKeys(): string[] {
+    const entity = this.record?.EntityInfo;
+    if (!entity) return [];
+    return ClaimedRelatedSectionKeys(
+      entity.Name,
+      entity.RelatedEntities,
+      entity.ChildEntities.map((child) => child.ID),
+      CollectFormPanelRegistrations(),
+    );
   }
 
   /**

@@ -606,6 +606,8 @@ MemberJunction has **two** patterns for extending generated entity forms. Both a
 
 Write a standalone Angular component that extends `BaseFormPanel`, decorate it with `@RegisterClassEx(BaseFormPanel, { metadata: { entity, slot, sortKey } })`, declare it in any module. The next time anyone opens that entity's edit form, the panel renders in your chosen slot via `<mj-form-panel-slot>`. No `*Extended` class. No restating every generated panel. No custom HTML for the existing form.
 
+To **replace** a related-entity grid (or supply one when another OpenApp's relationship was not baked into this form), add `relatedEntity` and optional `relatedJoinField` to the metadata bag. The composer hides the baked CodeGen panel and mounts yours. Highest ClassFactory `Priority` wins when two apps claim the same relationship. See [PANELS.md](Generic/base-forms/PANELS.md) and [`/plans/form-contributions.md`](../../plans/form-contributions.md).
+
 **Use when** the generated form's layout is fine, you just want to add governance widgets, typed-config panels, type-conditional sections, or any standalone UI. The generated form keeps regenerating freely; your panels mount alongside.
 
 **Full authoring guide**: [`packages/Angular/Generic/base-forms/PANELS.md`](Generic/base-forms/PANELS.md) — slot positions, fallback chain, multiple-panels-per-slot ordering, composition (reusing panels outside the form), CodeGen requirement.

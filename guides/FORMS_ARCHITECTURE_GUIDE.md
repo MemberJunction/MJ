@@ -79,6 +79,10 @@ You rarely touch Layer 1 directly. Two things you should know:
 
 - **Extending a form without replacing it:** register a `BaseFormPanel` against a
   slot — see [base-forms/PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md).
+  Claim `relatedEntity` to replace a baked related-entity grid, or let
+  `<mj-form-contributions>` (always in the container) fill in `DisplayInForm`
+  relationships the template did not bake. CodeGen keeps emitting those grids;
+  override is runtime. Plan: [`/plans/form-contributions.md`](../plans/form-contributions.md).
 - **Replacing a form entirely:** a custom `*Extended` class — see the "Extending
   Entity Forms" section of [packages/Angular/CLAUDE.md](../packages/Angular/CLAUDE.md).
 
