@@ -32,7 +32,13 @@ class ToolbarStub {
   @Output() DeleteRequested = new EventEmitter<void>();
 }
 @Component({ standalone: true, selector: 'mj-section-manager', template: '' })
-class SectionManagerStub { @Input() Sections: unknown; @Input() SectionOrder: unknown; @Input() Visible = false; }
+class SectionManagerStub {
+  @Input() Sections: unknown;
+  @Input() SectionOrder: unknown;
+  @Input() MoreSectionKeys: unknown;
+  @Input() LockedMoreKeys: unknown;
+  @Input() Visible = false;
+}
 @Component({ standalone: true, selector: 'mj-form-panel-slot', template: '' })
 class PanelSlotStub { @Input() Entity: unknown; @Input() Record: unknown; @Input() FormComponent: unknown; }
 @Component({ standalone: true, selector: 'mj-empty-state', template: '' })
