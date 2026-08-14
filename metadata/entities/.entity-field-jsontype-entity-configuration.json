@@ -1,0 +1,73 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on MJ: Entities.Configuration so CodeGen emits a typed",
+      "ConfigurationObject accessor returning MJEntityEntity_IEntityConfiguration.",
+      "The EntityField row must exist (created by the first CodeGen pass over the new",
+      "column) before this @lookup resolves on push.",
+      "Source: metadata/entities/JSONType-interfaces/IEntityConfiguration.ts"
+    ],
+    "fields": {
+      "Name": "MJ: Entities"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IEntityConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IEntityConfiguration.ts"
+          },
+          "_comments": [
+            "Entity.Configuration — optional UI/Form chrome bag (Layout, AutoLeftNavAt)"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entities&Name=Configuration"
+          },
+          "sync": {
+            "lastModified": "2026-08-14T19:19:42.689Z",
+            "checksum": "6e1ef7069dee71fe36a1b3ec14ac05b1b848b9b1ad17c649c85a362f6827dfd7"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entities"
+    }
+  },
+  {
+    "_comments": [
+      "Sets JSONType metadata on MJ: Entity Relationships.Configuration so CodeGen emits",
+      "a typed ConfigurationObject accessor returning MJEntityRelationshipEntity_IEntityRelationshipConfiguration.",
+      "Distinct from RelatedRecordCollection / DisplayComponentConfiguration on the same row.",
+      "Source: metadata/entities/JSONType-interfaces/IEntityRelationshipConfiguration.ts"
+    ],
+    "fields": {
+      "Name": "MJ: Entity Relationships"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IEntityRelationshipConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IEntityRelationshipConfiguration.ts"
+          },
+          "_comments": [
+            "EntityRelationship.Configuration — optional UI.FormRole bag (Primary | Detail)"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Relationships&Name=Configuration"
+          },
+          "sync": {
+            "lastModified": "2026-08-14T19:19:42.661Z",
+            "checksum": "4b691372a5807295aa253b8eaa9441d683edddecfafb06116efbbbd2150d76ad"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entity Relationships"
+    }
+  }
+]
