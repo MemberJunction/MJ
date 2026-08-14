@@ -8,18 +8,21 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  AssembleParentOverrides,
   BASELINE_DEV_DEPENDENCIES,
   BuildNpmrc,
   BuildRootPackageJson,
   BuildSentinel,
   BuildShellPeerGuidance,
   BuildWorkspaceYaml,
+  CollectFamilyPackages,
   CompareVersionStrings,
   FALLBACK_PNPM_PIN,
   NPMRC_BASE_LINES,
   ONLY_BUILT_DEPENDENCIES,
   PickTurboJson,
   ResolveDevDependencyUnion,
+  ResolveMemberPnpmBlocks,
   ResolvePnpmPin,
   SENTINEL_MARKER,
   SHELL_PROVIDED_PEERS,
@@ -34,9 +37,21 @@ function repo(name: string, overrides?: Partial<CandidateRepo>): CandidateRepo {
     Reasons: ['mj-app-json'],
     RootPackageJson: {},
     Packages: [],
+    UnsupportedGlobs: [],
+    Lockfile: null,
     TurboJson: null,
+    WorkspaceGlobs: ['packages/*'],
+    WorkspaceGlobsSource: 'no-workspace-yaml',
     ...overrides,
   };
+}
+
+/** The glob lines of the generated yaml's `packages:` section. */
+function packagesSectionGlobs(yaml: string): string[] {
+  return yaml
+    .slice(yaml.indexOf('packages:'))
+    .split('\n')
+    .filter((line) => line.startsWith('  - '));
 }
 
 describe('BuildWorkspaceYaml', () => {
@@ -45,7 +60,7 @@ describe('BuildWorkspaceYaml', () => {
   });
 
   it('emits linkWorkspacePackages and the 16-name build-scripts allowlist', () => {
-    const yaml = BuildWorkspaceYaml(['bizapps-common']);
+    const yaml = BuildWorkspaceYaml([repo('bizapps-common')]);
     expect(yaml).toContain('linkWorkspacePackages: true');
     expect(ONLY_BUILT_DEPENDENCIES).toHaveLength(16);
     expect(yaml).toContain("  - '@apollo/protobufjs'"); // scoped names quoted
@@ -53,11 +68,9 @@ describe('BuildWorkspaceYaml', () => {
     expect(yaml).toContain('  - tesseract.js');
   });
 
-  it('emits exactly a repo-root glob and a packages glob per member, sorted', () => {
-    const yaml = BuildWorkspaceYaml(['bizapps-tasks', 'bizapps-common']);
-    const packagesSection = yaml.slice(yaml.indexOf('packages:'));
-    const globs = packagesSection.split('\n').filter((l) => l.startsWith('  - '));
-    expect(globs).toEqual([
+  it('emits a repo-root glob and the default packages glob per plain member, sorted', () => {
+    const yaml = BuildWorkspaceYaml([repo('bizapps-tasks'), repo('bizapps-common')]);
+    expect(packagesSectionGlobs(yaml)).toEqual([
       "  - 'bizapps-common'",
       "  - 'bizapps-common/packages/*'",
       "  - 'bizapps-tasks'",
@@ -65,8 +78,57 @@ describe('BuildWorkspaceYaml', () => {
     ]);
   });
 
+  // The #3795 regression: MJ declares 42 nested globs of its own; hardcoding
+  // packages/* dropped 248 of its 307 packages from the workspace, silently.
+  it('re-prefixes every glob a nested-layout member declares, in declaration order', () => {
+    const yaml = BuildWorkspaceYaml([
+      repo('MJ', { WorkspaceGlobs: ['packages/*', 'packages/AI/*', 'packages/Angular/Explorer/*', 'packages/AI/AICLI'] }),
+      repo('bizapps-tasks'),
+    ]);
+    expect(packagesSectionGlobs(yaml)).toEqual([
+      "  - 'MJ'",
+      "  - 'MJ/packages/*'",
+      "  - 'MJ/packages/AI/*'",
+      "  - 'MJ/packages/Angular/Explorer/*'",
+      "  - 'MJ/packages/AI/AICLI'",
+      "  - 'bizapps-tasks'",
+      "  - 'bizapps-tasks/packages/*'",
+    ]);
+  });
+
+  it('emits a member whose own file declares packages/* exactly once — no doubled glob', () => {
+    const yaml = BuildWorkspaceYaml([repo('bizapps-common', { WorkspaceGlobs: ['packages/*'] })]);
+    const occurrences = packagesSectionGlobs(yaml).filter((line) => line === "  - 'bizapps-common/packages/*'");
+    expect(occurrences).toHaveLength(1);
+  });
+
+  it('re-prefixes a packages-rooted negation with the ! outside the member name', () => {
+    const yaml = BuildWorkspaceYaml([repo('MJ', { WorkspaceGlobs: ['packages/*', '!packages/Internal/*'] })]);
+    expect(packagesSectionGlobs(yaml)).toContain("  - '!MJ/packages/Internal/*'");
+  });
+
+  // Review finding on #3795: dropping a non-packages-rooted negation INVERTS its
+  // guard — mjcentral guards packages/** with !**/dist/**, and without the guard a
+  // dist/ copy of a package.json joins the workspace as a duplicate member.
+  it('keeps non-packages-rooted negations re-prefixed (mjcentral dist-guard shape)', () => {
+    const yaml = BuildWorkspaceYaml([
+      repo('mjcentral', { WorkspaceGlobs: ['packages/**', '!**/.next/**', '!**/dist/**'] }),
+    ]);
+    expect(packagesSectionGlobs(yaml)).toEqual([
+      "  - 'mjcentral'",
+      "  - 'mjcentral/packages/**'",
+      "  - '!mjcentral/**/.next/**'",
+      "  - '!mjcentral/**/dist/**'",
+    ]);
+  });
+
   it('never emits an apps glob (app-shell names collide across repos)', () => {
-    expect(BuildWorkspaceYaml(['bizapps-common', 'bizapps-accounting'])).not.toContain('/apps/');
+    expect(BuildWorkspaceYaml([repo('bizapps-common'), repo('bizapps-accounting')])).not.toContain('/apps/');
+  });
+
+  it('enforces the detection preconditions: globs present, POSITIVE globs packages-rooted', () => {
+    expect(() => BuildWorkspaceYaml([repo('bare', { WorkspaceGlobs: [] })])).toThrow(/no workspace globs/);
+    expect(() => BuildWorkspaceYaml([repo('shelly', { WorkspaceGlobs: ['apps/*'] })])).toThrow(/not rooted under packages\//);
   });
 });
 
@@ -194,6 +256,148 @@ describe('ResolveDevDependencyUnion', () => {
     expect(declared.DevDependencies.turbo).toBe('^2.9.9');
     expect(declared.Conflicts).toEqual([]); // baseline fill is a default, not a conflict
   });
+
+  // The field's @types/mssql 9.1.8+9.1.11: BCSaaS's exact devDep pin copied verbatim
+  // by this union put two copies of one @types package in the store — a guaranteed
+  // nominal-type break. @types never enter the union, and the skip is reported.
+  it('skips @types/* entirely and reports every skipped name', () => {
+    const { DevDependencies, SkippedTypes } = ResolveDevDependencyUnion([
+      repo('BCSaaS', { RootPackageJson: { devDependencies: { '@types/mssql': '9.1.8', typescript: '5.4.5' } } }),
+    ]);
+    expect(DevDependencies['@types/mssql']).toBeUndefined();
+    expect(DevDependencies.typescript).toBe('5.4.5');
+    expect(SkippedTypes).toEqual(['@types/mssql']);
+  });
+
+  it('rewrites member-provided names to workspace:* — local source beats any registry pin', () => {
+    const family = new Set(['@memberjunction/cli']);
+    const { DevDependencies, Conflicts } = ResolveDevDependencyUnion(
+      [
+        repo('MJ', { RootPackageJson: { devDependencies: { '@memberjunction/cli': 'workspace:*' } } }),
+        repo('bizapps-accounting', { RootPackageJson: { devDependencies: { '@memberjunction/cli': '6.1.0-edge.0' } } }),
+      ],
+      family
+    );
+    expect(DevDependencies['@memberjunction/cli']).toBe('workspace:*');
+    expect(Conflicts).toEqual([]); // both rewrite to the same specifier — no noise
+  });
+
+  it('drops a workspace: specifier on a package NO member provides, reporting it', () => {
+    const { DevDependencies, DroppedWorkspace } = ResolveDevDependencyUnion([
+      repo('MJ', { RootPackageJson: { devDependencies: { '@memberjunction/integration-test-suite': 'workspace:*' } } }),
+    ]);
+    expect(DevDependencies['@memberjunction/integration-test-suite']).toBeUndefined();
+    expect(DroppedWorkspace).toEqual([{ Package: '@memberjunction/integration-test-suite', Repo: 'MJ' }]);
+  });
+});
+
+/** Member package shorthand for family/enumeration tests. */
+function pkg(relPath: string, name: string): { RelPath: string; PackageJson: { name: string } } {
+  return { RelPath: relPath, PackageJson: { name } };
+}
+
+describe('CollectFamilyPackages', () => {
+  it('collects every member-provided package name, nested dirs included, sorted', () => {
+    const { Names, Duplicates } = CollectFamilyPackages([
+      repo('MJ', { Packages: [pkg('packages/MJCore', '@memberjunction/core'), pkg('packages/AI/Engine', '@memberjunction/aiengine')] }),
+      repo('bizapps-tasks', { Packages: [pkg('packages/Entities', 'tasks-entities')] }),
+    ]);
+    expect(Names).toEqual(['@memberjunction/aiengine', '@memberjunction/core', 'tasks-entities']);
+    expect(Duplicates).toEqual([]);
+  });
+
+  it('reports a name two members both provide — the link target is sort-order dependent', () => {
+    const { Duplicates } = CollectFamilyPackages([
+      repo('MJ', { Packages: [pkg('packages/MJCore', '@memberjunction/core')] }),
+      repo('MJ-clone', { Packages: [pkg('packages/MJCore', '@memberjunction/core')] }),
+    ]);
+    expect(Duplicates).toEqual([{ Package: '@memberjunction/core', Repos: ['MJ', 'MJ-clone'] }]);
+  });
+});
+
+describe('ResolveMemberPnpmBlocks', () => {
+  it('hoists member overrides, re-roots patch paths, and carries packageExtensions + peer rules', () => {
+    const result = ResolveMemberPnpmBlocks([
+      repo('MJ', {
+        RootPackageJson: {
+          pnpm: {
+            overrides: { jsdom: '26.1.0', fstream: 'npm:tar-fs@^3.0.4' },
+            patchedDependencies: { 'type-graphql@2.0.0-beta.3': 'patches/type-graphql@2.0.0-beta.3.patch' },
+            packageExtensions: { 'express-rate-limit': { dependencies: { '@types/express': '^5.0.6' } } },
+            peerDependencyRules: { allowedVersions: { 'foo>bar': '2' }, ignoreMissing: ['graphql'] },
+          },
+        },
+      }),
+    ]);
+    expect(result.Overrides).toEqual({ fstream: 'npm:tar-fs@^3.0.4', jsdom: '26.1.0' });
+    expect(result.PatchedDependencies).toEqual({
+      'type-graphql@2.0.0-beta.3': 'MJ/patches/type-graphql@2.0.0-beta.3.patch',
+    });
+    expect(result.PackageExtensions['express-rate-limit']).toEqual({ dependencies: { '@types/express': '^5.0.6' } });
+    expect(result.PeerAllowedVersions).toEqual({ 'foo>bar': '2' });
+    expect(result.PeerIgnoreMissing).toEqual(['graphql']);
+    expect(result.Patches).toEqual([
+      { Package: 'type-graphql@2.0.0-beta.3', Path: 'MJ/patches/type-graphql@2.0.0-beta.3.patch', Repo: 'MJ' },
+    ]);
+    expect(result.Conflicts).toEqual([]);
+  });
+
+  it('resolves override conflicts highest-comparable-wins and reports them', () => {
+    const result = ResolveMemberPnpmBlocks([
+      repo('a', { RootPackageJson: { pnpm: { overrides: { react: '19.1.0' } } } }),
+      repo('b', { RootPackageJson: { pnpm: { overrides: { react: '19.2.0' } } } }),
+    ]);
+    expect(result.Overrides.react).toBe('19.2.0');
+    expect(result.Conflicts).toHaveLength(1);
+    expect(result.Conflicts[0].Winner).toEqual({ Repo: 'b', Version: '19.2.0' });
+  });
+
+  it('gives a same-package patch conflict to the first member (patches cannot merge) and reports it', () => {
+    const result = ResolveMemberPnpmBlocks([
+      repo('a', { RootPackageJson: { pnpm: { patchedDependencies: { 'x@1.0.0': 'patches/x.patch' } } } }),
+      repo('b', { RootPackageJson: { pnpm: { patchedDependencies: { 'x@1.0.0': 'patches/other.patch' } } } }),
+    ]);
+    expect(result.PatchedDependencies['x@1.0.0']).toBe('a/patches/x.patch');
+    expect(result.Conflicts).toHaveLength(1);
+    expect(result.Conflicts[0].Package).toBe('x@1.0.0');
+    expect(result.Conflicts[0].Losers).toEqual([{ Repo: 'b', Version: 'b/patches/other.patch' }]);
+  });
+});
+
+describe('AssembleParentOverrides', () => {
+  it('layers pins < member overrides < family workspace:*, reporting every displacement', () => {
+    const { Overrides, SupersededPins } = AssembleParentOverrides(
+      { axios: '1.13.6', jsdom: '25.0.1', '@memberjunction/core': '6.1.0' },
+      { jsdom: '26.1.0' },
+      ['@memberjunction/core']
+    );
+    expect(Overrides).toEqual({
+      '@memberjunction/core': 'workspace:*',
+      axios: '1.13.6',
+      jsdom: '26.1.0',
+    });
+    expect(SupersededPins).toEqual(['@memberjunction/core', 'jsdom']);
+  });
+
+  it('a whole-name member override displaces EVERY per-major pin selector for that name', () => {
+    const { Overrides, SupersededPins } = AssembleParentOverrides(
+      { 'chalk@^5': '5.6.2', 'chalk@^4': '4.1.2', 'chalk@^2': '2.4.2', semver: '7.7.1' },
+      { chalk: '5.9.9' },
+      []
+    );
+    expect(Overrides).toEqual({ chalk: '5.9.9', semver: '7.7.1' });
+    expect(SupersededPins).toEqual(['chalk@^2', 'chalk@^4', 'chalk@^5']);
+  });
+
+  it('a range-scoped member override displaces only its own selector', () => {
+    const { Overrides, SupersededPins } = AssembleParentOverrides(
+      { 'chalk@^5': '5.6.2', 'chalk@^4': '4.1.2' },
+      { 'chalk@^5': '5.9.9' },
+      []
+    );
+    expect(Overrides).toEqual({ 'chalk@^4': '4.1.2', 'chalk@^5': '5.9.9' });
+    expect(SupersededPins).toEqual(['chalk@^5']);
+  });
 });
 
 describe('ResolvePnpmPin', () => {
@@ -246,6 +450,82 @@ describe('BuildRootPackageJson', () => {
     const result = BuildRootPackageJson('Blue Cypress Code!', [repo('a')]);
     const manifest = JSON.parse(result.Content) as { name: string };
     expect(manifest.name).toBe('blue-cypress-code-dev-workspace');
+  });
+
+  // End-to-end absorption: everything the 299/299 field recipe did by hand
+  // (#3795 steps 3–5 + the workspace:* addendum) lands in one generated manifest.
+  it('assembles the fully-absorbed pnpm block: pins, hoisted overrides + patch, extensions, family workspace:*', () => {
+    const mj = repo('MJ', {
+      RootPackageJson: {
+        name: 'memberjunction-workspace',
+        packageManager: 'pnpm@10.33.0',
+        devDependencies: {
+          turbo: '^2.5.0',
+          '@types/node': '24.10.11',
+          '@memberjunction/integration-test-suite': 'workspace:*', // the issue's guaranteed hard failure
+        },
+        pnpm: {
+          overrides: { jsdom: '26.1.0' },
+          patchedDependencies: { 'type-graphql@2.0.0-beta.3': 'patches/type-graphql@2.0.0-beta.3.patch' },
+          packageExtensions: { 'express-rate-limit': { dependencies: { '@types/express': '^5.0.6' } } },
+          peerDependencyRules: { allowedVersions: { 'foo>bar': '2' }, ignoreMissing: ['graphql'] },
+        },
+      },
+      Packages: [
+        pkg('packages/MJCore', '@memberjunction/core'),
+        pkg('packages/TestingFramework/integration-test-suite', '@memberjunction/integration-test-suite'),
+      ],
+      Lockfile: {
+        Kind: 'pnpm',
+        Direct: [
+          { Name: 'axios', Version: '1.13.6' },
+          { Name: '@memberjunction/core', Version: '6.1.0' }, // family — excluded from pins
+        ],
+        Types: [{ Name: '@types/express', Version: '5.1.1' }],
+        Resolutions: [{ Name: 'axios', Version: '1.13.6' }, { Name: '@types/express', Version: '5.1.1' }],
+        Skipped: [{ Name: 'fstream', Version: 'tar-fs@3.1.1', Reason: 'non-semver resolution' }],
+      },
+    });
+    const result = BuildRootPackageJson('bluecypress', [mj]);
+    const manifest = JSON.parse(result.Content) as {
+      devDependencies: Record<string, string>;
+      pnpm: {
+        overrides: Record<string, string>;
+        patchedDependencies: Record<string, string>;
+        packageExtensions: Record<string, { dependencies: Record<string, string> }>;
+        peerDependencyRules: { allowedVersions: Record<string, string>; ignoreMissing: string[] };
+      };
+    };
+    expect(manifest.pnpm.overrides).toEqual({
+      '@memberjunction/core': 'workspace:*',
+      '@memberjunction/integration-test-suite': 'workspace:*',
+      '@types/express': '5.1.1', // EXACT — ^resolved passed 6 of 7 field breaks through
+      axios: '1.13.6',
+      jsdom: '26.1.0',
+    });
+    expect(manifest.pnpm.patchedDependencies).toEqual({
+      'type-graphql@2.0.0-beta.3': 'MJ/patches/type-graphql@2.0.0-beta.3.patch',
+    });
+    // a member patch keyed to a version the parent graph never resolves must not
+    // hard-fail the whole install (ERR_PNPM_UNUSED_PATCH) — found by the live smoke
+    expect((JSON.parse(result.Content) as { pnpm: { allowUnusedPatches: boolean } }).pnpm.allowUnusedPatches).toBe(true);
+    expect(manifest.pnpm.packageExtensions['express-rate-limit']).toEqual({ dependencies: { '@types/express': '^5.0.6' } });
+    expect(manifest.pnpm.peerDependencyRules.allowedVersions['nunjucks>chokidar']).toBe('5'); // baseline kept
+    expect(manifest.pnpm.peerDependencyRules.allowedVersions['foo>bar']).toBe('2'); // member unioned on top
+    expect(manifest.pnpm.peerDependencyRules.ignoreMissing).toEqual(['axios', 'graphql']);
+    // devDependencies: @types skipped; the family workspace:* devDep KEPT (the package IS a member now)
+    expect(manifest.devDependencies['@types/node']).toBeUndefined();
+    expect(manifest.devDependencies['@memberjunction/integration-test-suite']).toBe('workspace:*');
+    expect(manifest.devDependencies.turbo).toBe('^2.5.0');
+    // the report carries every decision
+    expect(result.Report.LockfilePinCount).toBe(2);
+    expect(result.Report.FamilyOverrideCount).toBe(2);
+    expect(result.Report.Patches).toHaveLength(1);
+    expect(result.Report.SkippedTypesDevDeps).toEqual(['@types/node']);
+    expect(result.Report.LockfileSkips).toEqual([
+      { Repo: 'MJ', Skip: { Name: 'fstream', Version: 'tar-fs@3.1.1', Reason: 'non-semver resolution' } },
+    ]);
+    expect(result.Report.DroppedWorkspaceDevDeps).toEqual([]); // provided by a member — kept, not dropped
   });
 });
 
