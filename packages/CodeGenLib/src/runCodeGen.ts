@@ -12,11 +12,14 @@ import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { applyIncludeSchemaScope } from './Database/schema-scope';
+import { partitionEntitiesByOutputDirectory } from './Config/schema-output';
 import { outputDir, commands, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig, CommandInfo } from './Config/config';
+import { resolveDirtySchemasForEmit, schemaKey, SchemaEmitOptions } from './Misc/schema-emit';
+import { EmitStats } from './Misc/emit-stats';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
 import { CodeGenReporter } from './Misc/codegen-reporter';
 import * as MJ from '@memberjunction/core';
-import { RunCommandsBase, CommandExecutionResult } from './Misc/runCommand';
+import { RunCommandsBase, CommandExecutionResult, formatCommandFailureDetail } from './Misc/runCommand';
 import { DBSchemaGeneratorBase } from './Database/dbSchema';
 import { AngularClientGeneratorBase } from './Angular/angular-codegen';
 import { CreateNewUserBase } from './Misc/createNewUser';
@@ -62,7 +65,7 @@ export class RunCodeGenBase {
       if (!r.success) {
         const cmd = cmds[i];
         const cmdText = cmd ? [cmd.command, ...(cmd.args ?? [])].join(' ').trim() : `command #${i + 1}`;
-        const detail = (r.error || r.output || '').trim();
+        const detail = formatCommandFailureDetail(r);
         this.commandFailures.push({
           context: `${phase} command`,
           message: detail ? `\`${cmdText}\` failed: ${detail}` : `\`${cmdText}\` failed`,
@@ -167,8 +170,9 @@ export class RunCodeGenBase {
         errors,
       };
     } catch (e) {
+      const message = e instanceof Error ? (e.stack ?? e.message) : String(e);
       failSpinner('CodeGen failed: ' + e);
-      logError(e as string);
+      logError(message);
       return {
         success: false,
         command: 'codegen',
@@ -231,6 +235,11 @@ export class RunCodeGenBase {
           if (results.some((r) => !r.success)) {
             logError('ERROR running one or more BEFORE commands');
             this.recordCommandFailures('BEFORE', beforeCommands, results);
+            pipelineSuccess = false;
+            for (const failure of this.commandFailures) {
+              logError(failure.message);
+              reporter.note(failure.message);
+            }
           }
         }
 
@@ -426,6 +435,11 @@ export class RunCodeGenBase {
         if (results.some((r) => !r.success)) {
           failSpinner('ERROR running one or more AFTER commands');
           this.recordCommandFailures('AFTER', afterCommands, results);
+          pipelineSuccess = false;
+          for (const failure of this.commandFailures) {
+            logError(failure.message);
+            reporter.note(failure.message);
+          }
         }
         else succeedSpinner('AFTER commands completed');
       }
@@ -445,7 +459,8 @@ export class RunCodeGenBase {
       logStatus('MJ CodeGen Complete! ' + md.Entities.length + ' entities processed in ' + totalSeconds + 's @ ' + endTime.toLocaleString());
       // A BEFORE/AFTER command failure fails the run (success=false, exit 1) so it
       // isn't silently swallowed — details flow into the structured result below.
-      return this.commandFailures.length === 0;
+      pipelineSuccess = pipelineSuccess && this.commandFailures.length === 0;
+      return pipelineSuccess;
      } catch (err) {
        pipelineSuccess = false;
        throw err;
@@ -466,6 +481,25 @@ export class RunCodeGenBase {
   }
 
   /**
+   * Resolve dirty-schema emit options for one generator call.
+   * `--skipdb` (files only) and `fileEmit.dirtySchemaOnly === false` rebuild
+   * every schema; write-if-changed still keeps mtimes stable. A full run with
+   * no new/modified entities yields an empty Set — the generator then only
+   * writes schema files that are missing.
+   */
+  protected buildSchemaEmitOptions(entities: MJ.EntityInfo[], skipDB: boolean): SchemaEmitOptions {
+    const fileEmit = configInfo.fileEmit;
+    return {
+      dirtySchemas: resolveDirtySchemasForEmit(
+        entities,
+        [...ManageMetadataBase.newEntityList, ...ManageMetadataBase.modifiedEntityList],
+        skipDB,
+        fileEmit?.dirtySchemaOnly !== false,
+      ),
+    };
+  }
+
+  /**
    * Runs the file-generation phase of CodeGen: GraphQL resolvers, entity
    * subclasses (core + non-core), Angular components, DB schema JSON, and
    * action subclasses. Extracted so the caller can skip this phase entirely
@@ -481,18 +515,19 @@ export class RunCodeGenBase {
     skipDB: boolean,
   ): Promise<boolean> {
       const reporter = CodeGenReporter.Instance;
+      EmitStats.Reset();
       const apiEntities = md.Entities.filter((e) => e.IncludeInAPI);
-      const excludedSchemaNames = configInfo.excludeSchemas.map(s => s.toLowerCase());
+      const excludedSchemaNames = configInfo.excludeSchemas.map(s => schemaKey(s));
       const includedEntities = apiEntities.filter(
-        (e) => !excludedSchemaNames.includes(e.SchemaName.trim().toLowerCase())
+        (e) => !excludedSchemaNames.includes(schemaKey(e.SchemaName))
       );
 
       const excludedCount = apiEntities.length - includedEntities.length;
       if (excludedCount > 0) {
         const excludedBySchema = apiEntities
-          .filter((e) => excludedSchemaNames.includes(e.SchemaName.trim().toLowerCase()))
+          .filter((e) => excludedSchemaNames.includes(schemaKey(e.SchemaName)))
           .reduce((acc, e) => {
-            const schema = e.SchemaName.trim();
+            const schema = (e.SchemaName ?? '').trim() || '(none)';
             acc[schema] = (acc[schema] || 0) + 1;
             return acc;
           }, {} as Record<string, number>);
@@ -503,10 +538,10 @@ export class RunCodeGenBase {
       }
 
       const coreEntities = includedEntities.filter(
-        (e) => e.SchemaName.trim().toLowerCase() === mjCoreSchema.trim().toLowerCase()
+        (e) => schemaKey(e.SchemaName) === schemaKey(mjCoreSchema)
       );
       const nonCoreEntities = includedEntities.filter(
-        (e) => e.SchemaName.trim().toLowerCase() !== mjCoreSchema.trim().toLowerCase()
+        (e) => schemaKey(e.SchemaName) !== schemaKey(mjCoreSchema)
       );
 
       // Entities whose schemas are owned by OTHER packages (see entityPackageName map). They must be
@@ -516,7 +551,7 @@ export class RunCodeGenBase {
       // crash-loops.
       const externalSchemas = getExternalEntitySchemas().map(s => s.toLowerCase());
       const localNonCoreEntities = externalSchemas.length > 0
-        ? nonCoreEntities.filter(e => !externalSchemas.includes(e.SchemaName.toLowerCase()))
+        ? nonCoreEntities.filter(e => !externalSchemas.includes(schemaKey(e.SchemaName)))
         : nonCoreEntities;
 
       const isVerbose = configInfo?.verboseOutput ?? false;
@@ -527,7 +562,13 @@ export class RunCodeGenBase {
         if (isVerbose) startSpinner('Generating CORE Entity GraphQL Resolver Code...');
         const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase)!;
         const ok = await reporter.phase('generateGraphQLCore', async () =>
-          graphQLGenerator.generateGraphQLServerCode(coreEntities, graphQLCoreResolversOutputDir, '@memberjunction/core-entities', true),
+          graphQLGenerator.generateGraphQLServerCode(
+            coreEntities,
+            graphQLCoreResolversOutputDir,
+            '@memberjunction/core-entities',
+            true,
+            this.buildSchemaEmitOptions(coreEntities, skipDB),
+          ),
         );
         if (!ok) {
           failSpinner('Error generating GraphQL server code');
@@ -542,9 +583,27 @@ export class RunCodeGenBase {
         const entityPackageName = typeof configInfo.entityPackageName === 'string'
           ? (configInfo.entityPackageName || 'mj_generatedentities')
           : 'mj_generatedentities';
-        const ok = await reporter.phase('generateGraphQL', async () =>
-          graphQLGenerator.generateGraphQLServerCode(localNonCoreEntities, graphqlOutputDir, entityPackageName, false),
+        const graphqlGroups = partitionEntitiesByOutputDirectory(
+          localNonCoreEntities,
+          'GraphQLServer',
+          graphqlOutputDir,
+          configInfo.schemaOutput,
         );
+        const ok = await reporter.phase('generateGraphQL', async () => {
+          for (const [dir, group] of graphqlGroups) {
+            const groupOk = graphQLGenerator.generateGraphQLServerCode(
+              group,
+              dir,
+              entityPackageName,
+              false,
+              this.buildSchemaEmitOptions(group, skipDB),
+            );
+            if (!groupOk) {
+              return false;
+            }
+          }
+          return true;
+        });
         if (!ok) {
           failSpinner('Error generating GraphQL Resolver code');
           return false;
@@ -556,7 +615,13 @@ export class RunCodeGenBase {
         if (isVerbose) startSpinner('Generating CORE Entity Subclass Code...');
         const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
         const ok = await reporter.phase('generateEntitySubclassesCore', () =>
-          entitySubClassGeneratorObject.generateAllEntitySubClasses(conn, coreEntities, coreEntitySubClassOutputDir, skipDB),
+          entitySubClassGeneratorObject.generateAllEntitySubClasses(
+            conn,
+            coreEntities,
+            coreEntitySubClassOutputDir,
+            skipDB,
+            this.buildSchemaEmitOptions(coreEntities, skipDB),
+          ),
         );
         if (!ok) {
           failSpinner('Error generating entity subclass code');
@@ -568,9 +633,27 @@ export class RunCodeGenBase {
       if (entitySubClassOutputDir) {
         if (isVerbose) startSpinner('Generating Entity Subclass Code...');
         const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        const ok = await reporter.phase('generateEntitySubclasses', () =>
-          entitySubClassGeneratorObject.generateAllEntitySubClasses(conn, localNonCoreEntities, entitySubClassOutputDir, skipDB),
+        const entityGroups = partitionEntitiesByOutputDirectory(
+          localNonCoreEntities,
+          'EntitySubClasses',
+          entitySubClassOutputDir,
+          configInfo.schemaOutput,
         );
+        const ok = await reporter.phase('generateEntitySubclasses', async () => {
+          for (const [dir, group] of entityGroups) {
+            const groupOk = await entitySubClassGeneratorObject.generateAllEntitySubClasses(
+              conn,
+              group,
+              dir,
+              skipDB,
+              this.buildSchemaEmitOptions(group, skipDB),
+            );
+            if (!groupOk) {
+              return false;
+            }
+          }
+          return true;
+        });
         if (!ok) {
           failSpinner('Error generating entity subclass code');
           return false;
@@ -594,9 +677,21 @@ export class RunCodeGenBase {
       if (angularOutputDir) {
         if (isVerbose) startSpinner('Generating Angular Code...');
         const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase)!;
-        const ok = await reporter.phase('generateAngular', () =>
-          angularGenerator.generateAngularCode(localNonCoreEntities, angularOutputDir, '', currentUser),
+        const angularGroups = partitionEntitiesByOutputDirectory(
+          localNonCoreEntities,
+          'Angular',
+          angularOutputDir,
+          configInfo.schemaOutput,
         );
+        const ok = await reporter.phase('generateAngular', async () => {
+          for (const [dir, group] of angularGroups) {
+            const groupOk = angularGenerator.generateAngularCode(group, dir, '', currentUser);
+            if (!groupOk) {
+              return false;
+            }
+          }
+          return true;
+        });
         if (!ok) {
           failSpinner('Error generating Angular code');
           return false;
@@ -672,6 +767,18 @@ export class RunCodeGenBase {
           } else if (isVerbose) succeedSpinner(`${target.label} typed bases generated`);
         }
       } else if (isVerbose) warnSpinner('Remote Operations output directory NOT found in config file, skipping...');
+
+      const emit = EmitStats.Snapshot();
+      reporter.counter('filesWritten', emit.filesWritten);
+      reporter.counter('filesSkipped', emit.filesSkipped);
+      reporter.counter('schemasEmitted', emit.schemasEmitted);
+      reporter.counter('schemasSkipped', emit.schemasSkipped);
+      reporter.mark('emitStats', emit);
+      logStatus(
+        `File emit: wrote ${emit.filesWritten}, skipped ${emit.filesSkipped}, ` +
+        `schemas emitted ${emit.schemasEmitted} / skipped ${emit.schemasSkipped} ` +
+        `(assemble ${emit.assembleMs}ms)`,
+      );
 
       SQLLogging.finishSQLLogging();
       if (!isVerbose) succeedSpinner('TypeScript code generation completed');

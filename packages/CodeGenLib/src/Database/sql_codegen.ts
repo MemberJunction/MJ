@@ -15,6 +15,7 @@ import { MJEntityEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
 import { TempBatchFile } from '../Misc/temp_batch_file';
+import { writeFileIfChanged as writeFileIfChangedShared } from '../Misc/file-write';
 
 
 export const SPType = {
@@ -86,8 +87,17 @@ export class SQLCodeGenBase {
      */
     protected orderedEntitiesForDeleteSPRegeneration: string[] = [];
 
+    /**
+     * `schema.routine` keys (lowercased) present in the database at the start of
+     * this SQL-generation pass. Used to force-log CREATE PROC for routines that
+     * were dropped out-of-band (BigSchemaDemo recreate, a failed prior batch)
+     * while the entity itself is not in newEntityList/modifiedEntityList.
+     */
+    protected existingRoutines: Set<string> | null = null;
+
     public async manageSQLScriptsAndExecution(pool: CodeGenConnection, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
+            this.existingRoutines = null;
             // Build list of entities qualified for forced regeneration if entityWhereClause is provided
             if (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.entityWhereClause) {
                 this.filterEntitiesQualifiedForRegeneration = true; // Enable filtering
@@ -124,6 +134,8 @@ export class SQLCodeGenBase {
                 return false;
             }
             succeedSpinner(`Custom SQL scripts completed (${(new Date().getTime() - startTime.getTime())/1000}s)`);
+
+            await this.loadExistingRoutines(pool, entities);
 
             // ALWAYS use the first filter where we only include entities that have IncludeInAPI = 1
             // Entities are already sorted by name in PostProcessEntityMetadata (see providerBase.ts)
@@ -213,7 +225,8 @@ export class SQLCodeGenBase {
             // AI Engine init because vwAIModels is gone. SQL Server doesn't
             // hit this because its execution path is bulk-monolithic, not
             // phased per-entity.
-            const perEntityBatchSize = configInfo.dbPlatform === 'postgresql' ? 1 : 5;
+            const configuredBatch = configInfo.fileEmit?.sqlEntityBatchSize ?? 8;
+            const perEntityBatchSize = configInfo.dbPlatform === 'postgresql' ? 1 : configuredBatch;
 
             // Generate SQL for entities that don't need cascade delete regeneration
             const genResult = await this.generateAndExecuteEntitySQLToSeparateFiles({
@@ -838,14 +851,7 @@ export class SQLCodeGenBase {
      * This avoids false timestamp updates and unnecessary I/O.
      */
     protected writeFileIfChanged(filePath: string, newContent: string): boolean {
-        if (fs.existsSync(filePath)) {
-            const existing = fs.readFileSync(filePath, 'utf-8');
-            if (existing === newContent) {
-                return false;
-            }
-        }
-        fs.writeFileSync(filePath, newContent);
-        return true;
+        return writeFileIfChangedShared(filePath, newContent);
     }
 
     /**
@@ -1255,7 +1261,7 @@ export class SQLCodeGenBase {
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
                         this.writeFileIfChanged(filePath, s);
-                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
                         files.push(filePath);
                     }
                     sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
@@ -1266,7 +1272,7 @@ export class SQLCodeGenBase {
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true))
                     this.writeFileIfChanged(filePath, s);
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
                     files.push(filePath);
                 }
 
@@ -1287,7 +1293,7 @@ export class SQLCodeGenBase {
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
                         this.writeFileIfChanged(filePath, s);
-                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
                         files.push(filePath);
                     }
                     sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
@@ -1298,7 +1304,7 @@ export class SQLCodeGenBase {
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true));
                     this.writeFileIfChanged(filePath, s);
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
                     files.push(filePath);
                 }
 
@@ -1325,7 +1331,7 @@ export class SQLCodeGenBase {
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
                         this.writeFileIfChanged(filePath, s);
-                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
                         files.push(filePath);
                     }
                     sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
@@ -1336,7 +1342,7 @@ export class SQLCodeGenBase {
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true));
                     this.writeFileIfChanged(filePath, s);
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
                     files.push(filePath);
                 }
 
@@ -1388,6 +1394,44 @@ export class SQLCodeGenBase {
 
     public getSPName(entity: EntityInfo, type: SPType): string {
         return this._dbProvider.getCRUDRoutineName(entity, type as 'Create' | 'Update' | 'Delete');
+    }
+
+    /**
+     * Snapshot every CRUD routine currently in the database (one query) so
+     * generate-and-log can force-emit CREATE PROC for objects that vanished
+     * without the entity landing on newEntityList/modifiedEntityList.
+     */
+    protected async loadExistingRoutines(pool: CodeGenConnection, entities: EntityInfo[]): Promise<void> {
+        this.existingRoutines = new Set<string>();
+        const schemas = [...new Set(entities.map((e) => e.SchemaName).filter((s) => !!s))];
+        const sql = this._dbProvider.getRoutineNamesBySchemaSQL(schemas);
+        if (!sql || !sql.trim()) {
+            return;
+        }
+        try {
+            const result = await pool.query(sql);
+            for (const row of result.recordset ?? []) {
+                const schemaName = String(row.schema_name ?? '').toLowerCase();
+                const routineName = String(row.routine_name ?? '').toLowerCase();
+                if (schemaName && routineName) {
+                    this.existingRoutines.add(`${schemaName}.${routineName}`);
+                }
+            }
+        } catch (e) {
+            logWarning(`Could not load existing CRUD routines (missing-proc self-heal disabled this run): ${e instanceof Error ? e.message : String(e)}`);
+            this.existingRoutines = null;
+        }
+    }
+
+    protected isRoutineMissing(schema: string, routineName: string): boolean {
+        if (!this.existingRoutines) {
+            return false;
+        }
+        return !this.existingRoutines.has(`${schema}.${routineName}`.toLowerCase());
+    }
+
+    protected forceLogForRoutine(entity: EntityInfo, routineName: string, baseViewChanged: boolean): boolean {
+        return baseViewChanged || this.isRoutineMissing(entity.SchemaName, routineName);
     }
 
     public getEntityPermissionFileNames(entity: EntityInfo): string[] {
