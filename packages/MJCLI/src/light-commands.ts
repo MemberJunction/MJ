@@ -56,6 +56,7 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   // Dev workspace generator - node stdlib + chalk only, no bootstrap
   'dev workspace',
   'dev workspace status',
+  'dev workspace doctor',
   'dev workspace clean',
 
   // SQL conversion commands - use @memberjunction/sql-converter + sqlglot-ts only

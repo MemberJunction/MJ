@@ -1,32 +1,23 @@
+// Load the JIT compiler BEFORE any Angular library evaluates: npm-published Angular
+// packages ship partial declarations whose static initializers need the compiler facade.
+import '@angular/compiler';
+import { describe, it, expect } from 'vitest';
+import * as publicApi from '../public-api';
+import { CoreDashboardsModule, EntityAdminDashboardComponent, ExplorerStateService } from '../public-api';
+
 /**
- * Tests for dashboards package:
- * - Verifies the package exports are accessible
- * - Tests AI instrumentation service concepts where testable
+ * Entry-point smoke test: importing the public entry must succeed (catches
+ * broken exports / import-graph breakage) and the load-bearing symbols the
+ * package exists to provide must be real constructors.
  */
-import { describe, it, expect, vi } from 'vitest';
+describe('@memberjunction/ng-dashboards', () => {
+  it('exposes a non-empty public export surface', () => {
+    expect(Object.keys(publicApi).length).toBeGreaterThan(0);
+  });
 
-// Mock Angular
-vi.mock('@angular/core', () => ({
-  Injectable: () => (target: Function) => target,
-  Component: () => (target: Function) => target,
-  Directive: () => (target: Function) => target,
-  NgModule: () => (target: Function) => target,
-  Input: () => () => {},
-  Output: () => () => {},
-  EventEmitter: class { emit() {} },
-  ChangeDetectorRef: class { detectChanges() {} markForCheck() {} },
-  ChangeDetectionStrategy: { OnPush: 1 },
-  ViewChild: () => () => {},
-  ElementRef: class {},
-  OnInit: class {},
-  OnDestroy: class {},
-  Injector: class {},
-  ViewEncapsulation: { None: 0 },
-}));
-
-describe('dashboards package', () => {
-  it('should define workspace types for dashboards', async () => {
-    // Verify the module structure exists
-    expect(true).toBe(true);
+  it('exports its load-bearing classes as constructors', () => {
+    expect(CoreDashboardsModule).toBeTypeOf('function');
+    expect(EntityAdminDashboardComponent).toBeTypeOf('function');
+    expect(ExplorerStateService).toBeTypeOf('function');
   });
 });

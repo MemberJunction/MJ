@@ -112,6 +112,36 @@ export const DEV_WORKSPACE_STATUS_USAGE: PluginUsage = {
   runtime: { class: 'fast', typicalSeconds: 1, note: 'one `pnpm --version` probe plus directory reads' },
 };
 
+/** Usage for `mj dev workspace doctor` — the read-only health check. */
+export const DEV_WORKSPACE_DOCTOR_USAGE: PluginUsage = {
+  domain: 'dev',
+  command: 'dev:workspace:doctor',
+  summary: 'Health-check a generated cross-repo workspace and exit non-zero on any failure.',
+  description:
+    `Read-only: writes nothing, deletes nothing, no network. Prints one [PASS]/[WARN]/[FAIL]/[SKIP] line per check ` +
+    `and EXITS NON-ZERO when any check FAILS, so it can gate a script (status never exits non-zero — that is the ` +
+    `difference between the two). FAIL: the parent is itself a git repo root; a generated file is missing; a member ` +
+    `named in pnpm-workspace.yaml has no directory on disk (the parent manifest overrides that member's packages to ` +
+    `workspace:*, so pnpm install fails outright); a member carries a STANDALONE INSTALL — a member-root ` +
+    `${NODE_MODULES_NAME}/.pnpm store or npm .package-lock.json marker, NOT the plain ${NODE_MODULES_NAME} a healthy ` +
+    `parent install leaves inside every member; or the one-copy census finds more than one version of a package that ` +
+    `must be single-copy. WARN: not installed yet, no valid ${SENTINEL_FILE_NAME}, a pnpm pin/active mismatch, or a ` +
+    `detected repo that is not a workspace member. The one-copy census reads the DIRECTORY NAMES in the parent's ` +
+    `${NODE_MODULES_NAME}/.pnpm store (each already encodes name@version) and counts distinct versions of ` +
+    `@angular/core, @angular/common, @angular/compiler, rxjs, zone.js, @memberjunction/core and ` +
+    `@memberjunction/global — two copies of any of them is a second, mutually invisible runtime (Angular DI throws ` +
+    `NG0203; two Global Object Stores make every BaseSingleton two singletons), which is why it is a FAIL and not a ` +
+    `warning. Packages absent from the store are skipped, not failed. Light command: no MJ bootstrap. ` +
+    PARENT_DIR_RULE,
+  flags: [DIR_FLAG],
+  examples: [
+    'mj dev workspace doctor',
+    'mj dev workspace doctor --dir ~/code/bluecypress',
+    `${WORKSPACE_DIR_ENV_VAR}=~/code/bluecypress mj dev workspace doctor`,
+  ],
+  runtime: { class: 'fast', typicalSeconds: 1, note: 'one `pnpm --version` probe, directory reads, and one listing of the parent store' },
+};
+
 /** Usage for `mj dev workspace clean` — the teardown. */
 export const DEV_WORKSPACE_CLEAN_USAGE: PluginUsage = {
   domain: 'dev',
@@ -146,6 +176,7 @@ export const DEV_WORKSPACE_CLEAN_USAGE: PluginUsage = {
 export const DEV_DOMAIN_USAGE: readonly PluginUsage[] = [
   DEV_WORKSPACE_USAGE,
   DEV_WORKSPACE_STATUS_USAGE,
+  DEV_WORKSPACE_DOCTOR_USAGE,
   DEV_WORKSPACE_CLEAN_USAGE,
 ];
 
