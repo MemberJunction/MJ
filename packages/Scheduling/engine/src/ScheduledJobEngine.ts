@@ -18,7 +18,7 @@ import {
     type DatabaseProviderBase
 } from '@memberjunction/core';
 import { MJScheduledJobEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
-import { BaseSingleton, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, MJGlobal, ToEpochMs, UUIDsEqual } from '@memberjunction/global';
 import { ScheduledJobResult, NotificationChannel } from '@memberjunction/scheduling-base-types';
 import { SchedulingEngineBase } from '@memberjunction/scheduling-engine-base';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from './BaseScheduledJob';
@@ -653,7 +653,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         const runs: MJScheduledJobRunEntity[] = [];
 
         for (const job of this.ScheduledJobs) {
-            console.log(`  - ${job.Name}: NextRunAt=${job.NextRunAt?.toISOString() || 'NULL'}, Status=${job.Status}`);
+            console.log(`  - ${job.Name}: NextRunAt=${job.NextRunAt ? new Date(ToEpochMs(job.NextRunAt)).toISOString() : 'NULL'}, Status=${job.Status}`);
 
             if (this.isJobDue(job, evalTime)) {
                 console.log(`    ✓ Job is due, attempting to acquire lock...`);
@@ -825,11 +825,25 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      * @private
      */
     private isJobDue(job: MJScheduledJobEntity, evalTime: Date): boolean {
-        // Check date range
-        if (job.StartAt && evalTime < job.StartAt) {
+        // Defense in depth: dispatch must not rely on ScheduledJobs staying pre-filtered to
+        // Active — a cross-server cache event or an includeAllJobs Config can leave non-Active
+        // rows in the array, and lock acquisition does not check Status either.
+        if (job.Status !== 'Active') {
             return false;
         }
-        if (job.EndAt && evalTime > job.EndAt) {
+
+        // Every date here goes through ToEpochMs rather than being used as a Date directly.
+        // These fields are declared Date but can hold an ISO string at runtime, and the two
+        // failure modes differ in how loudly they break: `.getTime()` throws, while a relational
+        // compare against a string silently coerces to NaN — making EVERY comparison false, so
+        // the activation window stops being enforced and a job can fire outside it.
+        const evalMs = evalTime.getTime();
+
+        // Check date range
+        if (job.StartAt && evalMs < ToEpochMs(job.StartAt)) {
+            return false;
+        }
+        if (job.EndAt && evalMs > ToEpochMs(job.EndAt)) {
             return false;
         }
 
@@ -839,7 +853,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         }
 
         // Job is due if NextRunAt is in the past or very close to now (within 1 second tolerance)
-        return job.NextRunAt.getTime() <= evalTime.getTime() + 1000;
+        return ToEpochMs(job.NextRunAt) <= evalMs + 1000;
     }
 
     /**
@@ -1586,7 +1600,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                     // refactor to a targeted UPDATE sproc — see
                     // updateJobStatistics for the pattern.
                     await job.Save();
-                    console.log(`  ⚙️  Initialized NextRunAt for ${job.Name} -> ${job.NextRunAt.toISOString()}`);
+                    console.log(`  ⚙️  Initialized NextRunAt for ${job.Name} -> ${new Date(ToEpochMs(job.NextRunAt)).toISOString()}`);
                 } catch (error) {
                     this.logError(`Failed to initialize NextRunAt for job ${job.Name}`, error);
                 }

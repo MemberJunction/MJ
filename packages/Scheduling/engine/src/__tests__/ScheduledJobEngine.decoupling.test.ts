@@ -161,7 +161,8 @@ const singletonStore: Record<string, unknown> = {};
 // Default factory is installed in beforeEach.
 let createInstanceImpl: (base: unknown, driverClass: string) => unknown = () => undefined;
 
-vi.mock('@memberjunction/global', () => {
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const { ToEpochMs } = await importOriginal<typeof import('@memberjunction/global')>();
     class BaseSingleton<T> {
         protected static getInstance<T>(this: new () => T): T {
             const key = this.name;
@@ -173,6 +174,11 @@ vi.mock('@memberjunction/global', () => {
     }
     return {
         BaseSingleton,
+        // The real implementation, imported from the module itself — a stub would test
+        // nothing, and a hand-rolled copy would drift from the contract MJGlobal's own
+        // util.toEpochMs.test.ts pins. importOriginal only evaluates the module; the
+        // singletons this mock replaces are created lazily, so none are instantiated.
+        ToEpochMs,
         MJGlobal: {
             Instance: {
                 ClassFactory: {
