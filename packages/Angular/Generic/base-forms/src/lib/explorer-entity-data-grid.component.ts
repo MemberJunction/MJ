@@ -30,7 +30,17 @@ import { FormNavigationEvent } from './types/navigation-events';
             [NewRecordValues]="NewRecordValues"
             [AllowLoad]="EffectiveAllowLoad"
             [ShowToolbar]="ShowToolbar"
+            [ShowSearch]="ShowSearch"
             [ShowNewButton]="ShowNewButton"
+            [ShowRefreshButton]="ShowRefreshButton"
+            [ShowExportButton]="ShowExportButton"
+            [ShowDeleteButton]="ShowDeleteButton"
+            [ShowCompareButton]="ShowCompareButton"
+            [ShowMergeButton]="ShowMergeButton"
+            [ShowAddToListButton]="ShowAddToListButton"
+            [ShowDuplicateSearchButton]="ShowDuplicateSearchButton"
+            [ShowCommunicationButton]="ShowCommunicationButton"
+            [ShowRecycleBin]="ShowRecycleBin"
             [Height]="Height"
             [ToolbarConfig]="ToolbarConfig"
             [SelectionMode]="SelectionMode"
@@ -61,8 +71,19 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     @Input() NewRecordValues: Record<string, unknown> = {};
     @Input() AllowLoad: boolean = true;
     @Input() ShowToolbar: boolean = true;
-    /** Forwarded to the inner grid. Default true. Set false on read-only related lists. */
+    /** Search box on the left of the toolbar. Default true. */
+    @Input() ShowSearch: boolean = true;
+    /** Forwarded to the inner grid. Defaults match `<mj-entity-data-grid>`. */
     @Input() ShowNewButton: boolean = true;
+    @Input() ShowRefreshButton: boolean = true;
+    @Input() ShowExportButton: boolean = true;
+    @Input() ShowDeleteButton: boolean = false;
+    @Input() ShowCompareButton: boolean = false;
+    @Input() ShowMergeButton: boolean = false;
+    @Input() ShowAddToListButton: boolean = false;
+    @Input() ShowDuplicateSearchButton: boolean = false;
+    @Input() ShowCommunicationButton: boolean = false;
+    @Input() ShowRecycleBin: boolean = true;
     @Input() Height: number | 'auto' | 'fit-content' = 'auto';
     @Input() ToolbarConfig: GridToolbarConfig = {};
     @Input() SelectionMode: GridSelectionMode = 'single';
