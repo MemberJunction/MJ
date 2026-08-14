@@ -4,7 +4,7 @@
  */
 
 import { LogError, LogStatus, LogStatusEx, UserInfo } from '@memberjunction/core';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { IntegrationEngine } from '@memberjunction/integration-engine';
 import { IntegrationSyncWorkerConfig } from '../config.js';
 
