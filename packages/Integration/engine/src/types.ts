@@ -367,6 +367,14 @@ export interface IntegrationSyncOptions {
      * Pull = external → MJ only. Push = MJ → external only. Bidirectional = both.
      */
     SyncDirection?: 'Pull' | 'Push' | 'Bidirectional';
+    /**
+     * Expected maximum runtime for this sync, in minutes. Sizes the run's OWNERSHIP LEASE
+     * (durable-run claim/renew): the lease is max(engine default, this value), so a run with a
+     * known long single batch is not falsely reclaimed as dead by the stale sweep while a batch
+     * is still in flight. The lease is renewed on a timer regardless; this only raises the
+     * worst-case window a crashed run stays unclaimed. Omit for the engine default.
+     */
+    MaxRuntimeMinutes?: number;
 }
 
 // ─── Source Schema Introspection Types ──────────────────────────────
