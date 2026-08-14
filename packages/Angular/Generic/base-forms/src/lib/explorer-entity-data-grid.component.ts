@@ -30,6 +30,7 @@ import { FormNavigationEvent } from './types/navigation-events';
             [NewRecordValues]="NewRecordValues"
             [AllowLoad]="EffectiveAllowLoad"
             [ShowToolbar]="ShowToolbar"
+            [ShowNewButton]="ShowNewButton"
             [Height]="Height"
             [ToolbarConfig]="ToolbarConfig"
             [SelectionMode]="SelectionMode"
@@ -60,6 +61,8 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     @Input() NewRecordValues: Record<string, unknown> = {};
     @Input() AllowLoad: boolean = true;
     @Input() ShowToolbar: boolean = true;
+    /** Forwarded to the inner grid. Default true. Set false on read-only related lists. */
+    @Input() ShowNewButton: boolean = true;
     @Input() Height: number | 'auto' | 'fit-content' = 'auto';
     @Input() ToolbarConfig: GridToolbarConfig = {};
     @Input() SelectionMode: GridSelectionMode = 'single';

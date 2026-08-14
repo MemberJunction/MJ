@@ -21,6 +21,7 @@ class StubInnerGrid {
   @Input() NewRecordValues: Record<string, unknown> = {};
   @Input() AllowLoad = false;
   @Input() ShowToolbar = false;
+  @Input() ShowNewButton = true;
   @Input() Height: unknown;
   @Input() ToolbarConfig: unknown;
   @Input() SelectionMode = '';
@@ -47,8 +48,13 @@ describe('ExplorerEntityDataGridComponent (DOM)', () => {
     const g = inner(f);
     expect(g.Params).toBe(PARAMS);
     expect(g.ShowToolbar).toBe(true);
+    expect(g.ShowNewButton).toBe(true);
     expect(g.SelectionMode).toBe('multiple');
     expect(g.AllowColumnToggle).toBe(false);
+  });
+
+  it('forwards ShowNewButton=false so a read-only related list can hide New', () => {
+    expect(inner(render({ ShowNewButton: false })).ShowNewButton).toBe(false);
   });
 
   it('passes EffectiveAllowLoad=true to the inner grid when AllowLoad and not deferring', () => {
