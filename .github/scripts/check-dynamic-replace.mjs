@@ -17,9 +17,20 @@
  * deliberately allowed: an author writing `'$1'` means the back-reference. The
  * bug class is runtime data reaching the replacement slot.
  *
- * To accept a specific site (e.g. the replacement was already `$`-escaped, or an
+ * To accept a site (e.g. the replacement was already `$`-escaped, or an
  * identifier holds a function reference), put `safe-replace:` followed by a
- * reason in a comment anywhere within the call, or on the line above it.
+ * reason inside the call, or in the contiguous comment block immediately above
+ * it.
+ *
+ * The hatch is COARSE, deliberately, and it is worth knowing how coarse: the
+ * marker suppresses every `.replace(` whose span it falls in, not one specific
+ * call, so on a chained or multi-line expression it silences the neighbours too.
+ * The scan also reads raw lines rather than the masked buffer, so the text
+ * `safe-replace:` inside a string literal suppresses just as a comment would.
+ * Both were traded for a marker that is easy to place correctly; a marker that
+ * silently fails to apply is worse than one that applies too widely, because
+ * only the first looks like it worked. Prefer putting the marker on the call it
+ * is about, and keep chains short enough that the span means something.
  *
  * The existing `string-replace-all-occurrences` React lint rule does NOT cover
  * this: it only ever inspects the *search* argument.
@@ -133,10 +144,19 @@ function isRegexPosition(masked, index) {
   // `</` with nothing between is a JSX closing tag, never a regex: no real JS or
   // TS writes `a</re/`, but every `.tsx` file writes `</div>`.
   if (prev === '<' && k === index - 1) return false;
-  // `/>` closes a self-closing JSX tag — `<Foo x={1} />`, the single commonest
-  // JSX shape. Without this the `}` below claims it as a regex opener and the
-  // rest of the line disappears.
-  if (masked[index + 1] === '>') return false;
+  // `/>` closes a self-closing JSX tag — `<Foo x={1} />`, the commonest JSX
+  // shape, whose `}` would otherwise be read below as "an operand is expected"
+  // and claim the `/` as a regex opener.
+  //
+  // Restricted to `}` deliberately. Testing `/>` alone was far too broad: it
+  // also swallowed every regex literal that simply STARTS with `>`, so
+  // `html.replace(/>/g, userValue)` left `/>/` unmasked, the closing `/` opened
+  // a second "regex", and the rest of the line vanished. 53 files here contain
+  // `replace(/>`, and HTML-escape chains are exactly where a dynamic
+  // replacement gets appended. Every other self-closing form already resolves
+  // correctly: `<Foo />` and `<Foo x="1" />` end in an identifier or a quote,
+  // which fall through to the keyword test below and are read as division.
+  if (prev === '}' && masked[index + 1] === '>') return false;
   // `i++ / 2` and `i-- / 2` are division. The bare `+`/`-` in the operator set
   // below would otherwise read the `/` as opening a regex.
   if ((prev === '+' || prev === '-') && masked[k - 1] === prev) return false;
@@ -496,13 +516,23 @@ function changedLines(baseRef) {
     `the diff against '${mergeBase}'`,
   );
   let current = null;
+  let previousLine = '';
   for (const line of diff.split('\n')) {
+    // A file header is only ever the SECOND half of a `--- a/…` / `+++ b/…`
+    // pair. Matching `+++ b/` on its own is not safe: under `--unified=0` an
+    // added line carries a `+` prefix, so file CONTENT beginning `++ b/x`
+    // renders as `+++ b/x`. That silently re-pointed every following hunk at a
+    // path which does not exist, the existsSync filter then dropped it, and a
+    // real violation was reported as "clean" — the gate failing open. Content
+    // cannot forge the pair: a body line `--- a/x` renders as `+--- a/x`.
     const fileMatch = /^\+\+\+ b\/(.+)$/.exec(line);
-    if (fileMatch) {
+    if (fileMatch && previousLine.startsWith('--- ')) {
       current = join(REPO_ROOT, fileMatch[1]);
       if (!touched.has(current)) touched.set(current, new Set());
+      previousLine = line;
       continue;
     }
+    previousLine = line;
     const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
     if (hunk && current) {
       const start = Number(hunk[1]);

@@ -153,6 +153,28 @@ jobs:
       #    deferral annotation (a % bar is too coarse on a 350+ denominator). A newly shipped
       #    untested Generic component pushes the count past the cap and fails the PR. Ratchet
       #    the number DOWN as specs land — never up.
+      # Dynamic-replace guard (#3171): `.replace(search, replacement)` expands
+      # $$, $&, $` and $' when `replacement` is a STRING, so any '$' in runtime
+      # data passed there is silently executed instead of inserted. That wrote
+      # corrupted DB passwords into MJAPI's .env and rewrote RLS predicates.
+      # Line-aware on purpose: ~95 pre-existing sites remain (many benign), so
+      # this gates only the lines a change actually touches, preventing new
+      # occurrences without failing PRs for code they merely brushed past.
+      #
+      # Lives with the pure-file guards, NOT after the build: it reads source
+      # text only, costs about a second, and needs no dist/. Sitting after the
+      # ~20-minute build+test step meant any unit-test failure stopped it from
+      # running at all — the gate went silent exactly when a PR was already in
+      # trouble and most needed checking.
+      - name: Dynamic-replace guard
+        env:
+          # Via env, never interpolated into the run: string — a ref name must not
+          # be able to reach the shell. On push/schedule base_ref is empty and HEAD
+          # IS origin/next, so the diff is empty and this is a no-op by design;
+          # the PR run is where it does its work.
+          PR_BASE_REF: ${{ github.base_ref || 'next' }}
+        run: node .github/scripts/check-dynamic-replace.mjs --base "origin/$PR_BASE_REF"
+
       - name: DOM-spec placement guard
         run: node scripts/check-dom-spec-placement.mjs packages
 
@@ -310,20 +332,6 @@ jobs:
         run: |
           npx vitest run --config .github/scripts/vitest.config.mts
           node .github/scripts/check-esm-imports.mjs packages
-
-      # Dynamic-replace guard (#3171): `.replace(search, replacement)` expands
-      # $$, $&, $` and $' when `replacement` is a STRING, so any '$' in runtime
-      # data passed there is silently executed instead of inserted. That wrote
-      # corrupted DB passwords into MJAPI's .env and rewrote RLS predicates.
-      # Line-aware on purpose: ~100 pre-existing sites remain (many benign), so
-      # this gates only the lines a change actually touches, preventing new
-      # occurrences without failing PRs for code they merely brushed past.
-      - name: Dynamic-replace guard
-        env:
-          # Via env, never interpolated into the run: string — a ref name must not
-          # be able to reach the shell.
-          PR_BASE_REF: ${{ github.base_ref || 'next' }}
-        run: node .github/scripts/check-dynamic-replace.mjs --base "origin/$PR_BASE_REF"
 
       - name: Upload coverage
         if: always()

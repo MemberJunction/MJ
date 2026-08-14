@@ -13,6 +13,8 @@
 "@memberjunction/ai-cli": patch
 "@memberjunction/testing-engine": patch
 "@memberjunction/sql-converter": patch
+"@memberjunction/sql-parser": patch
+"@memberjunction/sqlserver-dataprovider": patch
 "@memberjunction/react-linter": patch
 "@memberjunction/testing-cli": patch
 ---
@@ -27,7 +29,9 @@ Fix `$`-sequence corruption in `String.prototype.replace` calls carrying runtime
 - **`@memberjunction/ai-prompts`, `@memberjunction/computer-use`, `@memberjunction/ai-vector-sync`, `@memberjunction/aiengine`, `@memberjunction/ai-agents`** — assistant prefill text (routinely contains `$$` for LaTeX or currency), computer-use goals/URLs/step summaries, embedding-document field values, and entity field values, all interpolated into prompts and templates.
 - **`@memberjunction/metadata-sync`** — parameter values in the debug SQL log.
 - **`@memberjunction/testing-engine`** — test input/expected/actual values into the LLM-judge prompt, and parameter values into `SQLValidatorOracle`'s generated SQL.
-- **`@memberjunction/sql-converter`** — the configured schema name substituted into emitted PostgreSQL view SQL.
+- **`@memberjunction/sql-converter`** — the configured schema name substituted into emitted PostgreSQL view SQL, in both `ViewRule` and its previously-missed twin in `InsertRule`. The schema is now escaped on the *search* side too: a `$` in it acted as an end-anchor, so the pattern matched nothing and the conversion silently emitted no rewrite.
+- **`@memberjunction/sql-parser`** — `restoreAliases` swaps generated aliases back to the caller's original bracketed identifiers. Two of its three branches used `split`/`join` and were already safe; the third expanded `$`-sequences, so `[a$'b]` spliced surrounding SQL into an identifier. The aliasing path fires precisely *because* an identifier contains a non-word character, so the input that triggers aliasing is the input that corrupted the restore. Reached from the public `ToSQL()`.
+- **`@memberjunction/sqlserver-dataprovider`** — batch execution rewrites `@name` placeholders to `@q<N>_name`; the parameter name went into the `RegExp` unescaped, so a `$` in it prevented the rewrite entirely and mssql failed with "Must declare the scalar variable". Sibling of the PostgreSQL `escapeRegExp` fix below.
 - **`@memberjunction/react-linter`** — component data substituted into diagnostic messages.
 - **`@memberjunction/actions-bizapps-social`, `@memberjunction/ai-cli`** — hardened a numeric-only site; documented the AICLI JSON highlighter's `$1` back-references as intentional.
 

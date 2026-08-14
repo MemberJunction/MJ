@@ -83,6 +83,19 @@ function segmentSQL(sql: string): Array<{ text: string; type: 'code' | 'string' 
  * Apply a transformation function only to SQL code segments,
  * preserving string literals and comments unchanged.
  */
+/**
+ * Escape every regex metacharacter in `literal` so it can be interpolated into a
+ * `RegExp` and match itself.
+ *
+ * The configured schema name is data, not pattern: SQL Server and PostgreSQL both
+ * permit `$` in an identifier, and interpolating one raw silently changes what the
+ * pattern means — a `$` becomes an end-anchor, so the pattern matches nothing and
+ * the conversion quietly emits nothing. See issue #3171.
+ */
+export function escapeRegExp(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export function transformCodeOnly(sql: string, transform: (code: string) => string): string {
   return segmentSQL(sql).map(seg => {
     if (seg.type !== 'code') return seg.text;

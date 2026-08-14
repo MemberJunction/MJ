@@ -11,6 +11,7 @@ import {
   convertStringConcat, convertTopToLimit, convertCastTypes, convertIIF,
   convertConvertFunction, removeNPrefix, removeCollate, convertCommonFunctions,
   convertBooleanLiteralComparisons,
+  escapeRegExp,
 } from './ExpressionHelpers.js';
 
 /** SQL keywords that should NOT be quoted as column references */
@@ -67,10 +68,10 @@ export class ViewRule implements IConversionRule {
     // may legally contain `$`, and a string replacement would expand it (and any
     // `$&`/`` $` ``/`$'`) while emitting SQL. Capture groups are carried through
     // as named callback parameters instead of `$1`/`$2`. See issue #3171.
-    const quotedSchemaPattern = new RegExp(`"${schema}"\\.(?!")`, 'g');
+    const quotedSchemaPattern = new RegExp(`"${escapeRegExp(schema)}"\\.(?!")`, 'g');
     result = result.replace(quotedSchemaPattern, () => `${schema}.`);
     // Quote unquoted table references after schema.
-    const bareSchemaPattern = new RegExp(`\\b${schema}\\.(?!")((?:vw)?[A-Za-z]\\w+)\\b`, 'g');
+    const bareSchemaPattern = new RegExp(`\\b${escapeRegExp(schema)}\\.(?!")((?:vw)?[A-Za-z]\\w+)\\b`, 'g');
     result = result.replace(bareSchemaPattern, (_match, table: string) => `${schema}."${table}"`);
     // Add schema to bare view references: FROM vwXxx → FROM schema."vwXxx"
     result = result.replace(

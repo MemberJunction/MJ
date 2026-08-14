@@ -579,3 +579,72 @@ describe('suppression scope', () => {
     expect(findViolations(src)).toHaveLength(1);
   });
 });
+
+// ─── fail-open defects (#3769 second review) ──────────────────────
+
+describe('diff parsing cannot be hijacked by file content', () => {
+  const repos = [];
+  afterAll(() => repos.forEach((r) => rmSync(r, { recursive: true, force: true })));
+
+  /**
+   * Under `--unified=0` an ADDED line carries a `+` prefix, so source content
+   * beginning `++ b/x` renders as `+++ b/x` and matched the file-header regex.
+   * Everything after it was attributed to a file that does not exist, then
+   * dropped by the existsSync filter — so a real violation shipped as "clean".
+   * A file header only ever appears as a `--- a/…` / `+++ b/…` PAIR.
+   */
+  it('does not treat a body line beginning "++ b/" as a file header', () => {
+    const { repo, git } = makeRepo('dyn-replace-hijack-');
+    repos.push(repo);
+    const filler = Array.from({ length: 30 }, (_, i) => `const p${i} = 1;`).join('\n');
+    writeFileSync(join(repo, 'packages', 'x', 'a.ts'), `export const seed = 1;\n${filler}\n`);
+    git('add', '-A');
+    git('commit', '-qm', 'base');
+    git('branch', '-M', 'next');
+    git('checkout', '-qb', 'feat');
+
+    // Two separate hunks: patch-like text near the top, the violation at the end.
+    writeFileSync(
+      join(repo, 'packages', 'x', 'a.ts'),
+      ['export const seed = 1;', 'const patchFixture = `', '++ b/nowhere.ts', '`;', filler,
+       's = s.replace("a", userValue);', ''].join('\n'),
+    );
+    git('add', '-A');
+    git('commit', '-qm', 'feat');
+
+    const { code, output } = runGate(repo, ['--base', 'next']);
+    expect(output).not.toContain('clean');
+    expect(output).toContain('a.ts');
+    expect(code).toBe(1);
+  });
+});
+
+describe('regex literals beginning with >', () => {
+  /**
+   * The JSX self-closing-tag rule (`/>`) fired for ANY regex starting with `>`,
+   * leaving `/>/` unmasked; the closing `/` was then read as a regex opener and
+   * the rest of the line was blanked. 53 files in this repo contain
+   * `replace(/>`, and HTML-escape chains are exactly where a dynamic
+   * replacement gets appended.
+   */
+  it('flags a dynamic replacement whose search is /">"/', () => {
+    expect(findViolations('html.replace(/>/g, userValue)')).toHaveLength(1);
+  });
+
+  it('does not let /">"/ blank the rest of the line', () => {
+    // The first call is safe (arrow), so a single finding proves the SECOND
+    // call was still seen — i.e. the line was not truncated at the `>` regex.
+    const src = 's.replace(/>/g, () => safe); const b = t.replace(p, dangerousValue);';
+    const [only] = findViolations(src);
+    expect(only?.text).toContain('dangerousValue');
+  });
+
+  it('handles a realistic HTML-escape chain ending in a dynamic replacement', () => {
+    const src = `col.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g, userValue)`;
+    expect(findViolations(src)).toHaveLength(1);
+  });
+
+  it('still treats a self-closing JSX tag with an expression prop as JSX', () => {
+    expect(findViolations('const el = <Foo x={1} />; const o = s.replace(p, v);')).toHaveLength(1);
+  });
+});
