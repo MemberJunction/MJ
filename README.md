@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/MemberJunction/MJ/blob/main/LICENSE"><img src="https://img.shields.io/github/license/MemberJunction/MJ?style=flat-square" alt="License"></a>
+  <a href="https://github.com/MemberJunction/MJ/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-BUSL--1.1-blue?style=flat-square" alt="License: BUSL 1.1"></a>
   <a href="https://www.npmjs.com/package/@memberjunction/core"><img src="https://img.shields.io/npm/v/@memberjunction/core?style=flat-square&label=npm" alt="npm version"></a>
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.x-blue?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript"></a>
   <a href="https://github.com/MemberJunction/MJ/stargazers"><img src="https://img.shields.io/github/stars/MemberJunction/MJ?style=flat-square" alt="GitHub Stars"></a>
@@ -728,5 +728,5 @@ Curious how big the codebase is? Lines-of-code snapshots by language — with tr
 </p>
 
 <p align="center">
-  <sub>Built with TypeScript · Angular 21 · SQL Server · Source available under BUSL License</sub>
+  <sub>Built with TypeScript · Angular 21 · SQL Server · Source available under the Business Source License 1.1</sub>
 </p>

@@ -677,7 +677,7 @@ Empirical evaluation demonstrates 95.0% F1 on primary key detection and 94.2% F1
 
 The central finding is that *treating schema documentation as an iterative learning problem* rather than a one-shot extraction task produces substantially better results. Neither the statistical approach alone nor the LLM approach alone achieves the quality of their combination in a bidirectional feedback loop.
 
-DBAutoDoc is released as source-available software under the BUSL License as part of the MemberJunction platform, with all benchmark configurations, prompt templates, and evaluation scripts included for full reproducibility. The repository is available at `https://github.com/MemberJunction/MJ`.
+DBAutoDoc is released as source-available software under the Business Source License 1.1 as part of the MemberJunction platform, with all benchmark configurations, prompt templates, and evaluation scripts included for full reproducibility. The repository is available at `https://github.com/MemberJunction/MJ`.
 
 ---
 

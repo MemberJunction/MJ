@@ -8,7 +8,7 @@ editUrl: false
 import InstallBlock from '../../components/InstallBlock.astro';
 import LandingFooter from '../../components/LandingFooter.astro';
 import { documentedLine } from '../../lib/documented-line.mjs';
-import { licenseName, sourceModel } from '../../lib/license-line.mjs';
+import { licenseShort, sourceModel } from '../../lib/license-line.mjs';
 
 <div class="mjd-landing">
 
@@ -16,7 +16,7 @@ import { licenseName, sourceModel } from '../../lib/license-line.mjs';
   <div class="mjd-pills">
     <span class="mjd-pill mjd-pill--accent">{documentedLine}</span>
     <span class="mjd-pill">{sourceModel}</span>
-    <span class="mjd-pill">{licenseName}</span>
+    <span class="mjd-pill">{licenseShort}</span>
   </div>
 
   <h1 class="mjd-title">MemberJunction</h1>

@@ -9,7 +9,7 @@ import { documentedMajor } from './documented-line.mjs';
  *
  * This has to be derived rather than hardcoded because docs.yml overlays the
  * whole docs-site/ directory — hand-authored pages included — from next onto
- * every line's content checkout. A literal "BUSL License" in a page would
+ * every line's content checkout. A literal "BUSL 1.1" in a page would
  * therefore also render on /v5, mislabelling software that is ISC-licensed.
  *
  * @see .github/workflows/docs.yml — "Overlay docs-site tooling from the triggering commit"
@@ -19,8 +19,16 @@ const BUSL_FIRST_MAJOR = 6;
 /** True when this build's line ships under the BUSL rather than the ISC License. */
 export const isBusl = documentedMajor >= BUSL_FIRST_MAJOR;
 
-/** License name for prose and badges, e.g. "BUSL License". */
-export const licenseName = isBusl ? 'BUSL License' : 'ISC License';
+/**
+ * Full license name, for prose and the site footer.
+ *
+ * Not "BUSL License" — BUSL already expands to Business Source License, so
+ * that phrasing reads "Business Source License License".
+ */
+export const licenseName = isBusl ? 'Business Source License 1.1' : 'ISC License';
+
+/** Short form for the landing badge, where the full name overflows the pill. */
+export const licenseShort = isBusl ? 'BUSL 1.1' : 'ISC';
 
 /** How the source model is described in badges: BUSL is source-available, not open source. */
 export const sourceModel = isBusl ? 'Source Available' : 'Open Source';

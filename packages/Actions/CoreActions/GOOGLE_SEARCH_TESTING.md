@@ -59,7 +59,7 @@ async function testGoogleSearch() {
   const result = await engine.RunAction({
     ActionName: 'Google Custom Search',
     Params: [
-      { Name: 'Query', Value: 'MemberJunction data platform', Type: 'Input' },
+      { Name: 'Query', Value: 'MemberJunction open source', Type: 'Input' },
       { Name: 'MaxResults', Value: 5, Type: 'Input' }
     ],
     contextUser
@@ -100,7 +100,7 @@ npx ts-node test-google-search.ts
   "Success": true,
   "ResultCode": "SUCCESS",
   "Message": {
-    "query": "MemberJunction data platform",
+    "query": "MemberJunction open source",
     "maxResults": 5,
     "startIndex": 1,
     "totalResults": 12500,
@@ -110,7 +110,7 @@ npx ts-node test-google-search.ts
         "title": "MemberJunction - GitHub",
         "link": "https://github.com/MemberJunction/MJ",
         "displayLink": "github.com",
-        "snippet": "MemberJunction is an AI-native data platform..."
+        "snippet": "MemberJunction is an open-source data platform..."
       }
     ]
   }

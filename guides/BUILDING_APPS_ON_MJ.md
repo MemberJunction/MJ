@@ -582,7 +582,7 @@ If you're weighing MemberJunction against the stacks you already know — Next.j
 
 ## Building on MJ & joining the community
 
-MemberJunction's full source code is public on GitHub (BUSL license), and there are two complementary ways to engage with it — building *on* the platform, and helping shape the platform itself.
+MemberJunction's full source code is public on GitHub (Business Source License 1.1), and there are two complementary ways to engage with it — building *on* the platform, and helping shape the platform itself.
 
 ### Build your application on MJ
 

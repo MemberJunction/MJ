@@ -1,6 +1,6 @@
 # MemberJunction Packages
 
-MemberJunction is a platform for building intelligent, metadata-driven applications. Full source on GitHub under the BUSL license. This directory contains all packages in the MemberJunction monorepo.
+MemberJunction is a platform for building intelligent, metadata-driven applications. Full source on GitHub under the Business Source License 1.1. This directory contains all packages in the MemberJunction monorepo.
 
 ## Directory Overview
 

@@ -72,4 +72,4 @@ Schema changes go through Flyway migrations. Read [`migrations/CLAUDE.md`](./mig
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the repository's [BUSL License](./LICENSE).
+By contributing, you agree that your contributions will be licensed under the repository's [Business Source License 1.1](./LICENSE).

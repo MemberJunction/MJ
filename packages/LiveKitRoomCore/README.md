@@ -89,4 +89,4 @@ See `src/__tests__/` for the in-memory fake used by the package's own 22-test su
 
 ## License
 
-ISC © MemberJunction.com
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.
