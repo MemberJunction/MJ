@@ -955,3 +955,109 @@ describe('PostgreSQLCodeGenProvider layered base views', () => {
         expect(() => provider.generateBaseView(contextFor(entity))).not.toThrow();
     });
 });
+
+/**
+ * Tokenizer coverage for the codegen-time quoting entry point.
+ *
+ * Everything ManageMetadataBase executes routes through `qsql()` → this method, so a quoting
+ * defect here corrupts every codegen-time statement. The tokenizer itself is shared with
+ * PostgreSQLDataProvider and lives in `@memberjunction/sql-dialect`; the exhaustive rule matrix
+ * and the baseline-derived collision guard live there. These tests drive the codegen entry point.
+ */
+describe('PostgreSQLCodeGenProvider.quoteSQLForExecution', () => {
+    const provider = new PostgreSQLCodeGenProvider();
+    const quote = (sql: string) => provider.quoteSQLForExecution(sql);
+
+    const COLLIDING_COLUMNS = [
+        'Action', 'Columns', 'Language', 'Length', 'Log',
+        'Month', 'Name', 'Precision', 'Rank', 'Text', 'Values',
+    ];
+
+    describe('keyword-colliding column names', () => {
+        it.each(COLLIDING_COLUMNS)('quotes %s in a SELECT list', (col) => {
+            expect(quote(`SELECT ${col} FROM t`)).toBe(`SELECT "${col}" FROM t`);
+        });
+
+        it.each(COLLIDING_COLUMNS)('quotes %s in an UPDATE SET clause', (col) => {
+            expect(quote(`UPDATE t SET ${col} = 1`)).toBe(`UPDATE t SET "${col}" = 1`);
+        });
+
+        it('quotes the column list while leaving the VALUES keyword bare', () => {
+            expect(quote(`INSERT INTO t (Name, Values) VALUES ('a', 'b')`))
+                .toBe(`INSERT INTO t ("Name", "Values") VALUES ('a', 'b')`);
+        });
+
+        it('distinguishes the Length column from the LENGTH function in one statement', () => {
+            expect(quote('SELECT Length, LENGTH(Name) FROM t')).toBe('SELECT "Length", LENGTH("Name") FROM t');
+        });
+    });
+
+    describe('ALL-CAPS words that are not keywords', () => {
+        it('quotes the ID and URL acronym columns rather than folding them', () => {
+            expect(quote('SELECT ID, URL FROM t')).toBe('SELECT "ID", "URL" FROM t');
+        });
+    });
+
+    describe('keywords stay bare', () => {
+        it('leaves an ALL-CAPS statement untouched', () => {
+            const sql = 'SELECT * FROM t WHERE x IS NOT NULL ORDER BY 1 DESC';
+            expect(quote(sql)).toBe(sql);
+        });
+
+        it('leaves SET CONSTRAINTS ALL IMMEDIATE bare', () => {
+            expect(quote('SET CONSTRAINTS ALL IMMEDIATE')).toBe('SET CONSTRAINTS ALL IMMEDIATE');
+        });
+
+        it('leaves RETURNING bare — it was previously missing from the codegen keyword set', () => {
+            expect(quote('INSERT INTO t (a) VALUES (1) RETURNING "ID"'))
+                .toBe('INSERT INTO t (a) VALUES (1) RETURNING "ID"');
+        });
+
+        it('leaves TYPE bare in ALTER COLUMN DDL while quoting a Type column', () => {
+            expect(quote('ALTER TABLE __mj."Foo" ALTER COLUMN "Bar" TYPE boolean'))
+                .toBe('ALTER TABLE __mj."Foo" ALTER COLUMN "Bar" TYPE boolean');
+            expect(quote('SELECT Type FROM t')).toBe('SELECT "Type" FROM t');
+        });
+    });
+
+    describe('dot-qualified references', () => {
+        it('quotes a lowercase-first view name after a dot', () => {
+            // New for codegen: the dot rule previously existed only on the runtime copy, so
+            // codegen-time SQL referencing __mj.vwFoo folded the view name to lowercase.
+            expect(quote('SELECT * FROM __mj.vwEntityFields'))
+                .toBe('SELECT * FROM __mj."vwEntityFields"');
+        });
+
+        it('quotes a dot-qualified stored procedure written without quotes', () => {
+            expect(quote('SELECT * FROM __mj.spGetPrimaryKeyForTable($1, $2)'))
+                .toBe('SELECT * FROM __mj."spGetPrimaryKeyForTable"($1, $2)');
+        });
+    });
+
+    describe('constructs the tokenizer skips', () => {
+        it('leaves string literals and dollar-quoted bodies untouched', () => {
+            const sql = `SELECT 1 FROM t WHERE x = 'a TestRun'`;
+            expect(quote(sql)).toBe(sql);
+            const body = '$func$ SELECT Name FROM t $func$';
+            expect(quote(body)).toBe(body);
+        });
+
+        it('QUOTES the mixed-case framework columns, which used to be exempted', () => {
+            // This assertion previously ran the other way — `__mj_CreatedAt > now()` was expected
+            // to come back untouched — which pinned the very carve-out that made those five
+            // columns fold to lowercase and fail. They are ordinary columns.
+            expect(quote('SELECT 1 FROM t WHERE __mj_CreatedAt > now()'))
+                .toBe('SELECT 1 FROM t WHERE "__mj_CreatedAt" > now()');
+            expect(quote('SELECT t.__mj_UpdatedAt FROM __mj.Entity t'))
+                .toBe('SELECT t."__mj_UpdatedAt" FROM __mj."Entity" t');
+            // ...while the all-lowercase internals stay bare via the ordinary lowercase rule.
+            expect(quote('SELECT 1 FROM t WHERE __mj_deleted_at IS NULL'))
+                .toBe('SELECT 1 FROM t WHERE __mj_deleted_at IS NULL');
+        });
+
+        it('is idempotent', () => {
+            const once = quote('SELECT ID, Name, rc.Type FROM __mj.vwRecordChanges rc');
+            expect(quote(once)).toBe(once);
+        });
+    });
+});

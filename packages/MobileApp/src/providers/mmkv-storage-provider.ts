@@ -38,6 +38,13 @@ function categoryIndexKey(category: string): string {
  * maintained so category-wide operations stay O(category-size).
  */
 export class MMKVStorageProvider implements ILocalStorageProvider {
+    /**
+     * `false` — MMKV stores strings, so every value is JSON-serialized on write and parsed
+     * on read; stored data is always a copy.
+     * See {@link ILocalStorageProvider.SharesReferences}.
+     */
+    public readonly SharesReferences = false;
+
     private readonly _mmkv: MMKV;
 
     /**

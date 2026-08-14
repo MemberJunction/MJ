@@ -38,6 +38,16 @@ describe('AlterTableRule', () => {
       expect(result).not.toMatch(/WITH\s+NOCHECK/i);
       expect(result).toContain('DEFERRABLE INITIALLY DEFERRED');
     });
+
+    it('should remove WITH CHECK from a non-FK ADD CONSTRAINT', () => {
+      // Previously stripped only inside the FOREIGN KEY branch, so this reached
+      // PostgreSQL verbatim and failed with `syntax error at or near "WITH"`.
+      const sql = `ALTER TABLE [__mj].[Task] WITH CHECK ADD CONSTRAINT [CK_Task_Status]
+        CHECK ([Status] IN (N'Active', N'Skipped'))`;
+      const result = convert(sql);
+      expect(result).not.toMatch(/WITH\s+(NO)?CHECK/i);
+      expect(result).toContain('ADD CONSTRAINT "CK_Task_Status"');
+    });
   });
 
   describe('primary key constraints', () => {
@@ -62,6 +72,22 @@ describe('AlterTableRule', () => {
       expect(result).toContain("'Active'");
       expect(result).toContain("'Inactive'");
       expect(result).not.toContain("N'");
+    });
+
+    it('should not quote CASE expression keywords inside a CHECK body', () => {
+      // The mutual-exclusion shape MJ uses (Task assignment, EntityAction dispatch).
+      // Quoting these as identifiers produced `syntax error at or near ""WHEN""` and
+      // the migration failed to apply on PostgreSQL.
+      const sql = `ALTER TABLE [__mj].[Task] ADD CONSTRAINT [CK_Task_Assignment] CHECK (
+        (CASE WHEN [UserID] IS NOT NULL THEN 1 ELSE 0 END) +
+        (CASE WHEN [AgentID] IS NOT NULL THEN 1 ELSE 0 END) <= 1)`;
+      const result = convert(sql);
+      for (const kw of ['CASE', 'WHEN', 'THEN', 'ELSE', 'END']) {
+        expect(result).not.toContain(`"${kw}"`);
+      }
+      // control — real columns in the same body must still be quoted
+      expect(result).toContain('"UserID"');
+      expect(result).toContain('"AgentID"');
     });
   });
 

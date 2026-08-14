@@ -202,9 +202,9 @@ describe('Dataset Caching in GetDatasetByName', () => {
         // 2 SQL calls: metadata + batch
         expect(provider.executeSQLCalls).toHaveLength(2);
         // Write-through to cache. Match the full SetRunViewResult signature —
-        // GenericDatabaseProvider invokes it with all 7 args (fingerprint,
+        // GenericDatabaseProvider invokes it with all 9 args (fingerprint,
         // params, results, maxUpdatedAt, aggregateResults?, totalRowCount?,
-        // provider?), and toHaveBeenCalledWith is arity-strict.
+        // provider?, ttlMs?, options?), and toHaveBeenCalledWith is arity-strict.
         expect(cacheSetSpy).toHaveBeenCalledTimes(1);
         expect(cacheSetSpy).toHaveBeenCalledWith(
             expect.any(String),         // fingerprint
@@ -213,8 +213,42 @@ describe('Dataset Caching in GetDatasetByName', () => {
             '2026-03-01T00:00:00.000Z', // maxUpdatedAt
             undefined,                  // aggregateResults
             undefined,                  // totalRowCount
-            expect.anything()           // provider (multi-provider migration: GenericDatabaseProvider passes `this`)
+            expect.anything(),          // provider (multi-provider migration: GenericDatabaseProvider passes `this`)
+            undefined,                  // ttlMs
+            // Dataset items are provider-internal scaffolding: GetAllMetadata's
+            // PostProcessEntityMetadata hydrates these very rows in place (sorts the array,
+            // attaches child collections), so they must stay exempt from the cache's
+            // defensive deep-freeze or metadata bootstrap throws.
+            { ProviderInternalScaffolding: true }
         );
+    });
+
+    it('does NOT mark a non-metadata dataset write as provider-internal scaffolding', async () => {
+        // Target contract (PR #3425 review, finding C2, now fixed): the
+        // scaffolding exemption exists for MJ_Metadata, whose rows only the provider's own
+        // assembly steps mutate. Every OTHER dataset is served to arbitrary consumers
+        // (BaseEngine.Load hands `item.Results` — the live cached arrays — to every engine
+        // subclass), so those slots must stay under the defensive deep-freeze or the original
+        // corruption class stays open for the whole dataset path.
+        provider.setTrustLocalCache(true);
+        vi.spyOn(LocalCacheManager.Instance, 'IsInitialized', 'get').mockReturnValue(true);
+        cacheGetSpy.mockResolvedValue(null);
+
+        const itemRow = buildDatasetItemRow();
+        const entityData = [{ ID: '1', Name: 'ResourceType1', __mj_UpdatedAt: '2026-03-01T00:00:00.000Z' }];
+        provider.setExecuteSQLResults([
+            [itemRow],     // Dataset metadata
+            entityData,    // SQL batch result
+        ]);
+
+        const result = await provider.GetDatasetByName('ResourceTypes', undefined, mockUser);
+
+        expect(result.Success).toBe(true);
+        expect(cacheSetSpy).toHaveBeenCalledTimes(1);
+        // Assert on the effect, not the exact call shape: however the write is made, the
+        // exemption flag must not be set for a dataset that is not MJ_Metadata.
+        const optionsArg = cacheSetSpy.mock.calls[0]?.[8] as { ProviderInternalScaffolding?: boolean } | undefined;
+        expect(optionsArg?.ProviderInternalScaffolding).toBeFalsy();
     });
 
     it('handles mixed cache hits and misses across multiple items', async () => {
@@ -306,19 +340,54 @@ describe('Dataset Caching in GetDatasetByName', () => {
                 ExtraFilter: "SchemaName = '__mj' AND (Status = 'Active')",
             }),
             // InstanceConnectionString is undefined in test context
-            undefined
+            undefined,
+            // No RLS clause is supplied on the dataset path...
+            undefined,
+            // ...but the dataset namespace segment is, so this item cannot share a cache slot
+            // with a plain RunView of the same entity (PR #3425 review, finding M3).
+            'MJ_Metadata/Entities'
         );
+    });
+
+    it('namespaces the dataset slot so it cannot collide with a plain RunView key', async () => {
+        // The collision this closes is exact: every shipped dataset item has a NULL WhereClause,
+        // so without the segment the dataset write emits byte-for-byte the fingerprint of an
+        // unfiltered `RunView` of the same entity — handing ordinary callers the deliberately
+        // UNFROZEN scaffolding rows for MJ: Entities and friends.
+        provider.setTrustLocalCache(true);
+        vi.spyOn(LocalCacheManager.Instance, 'IsInitialized', 'get').mockReturnValue(true);
+        cacheGetSpy.mockResolvedValue(null);
+
+        provider.setExecuteSQLResults([
+            [buildDatasetItemRow({ Code: 'Entities' })],
+            [{ ID: '1' }],
+        ]);
+
+        await provider.GetDatasetByName('MJ_Metadata', undefined, mockUser);
+
+        expect(cacheFingerprintSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ EntityName: 'MJ: Entities' }),
+            undefined,
+            undefined,
+            'MJ_Metadata/Entities'
+        );
+        // And every fingerprint call on this path carries a segment — read and write-through
+        // alike, since a mismatch would mean dataset reads never find dataset writes.
+        for (const call of cacheFingerprintSpy.mock.calls) {
+            expect(call[3]).toBe('MJ_Metadata/Entities');
+        }
     });
 });
 
 describe('Dataset Caching in GetDatasetStatusByName', () => {
     let provider: TestProvider;
     let cacheGetSpy: ReturnType<typeof vi.spyOn>;
+    let datasetFingerprintSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
         provider = new TestProvider();
         cacheGetSpy = vi.spyOn(LocalCacheManager.Instance, 'GetRunViewResult');
-        vi.spyOn(LocalCacheManager.Instance, 'GenerateRunViewFingerprint')
+        datasetFingerprintSpy = vi.spyOn(LocalCacheManager.Instance, 'GenerateRunViewFingerprint')
             .mockImplementation((params: RunViewParams) => {
                 const entity = params.EntityName?.trim() || 'Unknown';
                 const filter = (typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '').trim();
@@ -358,6 +427,17 @@ describe('Dataset Caching in GetDatasetStatusByName', () => {
         expect(result.EntityUpdateDates[0].EntityName).toBe('MJ: Entities');
         // Only 1 SQL call (metadata), no status queries
         expect(provider.executeSQLCalls).toHaveLength(1);
+
+        // The status path must key its lookup with the SAME dataset namespace the write-through
+        // uses (PR #3425 review, finding M3). If these ever drift apart, status silently stops
+        // finding the slot GetDatasetByName wrote and falls back to SQL on every call — a
+        // regression with no failing assertion anywhere else.
+        expect(datasetFingerprintSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ EntityName: 'MJ: Entities' }),
+            undefined,
+            undefined,
+            'MJ_Metadata/Entities'
+        );
     });
 
     it('falls back to SQL for cache misses in status check', async () => {

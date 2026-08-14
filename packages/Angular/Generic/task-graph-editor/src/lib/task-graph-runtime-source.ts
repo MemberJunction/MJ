@@ -67,6 +67,12 @@ export function NormalizeRuntimeState(status: string | null | undefined): TaskGr
         case 'Cancelled':
         case 'Deferred':
         case 'Pending':
+        // A branch the workflow declined. Absent from this list until now, so it fell to the default
+        // and was reported to the canvas as **Pending** — which is not a near-miss, it is the
+        // opposite: "still waiting to run" for a step that will never run. Everything downstream
+        // believed it. The node drew as an ordinary pending step, the edges into and out of it drew
+        // as live routes, and a settled graph could never satisfy `IsRuntimeSettled`.
+        case 'Skipped':
             return status;
         default:
             return 'Pending';
@@ -80,9 +86,15 @@ export function BuildNameIndex(tasks: readonly { tempId: string; name: string }[
     return new Map(tasks.map((t) => [t.name, t.tempId]));
 }
 
-/** True once every task has reached a state nothing will move it out of. */
+/**
+ * True once every task has reached a state nothing will move it out of.
+ *
+ * `Skipped` is terminal — a branch that was not taken is not going to be taken later — and its
+ * absence here meant a graph containing one never reported as settled, so a host polling on this
+ * would poll a finished workflow forever.
+ */
 export function IsRuntimeSettled(status: TaskGraphRuntimeStatus, tempIds: readonly string[]): boolean {
-    const terminal = new Set<TaskGraphRuntimeState>(['Complete', 'Failed', 'Cancelled']);
+    const terminal = new Set<TaskGraphRuntimeState>(['Complete', 'Failed', 'Cancelled', 'Skipped']);
     return tempIds.length > 0 && tempIds.every((id) => terminal.has(status[id] ?? 'Pending'));
 }
 

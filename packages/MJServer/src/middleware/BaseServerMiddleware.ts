@@ -126,6 +126,11 @@ export abstract class BaseServerMiddleware {
     /**
      * Hook that runs after a RunView operation completes. Can modify the result
      * (e.g., filtering or augmenting data) before it is returned to the caller.
+     *
+     * ⚠️ `results.Results` and its rows may be FROZEN shared cache state (LocalCacheManager
+     * freeze-on-write) — writing into a row throws `TypeError`. To modify, build copies and
+     * either reassign `results.Results = results.Results.map(r => ({ ...r, ... }))` or return
+     * a new result; never mutate rows in place.
      */
     PostRunView(params: RunViewParams, results: RunViewResult, contextUser: UserInfo | undefined): RunViewResult | Promise<RunViewResult> {
         return results;
