@@ -243,8 +243,11 @@ export default class DevWorkspace extends Command {
       );
       return false;
     }
+    this.log(`${name} has a standalone install (${treeCount} node_modules tree${treeCount === 1 ? '' : 's'}).`);
+    this.log(`  keep it   → its old trees resolve against a store the parent install does not manage: two copies of shared packages, dangling symlinks, phantom 'Cannot find module' errors`);
+    this.log(`  remove it → ${name} builds only through this workspace until you run a plain install inside it again (one command to switch back)`);
     return confirm({
-      message: `${name} has a standalone install (${treeCount} node_modules tree${treeCount === 1 ? '' : 's'}) — remove before the parent install?`,
+      message: `Remove ${name}'s standalone install before the parent install?`,
       default: true,
     });
   }
