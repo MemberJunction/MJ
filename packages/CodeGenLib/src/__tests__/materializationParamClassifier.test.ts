@@ -225,6 +225,56 @@ describe('classifyQueryParameters', () => {
         expect(r.qualification.qualifies).toBe(false);
     });
 
+    /**
+     * End-to-end evidence that the qualifier-aware binding proof is actually WIRED IN through the production
+     * entry point (classifyQueryParameters renders the held baseline and hands it to the qualifier). Without
+     * that threading the proof would be dead code and both queries below would still mint a materialization
+     * whose read filters a different column than the live query.
+     */
+    describe('filter-column binding proof is enforced end-to-end', () => {
+        it('JOIN COLLISION is refused: predicate on o.Status, output projects c.Status', () => {
+            const params: QueryParamDef[] = [{ Name: 'status', Type: 'string' }];
+            const render: VariantRenderer = (v) =>
+                `SELECT o.ID, c.Status FROM Orders o INNER JOIN Customers c ON c.ID = o.CustomerID WHERE o.Status = ${lit(v['status'])}`;
+            const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
+            expect(r.perParam[0].verdict.role).toBe('RowFilter'); // the verifier still sees a clean row filter…
+            expect(r.qualification.qualifies).toBe(false);        // …but the binding proof refuses it
+            expect(r.qualification.paramMode).not.toBe('RowFilterBroad');
+            expect(r.qualification.reason).toMatch(/different source column/i);
+        });
+
+        it('ALIAS REBINDING is refused: the output BillRegion is an alias over ShipRegion', () => {
+            const params: QueryParamDef[] = [{ Name: 'region', Type: 'string' }];
+            const render: VariantRenderer = (v) =>
+                `SELECT ID, ShipRegion AS BillRegion FROM Orders WHERE BillRegion = ${lit(v['region'])}`;
+            const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'BillRegion'], dialect: tsql, render, allowRowFilterBroad: true });
+            expect(r.perParam[0].verdict.role).toBe('RowFilter');
+            expect(r.qualification.qualifies).toBe(false);
+            expect(r.qualification.reason).toMatch(/ALIAS over source column "ShipRegion"/i);
+        });
+
+        it('NON-REGRESSION: an ordinary single-table row-filter query still qualifies unchanged', () => {
+            // The assertion that keeps this fix from being a stealth feature-disable: the plain, common shape
+            // must still reach RowFilterBroad with the same columns and read-filter spec as before.
+            const params: QueryParamDef[] = [{ Name: 'status', Type: 'string' }];
+            const render: VariantRenderer = (v) => `SELECT ID, Status FROM Orders WHERE Status = ${lit(v['status'])}`;
+            const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
+            expect(r.qualification.qualifies).toBe(true);
+            expect(r.qualification.paramMode).toBe('RowFilterBroad');
+            expect(r.qualification.rowFilterColumns).toEqual(['Status']);
+            expect(r.qualification.readFilterSpec).toEqual([{ column: 'Status', operator: '=', paramName: 'status', kind: 'scalar' }]);
+        });
+
+        it('NON-REGRESSION: a JOIN whose predicate and projection share the same qualifier still qualifies', () => {
+            const params: QueryParamDef[] = [{ Name: 'status', Type: 'string' }];
+            const render: VariantRenderer = (v) =>
+                `SELECT o.ID, o.Status FROM Orders o INNER JOIN Customers c ON c.ID = o.CustomerID WHERE o.Status = ${lit(v['status'])}`;
+            const r = classifyQueryParameters({ queryName: 'Q', params, outputColumns: ['ID', 'Status'], dialect: tsql, render, allowRowFilterBroad: true });
+            expect(r.qualification.qualifies).toBe(true);
+            expect(r.qualification.paramMode).toBe('RowFilterBroad');
+        });
+    });
+
     describe('probeValues', () => {
         it('produces distinct values per type', () => {
             for (const t of ['string', 'number', 'date', 'array'] as const) {
