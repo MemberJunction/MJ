@@ -2069,8 +2069,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     }
                     // rows === null → cannot safely materialize; fall through to a full reload
                 }
-            } catch {
-                // Fall through to full reload
+            } catch (e) {
+                // Designed degradation, but not a silent one: this catch also masks
+                // materialization failures (e.g. an entity class that cannot construct in
+                // this process), and without a trace the only symptom is every cache event
+                // turning into a database reload.
+                LogStatus(`BaseEngine.OnExternalCacheChange: payload for '${config.PropertyName}' could not be applied (${e instanceof Error ? e.message : String(e)}) — falling back to full reload`);
             }
         }
         // Fallback: reload this config from the database

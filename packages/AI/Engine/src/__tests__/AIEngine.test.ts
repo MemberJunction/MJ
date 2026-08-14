@@ -117,7 +117,8 @@ vi.mock('@memberjunction/core', () => ({
     }
 }));
 
-vi.mock('@memberjunction/global', () => {
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const { ToEpochMs } = await importOriginal<typeof import('@memberjunction/global')>();
     // Minimal in-memory LRU stand-in — the real MJLruCache is in @memberjunction/global
     // but the mock above replaces the entire module export, so we re-implement just
     // the surface AIEngine uses.
@@ -188,16 +189,11 @@ vi.mock('@memberjunction/global', () => {
             if (a == null || b == null) return false;
             return a.trim().toUpperCase() === b.trim().toUpperCase();
         },
-        // Real implementation, not a stub: the fallback-cache sorts under test call this to
-        // survive string dates, so a stubbed version would test nothing. This mock hand-rolls
-        // the module (rather than spreading importOriginal) to avoid pulling in the heavy
-        // singletons, so the copy is unavoidable here — MJGlobal's own util.toEpochMs.test.ts
-        // is what pins the contract this mirrors.
-        ToEpochMs: (value: Date | string | number | null | undefined): number => {
-            if (value == null) return 0;
-            const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
-            return Number.isNaN(ms) ? 0 : ms;
-        },
+        // The real implementation, imported from the module itself — a stub would test
+        // nothing, and a hand-rolled copy would drift from the contract MJGlobal's own
+        // util.toEpochMs.test.ts pins. importOriginal only evaluates the module; the
+        // singletons this mock replaces are created lazily, so none are instantiated.
+        ToEpochMs,
     };
 });
 

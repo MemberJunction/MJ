@@ -82,7 +82,8 @@ vi.mock('@memberjunction/core-entities', () => ({
 // Shared singleton store
 const singletonStore: Record<string, unknown> = {};
 
-vi.mock('@memberjunction/global', () => {
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const { ToEpochMs } = await importOriginal<typeof import('@memberjunction/global')>();
     class BaseSingleton<T> {
         protected static getInstance<T>(this: new () => T): T {
             const key = this.name;
@@ -95,14 +96,11 @@ vi.mock('@memberjunction/global', () => {
 
     return {
         BaseSingleton,
-        // Real implementation, not a stub: the engine's date comparisons rely on it to survive
-        // string-dated rows, so a stub would test nothing. MJGlobal's own util.toEpochMs.test.ts
-        // pins the contract this mirrors.
-        ToEpochMs: (value: Date | string | number | null | undefined): number => {
-            if (value == null) return 0;
-            const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
-            return Number.isNaN(ms) ? 0 : ms;
-        },
+        // The real implementation, imported from the module itself — a stub would test
+        // nothing, and a hand-rolled copy would drift from the contract MJGlobal's own
+        // util.toEpochMs.test.ts pins. importOriginal only evaluates the module; the
+        // singletons this mock replaces are created lazily, so none are instantiated.
+        ToEpochMs,
         MJGlobal: {
             Instance: {
                 ClassFactory: {
@@ -572,6 +570,16 @@ describe('SchedulingEngine', () => {
             expect(() => isJobDue(stringDatedJob(), NOW)).not.toThrow();
             expect(isJobDue(stringDatedJob(), NOW)).toBe(true);
         });
+
+        // Defense in depth: a cross-server cache event (or an includeAllJobs Config) can leave
+        // non-Active rows in ScheduledJobs, and lock acquisition does not check Status —
+        // isJobDue is the last gate before an inactive job would run.
+        it.each(['Disabled', 'Paused', 'Pending', 'Expired'])(
+            'refuses a due %s job — dispatch cannot rely on the array staying Active-only',
+            (status) => {
+                expect(isJobDue(stringDatedJob({ Status: status }), NOW)).toBe(false);
+            }
+        );
 
         it('reports a future string NextRunAt as not due', () => {
             expect(isJobDue(stringDatedJob({ NextRunAt: '2026-08-13T12:05:00.000Z' }), NOW)).toBe(false);

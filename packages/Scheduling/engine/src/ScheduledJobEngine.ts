@@ -846,6 +846,13 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      * @private
      */
     private isJobDue(job: MJScheduledJobEntity, evalTime: Date): boolean {
+        // Defense in depth: dispatch must not rely on ScheduledJobs staying pre-filtered to
+        // Active — a cross-server cache event or an includeAllJobs Config can leave non-Active
+        // rows in the array, and lock acquisition does not check Status either.
+        if (job.Status !== 'Active') {
+            return false;
+        }
+
         // Every date here goes through ToEpochMs rather than being used as a Date directly.
         // These fields are declared Date but can hold an ISO string at runtime, and the two
         // failure modes differ in how loudly they break: `.getTime()` throws, while a relational

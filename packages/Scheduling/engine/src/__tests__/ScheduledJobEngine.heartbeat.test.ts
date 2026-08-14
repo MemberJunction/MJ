@@ -124,7 +124,8 @@ vi.mock('@memberjunction/core-entities', () => ({
 const singletonStore: Record<string, unknown> = {};
 let createInstanceImpl: (base: unknown, driverClass: string) => unknown = () => undefined;
 
-vi.mock('@memberjunction/global', () => {
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const { ToEpochMs } = await importOriginal<typeof import('@memberjunction/global')>();
     class BaseSingleton<T> {
         protected static getInstance<T>(this: new () => T): T {
             const key = this.name;
@@ -136,14 +137,11 @@ vi.mock('@memberjunction/global', () => {
     }
     return {
         BaseSingleton,
-        // Real implementation, not a stub: the engine's date comparisons rely on it to survive
-        // string-dated rows, so a stub would test nothing. MJGlobal's own util.toEpochMs.test.ts
-        // pins the contract this mirrors.
-        ToEpochMs: (value: Date | string | number | null | undefined): number => {
-            if (value == null) return 0;
-            const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
-            return Number.isNaN(ms) ? 0 : ms;
-        },
+        // The real implementation, imported from the module itself — a stub would test
+        // nothing, and a hand-rolled copy would drift from the contract MJGlobal's own
+        // util.toEpochMs.test.ts pins. importOriginal only evaluates the module; the
+        // singletons this mock replaces are created lazily, so none are instantiated.
+        ToEpochMs,
         MJGlobal: {
             Instance: {
                 ClassFactory: {
