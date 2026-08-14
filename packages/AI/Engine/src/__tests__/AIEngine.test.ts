@@ -966,6 +966,33 @@ describe('AIEngine', () => {
             expect(result).toBe('Hello John, how are you?');
         });
 
+        // ── B7/B8 smoke: semantics unchanged by the #3171 conversion ──
+        //
+        // The search argument is a STRING, so each `.replace` hits only the FIRST
+        // occurrence. That is still correct here because `match(/g)` yields one
+        // entry PER occurrence, so the loop runs once per instance — verify that
+        // rather than assume it, since the conversion touched this exact line.
+        it('replaces every occurrence of a repeated token', () => {
+            expect(callMarkup({ N: 'x' }, '{N} {N} {N}')).toBe('x x x');
+        });
+
+        it('replaces a repeated token whose value contains $&', () => {
+            expect(callMarkup({ N: 'a$&b' }, '{N} and {N}')).toBe('a$&b and a$&b');
+        });
+
+        // Coercion parity: the old form passed the raw value to replace() and let
+        // it coerce; the new form calls String() explicitly. These must agree.
+        it.each([
+            [0, ''],
+            [false, ''],
+            [null, ''],
+            [undefined, ''],
+            [42, '42'],
+            [true, 'true'],
+        ])('coerces field value %p to %p exactly as the string form did', (value, expected) => {
+            expect(callMarkup({ N: value }, '[{N}]')).toBe(`[${expected}]`);
+        });
+
         it('should replace multiple tokens', () => {
             const result = callMarkup(
                 { FirstName: 'Jane', LastName: 'Doe' },

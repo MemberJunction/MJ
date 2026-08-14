@@ -336,6 +336,12 @@ export function classifyReplacementArg(argText) {
   return { safe: false, reason: 'dynamic-expression' };
 }
 
+/** A line that is entirely comment — `//`, or a `/* … *\/` body or delimiter. */
+function isCommentLine(line) {
+  const t = (line ?? '').trim();
+  return t.startsWith('//') || t.startsWith('/*') || t.startsWith('*');
+}
+
 /**
  * Find every unsafe `.replace(`/`.replaceAll(` in one file's source.
  *
@@ -348,7 +354,22 @@ export function findViolations(source) {
   const { masked, desynced } = maskSource(source);
   if (desynced) throw new UnparseableSourceError();
   const rawLines = source.split('\n');
-  const lineAt = (index) => masked.slice(0, index).split('\n').length;
+  // Offsets of every line start, built once, then binary-searched. The obvious
+  // `masked.slice(0, index).split('\n').length` copies and splits the whole
+  // prefix on EVERY lookup, and there are three lookups per violation — O(V·N).
+  // On a 20k-violation file that measured 8.3s, and 212s at 100k.
+  const lineStarts = [0];
+  for (let i = 0; i < masked.length; i++) if (masked[i] === '\n') lineStarts.push(i + 1);
+  const lineAt = (index) => {
+    let lo = 0;
+    let hi = lineStarts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (lineStarts[mid] <= index) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo + 1; // 1-based
+  };
   const violations = [];
   const callRe = /\.(replace|replaceAll)\s*\(/g;
 
@@ -369,8 +390,14 @@ export function findViolations(source) {
     const leadingWs = /^\s*/.exec(parsed.args[1].text)[0].length;
     const argLine = lineAt(parsed.args[1].start + leadingWs);
 
-    // Suppression may sit anywhere inside the call, or on the line above it.
-    const scanFrom = Math.max(0, startLine - 2);
+    // Suppression may sit anywhere inside the call, or in the contiguous comment
+    // block immediately above it. The block, not just one line: the hatch exists
+    // to force a written reason, and a reason worth writing rarely fits on the
+    // line above — put it on two and the marker silently fell out of range.
+    // Walking only over comment lines keeps it anchored: a blank line or any code
+    // ends the block, so a marker cannot drift onto an unrelated call below.
+    let scanFrom = startLine - 1; // 0-based index of the line above the call
+    while (scanFrom > 0 && isCommentLine(rawLines[scanFrom - 1])) scanFrom--;
     if (rawLines.slice(scanFrom, endLine).some((l) => l.includes(SUPPRESSION))) continue;
 
     violations.push({

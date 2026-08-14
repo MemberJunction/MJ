@@ -503,3 +503,79 @@ describe('CLI arguments', () => {
     expect(code).toBe(0);
   });
 });
+
+// ─── scan cost (#3769 review) ─────────────────────────────────────
+//
+// `lineAt` did `masked.slice(0, index).split('\n').length` per violation, so a
+// file with V violations over N characters cost O(V·N). Measured before the fix:
+// 2k lines 89ms, 20k lines 8.3s, 100k lines 212s — 10x the input for 93x the
+// time. Real files never hit it, but a generated or vendored blob would, and a
+// gate that takes three minutes gets disabled.
+
+describe('scan cost', () => {
+  const bigSource = (n) =>
+    Array.from({ length: n }, (_, i) => `const a${i} = x / y; s.replace(p, v${i});`).join('\n');
+
+  it('reports correct line numbers on a large file', () => {
+    const v = findViolations(bigSource(5000));
+    expect(v).toHaveLength(5000);
+    expect(v[0].line).toBe(1);
+    expect(v[4999].line).toBe(5000);
+  });
+
+  /**
+   * Deliberately loose — this guards the COMPLEXITY, not a wall-clock budget.
+   * Linear finishes in well under a second; the quadratic version needed 8.3s
+   * for this input, so anything near the bound means the O(V·N) scan is back.
+   */
+  it('scans 20k violations in linear-ish time', () => {
+    const started = Date.now();
+    expect(findViolations(bigSource(20000))).toHaveLength(20000);
+    expect(Date.now() - started).toBeLessThan(4000);
+  });
+});
+
+// ─── suppression scope (#3769 review) ─────────────────────────────
+//
+// The marker was only honoured on the SINGLE line above the call. But the escape
+// hatch exists to force a written reason, and real reasons run to several lines —
+// so the natural way to write one put the marker out of range and the suppression
+// silently did nothing. Three separate attempts in one sitting tripped over it.
+// The scan now covers the contiguous comment block immediately above the call.
+
+describe('suppression scope', () => {
+  it('honours a marker on the first line of a multi-line comment block', () => {
+    const src = [
+      '// safe-replace: alias is \\w-only by construction',
+      '// so the replacement can never contain a $',
+      's.replace(p, alias);',
+    ].join('\n');
+    expect(findViolations(src)).toHaveLength(0);
+  });
+
+  it('honours a marker in the middle of a comment block', () => {
+    const src = [
+      '// Explanation first.',
+      '// safe-replace: pre-escaped upstream',
+      '// And a trailing note.',
+      's.replace(p, escaped);',
+    ].join('\n');
+    expect(findViolations(src)).toHaveLength(0);
+  });
+
+  it('honours a JSDoc block above the call', () => {
+    const src = ['/**', ' * safe-replace: value is a constant', ' */', 's.replace(p, v);'].join('\n');
+    expect(findViolations(src)).toHaveLength(0);
+  });
+
+  // The widening must not reach past the block it belongs to.
+  it('does not honour a marker separated from the call by code', () => {
+    const src = ['// safe-replace: applies to the NEXT call only', 'other();', 's.replace(p, v);'].join('\n');
+    expect(findViolations(src)).toHaveLength(1);
+  });
+
+  it('does not honour a marker separated from the call by a blank line', () => {
+    const src = ['// safe-replace: stale marker', '', 's.replace(p, v);'].join('\n');
+    expect(findViolations(src)).toHaveLength(1);
+  });
+});
