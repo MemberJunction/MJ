@@ -83,6 +83,13 @@ function segmentSQL(sql: string): Array<{ text: string; type: 'code' | 'string' 
  * Apply a transformation function only to SQL code segments,
  * preserving string literals and comments unchanged.
  */
+export function transformCodeOnly(sql: string, transform: (code: string) => string): string {
+  return segmentSQL(sql).map(seg => {
+    if (seg.type !== 'code') return seg.text;
+    return transform(seg.text);
+  }).join('');
+}
+
 /**
  * Escape every regex metacharacter in `literal` so it can be interpolated into a
  * `RegExp` and match itself.
@@ -94,13 +101,6 @@ function segmentSQL(sql: string): Array<{ text: string; type: 'code' | 'string' 
  */
 export function escapeRegExp(literal: string): string {
   return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-export function transformCodeOnly(sql: string, transform: (code: string) => string): string {
-  return segmentSQL(sql).map(seg => {
-    if (seg.type !== 'code') return seg.text;
-    return transform(seg.text);
-  }).join('');
 }
 
 /**

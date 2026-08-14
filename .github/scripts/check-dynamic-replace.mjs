@@ -446,6 +446,17 @@ function walk(dir, acc) {
   // audit is incomplete, and a gate must not quietly under-report.
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
+    // Dot-directories are build and tool caches, never source we own:
+    // `.angular/cache` holds Vite-processed copies of marked.js / xlsx.js /
+    // mermaid.js, and on a checkout that has run the Explorer build those
+    // vendored bundles supplied roughly two thirds of every finding — the same
+    // third-party code `bundled-libs`/`vendor` are listed to exclude. That made
+    // `check:dynamic-replace:all` unusable as an audit.
+    //
+    // Skipped HERE rather than in `isSkippedPath`, which diff mode also uses:
+    // `.github/**` is ours and must stay scannable. Diff mode is driven by git
+    // and already excludes ignored files, so it never had this problem.
+    if (entry.isDirectory() && entry.name.startsWith('.')) continue;
     if (isSkippedPath(relative(REPO_ROOT, full))) continue;
     if (entry.isDirectory()) walk(full, acc);
     else if (SOURCE_EXTENSIONS.has(extname(entry.name))) acc.push(full);

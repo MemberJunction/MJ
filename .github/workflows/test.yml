@@ -153,11 +153,26 @@ jobs:
       #    deferral annotation (a % bar is too coarse on a 350+ denominator). A newly shipped
       #    untested Generic component pushes the count past the cap and fails the PR. Ratchet
       #    the number DOWN as specs land — never up.
+      - name: DOM-spec placement guard
+        run: node scripts/check-dom-spec-placement.mjs packages
+
+      - name: Spec anti-pattern lint
+        run: node scripts/check-spec-antipatterns.mjs packages
+
+      - name: Explorer DOM coverage gate
+        run: node scripts/classify-explorer-components.mjs --min 85
+
+      - name: Generic DOM coverage ratchet
+        run: node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=134
+
+      - name: Bootstrap DOM coverage ratchet
+        run: node scripts/dom-test-report.mjs packages/Angular/Bootstrap --max-none=0
+
       # Dynamic-replace guard (#3171): `.replace(search, replacement)` expands
       # $$, $&, $` and $' when `replacement` is a STRING, so any '$' in runtime
       # data passed there is silently executed instead of inserted. That wrote
       # corrupted DB passwords into MJAPI's .env and rewrote RLS predicates.
-      # Line-aware on purpose: ~95 pre-existing sites remain (many benign), so
+      # Line-aware on purpose: ~90 pre-existing sites remain (many benign), so
       # this gates only the lines a change actually touches, preventing new
       # occurrences without failing PRs for code they merely brushed past.
       #
@@ -174,21 +189,6 @@ jobs:
           # the PR run is where it does its work.
           PR_BASE_REF: ${{ github.base_ref || 'next' }}
         run: node .github/scripts/check-dynamic-replace.mjs --base "origin/$PR_BASE_REF"
-
-      - name: DOM-spec placement guard
-        run: node scripts/check-dom-spec-placement.mjs packages
-
-      - name: Spec anti-pattern lint
-        run: node scripts/check-spec-antipatterns.mjs packages
-
-      - name: Explorer DOM coverage gate
-        run: node scripts/classify-explorer-components.mjs --min 85
-
-      - name: Generic DOM coverage ratchet
-        run: node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=134
-
-      - name: Bootstrap DOM coverage ratchet
-        run: node scripts/dom-test-report.mjs packages/Angular/Bootstrap --max-none=0
 
       # Decide what to run:
       #  - pull_request: only packages changed since the base branch PLUS everything that

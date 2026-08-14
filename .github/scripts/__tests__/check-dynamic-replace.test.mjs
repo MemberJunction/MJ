@@ -648,3 +648,42 @@ describe('regex literals beginning with >', () => {
     expect(findViolations('const el = <Foo x={1} />; const o = s.replace(p, v);')).toHaveLength(1);
   });
 });
+
+// ─── --all must not walk dot-directories (review finding) ─────────
+//
+// SKIP_DIR_SEGMENTS had no dot-directory rule, so `--all` descended into build
+// and tool caches — `packages/MJExplorer/.angular/cache/**` above all, which
+// holds Vite-processed copies of marked.js / xlsx.js / mermaid.js. On a checkout
+// that has run the Explorer build those vendored bundles supplied ~2/3 of the
+// findings, making the documented audit entry point (`pnpm check:dynamic-replace:all`)
+// useless. CI never saw it: diff mode is driven by git, which excludes ignored
+// files. So the fix belongs in the traversal, not in the shared path filter —
+// `.github/**` must stay scannable in diff mode.
+
+describe('--all traversal', () => {
+  const repos = [];
+  afterAll(() => repos.forEach((r) => rmSync(r, { recursive: true, force: true })));
+
+  it('does not report violations inside a dot-directory', () => {
+    const { repo } = makeRepo('dyn-replace-dotdir-');
+    repos.push(repo);
+    mkdirSync(join(repo, 'packages', 'app', '.angular', 'cache'), { recursive: true });
+    writeFileSync(
+      join(repo, 'packages', 'app', '.angular', 'cache', 'vendored.js'),
+      'function esc(s, v) { return s.replace(/x/g, v); }\n',
+    );
+
+    const { output } = runGate(repo, ['--all']);
+    expect(output).not.toContain('.angular');
+  });
+
+  it('still reports violations in ordinary directories', () => {
+    const { repo } = makeRepo('dyn-replace-dotdir-ok-');
+    repos.push(repo);
+    writeFileSync(join(repo, 'packages', 'x', 'real.ts'), 's.replace(p, userValue);\n');
+
+    const { code, output } = runGate(repo, ['--all']);
+    expect(output).toContain('real.ts');
+    expect(code).toBe(1);
+  });
+});
