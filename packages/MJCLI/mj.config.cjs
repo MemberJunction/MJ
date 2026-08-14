@@ -222,6 +222,8 @@ const mjServerConfig = {
   userHandling: {
     autoCreateNewUsers: true,
     newUserLimitedToAuthorizedDomains: false,
+    // Authorized EMAIL domains for auto-provisioned users, e.g. ['example.com', '*.example.org'].
+    // Matched against the email domain of the verified identity token — NOT the browser Origin.
     newUserAuthorizedDomains: [],
     newUserRoles: ['UI', 'Developer'],
     updateCacheWhenNotFound: true,
