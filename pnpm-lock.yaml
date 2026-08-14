@@ -13534,6 +13534,9 @@ importers:
       '@memberjunction/core':
         specifier: 6.1.0-edge.2
         version: link:../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.1.0-edge.2
+        version: link:../MJCoreEntities
       '@memberjunction/global':
         specifier: 6.1.0-edge.2
         version: link:../MJGlobal
