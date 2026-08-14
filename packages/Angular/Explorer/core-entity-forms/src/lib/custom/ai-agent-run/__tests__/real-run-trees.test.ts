@@ -46,9 +46,22 @@ function treeFor(agent: string) {
 
 describe('real Content Pipeline run', () => {
     it('assembles every captured node into one tree', () => {
+        // One row FEWER than captured nodes, and deliberately so: a dispatched workflow is captured
+        // as two rows — the submit step and the graph it produced — which the timeline now renders
+        // as one (see `collapsibleGraphChild`). The old expectation of one-row-per-node encoded the
+        // duplicate, which is what put "Task Graph: X — Completed" above steps that had not run.
+        //
+        // Derived rather than hardcoded, so this stays honest if the fixture is ever recaptured.
+        const rows = REAL['Content Pipeline'].rows;
+        const collapsedPairs = rows.filter(
+            (r) => r.NodeType === 'Step' && r.SourceKind === 'TaskGraph'
+                && rows.some((c) => c.ParentNodeID === r.NodeID && c.NodeType === 'TaskGraph'),
+        ).length;
+        expect(collapsedPairs, 'the fixture should contain a dispatched workflow').toBeGreaterThan(0);
+
         const root = treeFor('Content Pipeline');
         expect(root).not.toBeNull();
-        expect(flatten(ProjectRunTreeToTimeline(root))).toHaveLength(REAL['Content Pipeline'].rows.length);
+        expect(flatten(ProjectRunTreeToTimeline(root))).toHaveLength(rows.length - collapsedPairs);
     });
 
     it('shows the workflow steps as timeline rows, at their real depth', () => {

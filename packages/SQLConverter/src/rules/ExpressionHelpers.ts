@@ -91,6 +91,49 @@ export function transformCodeOnly(sql: string, transform: (code: string) => stri
 }
 
 /**
+ * Remove comments, keeping code and string literals intact.
+ *
+ * Use this before matching a pattern that decides what a batch IS or what it names. Matching the
+ * raw batch means a comment can win — a migration that documents itself above a statement gets the
+ * prose matched instead of the code, and the rule acts on a word from the comment.
+ */
+export function StripComments(sql: string): string {
+  return segmentSQL(sql)
+    .map((seg) => (seg.type === 'comment' ? '' : seg.text))
+    .join('');
+}
+
+/**
+ * Quote constraint names that contain uppercase, so they survive PostgreSQL's folding.
+ *
+ * T-SQL is case-insensitive and CodeGen emits constraint names unquoted, so PostgreSQL folds them
+ * to lowercase at both definition and lookup. That is self-consistent only while EVERY site agrees.
+ * It is shared between CREATE TABLE (inline constraints) and ALTER TABLE (ADD / DROP CONSTRAINT)
+ * because those two disagreeing is what breaks: an unquoted CREATE registers `ck_payment_status`
+ * while a quoted `DROP CONSTRAINT "CK_Payment_Status"` misses it, and the ADD that follows then
+ * succeeds under the case-preserved name — leaving BOTH constraints on the table, so the original
+ * narrower one keeps rejecting exactly the rows the migration was written to allow. Nothing fails
+ * loudly; the only trace is one non-fatal error in the install log.
+ *
+ * The `IF EXISTS` exclusion is load-bearing, not defensive. `DROP CONSTRAINT IF EXISTS Foo` puts
+ * the keyword `IF` exactly where a constraint name otherwise sits, so the bare pattern captures
+ * `IF` as the name, sees an uppercase letter, and emits:
+ *
+ *     ALTER TABLE __mj."Foo" DROP CONSTRAINT "IF" EXISTS "CK_Foo_Bar";
+ *
+ * — which is a syntax error, on the one statement form whose whole purpose is to be safe to run.
+ * Four of the five T-SQL migrations in the repo using that syntax converted broken. It predates
+ * this rule's refactor, but this is the file that widened the pattern's reach to CREATE TABLE and
+ * separately added a path that EMITS `DROP CONSTRAINT IF EXISTS`, so the collision now round-trips
+ * through one module.
+ */
+export function QuoteConstraintNames(sql: string): string {
+  return transformCodeOnly(sql, (code) =>
+    code.replace(/\bCONSTRAINT\s+(?!IF\s+EXISTS\b)([A-Za-z_]\w*)\b/gi, (match, name: string) =>
+      (/[A-Z]/.test(name) ? `CONSTRAINT "${name}"` : match)));
+}
+
+/**
  * Emit a DO-block that drops every overload of a function in a given schema.
  *
  * PG dispatches functions by `(name, ordered-arg-type-list)`. `CREATE OR
@@ -131,8 +174,19 @@ export function convertIdentifiers(sql: string): string {
     code = code.replace(/\bCREATE\s+TABLE\s+#(\w+)/gi, 'CREATE TEMP TABLE "$1"');
     // Strip # from remaining temp object references: #name → "name"
     code = code.replace(/(?<!["\w])#(\w+)/g, '"$1"');
-    // Replace [Schema].[Name] with Schema."Name" (any schema, not just __mj)
-    code = code.replace(/\[(\w+)\]\.\[([^\]]+)\]/g, '$1."$2"');
+    // Replace [Schema].[Name] with Schema."Name" (any schema, not just __mj).
+    // The schema stays UNQUOTED so PostgreSQL folds it to lowercase, matching the lowercase
+    // schema `CREATE SCHEMA` produces (it is emitted unquoted too). The name is quoted because
+    // object names are case-sensitive and MJ's are PascalCase.
+    //
+    // The schema part may be built from a migration placeholder — `[${mjSchema}_BizAppsCommon]`
+    // is how an open app references a sibling app's schema. Those characters are not \w, so
+    // without them here the whole bracket falls through to the blanket rule below and comes out
+    // QUOTED: `"${mjSchema}_BizAppsCommon"`. At apply time the placeholder is substituted as
+    // plain text, giving `"__mj_BizAppsCommon"` — a schema that does not exist, because the real
+    // one folded to `__mj_bizappscommon` when it was created. Every cross-schema reference in
+    // that file then fails, while the unbracketed references beside them resolve fine.
+    code = code.replace(/\[([\w${}:]+)\]\.\[([^\]]+)\]/g, '$1."$2"');
     // Replace remaining [Name] with "Name"
     code = code.replace(/\[([^\]]+)\]/g, '"$1"');
     return code;
@@ -750,6 +804,10 @@ const PASCAL_QUOTE_KEYWORDS = new Set([
   'UNION', 'ALL', 'DISTINCT', 'BETWEEN', 'CASE', 'WHEN', 'COALESCE',
   'CAST', 'MAX', 'MIN', 'COUNT', 'SUM', 'AVG', 'NOW', 'CURRENT_USER',
   'INFORMATION_SCHEMA', 'NONCLUSTERED', 'CLUSTERED', 'NO',
+  // Emitted by the table-variable → temp-table rewrite (CREATE TEMP TABLE … ON COMMIT DROP)
+  // and the delete-join rewrite (DELETE … USING …). Quoted as identifiers these produce
+  // `CREATE "TEMP" TABLE` / `ON "COMMIT" DROP`, which PostgreSQL cannot parse.
+  'TEMP', 'COMMIT', 'USING',
   // SQL functions that should not be quoted
   'LENGTH', 'SUBSTRING', 'REPLACE', 'LTRIM', 'RTRIM', 'TRIM', 'UPPER', 'LOWER',
   'POSITION', 'OVERLAY', 'EXTRACT', 'FLOOR', 'CEIL', 'ROUND', 'ABS',
@@ -947,26 +1005,71 @@ function convertNamedJsonCall(
  * time. Column types come from the accumulated CREATE TABLE map (plus the seeded
  * core-metadata catalog); tuple values are tokenized string-aware so commas inside
  * quoted JSON/text never split a value. Handles multi-row VALUES and INSERTs that
- * appear inside a wrapping DO/IF block (only the INSERT...VALUES segment is rewritten).
+ * appear inside a wrapping DO/IF block.
+ *
+ * EVERY `INSERT ... VALUES` in the input is rewritten, each against its own table's
+ * column types. A single-statement rule (InsertRule) only ever passes one, but a
+ * DECLARE/DML block is one batch containing many INSERTs against different tables —
+ * rewriting only the first would silently leave the rest as integer literals.
+ * Each statement's VALUES region is bounded by its own top-level `;`, so an
+ * intervening statement can never be rewritten with the wrong table's positions.
  */
 export function castBooleanInsertValues(
   sql: string,
   tableColumns: Map<string, Map<string, string>>,
 ): string {
-  const m = sql.match(/INSERT\s+INTO\s+(?:\w+\.)?"?(\w+)"?\s*\(([^)]*)\)\s*VALUES/i);
-  if (!m) return sql;
-  const cols = tableColumns.get(m[1].toLowerCase());
-  if (!cols) return sql;
+  const re = /INSERT\s+INTO\s+(?:\w+\.)?"?(\w+)"?\s*\(([^)]*)\)\s*VALUES/gi;
+  let out = '';
+  let cursor = 0;
+  let m: RegExpExecArray | null;
 
-  const colNames = m[2].split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
-  const boolPos = new Set<number>();
-  colNames.forEach((c, i) => {
-    if ((cols.get(c.toLowerCase()) ?? '').toUpperCase() === 'BOOLEAN') boolPos.add(i);
+  while ((m = re.exec(sql)) !== null) {
+    const headEnd = m.index + m[0].length;
+    const valuesEnd = endOfStatement(sql, headEnd);
+    out += sql.slice(cursor, headEnd);
+
+    const body = sql.slice(headEnd, valuesEnd);
+    const boolPos = booleanColumnPositions(m[1], m[2], tableColumns);
+    out += boolPos.size > 0 ? rewriteValuesTuples(body, boolPos) : body;
+
+    cursor = valuesEnd;
+    re.lastIndex = valuesEnd;
+  }
+
+  return cursor === 0 ? sql : out + sql.slice(cursor);
+}
+
+/** Ordinal positions in an INSERT column list whose column is BOOLEAN on PG. */
+function booleanColumnPositions(
+  table: string,
+  columnList: string,
+  tableColumns: Map<string, Map<string, string>>,
+): Set<number> {
+  const positions = new Set<number>();
+  const cols = tableColumns.get(table.toLowerCase());
+  if (!cols) return positions;
+
+  columnList.split(',').forEach((raw, i) => {
+    const name = raw.trim().replace(/^"|"$/g, '').toLowerCase();
+    if ((cols.get(name) ?? '').toUpperCase() === 'BOOLEAN') positions.add(i);
   });
-  if (boolPos.size === 0) return sql;
+  return positions;
+}
 
-  const headEnd = m.index! + m[0].length;
-  return sql.slice(0, headEnd) + rewriteValuesTuples(sql.slice(headEnd), boolPos);
+/** Index just past the statement-terminating `;` at or after `from`, string- and paren-aware. */
+function endOfStatement(sql: string, from: number): number {
+  let depth = 0;
+  let inStr = false;
+  for (let i = from; i < sql.length; i++) {
+    const c = sql[i];
+    if (inStr) {
+      if (c === "'") { if (sql[i + 1] === "'") i++; else inStr = false; }
+    } else if (c === "'") inStr = true;
+    else if (c === '(') depth++;
+    else if (c === ')') depth--;
+    else if (c === ';' && depth <= 0) return i + 1;
+  }
+  return sql.length;
 }
 
 /** Walk the post-VALUES text, rewriting boolean-position literals in each top-level tuple. */

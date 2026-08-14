@@ -46,6 +46,17 @@ describe('ProjectTaskRowsToSpec', () => {
         expect(dep.priority).toBe(10);
     });
 
+    it('preserves the dependency row ID so a debugger can name the edge', () => {
+        const edges: TaskRunEdge[] = [
+            { ID: 'dep-row-1', TaskID: '2', DependsOnTaskID: '1', Condition: 'data.ok' },
+        ];
+        const { Spec } = ProjectTaskRowsToSpec('W', [
+            row({ ID: '1', Name: 'A', StepType: 'Action' }),
+            row({ ID: '2', Name: 'B', StepType: 'Action' }),
+        ], edges);
+        expect(NormalizeDependency(Spec.tasks[1].dependsOn[0]).id).toBe('dep-row-1');
+    });
+
     it('recovers the mappings from the configuration bag', () => {
         const { Spec } = ProjectTaskRowsToSpec('W', [
             row({

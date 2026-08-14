@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT78 - Agent Note Cache Types (entity_object invariant)",
+    "Name": "IT80 - Agent Note Cache Types (entity_object invariant)",
     "Description": "Pins the invariant behind the agent-context date-sort crash: a BaseEngine property configured as entity_object must hold real BaseEntity instances after a cross-server cache-change event, not the plain JSON objects the payload carries. NC1 fires a synthetic external cache-change event at AIEngine's _agentNotes config with string-dated plain rows and asserts every resulting row is a BaseEntity whose __mj_CreatedAt is a Date. NC2 runs the exact unguarded .getTime() sort that died in production over the post-event array. NC3 proves a malformed payload degrades to a database reload rather than poisoning the array. This tier is the only place the Date assertion is provable — the coercion lives in BaseEntity.Get()'s TSType handling and needs real EntityInfo field metadata that unit mocks do not build. 3 checks NC1-NC3.",
     "InputDefinition": {},
     "ExpectedOutcomes": {

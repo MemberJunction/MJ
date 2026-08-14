@@ -930,7 +930,23 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT78 - Agent Note Cache Types (entity_object invariant)",
+            "TestID": "@lookup:MJ: Tests.Name=IT78 - Materialized Entity Base-View Read Redirect",
+            "Sequence": 33,
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT79 - Materialized Read Served From Snapshot",
+            "Sequence": 33,
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT80 - Agent Note Cache Types (entity_object invariant)",
             "Sequence": 33,
             "Status": "Active"
           },
