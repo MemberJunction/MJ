@@ -126,9 +126,13 @@ IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_CompanyIntegrati
         DROP CONSTRAINT [CK_CompanyIntegrationRun_Status];
 GO
 
+-- 'Cancelled' joins 'Queued' here. Without it a deliberately-cancelled run had to be finalized as
+-- 'Failed' with an explanatory ErrorLog, so every health/cadence consumer counted operator
+-- cancellations as errors unless it string-matched that text. Cancellation is a distinct terminal
+-- outcome and now says so.
 ALTER TABLE [${flyway:defaultSchema}].[CompanyIntegrationRun]
     ADD CONSTRAINT [CK_CompanyIntegrationRun_Status]
-    CHECK ([Status]='Failed' OR [Status]='Success' OR [Status]='In Progress' OR [Status]='Pending' OR [Status]='Queued');
+    CHECK ([Status]='Failed' OR [Status]='Success' OR [Status]='In Progress' OR [Status]='Pending' OR [Status]='Queued' OR [Status]='Cancelled');
 GO
 
 -- ─── 3. Sweep / worker-poll index ────────────────────────────────────

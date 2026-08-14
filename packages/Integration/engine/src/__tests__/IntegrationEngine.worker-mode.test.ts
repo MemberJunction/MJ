@@ -10,6 +10,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationRunEntity } from '@memberjunction/core-entities';
+import type { TerminalRunStatus } from '../RunOwnershipService.js';
 
 let mockRunViewFn: ReturnType<typeof vi.fn>;
 
@@ -197,14 +198,16 @@ describe('IntegrationEngine worker mode (PR 1 item 8)', () => {
             expect(result.ErrorMessage).toContain('cancelled by user before it started');
             expectZeroWork(result);
             // The row must not be left Queued — the poll would hand it straight back to a worker.
-            expect(run.Status).toBe('Failed');
+            // And it must read as CANCELLED, not 'Failed': a health dashboard counting failures
+            // would otherwise book every deliberate stop as an error.
+            expect(run.Status).toBe('Cancelled');
             expect(run.ErrorLog).toContain('cancelled by user before it started');
             expect(run.EndedAt).toBeInstanceOf(Date);
             expect(run.Save).toHaveBeenCalledTimes(1);
         });
 
         it('refuses an already-terminal row rather than re-running it', async () => {
-            for (const status of ['Success', 'Failed'] as const) {
+            for (const status of ['Success', 'Failed', 'Cancelled'] as const) {
                 const run = createMockRunEntity({ Status: status });
                 const result = await IntegrationEngine.Instance.ExecuteQueuedRun('run-x', mockContextUser, createMockProvider(run));
                 expect(result.Success).toBe(false);
@@ -214,9 +217,25 @@ describe('IntegrationEngine worker mode (PR 1 item 8)', () => {
     });
 });
 
-describe('MJCompanyIntegrationRunEntity queued-status typing', () => {
+describe('MJCompanyIntegrationRunEntity status typing', () => {
     it('accepts Queued as a run status (the CHECK constraint was widened in the PR 1 migration)', () => {
         const status: MJCompanyIntegrationRunEntity['Status'] = 'Queued';
         expect(status).toBe('Queued');
+    });
+
+    // Compile-time pin: if CodeGen has not picked up 'Cancelled' from the widened CHECK constraint,
+    // this file fails to typecheck — which is the point. Every consumer that now branches on
+    // 'Cancelled' (the engine's FinalizeRun, RunOwnershipService.Release's TerminalRunStatus, the
+    // Integration dashboard's colour/filter helpers) depends on the generated union carrying it.
+    it('accepts Cancelled as a run status, so a stopped run is not booked as a failure', () => {
+        const status: MJCompanyIntegrationRunEntity['Status'] = 'Cancelled';
+        expect(status).toBe('Cancelled');
+    });
+
+    it('keeps the terminal-release subset pinned to the entity union', () => {
+        // Extract<> must still yield all three terminal values — if one were dropped from the
+        // column, this assignment stops compiling instead of failing at the CHECK constraint.
+        const terminal: TerminalRunStatus[] = ['Success', 'Failed', 'Cancelled'];
+        expect(terminal).toHaveLength(3);
     });
 });

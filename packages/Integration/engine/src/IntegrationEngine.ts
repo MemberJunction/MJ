@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogStatusEx, Metadata, RunView, type UserInfo } from '@memberjunction/core';
-import { RunOwnershipLostError, RunOwnershipService } from './RunOwnershipService.js';
+import { RunOwnershipLostError, RunOwnershipService, type TerminalRunStatus } from './RunOwnershipService.js';
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import type {
@@ -693,8 +693,26 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     `(${completedMapIDs.size} entity maps already completed)`
                 );
 
+                // Recover what this run was ASKED to do. Without this the resume rebuilds config from
+                // the CompanyIntegration alone, so an adopted run silently loses its options — most
+                // damagingly FullSync, which exists precisely to distrust the watermark. An adopted
+                // full sync would resume incrementally, fetch nothing, and report Success.
+                // Unparseable/absent ConfigData falls back to defaults rather than refusing to resume.
+                let resumeOptions: IntegrationSyncOptions | undefined;
+                let resumeTriggerType: SyncTriggerType = 'Scheduled';
+                try {
+                    const cfg = JSON.parse(run.ConfigData ?? '{}') as { triggerType?: SyncTriggerType; options?: IntegrationSyncOptions | null };
+                    resumeOptions = cfg.options ?? undefined;
+                    if (cfg.triggerType) resumeTriggerType = cfg.triggerType;
+                } catch {
+                    console.warn(`[IntegrationEngine] Run ${runID.substring(0, 8)} has unparseable ConfigData; resuming with defaults`);
+                }
+                if (resumeOptions?.FullSync) {
+                    console.log(`[IntegrationEngine] Run ${runID.substring(0, 8)} was a FULL sync — resuming as full, not incremental`);
+                }
+
                 // Load config and filter to only remaining entity maps (by map ID)
-                const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser);
+                const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, resumeOptions);
                 const remainingMaps = config.entityMaps.filter(
                     em => !completedMapIDs.has(em.ID.toLowerCase())
                 );
@@ -728,7 +746,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     RecordsCreated: 0,
                     RecordsUpdated: 0,
                     RecordsErrored: 0,
-                    TriggerType: 'Scheduled',
+                    // The run's OWN trigger type, recovered above — not a hardcoded 'Scheduled'. This is
+                    // what IntegrationGetSyncProgress reports back ("Sync in progress (Manual)"), so a
+                    // hardcoded value mislabels every adopted run.
+                    TriggerType: resumeTriggerType,
                 };
                 const runCtx: EngineRunContext = {
                     provider: prov,
@@ -873,11 +894,11 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // so without this gate the worker claims the cancelled row moments later and executes
         // it to completion. Verified live: run E3F51F9A was stamped CancelRequestedAt at
         // 15:50:46.643 and still finished Status='Success' at 15:50:48.646.
-        // Finalize the same way an aborted in-flight run finalizes (FinalizeRun): 'Failed'
-        // with an explicit ErrorLog, since CompanyIntegrationRun has no 'Cancelled' status.
+        // Finalize the same way an aborted in-flight run finalizes (FinalizeRun): 'Cancelled'
+        // with an explicit ErrorLog carrying the reason.
         if (run.CancelRequestedAt != null) {
             run.EndedAt = new Date();
-            run.Status = 'Failed';
+            run.Status = 'Cancelled';
             run.ErrorLog = 'Sync cancelled by user before it started';
             if (!(await run.Save())) {
                 console.warn(`[IntegrationEngine] Could not finalize cancelled queued run ${runID}: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -1074,7 +1095,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         }
 
         // Worker mode executes a row that already exists (Status='Queued'); the direct path creates one.
-        const run = existingRun ?? await this.CreateRunRecord(config.companyIntegration, triggerType, contextUser, options?.ScheduledJobRunID);
+        const run = existingRun ?? await this.CreateRunRecord(config.companyIntegration, triggerType, contextUser, options?.ScheduledJobRunID, options);
         logger.attachRunId(run.ID);
 
         // ── Durable-run ownership (PR 1 item 3): claim before the first batch. ──
@@ -1397,7 +1418,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         companyIntegration: MJCompanyIntegrationEntity,
         triggerType: SyncTriggerType,
         contextUser: UserInfo,
-        scheduledJobRunID?: string
+        scheduledJobRunID?: string,
+        options?: IntegrationSyncOptions
     ): Promise<MJCompanyIntegrationRunEntity> {
         const md = this.ProviderToUse;
         const run = await md.GetEntityObject<MJCompanyIntegrationRunEntity>(
@@ -1410,7 +1432,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         run.StartedAt = new Date();
         run.Status = 'In Progress';
         run.TotalRecords = 0;
-        run.ConfigData = JSON.stringify({ triggerType });
+        // Persist the OPTIONS alongside the trigger type, in the same shape EnqueueSync writes.
+        // Without them a run that outlives its process loses what it was asked to do: ResumeOrphanedSyncs
+        // rebuilds config from the CompanyIntegration alone, so an adopted `FullSync` run silently
+        // resumed as an incremental one — re-fetching nothing and reporting Success, which is the
+        // opposite of what a full sync is requested for (repairing drift, re-pulling after a remap).
+        run.ConfigData = JSON.stringify({ triggerType, options: options ?? null });
 
         // Link to scheduled job run if triggered by the scheduler.
         // Use Set() because the ScheduledJobRunID column won't exist on the
@@ -2542,6 +2569,25 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // last ordering key so the next run resumes the seek from here instead of restarting.
             await this.runWriteExclusive(() => this.watermarkService.SaveKeysetPosition(entityMapID, currentAfterKey, contextUser));
             result.WatermarkAfter = currentAfterKey;
+        } else if (!hadFetchGap && currentWatermark && currentWatermark !== initialWatermark) {
+            // A WATERMARK-based connector stopped early (cancel / safety limit / duplicate batch /
+            // schema-not-generated / unskippable fetch error) but whole batches DID complete. Persist the
+            // max watermark seen so the next run resumes from there instead of re-fetching everything
+            // since the last clean run — the counterpart of the keyset branch above, which until now was
+            // the ONLY early-stop that saved its position. The cancel log has always said "saving
+            // watermark"; for a non-keyset connector it previously saved nothing.
+            //
+            // Safe because currentWatermark only ever advances at the END of a fully-applied batch
+            // (§10, after ApplyRecords) — every early-exit `break` above happens before that, so this
+            // value can never point past a record that wasn't written.
+            //
+            // Deliberately NOT wall-clock "now", even for a full sync: coverage is partial, so advancing
+            // past the point actually reached would skip the (reached, now] window permanently. And
+            // deliberately NOT when hadFetchGap — a skipped page leaves a HOLE behind this watermark,
+            // which is why that path holds it for a full re-fetch next run.
+            const partialWatermark = currentWatermark;
+            await this.runWriteExclusive(() => this.watermarkService.Update(entityMapID, partialWatermark, contextUser, 'Pull'));
+            result.WatermarkAfter = partialWatermark;
         }
 
         // Orphan detection: delete/tombstone MJ records whose external counterpart no longer exists.
@@ -4840,22 +4886,27 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): Promise<void> {
         run.EndedAt = new Date();
         run.TotalRecords = result.RecordsProcessed;
-        // A user/system-cancelled run must NOT be recorded as 'Success' — that hides the
-        // cancellation in run history (indistinguishable from a clean completion) and is wrong
-        // for any downstream cadence/health logic. Until a first-class 'Cancelled' status value
-        // exists on CompanyIntegrationRun (Status value list is Pending/In Progress/Success/Failed),
-        // finalize an aborted run as 'Failed' with an explicit ErrorLog. The durable progress
-        // artifact additionally carries exitReason='aborted' (see finalizeSyncProgress) so a stopped
-        // run stays distinguishable from a real failure over GraphQL.
+        // A cancelled run is neither a success nor a failure, and 'Cancelled' is now a first-class
+        // value in the Status list — so record it as itself. Previously this had to be 'Failed' with
+        // an explanatory ErrorLog, which meant every health/cadence consumer counted deliberate
+        // cancellations as errors unless it string-matched that text. The ErrorLog is still written
+        // (it carries the reason), and the durable progress artifact still carries
+        // exitReason='aborted' (see finalizeSyncProgress).
+        // Held in a local so the release below sends the SAME value. Deriving it there from
+        // `run.Status` with a two-way test collapsed everything non-Success to 'Failed', which would
+        // have overwritten 'Cancelled' in the release UPDATE — the sproc assigns Status = @FinalStatus,
+        // so the row's carefully-set status would be undone one statement later.
+        let terminalStatus: TerminalRunStatus;
         if (aborted) {
-            run.Status = 'Failed';
+            terminalStatus = 'Cancelled';
             run.ErrorLog = result.ErrorMessage ?? 'Sync cancelled by user';
         } else {
-            run.Status = result.RecordsErrored > 0 ? 'Failed' : 'Success';
+            terminalStatus = result.RecordsErrored > 0 ? 'Failed' : 'Success';
             if (result.Errors.length > 0) {
                 run.ErrorLog = JSON.stringify(result.Errors.slice(0, 100));
             }
         }
+        run.Status = terminalStatus;
         // The generated spUpdate writes EVERY column from the entity's in-memory state.
         // This run entity was loaded BEFORE the claim, so without a sync its ownership
         // columns (FenceToken 0, OwnerToken null, stale lease) would clobber the DB's live
@@ -4889,7 +4940,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // in one token-checked statement, so the row is immediately claimable-clean.
         if (ownership) {
             try {
-                await ownership.Release(run.Status === 'Success' ? 'Success' : 'Failed');
+                await ownership.Release(terminalStatus);
             } catch (releaseErr) {
                 console.warn(`[IntegrationEngine] Run ${run.ID} release failed (non-fatal — lease will simply expire): ${releaseErr instanceof Error ? releaseErr.message : String(releaseErr)}`);
             }

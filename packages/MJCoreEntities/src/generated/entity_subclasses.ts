@@ -11490,13 +11490,14 @@ export const MJCompanyIntegrationRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Status: z.union([z.literal('Failed'), z.literal('In Progress'), z.literal('Pending'), z.literal('Queued'), z.literal('Success')]).describe(`
+    Status: z.union([z.literal('Cancelled'), z.literal('Failed'), z.literal('In Progress'), z.literal('Pending'), z.literal('Queued'), z.literal('Success')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
+    *   * Cancelled
     *   * Failed
     *   * In Progress
     *   * Pending
@@ -64478,6 +64479,7 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
+    *   * Cancelled
     *   * Failed
     *   * In Progress
     *   * Pending
@@ -64485,10 +64487,10 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
     *   * Success
     * * Description: Status of the integration run. Possible values: Pending, In Progress, Success, Failed.
     */
-    get Status(): 'Failed' | 'In Progress' | 'Pending' | 'Queued' | 'Success' {
+    get Status(): 'Cancelled' | 'Failed' | 'In Progress' | 'Pending' | 'Queued' | 'Success' {
         return this.Get('Status');
     }
-    set Status(value: 'Failed' | 'In Progress' | 'Pending' | 'Queued' | 'Success') {
+    set Status(value: 'Cancelled' | 'Failed' | 'In Progress' | 'Pending' | 'Queued' | 'Success') {
         this.Set('Status', value);
     }
 

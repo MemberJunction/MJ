@@ -3,7 +3,7 @@
  * @module MJServer/services
  */
 
-import { LogError, LogStatus, LogStatusEx, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { IntegrationEngine } from '@memberjunction/integration-engine';
 import { IntegrationSyncWorkerConfig } from '../config.js';
@@ -64,10 +64,14 @@ export class IntegrationSyncWorkerService {
 
         this.isRunning = true;
         this.timer = setInterval(() => void this.pollOnce(), this.config.pollingIntervalMs);
-        LogStatusEx({
-            message: `🔄 Integration Sync Worker: polling every ${Math.round(this.config.pollingIntervalMs / 1000)}s, up to ${this.config.maxConcurrentRuns} concurrent run(s)`,
-            verboseOnly: true,
-        });
+        // Standard level, NOT verboseOnly: this states a deployment-shaping fact — that this process
+        // executes queued syncs — and it's one line per process lifetime. Stop() already logs at
+        // standard level, so hiding Start() produced logs showing a worker stopping that never
+        // started, and no way to confirm from logs that a deployment is in worker mode at all.
+        LogStatus(
+            `🔄 Integration Sync Worker: polling every ${Math.round(this.config.pollingIntervalMs / 1000)}s, ` +
+            `up to ${this.config.maxConcurrentRuns} concurrent run(s)`
+        );
         // Don't wait a full interval to drain a queue that already has work.
         void this.pollOnce();
     }

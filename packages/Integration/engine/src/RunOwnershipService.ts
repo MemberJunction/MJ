@@ -10,6 +10,15 @@ import type { MJCompanyIntegrationRunEntity } from '@memberjunction/core-entitie
  * swallow it, because continuing to write after ownership loss is exactly the
  * split-brain hazard the fence exists to prevent.
  */
+/**
+ * The states a run can be released INTO — the terminal subset of the entity's Status value list.
+ * Derived with `Extract` rather than hand-written so it stays pinned to the CHECK-constraint union
+ * CodeGen generates: if one of these values were ever removed from the column, this type narrows and
+ * every call site fails to compile, instead of silently passing a status the constraint rejects at
+ * runtime. 'In Progress' / 'Pending' / 'Queued' are deliberately excluded — they are not terminal.
+ */
+export type TerminalRunStatus = Extract<MJCompanyIntegrationRunEntity['Status'], 'Success' | 'Failed' | 'Cancelled'>;
+
 export class RunOwnershipLostError extends Error {
     public readonly RunID: string;
     constructor(runID: string, detail: string) {
@@ -229,7 +238,7 @@ export class RunOwnershipService {
      * passing it keeps the guarantee in the procedure rather than in call-site
      * discipline.
      */
-    public async Release(finalStatus: 'Success' | 'Failed'): Promise<boolean> {
+    public async Release(finalStatus: TerminalRunStatus): Promise<boolean> {
         this.StopHeartbeat();
         const rows = await this.provider.ExecuteSQL<{ ID: string }>(
             this.buildSprocCall('spReleaseCompanyIntegrationRun', ['RunID', 'OwnerToken', 'FinalStatus', 'FenceToken']),

@@ -112,7 +112,10 @@ export type { IntegrationActionVerb, GenerateIntegrationActionResult } from './I
 // NOTE: For IntegrationEngineBase (client-safe metadata), import from @memberjunction/integration-engine-base
 export { IntegrationEngine } from './IntegrationEngine.js';
 export { RunOwnershipService, RunOwnershipLostError } from './RunOwnershipService.js';
-export type { RenewResult, BoundaryCheckResult, HeartbeatOptions } from './RunOwnershipService.js';
+// TerminalRunStatus is the parameter type of the public Release() method, so it has to be nameable
+// from outside the package — otherwise a consumer can call Release but cannot declare a variable to
+// pass to it.
+export type { RenewResult, BoundaryCheckResult, HeartbeatOptions, TerminalRunStatus } from './RunOwnershipService.js';
 
 // Schema persistence — upserts dynamically discovered objects/fields to IntegrationObject/Field tables
 export { IntegrationSchemaSync } from './IntegrationSchemaSync.js';
