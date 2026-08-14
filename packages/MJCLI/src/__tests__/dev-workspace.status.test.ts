@@ -96,6 +96,29 @@ describe('CollectWorkspaceStatus', () => {
   it('rejects a relative parent path', () => {
     expect(() => CollectWorkspaceStatus('relative/dir', null, 'default')).toThrow(/absolute/);
   });
+
+  it('flags a member-root .pnpm store as a standalone install, but not parent-linked node_modules', () => {
+    parent = CreateFixtureParent({
+      'bizapps-forked': { RootPackageJson: { name: 'forked' }, MjAppJson: true },
+      'bizapps-linked': { RootPackageJson: { name: 'linked' }, MjAppJson: true },
+      'bizapps-npm': { RootPackageJson: { name: 'npmish' }, MjAppJson: true },
+    });
+    writeFileSync(
+      path.join(parent, 'pnpm-workspace.yaml'),
+      BuildWorkspaceYaml([member('bizapps-forked'), member('bizapps-linked'), member('bizapps-npm')]),
+      'utf8'
+    );
+    // forked: pnpm standalone install → member-root local store
+    mkdirSync(path.join(parent, 'bizapps-forked', 'node_modules', '.pnpm'), { recursive: true });
+    // linked: what a healthy parent install leaves inside a member — node_modules WITHOUT a local store
+    mkdirSync(path.join(parent, 'bizapps-linked', 'node_modules'), { recursive: true });
+    // npm: npm standalone install → tree marker
+    mkdirSync(path.join(parent, 'bizapps-npm', 'node_modules'), { recursive: true });
+    writeFileSync(path.join(parent, 'bizapps-npm', 'node_modules', '.package-lock.json'), '{}', 'utf8');
+
+    const status = CollectWorkspaceStatus(parent, null, 'flag');
+    expect(status.MembersWithStandaloneInstalls).toEqual(['bizapps-forked', 'bizapps-npm']);
+  });
 });
 
 /** A fully-populated status literal the render tests mutate per-case. */
@@ -104,6 +127,7 @@ function baseStatus(): WorkspaceStatus {
     ParentDir: '/the/parent',
     DirSource: 'flag',
     ParentIsGitRepo: false,
+    MembersWithStandaloneInstalls: [],
     Files: [
       { Name: 'pnpm-workspace.yaml', Exists: true },
       { Name: '.npmrc', Exists: true },
@@ -148,6 +172,13 @@ describe('RenderStatus', () => {
   it('warns loudly when the parent is itself a git repo root', () => {
     const status = { ...baseStatus(), ParentIsGitRepo: true };
     expect(RenderStatus(status)).toContain('git repo root');
+  });
+
+  it('warns per member with a standalone install, naming the fix', () => {
+    const status = { ...baseStatus(), MembersWithStandaloneInstalls: ['bizapps-forked'] };
+    const out = RenderStatus(status);
+    expect(out).toContain('STANDALONE INSTALL: bizapps-forked');
+    expect(out).toContain('--clean-members');
   });
 
   it('reports missing member dirs', () => {

@@ -107,7 +107,13 @@ export default class DevWorkspace extends Command {
       } else {
         this.log(chalk.dim('Skipped pnpm install (--no-install); run `pnpm install` at the parent when ready.'));
       }
-      this.log(chalk.dim(`\nCheck the result any time with: ${this.config.bin} dev workspace status --dir ${parentDir}`));
+      this.log(chalk.dim(`\nBuild any package from the parent: pnpm --filter <package-name> run build`));
+      this.log(
+        chalk.dim(
+          `(members whose package.json pins npm refuse in-place pnpm runs — drive those from the parent with --filter until they migrate)`
+        )
+      );
+      this.log(chalk.dim(`Check the result any time with:  ${this.config.bin} dev workspace status --dir ${parentDir}`));
       this.log(chalk.dim(`Tear it back down with:          ${this.config.bin} dev workspace clean --dir ${parentDir}`));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

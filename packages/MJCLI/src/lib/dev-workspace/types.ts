@@ -285,6 +285,11 @@ export interface WorkspaceStatus {
   Members: string[];
   /** Members listed in the workspace file whose directory no longer exists. */
   MissingMemberDirs: string[];
+  /**
+   * Members carrying their OWN install (a member-root `.pnpm` store or npm's
+   * `.package-lock.json`) — resolution forked away from the parent workspace.
+   */
+  MembersWithStandaloneInstalls: string[];
   /** Candidate repo names detected on disk right now. */
   DetectedCandidates: string[];
   /** Detected candidates that are not members of the current workspace. */

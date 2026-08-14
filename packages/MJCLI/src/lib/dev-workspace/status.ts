@@ -57,6 +57,20 @@ function readPinnedPnpm(parentDir: string): string | null {
   }
 }
 
+/**
+ * True when a member carries its OWN install rather than the parent-linked one.
+ * A parent-managed workspace puts the store at the parent (`<parent>/node_modules/.pnpm`)
+ * and members hold only symlinks — so a member-root `.pnpm` store, or npm's
+ * `.package-lock.json` tree marker, proves a standalone install that forks
+ * resolution away from the workspace (the #3795 split-registry disease).
+ */
+function hasStandaloneInstallMarker(memberDir: string): boolean {
+  return (
+    existsSync(path.join(memberDir, 'node_modules', '.pnpm')) ||
+    existsSync(path.join(memberDir, 'node_modules', '.package-lock.json'))
+  );
+}
+
 /** Reads workspace members from pnpm-workspace.yaml at the parent, or [] when absent. */
 function readMembers(parentDir: string): string[] {
   const yamlPath = path.join(parentDir, 'pnpm-workspace.yaml');
@@ -85,6 +99,7 @@ export function CollectWorkspaceStatus(
   const detected = DetectCandidates(parentDir).map((c) => c.Name);
   const memberSet = new Set(members);
   return {
+    MembersWithStandaloneInstalls: members.filter((m) => hasStandaloneInstallMarker(path.join(parentDir, m))),
     ParentDir: parentDir,
     DirSource: dirSource,
     ParentIsGitRepo: existsSync(path.join(parentDir, '.git')),
@@ -140,6 +155,14 @@ function renderMemberLines(status: WorkspaceStatus): string[] {
   }
   for (const missing of status.MissingMemberDirs) {
     lines.push(chalk.red(`  missing on disk: ${missing}`));
+  }
+  for (const forked of status.MembersWithStandaloneInstalls) {
+    lines.push(
+      chalk.yellow(
+        `  STANDALONE INSTALL: ${forked} has its own package store — its code resolves against that store, ` +
+          `not this workspace (split singletons, stale deps). Fix: re-run \`dev workspace --clean-members\`.`
+      )
+    );
   }
   lines.push(`detected candidates (${status.DetectedCandidates.length}): ${status.DetectedCandidates.join(', ') || '(none)'}`);
   if (status.CandidatesNotInWorkspace.length > 0) {
