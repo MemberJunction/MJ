@@ -56,6 +56,9 @@ import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
 import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
 import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
+// Type-only: the registered runtime class for 'MJ: Company Integrations'. Needed so the create path can
+// set SuppressActivationSchemaRefresh — the activation-refresh opt-out — with a real type rather than a cast.
+import type { MJCompanyIntegrationEntityServer } from "@memberjunction/core-entities-server";
 import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
 import { UserCache } from "@memberjunction/generic-database-provider";
@@ -2460,6 +2463,18 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Trade-off the caller opts into: the mutation no longer reports what the refresh found (counts
      * are placeholder zeros) and a refresh failure no longer surfaces in the mutation's Message — both
      * live on the run stream instead. That is why `awaitSchemaRefresh` defaults to true.
+     *
+     * ON CREATE this only works because the caller ALSO sets
+     * `MJCompanyIntegrationEntityServer.SuppressActivationSchemaRefresh`. Activating a connection runs
+     * the same pipeline inside `Save()`, awaited — leave that in place and the create mutation pays a
+     * full introspect before ever reaching this method, and the launch below is coalesced onto the
+     * Save's run rather than owning `runID`. Suppressing it makes this the single refresh for the
+     * create, and moves it AFTER the connection test so a rejected connection is rolled back without
+     * having written any discovered schema.
+     *
+     * Belt and braces: if the launch below IS coalesced onto some other run for this connection (a
+     * concurrent refresh, a repeat click), the pipeline publishes a terminal alias run under `runID`
+     * naming the run that served it — so the ID handed back here is tailable in every case.
      */
     private startSchemaRefreshPipelineDetached(
         companyIntegrationID: string,
@@ -2696,7 +2711,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("testConnection", () => Boolean, { defaultValue: false }) testConnection: boolean,
         @Arg("runSchemaRefresh", () => Boolean, { defaultValue: true, description: "When true (default) and TestConnection succeeds, automatically runs IntegrationConnectorCreationPipeline (live introspect → persist Declared/Discovered/Custom → SoftPKClassifier). The intermittent server-side work the wizard's Forward step represents." }) runSchemaRefresh: boolean,
         @Arg("universalPKConvention", { nullable: true, description: "Optional vendor-wide PK hint (e.g. 'id' for HubSpot). Improves SoftPKClassifier convergence." }) universalPKConvention: string | undefined,
-        @Arg("awaitSchemaRefresh", () => Boolean, { defaultValue: true, description: "When false, the schema refresh is launched detached and this mutation returns immediately with SchemaRefresh.RunID + InProgress=true — tail that run instead of blocking on a minutes-long live introspect. Default true preserves the blocking behaviour (counts returned inline)." }) awaitSchemaRefresh: boolean,
+        @Arg("awaitSchemaRefresh", () => Boolean, { defaultValue: true, description: "When false, the schema refresh is launched detached and this mutation returns immediately with SchemaRefresh.RunID + InProgress=true — tail that run instead of blocking on a minutes-long live introspect. This also suppresses the refresh that activating the connection would otherwise run inside the CompanyIntegration Save (see MJCompanyIntegrationEntityServer.SuppressActivationSchemaRefresh), so the introspect happens exactly once, and AFTER the connection test — meaning a failed test rolls back a connection that left no discovered schema behind. Default true preserves the blocking behaviour (counts returned inline)." }) awaitSchemaRefresh: boolean,
         @Ctx() ctx: AppContext
     ): Promise<CreateConnectionOutput> {
         try {
@@ -2719,7 +2734,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const credentialID = credential.ID;
 
             // 2. Create CompanyIntegration linked to the Credential
-            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntityServer>('MJ: Company Integrations', user);
             ci.NewRecord();
             ci.IntegrationID = input.IntegrationID;
             ci.CompanyID = input.CompanyID;
@@ -2728,6 +2743,17 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             ci.Name = input.CredentialName; // Name is required on CompanyIntegration
             if (input.ExternalSystemID) ci.ExternalSystemID = input.ExternalSystemID;
             if (input.Configuration) ci.Configuration = input.Configuration;
+
+            // Saving IsActive=true fires MJCompanyIntegrationEntityServer's activation schema refresh
+            // INSIDE Save(), awaited. When the caller asked for a detached refresh we take ownership of
+            // it here instead, for two reasons: the Save-side run would make `awaitSchemaRefresh: false`
+            // cost a full introspect anyway (the flag would control reporting, not latency), and it would
+            // run BEFORE the connection test below — so a test failure would roll back a connection whose
+            // IntegrationObject rows had already been written. Running it ourselves, after the rollback
+            // decision, fixes both. If the server subclass isn't registered this assignment is inert and
+            // no refresh fires from Save either, so the detached launch below is still the only one.
+            const ownSchemaRefresh = runSchemaRefresh && !awaitSchemaRefresh;
+            ci.SuppressActivationSchemaRefresh = ownSchemaRefresh;
 
             const saved = await ci.Save();
             if (!saved) {
@@ -2758,7 +2784,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // caller also asked for a test.  The wizard may have tested separately
             // and just be hitting Create to save.
             let schemaRefreshSummary: CreateConnectionPipelineSummary | undefined;
-            if (runSchemaRefresh && !awaitSchemaRefresh) {
+            if (ownSchemaRefresh) {
                 schemaRefreshSummary = this.startSchemaRefreshPipelineDetached(ci.ID, user, md, universalPKConvention);
             } else if (runSchemaRefresh) {
                 try {

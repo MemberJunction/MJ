@@ -3,10 +3,13 @@
  *
  * CompanyIntegrationRecordMap is the highest-volume table the integration sync
  * path writes: one row per external record it has ever mapped, re-touched on
- * every sync. It is the only integration bookkeeping entity still shipping with
- * TrackRecordChanges = 1 -- its siblings (Company Integration Run Details,
- * Company Integration Run API Logs) are already 0 -- so every mapping upsert
- * also writes a RecordChange row, doubling the write volume of a sync.
+ * every sync. Its run-log siblings (Company Integration Runs, Run Details, Run
+ * API Logs) already ship with TrackRecordChanges = 0; this one did not, so every
+ * mapping upsert also wrote a RecordChange row, doubling the write volume of a
+ * sync. (Entity Maps, Field Maps, Sync Watermarks and Company Integrations are
+ * also still at 1 -- they are low-volume configuration, edited by operators, and
+ * their history IS worth keeping. This migration deliberately touches only the
+ * per-external-record table.)
  *
  * Nothing reads that history: the mapping row IS the current state, its prior
  * ExternalSystemRecordID has no diagnostic value, and the durable per-run
