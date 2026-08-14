@@ -13,6 +13,7 @@ import { FormNavigationEvent } from '../types/navigation-events';
 import { MjFormFieldComponent } from '../field/form-field.component';
 import { CompositeKey } from '@memberjunction/core';
 import { EscapeHTML, HighlightSearchMatches } from '@memberjunction/global';
+import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 
 /**
  * Reusable collapsible panel for form sections.
@@ -56,6 +57,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   private cdr = inject(ChangeDetectorRef);
   private elementRef = inject(ElementRef);
   private ngZone = inject(NgZone);
+  private chrome = inject(FormChromeCoordinator, { optional: true });
 
   /** Unique key for state persistence */
   @Input() SectionKey = '';
@@ -152,12 +154,36 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   FieldNames = '';
   IsVisible = true;
 
+  @HostBinding('attr.data-section-key')
+  get HostSectionKey(): string {
+    return this.SectionKey;
+  }
+
+  @HostBinding('attr.data-variant')
+  get HostVariant(): string {
+    return this.Variant;
+  }
+
+  @HostBinding('attr.data-icon')
+  get HostIcon(): string {
+    return this.Icon;
+  }
+
   @HostBinding('class')
   get HostClass(): string {
     const classes = [`mj-panel--${this.Variant}`];
     if (!this.IsVisible) classes.push('mj-search-hidden');
     if (this.IsDragging) classes.push('mj-dragging');
     if (this.IsDragOver) classes.push('mj-drag-over');
+    if (this.chrome?.Spec.RelatedRoles.get(this.SectionKey) === 'Detail') {
+      classes.push('mj-form-role-detail');
+    }
+    if (this.chrome?.HidesAccordionChrome(this.SectionKey)) {
+      classes.push('mj-chrome-plain');
+    }
+    if (!this.hasRenderableContent()) {
+      classes.push('mj-panel-empty');
+    }
     return classes.join(' ');
   }
 
@@ -174,6 +200,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
 
   /** Signals re-subscription when ContentChildren change */
   private fieldNavReset$ = new Subject<void>();
+  private destroy$ = new Subject<void>();
 
   // ---- Panel content resize ----
 
@@ -205,6 +232,8 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
    * that lock sections open). Undefined / true means collapsible.
    */
   get Collapsible(): boolean {
+    // Selected left-nav item has no accordion chrome. More keeps collapse/expand.
+    if (this.chrome?.HidesAccordionChrome(this.SectionKey)) return false;
     return this.FormContext?.collapsibleSections !== false;
   }
 
@@ -219,6 +248,9 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
 
   ngOnInit(): void {
     this.DisplayName = this.SectionName;
+    this.chrome?.Changes.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.UpdateVisibilityAndHighlighting();
+    });
   }
 
   ngAfterContentInit(): void {
@@ -251,6 +283,8 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   ngOnDestroy(): void {
     this.fieldNavReset$.next();
     this.fieldNavReset$.complete();
+    this.destroy$.next();
+    this.destroy$.complete();
     this.resizeObserver?.disconnect();
     if (this.resizeDebounceTimer) {
       clearTimeout(this.resizeDebounceTimer);
@@ -361,6 +395,25 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     this.cdr.markForCheck();
   }
 
+  /**
+   * Field panels whose only children are empty/hidden (e.g. leftover
+   * `Details` with just unused geo columns) should not take space.
+   * Custom widgets and related grids have no FieldComponents — keep them.
+   */
+  private hasRenderableContent(): boolean {
+    if (this.Variant === 'related-entity') return true;
+    if (!this.FieldComponents || this.FieldComponents.length === 0) return true;
+    return this.FieldComponents.some((field) => !field.ShouldHideField);
+  }
+
+  private isHiddenByChrome(): boolean {
+    if (!this.chrome) return false;
+    if (this.Variant === 'related-entity') {
+      return !this.chrome.IsRelatedSectionVisible(this.SectionKey);
+    }
+    return !this.chrome.IsFirstClassSectionVisible(this.SectionKey);
+  }
+
   private UpdateFieldNames(): void {
     if (this.FieldComponents) {
       const names: string[] = [];
@@ -435,7 +488,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     // `Hidden` input OR the form config's section-visibility rules carried on
     // FormContext (which also reach slot-injected BaseFormPanels, since every
     // panel receives FormContext).
-    if (this._hidden || IsFormSectionHidden(this.FormContext, this.SectionKey, this.Variant)) {
+    if (this._hidden || IsFormSectionHidden(this.FormContext, this.SectionKey, this.Variant) || this.isHiddenByChrome()) {
       this.IsVisible = false;
       this.DisplayName = EscapeHTML(this.SectionName);
       this.cdr.markForCheck();
@@ -445,7 +498,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     const searchTerm = (this.FormContext?.sectionFilter || '').toLowerCase().trim();
 
     if (!searchTerm) {
-      this.IsVisible = true;
+      this.IsVisible = this.hasRenderableContent();
       this.DisplayName = this.SectionName;
       this.cdr.markForCheck();
       return;

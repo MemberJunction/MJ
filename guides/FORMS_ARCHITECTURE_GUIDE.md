@@ -78,7 +78,12 @@ sections and related-entity grids are `<mj-collapsible-panel>`s.
 You rarely touch Layer 1 directly. Two things you should know:
 
 - **Extending a form without replacing it:** register a `BaseFormPanel` against a
-  slot — see [base-forms/PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md).
+  slot — see [base-forms/PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md)
+  and [§7c](#7c-form-contributions--add-replace-or-fill-in-no-regen). Claim
+  `relatedEntity` to replace a baked related grid, or `replacesSectionKey` to
+  replace a field panel (including a hero that is not a collapsible panel).
+  `<mj-form-contributions>` fills in `DisplayInForm` relationships the template
+  did not bake. CodeGen keeps emitting those sections; override is runtime.
 - **Replacing a form entirely:** a custom `*Extended` class — see the "Extending
   Entity Forms" section of [packages/Angular/CLAUDE.md](../packages/Angular/CLAUDE.md).
 
@@ -256,6 +261,175 @@ required touching the generated form. Full authoring contract:
 > / `ShowRelatedEntities`) apply uniformly. So a dialog can open the Content
 > Sources form and hide the crawler section with
 > `Config: { HiddenSectionKeys: ['websiteCrawlerSettings'] }` — no per-panel code.
+
+### 7c. Form contributions — add, replace, or fill in (no regen)
+
+A form is a list of **contributions**. CodeGen still bakes field panels and
+related-entity grids. At runtime, registered `BaseFormPanel`s can:
+
+- **add** a section (existing slot behavior)
+- **claim a related-entity grid** (`relatedEntity`) so the baked grid hides and yours mounts
+- **fill in** a `DisplayInForm` relationship the template never baked (other OpenApp installed)
+- **replace a named field panel** (`replacesSectionKey`) — hide `details` / `personalIdentity` and mount a hero that is **not** a collapsible panel
+
+Discovery is `GetAllRegistrationsByMetadata`. Last-wins is ClassFactory `Priority` per `contributionKey`. Plan: [`/plans/form-contributions.md`](../plans/form-contributions.md). Authoring: [PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md).
+
+`replacesSectionKey` is the CodeGen `SectionKey` on the baked `<mj-collapsible-panel>` (camelCase of the section name — look at the generated form HTML). Must name a concrete `entity`, not `'*'`.
+
+#### Scenario A — Extra settings on a generated form (Content Sources)
+
+```typescript
+@RegisterClassEx(BaseFormPanel, {
+  key: 'content-sources:website-crawler-settings',
+  metadata: { entity: 'MJ: Content Sources', slot: 'after-fields', sortKey: 80 },
+})
+export class WebsiteCrawlerSettingsPanel extends BaseFormPanel { /* gate in template */ }
+```
+
+Generated form untouched. Panel is a normal collapsible section.
+
+#### Scenario B — Form hero that is not a panel (Orders)
+
+The Order Header money strip + Confirm button is not a collapsible section. Register it at `before-fields` (the top of every generated form) and hide the generic Details panel if the hero owns those fields:
+
+```typescript
+@RegisterClassEx(BaseFormPanel, {
+  key: 'form-panel:OrderHeaders:header',
+  metadata: {
+    entity: 'MJ_BizApps_Orders: Order Headers',
+    slot: 'before-fields',
+    sortKey: 100,
+    contributionKey: 'header',
+    replacesSectionKey: 'details',
+  },
+})
+@Component({ standalone: false, selector: 'mjo-order-header-hero', template: `
+  <div class="mjo-oh-hero">
+    <h1>{{ Record.OrderNumber }}</h1>
+    <span>{{ Record.Status }}</span>
+    <button type="button" mjButton variant="primary" (click)="confirm()">Confirm order</button>
+  </div>
+` })
+export class OrderHeaderHeroPanel extends BaseFormPanel<OrderHeaderEntity> {
+  public async confirm(): Promise<void> { await this.Record.Confirm(); }
+}
+```
+
+No `<mj-collapsible-panel>`. The generated Details section disappears. The rest of the generated form (lines, payment, related grids) stays. A second app that also ships a header uses the same `contributionKey: 'header'` and a higher `Priority`.
+
+#### Scenario C — Replace Personal Identity on a Person with a richer header (Common)
+
+```typescript
+@RegisterClassEx(BaseFormPanel, {
+  key: 'form-panel:People:header',
+  metadata: {
+    entity: 'MJ_BizApps_Common: People',
+    slot: 'before-fields',
+    contributionKey: 'header',
+    replacesSectionKey: 'personalIdentity',
+  },
+})
+export class PersonHeroPanel extends BaseFormPanel { /* photo, display name, primary org — not a panel */ }
+```
+
+Addresses / contacts widgets can stay as later slots or as the custom form's own markup.
+
+#### Scenario D — Orders claims Event tickets on Person (related grid takeover)
+
+```typescript
+@RegisterClassEx(BaseFormPanel, {
+  key: 'form-panel:People:related:EventOrderLines',
+  metadata: {
+    entity: 'MJ_BizApps_Common: People',
+    slot: 'after-related',
+    sortKey: 80,
+    relatedEntity: 'MJ_BizApps_Orders: Event Order Lines',
+    relatedJoinField: 'PersonID',
+  },
+})
+export class PersonEventTicketsPanel extends BaseFormPanel { /* ticket cards */ }
+```
+
+Common does not import Orders. If CodeGen baked a generic Event Order Lines grid, it hides. If it never baked one (OpenApp install), the composer does not add a stock grid either — your panel is the contribution.
+
+Omit `relatedJoinField` only when there is a single FK to that entity. Bill-to vs ship-to on the same Person must pass `BillToPersonID` / `ShipToPersonID`.
+
+#### Scenario E — Another app installed: stock grid appears with no code
+
+Accounting (or Sales) adds `DisplayInForm` from Deals → Person. Person's generated form was CodeGen'd before Sales existed, so it has no Deals panel. `<mj-form-contributions>` in the container mounts the stock related grid. No Common change, no regen.
+
+#### Scenario F — Two apps ship a Person header; highest Priority wins
+
+```typescript
+// Common, Priority default 0
+metadata: { entity: PEOPLE, slot: 'before-fields', contributionKey: 'header', replacesSectionKey: 'personalIdentity' }
+
+// A vertical app, @RegisterClassEx(..., { priority: 10, metadata: { ..., contributionKey: 'header' } })
+```
+
+One header mounts. The loser is not shown. Same rule as related claims.
+
+#### Scenario G — Subscription term waterfall (not a grid, not a header)
+
+```typescript
+@RegisterClassEx(BaseFormPanel, {
+  key: 'form-panel:Subscriptions:waterfall',
+  metadata: {
+    entity: 'MJ_BizApps_Orders: Subscriptions',
+    slot: 'after-fields',
+    sortKey: 60,
+    contributionKey: 'rev-rec-waterfall',
+  },
+})
+export class SubscriptionWaterfallPanel extends BaseFormPanel { /* deferred-rev chart */ }
+```
+
+Extra pane. Does not replace anything. Generated subscription fields stay.
+
+#### Scenario H — Custom form still uses the container
+
+Orders' full custom form already wraps `<mj-record-form-container>` and emits `before-fields`. A contribution registered for Order Headers still mounts there. You do **not** have to replace the whole form to get a hero — start with B, grow to a custom form only when the line editor / tab strip demand it.
+
+### 7d. Form chrome — accordion, left-nav, and More
+
+Contributions decide *what* is on the form. Chrome decides *how the container
+arranges it*. Metadata is the floor; an optional `BaseFormPolicy` is the last-wins
+override. Plan: [`/plans/form-chrome-policy.md`](../plans/form-chrome-policy.md).
+
+`Entity.Configuration.UI.Form`:
+
+- `Layout`: `'accordion'` | `'left-nav'` | `'auto'` (omit = auto)
+- `AutoLeftNavAt`: first-class section count that flips auto to left-nav (omit = 8)
+- `RelatedRolePolicy`: `'smart'` (default) or `'keep-all-primary'`
+- `PrimaryRelatedBudget`: max untagged related grids that stay first-class under smart (omit = 6)
+
+`EntityRelationship.Configuration.UI.FormRole`:
+
+- `'Primary'` — always top-level (punches through the budget)
+- `'Detail'` — always parked in one More group
+- omit — the parent entity's ranker decides
+
+**Smart is not "everything in More."** Same-schema 1:N children, declared
+collections, and custom display components stay first-class. Cross-schema
+hang-ons and `__mj` plumbing fold only after the untagged pool exceeds the
+budget. A form with 4 related grids is unchanged.
+
+`BaseFormPolicy` registers with `{ metadata: { entity } }` and may return a
+full chrome spec. Cancelable `BeforeLayoutResolve` / `BeforeSectionActivate`
+live on the container.
+
+**Left-nav is not accordion-on-the-side.** The rail picks one group; the body
+shows only that group. Selected content has **no accordion chrome** (the rail
+is the header) and related grids fill the remaining height. **More** is a
+folder on the rail — click to expand sub-nodes, then pick one item like any
+other rail entry. Field panels collapse into one **Details** item. Related
+Primary grids stay first-class (same-title grids merge). `System Metadata`
+and Detail related always sit in More. Rail items use the same icon as the
+accordion header (entity `Icon` when present) and show related-grid row
+counts after they load. Users reorder first-class items by dragging the
+rail grip (or Manage Sections / reset in the toolbar). Section search
+filters the rail the same way it filters accordion panels. The centered /
+full-width toolbar toggle still applies.
 
 ### 7b. Render a single section standalone (`SectionName`)
 

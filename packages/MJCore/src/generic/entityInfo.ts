@@ -9,6 +9,12 @@ import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
 import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/global"
+import {
+    ParseEntityConfiguration,
+    ParseEntityRelationshipConfiguration,
+    type IEntityConfiguration,
+    type IEntityRelationshipConfiguration,
+} from "./entityConfiguration"
 
 /**
  * Valid values for EntityField.ExtendedType.
@@ -128,6 +134,28 @@ export class EntityRelationshipInfo extends BaseInfo  {
     * @see guides/TRANSACTIONS_AND_BATCHING_GUIDE.md
     */
     RelatedRecordCollection: string = null
+
+    /**
+     * Optional JSON configuration bag (shape = {@link IEntityRelationshipConfiguration}).
+     * Nested `UI.FormRole` is Primary (first-class chrome), Detail (parked in More),
+     * or omitted (the smart ranker decides). Distinct from RelatedRecordCollection,
+     * DisplayComponentConfiguration, and AdditionalFieldsToInclude.
+     *
+     * @see packages/MJCore/src/generic/entityConfiguration.ts
+     */
+    Configuration: string = null
+
+    private _configurationObject: IEntityRelationshipConfiguration | null | undefined = undefined;
+
+    /**
+     * Parsed {@link Configuration}. Null when the column is empty or not valid JSON.
+     */
+    get ConfigurationObject(): IEntityRelationshipConfiguration | null {
+        if (this._configurationObject === undefined) {
+            this._configurationObject = ParseEntityRelationshipConfiguration(this.Configuration);
+        }
+        return this._configurationObject;
+    }
 
     // virtual fields - returned by the database VIEW
     Entity: string = null 
@@ -1769,6 +1797,27 @@ export class EntityInfo extends BaseInfo {
      * CSS class or icon identifier for displaying this entity in the UI
      */
     Icon: string = null
+
+    /**
+     * Optional JSON configuration bag (shape = {@link IEntityConfiguration}).
+     * Nested `UI.Form` holds generated-form chrome: layout, auto left-nav
+     * threshold, related-role policy, and the Primary related budget.
+     *
+     * @see packages/MJCore/src/generic/entityConfiguration.ts
+     */
+    Configuration: string = null
+
+    private _configurationObject: IEntityConfiguration | null | undefined = undefined;
+
+    /**
+     * Parsed {@link Configuration}. Null when the column is empty or not valid JSON.
+     */
+    get ConfigurationObject(): IEntityConfiguration | null {
+        if (this._configurationObject === undefined) {
+            this._configurationObject = ParseEntityConfiguration(this.Configuration);
+        }
+        return this._configurationObject;
+    }
     /**
      * Date and time when this entity was created
      */
@@ -2566,6 +2615,35 @@ export class EntityInfo extends BaseInfo {
             params.MaxRows = maxRecords;
 
         return params;
+    }
+
+    /**
+     * One related-entity grid over several join fields (Bill-To OR Ship-To).
+     * New records still default to the first join field.
+     */
+    public static BuildRelationshipViewParamsForJoinFields(
+        record: BaseEntity,
+        relatedEntityName: string,
+        joinFields: readonly string[],
+    ): RunViewParams {
+        const fields = joinFields.map((f) => f.trim()).filter((f) => f.length > 0);
+        if (fields.length === 0) return { EntityName: relatedEntityName };
+        if (fields.length === 1) {
+            const rel = record.EntityInfo.RelatedEntities.find((r) =>
+                r.RelatedEntity.trim().toLowerCase() === relatedEntityName.trim().toLowerCase()
+                && r.RelatedEntityJoinField.trim().toLowerCase() === fields[0].toLowerCase(),
+            );
+            if (rel) return EntityInfo.BuildRelationshipViewParams(record, rel);
+        }
+
+        const firstKey = record.FirstPrimaryKey;
+        const keyValue = firstKey.Value;
+        const quotes = keyValue && firstKey.NeedsQuotes ? "'" : '';
+        const clauses = fields.map((field) => `[${field}] = ${quotes}${keyValue}${quotes}`);
+        return {
+            EntityName: relatedEntityName,
+            ExtraFilter: clauses.join(' OR '),
+        };
     }
     
     /**
