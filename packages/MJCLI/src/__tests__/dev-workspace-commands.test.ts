@@ -56,6 +56,14 @@ describe('dev workspace flag defaults', () => {
     expect(DevWorkspace.flags.include.multiple).toBe(true);
     expect(DevWorkspace.flags.exclude.multiple).toBe(true);
   });
+
+  it('clean-members is tri-state: --clean-members / --no-clean-members / absent means ask', async () => {
+    const { default: DevWorkspace } = await import('../commands/dev/workspace/index.js');
+    const flag = DevWorkspace.flags['clean-members'];
+    expect(flag.type).toBe('boolean');
+    expect(flag.allowNo).toBe(true);
+    expect(flag.default).toBeUndefined(); // absent -> interactive confirm, or a loud skip when non-interactive
+  });
 });
 
 describe('dev workspace clean flag defaults', () => {

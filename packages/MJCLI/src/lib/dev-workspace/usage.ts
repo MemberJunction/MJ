@@ -42,11 +42,24 @@ export const DEV_WORKSPACE_USAGE: PluginUsage = {
     `Writes ${WORKSPACE_FILE_NAMES.join(', ')} plus the ${SENTINEL_FILE_NAME} sentinel manifest at the parent, then ` +
     `runs pnpm install there (disable with --no-install). Members are detected among the parent's immediate ` +
     `subdirectories: a sibling qualifies when it has a root package.json AND any of (a) an mj-app.json marker, ` +
-    `(b) a package under its packages/ dir naming or depending on the @mj-biz-apps scope, (c) a root package name ` +
-    `of memberjunction-workspace (the MJ monorepo). Use --include to add a repo detection missed and --exclude to ` +
-    `drop one. Existing files are NEVER overwritten silently — the run refuses unless --force, which keeps a ` +
-    `<name>.bak copy of each. Workspace globs cover each member's repo root and packages/* only, never apps/*, ` +
-    `because app-shell names collide across repos. Auth SDKs and @angular/service-worker are peerDependencies of ` +
+    `(b) a package its workspace globs enumerate naming or depending on the @mj-biz-apps scope, (c) a root package ` +
+    `name of memberjunction-workspace (the MJ monorepo). Use --include to add a repo detection missed and --exclude ` +
+    `to drop one. Existing files are NEVER overwritten silently — the run refuses unless --force, which keeps a ` +
+    `<name>.bak copy of each. Workspace globs cover each member's repo root plus the packages-rooted globs of the ` +
+    `member's own pnpm-workspace.yaml (packages/* when it has none) — never apps/*, ` +
+    `because app-shell names collide across repos. The generated parent package.json ABSORBS what each member's own ` +
+    `config would otherwise lose at a workspace root: member pnpm.overrides/patchedDependencies/packageExtensions/` +
+    `peerDependencyRules are hoisted (patch paths re-rooted to <member>/...); every member-provided package name gets ` +
+    `a workspace:* override so local source always beats registry copies; and pnpm.overrides pins every direct ` +
+    `dependency of each member's importers (plus every @types/* at any depth) to the member's COMMITTED lockfile ` +
+    `resolution — EXACT versions, with per-major override selectors (name@^N) when the committed graphs hold more ` +
+    `than one major of a name — pure file derivation, no network (unsupported lockfile formats are warned about ` +
+    `per member, never a silent zero). @types/* ` +
+    `are excluded from the devDependency union (duplicate @types break nominal typing) and workspace: specifiers on ` +
+    `packages no member provides are dropped — every drop, conflict and skip is reported. Members carrying a ` +
+    `standalone install (root or nested node_modules, detected depth-independently) are offered cleanup before the ` +
+    `parent install (--clean-members / --no-clean-members for non-interactive runs); skipping leaves overlapping ` +
+    `stores that surface as dangling symlinks. Auth SDKs and @angular/service-worker are peerDependencies of ` +
     `the MJ libraries that expose them: a shell serving those features declares its own picks in its own ` +
     `package.json — the command prints that guidance instead of hoisting them. Light command: no MJ bootstrap, ` +
     `no database. Generated files are ephemeral — never commit them; remove them with dev workspace clean. ` +
@@ -57,7 +70,12 @@ export const DEV_WORKSPACE_USAGE: PluginUsage = {
     { name: '--exclude', type: 'string (repeatable)', description: 'Repo directory name to drop from the member set' },
     { name: '--no-install', type: 'boolean', description: 'Generate the files but skip pnpm install' },
     { name: '--force', type: 'boolean', description: 'Overwrite existing generated files, keeping a .bak of each' },
-    { name: '--verbose', type: 'boolean', description: 'Show detailed output' },
+    {
+      name: '--clean-members / --no-clean-members',
+      type: 'boolean',
+      description: 'Remove (or keep) members\' standalone node_modules trees before installing; omit both to be asked interactively',
+    },
+    { name: '--verbose', type: 'boolean', description: 'Show detailed output (per-entry lockfile skips, superseded pins, skipped @types)' },
   ],
   examples: [
     'mj dev workspace --dir ~/code/bluecypress',
