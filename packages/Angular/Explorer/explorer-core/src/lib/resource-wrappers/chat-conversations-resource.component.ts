@@ -39,20 +39,6 @@ import { Subject, takeUntil } from 'rxjs';
             [class.no-transition]="!sidebarTransitionsEnabled"
             [style.width.px]="isSidebarCollapsed ? 0 : sidebarWidth">
             @if (currentUser) {
-              <!-- Cross-entity search entry point. Explorer composes the chat UI from
-                   resource wrappers rather than mounting ConversationWorkspaceComponent,
-                   so the workspace's own nav search button never renders here — without
-                   this the search panel has no trigger at all. Ctrl+K is not usable as
-                   the shortcut: Explorer's global command palette owns it. -->
-              <div class="chat-search-bar">
-                <button
-                  class="chat-search-trigger"
-                  (click)="openSearch()"
-                  title="Search conversations, messages, artifacts, collections and tasks">
-                  <i class="fa-solid fa-magnifying-glass"></i>
-                  <span>Search everything in Chat</span>
-                </button>
-              </div>
               <mj-conversation-list
                 #conversationList
                 [environmentId]="environmentId"
@@ -66,7 +52,8 @@ import { Subject, takeUntil } from 'rxjs';
                 (newConversationRequested)="onNewConversationRequested()"
                 (pinSidebarRequested)="pinSidebar()"
                 (unpinSidebarRequested)="unpinSidebar()"
-                (refreshRequested)="onRefreshRequested()">
+                (refreshRequested)="onRefreshRequested()"
+                (searchEscalated)="openSearch($event)">
               </mj-conversation-list>
               <!-- Routines — pinned at the very bottom of the sidebar. Gated inside the
                    section component by Read permission on 'MJ: User Routines'. -->
@@ -125,6 +112,7 @@ import { Subject, takeUntil } from 'rxjs';
     <!-- Cross-entity search panel (conversations / messages / artifacts / collections / tasks) -->
     @if (currentUser) {
       <mj-search-panel
+        [initialQuery]="searchSeedQuery"
         [isOpen]="isSearchPanelOpen"
         [environmentId]="environmentId"
         [currentUser]="currentUser"
@@ -172,31 +160,6 @@ import { Subject, takeUntil } from 'rxjs';
 
     .conversation-sidebar mj-conversation-routines-section {
       flex-shrink: 0;
-    }
-
-    .chat-search-bar {
-      flex-shrink: 0;
-      padding: 8px 8px 0;
-    }
-
-    .chat-search-trigger {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      width: 100%;
-      padding: 6px 10px;
-      border: 1px solid var(--mj-border-default);
-      border-radius: var(--mj-radius-md);
-      background: var(--mj-bg-surface);
-      color: var(--mj-text-secondary);
-      font-size: 13px;
-      cursor: pointer;
-      text-align: left;
-    }
-
-    .chat-search-trigger:hover {
-      background: var(--mj-bg-surface-hover);
-      color: var(--mj-text-primary);
     }
 
     /* Disable transitions during initial load to prevent jarring animation */
@@ -1166,16 +1129,21 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   /** Whether the cross-entity search panel is open. */
   public isSearchPanelOpen = false;
 
-  /** Open the cross-entity search panel. */
-  openSearch(): void {
+  /** Term the panel opens with, handed over from the conversation list's own filter. */
+  public searchSeedQuery = '';
+
+  /**
+   * Open the cross-entity search panel, carrying over the term the user had already typed
+   * into the conversation list's filter so they do not retype it.
+   */
+  openSearch(query: string = ''): void {
+    this.searchSeedQuery = query;
     this.isSearchPanelOpen = true;
-    this.cdr.markForCheck();
   }
 
   /** Close the cross-entity search panel. */
   closeSearch(): void {
     this.isSearchPanelOpen = false;
-    this.cdr.markForCheck();
   }
 
   /**
@@ -1203,13 +1171,12 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
         break;
 
       case 'artifact':
-        // Artifacts live under either a collection or a conversation; reuse the same
-        // link routing the artifact viewer already uses so the destination opens it.
-        if (result.collectionId) {
-          this.onArtifactLinkClicked({ type: 'collection', id: result.collectionId, artifactId: result.id });
-        } else if (result.conversationId) {
-          this.onArtifactLinkClicked({ type: 'conversation', id: result.conversationId, artifactId: result.id });
-        }
+        // Open the artifact directly rather than routing through a parent collection or
+        // conversation. An artifact need not have either — one created standalone has no
+        // Collection Artifact row and no Conversation Detail referencing it — and the
+        // search result only ever carries collectionId, so parent-based routing silently
+        // did nothing for every artifact outside a collection.
+        this.navigationService.OpenArtifact(result.id, result.title);
         break;
 
       case 'collection':
