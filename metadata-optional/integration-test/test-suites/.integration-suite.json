@@ -683,6 +683,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT84 - Agent Note Cache Types (entity_object invariant)",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "1AA3CA8B-2292-41C0-AB16-2486D406AFCC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT03 - Client GraphQL Cache Integrity",
             "Sequence": 49,
             "Status": "Active"

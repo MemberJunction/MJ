@@ -37,6 +37,7 @@ import { AgentSkillsLiveChecks } from '../checks/agent-skills-live.checks';
 import { AgentPlanModeChecks } from '../checks/agent-plan-mode.checks';
 import { AgentCompactionE2EChecks } from '../checks/agent-compaction-e2e.checks';
 import { AgentMemoryGuardsChecks } from '../checks/agent-memory-guards.checks';
+import { AgentNoteCacheTypeChecks } from '../checks/agent-note-cache-types.checks';
 import { AgentRagSearchChecks } from '../checks/agent-rag-search.checks';
 import { AgentWireCallbackChecks } from '../checks/agent-wire-callback.checks';
 import { ViewSecurityChecks } from '../checks/view-security.checks';
@@ -133,6 +134,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['agent-plan-mode', AgentPlanModeChecks, 6],
         ['agent-compaction-e2e', AgentCompactionE2EChecks, 3],
         ['agent-memory-guards', AgentMemoryGuardsChecks, 5],
+        ['agent-note-cache-types', AgentNoteCacheTypeChecks, 3], // NC1-NC3 entity_object cache-event invariant (IT84)
         ['agent-rag-search', AgentRagSearchChecks, 7], // extended-agents suite (live-model, IT53-62)
         ['agent-wire-callback', AgentWireCallbackChecks, 2], // over-the-wire fire-and-forget callback (IT63)
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
@@ -207,6 +209,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-loop-live': 7,
         'agent-loop-standin': 6,
         'agent-memory-guards': 5,
+        'agent-note-cache-types': 3,
         'agent-payload-guards': 9,
         'agent-plan-mode': 6,
         'agent-rag-search': 7,
@@ -305,7 +308,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(83);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(84);
     });
 });
 
