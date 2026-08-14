@@ -23,6 +23,12 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env'), quiet: true });
 
 export interface MJConfig {
     // Database settings
+    /**
+     * Which backend to connect to. Absent means SQL Server, so every existing config keeps its
+     * behaviour; `initializeMJProvider` falls back to the DB_PLATFORM env var when this is unset,
+     * which is how a repo whose mj.config.cjs predates this key still switches platform.
+     */
+    dbPlatform?: 'sqlserver' | 'postgresql';
     dbHost?: string;
     dbDatabase?: string;
     dbPort?: number | string;

@@ -19,10 +19,18 @@
  * @module @memberjunction/integration-test-suite
  */
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { MJTaskEntity, MJTaskTypeEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
+import {
+    MJTaskEntity,
+    MJTaskTypeEntity,
+    MJAIAgentRunEntity,
+    MJAIAgentRequestEntity,
+} from '@memberjunction/core-entities';
 import type { TaskGraphSpec, TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
 import {
+    ParseTaskGraphDebugState,
     ParseTaskGraphParentMetadata,
+    TASK_TYPE_NAME,
+    TaskClaimStore,
     TaskGraphDispatcher,
     TaskGraphService,
     type TaskPromptRunner,
@@ -38,6 +46,12 @@ import {
     type TaskGraphObserver,
 } from '@memberjunction/task-graph';
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import {
+    GetTaskGraphSubmitter,
+    SuppressTaskGraphSubmission,
+    TaskGraphSubmissionSuppressedBecause,
+} from '@memberjunction/ai-core-plus';
+import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
@@ -206,6 +220,33 @@ async function resolveTaskTypeID(ctx: IntegrationCheckContext): Promise<string> 
     return tt.ID;
 }
 
+/**
+ * The `AI Workflow` task type specifically — NOT interchangeable with `resolveTaskTypeID`.
+ *
+ * The type-scoped claim-store verbs (`TrySkipPending` and friends) carry `TypeID` in their WHERE
+ * clause so a graph verb can never touch a row outside the workflow substrate. A check that passes
+ * the wrong type ID to one of them still sees the refusal it asserts — but earned by the type
+ * predicate rather than by the guard actually under test, which is a green test proving nothing.
+ * Resolved by reading, never creating: `TaskGraphService.Submit` has already minted the row by the
+ * time any check calls this, so an absent one means the graph under test was typed as something
+ * else and the check should fail rather than mint a type that makes it vacuous.
+ */
+async function resolveWorkflowTaskTypeID(ctx: IntegrationCheckContext): Promise<string> {
+    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
+        {
+            EntityName: 'MJ: Task Types',
+            ExtraFilter: `Name='${TASK_TYPE_NAME}'`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            MaxRows: 1,
+        },
+        ctx.User,
+    );
+    const id = res.Results?.[0]?.ID;
+    Assert(!!id, `could not resolve the '${TASK_TYPE_NAME}' task type`);
+    return id!;
+}
+
 /** Any real agent name — the graph must resolve one, but the stub is what actually runs. */
 async function resolveAgentName(ctx: IntegrationCheckContext): Promise<string> {
     const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ Name: string }>(
@@ -230,6 +271,7 @@ async function submitGraph(
     ctx: IntegrationCheckContext,
     spec: TaskGraphSpec,
     agentRunID?: string,
+    invocation?: { Data?: unknown; Context?: unknown },
 ): Promise<string> {
     await resolveTaskTypeID(ctx);
     const result = await new TaskGraphService().Submit(spec, {
@@ -243,6 +285,9 @@ async function submitGraph(
         // claims delivery correctly, which would make a check about deferral fail for a reason that
         // is not the behaviour under test.
         AgentRunID: agentRunID ?? null,
+        // The flow dialect's `data`/`context` roots (R3-3). Supplied at persist time, like the run,
+        // because a graph is claimable the instant `Submit` returns.
+        Invocation: invocation,
     });
     Assert(result.Success, `submission failed: ${result.ErrorMessage}`);
     Assert(!!result.ParentTaskID, 'submission returned no parent task');
@@ -300,6 +345,7 @@ function buildDispatcher(
     deliverer?: TaskContinuationDeliverer,
     pollIntervalSeconds: number = TEST_POLL_SECONDS,
     promptRunner?: TaskPromptRunner,
+    reconciliationIntervalSeconds: number = 3600,
 ): TaskGraphDispatcher {
     return new TaskGraphDispatcher(
         providerFactory(ctx),
@@ -310,7 +356,9 @@ function buildDispatcher(
             PollIntervalSeconds: pollIntervalSeconds,
             // Long enough that nothing self-reclaims mid-check; TX7 drives reconciliation explicitly.
             ClaimTTLSeconds: 300,
-            ReconciliationIntervalSeconds: 3600,
+            // Default long, for the same reason — TX26 is the one check that wants it short, because
+            // an interval it can outwait is how a timer that should not exist becomes observable.
+            ReconciliationIntervalSeconds: reconciliationIntervalSeconds,
             MaxConcurrentTasks: 5,
         },
         deliverer,  // usually absent: a test has no conversation to post into
@@ -466,12 +514,25 @@ async function assertStubRan(
             + `bundle's stub ever running them: ${ranByOthers.join(', ')}. Another dispatcher on this `
             + `database executed them with its own runner, so this check exercised nothing. IT74 `
             + `requires exclusive use of the database (an MJAPI pointed at it, or another agent's `
-            + `session, will race every check here). Stop the other dispatcher and re-run.`,
+            + `session, will race every check here). ${CONTAMINATION_REMEDY}`,
         );
     }
     AssertEqual(started.length, expected, what);
     return started;
 }
+
+/**
+ * What to DO about a contaminated run — stated once, so both inferences give the same instruction.
+ *
+ * Naming the flag matters: without it the only apparent remedy is "stop your server", which nobody
+ * wants to do on a machine they are also developing on, so the bundle gets re-run and blamed
+ * instead. The flag is also what R3-11 made honest — a host carrying it now refuses graph
+ * submissions rather than silently accepting work it will never run.
+ */
+const CONTAMINATION_REMEDY =
+    'Stop the other dispatcher — or, if it is an MJAPI you need running, restart it with ' +
+    'MJ_DISABLE_TASK_GRAPH_DISPATCHER=1, which keeps the server serving while it declines both to ' +
+    'run graphs and (since R3-11) to accept them — then re-run.';
 
 /** Statuses that mean a task was RUN by somebody, for the foreign-runner inference above. */
 const TERMINAL_FOR_FOREIGN_CHECK: ReadonlySet<string> = new Set(['Complete', 'Failed']);
@@ -492,9 +553,85 @@ function assertMarkerUnclaimed(marker: { At: string | undefined }, provenLocally
         `${what} — but this bundle's own instances provably delivered nothing, so the marker at ` +
         `${marker.At} was claimed by a dispatcher outside this bundle. IT74 requires exclusive use of ` +
         `the database (an MJAPI pointed at it, or another agent's session, will race every check ` +
-        `here). Stop the other dispatcher and re-run.`,
+        `here). ${CONTAMINATION_REMEDY}`,
     );
     AssertEqual(marker.At, undefined, what);
+}
+
+/** How many requests are still awaiting an answer for a task. */
+async function openRequestCount(ctx: IntegrationCheckContext, taskID: string): Promise<number> {
+    const open = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
+        {
+            EntityName: 'MJ: AI Agent Requests',
+            ExtraFilter: `Status='Requested' AND OriginatingTaskID='${taskID}'`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            BypassCache: true,
+        },
+        ctx.User,
+    );
+    return (open.Results ?? []).length;
+}
+
+
+/** The still-open requests for a task, oldest first — the order the dispatcher itself resolves. */
+async function openRequests(ctx: IntegrationCheckContext, taskID: string): Promise<MJAIAgentRequestEntity[]> {
+    const open = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJAIAgentRequestEntity>(
+        {
+            EntityName: 'MJ: AI Agent Requests',
+            ExtraFilter: `Status='Requested' AND OriginatingTaskID='${taskID}'`,
+            OrderBy: '__mj_CreatedAt ASC, ID ASC',
+            ResultType: 'entity_object',
+            BypassCache: true,
+        },
+        ctx.User,
+    );
+    return open.Results ?? [];
+}
+
+/** Polls until a value satisfies a predicate, or fails the check with `what` at the deadline. */
+async function waitFor<T>(read: () => Promise<T>, done: (value: T) => boolean, what: string): Promise<T> {
+    const deadline = Date.now() + SETTLE_TIMEOUT_MS;
+    let latest = await read();
+    while (Date.now() < deadline && !done(latest)) {
+        await settle(250);
+        latest = await read();
+    }
+    Assert(done(latest), `${what} (last saw ${JSON.stringify(latest)})`);
+    return latest;
+}
+
+
+/** How long to wait for a SECOND task to wrongly slip through after a one-shot allowance. */
+const TWO_INSTANCE_DRAIN_MS = 8_000;
+
+/** Parent statuses that mean the graph is over. */
+const TERMINAL_PARENT_STATUSES: ReadonlySet<string> = new Set(['Complete', 'Failed', 'Cancelled', 'Skipped']);
+
+/** How many of a graph's steps have started (or finished) — the count a step allowance must bound. */
+async function countStarted(ctx: IntegrationCheckContext, parentID: string): Promise<number> {
+    return [...(await loadChildren(ctx, parentID)).values()]
+        .filter((t) => t.Status !== 'Pending').length;
+}
+
+/** Lets the dispatchers poll, then reports how many steps have started. */
+async function settleAndCount(ctx: IntegrationCheckContext, parentID: string): Promise<number> {
+    await settle(TWO_INSTANCE_DRAIN_MS);
+    return countStarted(ctx, parentID);
+}
+
+/** One task's current status. */
+async function statusOf(ctx: IntegrationCheckContext, taskID: string): Promise<string> {
+    return (await loadTask(ctx, taskID)).Status;
+}
+
+/** True once the graph records that a BREAKPOINT paused it, rather than a person. */
+async function pausedByBreakpoint(ctx: IntegrationCheckContext, parentID: string): Promise<boolean> {
+    // Read through the engine's own parser rather than JSON-walking the bag: `$.debug` is written by
+    // guarded JSON_MODIFY statements, and a check that re-implements the read is a second opinion
+    // about a shape only one of them owns.
+    const debug = ParseTaskGraphDebugState((await loadTask(ctx, parentID)).InputPayload);
+    return debug.paused === true && debug.pausedReason === 'breakpoint';
 }
 
 /** A well-formed run ID that will never exist, for TX14's read-failure trigger. */
@@ -634,6 +771,10 @@ async function createRun(ctx: IntegrationCheckContext, status: 'Running' | 'Paus
 /** One agent-assigned node. Spec v2: `kind` selects the configuration shape. */
 const agentTask = (tempId: string, name: string, agentName: string, dependsOn: string[] = []): TaskGraphSpecNode =>
     ({ tempId, name, description: name, kind: 'Agent', configuration: { agentName }, dependsOn });
+
+/** A step a person completes: never claimed, never run, released by answering its request. */
+const humanTask = (tempId: string, name: string, dependsOn: string[] = []): TaskGraphSpecNode =>
+    ({ tempId, name, description: name, kind: 'Human', configuration: {}, dependsOn });
 
 export const TaskGraphExecutionChecks: NamedCheck[] = [
     {
@@ -1338,6 +1479,532 @@ export const TaskGraphExecutionChecks: NamedCheck[] = [
             AssertEqual(finished.Status, 'Completed', 'the run was never settled — the retry did not resolve');
 
             console.log('      → run-half failure deferred delivery; the next pass completed it once');
+        }
+    },
+
+
+    {
+        Id: 'task-graph-execution.TX18',
+        Name: 'TX18: an early finish cannot overwrite a sibling that started',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // R3-1. The early-finish skips were full-row saves against a one-shot snapshot, and the
+            // decision lived only in the deciding instance's memory — so a sibling claimed between
+            // the snapshot and its write had `In Progress` reverted to `Skipped` and `ClaimedBy`
+            // cleared MID-EXECUTION. Its side effects had fired, its completion was refused, its
+            // output discarded, and the graph settled `Complete` with nothing recording it ran.
+            //
+            // Staged by claiming the sibling FIRST, which is the state that race produces and the
+            // one the guarded write must refuse.
+            const agentName = await resolveAgentName(ctx);
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-early-race (safe to delete)',
+                tasks: [
+                    agentTask('a', 'ER Finisher', agentName),
+                    agentTask('b', 'ER Sibling', agentName),
+                ],
+            });
+
+            const sibling = (await loadChildren(ctx, parentID)).get('ER Sibling')!;
+            const claims = new TaskClaimStore('it-tx18-peer', 300);
+            Assert(await claims.TryClaim(ctx.Provider, sibling.ID, ctx.User),
+                'could not stage the sibling as claimed');
+
+            // The guarded skip must refuse it — its predicate is `Status='Pending'`, and a claimed
+            // task is `In Progress`. The REAL workflow type ID is passed deliberately: the verb is
+            // type-scoped, so a wrong one would produce the same refusal for the wrong reason and
+            // leave the Pending guard untested.
+            const skipped = await claims.TrySkipPending(
+                ctx.Provider, sibling.ID, await resolveWorkflowTaskTypeID(ctx), ctx.User,
+            );
+            AssertEqual(skipped, false, 'a claimed sibling was skipped — its running work would be discarded');
+
+            const after = (await loadChildren(ctx, parentID)).get('ER Sibling')!;
+            AssertEqual(after.Status, 'In Progress', 'the claimed sibling lost its status');
+            AssertEqual(after.ClaimedBy, 'it-tx18-peer', 'the claimed sibling lost its owner');
+
+            // And its owner can still record the outcome, which is the point: the work is not lost.
+            const recorded = await claims.CompleteClaimed(
+                ctx.Provider, sibling.ID,
+                { Status: 'Complete', OutputPayload: JSON.stringify({ ranBy: 'peer' }) },
+                ctx.User,
+            );
+            AssertEqual(recorded, true, 'the claimed sibling could not record its outcome');
+
+            const final = (await loadChildren(ctx, parentID)).get('ER Sibling')!;
+            AssertEqual(final.Status, 'Complete', 'the sibling\'s outcome did not survive');
+            Assert(!!final.OutputPayload, 'the sibling\'s output was discarded');
+
+            console.log('      → a claimed sibling refused the skip and kept its outcome');
+        }
+    },
+
+    {
+        Id: 'task-graph-execution.TX19',
+        Name: 'TX19: under block semantics, a failed step blocks the join rather than releasing it',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // R3-2. A Failed origin's false conditional edge was DROPPED, its target skipped, and
+            // the dropped edge severed the block walk — so a join fed by an independent healthy
+            // route executed downstream of an unhandled failure while the parent rolled up Failed.
+            // `'block'` is the spec default, so this is every agent-emitted graph.
+            const agentName = await resolveAgentName(ctx);
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-block-join (safe to delete)',
+                tasks: [
+                    agentTask('a', 'BJ Fails', agentName),
+                    agentTask('e', 'BJ Healthy', agentName),
+                    {
+                        tempId: 'b', name: 'BJ Guarded', description: 'guarded', kind: 'Agent',
+                        configuration: { agentName },
+                        dependsOn: [{ tempId: 'a', condition: 'payload.approved === true' }],
+                    },
+                    {
+                        tempId: 'd', name: 'BJ Join', description: 'join', kind: 'Agent',
+                        configuration: { agentName }, dependsOn: ['b', 'e'],
+                    },
+                ],
+            });
+
+            SHARED_FAILURES.add('BJ Fails');
+            SILENT_TASKS.add('BJ Fails');   // a failed step almost never has output — that is the point
+            try {
+                const mine = await taskNames(ctx, parentID);
+                const parent = await runUntilSettled(ctx, buildDispatcher(ctx, RUNNER, 'it-tx19'), parentID);
+                AssertEqual(parent.Status, 'Failed', 'the graph must roll up Failed');
+
+                const started = RUNNER.StartedAmong(mine);
+                Assert(!started.includes('BJ Join'),
+                    'the join RAN downstream of an unhandled failure — the dropped edge released it');
+
+                const children = await loadChildren(ctx, parentID);
+                AssertEqual(children.get('BJ Join')!.Status, 'Blocked', 'the join should be Blocked, not skipped or run');
+                AssertEqual(children.get('BJ Guarded')!.Status, 'Blocked',
+                    'the guarded step should be Blocked — Skipped would satisfy its dependents');
+            } finally {
+                SHARED_FAILURES.delete('BJ Fails');
+                SILENT_TASKS.delete('BJ Fails');
+            }
+
+            console.log('      → failed origin blocked the join instead of skip-releasing it');
+        }
+    },
+
+    {
+        Id: 'task-graph-execution.TX20',
+        Name: 'TX20: a flow condition on data.* sees the invocation, not the origin\'s output',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // R3-3 / D2. `data` and `context` resolved against the origin STEP's output, which never
+            // carries those keys — so every documented `data.x` condition read undefined, came out
+            // false, and silently took the branch the walker would not have. On every invocation,
+            // with the validator blessing the condition at the door.
+            const agentName = await resolveAgentName(ctx);
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-invocation (safe to delete)',
+                tasks: [
+                    agentTask('a', 'IV Gate', agentName),
+                    {
+                        tempId: 'b', name: 'IV Approved', description: 'approved branch', kind: 'Agent',
+                        configuration: { agentName },
+                        dependsOn: [{ tempId: 'a', condition: 'data.userApproval === true' }],
+                    },
+                ],
+            }, undefined, { Data: { userApproval: true } });
+
+            const mine = await taskNames(ctx, parentID);
+            const parent = await runUntilSettled(ctx, buildDispatcher(ctx, RUNNER, 'it-tx20'), parentID);
+            AssertEqual(parent.Status, 'Complete', 'the graph must settle');
+
+            const started = RUNNER.StartedAmong(mine);
+            Assert(started.includes('IV Approved'),
+                'the approval branch did not run — data.userApproval resolved against the wrong thing');
+
+            console.log('      → data.userApproval reached the dispatcher and took the approval branch');
+        }
+    },
+
+    {
+        Id: 'task-graph-execution.TX21',
+        Name: 'TX21: duplicate asks for one human step collapse to one, and settle leaves none',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // R3-5. The raise was SELECT-then-INSERT with no unique index behind it, so two
+            // overlapping instances both read "none open", both inserted, and both pinged the
+            // assignee. Answering one left the other un-answerable and IMMORTAL: the withdrawal
+            // paths fire only on skips and cancels, and both human sweeps scope to `Pending` tasks,
+            // which an answered task no longer is.
+            //
+            // The duplicate is staged rather than raced, because the interleaving that produces it
+            // is a few milliseconds wide and unreachable from a check. What is asserted is the
+            // property that makes the race survivable: a task with more than one open ask converges
+            // to one on the next pass over it, whoever minted the extra and whenever.
+            const run = await createRun(ctx, 'Paused');
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-human-race (safe to delete)',
+                tasks: [humanTask('a', 'HR One')],
+            }, run.ID);
+            const task = (await loadChildren(ctx, parentID)).get('HR One')!;
+
+            const dispatcher = buildDispatcher(ctx, RUNNER, 'it-tx21');
+            await dispatcher.Start();
+            try {
+                await waitFor(() => openRequestCount(ctx, task.ID), n => n === 1,
+                    'the dispatcher never raised the human step\'s request');
+
+                // The losing instance's insert, exactly as the race leaves it.
+                const original = (await openRequests(ctx, task.ID))[0];
+                const duplicate = await ctx.Provider.GetEntityObject<MJAIAgentRequestEntity>(
+                    'MJ: AI Agent Requests', ctx.User,
+                );
+                duplicate.NewRecord();
+                duplicate.OriginatingTaskID = task.ID;
+                duplicate.AgentID = original.AgentID;
+                duplicate.RequestForUserID = original.RequestForUserID;
+                duplicate.Status = 'Requested';
+                duplicate.RequestedAt = new Date();
+                duplicate.Request = 'a second ask for the same step';
+                Assert(await duplicate.Save(), 'could not stage the duplicate request');
+                AssertEqual(await openRequestCount(ctx, task.ID), 2, 'the fixture did not stage a duplicate');
+
+                await waitFor(() => openRequestCount(ctx, task.ID), n => n === 1,
+                    'more than one request is still open — the assignee sees a duplicate that nothing will ever close');
+
+                const survivor = (await openRequests(ctx, task.ID))[0];
+                Assert(UUIDsEqual(survivor.ID, original.ID),
+                    'the wrong row survived — the assignee already saw the older ask, so it is the one that must stand');
+            } finally {
+                await dispatcher.Stop();
+            }
+
+            // The other half: nothing is left open behind a graph that is over.
+            const cancelled = await new TaskGraphService().Cancel(parentID, {
+                EnvironmentID: await resolveEnvironmentID(ctx),
+                ConversationDetailID: null,
+                ContextUser: ctx.User,
+                Provider: ctx.Provider,
+            });
+            Assert(cancelled.Success, `cancel reported failure: ${cancelled.ErrorMessage}`);
+            AssertEqual(await openRequestCount(ctx, task.ID), 0,
+                'a cancelled workflow left an ask standing in someone\'s inbox');
+
+            console.log('      → duplicate asks collapsed to the older one, and cancelling closed it');
+        }
+    },
+
+    {
+        Id: 'task-graph-execution.TX22',
+        Name: 'TX22: a transient rollup failure defers the marker, and the next pass completes it',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // R3-8. Only the settlement half of R2-2's specification shipped: the rollup's transient
+            // failures logged and returned while the pass went on to settle the run and claim the
+            // marker — which permanently excludes the graph from the rescue sweep, making the
+            // rollup's own "retrying on a later settlement" log a promise it could not keep.
+            //
+            // The transient trigger is a submitting run whose TREE cannot be loaded, staged by
+            // pointing the graph at a run ID that does not exist. TX14 covers the run READ failure;
+            // this covers the tree, which is the path R2-2 named and R2-2 did not close.
+            const agentName = await resolveAgentName(ctx);
+            const run = await createRun(ctx, 'Paused');
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-rollup-defer (safe to delete)',
+                tasks: [agentTask('a', 'RD One', agentName)],
+            }, run.ID);
+
+            await repointSubmittingRun(ctx, parentID, NONEXISTENT_RUN_ID);
+
+            const deliverer = new CountingDeliverer();
+            const settled = await runUntilSettled(
+                ctx, buildDispatcher(ctx, RUNNER, 'it-tx22', undefined, deliverer), parentID);
+            AssertEqual(settled.Status, 'Complete', 'the graph itself must still settle');
+
+            AssertEqual(deliverer.CountFor(parentID), 0,
+                'this instance delivered despite being unable to roll up — the marker would lock the wrong total in');
+            assertMarkerUnclaimed(
+                await deliveryMarker(ctx, parentID), true,
+                'the marker was claimed by a pass whose rollup failed transiently',
+            );
+
+            await repointSubmittingRun(ctx, parentID, run.ID);
+            await runUntilDelivered(
+                ctx, [buildDispatcher(ctx, RUNNER, 'it-tx22-second', undefined, deliverer)], parentID);
+            AssertEqual(deliverer.CountFor(parentID), 1, 'the recovering pass delivered exactly once');
+
+            console.log('      → transient rollup failure deferred the marker; the next pass finished it');
+        }
+    },
+
+    {
+        Id: 'task-graph-execution.TX23',
+        Name: 'TX23: Cancel racing a completion keeps the completed outcome',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // R3-9. `Cancel` tested the terminal set against an in-memory snapshot and wrote with a
+            // full-row save, so a child whose guarded completion landed in between had its entire
+            // outcome overwritten — Complete back to Cancelled, OutputPayload to NULL, provenance
+            // reverted. The moment users cancel is exactly the moment tasks are running.
+            const agentName = await resolveAgentName(ctx);
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-cancel-race (safe to delete)',
+                tasks: [
+                    agentTask('a', 'CR Done', agentName),
+                    agentTask('b', 'CR Pending', agentName),
+                ],
+            });
+
+            // Stage the state the race produces: one child already settled with a real outcome.
+            const claims = new TaskClaimStore('it-tx23-peer', 300);
+            const done = (await loadChildren(ctx, parentID)).get('CR Done')!;
+            Assert(await claims.TryClaim(ctx.Provider, done.ID, ctx.User), 'could not claim the child');
+            Assert(
+                await claims.CompleteClaimed(
+                    ctx.Provider, done.ID,
+                    { Status: 'Complete', OutputPayload: JSON.stringify({ kept: true }) },
+                    ctx.User,
+                ),
+                'could not complete the child',
+            );
+
+            const result = await new TaskGraphService().Cancel(parentID, {
+                EnvironmentID: await resolveEnvironmentID(ctx),
+                ConversationDetailID: null,
+                ContextUser: ctx.User,
+                Provider: ctx.Provider,
+            });
+            Assert(result.Success, `cancel reported failure: ${result.ErrorMessage}`);
+
+            const after = await loadChildren(ctx, parentID);
+            const kept = after.get('CR Done')!;
+            AssertEqual(kept.Status, 'Complete', 'the completed child was overwritten to Cancelled');
+            Assert(!!kept.OutputPayload, 'the completed child lost its OutputPayload');
+            AssertEqual(after.get('CR Pending')!.Status, 'Cancelled', 'the pending child was not cancelled');
+
+            console.log('      → cancel left the completed outcome and its output intact');
+        }
+    },
+
+    {
+        Id: 'task-graph-execution.TX24',
+        Name: 'TX24: nested cancel stays inside workflow graphs and terminates on a cycle',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // R3-10. The sub-graph walk filtered only on `AgentRunID`, with no TypeID predicate — so
+            // any non-workflow root hierarchy carrying a cancelled run's ID got `Cancelled` written
+            // over its children. And the depth cap was dead code: the sole caller passed a literal 0
+            // and the recursion restarted at 0, so a cyclic `AgentRunID` linkage recursed to stack
+            // overflow mid-cancel.
+            const agentName = await resolveAgentName(ctx);
+            const run = await createRun(ctx, 'Paused');
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-nested-scope (safe to delete)',
+                tasks: [agentTask('a', 'NS One', agentName)],
+            }, run.ID);
+
+            // A NON-workflow root hierarchy carrying the same run id — the shape the unscoped walk
+            // would have cancelled.
+            const foreignParentID = await createForeignTaskHierarchy(ctx);
+            const foreign = await loadTask(ctx, foreignParentID);
+            foreign.AgentRunID = run.ID;
+            Assert(await foreign.Save(), 'could not stage the foreign hierarchy');
+            const foreignChildBefore = [...(await loadChildren(ctx, foreignParentID)).values()][0];
+
+            // A cycle: the graph's own child points back at the run that owns the graph.
+            const child = (await loadChildren(ctx, parentID)).get('NS One')!;
+            child.AgentRunID = run.ID;
+            Assert(await child.Save(), 'could not stage the cyclic linkage');
+
+            const result = await new TaskGraphService().Cancel(parentID, {
+                EnvironmentID: await resolveEnvironmentID(ctx),
+                ConversationDetailID: null,
+                ContextUser: ctx.User,
+                Provider: ctx.Provider,
+            });
+            // Terminating at all is half the assertion — the cycle used to recurse without bound.
+            Assert(result.Success, `cancel reported failure: ${result.ErrorMessage}`);
+
+            const foreignAfter = [...(await loadChildren(ctx, foreignParentID)).values()][0];
+            AssertEqual(foreignAfter.Status, foreignChildBefore.Status,
+                'the non-workflow hierarchy was cancelled — the walk is not type-scoped');
+
+            console.log('      → nested cancel skipped the foreign hierarchy and terminated on the cycle');
+        }
+    },
+
+    {
+        Id: 'task-graph-execution.TX25',
+        Name: 'TX25: a host that will not run graphs refuses to accept them',
+        RequiresMutation: true,
+        Fn: async () => {
+            // R3-11. `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1` suppressed execution while the durable
+            // submitter kept registering, so the agent submitted, promised a follow-up, and parked
+            // its run `Paused` — graph Pending, run parked, forever, with no per-submission
+            // diagnostics. This asserts the seam the host uses, rather than booting a second server.
+            const before = GetTaskGraphSubmitter();
+            Assert(!!before, 'this host has no submitter registered, so the check would pass vacuously');
+
+            SuppressTaskGraphSubmission('MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 is set on this host');
+            try {
+                AssertEqual(GetTaskGraphSubmitter(), null,
+                    'a disabled host still hands out a submitter — it would accept graphs nobody runs');
+                Assert(
+                    (TaskGraphSubmissionSuppressedBecause() ?? '').includes('MJ_DISABLE_TASK_GRAPH_DISPATCHER'),
+                    'the refusal does not name the flag, so an operator cannot tell why it refused',
+                );
+            } finally {
+                SuppressTaskGraphSubmission(null as unknown as string);
+            }
+
+            Assert(!!GetTaskGraphSubmitter(), 'suppression leaked past the check');
+            console.log('      → a disabled host hands out no submitter, and says which flag did it');
+        }
+    },
+
+    {
+        Id: 'task-graph-execution.TX26',
+        Name: 'TX26: a dispatcher stopped during boot installs no timers afterwards',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // R3-4. Everything in `Start()` before the timer install is awaited — reconciliation and
+            // the counted startup sweep, which R2-13 makes `Stop()` wait out. So a host shutting down
+            // during boot drained correctly, logged "Stopped.", and returned with both timer fields
+            // null — and then `Start()`'s own continuation resumed and installed both timers on the
+            // stopped instance. `pollOnce` was inert (its own `running` guard), but `Reconcile` had
+            // none: `ReleaseExpiredClaims` — a real UPDATE — ran every interval forever, against a
+            // pool the host may have torn down, with nothing left to call `Stop()` again.
+            //
+            // Observed through that UPDATE, since the timers themselves are private: an expired claim
+            // staged AFTER the race has no legitimate reason to be released by anybody. If it is, a
+            // reconcile timer exists on an instance that reported itself stopped.
+            const agentName = await resolveAgentName(ctx);
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-boot-race (safe to delete)',
+                tasks: [agentTask('a', 'BR One', agentName)],
+            });
+
+            const dispatcher = buildDispatcher(ctx, RUNNER, 'it-tx26', undefined, undefined,
+                TEST_POLL_SECONDS, undefined, 1);
+            const booting = dispatcher.Start();     // deliberately not awaited
+            await dispatcher.Stop();                 // lands inside the boot awaits
+            await booting;                           // let the continuation run
+
+            // The state a crashed peer leaves, staged now so only a live timer could clear it.
+            const child = (await loadChildren(ctx, parentID)).get('BR One')!;
+            child.Status = 'In Progress';
+            child.ClaimedBy = 'it-tx26-dead-peer';
+            child.ClaimExpiresAt = new Date(Date.now() - 60_000);
+            Assert(await child.Save(), `could not stage the orphaned claim: ${child.LatestResult?.CompleteMessage ?? 'unknown'}`);
+
+            await settle(4_000);   // several reconcile intervals, had one been installed
+
+            const after = (await loadChildren(ctx, parentID)).get('BR One')!;
+            AssertEqual(after.ClaimedBy, 'it-tx26-dead-peer',
+                'the claim was released by an instance that reported itself stopped — a reconcile timer is still running');
+            AssertEqual(after.Status, 'In Progress', 'the stopped instance reconciled the task back to Pending');
+
+            console.log('      → a stop during boot stayed stopped; no timer outlived it');
+        }
+    },
+
+
+    {
+        Id: 'task-graph-execution.TX27',
+        Name: 'TX27: a step allowance armed on one instance releases exactly one task, whichever instance owns it',
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            // #3770's handover exercise (d)-(h), which nothing in CI could run: step allowances live
+            // in the claim store precisely so a Run Console attached to instance A can single-step a
+            // graph whose tasks are executed by a dispatcher on instance B. Two instances is the
+            // whole point, and no test had two.
+            //
+            // The console is one CALLER of the debug verbs, so the verbs are driven directly here —
+            // deterministic, no browser session, and it runs on every future change instead of once.
+            //
+            // THE FAILURE MODE, named in the handover: an allowance granted on A consumed as a
+            // FREE-RUN signal on B, so more than one step executes per press.
+            const agentName = await resolveAgentName(ctx);
+            const parentID = await submitGraph(ctx, {
+                workflowName: 'mj-it-exec-two-instance (safe to delete)',
+                tasks: [
+                    agentTask('a', 'TI One', agentName),
+                    agentTask('b', 'TI Two', agentName, ['a']),
+                    agentTask('c', 'TI Three', agentName, ['b']),
+                    agentTask('d', 'TI Four', agentName, ['c']),
+                ],
+            });
+            const service = new TaskGraphService();
+            const context = {
+                EnvironmentID: await resolveEnvironmentID(ctx),
+                ConversationDetailID: null,
+                ContextUser: ctx.User,
+                Provider: ctx.Provider,
+            };
+
+            // (d) PAUSE on "instance A" — durable state, so BOTH instances must stop advancing it.
+            Assert((await service.PauseGraph(parentID, context)).Success, 'pause was refused');
+
+            const instanceA = buildDispatcher(ctx, RUNNER, 'it-tx27-instance-a');
+            const instanceB = buildDispatcher(ctx, RUNNER, 'it-tx27-instance-b');
+            await instanceA.Start();
+            await instanceB.Start();
+            try {
+                const ranAfterPause = await settleAndCount(ctx, parentID);
+                AssertEqual(ranAfterPause, 0,
+                    'a paused graph advanced anyway — the pause is not gating both instances');
+
+                // (e) STEP once. Exactly one task may start, whichever instance wins the claim.
+                Assert((await service.StepGraph(parentID, 'one', context)).Success, 'step was refused');
+                await waitFor(() => countStarted(ctx, parentID), (n) => n >= 1,
+                    'the step allowance released nothing within the timeout');
+                await settle(TWO_INSTANCE_DRAIN_MS);   // give a SECOND task time to slip through
+                AssertEqual(await countStarted(ctx, parentID), 1,
+                    'more than one task ran for a single step — the allowance was consumed as a free-run signal');
+
+                // The allowance is spent: nothing further moves until told again.
+                const afterConsume = await settleAndCount(ctx, parentID);
+                AssertEqual(afterConsume, 1, 'the graph kept running after its one-shot allowance was consumed');
+
+                // (f) BREAKPOINT on a downstream step, then resume. The graph must halt there even
+                // though a different instance may be the executor.
+                const children = await loadChildren(ctx, parentID);
+                const breakOn = children.get('TI Three')!;
+                Assert((await service.SetBreakpoints(parentID, [breakOn.ID], context)).Success, 'breakpoints refused');
+                Assert((await service.ResumeGraph(parentID, context)).Success, 'resume was refused');
+
+                await waitFor(() => statusOf(ctx, breakOn.ID), (st) => st === 'Pending',
+                    'the breakpoint task should still be Pending when the graph halts on it');
+                await waitFor(() => pausedByBreakpoint(ctx, parentID), (hit) => hit,
+                    'the graph never paused on the breakpoint');
+                AssertEqual(await statusOf(ctx, breakOn.ID), 'Pending',
+                    'the breakpoint task RAN — the graph did not halt before claiming it');
+                AssertEqual(await statusOf(ctx, children.get('TI Two')!.ID), 'Complete',
+                    'the step before the breakpoint should have run');
+
+                // (g) FORCE COMPLETE the step we are stopped on, and SKIP the one after it. Both are
+                // verbs the console offers; what matters here is that the graph's own gating honours
+                // the forced and skipped results rather than re-deciding them.
+                Assert(
+                    (await service.ForceCompleteTask(breakOn.ID, { forcedBy: 'TX27' }, context)).Success,
+                    'force-complete was refused',
+                );
+                Assert((await service.SkipTask(children.get('TI Four')!.ID, context)).Success, 'skip was refused');
+                Assert((await service.SetBreakpoints(parentID, [], context)).Success, 'clearing breakpoints refused');
+                Assert((await service.ResumeGraph(parentID, context)).Success, 'final resume was refused');
+
+                const settled = await waitFor(
+                    async () => (await loadTask(ctx, parentID)).Status,
+                    (st) => TERMINAL_PARENT_STATUSES.has(st),
+                    'the graph never settled after the forced completion and skip',
+                );
+                AssertEqual(settled, 'Complete',
+                    'a graph whose remaining work was forced and skipped should settle Complete');
+                AssertEqual(await statusOf(ctx, breakOn.ID), 'Complete', 'the forced step did not stay Complete');
+                AssertEqual(await statusOf(ctx, children.get('TI Four')!.ID), 'Skipped', 'the skipped step did not stay Skipped');
+            } finally {
+                await Promise.all([instanceA.Stop(), instanceB.Stop()]);
+            }
+
+            console.log('      → two instances honoured one pause, one step, one breakpoint, and two interventions');
         }
     },
 
