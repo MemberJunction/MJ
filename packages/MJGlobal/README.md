@@ -343,7 +343,7 @@ if (!result.Success) {
 
 ### SafeExpressionEvaluator
 
-Evaluates boolean expressions against context objects securely, blocking injection patterns like `eval()`, `require()`, `process.`, template literals, and more.
+Evaluates boolean expressions against context objects securely. The expression is parsed and every AST node checked against an **allowlist** before it is compiled, so constructs outside the supported grammar — `eval()`, `require()`, `.constructor`, computed member keys built at runtime, calls to anything unlisted — are refused at validation time and never reach the compiler.
 
 ```typescript
 import { SafeExpressionEvaluator } from '@memberjunction/global';
@@ -363,7 +363,7 @@ if (result.success) {
 }
 ```
 
-Supports comparisons (`==`, `!=`, `<`, `>`, `<=`, `>=`), logical operators (`&&`, `||`, `!`), dot-notation property access, bracket-notation array access, and safe string/array methods (`.includes()`, `.startsWith()`, `.some()`, `.every()`, etc.).
+Supports comparisons (`==`, `!=`, `<`, `>`, `<=`, `>=`), logical operators (`&&`, `||`, `!`), `typeof`, dot-notation property access including optional chaining (`payload?.customer?.tier`), bracket-notation access with a **literal** index/key, safe string/array methods (`.includes()`, `.startsWith()`, `.some()`, `.every()`, etc.), and the safe globals exported as `SAFE_EXPRESSION_GLOBALS` — `Math`, `Number`, `String`, `Boolean`, `Array`, `Object`, `JSON`, `Date`, `parseInt`, `parseFloat`, `isNaN`, `isFinite` — callable as namespace methods (`Math.abs(x)`, `Object.keys(x)`) or bare functions (`Number(x)`). Regex literals, `in`/`instanceof`, and methods outside the safe list are not supported.
 
 ### SQLExpressionValidator
 

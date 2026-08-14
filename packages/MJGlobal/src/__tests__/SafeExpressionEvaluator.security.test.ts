@@ -247,6 +247,50 @@ describe('SafeExpressionEvaluator - Security', () => {
     });
   });
 
+  // ===============================================================
+  // SAFE GLOBALS DO NOT REOPEN THE ESCAPE
+  // ===============================================================
+  //
+  // `Math.abs(x)` and `parseInt(x)` are admitted so the task-graph door stops refusing
+  // specs that run correctly. Both halves of every admitted call are FIXED identifiers
+  // in the AST, so the four invariants that close the escape still hold: literal-only
+  // computed keys, no `constructor`/`__proto__`/`prototype`, a closed non-computed call
+  // surface with no `call`/`apply`/`bind`, and screened free identifiers. These pin that.
+  // ===============================================================
+  describe('safe-global calls do not widen the escape surface', () => {
+    it('blocks the constructor climb off an allowed namespace', () => {
+      expectBlocked('Math.constructor("return 1")()');
+      expectBlocked('JSON.stringify.constructor("return 1")()');
+    });
+
+    it('blocks call/apply/bind on an allowed namespace method', () => {
+      expectBlocked('Math.abs.call(null, -1) === 1');
+      expectBlocked('parseInt.apply(null, ["1"]) === 1');
+    });
+
+    it('blocks a computed method name on an allowed namespace', () => {
+      expectBlocked('Math["cons"+"tructor"]("return 1")()');
+      expectBlocked('Math[m](-1) === 1', { m: 'abs' });
+    });
+
+    it('blocks a namespace method that is not on its list', () => {
+      expectBlocked('Object.getPrototypeOf(x) !== null', { x: {} });
+      expectBlocked('Object.setPrototypeOf(x, null) !== null', { x: {} });
+      expectBlocked('String.fromCharCode(65) === "A"');
+    });
+
+    it('blocks a bare call to any global outside the callable list', () => {
+      expectBlocked('setTimeout(1) === 1');
+      expectBlocked('structuredClone(x) !== null', { x: 1 });
+    });
+
+    it('blocks an optional call on a context value', () => {
+      // Optional chaining unwraps to the ordinary rules; it does not make `f()` callable.
+      expectBlocked('f?.() === 1', { f: 1 });
+      expectBlocked('x?.constructor', { x: 1 });
+    });
+  });
+
   // ---------------------------------------------------------------
   // No over-blocking of harmless data — the structural allowlist fix
   // ---------------------------------------------------------------

@@ -25,8 +25,56 @@ import type {
     UnaryExpression,
     ConditionalExpression,
     ArrayExpression,
+    ChainExpression,
+    Expression,
+    Super,
 } from 'acorn';
 import { MJLruCache } from './MJLruCache';
+
+/**
+ * Namespace globals whose listed methods a condition may CALL, keyed by namespace name.
+ *
+ * Both halves of `Math.abs(x)` are fixed identifiers in the AST, so admitting them adds no dynamic
+ * lookup: the four invariants that close the sandbox escape — literal-only computed keys, no
+ * `constructor`/`__proto__`/`prototype`, a closed non-computed call surface with no
+ * `call`/`apply`/`bind`, and screened free identifiers — are all untouched by this list.
+ *
+ * Every entry is a pure value function. `Math.random` is deliberately absent (a condition that
+ * evaluates differently on each run is not a guard), as are `Object.assign`,
+ * `Object.defineProperty` and `Object.setPrototypeOf`, which mutate.
+ */
+export const SAFE_GLOBAL_NAMESPACE_METHODS: ReadonlyMap<string, ReadonlySet<string>> = new Map<string, ReadonlySet<string>>([
+    ['Math', new Set([
+        'abs', 'ceil', 'floor', 'round', 'trunc', 'sign', 'min', 'max',
+        'pow', 'sqrt', 'cbrt', 'log', 'log2', 'log10', 'exp', 'hypot',
+    ])],
+    ['JSON', new Set(['parse', 'stringify'])],
+    ['Object', new Set(['keys', 'values', 'entries'])],
+    ['Array', new Set(['isArray'])],
+    ['Number', new Set(['isInteger', 'isFinite', 'isNaN', 'isSafeInteger', 'parseInt', 'parseFloat'])],
+    ['Date', new Set(['now'])],
+]);
+
+/**
+ * Global functions a condition may call by bare name — the coercions and numeric predicates that
+ * authored specs use (`Number(payload.count) > 3`, `isNaN(payload.count)`).
+ */
+export const SAFE_GLOBAL_CALLABLES: ReadonlySet<string> = new Set([
+    'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'Number', 'String', 'Boolean',
+]);
+
+/**
+ * Every global name a condition may reference, as a namespace or as a bare callable.
+ *
+ * **This is the single source of truth for the ambient globals of the condition dialect.** It lives
+ * beside the policy screen that enforces it so a caller validating conditions ahead of evaluation
+ * (`ai-core-plus`'s task-graph door) cannot bless a name the runtime would refuse — the failure mode
+ * that shipped once already, where the door's own list and the evaluator disagreed silently.
+ */
+export const SAFE_EXPRESSION_GLOBALS: ReadonlySet<string> = new Set([
+    ...SAFE_GLOBAL_NAMESPACE_METHODS.keys(),
+    ...SAFE_GLOBAL_CALLABLES,
+]);
 
 /**
  * Result of expression evaluation including success status and diagnostics
@@ -49,17 +97,19 @@ export interface ExpressionEvaluationResult {
  * Supported operations:
  * - Comparison: ==, ===, !=, !==, <, >, <=, >=
  * - Logical: &&, ||, !
- * - Property access: dot notation (e.g., payload.customer.name)
+ * - Property access: dot notation (e.g., payload.customer.name), including optional chaining (`?.`)
  * - Array access: bracket notation with a literal index/key (e.g., items[0])
  * - Safe methods: .length, .includes(), .startsWith(), .endsWith()
  * - Array methods: .some(), .every(), .find(), .filter()
+ * - Safe globals: the namespaces and bare callables in {@link SAFE_EXPRESSION_GLOBALS}
+ *   (e.g. `Math.abs(output.delta) < 5`, `Number(payload.count) > 3`, `Object.keys(payload).length`)
  * - Type checking: typeof
  *
  * Safety is enforced by parsing the expression to an AST and walking it against
  * an ALLOWLIST of node types before it is compiled — an unlisted construct
  * (computed member access with a non-literal key, `.constructor`/`__proto__`
- * access, any call outside the safe-method list, host-global identifiers, etc.)
- * is rejected at validation time and never reaches the compiler. A structural
+ * access, any call outside the safe-method and safe-global lists, host-global
+ * identifiers, etc.) is rejected at validation time and never reaches the compiler. A structural
  * allowlist cannot be defeated by string concatenation the way a textual
  * denylist can, and it does not over-reject data that merely mentions a reserved
  * word (e.g. `name == 'constructor'` is a legal comparison).
@@ -320,6 +370,11 @@ export class SafeExpressionEvaluator {
                 }
                 return null;
             }
+            case 'ChainExpression':
+                // `a?.b`, `a?.[0]`, `a?.b()` — the optional marker changes only whether the member
+                // read short-circuits on null/undefined, so unwrapping lands the inner node back in
+                // the ordinary member/call rules and `a?.constructor` stays blocked.
+                return this.checkNode((node as ChainExpression).expression);
             case 'MemberExpression':
                 return this.checkMemberExpression(node as MemberExpression);
             case 'CallExpression':
@@ -400,13 +455,24 @@ export class SafeExpressionEvaluator {
     }
 
     /**
-     * Only method calls on the safe-method allowlist may be invoked. A call whose
-     * callee is a bare identifier (`eval(...)`, `Function(...)`) or a computed
-     * member is rejected.
+     * A call is admitted only when its callee is a FIXED name on one of two allowlists: a bare
+     * safe global (`parseInt(...)`) or a dotted method that is either a safe instance method or a
+     * method of a safe global namespace (`Math.abs(...)`). Everything else — a computed callee, an
+     * unlisted bare identifier (`eval(...)`, `Function(...)`), a call on a call's result that is
+     * not itself a safe method — is rejected.
      * @private
      */
     private checkCallExpression(node: CallExpression): string | null {
         const callee = node.callee;
+
+        if (callee.type === 'Identifier') {
+            const name = (callee as Identifier).name;
+            if (!SAFE_GLOBAL_CALLABLES.has(name)) {
+                return this.forbidden(`calling "${name}" — only safe methods and safe global functions may be invoked`);
+            }
+            return this.checkCallArguments(node);
+        }
+
         if (callee.type !== 'MemberExpression') {
             return this.forbidden('only method calls on the safe-method allowlist may be invoked');
         }
@@ -415,11 +481,31 @@ export class SafeExpressionEvaluator {
             return this.forbidden('methods must be called by a dotted, non-computed name');
         }
         const method = (member.property as Identifier).name;
-        if (!SafeExpressionEvaluator.SAFE_METHODS.includes(method)) {
+        if (!this.isCallableMethod(member.object, method)) {
             return this.forbidden(`the method "${method}" is not on the safe-method allowlist`);
         }
         const receiverError = this.checkNode(member.object);
         if (receiverError) return receiverError;
+        return this.checkCallArguments(node);
+    }
+
+    /**
+     * Whether `<receiver>.<method>()` names a permitted call: a safe instance method on any value,
+     * or a method of a safe global namespace when the receiver is that namespace by bare name.
+     * @private
+     */
+    private isCallableMethod(receiver: Expression | Super, method: string): boolean {
+        if (SafeExpressionEvaluator.SAFE_METHODS.includes(method)) {
+            return true;
+        }
+        if (receiver.type !== 'Identifier') {
+            return false;
+        }
+        return SAFE_GLOBAL_NAMESPACE_METHODS.get((receiver as Identifier).name)?.has(method) === true;
+    }
+
+    /** Walks a call's arguments; spreads are rejected outright. @private */
+    private checkCallArguments(node: CallExpression): string | null {
         for (const arg of node.arguments) {
             if (arg.type === 'SpreadElement') {
                 return this.forbidden('spread arguments are not allowed');

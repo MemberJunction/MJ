@@ -345,6 +345,73 @@ describe('SafeExpressionEvaluator', () => {
   });
 
   // ---------------------------------------------------------------
+  // Safe globals — the shapes authored specs write
+  // ---------------------------------------------------------------
+  describe('safe global calls', () => {
+    // `condition-roots.ts` blesses these twelve names at the task-graph door, and
+    // `1efc248ac5` shipped that decision precisely because refusing them rejects specs
+    // that run correctly. Receiver and method are both fixed identifiers, so nothing
+    // here is reachable by string assembly.
+    const ctx = { payload: { count: 4, raw: '7', id: 42 }, output: { delta: -3 } };
+
+    it.each([
+      ['Math.abs(output.delta) < 5', true],
+      ['Math.max(payload.count, 9) === 9', true],
+      ['Number(payload.count) > 3', true],
+      ['String(payload.id).length > 0', true],
+      ['Boolean(payload.count) === true', true],
+      ['Array.isArray(output) === false', true],
+      ['Object.keys(payload).length > 0', true],
+      ["JSON.stringify(payload) !== ''", true],
+      ['Date.now() > 0', true],
+      ['parseInt(payload.raw) > 0', true],
+      ['parseFloat(payload.raw) === 7', true],
+      ['isNaN(payload.count) === false', true],
+      ['isFinite(payload.count) === true', true],
+      ['Number.isInteger(payload.count)', true],
+    ])('should evaluate %s', (expression, expected) => {
+      const r = evaluator.evaluate(expression, ctx);
+      expect(r.error).toBeUndefined();
+      expect(r.value).toBe(expected);
+    });
+
+    it('should reject a namespace method that is not on the list', () => {
+      // Mutators stay out even on an allowed namespace.
+      const r = evaluator.evaluate('Object.assign(payload) !== null', ctx);
+      expect(r.success).toBe(false);
+      expect(r.error).toContain('forbidden construct');
+    });
+
+    it('should reject a global that is not on the list', () => {
+      expect(evaluator.evaluate('Symbol("x") !== null', {}).success).toBe(false);
+      expect(evaluator.evaluate('fetch("/x") !== null', {}).success).toBe(false);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // Optional chaining
+  // ---------------------------------------------------------------
+  describe('optional chaining', () => {
+    it('should read through a present chain', () => {
+      const r = evaluator.evaluate("payload?.customer?.tier == 'premium'", {
+        payload: { customer: { tier: 'premium' } },
+      });
+      expect(r.value).toBe(true);
+    });
+
+    it('should short-circuit on an absent link rather than throwing', () => {
+      const r = evaluator.evaluate("payload?.customer?.tier == 'premium'", { payload: {} });
+      expect(r.success).toBe(true);
+      expect(r.value).toBe(false);
+    });
+
+    it('should apply the same rules to an optional index and an optional call', () => {
+      expect(evaluator.evaluate('items?.[0]?.price > 100', { items: [{ price: 150 }] }).value).toBe(true);
+      expect(evaluator.evaluate("name?.toLowerCase() == 'ada'", { name: 'Ada' }).value).toBe(true);
+    });
+  });
+
+  // ---------------------------------------------------------------
   // Default exported instance
   // ---------------------------------------------------------------
   describe('defaultExpressionEvaluator', () => {
