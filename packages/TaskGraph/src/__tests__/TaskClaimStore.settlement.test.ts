@@ -13,6 +13,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { TaskClaimStore } from '../TaskClaimStore';
 import { ParseTaskGraphParentMetadata } from '../TaskGraphService';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { SQLServerDialect } from '@memberjunction/sql-dialect';
 
 /** Captures the SQL a method issues, and answers with a caller-chosen rowcount. */
 function recordingProvider(rowsAffected = 1) {
@@ -20,6 +21,13 @@ function recordingProvider(rowsAffected = 1) {
     const provider = {
         MJCoreSchemaName: '__mj',
         QuoteIdentifier: (id: string) => `[${id}]`,
+        // The REAL dialect, not a stub. `affectedRows` wraps every guarded write in
+        // `Dialect.AffectedRowCountSQL(...)`, so a provider without one throws — and because that
+        // helper catches and returns 0, the throw is silent: `ExecuteSQL` is never reached and
+        // every assertion below reads `statements[0]` as `undefined`. Using the shipped dialect
+        // rather than a hand-written stub keeps these assertions honest if its output shape
+        // changes; the `[bracket]` expectations here are SQL Server's, which is what it emits.
+        Dialect: new SQLServerDialect(),
         ExecuteSQL: async (sql: string) => {
             statements.push(sql);
             return [{ AffectedRows: rowsAffected }];

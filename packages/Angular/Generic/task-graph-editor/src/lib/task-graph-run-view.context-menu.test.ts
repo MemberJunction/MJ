@@ -10,7 +10,7 @@ import { TaskGraphRunViewComponent } from './task-graph-run-view.component';
 const NODE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
 function node(id: string): FlowNode {
-    return { ID: id, Type: 'Action', Label: 'Step', Position: { X: 0, Y: 0 }, Ports: [] };
+    return { ID: id, Type: 'Action', Label: 'Step', Status: 'default', Position: { X: 0, Y: 0 }, Ports: [] };
 }
 
 function viewWithBreakpoints(ids: readonly string[]): TaskGraphRunViewComponent {
