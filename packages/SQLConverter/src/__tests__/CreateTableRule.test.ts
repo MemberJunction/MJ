@@ -294,4 +294,32 @@ describe('CreateTableRule', () => {
       expect(result).toContain('DEFAULT NOW()');
     });
   });
+
+  describe('constraint names', () => {
+    // Inline constraint names must be quoted to match AlterTableRule, which already quotes them.
+    // When only the ALTER side is quoted, a later DROP CONSTRAINT silently misses the folded
+    // name it was meant to remove and the subsequent ADD succeeds under a different name — so
+    // BOTH constraints end up on the table and the original, narrower one keeps rejecting rows.
+    it('should quote mixed-case inline constraint names', () => {
+      const sql = `CREATE TABLE [__mj].[Payment] (
+  [ID] UNIQUEIDENTIFIER NOT NULL,
+  [Status] NVARCHAR(20) NOT NULL,
+  CONSTRAINT PK_Payment PRIMARY KEY ([ID]),
+  CONSTRAINT CK_Payment_Status CHECK ([Status] IN ('Captured','Failed'))
+)`;
+      const result = convert(sql);
+      expect(result).toContain('CONSTRAINT "PK_Payment"');
+      expect(result).toContain('CONSTRAINT "CK_Payment_Status"');
+    });
+
+    it('should leave an all-lowercase constraint name unquoted', () => {
+      const sql = `CREATE TABLE [__mj].[Payment] (
+  [ID] UNIQUEIDENTIFIER NOT NULL,
+  CONSTRAINT pk_payment PRIMARY KEY ([ID])
+)`;
+      const result = convert(sql);
+      expect(result).toContain('CONSTRAINT pk_payment');
+      expect(result).not.toContain('"pk_payment"');
+    });
+  });
 });
