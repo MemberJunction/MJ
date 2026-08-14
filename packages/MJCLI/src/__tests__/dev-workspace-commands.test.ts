@@ -13,6 +13,7 @@ describe('dev workspace command modules load cleanly', () => {
       import('../commands/dev/index.js'),
       import('../commands/dev/workspace/index.js'),
       import('../commands/dev/workspace/status.js'),
+      import('../commands/dev/workspace/doctor.js'),
       import('../commands/dev/workspace/clean.js'),
     ]);
     for (const mod of modules) {
@@ -42,12 +43,14 @@ describe('dev workspace flag defaults', () => {
     expect(DevWorkspace.examples.join('\n')).not.toContain('hoist');
   });
 
-  it('dir defaults to the current directory on all three commands', async () => {
+  it('dir defaults to the current directory on all four commands', async () => {
     const { default: DevWorkspace } = await import('../commands/dev/workspace/index.js');
     const { default: DevWorkspaceStatus } = await import('../commands/dev/workspace/status.js');
+    const { default: DevWorkspaceDoctor } = await import('../commands/dev/workspace/doctor.js');
     const { default: DevWorkspaceClean } = await import('../commands/dev/workspace/clean.js');
     expect(DevWorkspace.flags.dir.default).toBe('.');
     expect(DevWorkspaceStatus.flags.dir.default).toBe('.');
+    expect(DevWorkspaceDoctor.flags.dir.default).toBe('.');
     expect(DevWorkspaceClean.flags.dir.default).toBe('.');
   });
 
@@ -80,11 +83,30 @@ describe('dev workspace clean flag defaults', () => {
   });
 });
 
+describe('dev workspace doctor flags', () => {
+  it('takes --dir and nothing else — doctor diagnoses, it never changes behavior', async () => {
+    const { default: DevWorkspaceDoctor } = await import('../commands/dev/workspace/doctor.js');
+    expect(Object.keys(DevWorkspaceDoctor.flags)).toEqual(['dir']);
+  });
+
+  it('binds --dir to the shared environment variable', async () => {
+    const { default: DevWorkspaceDoctor } = await import('../commands/dev/workspace/doctor.js');
+    expect(DevWorkspaceDoctor.flags.dir.env).toBe('MJ_DEV_WORKSPACE_DIR');
+  });
+
+  it('describes itself as read-only with a non-zero exit on failure', async () => {
+    const { default: DevWorkspaceDoctor } = await import('../commands/dev/workspace/doctor.js');
+    expect(DevWorkspaceDoctor.description).toMatch(/Read-only/);
+    expect(DevWorkspaceDoctor.description).toMatch(/exits non-zero/);
+  });
+});
+
 describe('light-command registration', () => {
   it('dev commands run without the MJ bootstrap', () => {
     expect(LIGHT_COMMANDS.has('dev')).toBe(true);
     expect(LIGHT_COMMANDS.has('dev workspace')).toBe(true);
     expect(LIGHT_COMMANDS.has('dev workspace status')).toBe(true);
+    expect(LIGHT_COMMANDS.has('dev workspace doctor')).toBe(true);
     expect(LIGHT_COMMANDS.has('dev workspace clean')).toBe(true);
   });
 });
