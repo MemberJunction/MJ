@@ -258,7 +258,7 @@ MemberJunction's full source code is public on GitHub — free and unrestricted 
 
 Versions prior to v6.0.0 were released under the ISC License and remain ISC-licensed.
 
-Firms providing professional services to clients on MemberJunction need to be certified — see the [MemberJunction Certified Program](https://docs.memberjunction.org/mjcertified).
+Firms providing professional services to clients on MemberJunction need to be certified — see the [MemberJunction Certified Program](https://docs.memberjunction.org/v6/mjcertified).
 
 ---
 

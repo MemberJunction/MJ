@@ -261,17 +261,27 @@ jobs:
           # program page needs a version-independent address that answers 200.
           # The 404 forwarder below would also land it, but only after serving a
           # 404 status — wrong for a page the license refers to.
+          #
+          # It targets the newest BUSL line, NOT $DEFAULT. $DEFAULT is the newest
+          # certified LTS set, which today is v5 — an ISC line that predates the
+          # program entirely, so sending the canonical program URL there would
+          # answer the question on the one set where it does not apply. Falls
+          # back to $DEFAULT before any BUSL line is published.
+          CERT_SET=$(jq -r '[.[] | select((.id | ltrimstr("v") | tonumber) >= 6)] | max_by(.id | ltrimstr("v") | tonumber) | .id // empty' <<<"$VERSIONS")
+          [ -n "$CERT_SET" ] || CERT_SET="$DEFAULT"
+          echo "::notice::/mjcertified -> /$CERT_SET/mjcertified/"
+
           mkdir -p dist/mjcertified
           cat > dist/mjcertified/index.html <<EOF
           <!doctype html>
           <html lang="en">
           <head>
           <meta charset="utf-8">
-          <meta http-equiv="refresh" content="0; url=/$DEFAULT/mjcertified/">
-          <link rel="canonical" href="https://docs.memberjunction.org/$DEFAULT/mjcertified/">
+          <meta http-equiv="refresh" content="0; url=/$CERT_SET/mjcertified/">
+          <link rel="canonical" href="https://docs.memberjunction.org/$CERT_SET/mjcertified/">
           <title>MemberJunction Certified Program</title>
           </head>
-          <body><a href="/$DEFAULT/mjcertified/">MemberJunction Certified Program</a></body>
+          <body><a href="/$CERT_SET/mjcertified/">MemberJunction Certified Program</a></body>
           </html>
           EOF
 
