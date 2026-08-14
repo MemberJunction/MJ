@@ -21,6 +21,10 @@ on:
       - '.github/scripts/check-esm-imports.mjs'
       - '.github/scripts/vitest.config.mts'
       - '.github/scripts/__tests__/**'
+      # Same reasoning for the dynamic-replace guard (see that step). Without this
+      # entry a PR editing only the gate script runs neither the gate nor its own
+      # vitest suite — the one change that most needs both.
+      - '.github/scripts/check-dynamic-replace.mjs'
       # The DOM-spec guards/gates run in this workflow too.
       - 'scripts/check-dom-spec-placement.mjs'
       - 'scripts/check-spec-antipatterns.mjs'

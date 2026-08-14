@@ -30,6 +30,17 @@
  * only when the change touched some line of that call. `--all` reports
  * everything under `packages/` and is for auditing, not for CI.
  *
+ * KNOWN LIMITS. This is a masking scanner, not a parser, and `/` is ambiguous in
+ * JS/TS. Three shapes are still mis-read as regex-vs-division, each costing a
+ * FALSE NEGATIVE confined to the remainder of that ONE line:
+ *   - JSX text containing a slash            `<div>{a}/{b} {s.replace(p, v)}</div>`
+ *   - a TS non-null assertion before `/`     `count! / 2`   (`!` also precedes a real regex)
+ *   - a regex opening after `)`              `if (x) /re/.test(y)`  (vs `(a+b) / 2`)
+ * Resolving these needs real parsing; guessing differently just moves the false
+ * negative somewhere more common. What is NOT tolerated is unbounded damage: if
+ * the scan ends mid-frame the file is reported as unscannable and the run fails,
+ * rather than being counted as clean.
+ *
  * Usage:
  *   node check-dynamic-replace.mjs                # lines changed vs origin/next
  *   node check-dynamic-replace.mjs --base <ref>   # changed vs <ref>
@@ -96,23 +107,47 @@ function git(args) {
  * right matters: `.replace(/'/g, x)` contains a quote INSIDE a regex, and
  * treating it as a string opener desynchronises the whole scan.
  */
-function isRegexPosition(source, index) {
+const REGEX_PRECEDING_KEYWORDS = [
+  'return', 'typeof', 'case', 'in', 'of', 'new', 'delete', 'void', 'do', 'else', 'yield', 'await',
+];
+
+/**
+ * `masked` is the in-progress output buffer, NOT the raw source. Everything
+ * before `index` has already been blanked, so looking back over it skips
+ * comments and literal bodies as whitespace and lands on the last real code
+ * character.
+ *
+ * Looking back over the RAW source instead is what let a trailing `//` comment
+ * masquerade as code: the scan landed on the comment's last word, judged the
+ * next line's `/` to be division, left the regex unmasked, and a backtick inside
+ * it opened a template frame that never closed — blanking the rest of the FILE
+ * and making the gate print "clean" over code it never parsed. Two real files
+ * did exactly this.
+ */
+function isRegexPosition(masked, index) {
   let k = index - 1;
-  while (k >= 0 && /\s/.test(source[k])) k--;
+  while (k >= 0 && /\s/.test(masked[k])) k--;
   if (k < 0) return true;
-  const prev = source[k];
+  const prev = masked[k];
+
   // `</` with nothing between is a JSX closing tag, never a regex: no real JS or
-  // TS writes `a</re/`, but every `.tsx` file writes `</div>`. Without this, the
-  // `/` opened a "regex" that ran to the next `/` or newline, blanking the rest
-  // of the line — so a `.replace(p, value)` sitting after a closing tag was
-  // silently skipped in the one file type that is mostly closing tags.
+  // TS writes `a</re/`, but every `.tsx` file writes `</div>`.
   if (prev === '<' && k === index - 1) return false;
+  // `/>` closes a self-closing JSX tag — `<Foo x={1} />`, the single commonest
+  // JSX shape. Without this the `}` below claims it as a regex opener and the
+  // rest of the line disappears.
+  if (masked[index + 1] === '>') return false;
+  // `i++ / 2` and `i-- / 2` are division. The bare `+`/`-` in the operator set
+  // below would otherwise read the `/` as opening a regex.
+  if ((prev === '+' || prev === '-') && masked[k - 1] === prev) return false;
+
   if ('(,=:[!&|?{};+-*%^~<>'.includes(prev)) return true;
-  const word = /([A-Za-z_$]+)$/.exec(source.slice(0, k + 1));
-  return word
-    ? ['return', 'typeof', 'case', 'in', 'of', 'new', 'delete', 'void', 'do', 'else', 'yield', 'await']
-        .includes(word[1])
-    : false;
+
+  // Walk back over an identifier rather than slicing the whole buffer — this
+  // runs once per '/' in the file, so the slice was quadratic on large sources.
+  let end = k;
+  while (k >= 0 && /[A-Za-z_$]/.test(masked[k])) k--;
+  return REGEX_PRECEDING_KEYWORDS.includes(masked.slice(k + 1, end + 1).join(''));
 }
 
 /**
@@ -129,7 +164,7 @@ function isRegexPosition(source, index) {
  * `classifyReplacementArg` can still tell a static template from an
  * interpolated one. Newlines survive so line numbers stay accurate.
  */
-export function maskLiteralsAndComments(source) {
+function maskSource(source) {
   const out = source.split('');
   const n = source.length;
   const blank = (from, to) => {
@@ -169,7 +204,7 @@ export function maskLiteralsAndComments(source) {
       i = j + 2;
       continue;
     }
-    if (c === '/' && isRegexPosition(source, i)) {
+    if (c === '/' && isRegexPosition(out, i)) {
       let j = i + 1;
       let inCharClass = false;
       while (j < n) {
@@ -205,7 +240,31 @@ export function maskLiteralsAndComments(source) {
     }
     i++;
   }
-  return out.join('');
+  // A leftover frame means the scan lost sync. From there on the mask is
+  // fiction and every `.replace(` past it is invisible, so the caller has to
+  // fail loudly rather than report a clean file. Across all 5,079 source files
+  // in this repo it never fires; it exists so that a shape the scanner cannot
+  // follow surfaces as an error instead of as a pass.
+  return { masked: out.join(''), desynced: stack.length > 1 };
+}
+
+/**
+ * Public face of the masker: the masked text alone. `findViolations` uses
+ * `maskSource` directly so it can also see the desync flag.
+ */
+export function maskLiteralsAndComments(source) {
+  return maskSource(source).masked;
+}
+
+/** Thrown when the scan cannot be trusted; never swallowed into a clean result. */
+export class UnparseableSourceError extends Error {
+  constructor() {
+    super(
+      'scanner lost sync (unterminated string, template or regex) — the mask is ' +
+      'unreliable from that point, so this file cannot be checked',
+    );
+    this.name = 'UnparseableSourceError';
+  }
 }
 
 /**
@@ -286,7 +345,8 @@ export function classifyReplacementArg(argText) {
  * and the line-aware filter would wave it through.
  */
 export function findViolations(source) {
-  const masked = maskLiteralsAndComments(source);
+  const { masked, desynced } = maskSource(source);
+  if (desynced) throw new UnparseableSourceError();
   const rawLines = source.split('\n');
   const lineAt = (index) => masked.slice(0, index).split('\n').length;
   const violations = [];
@@ -361,7 +421,16 @@ function changedLines(baseRef) {
   let mergeBase;
   try {
     mergeBase = git(['merge-base', baseRef, 'HEAD']).trim();
-  } catch {
+  } catch (err) {
+    // Don't blame the ref for a buffer failure — the message would send the
+    // reader off fetching a ref that resolves perfectly well.
+    if (err.code === 'ENOBUFS') {
+      console.error(
+        `✗ check-dynamic-replace: could not read the merge base (output exceeded\n` +
+        `  ${GIT_MAX_BUFFER} bytes; raise MJ_GIT_MAX_BUFFER).`,
+      );
+      process.exit(2);
+    }
     // Hard failure, not a warning. A gate that silently downgrades its scope and
     // then prints "clean" is worse than one that stops and asks to be fixed.
     console.error(
@@ -372,23 +441,33 @@ function changedLines(baseRef) {
     process.exit(2);
   }
 
-  const touched = new Map();
-  let diff;
-  try {
-    diff = git(['diff', '--unified=0', '--diff-filter=ACMR', mergeBase]);
-  } catch (err) {
-    // Same doctrine as an unresolvable base: a gate that can't read its own
-    // scope must say so, not print "clean" over a diff it never saw.
-    if (err.code === 'ENOBUFS') {
-      console.error(
-        `✗ check-dynamic-replace: the diff against '${mergeBase}' is too large to buffer\n` +
-        `  (cap ${GIT_MAX_BUFFER} bytes, set MJ_GIT_MAX_BUFFER to raise it). Refusing to\n` +
-        `  report a pass over a scope that was never read.`,
-      );
-      process.exit(2);
+  // Every git read that can outgrow the buffer goes through here. `ls-files`
+  // needs it as much as `diff` does: left unguarded it threw the raw ENOBUFS
+  // stack and exited 1 — the "violations found" code — so a tooling failure was
+  // reported as a content failure.
+  const readOrFail = (args, what) => {
+    try {
+      return git(args);
+    } catch (err) {
+      // Same doctrine as an unresolvable base: a gate that can't read its own
+      // scope must say so, not print "clean" over something it never saw.
+      if (err.code === 'ENOBUFS') {
+        console.error(
+          `✗ check-dynamic-replace: ${what} is too large to buffer (cap ${GIT_MAX_BUFFER}\n` +
+          `  bytes; raise it with MJ_GIT_MAX_BUFFER). Refusing to report a pass over a\n` +
+          `  scope that was never read.`,
+        );
+        process.exit(2);
+      }
+      throw err;
     }
-    throw err;
-  }
+  };
+
+  const touched = new Map();
+  const diff = readOrFail(
+    ['diff', '--unified=0', '--diff-filter=ACMR', mergeBase],
+    `the diff against '${mergeBase}'`,
+  );
   let current = null;
   for (const line of diff.split('\n')) {
     const fileMatch = /^\+\+\+ b\/(.+)$/.exec(line);
@@ -406,7 +485,8 @@ function changedLines(baseRef) {
   }
 
   // Untracked files are entirely new — every line counts.
-  for (const f of git(['ls-files', '--others', '--exclude-standard']).split('\n').filter(Boolean)) {
+  const untracked = readOrFail(['ls-files', '--others', '--exclude-standard'], 'the untracked-file list');
+  for (const f of untracked.split('\n').filter(Boolean)) {
     touched.set(join(REPO_ROOT, f), null); // null = all lines
   }
   return touched;
@@ -421,14 +501,28 @@ function main(argv) {
   let baseRef = process.env.BASE_REF || 'origin/next';
   let singleFile = null;
 
+  const USAGE = 'Usage: check-dynamic-replace.mjs [--all | --file <path> | --base <ref>]';
+  // Every bad-argument path exits 2, never 0. Reporting "0 file(s) clean" for a
+  // mistyped invocation is a pass over nothing at all, which is precisely the
+  // outcome this gate refuses everywhere else.
+  const reject = (msg) => {
+    console.error(`✗ check-dynamic-replace: ${msg}\n  ${USAGE}`);
+    return 2;
+  };
+
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--all') mode = 'all';
-    else if (argv[i] === '--base') baseRef = argv[++i];
-    else if (argv[i] === '--file') { mode = 'single'; singleFile = argv[++i]; }
-    else if (argv[i] === '-h' || argv[i] === '--help') {
-      console.log('Usage: check-dynamic-replace.mjs [--all | --file <path> | --base <ref>]');
+    else if (argv[i] === '--base') {
+      baseRef = argv[++i];
+      if (!baseRef) return reject('--base requires a value, e.g. --base origin/next');
+    } else if (argv[i] === '--file') {
+      mode = 'single';
+      singleFile = argv[++i];
+      if (!singleFile) return reject('--file requires a path');
+    } else if (argv[i] === '-h' || argv[i] === '--help') {
+      console.log(USAGE);
       return 0;
-    }
+    } else return reject(`unknown argument '${argv[i]}'`);
   }
 
   // file -> Set of changed lines, or null meaning "report every line".
@@ -447,10 +541,32 @@ function main(argv) {
       statSync(f).isFile(),
   );
 
+  // In --file mode the caller named ONE file; if the filter above dropped it,
+  // say why rather than reporting a vacuous pass over zero files.
+  if (mode === 'single' && files.length === 0) {
+    return reject(
+      `--file '${singleFile}' is not a scannable source file ` +
+      `(missing, not a file, unsupported extension, or in a skipped directory)`,
+    );
+  }
+
   let total = 0;
+  const unparseable = [];
   for (const file of files) {
     const touchedLines = lineFilter.get(file);
-    const violations = findViolations(readFileSync(file, 'utf8')).filter((v) => {
+    let found;
+    try {
+      found = findViolations(readFileSync(file, 'utf8'));
+    } catch (err) {
+      // Collect rather than abort, so one unreadable file still lets the rest be
+      // reported — but never treat it as clean.
+      if (err instanceof UnparseableSourceError) {
+        unparseable.push(relative(REPO_ROOT, file));
+        continue;
+      }
+      throw err;
+    }
+    const violations = found.filter((v) => {
       if (touchedLines === null) return true;
       // Any line of the call being touched is enough — the replacement argument
       // often sits several lines below the `.replace(`.
@@ -464,6 +580,19 @@ function main(argv) {
       console.error(`    ${v.text}`);
       total++;
     }
+  }
+
+  // Reported before violations, and fatal on its own: an unparseable file is not
+  // a clean file, and saying nothing about it is the silent pass this gate exists
+  // to prevent.
+  if (unparseable.length > 0) {
+    console.error(
+      `✗ check-dynamic-replace: ${unparseable.length} file(s) could not be scanned:\n` +
+      unparseable.map((f) => `    ${f}`).join('\n') +
+      `\n  The scanner lost sync on an unterminated string, template or regex, so\n` +
+      `  anything after that point was invisible. Refusing to report these clean.`,
+    );
+    return 2;
   }
 
   if (total > 0) {

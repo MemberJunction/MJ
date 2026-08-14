@@ -818,7 +818,15 @@ export class QueryCompositionEngine {
             `\\[${escaped}\\]|"${escaped}"|\\b${escaped}\\b`,
             'gi'
         );
-        return sql.replace(pattern, newName);
+        // Function replacement, not a string. `newName` comes from
+        // `SymbolTable.Register`, which returns the identifier verbatim (or
+        // `name__N`) with no sanitisation — and both SQL Server bracketed and
+        // PostgreSQL quoted identifiers may legally contain `$`. As a string
+        // replacement, `$$`/`$&`/`` $` ``/`$'` in it were expanded rather than
+        // inserted, splicing surrounding SQL into an identifier in executed SQL.
+        // Escaping the search side above and stopping there is exactly the
+        // half-applied defence issue #3171 was about.
+        return sql.replace(pattern, () => newName);
     }
 
     /**

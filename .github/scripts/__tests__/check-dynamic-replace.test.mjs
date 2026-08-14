@@ -1,14 +1,15 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, copyFileSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   findViolations,
   classifyReplacementArg,
   maskLiteralsAndComments,
   splitCallArguments,
+  UnparseableSourceError,
 } from '../check-dynamic-replace.mjs';
 
 const linesOf = (v) => v.map((x) => x.line);
@@ -333,11 +334,26 @@ describe('direct invocation', () => {
   const repos = [];
   afterAll(() => repos.forEach((r) => rmSync(r, { recursive: true, force: true })));
 
-  it('runs when invoked through a path that is not already a realpath', () => {
+  /**
+   * The symlink is created EXPLICITLY rather than relying on `os.tmpdir()`
+   * happening to be one. It is on macOS (`/var` -> `/private/var`), but on the
+   * Linux runners CI actually uses `os.tmpdir()` is a real directory — so a test
+   * that leaned on it would pass with or without the fix, exactly where it
+   * matters most.
+   */
+  it('runs when invoked through a symlinked path', () => {
     const { repo } = makeRepo('dyn-replace-symlink-');
     repos.push(repo);
-    const { output } = runGate(repo, ['--help']);
-    expect(output).toContain('Usage:');
+    const link = join(dirname(repo), `${basename(repo)}-link`);
+    symlinkSync(repo, link, 'dir');
+    repos.push(link);
+
+    const viaLink = execFileSync(
+      'node',
+      [join(link, '.github', 'scripts', 'check-dynamic-replace.mjs'), '--help'],
+      { cwd: repo, encoding: 'utf8' },
+    );
+    expect(viaLink).toContain('Usage:');
   });
 });
 
@@ -374,5 +390,116 @@ describe('JSX', () => {
   it('still treats a regex literal after a comparison as a regex', () => {
     const src = 'if (a < /x,y/.source.length) { s.replace(p, value); }';
     expect(findViolations(src)).toHaveLength(1);
+  });
+});
+
+// ─── scanner must never go blind (#3769 review) ───────────────────
+//
+// `isRegexPosition` looked back over the RAW source, so a trailing `//` comment
+// on the previous line was read as code. When its last word wasn't a keyword the
+// next line's `/` was called division, the regex went unmasked, and a backtick
+// inside it opened a template frame that never closed — blanking the rest of the
+// FILE. The gate then printed "✓ clean" over code it had never parsed. Two real
+// files did this (SafeExpressionEvaluator.ts, calculate-expression.action.ts).
+
+describe('scanner blindness', () => {
+  const canary = '\nconst out = s.replace(pattern, userValue);\n';
+
+  it('is not blinded by a trailing comment above a regex holding a backtick', () => {
+    const src = ['const re = [', '  /x/, // note', '  /`/,', '];'].join('\n');
+    expect(findViolations(src + canary)).toHaveLength(1);
+  });
+
+  it('reports a residual-frame desync instead of silently under-reporting', () => {
+    // An unterminated template is unparseable; the gate must refuse, not pass.
+    expect(() => findViolations('const a = `never closed;\n')).toThrow(UnparseableSourceError);
+  });
+
+  it('still parses a balanced file without complaint', () => {
+    expect(() => findViolations('const a = `closed`;\ns.replace(p, () => v);\n')).not.toThrow();
+  });
+
+  it('flags a replace after a self-closing JSX tag with an expression prop', () => {
+    expect(findViolations('const el = <Foo x={1} />; const o = s.replace(p, v);')).toHaveLength(1);
+  });
+
+  it('flags a replace after a postfix increment used in division', () => {
+    expect(findViolations('const r = (i++ / 2) + s.replace(p, v);')).toHaveLength(1);
+  });
+
+  it('flags a replace after a postfix decrement used in division', () => {
+    expect(findViolations('const r = (i-- / 2) + s.replace(p, v);')).toHaveLength(1);
+  });
+
+  it('still masks a genuine regex opening after an operator', () => {
+    // `/'/` here IS a regex; if we mis-call it division the quote desyncs the line.
+    expect(findViolations("const m = x || /'/.test(y); s.replace(p, v);")).toHaveLength(1);
+  });
+});
+
+// ─── CLI argument handling (#3769 review) ─────────────────────────
+//
+// `--file` with a missing, nonexistent or filtered-out path fell through to
+// "✓ 0 file(s) clean" and exit 0 — a pass reported over nothing at all, while
+// `--base` already exits 2 for the identical mistake. An unknown flag was
+// silently ignored, so a typo'd invocation quietly checked something else.
+
+describe('CLI arguments', () => {
+  const repos = [];
+  afterAll(() => repos.forEach((r) => rmSync(r, { recursive: true, force: true })));
+
+  /**
+   * A repo whose diff mode WORKS. Without a resolvable base, every bad-argument
+   * case exits 2 via base resolution instead of via validation — the assertions
+   * would pass while proving nothing.
+   */
+  const workingRepo = () => {
+    const { repo, git } = makeRepo('dyn-replace-cli-');
+    repos.push(repo);
+    writeFileSync(join(repo, 'packages', 'x', 'a.ts'), 's.replace(p, () => v);\n');
+    git('add', '-A');
+    git('commit', '-qm', 'base');
+    git('branch', '-M', 'next');
+    git('checkout', '-qb', 'feat');
+    return repo;
+  };
+
+  it('confirms the control: diff mode against this base does report clean', () => {
+    const { code, output } = runGate(workingRepo(), ['--base', 'next']);
+    expect(output).toContain('clean');
+    expect(code).toBe(0);
+  });
+
+  it('rejects --file with no value instead of reporting a pass', () => {
+    const { code, output } = runGate(workingRepo(), ['--file']);
+    expect(output).not.toContain('clean');
+    expect(code).toBe(2);
+  });
+
+  it('rejects a --file path that does not exist', () => {
+    const { code, output } = runGate(workingRepo(), ['--file', 'packages/x/nope.ts']);
+    expect(output).not.toContain('clean');
+    expect(code).toBe(2);
+  });
+
+  it('rejects an unknown flag instead of silently checking something else', () => {
+    // BASE_REF makes diff mode viable, so a pass here would mean the flag was
+    // ignored — not that the base failed to resolve.
+    const { code, output } = runGate(workingRepo(), ['--bogus-flag'], { BASE_REF: 'next' });
+    expect(output).not.toContain('clean');
+    expect(code).toBe(2);
+  });
+
+  it('rejects --base with no value', () => {
+    const { code, output } = runGate(workingRepo(), ['--base'], { BASE_REF: 'next' });
+    expect(output).not.toContain('clean');
+    expect(code).toBe(2);
+  });
+
+  it('still accepts a valid --file', () => {
+    const r = workingRepo();
+    const { code, output } = runGate(r, ['--file', join(r, 'packages', 'x', 'a.ts')]);
+    expect(output).toContain('clean');
+    expect(code).toBe(0);
   });
 });
