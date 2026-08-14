@@ -21788,10 +21788,6 @@ export const MJMaterializedResultSchema = z.object({
         * * Display Name: Read Filter Spec
         * * SQL Data Type: nvarchar(MAX)
         * * Description: For a RowFilterBroad materialization, a JSON array of read-time filter predicates — each { column, operator, paramName, kind } — that the runtime provider injects against the broad materialized table when a caller runs the query with DataSource=Materialized. operator is one of the read-time-safe set (=, !=, <>, <, >, <=, >=, IN, NOT IN); kind is scalar or list. Values are always bound as SQL parameters, never interpolated. NULL for non-row-filter materializations.`),
-    SourceQuery: z.string().nullable().describe(`
-        * * Field Name: SourceQuery
-        * * Display Name: Source Query
-        * * SQL Data Type: nvarchar(255)`),
     SourceEntity: z.string().nullable().describe(`
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
@@ -91340,15 +91336,6 @@ export class MJMaterializedResultEntity extends BaseEntity<MJMaterializedResultE
     }
     set ReadFilterSpec(value: string | null) {
         this.Set('ReadFilterSpec', value);
-    }
-
-    /**
-    * * Field Name: SourceQuery
-    * * Display Name: Source Query
-    * * SQL Data Type: nvarchar(255)
-    */
-    get SourceQuery(): string | null {
-        return this.Get('SourceQuery');
     }
 
     /**
