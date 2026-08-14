@@ -9,7 +9,7 @@
       "ModelSelectionMode": "Agent",
       "ExposeAsAction": true,
       "InvocationMode": "Sub-Agent",
-      "IconClass": "fa-solid fa-chart-mixed",
+      "IconClass": "fa-solid fa-chart-line",
       "PayloadDownstreamPaths": [
         "*"
       ],
@@ -127,8 +127,8 @@
       "ID": "06F07CDD-5021-4737-A5CB-019204ADE8A8"
     },
     "sync": {
-      "lastModified": "2026-03-13T19:10:49.107Z",
-      "checksum": "fbb5edbf4dd15476d04886c0daf27b32e9c4f1aaadf8b27d3dbafab51a176fae"
+      "lastModified": "2026-08-13T14:54:20.255Z",
+      "checksum": "47ac261901c788a1bc40a3db1aac084468767d05978c82ac98c5e995a4ebe096"
     }
   }
 ]

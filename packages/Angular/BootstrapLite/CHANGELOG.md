@@ -1,5 +1,46 @@
 # @memberjunction/ng-bootstrap-lite
 
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [2792d97]
+- Updated dependencies [255d506]
+- Updated dependencies [59def38]
+- Updated dependencies [8de5f7e]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [9fc0e2d]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [9a29da4]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [768980d]
+- Updated dependencies [1c0d586]
+  - @memberjunction/ng-conversations@6.1.0-edge.2
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/actions-base@6.1.0-edge.2
+  - @memberjunction/ai-core-plus@6.1.0-edge.2
+  - @memberjunction/ng-core-entity-forms@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.2
+  - @memberjunction/ai-engine-base@6.1.0-edge.2
+  - @memberjunction/ai-realtime-client@6.1.0-edge.2
+  - @memberjunction/ng-explorer-core@6.1.0-edge.2
+  - @memberjunction/ng-shared@6.1.0-edge.2
+  - @memberjunction/ng-artifacts@6.1.0-edge.2
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.2
+  - @memberjunction/ng-entity-action-ux@6.1.0-edge.2
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.2
+  - @memberjunction/ng-file-storage@6.1.0-edge.2
+  - @memberjunction/communication-types@6.1.0-edge.2
+  - @memberjunction/entity-communications-base@6.1.0-edge.2
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.2
+  - @memberjunction/ng-auth-services@6.1.0-edge.2
+
 ## 6.1.0-edge.1
 
 ### Minor Changes

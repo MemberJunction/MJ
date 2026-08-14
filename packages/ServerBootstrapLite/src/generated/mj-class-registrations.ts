@@ -188,7 +188,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (401 classes)
+// @memberjunction/core-entities (403 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -463,6 +463,8 @@ import {
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
+    MJMaterializedResultEntity,
+    MJMaterializedResultQueryEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -1509,6 +1511,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
+    MJMaterializedResultEntity,
+    MJMaterializedResultQueryEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -2091,7 +2095,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 898;
+export const CLASS_REGISTRATIONS_COUNT = 900;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

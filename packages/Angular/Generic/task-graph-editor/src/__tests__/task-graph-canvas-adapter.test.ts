@@ -14,6 +14,7 @@ import {
     GetEntryTempIds,
     GetNodeTypeConfig,
     GetTaskNodeType,
+    TASK_GRAPH_NODE_TYPES,
     IsHumanTask,
     NewTaskFromNodeType,
     NextTempId,
@@ -22,7 +23,6 @@ import {
     RuntimeStateToNodeStatus,
     SpecToConnections,
     SpecToNodes,
-    TASK_GRAPH_NODE_TYPES,
     TaskSubtitle,
     UpdateTask,
     WouldCreateCycle,
@@ -194,6 +194,163 @@ describe('SpecToConnections', () => {
     it('gives edges stable ids, so re-rendering does not churn selection', () => {
         expect(SpecToConnections(spec())[0].ID).toBe(SpecToConnections(spec())[0].ID);
     });
+
+    it('styles an operator-forced edge as dotted, never dashed', () => {
+        const edgeID = '1e0a5b3c-1111-2222-3333-444455556666';
+        const s = spec({
+            tasks: [
+                task({ tempId: 'a' }),
+                task({ tempId: 'b', dependsOn: [{ id: edgeID, tempId: 'a', condition: 'data.ok' }] }),
+            ],
+        });
+        const conn = SpecToConnections(s, undefined, { edgeOverrides: { [edgeID]: 'true' } })[0];
+        expect(conn.Style).toBe('dotted');
+        expect(conn.Label).toBe('forced yes');
+        expect(conn.LabelIcon).toBe('fa-hand');
+        expect(conn.Data?.['EdgeID']).toBe(edgeID);
+    });
+
+    it('keeps a false-overridden edge visible after a skip cascade', () => {
+        const edgeID = '1e0a5b3c-1111-2222-3333-444455556666';
+        const s = spec({
+            tasks: [
+                task({ tempId: 'a' }),
+                task({ tempId: 'b', dependsOn: [{ id: edgeID, tempId: 'a', condition: 'data.ok' }] }),
+            ],
+        });
+        const hidden = SpecToConnections(s, { a: 'Complete', b: 'Skipped' });
+        expect(hidden).toHaveLength(0);
+        const kept = SpecToConnections(s, { a: 'Complete', b: 'Skipped' }, { edgeOverrides: { [edgeID]: 'false' } });
+        expect(kept).toHaveLength(1);
+        expect(kept[0].Style).toBe('dotted');
+        expect(kept[0].Label).toBe('forced no');
+    });
+
+    it('shows the condition expression as the label in debugger mode', () => {
+        const s = spec({
+            tasks: [
+                task({ tempId: 'a' }),
+                task({ tempId: 'b', dependsOn: [{ tempId: 'a', condition: 'data.approved' }] }),
+            ],
+        });
+        const conn = SpecToConnections(s, undefined, { showConditions: true })[0];
+        expect(conn.Label).toBe('data.approved');
+        expect(conn.Style).toBe('dashed');
+    });
+});
+
+describe('SpecToNodes — debug badges', () => {
+    it('emits a breakpoint badge and a distinct waiting-here badge', () => {
+        const nodes = SpecToNodes(spec(), undefined, undefined, {
+            breakpoints: ['a'],
+            pausedAtTaskID: 'a',
+        });
+        const badges = nodes.find((n) => n.ID === 'a')?.Badges ?? [];
+        expect(badges.map((b) => b.Value)).toEqual(['Waiting here', 'break']);
+        expect(nodes.find((n) => n.ID === 'a')?.Data?.['AwaitingUser']).toBe(true);
+    });
+
+    it('marks the entry node as waiting when the graph is start-paused with no step yet', () => {
+        const nodes = SpecToNodes(spec(), undefined, undefined, { paused: true });
+        expect(nodes.find((n) => n.ID === 'a')?.Data?.['AwaitingUser']).toBe(true);
+        expect(nodes.find((n) => n.ID === 'b')?.Data?.['AwaitingUser']).toBe(false);
+    });
+
+    it('does not paint paused-here on a step that has already finished', () => {
+        const nodes = SpecToNodes(spec(), { a: 'Complete' }, undefined, {
+            breakpoints: ['a'],
+            pausedAtTaskID: 'a',
+        });
+        const badges = nodes.find((n) => n.ID === 'a')?.Badges ?? [];
+        expect(badges.map((b) => b.Value)).toEqual(['break']);
+        expect(nodes.find((n) => n.ID === 'a')?.Status).not.toBe('running');
+    });
+
+    it('emits no badges when the overlay is empty', () => {
+        expect(SpecToNodes(spec())[0].Badges).toBeUndefined();
+    });
+
+    it('paints a flowing edge animated when the origin is complete and the target is in progress', () => {
+        const s = spec({
+            tasks: [
+                task({ tempId: 'a' }),
+                task({ tempId: 'b', dependsOn: [{ tempId: 'a' }] }),
+            ],
+        });
+        const conn = SpecToConnections(s, { a: 'Complete', b: 'In Progress' })[0];
+        expect(conn.Animated).toBe(true);
+        expect(conn.Color).toBe('var(--mj-brand-primary)');
+        expect(conn.StrokeWidth).toBe(4.5);
+    });
+
+    it('paints a traveled edge a distinct color after the path has been taken', () => {
+        const s = spec({
+            tasks: [
+                task({ tempId: 'a' }),
+                task({ tempId: 'b', dependsOn: [{ tempId: 'a' }] }),
+            ],
+        });
+        const conn = SpecToConnections(s, { a: 'Complete', b: 'Complete' })[0];
+        expect(conn.Animated).toBe(false);
+        expect(conn.Color).toBe('var(--mj-status-success)');
+        expect(conn.StrokeWidth).toBe(3);
+    });
+
+    it('paints a traveled conditional edge solid — the if stays on the label, not the stroke', () => {
+        const s = spec({
+            tasks: [
+                task({ tempId: 'a' }),
+                task({ tempId: 'b', dependsOn: [{ tempId: 'a', condition: 'payload.stockPrice <= 500' }] }),
+            ],
+        });
+        const conn = SpecToConnections(s, { a: 'Complete', b: 'Complete' }, { showConditions: true })[0];
+        expect(conn.Style).toBe('solid');
+        expect(conn.Color).toBe('var(--mj-status-success)');
+        expect(conn.Label).toBe('payload.stockPrice <= 500');
+        expect(conn.Condition).toBe('payload.stockPrice <= 500');
+    });
+
+    it('marks an entry as next-to-run until the engine claims it', () => {
+        const nodes = SpecToNodes(spec(), { a: 'Pending', b: 'Pending' });
+        expect(nodes.find((n) => n.ID === 'a')?.Data?.['NextToRun']).toBe(true);
+        expect(nodes.find((n) => n.ID === 'b')?.Data?.['NextToRun']).toBe(false);
+    });
+
+    it('marks a dest as next-to-run only after its origin is complete', () => {
+        const after = SpecToNodes(spec(), { a: 'Complete', b: 'Pending' });
+        expect(after.find((n) => n.ID === 'b')?.Data?.['NextToRun']).toBe(true);
+        const during = SpecToNodes(spec(), { a: 'In Progress', b: 'Pending' });
+        expect(during.find((n) => n.ID === 'b')?.Data?.['NextToRun']).toBe(false);
+    });
+
+    it('does not mark the breakpoint-stopped step as next-to-run', () => {
+        const nodes = SpecToNodes(spec(), { a: 'Complete', b: 'Pending' }, undefined, {
+            paused: true,
+            pausedAtTaskID: 'b',
+        });
+        expect(nodes.find((n) => n.ID === 'b')?.Data?.['AwaitingUser']).toBe(true);
+        expect(nodes.find((n) => n.ID === 'b')?.Data?.['NextToRun']).toBe(false);
+    });
+
+    it('animates the incoming edge of a queued dest', () => {
+        const conn = SpecToConnections(spec(), { a: 'Complete', b: 'Pending' })[0];
+        expect(conn.Animated).toBe(true);
+        expect(conn.Color).toBe('var(--mj-brand-primary)');
+    });
+
+    it('keeps both conditionals dashed while dests are still pending — the gate has not fired', () => {
+        const s = spec({
+            tasks: [
+                task({ tempId: 'a' }),
+                task({ tempId: 'yes', dependsOn: [{ tempId: 'a', condition: 'payload.stockPrice <= 500' }] }),
+                task({ tempId: 'no', dependsOn: [{ tempId: 'a', condition: 'payload.stockPrice > 500' }] }),
+            ],
+        });
+        const conns = SpecToConnections(s, { a: 'Complete', yes: 'Pending', no: 'Pending' }, { showConditions: true });
+        expect(conns).toHaveLength(2);
+        expect(conns.every((c) => c.Style === 'dashed')).toBe(true);
+        expect(conns.every((c) => c.Animated === true)).toBe(true);
+    });
 });
 
 describe('graph queries', () => {
@@ -212,7 +369,7 @@ describe('graph queries', () => {
         // An action step has no agent either. Reading "no agent" as "a person" is what put steps in
         // the graph claiming to wait on someone nobody had asked for.
         expect(IsHumanTask(task({ kind: 'Action' as const, configuration: { actionName: 'Send Email' } }))).toBe(false);
-        expect(IsHumanTask(task({ kind: 'Agent' as const, configuration: { agentName: '' } }))).toBe(false);
+        expect(IsHumanTask(task({ kind: 'Agent' as const, configuration: {} }))).toBe(false);
     });
 });
 
@@ -230,7 +387,7 @@ describe('assignment shapes', () => {
     });
 
     it('reads an unassigned step as an agent step rather than guessing "person"', () => {
-        expect(GetTaskNodeType(task({ kind: 'Agent' as const, configuration: { agentName: '' } }))).toBe('AgentTask');
+        expect(GetTaskNodeType(task({ kind: 'Agent' as const, configuration: {} }))).toBe('AgentTask');
     });
 
     it('says so when a step has no assignee, instead of showing a blank subtitle', () => {
@@ -377,5 +534,45 @@ describe('NextTempId', () => {
 
     it('works on an empty graph', () => {
         expect(NextTempId(spec({ tasks: [] }))).toBe('task1');
+    });
+
+    /**
+     * Kinds a person cannot DRAW but a run can contain.
+     *
+     * These all collapsed to `AgentTask`, and `TaskSubtitle`'s default branch then reported
+     * "No agent chosen yet" — so a fully-configured ForEach rendered as a broken agent step in the
+     * run view. Drawing and rendering are different questions; the canvas has to depict every kind
+     * the dispatcher can execute, whether or not the palette offers it.
+     */
+    describe('display-only kinds', () => {
+        it('gives each run-only kind its own shape instead of the agent fallback', () => {
+            expect(GetTaskNodeType(task({ kind: 'Prompt' as const, configuration: { promptName: 'Draft' } }))).toBe('PromptTask');
+            expect(GetTaskNodeType(task({ kind: 'ForEach' as const, configuration: { collectionPath: 'payload.rows' } }))).toBe('ForEachTask');
+            expect(GetTaskNodeType(task({ kind: 'While' as const, configuration: { condition: 'payload.ok !== true' } }))).toBe('WhileTask');
+            expect(GetTaskNodeType(task({ kind: 'External' as const, configuration: { domain: 'billing' } }))).toBe('ExternalTask');
+        });
+
+        it('never tells a configured step that it has no agent', () => {
+            const foreach = task({ kind: 'ForEach' as const, configuration: { collectionPath: 'payload.rows', prompt: { name: 'Describe' } } });
+            const prompt = task({ kind: 'Prompt' as const, configuration: { promptName: 'Draft the piece' } });
+
+            expect(TaskSubtitle(foreach)).not.toContain('No agent chosen');
+            expect(TaskSubtitle(foreach)).toContain('Describe');      // says what it repeats
+            expect(TaskSubtitle(prompt)).toBe('Draft the piece');
+        });
+
+        it('still says so for a genuinely unassigned node', () => {
+            // The original behaviour, which was right — it was only wrong for kinds that never take
+            // an agent in the first place.
+            const unassigned = task({ kind: 'Agent' as const, configuration: {} });
+            expect(TaskSubtitle(unassigned)).toBe('No agent chosen yet');
+        });
+
+        it('keeps the PALETTE to what a person can actually configure', () => {
+            // Rendering is a superset. Putting these in the palette would offer steps the properties
+            // panel cannot configure, which is worse than not offering them.
+            expect(TASK_GRAPH_NODE_TYPES.map((t) => t.Type)).toEqual(['AgentTask', 'ActionTask', 'HumanTask']);
+            expect(GetNodeTypeConfig('ForEachTask')?.Label).toBe('For Each Step');
+        });
     });
 });

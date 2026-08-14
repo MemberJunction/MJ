@@ -1,5 +1,103 @@
 # @memberjunction/server-bootstrap-lite
 
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [71817db]
+- Updated dependencies [255d506]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [59def38]
+- Updated dependencies [102a692]
+- Updated dependencies [11de1a3]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [9fc0e2d]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [9a29da4]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [82a8585]
+- Updated dependencies [d8adda1]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/search-engine@6.1.0-edge.2
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/ai-elevenlabs@6.1.0-edge.2
+  - @memberjunction/ai-assemblyai@6.1.0-edge.2
+  - @memberjunction/ai-openai@6.1.0-edge.2
+  - @memberjunction/ai-gemini@6.1.0-edge.2
+  - @memberjunction/ai-inworld@6.1.0-edge.2
+  - @memberjunction/ai-agents@6.1.0-edge.2
+  - @memberjunction/actions-base@6.1.0-edge.2
+  - @memberjunction/actions@6.1.0-edge.2
+  - @memberjunction/core-entities-server@6.1.0-edge.2
+  - @memberjunction/scheduling-engine@6.1.0-edge.2
+  - @memberjunction/ai-core-plus@6.1.0-edge.2
+  - @memberjunction/task-graph@6.1.0-edge.2
+  - @memberjunction/ai-groq@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/ai-engine-base@6.1.0-edge.2
+  - @memberjunction/ai-xai@6.1.0-edge.2
+  - @memberjunction/ai-agent-manager@6.1.0-edge.2
+  - @memberjunction/storage@6.1.0-edge.2
+  - @memberjunction/core-actions@6.1.0-edge.2
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.2
+  - @memberjunction/ai-agent-harness@6.1.0-edge.2
+  - @memberjunction/ai-form-builder@6.1.0-edge.2
+  - @memberjunction/tag-engine-base@6.1.0-edge.2
+  - @memberjunction/predictive-studio@6.1.0-edge.2
+  - @memberjunction/ai-prompts@6.1.0-edge.2
+  - @memberjunction/ai-recommendations-rex@6.1.0-edge.2
+  - @memberjunction/ai-reranker@6.1.0-edge.2
+  - @memberjunction/actions-apollo@6.1.0-edge.2
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.2
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.2
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.2
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.2
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.2
+  - @memberjunction/communication-types@6.1.0-edge.2
+  - @memberjunction/content-autotagging@6.1.0-edge.2
+  - @memberjunction/doc-utils@6.1.0-edge.2
+  - @memberjunction/encryption@6.1.0-edge.2
+  - @memberjunction/queue@6.1.0-edge.2
+  - @memberjunction/react-linter@6.1.0-edge.2
+  - @memberjunction/record-comparison@6.1.0-edge.2
+  - @memberjunction/record-set-processor@6.1.0-edge.2
+  - @memberjunction/scheduling-actions@6.1.0-edge.2
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.2
+  - @memberjunction/templates@6.1.0-edge.2
+  - @memberjunction/testing-engine@6.1.0-edge.2
+  - @memberjunction/geo-core@6.1.0-edge.2
+  - @memberjunction/ai-anthropic@6.1.0-edge.2
+  - @memberjunction/ai-azure@6.1.0-edge.2
+  - @memberjunction/ai-bedrock@6.1.0-edge.2
+  - @memberjunction/ai-betty-bot@6.1.0-edge.2
+  - @memberjunction/ai-blackforestlabs@6.1.0-edge.2
+  - @memberjunction/ai-cerebras@6.1.0-edge.2
+  - @memberjunction/ai-cohere@6.1.0-edge.2
+  - @memberjunction/ai-fireworks@6.1.0-edge.2
+  - @memberjunction/ai-heygen@6.1.0-edge.2
+  - @memberjunction/ai-inception@6.1.0-edge.2
+  - @memberjunction/ai-lmstudio@6.1.0-edge.2
+  - @memberjunction/ai-llamacpp@6.1.0-edge.2
+  - @memberjunction/ai-local-embeddings@6.1.0-edge.2
+  - @memberjunction/ai-minimax@6.1.0-edge.2
+  - @memberjunction/ai-mistral@6.1.0-edge.2
+  - @memberjunction/ai-ollama@6.1.0-edge.2
+  - @memberjunction/ai-openrouter@6.1.0-edge.2
+  - @memberjunction/ai-vertex@6.1.0-edge.2
+  - @memberjunction/ai-zhipu@6.1.0-edge.2
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.2
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.2
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.2
+  - @memberjunction/ai-vectors-qdrant@6.1.0-edge.2
+  - @memberjunction/ai-vectors-sqlserver@6.1.0-edge.2
+  - @memberjunction/ai-vectors-pgvector@6.1.0-edge.2
+  - @memberjunction/data-context-server@6.1.0-edge.2
+
 ## 6.1.0-edge.1
 
 ### Minor Changes

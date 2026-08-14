@@ -29,7 +29,8 @@ export class MJQueryFormComponent extends BaseFormComponent {
             { sectionKey: 'mJQueryParameters', sectionName: 'Query Parameters', isExpanded: false },
             { sectionKey: 'mJQueryDependenciesQueryID', sectionName: 'Query Dependencies (Query)', isExpanded: false },
             { sectionKey: 'mJQueryEntities', sectionName: 'Query Entities', isExpanded: false },
-            { sectionKey: 'mJQuerySQLs', sectionName: 'Query SQLs', isExpanded: false }
+            { sectionKey: 'mJQuerySQLs', sectionName: 'Query SQLs', isExpanded: false },
+            { sectionKey: 'mJMaterializedResultQueries', sectionName: 'Materialized Result Queries', isExpanded: false }
         ]);
     }
 }

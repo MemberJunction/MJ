@@ -21664,6 +21664,214 @@ export const MJMagicLinkRedemptionSchema = z.object({
 export type MJMagicLinkRedemptionEntityType = z.infer<typeof MJMagicLinkRedemptionSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Materialized Result Queries
+ */
+export const MJMaterializedResultQuerySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    MaterializedResultID: z.string().describe(`
+        * * Field Name: MaterializedResultID
+        * * Display Name: Materialized Result ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Materialized Results (vwMaterializedResults.ID)
+        * * Description: The materialization (MJ: Materialized Results) side of the query<->materialization link.`),
+    QueryID: z.string().describe(`
+        * * Field Name: QueryID
+        * * Display Name: Query ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Queries (vwQueries.ID)
+        * * Description: The source Query (MJ: Queries) whose result this materialization was built from. The link lives here (not as a direct FK on either table) to avoid the MaterializedResult<->Query circular dependency.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Query: z.string().describe(`
+        * * Field Name: Query
+        * * Display Name: Query
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJMaterializedResultQueryEntityType = z.infer<typeof MJMaterializedResultQuerySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Materialized Results
+ */
+export const MJMaterializedResultSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SourceType: z.union([z.literal('EntityBaseView'), z.literal('Query')]).describe(`
+        * * Field Name: SourceType
+        * * Display Name: Source Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * EntityBaseView
+    *   * Query
+        * * Description: Which materialization door produced this row: 'Query' (a materialized stored Query, surfaced as a new read-only Virtual Entity; the source query is linked via the MaterializedResultQuery join table) or 'EntityBaseView' (a 1:1 materialized copy of an existing entity's base view, which reuses the source entity).`),
+    SourceEntityID: z.string().nullable().describe(`
+        * * Field Name: SourceEntityID
+        * * Display Name: Source Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: For the EntityBaseView case, the existing entity whose base view is materialized (RLS applies unchanged). NULL for the Query case (whose source query is linked via the MaterializedResultQuery join table).`),
+    GeneratedEntityID: z.string().nullable().describe(`
+        * * Field Name: GeneratedEntityID
+        * * Display Name: Generated Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: For the Query case, the new read-only Virtual Entity CodeGen mints for the materialized result shape. NULL for the EntityBaseView case (which reuses the source entity).`),
+    SchemaName: z.string().describe(`
+        * * Field Name: SchemaName
+        * * Display Name: Schema Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Schema of the physical materialized table and its wrapper view.`),
+    TableName: z.string().describe(`
+        * * Field Name: TableName
+        * * Display Name: Table Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Physical materialized table (swappable storage, repointed on atomic refresh). Convention: materialized_<Name>.`),
+    ViewName: z.string().describe(`
+        * * Field Name: ViewName
+        * * Display Name: View Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Wrapper view (the stable read contract; body is SELECT * FROM the physical table). Convention: materialized_vw<Name>. The atomic swap repoints this view, never truncates the table in place.`),
+    ParamMode: z.union([z.literal('BoundFixed'), z.literal('None'), z.literal('PerValueCache'), z.literal('RowFilterBroad')]).describe(`
+        * * Field Name: ParamMode
+        * * Display Name: Param Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * BoundFixed
+    *   * None
+    *   * PerValueCache
+    *   * RowFilterBroad
+        * * Description: Parameterization classification: 'None' (unparameterized), 'RowFilterBroad' (materialize broad, filter at read), 'PerValueCache' (bounded structural variant), or 'BoundFixed' (params bound to fixed values). v1 supports 'None' and 'RowFilterBroad'; 'PerValueCache' and 'BoundFixed' are reserved for later phases.`),
+    RefreshStrategy: z.union([z.literal('DirtyGroupRecompute'), z.literal('FullRebuild'), z.literal('Incremental')]).describe(`
+        * * Field Name: RefreshStrategy
+        * * Display Name: Refresh Strategy
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: FullRebuild
+    * * Value List Type: List
+    * * Possible Values 
+    *   * DirtyGroupRecompute
+    *   * FullRebuild
+    *   * Incremental
+        * * Description: Refresh strategy: 'FullRebuild' (rebuild the whole result), 'Incremental' (MERGE on the surrogate key), or 'DirtyGroupRecompute' (recompute groups changed since Watermark). v1 ships all three: 'FullRebuild' for unkeyed materializations, and 'Incremental'/'DirtyGroupRecompute' auto-selected by CodeGen for eligible keyed aggregations.`),
+    RefreshSchedule: z.string().nullable().describe(`
+        * * Field Name: RefreshSchedule
+        * * Display Name: Refresh Schedule
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Cron expression for scheduled rehydration via the ScheduledJobEngine. NULL means manual refresh only. Stagger across materializations to avoid refresh-window contention.`),
+    LastRefreshedAt: z.date().nullable().describe(`
+        * * Field Name: LastRefreshedAt
+        * * Display Name: Last Refreshed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the last successful refresh (freshness surfacing for the selection contract).`),
+    NextRefreshAt: z.date().nullable().describe(`
+        * * Field Name: NextRefreshAt
+        * * Display Name: Next Refresh At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Next scheduled refresh time, computed from RefreshSchedule; the scheduler reads this as its due-work signal.`),
+    Watermark: z.date().nullable().describe(`
+        * * Field Name: Watermark
+        * * Display Name: Watermark
+        * * SQL Data Type: datetimeoffset
+        * * Description: Last-seen MAX(__mj_UpdatedAt) of the source data; the staleness probe for incremental / dirty-group refresh. Reuses the existing query smart-cache fingerprint pattern.`),
+    Status: z.union([z.literal('Active'), z.literal('Building'), z.literal('Disabled'), z.literal('DriftHold'), z.literal('Stale')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Building
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Building
+    *   * Disabled
+    *   * DriftHold
+    *   * Stale
+        * * Description: Lifecycle state: 'Building' (materializing), 'Active' (fresh, readable), 'Stale' (past expected freshness), 'Disabled' (turned off), 'DriftHold' (upstream schema drift detected; held for review).`),
+    RowCount: z.number().nullable().describe(`
+        * * Field Name: RowCount
+        * * Display Name: Row Count
+        * * SQL Data Type: bigint
+        * * Description: Approximate row count of the last build — part of the cost/size profile an agent (Skip) uses to choose live vs. materialized.`),
+    ApproxBuildCostMs: z.number().nullable().describe(`
+        * * Field Name: ApproxBuildCostMs
+        * * Display Name: Approx Build Cost Ms
+        * * SQL Data Type: bigint
+        * * Description: Approximate build cost in milliseconds of the last refresh — part of the cost/size profile for the selection contract.`),
+    IntendedWorkload: z.string().nullable().describe(`
+        * * Field Name: IntendedWorkload
+        * * Display Name: Intended Workload
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human/structured note describing what this materialization is good for; surfaced in the selection contract so callers pick the right variant.`),
+    RowFilterColumns: z.string().nullable().describe(`
+        * * Field Name: RowFilterColumns
+        * * Display Name: Row Filter Columns
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of the output column names that the row-filter parameters map to. Populated when ParamMode is RowFilterBroad. The materialization holds all rows broad and these columns are filtered at read time (plan section 6.4). NULL for non-row-filter materializations.`),
+    BroadSQL: z.string().nullable().describe(`
+        * * Field Name: BroadSQL
+        * * Display Name: Broad SQL
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: For a RowFilterBroad materialization, the broad source SELECT that the refresh engine materializes: the source query with its row-filter WHERE predicates removed, so the materialized table holds every row the query could return for any parameter value. NULL for non-parameterized materializations, which use the source query SQL directly.`),
+    KeyColumns: z.string().nullable().describe(`
+        * * Field Name: KeyColumns
+        * * Display Name: Key Columns
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Phase 3: JSON array of the key columns ({name, type}) for a keyed/aggregation materialization — the combined key hashed into the surrogate (the stable match key for incremental refresh / dirty-group recompute). NULL means not keyed, in which case a synthetic IDENTITY/ROW_NUMBER surrogate is used.`),
+    SourceRowCount: z.number().nullable().describe(`
+        * * Field Name: SourceRowCount
+        * * Display Name: Source Row Count
+        * * SQL Data Type: bigint
+        * * Description: Phase 3 (DirtyGroupRecompute): the SOURCE table row count observed at the last successful refresh. Delete-detection guard — if the current source COUNT(*) is lower than this, rows were deleted and the refresh falls back to a full rebuild (dirty-group recompute cannot localize deletes from surviving rows). NULL means no baseline yet (first run does a full rebuild and sets it). Distinct from RowCount, which counts materialized rows (groups).`),
+    RefreshesSinceFullRebuild: z.number().describe(`
+        * * Field Name: RefreshesSinceFullRebuild
+        * * Display Name: Refreshes Since Full Rebuild
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Count of consecutive incremental (Incremental/DirtyGroupRecompute) refreshes since the last full rebuild. The refresher forces a full rebuild once this reaches its threshold, reconciling drift that a balanced delete+insert (net-zero source row-count change) leaves uncaught by the delete-detection guard. Reset to 0 on every full rebuild; incremented on every incremental refresh.`),
+    ReadFilterSpec: z.string().nullable().describe(`
+        * * Field Name: ReadFilterSpec
+        * * Display Name: Read Filter Spec
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: For a RowFilterBroad materialization, a JSON array of read-time filter predicates — each { column, operator, paramName, kind } — that the runtime provider injects against the broad materialized table when a caller runs the query with DataSource=Materialized. operator is one of the read-time-safe set (=, !=, <>, <, >, <=, >=, IN, NOT IN); kind is scalar or list. Values are always bound as SQL parameters, never interpolated. NULL for non-row-filter materializations.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    SourceEntity: z.string().nullable().describe(`
+        * * Field Name: SourceEntity
+        * * Display Name: Source Entity
+        * * SQL Data Type: nvarchar(255)`),
+    GeneratedEntity: z.string().nullable().describe(`
+        * * Field Name: GeneratedEntity
+        * * Display Name: Generated Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJMaterializedResultEntityType = z.infer<typeof MJMaterializedResultSchema>;
+
+/**
  * zod schema definition for the entity MJ: MCP Server Connection Permissions
  */
 export const MJMCPServerConnectionPermissionSchema = z.object({
@@ -24332,6 +24540,12 @@ export const MJQuerySchema = z.object({
         * * Display Name: External Data Source ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: External Data Sources (vwExternalDataSources.ID)`),
+    IsMaterialized: z.boolean().describe(`
+        * * Field Name: IsMaterialized
+        * * Display Name: Is Materialized
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Author's declared intent that this Query should be materialized. CodeGen scans for IsMaterialized = 1 and, if the query qualifies (§9/§10), materializes it. The authoritative state lives on the linked MJ: Materialized Results row (found via the MaterializedResultQuery join table).`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
@@ -68759,6 +68973,42 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
      */
     VectorMetadata?: MJContentSourceEntity_IContentSourceVectorMetadataConfig;
     /**
+     * The MJ entity this source's VECTORS resolve to, for search attribution. Optional; when unset,
+     * attribution falls back to the index's Entity Documents exactly as before.
+     *
+     * Why this exists. `SearchEngine` groups results by `EntityName` and evaluates THAT entity's
+     * CanRead/RLS, so a match it cannot name is dropped rather than shown unlabelled. A source whose
+     * vectors carry minimal metadata (`VectorMetadata.FieldStrategy: 'explicit'`) has no `Entity`
+     * key to read, and a source populated outside MJ's pipeline has no Entity Document either —
+     * this is how such a source states the answer once instead of paying for it per vector.
+     *
+     * Distinct from the `EntityID` **column**, which is the entity an Entity-type source pulls
+     * records *from* and is null for file/RSS/website sources. This is the entity its vectors *are*.
+     *
+     * Set it to an **ISA extension** rather than the base entity when that is where row-level
+     * security lives: attribution decides which entity's RLS is applied, so naming the base entity
+     * of an extension evaluates the wrong rules.
+     *
+     * One declaration names one entity, so it is only meaningful when a source's vectors are all at
+     * the same level. Under `ChunkTextStorage: 'mixed'` a source emits ContentItem-level vectors for
+     * single-chunk items and ContentItemChunk-level vectors for the rest — two different entities —
+     * so leave this unset there and let per-vector `Entity` metadata carry it.
+     *
+     * Setting this also changes what gets WRITTEN — with `FieldStrategy: 'explicit'`, new vectors omit
+     * `Entity` and carry `ContentSourceID` instead, so the entity name lives in one place rather than on
+     * every vector. That additionally requires `ChunkTextStorage: 'alwaysChunk'`,
+     * `VectorIDStrategy: 'recordId'`, and a name here resolving to `MJ: Content Item Chunks` or a
+     * subtype. Anything unmet and `Entity` is written anyway, because a match search cannot attribute is
+     * dropped by the permission filter rather than returned unlabelled — `'mixed'` would need two names,
+     * `'hash'` leaves no recoverable record id, and a declaration naming the ITEM entity would point
+     * search at a table holding none of these ids.
+     *
+     * Note that last one when row-level security is your reason for declaring an extension: under
+     * `'alwaysChunk'` the vectors are chunk rows, so the extension has to extend the CHUNK entity.
+     * Existing vectors are untouched and keep resolving through their stored key.
+     */
+    VectorEntityName?: string;
+    /**
      * Lower confidence band (0.0-1.0) that routes a semantic match into the human-in-the-loop
      * `MJ:Tag Suggestions` queue instead of auto-applying or auto-creating. A score `s` is
      * routed as: `s >= TagMatchThreshold` → apply; `SuggestThreshold <= s < TagMatchThreshold`
@@ -90922,6 +91172,503 @@ export class MJMagicLinkRedemptionEntity extends BaseEntity<MJMagicLinkRedemptio
 
 
 /**
+ * MJ: Materialized Result Queries - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MaterializedResultQuery
+ * * Base View: vwMaterializedResultQueries
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Materialized Result Queries')
+export class MJMaterializedResultQueryEntity extends BaseEntity<MJMaterializedResultQueryEntityType> {
+    /**
+    * Loads the MJ: Materialized Result Queries record from the database
+    * @param ID: string - primary key value to load the MJ: Materialized Result Queries record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMaterializedResultQueryEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: MaterializedResultID
+    * * Display Name: Materialized Result ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Materialized Results (vwMaterializedResults.ID)
+    * * Description: The materialization (MJ: Materialized Results) side of the query<->materialization link.
+    */
+    get MaterializedResultID(): string {
+        return this.Get('MaterializedResultID');
+    }
+    set MaterializedResultID(value: string) {
+        this.Set('MaterializedResultID', value);
+    }
+
+    /**
+    * * Field Name: QueryID
+    * * Display Name: Query ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Queries (vwQueries.ID)
+    * * Description: The source Query (MJ: Queries) whose result this materialization was built from. The link lives here (not as a direct FK on either table) to avoid the MaterializedResult<->Query circular dependency.
+    */
+    get QueryID(): string {
+        return this.Get('QueryID');
+    }
+    set QueryID(value: string) {
+        this.Set('QueryID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Query
+    * * Display Name: Query
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Query(): string {
+        return this.Get('Query');
+    }
+}
+
+
+/**
+ * MJ: Materialized Results - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MaterializedResult
+ * * Base View: vwMaterializedResults
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Materialized Results')
+export class MJMaterializedResultEntity extends BaseEntity<MJMaterializedResultEntityType> {
+    /**
+    * Loads the MJ: Materialized Results record from the database
+    * @param ID: string - primary key value to load the MJ: Materialized Results record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMaterializedResultEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SourceType
+    * * Display Name: Source Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * EntityBaseView
+    *   * Query
+    * * Description: Which materialization door produced this row: 'Query' (a materialized stored Query, surfaced as a new read-only Virtual Entity; the source query is linked via the MaterializedResultQuery join table) or 'EntityBaseView' (a 1:1 materialized copy of an existing entity's base view, which reuses the source entity).
+    */
+    get SourceType(): 'EntityBaseView' | 'Query' {
+        return this.Get('SourceType');
+    }
+    set SourceType(value: 'EntityBaseView' | 'Query') {
+        this.Set('SourceType', value);
+    }
+
+    /**
+    * * Field Name: SourceEntityID
+    * * Display Name: Source Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: For the EntityBaseView case, the existing entity whose base view is materialized (RLS applies unchanged). NULL for the Query case (whose source query is linked via the MaterializedResultQuery join table).
+    */
+    get SourceEntityID(): string | null {
+        return this.Get('SourceEntityID');
+    }
+    set SourceEntityID(value: string | null) {
+        this.Set('SourceEntityID', value);
+    }
+
+    /**
+    * * Field Name: GeneratedEntityID
+    * * Display Name: Generated Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: For the Query case, the new read-only Virtual Entity CodeGen mints for the materialized result shape. NULL for the EntityBaseView case (which reuses the source entity).
+    */
+    get GeneratedEntityID(): string | null {
+        return this.Get('GeneratedEntityID');
+    }
+    set GeneratedEntityID(value: string | null) {
+        this.Set('GeneratedEntityID', value);
+    }
+
+    /**
+    * * Field Name: SchemaName
+    * * Display Name: Schema Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Schema of the physical materialized table and its wrapper view.
+    */
+    get SchemaName(): string {
+        return this.Get('SchemaName');
+    }
+    set SchemaName(value: string) {
+        this.Set('SchemaName', value);
+    }
+
+    /**
+    * * Field Name: TableName
+    * * Display Name: Table Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Physical materialized table (swappable storage, repointed on atomic refresh). Convention: materialized_<Name>.
+    */
+    get TableName(): string {
+        return this.Get('TableName');
+    }
+    set TableName(value: string) {
+        this.Set('TableName', value);
+    }
+
+    /**
+    * * Field Name: ViewName
+    * * Display Name: View Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Wrapper view (the stable read contract; body is SELECT * FROM the physical table). Convention: materialized_vw<Name>. The atomic swap repoints this view, never truncates the table in place.
+    */
+    get ViewName(): string {
+        return this.Get('ViewName');
+    }
+    set ViewName(value: string) {
+        this.Set('ViewName', value);
+    }
+
+    /**
+    * * Field Name: ParamMode
+    * * Display Name: Param Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * BoundFixed
+    *   * None
+    *   * PerValueCache
+    *   * RowFilterBroad
+    * * Description: Parameterization classification: 'None' (unparameterized), 'RowFilterBroad' (materialize broad, filter at read), 'PerValueCache' (bounded structural variant), or 'BoundFixed' (params bound to fixed values). v1 supports 'None' and 'RowFilterBroad'; 'PerValueCache' and 'BoundFixed' are reserved for later phases.
+    */
+    get ParamMode(): 'BoundFixed' | 'None' | 'PerValueCache' | 'RowFilterBroad' {
+        return this.Get('ParamMode');
+    }
+    set ParamMode(value: 'BoundFixed' | 'None' | 'PerValueCache' | 'RowFilterBroad') {
+        this.Set('ParamMode', value);
+    }
+
+    /**
+    * * Field Name: RefreshStrategy
+    * * Display Name: Refresh Strategy
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: FullRebuild
+    * * Value List Type: List
+    * * Possible Values 
+    *   * DirtyGroupRecompute
+    *   * FullRebuild
+    *   * Incremental
+    * * Description: Refresh strategy: 'FullRebuild' (rebuild the whole result), 'Incremental' (MERGE on the surrogate key), or 'DirtyGroupRecompute' (recompute groups changed since Watermark). v1 ships all three: 'FullRebuild' for unkeyed materializations, and 'Incremental'/'DirtyGroupRecompute' auto-selected by CodeGen for eligible keyed aggregations.
+    */
+    get RefreshStrategy(): 'DirtyGroupRecompute' | 'FullRebuild' | 'Incremental' {
+        return this.Get('RefreshStrategy');
+    }
+    set RefreshStrategy(value: 'DirtyGroupRecompute' | 'FullRebuild' | 'Incremental') {
+        this.Set('RefreshStrategy', value);
+    }
+
+    /**
+    * * Field Name: RefreshSchedule
+    * * Display Name: Refresh Schedule
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Cron expression for scheduled rehydration via the ScheduledJobEngine. NULL means manual refresh only. Stagger across materializations to avoid refresh-window contention.
+    */
+    get RefreshSchedule(): string | null {
+        return this.Get('RefreshSchedule');
+    }
+    set RefreshSchedule(value: string | null) {
+        this.Set('RefreshSchedule', value);
+    }
+
+    /**
+    * * Field Name: LastRefreshedAt
+    * * Display Name: Last Refreshed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the last successful refresh (freshness surfacing for the selection contract).
+    */
+    get LastRefreshedAt(): Date | null {
+        return this.Get('LastRefreshedAt');
+    }
+    set LastRefreshedAt(value: Date | null) {
+        this.Set('LastRefreshedAt', value);
+    }
+
+    /**
+    * * Field Name: NextRefreshAt
+    * * Display Name: Next Refresh At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Next scheduled refresh time, computed from RefreshSchedule; the scheduler reads this as its due-work signal.
+    */
+    get NextRefreshAt(): Date | null {
+        return this.Get('NextRefreshAt');
+    }
+    set NextRefreshAt(value: Date | null) {
+        this.Set('NextRefreshAt', value);
+    }
+
+    /**
+    * * Field Name: Watermark
+    * * Display Name: Watermark
+    * * SQL Data Type: datetimeoffset
+    * * Description: Last-seen MAX(__mj_UpdatedAt) of the source data; the staleness probe for incremental / dirty-group refresh. Reuses the existing query smart-cache fingerprint pattern.
+    */
+    get Watermark(): Date | null {
+        return this.Get('Watermark');
+    }
+    set Watermark(value: Date | null) {
+        this.Set('Watermark', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Building
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Building
+    *   * Disabled
+    *   * DriftHold
+    *   * Stale
+    * * Description: Lifecycle state: 'Building' (materializing), 'Active' (fresh, readable), 'Stale' (past expected freshness), 'Disabled' (turned off), 'DriftHold' (upstream schema drift detected; held for review).
+    */
+    get Status(): 'Active' | 'Building' | 'Disabled' | 'DriftHold' | 'Stale' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Building' | 'Disabled' | 'DriftHold' | 'Stale') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: RowCount
+    * * Display Name: Row Count
+    * * SQL Data Type: bigint
+    * * Description: Approximate row count of the last build — part of the cost/size profile an agent (Skip) uses to choose live vs. materialized.
+    */
+    get RowCount(): number | null {
+        return this.Get('RowCount');
+    }
+    set RowCount(value: number | null) {
+        this.Set('RowCount', value);
+    }
+
+    /**
+    * * Field Name: ApproxBuildCostMs
+    * * Display Name: Approx Build Cost Ms
+    * * SQL Data Type: bigint
+    * * Description: Approximate build cost in milliseconds of the last refresh — part of the cost/size profile for the selection contract.
+    */
+    get ApproxBuildCostMs(): number | null {
+        return this.Get('ApproxBuildCostMs');
+    }
+    set ApproxBuildCostMs(value: number | null) {
+        this.Set('ApproxBuildCostMs', value);
+    }
+
+    /**
+    * * Field Name: IntendedWorkload
+    * * Display Name: Intended Workload
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human/structured note describing what this materialization is good for; surfaced in the selection contract so callers pick the right variant.
+    */
+    get IntendedWorkload(): string | null {
+        return this.Get('IntendedWorkload');
+    }
+    set IntendedWorkload(value: string | null) {
+        this.Set('IntendedWorkload', value);
+    }
+
+    /**
+    * * Field Name: RowFilterColumns
+    * * Display Name: Row Filter Columns
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of the output column names that the row-filter parameters map to. Populated when ParamMode is RowFilterBroad. The materialization holds all rows broad and these columns are filtered at read time (plan section 6.4). NULL for non-row-filter materializations.
+    */
+    get RowFilterColumns(): string | null {
+        return this.Get('RowFilterColumns');
+    }
+    set RowFilterColumns(value: string | null) {
+        this.Set('RowFilterColumns', value);
+    }
+
+    /**
+    * * Field Name: BroadSQL
+    * * Display Name: Broad SQL
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: For a RowFilterBroad materialization, the broad source SELECT that the refresh engine materializes: the source query with its row-filter WHERE predicates removed, so the materialized table holds every row the query could return for any parameter value. NULL for non-parameterized materializations, which use the source query SQL directly.
+    */
+    get BroadSQL(): string | null {
+        return this.Get('BroadSQL');
+    }
+    set BroadSQL(value: string | null) {
+        this.Set('BroadSQL', value);
+    }
+
+    /**
+    * * Field Name: KeyColumns
+    * * Display Name: Key Columns
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Phase 3: JSON array of the key columns ({name, type}) for a keyed/aggregation materialization — the combined key hashed into the surrogate (the stable match key for incremental refresh / dirty-group recompute). NULL means not keyed, in which case a synthetic IDENTITY/ROW_NUMBER surrogate is used.
+    */
+    get KeyColumns(): string | null {
+        return this.Get('KeyColumns');
+    }
+    set KeyColumns(value: string | null) {
+        this.Set('KeyColumns', value);
+    }
+
+    /**
+    * * Field Name: SourceRowCount
+    * * Display Name: Source Row Count
+    * * SQL Data Type: bigint
+    * * Description: Phase 3 (DirtyGroupRecompute): the SOURCE table row count observed at the last successful refresh. Delete-detection guard — if the current source COUNT(*) is lower than this, rows were deleted and the refresh falls back to a full rebuild (dirty-group recompute cannot localize deletes from surviving rows). NULL means no baseline yet (first run does a full rebuild and sets it). Distinct from RowCount, which counts materialized rows (groups).
+    */
+    get SourceRowCount(): number | null {
+        return this.Get('SourceRowCount');
+    }
+    set SourceRowCount(value: number | null) {
+        this.Set('SourceRowCount', value);
+    }
+
+    /**
+    * * Field Name: RefreshesSinceFullRebuild
+    * * Display Name: Refreshes Since Full Rebuild
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Count of consecutive incremental (Incremental/DirtyGroupRecompute) refreshes since the last full rebuild. The refresher forces a full rebuild once this reaches its threshold, reconciling drift that a balanced delete+insert (net-zero source row-count change) leaves uncaught by the delete-detection guard. Reset to 0 on every full rebuild; incremented on every incremental refresh.
+    */
+    get RefreshesSinceFullRebuild(): number {
+        return this.Get('RefreshesSinceFullRebuild');
+    }
+    set RefreshesSinceFullRebuild(value: number) {
+        this.Set('RefreshesSinceFullRebuild', value);
+    }
+
+    /**
+    * * Field Name: ReadFilterSpec
+    * * Display Name: Read Filter Spec
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: For a RowFilterBroad materialization, a JSON array of read-time filter predicates — each { column, operator, paramName, kind } — that the runtime provider injects against the broad materialized table when a caller runs the query with DataSource=Materialized. operator is one of the read-time-safe set (=, !=, <>, <, >, <=, >=, IN, NOT IN); kind is scalar or list. Values are always bound as SQL parameters, never interpolated. NULL for non-row-filter materializations.
+    */
+    get ReadFilterSpec(): string | null {
+        return this.Get('ReadFilterSpec');
+    }
+    set ReadFilterSpec(value: string | null) {
+        this.Set('ReadFilterSpec', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: SourceEntity
+    * * Display Name: Source Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SourceEntity(): string | null {
+        return this.Get('SourceEntity');
+    }
+
+    /**
+    * * Field Name: GeneratedEntity
+    * * Display Name: Generated Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get GeneratedEntity(): string | null {
+        return this.Get('GeneratedEntity');
+    }
+}
+
+
+/**
  * MJ: MCP Server Connection Permissions - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: MCPServerConnectionPermission
@@ -97785,6 +98532,20 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
     set ExternalDataSourceID(value: string | null) {
         this.Set('ExternalDataSourceID', value);
+    }
+
+    /**
+    * * Field Name: IsMaterialized
+    * * Display Name: Is Materialized
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Author's declared intent that this Query should be materialized. CodeGen scans for IsMaterialized = 1 and, if the query qualifies (§9/§10), materializes it. The authoritative state lives on the linked MJ: Materialized Results row (found via the MaterializedResultQuery join table).
+    */
+    get IsMaterialized(): boolean {
+        return this.Get('IsMaterialized');
+    }
+    set IsMaterialized(value: boolean) {
+        this.Set('IsMaterialized', value);
     }
 
     /**
@@ -110844,6 +111605,26 @@ export interface MJTaskEntity_ITaskStepConfiguration {
      * produced one.
      */
     runtime?: MJTaskEntity_ITaskStepRuntime;
+
+    /**
+     * Where this step sits in the graph's own order — its rank in a topological sort of the
+     * dependency edges, assigned once at submission.
+     *
+     * **Why a stored rank rather than an ordering rule.** `Task` has no sequence column, and every
+     * consumer that lists a graph's steps was therefore falling back to `__mj_CreatedAt` — which is
+     * the COMPILER's walk order, related to neither the order someone drew the steps in nor the
+     * order they run in. A graph that had not started yet listed its steps essentially at random:
+     * step 2(b), step 3, step 1, step 2(a), with step 3 above the steps it depends on.
+     *
+     * A graph's edges already define a partial order, and that order is knowable before anything
+     * runs — which is exactly when it is needed, since there are no timestamps to sort by yet.
+     * Steps that share a rank are genuinely concurrent, and consumers break that tie with the real
+     * start time, so the rule reads "drawn order, then what actually happened".
+     *
+     * Assigned at submission and never rewritten: it describes the graph's shape, which does not
+     * change once compiled.
+     */
+    sequence?: number;
 }
 
 /**
@@ -110864,6 +111645,109 @@ export interface MJTaskEntity_ITaskStepRuntime {
      * output the payload actually carries.
      */
     promptRunID?: string;
+
+    /**
+     * The `MJ: Action Execution Logs` row this step produced, when it was an Action step.
+     *
+     * The action equivalent of {@link promptRunID}, and it exists for the same reason: the Task row
+     * records that an action ran, and nothing recorded WHICH execution. So a workflow's action step
+     * had no way to offer "view the execution log" — the one thing a person wants when an action
+     * misbehaves — while an ordinary agent run step has offered exactly that all along through its
+     * `TargetLogID`.
+     *
+     * Set on the step's LAST execution, matching promptRunID: the logs themselves are the durable
+     * history, and this points at the one whose output the payload actually carries.
+     */
+    actionLogID?: string;
+
+    /**
+     * One entry per pass of a loop step, in iteration order.
+     *
+     * **Without this a loop's work does not exist anywhere the platform can see it.** The run tree
+     * reaches nested work through exactly six links — a run's steps, a task-graph step's graph, a
+     * graph's tasks, a Sub-Agent step's run, and a task's own `AgentRunID` — and a loop iteration is
+     * none of them. `AIAgentRun.ParentRunID` does not help either: it records parentage but is not a
+     * link the tree traverses. So a `While` that spent real money across three passes reported one
+     * childless node with no cost, the settlement rollup under-counted every loop-bearing workflow,
+     * and the timeline offered nothing to expand — the work had happened and was unreachable.
+     *
+     * Recorded by the dispatcher as each pass completes, so a loop that is still running already has
+     * its finished iterations here.
+     */
+    iterations?: MJTaskEntity_ITaskLoopIteration[];
+
+    /**
+     * The payload as it stood when this step BEGAN — its dependencies' outputs merged with whatever
+     * authored input it carried.
+     *
+     * **Why this is not `Task.InputPayload`.** That column holds the *authored* input from the spec
+     * and round-trips back out through `TaskGraphSpecToAgentSpec`; overwriting it at completion would
+     * make a run's resolved values indistinguishable from what its author declared. So the resolved
+     * value lives here, and the authored one stays where it was written.
+     *
+     * **Why it is stored at all**, when `OutputPayload` already holds the payload as it stood after.
+     * Without a before, the run view has nothing to diff against and reports every step as having
+     * created the entire payload from nothing — a step that added one key showed as `root Added
+     * Object{5 keys}`. It is the same before/after pair an `AIAgentRunStep` has always recorded, for
+     * the same reason. It duplicates the upstream task's output by design: recomputing it would mean
+     * re-implementing the dependency merge in every consumer.
+     */
+    payloadAtStart?: Record<string, unknown>;
+}
+
+/**
+ * What one pass of a loop produced.
+ *
+ * Deliberately just pointers plus outcome: the `AIPromptRun` / `AIAgentRun` rows are the durable
+ * record of what happened, and copying their cost here would create a second number to disagree with
+ * the first — the exact failure this whole area has been fixing.
+ */
+export interface MJTaskEntity_ITaskLoopIteration {
+    /** Zero-based pass number, so iterations render in the order they ran. */
+    index: number;
+    /** The `MJ: AI Prompt Runs` row this pass produced, when the loop body is a prompt. */
+    promptRunID?: string;
+    /** The `MJ: AI Agent Runs` row this pass started, when the loop body is a sub-agent. */
+    agentRunID?: string;
+    /**
+     * The `MJ: Action Execution Logs` row this pass produced, when the loop body is an ACTION.
+     *
+     * Without it an action-bodied pass recorded no pointer at all, so it had no cost, no timing and
+     * nothing to open — and the tree, having neither a prompt run nor an agent run to go on, fell to
+     * its last branch and labelled the pass a **Sub-Agent**. A loop over a web search then presented
+     * five sub-agent runs that never happened.
+     */
+    actionLogID?: string;
+    /** Whether the pass succeeded. A loop with `continueOnError` can have failed passes and still finish. */
+    success?: boolean;
+    /** Why the pass failed, when it did. */
+    errorMessage?: string;
+
+    /**
+     * What THIS pass was handed — the body's resolved input, not the loop's running payload.
+     *
+     * A pass is the ONLY unit of work in a graph with no row of its own, so there is nowhere else
+     * for its input and output to live. Without them every pass presented `null` on both sides and
+     * the run view could say nothing about any individual iteration — which for a loop is the only
+     * interesting question, since the step's own payload shows just the final accumulated state.
+     *
+     * **Deliberately the pass's own input rather than "the running payload before this pass".** The
+     * latter is the obvious reading of a before/after pair and is quadratic: every pass would carry a
+     * full copy of everything the earlier passes accumulated. A five-iteration demo produced a 121KB
+     * configuration that way, and the same loop over fifty items would produce megabytes — in a
+     * column that the run tree, the timeline, the canvas and the run list all load.
+     *
+     * May instead hold `{ __omitted, __bytes, __limit }` when a size budget was exceeded. Stated
+     * rather than left empty, because a pass showing nothing is otherwise indistinguishable from a
+     * pass that produced nothing.
+     */
+    payloadAtStart?: Record<string, unknown>;
+
+    /**
+     * What this pass gave back — the body's own output, on the same basis as {@link payloadAtStart},
+     * and subject to the same budget marker.
+     */
+    payloadAtEnd?: Record<string, unknown>;
 }
 
 /** A step's position and size on the canvas, in canvas units. */
@@ -110990,6 +111874,19 @@ export interface MJTaskEntity_ITaskLoopSubAgentBody {
 export interface MJTaskEntity_ITaskHumanConfiguration {
     /** What the person is being asked to do. */
     instructions?: string;
+
+    /**
+     * How long the person has to answer before the step gives up, in hours.
+     *
+     * **Without this the deadline machinery is unreachable.** `AIAgentRequest.ExpiresAt` exists, and
+     * the dispatcher already expires overdue requests and fails the step so a give-up edge can route
+     * around it — but nothing ever set the column, so that path had never run outside a test. A
+     * workflow waiting on someone who left the company waited forever.
+     *
+     * Omitted means no deadline, which stays the default: a step that silently expired on a timeout
+     * its author never chose would be worse than one that waits.
+     */
+    expiresInHours?: number;
 }
 
 /** A step completed by a system outside MemberJunction, which reports back when it is done. */
