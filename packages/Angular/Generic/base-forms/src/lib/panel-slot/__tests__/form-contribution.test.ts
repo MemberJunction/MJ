@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { FormPanelRegistrationMetadata, FormPanelSlot } from '../base-form-panel';
 import {
-    ClaimedRelatedSectionKeys,
+    ContributionHiddenSectionKeys,
     FormSectionCamelCase,
     RelatedContributionKey,
     RelatedEntitySectionKey,
@@ -274,6 +274,28 @@ describe('ResolveFormContributions', () => {
         expect(result.StockGrids).toHaveLength(1);
     });
 
+    it('a header contribution can sit in before-fields and replace Details', () => {
+        const hero = reg({
+            entity: 'MJ_BizApps_Orders: Order Headers',
+            slot: 'before-fields',
+            contributionKey: 'header',
+            replacesSectionKey: 'details',
+            sortKey: 100,
+        }, 10);
+        const result = ResolveFormContributions({
+            EntityName: 'MJ_BizApps_Orders: Order Headers',
+            RelatedEntities: [],
+            IsaChildEntityIDs: [],
+            Registrations: [hero],
+            BakedSectionKeys: [],
+            ShowRelatedEntities: true,
+        });
+        const winner = result.Winners.find((w) => w.ContributionKey === 'header');
+        expect(winner?.Slot).toBe('before-fields');
+        expect(winner?.ReplacesSectionKey).toBe('details');
+        expect(result.StockGrids).toEqual([]);
+    });
+
     it('two extras without a contributionKey do not collapse', () => {
         const a = reg({ entity: PEOPLE, slot: 'after-fields', sortKey: 10 });
         const b = reg({ entity: PEOPLE, slot: 'before-fields', sortKey: 20 });
@@ -289,9 +311,9 @@ describe('ResolveFormContributions', () => {
     });
 });
 
-describe('ClaimedRelatedSectionKeys', () => {
+describe('ContributionHiddenSectionKeys', () => {
     it('returns the CodeGen section key for each claimed relationship', () => {
-        const keys = ClaimedRelatedSectionKeys(
+        const keys = ContributionHiddenSectionKeys(
             PEOPLE,
             [tickets, addresses],
             [],
@@ -300,8 +322,55 @@ describe('ClaimedRelatedSectionKeys', () => {
         expect(keys).toEqual([RelatedEntitySectionKey(tickets, [tickets, addresses])]);
     });
 
+    it('includes replacesSectionKey for a field-panel takeover', () => {
+        const keys = ContributionHiddenSectionKeys(
+            PEOPLE,
+            [],
+            [],
+            [reg({
+                entity: PEOPLE,
+                slot: 'before-fields',
+                contributionKey: 'header',
+                replacesSectionKey: 'personalIdentity',
+                sortKey: 100,
+            })],
+        );
+        expect(keys).toEqual(['personalIdentity']);
+    });
+
+    it('hides both a field section and a related grid when one winner claims both', () => {
+        const keys = ContributionHiddenSectionKeys(
+            PEOPLE,
+            [tickets],
+            [],
+            [reg({
+                entity: PEOPLE,
+                slot: 'before-fields',
+                contributionKey: 'header',
+                replacesSectionKey: 'details',
+                relatedEntity: TICKETS,
+            })],
+        );
+        expect(keys).toContain('details');
+        expect(keys).toContain(RelatedEntitySectionKey(tickets, [tickets]));
+    });
+
+    it('ignores a wildcard registration that tries to replace a field section', () => {
+        const keys = ContributionHiddenSectionKeys(
+            PEOPLE,
+            [],
+            [],
+            [reg({
+                entity: '*',
+                slot: 'before-fields',
+                replacesSectionKey: 'details',
+            }, 99)],
+        );
+        expect(keys).toEqual([]);
+    });
+
     it('returns empty when nothing is claimed', () => {
-        expect(ClaimedRelatedSectionKeys(PEOPLE, [tickets], [], [])).toEqual([]);
+        expect(ContributionHiddenSectionKeys(PEOPLE, [tickets], [], [])).toEqual([]);
     });
 });
 

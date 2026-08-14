@@ -240,7 +240,7 @@ A form is a list of **contributions**. A related-entity grid is the default cont
 | `DisplayInForm` relationship not baked (other app installed; custom form omitted it) | Composer mounts the stock grid — or the claiming panel. |
 | Extra pane (`relatedEntity` omitted) | Existing slot host mounts it. |
 
-Claim a relationship so your panel replaces the stock/baked grid:
+**Replace a related grid** so your panel is the contribution (baked grid hides):
 
 ```typescript
 @RegisterClassEx(BaseFormPanel, {
@@ -250,13 +250,35 @@ Claim a relationship so your panel replaces the stock/baked grid:
         slot: 'after-related',
         sortKey: 80,
         relatedEntity: 'MJ_BizApps_Orders: Event Order Lines',
-        relatedJoinField: 'PersonID',   // optional; required when two FKs point at the same entity
+        relatedJoinField: 'PersonID',   // required when two FKs point at the same entity
     },
 })
-export class PersonEventTicketsPanel extends BaseFormPanel { /* ... */ }
+export class PersonEventTicketsPanel extends BaseFormPanel { /* ticket cards */ }
 ```
 
-`contributionKey` defaults to `related:${relatedEntity}:${joinField}`. Two registrations with the same key collapse; highest ClassFactory `Priority` wins. Discover via `GetAllRegistrationsByMetadata` — do not stuff entity/slot/order into `Key`.
+**Replace a field panel with a hero that is not a collapsible panel** (Orders header, Person identity):
+
+```typescript
+@RegisterClassEx(BaseFormPanel, {
+    key: 'form-panel:OrderHeaders:header',
+    metadata: {
+        entity: 'MJ_BizApps_Orders: Order Headers',
+        slot: 'before-fields',          // top of every generated form
+        sortKey: 100,
+        contributionKey: 'header',      // last-wins identity if two apps ship a header
+        replacesSectionKey: 'details',  // CodeGen SectionKey — hides the baked Details panel
+    },
+})
+export class OrderHeaderHeroPanel extends BaseFormPanel {
+    // template is a hero strip — no <mj-collapsible-panel>
+}
+```
+
+`replacesSectionKey` is the `SectionKey` on the generated `<mj-collapsible-panel>` (camelCase of the section name). Must name a concrete `entity`, not `'*'`.
+
+`contributionKey` defaults to `related:${relatedEntity}:${joinField}` for related claims. Two registrations with the same key collapse; highest ClassFactory `Priority` wins. Discover via `GetAllRegistrationsByMetadata` — do not stuff entity/slot/order into `Key`.
+
+Worked examples (Orders hero, Person tickets, Sales fill-in, competing headers): [Forms Architecture Guide §7c](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7c-form-contributions--add-replace-or-fill-in-no-regen).
 
 `<mj-record-form-container>` always hosts `<mj-form-contributions>`, so custom forms that use the container get fill-in grids with no template edit. Put CodeGen slots back on custom templates so claimed panels land in `after-related` instead of falling through to `after-everything`. A form that is not in the container can drop in:
 

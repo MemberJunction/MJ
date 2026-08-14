@@ -78,6 +78,13 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
      * Compared after stripping wrapping `[]`.
      */
     relatedJoinField?: string;
+    /**
+     * CodeGen `SectionKey` of a baked field (or other) panel this contribution
+     * replaces — e.g. `'details'`, `'personalIdentity'`. Hidden at runtime via
+     * `HiddenSectionKeys`. Use with `slot: 'before-fields'` for a form hero that
+     * is not a collapsible panel. Must name a concrete `entity` (not `'*'`).
+     */
+    replacesSectionKey?: string;
 }
 
 /**

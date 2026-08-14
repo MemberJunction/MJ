@@ -2,55 +2,45 @@
 
 **Status:** implemented on `an-form-contributions`  
 **Package:** `@memberjunction/ng-base-forms`  
-**Migration:** none
+**Migration:** none  
+**How-to + domain examples:** [Forms Architecture Guide §7c](../guides/FORMS_ARCHITECTURE_GUIDE.md#7c-form-contributions--add-replace-or-fill-in-no-regen)
 
-A form is a list of **contributions**. A related-entity grid is the default contribution when nobody claimed that relationship. Installed OpenApps register `BaseFormPanel`s via `@RegisterClassEx` + a metadata bag; ClassFactory discovery is “what is installed.”
+A form is a list of **contributions**. Installed OpenApps register `BaseFormPanel`s via `@RegisterClassEx` + a metadata bag; ClassFactory discovery is “what is installed.”
+
+A contribution can be a collapsible section, a related-entity card, **or a form hero that is not a panel at all**.
 
 ## CodeGen: keep emitting
 
-Generated forms keep baking related-entity `<mj-collapsible-panel Variant="related-entity">` panels exactly as they do today.
+Generated forms keep baking field panels and related-entity grids exactly as they do today.
 
 | Situation | What happens |
 |---|---|
-| Generated form, no claim | Baked grid shows. Composer does **not** add a second one. |
-| A panel **claims** that relationship (`relatedEntity` + optional join field) | Baked section is hidden via `HiddenSectionKeys`. The registered panel mounts in its slot. |
-| Relationship exists in metadata (`DisplayInForm`) but was **not** baked (other app installed after CodeGen; custom form omitted it) | Composer mounts the stock grid — or the claiming panel. |
-| Extra pane (no `relatedEntity`) | Existing `<mj-form-panel-slot>` mounts it. Unchanged. |
+| Generated form, no claim | Baked UI shows. Composer does **not** add a second related grid. |
+| Panel claims a relationship (`relatedEntity` + optional join field) | Baked related section hides. The registered panel mounts. |
+| `DisplayInForm` relationship not baked (other app installed after CodeGen) | Composer mounts the stock grid — or the claiming panel. |
+| Panel sets `replacesSectionKey` (e.g. `'details'`) | That baked field panel hides. Yours mounts in `slot` (typically `before-fields`). Does not have to be a collapsible panel. |
+| Extra pane (no claim) | Existing `<mj-form-panel-slot>` mounts it. |
 
-Override is runtime. No regen required. A later CodeGen cleanup (stop baking related grids; container is the only renderer) is optional and not part of this change.
+Override is runtime. No regen required.
 
-## Discovery — metadata, not key prefixes
-
-`GetAllRegistrationsByMetadata` is the query. Do not encode entity/slot/order into `Key`. `Key` stays a diagnostic id (`form-panel:People:related:EventOrderLines`).
+## Metadata
 
 ```ts
 interface FormPanelRegistrationMetadata {
   entity: string | '*';
-  slot: FormPanelSlot;
+  slot: FormPanelSlot;            // before-fields = top of every generated form
   sortKey?: number;
-  contributionKey?: string;       // identity for last-wins; derived if omitted
-  relatedEntity?: string;         // claim → replace the stock/baked grid
-  relatedJoinField?: string;      // BillToPersonID vs ShipToPersonID
+  contributionKey?: string;       // last-wins identity; derived for related claims
+  relatedEntity?: string;         // replace a related grid
+  relatedJoinField?: string;      // BillTo vs ShipTo
+  replacesSectionKey?: string;    // replace a field panel (CodeGen SectionKey)
 }
 ```
 
-Derived `contributionKey`: `related:${relatedEntity}:${joinField}` when claiming a relationship.
-
-Collapse by `contributionKey`. Winner = highest ClassFactory `Priority`. Order winners by `sortKey` then `Priority`.
-
-## Composer
-
-`ResolveFormContributions` (pure TS, unit-tested):
-
-1. Implicit set = `DisplayInForm` relationships that are not IS-A children.
-2. Registered set = panels whose `entity` matches this form (or `'*'` extras).
-3. Merge by key. A related claim replaces the stock grid and, if baked, hides that section key (same camelCase CodeGen uses).
-4. Stock grids only for relationships that are **not** claimed and **not** already baked.
-
-`<mj-form-contributions>` lives in `<mj-record-form-container>` (after projected content, before `after-everything`). Custom forms that use the container get fill-in grids for free. Restore CodeGen slots on custom templates so claimed panels land in `after-related` instead of falling through.
+Related / field-section claims must name a concrete `entity` (not `'*'`). Collapse by `contributionKey`. Winner = highest ClassFactory `Priority`.
 
 ## Out of scope
 
-- Toolbar verbs / hero replace (same idea, later host)
-- A `MJ: Form Extensions` table — ClassFactory + client bootstrap is enough
+- Toolbar verbs (same idea, later host)
+- A `MJ: Form Extensions` table
 - Changing CodeGen output

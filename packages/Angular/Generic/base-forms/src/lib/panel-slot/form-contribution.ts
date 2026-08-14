@@ -48,6 +48,8 @@ export interface FormContributionWinner {
     Kind: FormContributionKind;
     RelatedEntity?: string;
     RelatedJoinField?: string;
+    /** Field/other section this registered winner asked to hide. */
+    ReplacesSectionKey?: string;
     BakedSectionKey: string;
     DisplayName: string;
 }
@@ -150,7 +152,11 @@ function applicableRegistrations(
         if (!entity || !entityMatches(entity, entityName)) return false;
         // A related claim on entity:'*' would hide that grid on every form.
         // Claims must name the form entity.
-        if (reg.Metadata.relatedEntity && entity === '*') return false;
+        // Related / field-section claims on entity:'*' would hide panels on every
+        // form. Those claims must name the form entity.
+        if ((reg.Metadata.relatedEntity || reg.Metadata.replacesSectionKey) && entity === '*') {
+            return false;
+        }
         return true;
     });
 }
@@ -203,6 +209,7 @@ function registeredWinner(
         Kind: 'registered',
         RelatedEntity: meta.relatedEntity,
         RelatedJoinField: meta.relatedJoinField ? StripJoinFieldBrackets(meta.relatedJoinField) : undefined,
+        ReplacesSectionKey: meta.replacesSectionKey?.trim() || undefined,
         BakedSectionKey: sectionKey,
         DisplayName: displayName,
     };
@@ -280,8 +287,8 @@ export function ResolveFormContributions(input: ResolveFormContributionsInput): 
     };
 }
 
-/** Section keys a form should hide because a panel claimed the relationship. */
-export function ClaimedRelatedSectionKeys(
+/** Section keys a form should hide because a winning contribution claimed them. */
+export function ContributionHiddenSectionKeys(
     entityName: string,
     relatedEntities: readonly FormContributionRelationship[],
     isaChildEntityIDs: readonly string[],
@@ -298,7 +305,9 @@ export function ClaimedRelatedSectionKeys(
     const peers = visibleRelationships(relatedEntities, isaChildEntityIDs);
     const keys: string[] = [];
     for (const winner of resolved.Winners) {
-        if (winner.Kind !== 'registered' || !winner.RelatedEntity) continue;
+        if (winner.Kind !== 'registered') continue;
+        if (winner.ReplacesSectionKey) keys.push(winner.ReplacesSectionKey);
+        if (!winner.RelatedEntity) continue;
         const peer = peers.find((rel) => {
             if (rel.RelatedEntity !== winner.RelatedEntity) return false;
             if (!winner.RelatedJoinField) return true;
@@ -307,4 +316,14 @@ export function ClaimedRelatedSectionKeys(
         if (peer) keys.push(RelatedEntitySectionKey(peer, peers));
     }
     return keys;
+}
+
+/** @deprecated Use {@link ContributionHiddenSectionKeys}. */
+export function ClaimedRelatedSectionKeys(
+    entityName: string,
+    relatedEntities: readonly FormContributionRelationship[],
+    isaChildEntityIDs: readonly string[],
+    registrations: readonly FormContributionRegistration[],
+): string[] {
+    return ContributionHiddenSectionKeys(entityName, relatedEntities, isaChildEntityIDs, registrations);
 }
