@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Spend &amp; Policy Console</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626;
+    --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+
+  .content { padding: 22px 28px 40px; }
+
+  .budget-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 22px; }
+  .budget-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 18px; }
+  .budget-card .bname { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+  .budget-card .bscope { font-size: 11.5px; color: var(--mj-text-muted); margin-bottom: 14px; }
+  .gauge-wrap { display: flex; align-items: center; gap: 14px; }
+  .gauge { width: 74px; height: 74px; border-radius: 50%; position: relative; flex-shrink: 0; }
+  .gauge-inner { position: absolute; inset: 8px; background: var(--mj-bg-surface); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+  .gauge-inner .pct { font-size: 15px; font-weight: 800; }
+  .gauge-stats .amt { font-size: 18px; font-weight: 800; }
+  .gauge-stats .of { font-size: 11.5px; color: var(--mj-text-muted); }
+  .gauge-stats .tag { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; margin-top: 6px; }
+  .tag-good { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+  .tag-warn { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+  .tag-err { background: var(--mj-status-error-bg); color: var(--mj-status-error); }
+
+  .alert-banner { background: var(--mj-status-warning-bg); border: 1px solid color-mix(in srgb, var(--mj-status-warning) 30%, transparent); border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+  .alert-banner i { color: var(--mj-status-warning); font-size: 18px; }
+  .alert-banner b { display: block; }
+  .alert-banner span.d { font-size: 12.5px; color: var(--mj-text-secondary); }
+
+  .grid-2 { display: grid; grid-template-columns: 1.35fr 1fr; gap: 20px; align-items: start; }
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+  .card-body { padding: 0; }
+  .card-body.pad { padding: 18px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); padding: 10px 18px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); }
+  td { padding: 11px 18px; border-bottom: 1px solid var(--mj-border-subtle); font-size: 13px; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .who { font-weight: 700; }
+  .what { color: var(--mj-text-muted); font-size: 11.5px; }
+  .cost-cell { font-weight: 700; font-family: ui-monospace, monospace; }
+
+  .breakdown-list { padding: 6px 0; }
+  .b-row { display: flex; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .b-row:last-child { border-bottom: none; }
+  .b-name { flex: 1; font-size: 12.5px; font-weight: 600; }
+  .b-name .path { display: block; font-size: 11px; font-weight: 400; color: var(--mj-text-muted); }
+  .b-score { font-size: 13px; font-weight: 800; width: 60px; text-align: right; font-family: ui-monospace, monospace; }
+  .b-bar-track { width: 70px; height: 6px; background: var(--mj-bg-surface-sunken); border-radius: 999px; overflow: hidden; }
+  .b-bar { height: 100%; border-radius: 999px; }
+
+  .export-panel { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; }
+  .export-panel .card-header { background: var(--mj-bg-surface-card); }
+  .export-body { padding: 18px; }
+  .export-title { font-weight: 700; font-size: 13.5px; margin-bottom: 4px; }
+  .export-desc { font-size: 12.5px; color: var(--mj-text-secondary); margin-bottom: 14px; }
+  .export-row { display: flex; justify-content: space-between; font-size: 12.5px; padding: 7px 0; border-bottom: 1px solid var(--mj-border-subtle); }
+  .export-row:last-of-type { border-bottom: none; margin-bottom: 12px; }
+
+  .footer-note { padding: 4px 28px 24px; color: var(--mj-text-muted); font-size: 11.5px; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-diagram-project"></i> MemberJunction</div>
+    <div class="nav-section">AI</div>
+    <div class="nav-item"><i class="fa-solid fa-robot"></i> Agents</div>
+    <div class="nav-item"><i class="fa-solid fa-comment-dots"></i> Prompts</div>
+    <div class="nav-section">Governance · New</div>
+    <div class="nav-item active"><i class="fa-solid fa-sack-dollar"></i> Spend &amp; Policy Console</div>
+    <div class="nav-item"><i class="fa-solid fa-scale-balanced"></i> Usage Policies</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1><i class="fa-solid fa-sack-dollar"></i> AI Spend &amp; Policy Console</h1>
+        <div class="sub">Budget guardrails and cost visibility across every Agent &amp; Prompt run this org owns</div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <div class="btn"><i class="fa-solid fa-plus"></i> New Budget</div>
+        <div class="btn btn-primary"><i class="fa-solid fa-file-shield"></i> Board Governance Export</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="alert-banner">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <div>
+          <b>Program Ops budget is at 92% with 9 days left in the cycle</b>
+          <span class="d">14 of those runs were unplanned model failovers to a higher-cost model after the primary provider timed out — visible here for the first time instead of buried in execution logs.</span>
+        </div>
+      </div>
+
+      <div class="budget-row">
+        <div class="budget-card">
+          <div class="bname">Program Ops</div>
+          <div class="bscope">Scope: Grants Review Agent · Monthly</div>
+          <div class="gauge-wrap">
+            <div class="gauge" style="background: conic-gradient(var(--mj-status-error) 0% 92%, var(--mj-bg-surface-sunken) 92% 100%);">
+              <div class="gauge-inner"><span class="pct" style="color:var(--mj-status-error);">92%</span></div>
+            </div>
+            <div class="gauge-stats">
+              <div class="amt">$184</div>
+              <div class="of">of $200 / mo</div>
+              <div class="tag tag-err"><i class="fa-solid fa-circle-exclamation"></i> Near Limit</div>
+            </div>
+          </div>
+        </div>
+        <div class="budget-card">
+          <div class="bname">Donor Research</div>
+          <div class="bscope">Scope: Prospect Research Agent · Monthly</div>
+          <div class="gauge-wrap">
+            <div class="gauge" style="background: conic-gradient(var(--mj-status-warning) 0% 61%, var(--mj-bg-surface-sunken) 61% 100%);">
+              <div class="gauge-inner"><span class="pct" style="color:var(--mj-status-warning);">61%</span></div>
+            </div>
+            <div class="gauge-stats">
+              <div class="amt">$91</div>
+              <div class="of">of $150 / mo</div>
+              <div class="tag tag-warn"><i class="fa-solid fa-clock"></i> On Track</div>
+            </div>
+          </div>
+        </div>
+        <div class="budget-card">
+          <div class="bname">Volunteer Scheduling</div>
+          <div class="bscope">Scope: Shift Copilot Agent · Monthly</div>
+          <div class="gauge-wrap">
+            <div class="gauge" style="background: conic-gradient(var(--mj-status-success) 0% 24%, var(--mj-bg-surface-sunken) 24% 100%);">
+              <div class="gauge-inner"><span class="pct" style="color:var(--mj-status-success);">24%</span></div>
+            </div>
+            <div class="gauge-stats">
+              <div class="amt">$18</div>
+              <div class="of">of $75 / mo</div>
+              <div class="tag tag-good"><i class="fa-solid fa-circle-check"></i> Healthy</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <div class="card">
+            <div class="card-header">
+              <h2><i class="fa-solid fa-receipt"></i> Recent Runs Against Budget</h2>
+              <span style="font-size:12px; color:var(--mj-text-muted);">Program Ops · Aug 2026</span>
+            </div>
+            <div class="card-body">
+              <table>
+                <thead><tr><th>Agent / Prompt</th><th>Model</th><th>Run</th><th>Cost</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td><div class="who">Grants Review Agent</div><div class="what">Failed over from primary after timeout</div></td>
+                    <td class="what">claude-opus-5 (failover)</td>
+                    <td class="what">Run #88231 · 2h ago</td>
+                    <td class="cost-cell">$4.12</td>
+                  </tr>
+                  <tr>
+                    <td><div class="who">Grants Review Agent</div><div class="what">Standard eligibility screen</div></td>
+                    <td class="what">claude-sonnet-5</td>
+                    <td class="what">Run #88229 · 3h ago</td>
+                    <td class="cost-cell">$0.61</td>
+                  </tr>
+                  <tr>
+                    <td><div class="who">Grants Review Agent</div><div class="what">Failed over from primary after timeout</div></td>
+                    <td class="what">claude-opus-5 (failover)</td>
+                    <td class="what">Run #88214 · 6h ago</td>
+                    <td class="cost-cell">$3.87</td>
+                  </tr>
+                  <tr>
+                    <td><div class="who">Grants Review Agent</div><div class="what">Batch narrative summary — 12 grants</div></td>
+                    <td class="what">claude-sonnet-5</td>
+                    <td class="what">Run #88198 · yesterday</td>
+                    <td class="cost-cell">$2.04</td>
+                  </tr>
+                  <tr>
+                    <td><div class="who">Grants Review Agent</div><div class="what">Standard eligibility screen</div></td>
+                    <td class="what">claude-sonnet-5</td>
+                    <td class="what">Run #88190 · yesterday</td>
+                    <td class="cost-cell">$0.58</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2><i class="fa-solid fa-chart-pie"></i> Cost Breakdown by Model — This Cycle</h2></div>
+            <div class="card-body breakdown-list">
+              <div class="b-row">
+                <div class="b-name">claude-opus-5 (failover only)<span class="path">14 runs · unplanned</span></div>
+                <div class="b-bar-track"><div class="b-bar" style="width:58%; background:var(--mj-status-error);"></div></div>
+                <div class="b-score">$106.40</div>
+              </div>
+              <div class="b-row">
+                <div class="b-name">claude-sonnet-5<span class="path">142 runs · planned</span></div>
+                <div class="b-bar-track"><div class="b-bar" style="width:38%; background:var(--mj-status-info);"></div></div>
+                <div class="b-score">$70.10</div>
+              </div>
+              <div class="b-row">
+                <div class="b-name">claude-haiku-4.5<span class="path">31 runs · planned</span></div>
+                <div class="b-bar-track"><div class="b-bar" style="width:4%; background:var(--mj-status-success);"></div></div>
+                <div class="b-score">$7.50</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="export-panel card">
+            <div class="card-header"><h2><i class="fa-solid fa-file-shield"></i> Board Governance Export</h2></div>
+            <div class="export-body">
+              <div class="export-title">Q3 2026 AI Usage Summary</div>
+              <div class="export-desc">One-click summary for board or funder review — who used AI, on what data, at what cost, and whether every budget stayed within its declared limit.</div>
+              <div class="export-row"><span>Total AI spend</span><b>$293.14</b></div>
+              <div class="export-row"><span>Active agents/prompts</span><b>7</b></div>
+              <div class="export-row"><span>Budgets exceeded this quarter</span><b>0</b></div>
+              <div class="export-row"><span>Runs blocked by hard-stop policy</span><b>0</b></div>
+              <div class="btn btn-primary" style="width:100%; justify-content:center;"><i class="fa-solid fa-download"></i> Generate PDF</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2><i class="fa-solid fa-gear"></i> Program Ops Policy</h2></div>
+            <div class="card-body pad" style="display:flex; flex-direction:column; gap:10px; font-size:12.5px;">
+              <div style="display:flex; justify-content:space-between;"><span>Alert threshold</span><b>80%</b></div>
+              <div style="display:flex; justify-content:space-between;"><span>Hard stop</span><b style="color:var(--mj-status-warning);">Off (alert only)</b></div>
+              <div style="display:flex; justify-content:space-between;"><span>Period</span><b>Monthly, resets Sept 1</b></div>
+              <div style="display:flex; justify-content:space-between;"><span>Allowed models</span><b>Any (no restriction)</b></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-note">Mockup — MemberJunction Weekly Exploration, 2026-08-15 · Idea 3: AI Spend &amp; Policy Console · Illustrative data only.</div>
+  </div>
+</body>
+</html>

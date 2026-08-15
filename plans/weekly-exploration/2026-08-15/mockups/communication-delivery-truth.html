@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deliverability</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626;
+    --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+
+  .content { padding: 22px 28px 40px; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
+  .kpi { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 16px 18px; }
+  .kpi .label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); margin-bottom: 8px; }
+  .kpi .value { font-size: 28px; font-weight: 800; }
+  .kpi .value.good { color: var(--mj-status-success); }
+  .kpi .value.warn { color: var(--mj-status-warning); }
+  .kpi .value.err { color: var(--mj-status-error); }
+  .kpi .delta { font-size: 12px; font-weight: 600; margin-top: 4px; color: var(--mj-status-success); }
+  .kpi .delta.bad { color: var(--mj-status-error); }
+
+  .insight-banner { background: var(--mj-status-info-bg); border: 1px solid color-mix(in srgb, var(--mj-status-info) 30%, transparent); border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+  .insight-banner i { color: var(--mj-status-info); font-size: 18px; }
+  .insight-banner b { display: block; }
+  .insight-banner span.d { font-size: 12.5px; color: var(--mj-text-secondary); }
+
+  .grid-2 { display: grid; grid-template-columns: 1.35fr 1fr; gap: 20px; align-items: start; }
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+  .card-body { padding: 0; }
+  .card-body.pad { padding: 18px; }
+
+  /* Funnel */
+  .funnel { padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+  .funnel-row { display: grid; grid-template-columns: 110px 1fr 70px; align-items: center; gap: 12px; }
+  .funnel-label { font-size: 12.5px; font-weight: 600; color: var(--mj-text-secondary); }
+  .funnel-track { height: 26px; background: var(--mj-bg-surface-sunken); border-radius: 6px; overflow: hidden; position:relative; }
+  .funnel-bar { height: 100%; border-radius: 6px; display:flex; align-items:center; }
+  .funnel-pct { font-size: 13px; font-weight: 800; text-align: right; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); padding: 10px 18px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); }
+  td { padding: 11px 18px; border-bottom: 1px solid var(--mj-border-subtle); font-size: 13px; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .run-name { font-weight: 700; }
+  .run-meta { color: var(--mj-text-muted); font-size: 11.5px; }
+  .rate { font-weight: 700; }
+  .rate.good { color: var(--mj-status-success); }
+  .rate.warn { color: var(--mj-status-warning); }
+  .rate.err { color: var(--mj-status-error); }
+
+  .dnc-panel { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; }
+  .dnc-panel .card-header { background: var(--mj-bg-surface-card); }
+  .contact-strip { display:flex; align-items:center; gap:12px; padding: 16px 18px; border-bottom: 1px solid var(--mj-border-default); }
+  .avatar { width:38px; height:38px; border-radius:50%; background: color-mix(in srgb, var(--mj-brand-primary) 15%, white); color: var(--mj-brand-primary); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; }
+  .contact-name { font-weight:700; font-size:13.5px; }
+  .contact-email { font-size:11.5px; color:var(--mj-text-muted); }
+  .dnc-list { padding: 6px 0; }
+  .dnc-row { display:flex; align-items:flex-start; gap:10px; padding: 12px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .dnc-row:last-child { border-bottom:none; }
+  .dnc-icon { width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; margin-top:1px; }
+  .dnc-icon.global { background: var(--mj-status-error-bg); color: var(--mj-status-error); }
+  .dnc-icon.scoped { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+  .dnc-title { font-weight:700; font-size:12.5px; }
+  .dnc-meta { font-size:11.5px; color: var(--mj-text-muted); margin-top:2px; }
+  .dnc-actions { padding: 14px 18px; }
+
+  .footer-note { padding: 4px 28px 24px; color: var(--mj-text-muted); font-size: 11.5px; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-diagram-project"></i> MemberJunction</div>
+    <div class="nav-section">Engagement</div>
+    <div class="nav-item"><i class="fa-solid fa-envelope"></i> Communication Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-users"></i> Audiences</div>
+    <div class="nav-section">Trust &amp; Ops · New</div>
+    <div class="nav-item active"><i class="fa-solid fa-chart-line"></i> Deliverability</div>
+    <div class="nav-item"><i class="fa-solid fa-ban"></i> Suppressions</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1><i class="fa-solid fa-chart-line"></i> Deliverability</h1>
+        <div class="sub">Delivery truth &amp; suppression status across all Communication Runs, last 30 days</div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <div class="btn"><i class="fa-solid fa-file-export"></i> Export Report</div>
+        <div class="btn btn-primary"><i class="fa-solid fa-broom"></i> Clean List Now</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="insight-banner">
+        <i class="fa-solid fa-lightbulb"></i>
+        <div>
+          <b>Engagement isn't declining — 8.4% of your list is dead</b>
+          <span class="d">Open rate looked like a 6-month slide until suppression data showed 412 addresses have hard-bounced since March and were never removed. Real engagement among deliverable addresses is flat.</span>
+        </div>
+      </div>
+
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="label">Sent</div>
+          <div class="value">18,204</div>
+          <div class="delta" style="color:var(--mj-text-muted);">across 6 runs this month</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Delivered</div>
+          <div class="value good">96.6%</div>
+          <div class="delta"><i class="fa-solid fa-arrow-trend-up"></i> +1.8pts after suppression cleanup</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Hard Bounces</div>
+          <div class="value err">412</div>
+          <div class="delta" style="color:var(--mj-text-muted);">auto-suppressed, not resent</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Unsubscribed</div>
+          <div class="value warn">61</div>
+          <div class="delta" style="color:var(--mj-text-muted);">honored automatically, no manual work</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <div class="card">
+            <div class="card-header">
+              <h2><i class="fa-solid fa-filter"></i> Delivery Funnel — All Runs</h2>
+            </div>
+            <div class="funnel">
+              <div class="funnel-row">
+                <div class="funnel-label">Sent</div>
+                <div class="funnel-track"><div class="funnel-bar" style="width:100%; background:var(--mj-brand-primary);"></div></div>
+                <div class="funnel-pct">18,204</div>
+              </div>
+              <div class="funnel-row">
+                <div class="funnel-label">Delivered</div>
+                <div class="funnel-track"><div class="funnel-bar" style="width:96.6%; background:var(--mj-status-success);"></div></div>
+                <div class="funnel-pct">17,585</div>
+              </div>
+              <div class="funnel-row">
+                <div class="funnel-label">Opened</div>
+                <div class="funnel-track"><div class="funnel-bar" style="width:41%; background:var(--mj-status-info);"></div></div>
+                <div class="funnel-pct">7,459</div>
+              </div>
+              <div class="funnel-row">
+                <div class="funnel-label">Clicked</div>
+                <div class="funnel-track"><div class="funnel-bar" style="width:9%; background:var(--mj-status-info);"></div></div>
+                <div class="funnel-pct">1,638</div>
+              </div>
+              <div class="funnel-row">
+                <div class="funnel-label">Bounced</div>
+                <div class="funnel-track"><div class="funnel-bar" style="width:2.3%; background:var(--mj-status-error);"></div></div>
+                <div class="funnel-pct">412</div>
+              </div>
+              <div class="funnel-row">
+                <div class="funnel-label">Suppressed</div>
+                <div class="funnel-track"><div class="funnel-bar" style="width:2.6%; background:var(--mj-status-warning);"></div></div>
+                <div class="funnel-pct">473</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2><i class="fa-solid fa-envelope-open-text"></i> Runs by Delivery Rate</h2>
+            </div>
+            <div class="card-body">
+              <table>
+                <thead><tr><th>Run</th><th>Sent</th><th>Delivered</th><th>Bounced</th><th>Suppressed at Send</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td><div class="run-name">Q3 Renewal Reminder — Wave 2</div><div class="run-meta">Aug 12 · Membership</div></td>
+                    <td>4,120</td>
+                    <td><span class="rate good">98.1%</span></td>
+                    <td>78</td>
+                    <td class="run-meta">142 held automatically</td>
+                  </tr>
+                  <tr>
+                    <td><div class="run-name">Annual Gala Invitation</div><div class="run-meta">Aug 8 · Events</div></td>
+                    <td>3,850</td>
+                    <td><span class="rate good">97.4%</span></td>
+                    <td>61</td>
+                    <td class="run-meta">89 held automatically</td>
+                  </tr>
+                  <tr>
+                    <td><div class="run-name">Volunteer Shift Reminder</div><div class="run-meta">Aug 5 · Volunteer Ops</div></td>
+                    <td>2,204</td>
+                    <td><span class="rate warn">93.2%</span></td>
+                    <td>94</td>
+                    <td class="run-meta">51 held automatically</td>
+                  </tr>
+                  <tr>
+                    <td><div class="run-name">Monthly Donor Digest</div><div class="run-meta">Aug 1 · Development</div></td>
+                    <td>5,910</td>
+                    <td><span class="rate good">97.9%</span></td>
+                    <td>112</td>
+                    <td class="run-meta">158 held automatically</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="dnc-panel card">
+            <div class="card-header"><h2><i class="fa-solid fa-user-shield"></i> Do Not Contact</h2></div>
+            <div class="contact-strip">
+              <div class="avatar">JR</div>
+              <div>
+                <div class="contact-name">Jordan Reyes</div>
+                <div class="contact-email">jordan.reyes@example.org · Contact #10432</div>
+              </div>
+            </div>
+            <div class="dnc-list">
+              <div class="dnc-row">
+                <div class="dnc-icon global"><i class="fa-solid fa-ban"></i></div>
+                <div>
+                  <div class="dnc-title">Global — Spam Complaint</div>
+                  <div class="dnc-meta">Reported via SendGrid webhook · Jul 29, 2026</div>
+                </div>
+              </div>
+              <div class="dnc-row">
+                <div class="dnc-icon scoped"><i class="fa-solid fa-envelope-circle-check"></i></div>
+                <div>
+                  <div class="dnc-title">Email — Unsubscribed</div>
+                  <div class="dnc-meta">Clicked footer link · Feb 14, 2026 · SMS still active</div>
+                </div>
+              </div>
+            </div>
+            <div class="dnc-actions">
+              <div class="btn" style="width:100%; justify-content:center;"><i class="fa-solid fa-plus"></i> Add Manual Suppression</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2><i class="fa-solid fa-triangle-exclamation"></i> Suppression Reasons — 30d</h2></div>
+            <div class="card-body pad" style="display:flex; flex-direction:column; gap:10px;">
+              <div style="display:flex; justify-content:space-between; font-size:12.5px;"><span>Hard Bounce</span><b>412</b></div>
+              <div style="display:flex; justify-content:space-between; font-size:12.5px;"><span>Unsubscribed</span><b>61</b></div>
+              <div style="display:flex; justify-content:space-between; font-size:12.5px;"><span>Spam Complaint</span><b>9</b></div>
+              <div style="display:flex; justify-content:space-between; font-size:12.5px;"><span>Manual Do-Not-Contact</span><b>4</b></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-note">Mockup — MemberJunction Weekly Exploration, 2026-08-15 · Idea 2: Communication Delivery Truth &amp; Suppression Layer · Illustrative data only.</div>
+  </div>
+</body>
+</html>

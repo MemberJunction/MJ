@@ -17,7 +17,9 @@ capabilities, not by prescribing specific business applications.
 
 | Week | Ideas | PR |
 |---|---|---|
-| [2026-08-07](./2026-08-07/) | Relationship Graph & Engagement Signal Engine · Decision Provenance Layer & AI Handoff Briefs · Accessibility-by-Default Framework Layer | _(this week's PR)_ |
+| [2026-08-07](./2026-08-07/) | Relationship Graph & Engagement Signal Engine · Decision Provenance Layer & AI Handoff Briefs · Accessibility-by-Default Framework Layer | #3605 (closed) — Idea 3 landed as #3609 |
+| 2026-08-08 | CodeGen Decision Ledger & IS-A Name-Field Gap · Open App Publish & Install Integrity Contract · Consent & Data Rights Ledger | #3630 |
+| [2026-08-15](./2026-08-15/) | Verified Outcomes (Actions & Integrations) · Communication Delivery Truth & Suppression Layer · AI Spend & Policy Console | _(this week's PR)_ |
 
 ## Before starting a new week
 

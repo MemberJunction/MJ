@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Confirmed Outcomes</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626;
+    --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+
+  .content { padding: 22px 28px 40px; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
+  .kpi { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 16px 18px; }
+  .kpi .label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); margin-bottom: 8px; }
+  .kpi .value { font-size: 28px; font-weight: 800; }
+  .kpi .value.good { color: var(--mj-status-success); }
+  .kpi .value.warn { color: var(--mj-status-warning); }
+  .kpi .value.err { color: var(--mj-status-error); }
+  .kpi .delta { font-size: 12px; font-weight: 600; margin-top: 4px; color: var(--mj-status-success); }
+  .kpi .delta.bad { color: var(--mj-status-error); }
+
+  .alert-banner { background: var(--mj-status-error-bg); border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, transparent); border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+  .alert-banner i { color: var(--mj-status-error); font-size: 18px; }
+  .alert-banner b { display: block; }
+  .alert-banner span.d { font-size: 12.5px; color: var(--mj-text-secondary); }
+
+  .grid-2 { display: grid; grid-template-columns: 1.35fr 1fr; gap: 20px; align-items: start; }
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+  .card-body { padding: 0; }
+  .card-body.pad { padding: 18px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); padding: 10px 18px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); }
+  td { padding: 11px 18px; border-bottom: 1px solid var(--mj-border-subtle); font-size: 13px; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+
+  .status-pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .st-verified { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+  .st-unverified { background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary); }
+  .st-contradicted { background: var(--mj-status-error-bg); color: var(--mj-status-error); }
+  .action-name { font-weight: 700; }
+  .action-meta { color: var(--mj-text-muted); font-size: 11.5px; }
+  .evidence-link { color: var(--mj-brand-primary); font-weight: 600; font-size: 12px; cursor: default; white-space: nowrap; }
+
+  .detail-panel { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; }
+  .detail-panel .card-header { background: var(--mj-status-error-bg); border-bottom-color: color-mix(in srgb, var(--mj-status-error) 25%, transparent); }
+  .detail-panel .card-header h2 i { color: var(--mj-status-error); }
+  .detail-body { padding: 18px; }
+  .detail-title { font-weight: 700; font-size: 13.5px; margin-bottom: 4px; }
+  .detail-desc { font-size: 12.5px; color: var(--mj-text-secondary); margin-bottom: 14px; }
+  .evidence-block { background: #1e1e2e; color: #cdd6f4; border-radius: 8px; padding: 12px 14px; font-family: ui-monospace, 'SF Mono', monospace; font-size: 11.5px; line-height: 1.7; overflow-x: auto; margin-bottom: 10px; }
+  .evidence-block .k { color: #89b4fa; }
+  .evidence-block .v-bad { color: #f38ba8; }
+  .evidence-block .v-good { color: #a6e3a1; }
+  .contradicted-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: var(--mj-status-error); background: var(--mj-status-error-bg); padding: 2px 8px; border-radius: 999px; margin-bottom: 10px; }
+  .detail-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .detail-actions .btn { font-size: 12px; padding: 6px 12px; }
+
+  .breakdown-list { padding: 6px 0; }
+  .b-row { display: flex; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .b-row:last-child { border-bottom: none; }
+  .b-name { flex: 1; font-size: 12.5px; font-weight: 600; }
+  .b-name .path { display: block; font-size: 11px; font-weight: 400; color: var(--mj-text-muted); }
+  .b-score { font-size: 13px; font-weight: 800; width: 46px; text-align: right; }
+  .b-bar-track { width: 70px; height: 6px; background: var(--mj-bg-surface-sunken); border-radius: 999px; overflow: hidden; }
+  .b-bar { height: 100%; border-radius: 999px; }
+
+  .footer-note { padding: 4px 28px 24px; color: var(--mj-text-muted); font-size: 11.5px; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-diagram-project"></i> MemberJunction</div>
+    <div class="nav-section">Automation</div>
+    <div class="nav-item"><i class="fa-solid fa-bolt"></i> Actions</div>
+    <div class="nav-item"><i class="fa-solid fa-plug"></i> Integrations</div>
+    <div class="nav-section">Trust &amp; Ops · New</div>
+    <div class="nav-item active"><i class="fa-solid fa-check-double"></i> Confirmed Outcomes</div>
+    <div class="nav-item"><i class="fa-solid fa-clock-rotate-left"></i> Execution Logs</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1><i class="fa-solid fa-check-double"></i> Confirmed Outcomes</h1>
+        <div class="sub">Attempted vs. independently verified results across Actions &amp; Integration syncs, last 7 days</div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <div class="btn"><i class="fa-solid fa-gear"></i> Configure Verification</div>
+        <div class="btn btn-primary"><i class="fa-solid fa-arrows-rotate"></i> Re-verify All Pending</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="alert-banner">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <div>
+          <b>3 actions reported success this week but verification says otherwise</b>
+          <span class="d">These would previously have looked identical to a real success in the execution log — nobody would know unless a donor or member noticed first.</span>
+        </div>
+      </div>
+
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="label">Attempted</div>
+          <div class="value">1,842</div>
+          <div class="delta" style="color:var(--mj-text-muted);">across 6 connected actions</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Verified</div>
+          <div class="value good">1,791</div>
+          <div class="delta"><i class="fa-solid fa-arrow-trend-up"></i> 97.2% confirmation rate</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Contradicted</div>
+          <div class="value err">3</div>
+          <div class="delta bad"><i class="fa-solid fa-arrow-trend-up"></i> claimed success, verification disagreed</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Unverified</div>
+          <div class="value warn">48</div>
+          <div class="delta" style="color:var(--mj-text-muted);">no verification strategy configured yet</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <div class="card">
+            <div class="card-header">
+              <h2><i class="fa-solid fa-list-check"></i> Recent Results</h2>
+              <span style="font-size:12px; color:var(--mj-text-muted);">Sorted by verification status</span>
+            </div>
+            <div class="card-body">
+              <table>
+                <thead>
+                  <tr><th>Action / Sync</th><th>Result Code</th><th>Verification</th><th>Target</th><th></th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><div class="action-name">Delete Outdated Event Post</div><div class="action-meta">Social Publishing — Twitter connector</div></td>
+                    <td><span class="status-pill st-verified" style="background:var(--mj-status-success-bg); color:var(--mj-status-success);">SUCCESS</span></td>
+                    <td><span class="status-pill st-contradicted"><i class="fa-solid fa-circle-xmark"></i> Contradicted</span></td>
+                    <td class="action-meta">Post #48213 — Chapter Mixer</td>
+                    <td class="evidence-link">View Evidence →</td>
+                  </tr>
+                  <tr>
+                    <td><div class="action-name">Schedule Instagram Post</div><div class="action-meta">Social Publishing — Instagram connector</div></td>
+                    <td><span class="status-pill" style="background:var(--mj-status-success-bg); color:var(--mj-status-success);">SUCCESS</span></td>
+                    <td><span class="status-pill st-contradicted"><i class="fa-solid fa-circle-xmark"></i> Contradicted</span></td>
+                    <td class="action-meta">Post #48219 — Volunteer Day</td>
+                    <td class="evidence-link">View Evidence →</td>
+                  </tr>
+                  <tr>
+                    <td><div class="action-name">Post Dues Payment</div><div class="action-meta">Payment Processor Sync</div></td>
+                    <td><span class="status-pill" style="background:var(--mj-status-success-bg); color:var(--mj-status-success);">SUCCESS</span></td>
+                    <td><span class="status-pill st-contradicted"><i class="fa-solid fa-circle-xmark"></i> Contradicted</span></td>
+                    <td class="action-meta">Invoice #INV-88213</td>
+                    <td class="evidence-link">View Evidence →</td>
+                  </tr>
+                  <tr>
+                    <td><div class="action-name">Send Renewal Reminder</div><div class="action-meta">Communication Action</div></td>
+                    <td><span class="status-pill" style="background:var(--mj-status-success-bg); color:var(--mj-status-success);">SUCCESS</span></td>
+                    <td><span class="status-pill st-verified"><i class="fa-solid fa-circle-check"></i> Verified</span></td>
+                    <td class="action-meta">Contact #10432</td>
+                    <td class="evidence-link">View Evidence →</td>
+                  </tr>
+                  <tr>
+                    <td><div class="action-name">Update Mailing Address</div><div class="action-meta">CRM Sync — Batch #2291</div></td>
+                    <td><span class="status-pill" style="background:var(--mj-status-success-bg); color:var(--mj-status-success);">SUCCESS</span></td>
+                    <td><span class="status-pill st-verified"><i class="fa-solid fa-circle-check"></i> Verified</span></td>
+                    <td class="action-meta">Contact #10488</td>
+                    <td class="evidence-link">View Evidence →</td>
+                  </tr>
+                  <tr>
+                    <td><div class="action-name">Archive Closed Grant</div><div class="action-meta">Entity Action — Grants</div></td>
+                    <td><span class="status-pill" style="background:var(--mj-status-success-bg); color:var(--mj-status-success);">SUCCESS</span></td>
+                    <td><span class="status-pill st-unverified"><i class="fa-solid fa-circle-minus"></i> Unverified</span></td>
+                    <td class="action-meta">Grant #G-3391</td>
+                    <td class="evidence-link">Add Strategy →</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="detail-panel card">
+            <div class="card-header">
+              <h2><i class="fa-solid fa-magnifying-glass"></i> Evidence — Contradicted</h2>
+            </div>
+            <div class="detail-body">
+              <span class="contradicted-tag"><i class="fa-solid fa-circle-xmark"></i> Requery verification failed</span>
+              <div class="detail-title">Delete Outdated Event Post</div>
+              <div class="detail-desc">The action returned result code <code>SUCCESS</code>, but re-fetching the post 90 seconds later found it still live. A dead-code guard in the Twitter connector's delete path is preventing the API call from ever firing — the exact failure class reported in issue #3790.</div>
+              <div class="evidence-block">
+<span class="k">expected:</span> Post.Status <span class="v-good">= "Deleted"</span>
+<span class="k">actual:</span>   Post.Status <span class="v-bad">= "Published"</span>
+<span class="k">checked:</span> 2026-08-15 09:14:22 UTC (+90s requery)
+<span class="k">source:</span>  Action Verification Strategy #7 — Requery
+              </div>
+              <div style="font-size:11.5px; color:var(--mj-text-muted);">3 rows share this exact signature this week — same connector, same code path, same false SUCCESS. One fix resolves all three.</div>
+              <div class="detail-actions">
+                <div class="btn btn-primary"><i class="fa-solid fa-bug"></i> File Engineering Issue</div>
+                <div class="btn"><i class="fa-solid fa-clock"></i> Retry Verification</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2><i class="fa-solid fa-chart-simple"></i> Confirmation Rate by Action</h2></div>
+            <div class="card-body breakdown-list">
+              <div class="b-row">
+                <div class="b-name">Delete Outdated Event Post<span class="path">Social Publishing</span></div>
+                <div class="b-bar-track"><div class="b-bar" style="width:40%; background:var(--mj-status-error);"></div></div>
+                <div class="b-score" style="color:var(--mj-status-error);">40%</div>
+              </div>
+              <div class="b-row">
+                <div class="b-name">Schedule Instagram Post<span class="path">Social Publishing</span></div>
+                <div class="b-bar-track"><div class="b-bar" style="width:55%; background:var(--mj-status-warning);"></div></div>
+                <div class="b-score" style="color:var(--mj-status-warning);">55%</div>
+              </div>
+              <div class="b-row">
+                <div class="b-name">Post Dues Payment<span class="path">Payment Processor</span></div>
+                <div class="b-bar-track"><div class="b-bar" style="width:96%; background:var(--mj-status-success);"></div></div>
+                <div class="b-score" style="color:var(--mj-status-success);">96%</div>
+              </div>
+              <div class="b-row">
+                <div class="b-name">Send Renewal Reminder<span class="path">Communication</span></div>
+                <div class="b-bar-track"><div class="b-bar" style="width:99%; background:var(--mj-status-success);"></div></div>
+                <div class="b-score" style="color:var(--mj-status-success);">99%</div>
+              </div>
+              <div class="b-row">
+                <div class="b-name">Update Mailing Address<span class="path">CRM Sync</span></div>
+                <div class="b-bar-track"><div class="b-bar" style="width:100%; background:var(--mj-status-success);"></div></div>
+                <div class="b-score" style="color:var(--mj-status-success);">100%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-note">Mockup — MemberJunction Weekly Exploration, 2026-08-15 · Idea 1: Verified Outcomes — Closing the Attempted-vs-Confirmed Gap · Illustrative data only.</div>
+  </div>
+</body>
+</html>
