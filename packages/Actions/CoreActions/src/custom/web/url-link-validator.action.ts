@@ -1,6 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
+import { assertPublicHttpUrl } from './ssrf-guard.js';
 
 /**
  * Action that validates URLs by checking accessibility, response codes, and basic health checks
@@ -187,6 +188,9 @@ export class URLLinkValidatorAction extends BaseAction {
             const timeoutId = setTimeout(() => controller.abort(), timeout);
 
             try {
+                // SECURITY: reject targets that resolve to private/loopback/link-local/metadata
+                // ranges before making the request (SSRF guard).
+                await assertPublicHttpUrl(result.url);
                 const response = await fetch(result.url, {
                     method: 'HEAD', // Use HEAD to minimize data transfer
                     headers: {
@@ -257,6 +261,8 @@ export class URLLinkValidatorAction extends BaseAction {
             const timeoutId = setTimeout(() => controller.abort(), 5000);
 
             try {
+                // SECURITY: SSRF guard on the SSL-probe target as well.
+                await assertPublicHttpUrl(`https://${hostname}`);
                 const response = await fetch(`https://${hostname}`, {
                     method: 'HEAD',
                     signal: controller.signal

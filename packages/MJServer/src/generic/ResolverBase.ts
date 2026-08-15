@@ -355,7 +355,11 @@ export class ResolverBase {
       const field = e.Fields.find((f) => f.Name === k);
       if (!field) throw new Error(`Field ${k} not found in entity ${entity}`);
       const quotes = field.NeedsQuotes ? "'" : '';
-      extraFilter += `${k} = ${quotes}${params[k]}${quotes}`;
+      // SECURITY: escape single quotes in the value before interpolating it into the ExtraFilter
+      // this builds. Values here are client-supplied (e.g. UserByEmail's Email arg, RunViewByName's
+      // ViewName), so an unescaped value could otherwise alter the WHERE clause.
+      const safeValue = field.NeedsQuotes ? String(params[k]).replace(/'/g, "''") : String(params[k]);
+      extraFilter += `${k} = ${quotes}${safeValue}${quotes}`;
     });
 
     // ok, now we have a SQL string, run it and return the results
@@ -382,7 +386,8 @@ export class ResolverBase {
       const rv = provider as any as IRunViewProvider;
       const result = await rv.RunView<MJUserViewEntityExtended>({
         EntityName: 'MJ: User Views',
-        ExtraFilter: "Name='" + viewInput.ViewName + "'",
+        // SECURITY: escape single quotes in the client-supplied view name (SQL injection guard).
+        ExtraFilter: "Name='" + viewInput.ViewName.replace(/'/g, "''") + "'",
       }, userPayload.userRecord);
       if (result && result.Success && result.Results.length > 0) {
         const viewInfo = result.Results[0];

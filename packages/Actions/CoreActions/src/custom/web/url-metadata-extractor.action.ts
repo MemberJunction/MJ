@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import axios, { AxiosResponse } from 'axios';
+import { assertPublicHttpUrl } from './ssrf-guard.js';
 
 /**
  * Action that extracts comprehensive metadata from web pages including OpenGraph, Twitter Cards,
@@ -94,6 +95,9 @@ export class URLMetadataExtractorAction extends BaseAction {
 
             // Fetch the webpage
             try {
+                // SECURITY: reject URLs that resolve to private/loopback/link-local/metadata
+                // targets before making the request (SSRF guard).
+                await assertPublicHttpUrl(url);
                 const response = await axios.get(url, {
                     headers: {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',

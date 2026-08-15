@@ -7,6 +7,7 @@ import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
 import xml2js from 'xml2js';
 import Papa from 'papaparse';
+import { ssrfSafeFetch } from './ssrf-guard.js';
 
 /**
  * Action that retrieves and processes web content in various formats
@@ -735,7 +736,10 @@ export class WebPageContentAction extends BaseAction {
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                const response = await fetch(url, options);
+                // SECURITY: ssrfSafeFetch validates the target (and every redirect hop) against
+                // a private/loopback/link-local/metadata blocklist before connecting, so a
+                // user-/agent-supplied URL cannot be steered at cloud IMDS or internal hosts.
+                const response = await ssrfSafeFetch(url, options);
 
                 // Retry on specific status codes that might be transient
                 if (attempt < maxRetries && this.shouldRetry(response.status)) {
