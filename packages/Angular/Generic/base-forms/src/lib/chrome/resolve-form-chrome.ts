@@ -4,6 +4,7 @@ import {
     EntityInfo,
     EntityRelationshipInfo,
     ResolveFormLayout,
+    ReadRelationshipSortKey,
     ResolveRelatedFormRoles,
     type FormChromeRule,
     type FormInclusion,
@@ -648,14 +649,34 @@ function sortFirstClassRelatedGroups(
             related.push(group);
         }
     }
-    leads.sort((a, b) => groupSortKey(b, sortKeyByKey) - groupSortKey(a, sortKeyByKey));
+    const combinedSort = mergeRelatedSortKeys(entity, displayInForm, sortKeyByKey);
+    leads.sort((a, b) => groupSortKey(b, combinedSort) - groupSortKey(a, combinedSort));
     related.sort((a, b) => {
+        const aSort = groupSortKey(a, combinedSort);
+        const bSort = groupSortKey(b, combinedSort);
+        if (aSort !== bSort) return bSort - aSort;
         const aExplicit = a.SectionKeys.some((key) => explicitPrimary.has(key));
         const bExplicit = b.SectionKeys.some((key) => explicitPrimary.has(key));
         if (aExplicit !== bExplicit) return aExplicit ? -1 : 1;
         return groupScore(b, scoreByKey) - groupScore(a, scoreByKey);
     });
     spec.Groups = [...leads, ...details, ...related, ...more];
+}
+
+function mergeRelatedSortKeys(
+    entity: EntityInfo,
+    displayInForm: readonly EntityRelationshipInfo[],
+    contributionSortKeyByKey: ReadonlyMap<string, number>,
+): Map<string, number> {
+    const merged = new Map(contributionSortKeyByKey);
+    for (const rel of displayInForm) {
+        const sort = ReadRelationshipSortKey(rel.Configuration);
+        if (sort == null) continue;
+        const key = RelatedEntitySectionKey(rel, displayInForm);
+        const current = merged.get(key);
+        merged.set(key, current == null ? sort : Math.max(current, sort));
+    }
+    return merged;
 }
 
 function groupSortKey(group: FormChromeGroup, sortKeyByKey: ReadonlyMap<string, number>): number {

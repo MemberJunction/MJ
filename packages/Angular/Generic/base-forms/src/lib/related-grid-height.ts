@@ -6,8 +6,8 @@ export const RELATED_GRID_HEADER_PX = 40;
 export const RELATED_GRID_ROW_PX = 40;
 /** 4–5px so the last row's bottom border is not clipped by the grid edge. */
 export const RELATED_GRID_BOTTOM_PAD_PX = 5;
-/** Empty-state body when there are no rows (no 200px floor). */
-export const RELATED_GRID_EMPTY_BODY_PX = 88;
+/** Empty-state body when there are no rows (inline icon + title, no 200px floor). */
+export const RELATED_GRID_EMPTY_BODY_PX = 56;
 /** Default cap for nav-related grids. `null` on the input means unbounded. */
 export const RELATED_GRID_DEFAULT_MAX_PX = 560;
 

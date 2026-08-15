@@ -65,4 +65,10 @@ export interface IEntityRelationshipUIConfiguration {
         mode: 'any';
         fields: string[];
     };
+
+    /**
+     * Higher = earlier among first-class related rail items (after Details,
+     * after lead contributions such as Overview). Omit = 0.
+     */
+    sortKey?: number;
 }

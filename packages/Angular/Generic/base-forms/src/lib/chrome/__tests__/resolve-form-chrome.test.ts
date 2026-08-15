@@ -633,8 +633,6 @@ describe('ResolveFormChrome inclusion None', () => {
         expect(firstClass).toEqual(['Overview', 'Details', 'Payments']);
         expect(result.Spec.Groups.find((g) => g.Key === 'overview')?.IsLead).toBe(true);
         expect(result.Spec.Groups.find((g) => g.Key === DETAILS_SECTION_KEY)?.SectionKeys).toEqual(['identity']);
-        // Generated form.sections look like this — they must NOT be passed
-        // as the rail order or Overview (absent from that list) sorts last.
         const formSections = ['identity', 'mJBizAppsOrdersPaymentHeaders'];
         const undone = OrderChromeGroups(result.Spec.Groups, formSections)
             .filter((g) => !g.IsMore)
@@ -642,6 +640,63 @@ describe('ResolveFormChrome inclusion None', () => {
         expect(undone).toEqual(['Details', 'Payments', 'Overview']);
         expect(OrderChromeGroups(result.Spec.Groups, []).filter((g) => !g.IsMore).map((g) => g.Title))
             .toEqual(['Overview', 'Details', 'Payments']);
+    });
+
+    it('orders first-class related by relationship and contribution sortKey', () => {
+        const entity = new EntityInfo({
+            ID: '77777777-7777-7777-7777-777777777777',
+            Name: 'MJ_BizApps_Orders: Subscriptions',
+            SchemaName: 'MJ_BizApps_Orders',
+            RelatedEntities: [
+                {
+                    ID: '88888888-8888-8888-8888-888888888888',
+                    RelatedEntity: 'MJ_BizApps_Orders: Entitlement Grants',
+                    RelatedEntityID: '99999999-9999-9999-9999-999999999999',
+                    RelatedEntityJoinField: 'SubscriptionID',
+                    DisplayInForm: true,
+                    DisplayName: 'Entitlement Grants',
+                    Configuration: JSON.stringify({ UI: { inclusion: 'Primary', sortKey: 70 } }),
+                },
+                {
+                    ID: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+                    RelatedEntity: 'MJ_BizApps_Orders: Subscription Terms',
+                    RelatedEntityID: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+                    RelatedEntityJoinField: 'SubscriptionID',
+                    DisplayInForm: true,
+                    DisplayName: 'Terms',
+                    Configuration: JSON.stringify({ UI: { inclusion: 'Primary', sortKey: 90 } }),
+                },
+            ],
+        });
+        const result = ResolveFormChrome({
+            Entity: entity,
+            Panels: [
+                { SectionKey: 'identity', SectionName: 'Identity', Variant: 'default' },
+                { SectionKey: 'revRec', SectionName: 'Deferred Revenue', Variant: 'default' },
+                {
+                    SectionKey: 'mJBizAppsOrdersEntitlementGrants',
+                    SectionName: 'Entitlement Grants',
+                    Variant: 'related-entity',
+                },
+                {
+                    SectionKey: 'mJBizAppsOrdersSubscriptionTerms',
+                    SectionName: 'Terms',
+                    Variant: 'related-entity',
+                },
+            ],
+            RelatedSchemaByEntityId: new Map([
+                ['99999999-9999-9999-9999-999999999999', 'MJ_BizApps_Orders'],
+                ['bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'MJ_BizApps_Orders'],
+            ]),
+            ContributionSectionKeys: ['revRec'],
+            ContributionSortKeyByKey: new Map([['revRec', 80]]),
+        });
+        expect(result.Spec.Groups.filter((g) => !g.IsMore).map((g) => g.Title)).toEqual([
+            'Details',
+            'Terms',
+            'Deferred Revenue',
+            'Entitlement Grants',
+        ]);
     });
 
     it('does not fold a Primary contribution into Details', () => {

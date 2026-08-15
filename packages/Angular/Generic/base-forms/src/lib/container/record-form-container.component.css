@@ -230,7 +230,10 @@ mj-collapsible-panel.mj-form-role-more {
 }
 
 .mj-forms-chrome-rail {
-  flex: 0 0 220px;
+  flex: 0 1 200px;
+  width: 200px;
+  max-width: 200px;
+  min-width: 160px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -239,6 +242,7 @@ mj-collapsible-panel.mj-form-role-more {
   align-self: stretch;
   min-height: 0;
   padding: 4px;
+  overflow-x: hidden;
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-subtle);
   border-radius: var(--mj-radius-md);
