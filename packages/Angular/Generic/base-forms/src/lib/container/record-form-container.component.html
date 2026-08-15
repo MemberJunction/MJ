@@ -76,7 +76,37 @@
          [class.mj-forms-layout--accordion]="ChromeLayout === 'accordion'"
          [class.mj-forms-layout--more]="IsChromeMoreActive">
       @if (ShowChromeRail) {
-        <nav class="mj-forms-chrome-rail" aria-label="Form sections">
+        <nav class="mj-forms-chrome-rail"
+             [class.is-collapsed]="ChromeRailCollapsed"
+             [attr.aria-expanded]="!ChromeRailCollapsed"
+             aria-label="Form sections">
+          @if (ChromeRailCollapsed) {
+            <button type="button"
+                    class="mj-forms-chrome-rail-spine"
+                    (click)="OnChromeRailExpand()"
+                    [attr.aria-label]="'Show form sections — ' + ChromeActiveTitle"
+                    [title]="'Show sections — ' + ChromeActiveTitle">
+              <i [class]="ChromeActiveIcon"></i>
+              <span class="mj-forms-chrome-rail-spine-label">{{ ChromeActiveTitle }}</span>
+            </button>
+          } @else {
+            <div class="mj-forms-chrome-rail-toolbar">
+              <button type="button"
+                      class="mj-forms-chrome-rail-pin"
+                      [class.is-pinned]="ChromeRailPinned"
+                      [attr.aria-pressed]="ChromeRailPinned"
+                      [title]="ChromeRailPinned ? 'Unpin sections — they hide after you switch' : 'Pin sections open'"
+                      (click)="OnChromeRailPinToggle()">
+                <i class="fa-solid fa-thumbtack"></i>
+              </button>
+              <button type="button"
+                      class="mj-forms-chrome-rail-collapse"
+                      title="Hide sections"
+                      aria-label="Hide form sections"
+                      (click)="OnChromeRailCollapse()">
+                <i class="fa-solid fa-angles-left"></i>
+              </button>
+            </div>
           @for (group of ChromeFirstClassGroups; track group.Key) {
             <div class="mj-forms-chrome-rail-item"
                  role="button"
@@ -161,6 +191,7 @@
               }
               </div>
             }
+          }
           }
         </nav>
       }

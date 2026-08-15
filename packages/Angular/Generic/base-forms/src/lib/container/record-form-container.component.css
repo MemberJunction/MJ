@@ -248,11 +248,90 @@ mj-collapsible-panel.mj-form-role-more {
   gap: 4px;
   position: sticky;
   top: 0;
-  align-self: flex-start;
+  align-self: stretch;
+  min-height: 0;
   padding: 4px;
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-subtle);
   border-radius: var(--mj-radius-md);
+}
+
+.mj-forms-chrome-rail.is-collapsed {
+  flex: 0 0 36px;
+  width: 36px;
+  padding: 8px 0;
+}
+
+.mj-forms-chrome-rail-spine {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--mj-brand-primary);
+  cursor: pointer;
+}
+
+.mj-forms-chrome-rail-spine:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+}
+
+.mj-forms-chrome-rail-spine > i {
+  flex-shrink: 0;
+}
+
+.mj-forms-chrome-rail-spine-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  letter-spacing: 0.04em;
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 100%;
+}
+
+.mj-forms-chrome-rail-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 2px 4px 6px;
+}
+
+.mj-forms-chrome-rail-pin,
+.mj-forms-chrome-rail-collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--mj-radius-sm);
+  background: transparent;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+}
+
+.mj-forms-chrome-rail-pin:hover,
+.mj-forms-chrome-rail-collapse:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.mj-forms-chrome-rail-pin:not(.is-pinned) i {
+  transform: rotate(45deg);
+}
+
+.mj-forms-chrome-rail-pin.is-pinned {
+  color: var(--mj-brand-primary);
 }
 
 .mj-forms-chrome-rail-item {
@@ -425,6 +504,28 @@ mj-collapsible-panel.mj-form-role-more {
     position: static;
     flex-direction: row;
     flex-wrap: wrap;
+  }
+
+  .mj-forms-chrome-rail.is-collapsed {
+    flex: 0 0 auto;
+    width: 100%;
+    height: 36px;
+    padding: 0;
+  }
+
+  .mj-forms-chrome-rail-spine {
+    flex-direction: row;
+    padding: 0 12px;
+  }
+
+  .mj-forms-chrome-rail-spine-label {
+    writing-mode: horizontal-tb;
+    transform: none;
+    max-height: none;
+  }
+
+  .mj-forms-chrome-rail-toolbar {
+    width: 100%;
   }
 
   .mj-forms-chrome-rail-item {

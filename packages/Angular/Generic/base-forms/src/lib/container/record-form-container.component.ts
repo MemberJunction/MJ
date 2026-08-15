@@ -38,6 +38,11 @@ import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeG
 import { LoadFormChromeRules } from '../chrome/load-form-chrome-rules';
 import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection } from '../chrome/form-chrome';
 import type { FormChromeGroup, FormChromePanelSnapshot } from '../chrome/form-chrome';
+import {
+  FORM_CHROME_RAIL_PINNED_DEFAULT,
+  ParseRailPinnedSetting,
+  SerializeRailPinnedSetting,
+} from '../chrome/form-chrome-rail-pref';
 import { CollectFormPanelRegistrations } from '../panel-slot/collect-form-panel-registrations';
 import { ContributionHiddenSectionKeys, ResolveFormContributions } from '../panel-slot/form-contribution';
 import { IsFormSectionHidden } from '../types/entity-form-config';
@@ -133,6 +138,15 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Controls visibility of section manager drawer */
   ShowSectionManager = false;
+
+  /**
+   * Persisted per entity. Pinned (default) keeps the left rail open.
+   * Unpinned auto-collapses after the user picks another section.
+   */
+  ChromeRailPinned = FORM_CHROME_RAIL_PINNED_DEFAULT;
+
+  /** Session-only: the rail is showing its items. Follows pin on load. */
+  private chromeRailExpanded = FORM_CHROME_RAIL_PINNED_DEFAULT;
 
   // ---- Primary Inputs ----
 
@@ -437,6 +451,38 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     return this.chrome.ActiveGroupKey;
   }
 
+  get ChromeActiveGroup(): FormChromeGroup | null {
+    const key = this.ChromeActiveGroupKey;
+    if (!key) {
+      return null;
+    }
+    return this.ChromeFirstClassGroups.find((group) => group.Key === key)
+      ?? this.ChromeMoreItems.find((item) => item.Key === key)
+      ?? null;
+  }
+
+  get ChromeActiveTitle(): string {
+    return this.ChromeActiveGroup?.Title || 'Sections';
+  }
+
+  get ChromeActiveIcon(): string {
+    return this.ChromeActiveGroup?.Icon || 'fa-solid fa-list';
+  }
+
+  /**
+   * True when the rail is the thin rotated strip. Search keeps the full
+   * list visible so matches stay clickable.
+   */
+  get ChromeRailCollapsed(): boolean {
+    if (!this.ShowChromeRail) {
+      return false;
+    }
+    if (this.EffectiveSearchFilter.trim()) {
+      return false;
+    }
+    return !this.chromeRailExpanded;
+  }
+
   get IsChromeMoreActive(): boolean {
     return this.chrome.IsMoreActive;
   }
@@ -584,11 +630,34 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const before = new BeforeSectionActivateEventArgs(groupKey);
     this.BeforeSectionActivate.emit(before);
     if (before.Cancel) return;
+    const previous = this.chrome.ActiveGroupKey;
     this.chrome.SetActiveGroup(groupKey);
     this.expandActiveGroupSections(groupKey);
     this.applyChromeVisibility();
+    if (!this.ChromeRailPinned && previous !== groupKey) {
+      this.chromeRailExpanded = false;
+    }
     this.PersistChromePrefs();
     this.AfterSectionActivated.emit(new AfterSectionActivatedEventArgs(groupKey));
+    this.cdr.detectChanges();
+  }
+
+  public OnChromeRailExpand(): void {
+    this.chromeRailExpanded = true;
+    this.cdr.detectChanges();
+  }
+
+  public OnChromeRailCollapse(): void {
+    this.chromeRailExpanded = false;
+    this.cdr.detectChanges();
+  }
+
+  public OnChromeRailPinToggle(): void {
+    this.ChromeRailPinned = !this.ChromeRailPinned;
+    if (this.ChromeRailPinned) {
+      this.chromeRailExpanded = true;
+    }
+    this.PersistChromePrefs();
     this.cdr.detectChanges();
   }
 
@@ -1003,6 +1072,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const more = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('moreExpanded'));
     if (more === '1') this.chrome.MoreExpanded = true;
     if (more === '0') this.chrome.MoreExpanded = false;
+    this.ChromeRailPinned = ParseRailPinnedSetting(
+      UserInfoEngine.Instance.GetSetting(this.chromePrefKey('railPinned')),
+    );
+    this.chromeRailExpanded = this.ChromeRailPinned;
   }
 
   private PersistChromePrefs(): void {
@@ -1015,6 +1088,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     UserInfoEngine.Instance.SetSettingDebounced(
       this.chromePrefKey('moreExpanded'),
       this.chrome.MoreExpanded ? '1' : '0',
+    );
+    UserInfoEngine.Instance.SetSettingDebounced(
+      this.chromePrefKey('railPinned'),
+      SerializeRailPinnedSetting(this.ChromeRailPinned),
     );
   }
 
