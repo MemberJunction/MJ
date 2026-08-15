@@ -181,7 +181,18 @@ jobs:
       # ~20-minute build+test step meant any unit-test failure stopped it from
       # running at all — the gate went silent exactly when a PR was already in
       # trouble and most needed checking.
+      #
+      # `!cancelled()` for that same reason, one step further: a step's default
+      # `if: success()` also skips it when any EARLIER step failed, which is how
+      # the unrelated Generic DOM ratchet silenced it on run 31848972923. Moving
+      # it above the DOM guards would only hand the same silence to them —
+      # ordering can protect exactly one gate, and these are independent. This
+      # makes the gate's result independent of every other step's outcome; it
+      # still fails the job when it finds something. (Needs only git + node,
+      # both present from checkout, so it holds even if an earlier setup step is
+      # what broke.)
       - name: Dynamic-replace guard
+        if: ${{ !cancelled() }}
         env:
           # Via env, never interpolated into the run: string — a ref name must not
           # be able to reach the shell. On push/schedule base_ref is empty and HEAD
