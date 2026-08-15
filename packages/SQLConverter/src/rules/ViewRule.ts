@@ -11,6 +11,7 @@ import {
   convertStringConcat, convertTopToLimit, convertCastTypes, convertIIF,
   convertConvertFunction, removeNPrefix, removeCollate, convertCommonFunctions,
   convertBooleanLiteralComparisons,
+  escapeRegExp,
 } from './ExpressionHelpers.js';
 
 /** SQL keywords that should NOT be quoted as column references */
@@ -63,14 +64,24 @@ export class ViewRule implements IConversionRule {
     result = convertIdentifiers(result);
 
     // Schema normalization: "schema".Name → schema."Name"
-    const quotedSchemaPattern = new RegExp(`"${schema}"\\.(?!")`, 'g');
-    result = result.replace(quotedSchemaPattern, `${schema}.`);
+    // Function replacements throughout: `schema` is a configured identifier that
+    // may legally contain `$`, and a string replacement would expand it (and any
+    // `$&`/`` $` ``/`$'`) while emitting SQL. Capture groups are carried through
+    // as named callback parameters instead of `$1`/`$2`. See issue #3171.
+    const quotedSchemaPattern = new RegExp(`"${escapeRegExp(schema)}"\\.(?!")`, 'g');
+    result = result.replace(quotedSchemaPattern, () => `${schema}.`);
     // Quote unquoted table references after schema.
-    const bareSchemaPattern = new RegExp(`\\b${schema}\\.(?!")((?:vw)?[A-Za-z]\\w+)\\b`, 'g');
-    result = result.replace(bareSchemaPattern, `${schema}."$1"`);
+    const bareSchemaPattern = new RegExp(`\\b${escapeRegExp(schema)}\\.(?!")((?:vw)?[A-Za-z]\\w+)\\b`, 'g');
+    result = result.replace(bareSchemaPattern, (_match, table: string) => `${schema}."${table}"`);
     // Add schema to bare view references: FROM vwXxx → FROM schema."vwXxx"
-    result = result.replace(/(\bFROM\s+)(vw\w+)\b/gi, `$1${schema}."$2"`);
-    result = result.replace(/(\bJOIN\s+)(vw\w+)\b/gi, `$1${schema}."$2"`);
+    result = result.replace(
+        /(\bFROM\s+)(vw\w+)\b/gi,
+        (_match, keyword: string, view: string) => `${keyword}${schema}."${view}"`,
+    );
+    result = result.replace(
+        /(\bJOIN\s+)(vw\w+)\b/gi,
+        (_match, keyword: string, view: string) => `${keyword}${schema}."${view}"`,
+    );
 
     // PascalCase column and alias quoting
     result = this.quoteColumnRefs(result);
@@ -212,6 +223,11 @@ export class ViewRule implements IConversionRule {
     // Handles cases where convertIdentifiers already quoted [Col] → "Col". Same gate as above:
     // quote the reference only when the alias's own definition is case-preserved.
     sql = sql.replace(/\b([A-Za-z]\w*)\."(\w+)"/g, (match, alias: string) => {
+      // `alias` is captured by `([A-Za-z]\w*)` above, so it is word characters
+      // only and can never contain `$` — the replacement has no `$` for
+      // expansion to act on. Marked because the #3171 gate cannot see that
+      // constraint, and would otherwise fail the next PR to touch this line.
+      // safe-replace: alias is \w-only by construction, so the replacement is $-free
       return quotedAliases.has(alias) ? match.replace(`${alias}.`, `"${alias}".`) : match;
     });
     return sql;

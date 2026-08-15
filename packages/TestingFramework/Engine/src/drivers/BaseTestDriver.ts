@@ -79,7 +79,21 @@ export abstract class BaseTestDriver {
      * always set this so each driver run binds to the right database connection.
      */
     public get Provider(): IMetadataProvider {
-        return this._provider ?? (new Metadata() as unknown as IMetadataProvider);
+        // `Metadata` is a FACADE — it proxies a hand-maintained subset of members
+        // to the global provider — so it is not an IMetadataProvider, and
+        // `as unknown as` was the only reason the compiler accepted it. Members it
+        // does not proxy silently read `undefined` through that cast.
+        //
+        // That cost a security check: the integration suite's `discoverTokenFilter`
+        // reads `provider.RowLevelSecurityFilters` to find a `{{UserID}}`-scoped
+        // filter. Through the facade it was `undefined`, the caller's `?? []` made
+        // that "no filters exist", and the rls-isolation RLS1/RLS2 token checks
+        // skipped-as-pass on every database while the bundle reported green — with
+        // 13 filters, 5 of them `{{UserID}}`-scoped, sitting right there.
+        //
+        // Returning the global provider is what this getter's own doc comment
+        // always promised.
+        return this._provider ?? Metadata.Provider;
     }
     public set Provider(value: IMetadataProvider | null) {
         this._provider = value;
