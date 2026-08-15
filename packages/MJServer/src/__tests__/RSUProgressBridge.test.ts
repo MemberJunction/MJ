@@ -19,10 +19,19 @@ describe('RSUProgressBridge', () => {
 
     beforeEach(() => {
         rootDir = mkdtempSync(join(tmpdir(), 'rsu-bridge-'));
-        bridge = new RSUProgressBridge({ rootDir });
+        // The bridge is a BaseSingleton, so every test in this file shares ONE instance. Reset()
+        // returns it to idle (dropping an emitter or heartbeat a prior test left in flight) and
+        // Configure() repoints artifacts at this test's temp dir. Without both, one test's in-flight
+        // run would be inherited by the next and its writes would land in a deleted directory.
+        bridge = RSUProgressBridge.Instance;
+        bridge.Reset();
+        bridge.Configure({ rootDir });
     });
 
     afterEach(() => {
+        // Reset BEFORE the temp dir goes away, so a lingering heartbeat cannot write into a deleted
+        // path — and so a stray interval cannot keep the test process alive.
+        bridge.Reset();
         rmSync(rootDir, { recursive: true, force: true });
     });
 
@@ -49,6 +58,28 @@ describe('RSUProgressBridge', () => {
             .filter(Boolean)
             .map(line => JSON.parse(line) as IntegrationProgressEvent);
     }
+
+    it('is a singleton, so a resolver can reach the in-flight run to tail it', () => {
+        // The point of the singleton. Previously the bridge was constructed inside
+        // RegisterRSUProgressBridge and the only surviving reference was the observer closure handed
+        // to RuntimeSchemaManager -- so CurrentRunID, whose whole purpose is letting a caller that
+        // triggered an RSU hand its client a run to tail, was unreachable from any caller.
+        expect(RSUProgressBridge.Instance).toBe(bridge);
+
+        bridge.Observe(RUN_START);
+        expect(RSUProgressBridge.Instance.CurrentRunID).toBe(bridge.CurrentRunID);
+        expect(RSUProgressBridge.Instance.CurrentRunID).toMatch(/^rsu-/);
+    });
+
+    it('Reset returns the bridge to idle without emitting a terminal event', () => {
+        bridge.Observe(RUN_START);
+        expect(bridge.CurrentRunID).not.toBeNull();
+
+        bridge.Reset();
+
+        // Idle again, and the next run starts clean rather than inheriting the abandoned emitter.
+        expect(bridge.CurrentRunID).toBeNull();
+    });
 
     it('opens a run tagged RSU carrying the batch context, and exposes its ID to tail', async () => {
         bridge.Observe(RUN_START);

@@ -19,6 +19,7 @@ import type { EmitterOptions } from '@memberjunction/integration-progress-artifa
 import { RuntimeSchemaManager } from '@memberjunction/schema-engine';
 import type { RSUObserverEvent } from '@memberjunction/schema-engine';
 import { LogError } from '@memberjunction/core';
+import { BaseSingleton } from '@memberjunction/global';
 
 /** The emitter stage name used for run-level (non-step) events. */
 const RUN_STAGE = 'RSUPipeline';
@@ -36,22 +37,42 @@ const HEARTBEAT_INTERVAL_MS = 30_000;
 /**
  * Owns one emitter per RSU pipeline run and translates observer events into progress events.
  *
- * One instance per process. RSU runs are serialized by the pipeline lock, so at most one run is
- * ever in flight and a single current-emitter slot is sufficient.
+ * A {@link BaseSingleton} because the state here is inherently process-wide AND has to be readable
+ * from elsewhere. `RuntimeSchemaManager` is itself a singleton and serializes its runs behind the
+ * pipeline lock, so at most one RSU run is ever in flight and one current-emitter slot is sufficient
+ * — but the reason for the singleton is {@link CurrentRunID}: a resolver that has just triggered an
+ * RSU needs to hand its client a run to tail, and it can only do that if it can reach this instance.
+ * Constructing the bridge and keeping the only reference inside the observer closure made that
+ * accessor unreachable from any caller.
+ *
+ * NOT a `BaseEngine`: there is no metadata to load and nothing to `Config()`. The distinction is
+ * "single shared instance" (this) versus "cached metadata with a load lifecycle" (that).
  */
-export class RSUProgressBridge {
+export class RSUProgressBridge extends BaseSingleton<RSUProgressBridge> {
     private emitter: IntegrationProgressEmitter | null = null;
     private currentRunID: string | null = null;
     /** Liveness timer for the step currently in flight — see {@link HEARTBEAT_INTERVAL_MS}. */
     private heartbeat: ReturnType<typeof setInterval> | null = null;
+    private emitterOptions: EmitterOptions = {};
+
+    /** The one bridge for this process. */
+    public static get Instance(): RSUProgressBridge {
+        return super.getInstance<RSUProgressBridge>();
+    }
 
     /**
-     * @param emitterOptions passed through to each run's emitter. The only field that matters in
-     *   practice is `rootDir` — omitted in production so RSU runs land in the same
-     *   `logs/integration-runs/` tree as every other run kind and `IntegrationTailRunEvents` finds
-     *   them without configuration.
+     * Options passed through to each run's emitter. Set once, before the first run.
+     *
+     * The only field that matters in practice is `rootDir` — left unset in production so RSU runs
+     * land in the same `logs/integration-runs/` tree as every other run kind and
+     * `IntegrationTailRunEvents` finds them without configuration. Tests point it at a temp dir.
+     *
+     * A settable property rather than a constructor argument because `BaseSingleton.getInstance`
+     * requires a zero-argument constructor.
      */
-    constructor(private readonly emitterOptions: EmitterOptions = {}) {}
+    public Configure(emitterOptions: EmitterOptions): void {
+        this.emitterOptions = emitterOptions;
+    }
 
     /**
      * The run ID of the in-flight RSU run, or null when idle. Lets a caller that triggered an RSU
@@ -60,6 +81,19 @@ export class RSUProgressBridge {
      */
     public get CurrentRunID(): string | null {
         return this.currentRunID;
+    }
+
+    /**
+     * Abandons any in-flight run state and stops its heartbeat, without emitting a terminal event.
+     *
+     * Needed because singleton state outlives a single caller: a test (or a server tearing down)
+     * must be able to return the bridge to idle without the next run inheriting a stale emitter or
+     * leaking an interval that keeps the process alive.
+     */
+    public Reset(): void {
+        this.stopHeartbeat();
+        this.emitter = null;
+        this.currentRunID = null;
     }
 
     /** The observer to hand to {@link RuntimeSchemaManager.PipelineObserver}. */
@@ -207,7 +241,8 @@ export class RSUProgressBridge {
  * @returns the bridge, so callers can read {@link RSUProgressBridge.CurrentRunID}.
  */
 export function RegisterRSUProgressBridge(emitterOptions: EmitterOptions = {}): RSUProgressBridge {
-    const bridge = new RSUProgressBridge(emitterOptions);
+    const bridge = RSUProgressBridge.Instance;
+    bridge.Configure(emitterOptions);
     RuntimeSchemaManager.Instance.PipelineObserver = bridge.Observe;
     return bridge;
 }
