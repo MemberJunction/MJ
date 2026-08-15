@@ -127,29 +127,17 @@ mj-record-form-container {
 }
 
 .mj-forms-layout--left-nav mj-collapsible-panel.mj-panel--related-entity.mj-chrome-show {
-  /* flex-basis 0 so grow uses the leftover viewport, not content size.
-     Do not set a pixel min-height — that was hiding a broken containing block. */
-  flex: 1 1 0;
+  /* Content-sized (see RelatedGridHeightPx). Do not flex-fill leftover
+     column space — a form header above the grid can collapse that to 0. */
+  flex: 0 0 auto;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
 }
 
-.mj-forms-layout--left-nav mj-collapsible-panel.mj-panel--related-entity.mj-chrome-show .mj-forms-panel,
-.mj-forms-layout--left-nav mj-collapsible-panel.mj-panel--related-entity.mj-chrome-show .mj-forms-panel-body,
-.mj-forms-layout--left-nav mj-collapsible-panel.mj-panel--related-entity.mj-chrome-show .mj-forms-panel-content {
-  flex: 1 1 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Accordion related panels use a 400px resizable box. Left-nav must drop that
-   so height:100% on the grid resolves against the leftover column, not 400px
-   or a circular auto. */
+/* Accordion related panels use a 400px resizable box. Left-nav grids
+   set their own pixel height from row count (RelatedGridHeightPx). */
 .mj-forms-layout--left-nav mj-collapsible-panel.mj-panel--related-entity.mj-chrome-show .mj-forms-panel-content {
   height: auto;
-  max-height: none;
+  max-height: min(560px, 65vh);
   overflow: hidden;
   resize: none;
 }
@@ -157,7 +145,7 @@ mj-record-form-container {
 .mj-forms-layout--left-nav .mj-forms-all-panels {
   gap: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 /* Details (field panels) can be taller than the viewport — scroll inside the

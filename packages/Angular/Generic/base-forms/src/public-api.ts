@@ -76,3 +76,4 @@ export * from './lib/chrome/resolve-form-chrome';
 export * from './lib/chrome/load-form-chrome-rules';
 export * from './lib/chrome/form-chrome-coordinator.service';
 export * from './lib/chrome/form-chrome-rail-pref';
+export * from './lib/related-grid-height';

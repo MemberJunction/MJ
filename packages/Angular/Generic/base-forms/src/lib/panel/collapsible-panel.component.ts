@@ -212,14 +212,14 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
 
   /**
    * Persisted accordion resize height for related-entity panels.
-   * Undefined lets CSS apply (400px accordion, leftover column in left-nav).
-   * Left-nav must not apply a pixel height — that would beat the flex fill.
+   * Undefined lets CSS apply (400px accordion). Left-nav related grids
+   * size themselves from row count, so do not pin an accordion pixel height.
    */
   get PanelContentHeight(): number | undefined {
     if (this.Variant !== 'related-entity') return undefined;
-    // Left-nav sizes the grid from leftover column height. A persisted
-    // accordion pixel height (or a 0 measured while hidden) would pin the
-    // body to the toolbar. Slot-mounted panels cannot inject the coordinator,
+    // Left-nav sizes the grid from row count. A persisted accordion
+    // pixel height (or a 0 measured while hidden) would pin the body to
+    // the toolbar. Slot-mounted panels cannot inject the coordinator,
     // so also honor the container-applied `mj-chrome-show` host class.
     if (this.hidesAccordionChrome()) return undefined;
     const formRef = this.Form as { GetSectionPanelHeight?: (key: string) => number | undefined };

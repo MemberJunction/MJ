@@ -11,6 +11,7 @@ import {
 } from '@memberjunction/ng-entity-viewer';
 import { EntityInfo } from '@memberjunction/core';
 import { FormNavigationEvent } from './types/navigation-events';
+import { RELATED_GRID_MIN_PX, RelatedGridHeightPx } from './related-grid-height';
 
 /**
  * Wrapper for EntityDataGridComponent that emits navigation events on row double-click.
@@ -41,7 +42,7 @@ import { FormNavigationEvent } from './types/navigation-events';
             [ShowDuplicateSearchButton]="ShowDuplicateSearchButton"
             [ShowCommunicationButton]="ShowCommunicationButton"
             [ShowRecycleBin]="ShowRecycleBin"
-            [Height]="Height"
+            [Height]="ResolvedHeight"
             [ToolbarConfig]="ToolbarConfig"
             [SelectionMode]="SelectionMode"
             [AllowColumnToggle]="false"
@@ -57,7 +58,10 @@ import { FormNavigationEvent } from './types/navigation-events';
             height: 100%;
             width: 100%;
         }
-    `]
+    `],
+    host: {
+        '[style.height]': 'hostHeightStyle',
+    },
 })
 export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy {
     @ViewChild('innerGrid') innerGrid!: EntityDataGridComponent;
@@ -83,14 +87,24 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     }
 
     private isInsideRelatedEntityPanel(): boolean {
+        return this.findRelatedEntityPanel() != null;
+    }
+
+    /** Left-nav / right-nav related panels get `mj-chrome-show` from the container. */
+    private isInsideNavRelatedPanel(): boolean {
+        return !!this.findRelatedEntityPanel()?.classList.contains('mj-chrome-show');
+    }
+
+    private findRelatedEntityPanel(): HTMLElement | null {
         let el: HTMLElement | null = this.elementRef.nativeElement?.parentElement ?? null;
         while (el) {
-            if (el.tagName?.toLowerCase() === 'mj-collapsible-panel') {
-                return el.getAttribute('data-variant') === 'related-entity';
+            if (el.tagName?.toLowerCase() === 'mj-collapsible-panel'
+                && el.getAttribute('data-variant') === 'related-entity') {
+                return el;
             }
             el = el.parentElement;
         }
-        return false;
+        return null;
     }
     /** Search box on the left of the toolbar. Default true. */
     @Input() ShowSearch: boolean = true;
@@ -108,6 +122,26 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     @Input() Height: number | 'auto' | 'fit-content' = 'auto';
     @Input() ToolbarConfig: GridToolbarConfig = {};
     @Input() SelectionMode: GridSelectionMode = 'single';
+
+    /**
+     * Left-nav related grids size to their rows (capped) instead of
+     * `height: 100%` of leftover flex space, which can collapse to zero
+     * under a form header. Re-read the panel each time — `mj-chrome-show`
+     * is added when the rail item is selected, after the first view init.
+     */
+    private sizedHeightPx = RELATED_GRID_MIN_PX;
+
+    get ResolvedHeight(): number | 'auto' | 'fit-content' {
+        return this.shouldSizeToRows() ? this.sizedHeightPx : this.Height;
+    }
+
+    get hostHeightStyle(): string {
+        return this.shouldSizeToRows() ? `${this.sizedHeightPx}px` : '100%';
+    }
+
+    private shouldSizeToRows(): boolean {
+        return this.isInsideNavRelatedPanel();
+    }
 
     /**
      * When true (default), the inner grid does not fetch until this component's host
@@ -214,8 +248,12 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     }
 
     onDataLoad(event: AfterDataLoadEventArgs): void {
-        // Re-emit the event for any consumers
         this.AfterDataLoad.emit(event);
+        if (!this.shouldSizeToRows()) {
+            return;
+        }
+        this.sizedHeightPx = RelatedGridHeightPx(event.loadedRowCount);
+        this.cdr.markForCheck();
     }
 
     /**
