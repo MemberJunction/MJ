@@ -211,11 +211,13 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   private resizeObserverPrimed = false;
 
   /**
-   * Persisted panel height for related-entity panels.
-   * Returns undefined to let CSS default (400px) apply.
+   * Persisted accordion resize height for related-entity panels.
+   * Undefined lets CSS apply (400px accordion, leftover column in left-nav).
+   * Left-nav must not apply a pixel height — that would beat the flex fill.
    */
   get PanelContentHeight(): number | undefined {
     if (this.Variant !== 'related-entity') return undefined;
+    if (this.chrome?.HidesAccordionChrome(this.SectionKey)) return undefined;
     const formRef = this.Form as { GetSectionPanelHeight?: (key: string) => number | undefined };
     return formRef?.GetSectionPanelHeight?.(this.SectionKey);
   }
@@ -461,6 +463,9 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
         // Only a height change while the panel is expanded reflects a genuine user drag of
         // the resize handle. Ignore reflows while collapsed (e.g. content settling on load).
         if (!this.Expanded) return;
+        // Left-nav sizes the grid from the leftover column. Persisting that
+        // computed height would write ~0 (or the toolbar) and then pin it.
+        if (this.chrome?.HidesAccordionChrome(this.SectionKey)) return;
         const entry = entries[0];
         if (!entry) return;
         const newHeight = Math.round(entry.contentRect.height);
