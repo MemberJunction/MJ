@@ -2,7 +2,7 @@ import { NgModule } from "@angular/core";
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { DragDropModule } from '@angular/cdk/drag-drop';
-import { MJButtonDirective, MJAccordionModule, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent, MjSlidePanelComponent, MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJAccordionModule, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent, MjSlidePanelComponent, MJEmptyStateComponent, MJAlertComponent, MJTabNavComponent } from '@memberjunction/ng-ui-components';
 import { AngularSplitModule } from 'angular-split';
 import { AgGridModule } from 'ag-grid-angular';
 import { BaseFormsModule, MjFormDialogComponent } from '@memberjunction/ng-base-forms';
@@ -57,6 +57,7 @@ import { MJQueryFormComponentExtended } from "./Queries/query-form.component";
 import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
 import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-agent-form-section.component";
 import { FlowEditorModule } from "@memberjunction/ng-flow-editor";
+import { TaskGraphEditorModule } from "@memberjunction/ng-task-graph-editor";
 import { MarkdownModule } from "@memberjunction/ng-markdown";
 import { NgTreesModule } from "@memberjunction/ng-trees";
 import { MJTestRunFormComponentExtended } from "./Tests/test-run-form.component";
@@ -97,6 +98,8 @@ import { ModelPredictionPanel } from "../panels/model-predictions/model-predicti
 // dialog + SKILL.md export/import actions, mounted on the generated MJ: AI
 // Skills form. Imported so the @RegisterClassEx decorator runs at module load.
 import { AISkillSharingPanel } from "../panels/ai-skill-sharing/ai-skill-sharing-panel.component";
+import { EntityFormChromeEditorComponent } from "../panels/form-chrome/entity-form-chrome-editor.component";
+import { EntityRelationshipFormRolePanel } from "../panels/form-chrome/entity-relationship-form-role.panel";
 import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissions";
 
 @NgModule({
@@ -158,6 +161,8 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
         MJAIBridgeAgentIdentityFormComponentExtended,
         AgentRealtimePanel,
         RecordProcessFormComponentExtended,
+        EntityFormChromeEditorComponent,
+        EntityRelationshipFormRolePanel,
     ],
     imports: [
         CommonModule,
@@ -167,6 +172,7 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
         AgGridModule,
         MJEmptyStateComponent,
         MJAlertComponent,
+        MJTabNavComponent,
         MJButtonDirective,
         MJAccordionModule,
         MJDropdownComponent,
@@ -189,6 +195,7 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
         ActionGalleryModule,
         TestingModule,
         FlowEditorModule,
+        TaskGraphEditorModule,
         SharedGenericModule,
         EntityRelationshipDiagramModule,
         ListManagementModule,

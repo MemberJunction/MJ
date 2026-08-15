@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/api-keys-base",
-  "version": "6.0.0",
+  "version": "6.1.0-edge.2",
   "description": "MemberJunction: Base API Keys Engine Package - provides metadata caching for API scopes, applications, and key bindings. Can be used anywhere (client or server).",
   "type": "module",
   "main": "dist/index.js",
@@ -15,9 +15,9 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "6.0.0",
-    "@memberjunction/core-entities": "6.0.0",
-    "@memberjunction/global": "6.0.0"
+    "@memberjunction/core": "6.1.0-edge.2",
+    "@memberjunction/core-entities": "6.1.0-edge.2",
+    "@memberjunction/global": "6.1.0-edge.2"
   },
   "devDependencies": {
     "@types/node": "^24.10.11",

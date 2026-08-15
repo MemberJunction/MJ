@@ -1,5 +1,141 @@
 # @memberjunction/notifications
 
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- d8adda1: **BREAKING — `UserCache` moved packages. Update the import, not just the call.**
+
+  `UserCache` now lives in `@memberjunction/generic-database-provider`. It is no longer exported
+  from `@memberjunction/sqlserver-dataprovider`, and there is deliberately **no re-export shim**,
+  so every import of the symbol must be repointed or it will fail to resolve:
+
+  ```diff
+  - import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+  + import { UserCache } from '@memberjunction/generic-database-provider';
+  ```
+
+  `Refresh` is now dialect-neutral and takes the configured provider rather than an
+  `mssql.ConnectionPool`:
+
+  ```diff
+  - await UserCache.Instance.Refresh(pool, intervalMs);
+  + await UserCache.Instance.Refresh(provider, intervalMs);
+  ```
+
+  **These are two separate breaks, and the first is much wider than the second.** The import path
+  affects _every_ consumer of the symbol — reads included. The signature affects only the handful
+  of callers of `Refresh`. Anything that imports `UserCache` merely to call `Users`,
+  `GetSystemUser()` or `UserByName()` still has to change its import, so a consumer who reads only
+  "the signature changed" will treat this as a no-op and fail to build. In this repo the split was
+  56 files versus 9 call sites.
+
+  Packages that import `UserCache` must also declare `@memberjunction/generic-database-provider`
+  as a dependency — pnpm resolves strictly, so an undeclared import fails rather than falling
+  through to a hoisted copy.
+
+  **Check for dynamic imports too**, not just static ones. `await import('@memberjunction/sqlserver-dataprovider')`
+  destructuring `UserCache` breaks the same way, and a grep for `import { … } from` will not find it.
+
+  **Unchanged:** the read surface (`Users`, `GetSystemUser`, `UserByName`, `SYSTEM_USER_ID`), and
+  the class name. The name is load-bearing — `BaseSingleton` keys its global store on the
+  constructor name, so keeping it `UserCache` preserves singleton identity across the move.
+
+  **Also fixed:** `_users` now initializes to `[]`. It previously stayed `undefined` after a
+  `Refresh` that never ran or that failed (failures are swallowed into `LogError`), so
+  `GetSystemUser()` threw a `TypeError` off `.find()` instead of returning `undefined` as its
+  callers already assume.
+
+  **Why:** the cache was dialect-neutral except for that one `mssql` type, which left PostgreSQL
+  with no user cache at all and produced four separate hand-rolled "read `vwUsers` + `vwUserRoles`,
+  build `UserInfo[]`" implementations — one of which reached into the singleton's private field
+  through a cast from another package. Those are all removed, and a PostgreSQL process that never
+  goes through the server bootstrap now has a system user.
+
+- Updated dependencies [255d506]
+- Updated dependencies [59def38]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [e26c866]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [d8adda1]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/generic-database-provider@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.2
+  - @memberjunction/communication-types@6.1.0-edge.2
+  - @memberjunction/communication-engine@6.1.0-edge.2
+  - @memberjunction/templates@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Minor Changes
+
+- 394d276: Phase 7 of the unified workflow DAG engine program (plan: PR #3456) — Track D, the trigger layer. Everything here closes a gap where something _claimed_ to work and did not.
+
+  **Entity-change triggers only bind where an agent can safely run.** A `WorkflowSpec` trigger passed its `invocationType` straight through, and `Validate` / `BeforeCreate` / `BeforeUpdate` / `BeforeDelete` are real invocation names — so a workflow could bind an unbounded agent run _inside_ a user's save, in the held transaction, with the power to abort it. Validation now refuses anything but the `After*` forms, and the shorthand an author writes (`Update`) resolves to `AfterUpdate` rather than drifting from the name the platform actually fires. That drift was live: the contract documented `Create | Update | Delete`, none of which the platform matches, so the first trigger ever saved through it failed to resolve.
+
+  **Trigger scope stopped being decorative.** `scopeEntityName` / `scopeRecordID` were declared, documented, accepted by validation — and then referenced nowhere in reconciliation. A workflow the author scoped to one record fired on _every_ record of the entity while the UI showed it as scoped. They now reconcile onto the binding's own `ScopeEntityID` / `ScopeRecordID`, which the engine's scope resolver already honored. `filter` is **refused** rather than accepted-and-ignored: narrowing by predicate needs the before/after values of a change, a contract that does not exist yet, and a workflow runs an agent — over-firing costs real money. Accepting it later is additive; the reverse would break specs already published against it.
+
+  **An entity may bind the same action more than once (`UQ_EntityAction_ActionID_EntityID` dropped).** The v5.37.x junction sweep added that constraint under a stated scope of _"pure junction tables — two foreign-key columns plus ID/Sequence/timestamps, with no other meaningful data columns."_ `EntityAction` never met it: even then it carried `Status`, `Sequence` and `LoggingMode` and owned three child collections. Three months later #3408 added `ScopeEntityID`/`ScopeRecordID` so a binding could attach to "this Deal Type" — a feature the constraint makes unusable, since one binding per (entity, action) means one scope, so "every Deal" and "this Deal Type" cannot coexist. It also forced a single param set, filter set and scope to be shared across _every_ event an action responds to, making "on create run agent X, on update run agent Y" unexpressible. `V202608080100__v6.1.x__Drop_EntityAction_Uniqueness` removes it with no replacement; a narrower index would still refuse two unscoped bindings differing only by invocation type. Nothing in the runtime assumed uniqueness — every accessor already returns a collection and `HandleEntityActions` already iterates — so this is schema-only. Each workflow now owns its own binding, matched on the agent it dispatches to plus its scope; reusing a shared row would have rewritten `AgentID` and silently repointed one workflow's trigger at another's agent.
+
+  **A self-trigger guard, because enrich-and-write-back is the normal shape.** "When a ticket changes, summarize it and store the summary" saves the ticket, which re-fires the action, forever. `EntityActionDispatchGuard` keys every automatic dispatch by `(entity action, entity, record)` and tracks origin through the async call tree with `AsyncLocalStorage`, so re-entry is detected however deep inside an agent run the write-back happens — no call site threads anything. Re-entry is **suppressed**, not deferred: queuing it would turn an infinite loop into an infinite sequence. A merely _overlapping_ save is a different problem with the same key, so it **coalesces** — latest wins, one pending rerun, and a burst of ten saves collapses to two runs instead of ten. Only after-hooks are guarded; `Validate` and `Before*` participate in the save and must neither be skipped nor deferred. Work that has detached from the async context (a durable task graph, a queued job) declares its origin explicitly through the new `EntitySaveOptions.OriginatingEntityActionIDs`.
+
+  **Scheduled-job notifications actually send.** `NotificationManager` logged `"Would send notification to user …"` while `NotificationEngine` sat one package away. It now delivers for real, and composes the two people who have a say: the job's `NotifyViaEmail` / `NotifyViaInApp` toggles are a **ceiling**, the recipient's preferences decide within it. Neither existing knob expressed that — `forceDeliveryChannels` would let a job override a recipient's opt-out, and omitting the toggles would let a type default fire a channel the job never asked for. `SendNotificationParams.allowedDeliveryChannels` is the new primitive; it can only subtract, which is what makes it safe to expose.
+
+  **"Execute Scheduled Job Now" runs the job.** It used to insert a `Status='Running'` run row and report success. Nothing consumed those rows — the poller selects jobs by _schedule_, never by pending run record — so the action left a row that said Running forever and ran nothing. It now executes through `SchedulingEngine`, and a failed job is a failed action rather than a successful insert. `Wait=false` starts it without blocking.
+
+  **The dispatcher has somewhere to deliver.** `StartTaskGraphDispatcher` constructed it with no continuation deliverer at all, so a finished graph logged its outcome, marked itself delivered, and said nothing to the conversation that asked for it. `TaskGraphContinuationDeliverer` posts the roll-up with per-step detail. `Reinvoke` stays unimplemented on purpose: a safe one needs the new agent run to remember it was a continuation at depth N so `MAX_REINVOKE_DEPTH` can stop the chain, and nothing durable records that — a cap that never trips is worse than degrading to a message.
+
+  **IT71 grows to 16 checks.** TG14 drives the save-to-binding round trip that Phase 6 owed; TG15 pins that a scoped trigger actually narrows; TG16 pins that two workflows on one entity keep separate bindings pointing at their own agents, and that re-saving finds its own row rather than adding a third. TG14 caught a second real bug on its first run — the invocation-type mismatch above — and TG16 is what surfaced the unique constraint.
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/communication-types@6.1.0-edge.1
+  - @memberjunction/communication-engine@6.1.0-edge.1
+  - @memberjunction/templates@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [fe7bd9d]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+- Updated dependencies [8d0d45a]
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.0
+  - @memberjunction/communication-types@6.1.0-edge.0
+  - @memberjunction/communication-engine@6.1.0-edge.0
+  - @memberjunction/templates@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

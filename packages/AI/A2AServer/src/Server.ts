@@ -1,5 +1,6 @@
 import { EntityInfo, IMetadataProvider, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
-import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
+import { setupSQLServerClient, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
+import { UserCache } from "@memberjunction/generic-database-provider";
 import { GetAPIKeyEngine } from "@memberjunction/api-keys";
 import express, { Request, Response, NextFunction } from 'express';
 import sql from 'mssql';

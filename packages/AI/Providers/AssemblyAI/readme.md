@@ -35,8 +35,9 @@ The matching **browser-direct client driver** (`AssemblyAIRealtimeClient`, Class
 ## Configuration
 
 - API key env alias: `AI_VENDOR_API_KEY__AssemblyAIRealtime`
-- `RealtimeSessionParams.Config` passthrough keys: `voice`, `greeting`, `turn_detection`
-  (object), `keyterms` (string array)
+- `RealtimeSessionParams.Config` passthrough keys: `voice`, `firstMessage` (the driver-neutral
+  opening utterance; `greeting` is the legacy alias and still honored, with `firstMessage` winning
+  when both appear), `turn_detection` (object), `keyterms` (string array)
 - `Model` / `APIName` plays no wire role (single endpoint, no model selection) — the metadata
   row uses `voice-agent`
 

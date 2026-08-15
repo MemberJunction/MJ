@@ -1,5 +1,33 @@
 # Change Log - @memberjunction/ai-mistral
 
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [11de1a3]
+- Updated dependencies [080f4cd]
+- Updated dependencies [48ff99f]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [de343b5]
+  - @memberjunction/ai@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- 394d276: Declare axios as a direct dependency. axios-retry peers on axios ("0.x || 1.x") and ai-mistral used it without declaring it, which fails strict peer resolution in consuming workspaces and is a phantom dependency under any non-hoisted layout.
+  - @memberjunction/ai@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- @memberjunction/ai@6.1.0-edge.0
+- @memberjunction/global@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

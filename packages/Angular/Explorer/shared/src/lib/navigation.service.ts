@@ -863,41 +863,6 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
-   * Open a report
-   * Uses Home app if available, otherwise falls back to active app or system app
-   */
-  public OpenReport(
-    reportId: string,
-    reportName: string,
-    options?: NavigationOptions
-  ): string {
-    const appId = this.getDefaultApplicationId();
-    const appColor = this.getDefaultAppColor();
-    let forceNew = this.shouldForceNewTab(options);
-
-    const request: TabRequest = {
-      ApplicationId: appId,
-      Title: reportName,
-      Configuration: {
-        resourceType: 'Reports',
-        reportId,
-        recordId: reportId  // Also needed in Configuration for tab-container.component to populate ResourceRecordID
-      },
-      ResourceRecordId: reportId,
-      IsPinned: options?.pinTab || false
-    };
-
-    // Handle transition from single-resource mode
-    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
-
-    if (forceNew) {
-      return this.workspaceManager.OpenTabForced(request, appColor);
-    } else {
-      return this.workspaceManager.OpenTab(request, appColor);
-    }
-  }
-
-  /**
    * Open an artifact
    * Artifacts are versioned content containers (reports, dashboards, UI components, etc.)
    * Uses Home app if available, otherwise falls back to active app or system app

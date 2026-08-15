@@ -78,11 +78,58 @@ jobs:
         uses: pnpm/action-setup@v4
 
       - name: Set up node
-        if: steps.check_migrations.outputs.has_migrations == 'true'
+        # Unconditional, unlike the migration-specific steps below: the CodeGen-tail check
+        # runs on every PR (see that step for why) and it needs node.
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: 'pnpm'
+          # No dependency cache here on purpose: this job never runs `pnpm install`
+          # (the gate is shell + jq over filenames), so there is no pnpm store to save.
+          # With `cache: 'pnpm'` the post-job cache-save step fails the whole check with
+          # "Path Validation Error: Path(s) specified in the action for caching do(es) not
+          # exist" — after every real validation step has already passed.
+
+      - name: Check CodeGen tail matches committed migrations (#3737)
+        # Lives in THIS job rather than a workflow of its own, and is NOT gated on
+        # has_migrations. Both are deliberate:
+        #
+        # 1. `next-protect` requires exactly one context — `Check migrations`, i.e. this job.
+        #    This workflow carries no `paths:` filter precisely so that context always
+        #    reports. A separate paths-filtered workflow could never BE a required check: on
+        #    every PR it skipped, the required context would never arrive and the PR would sit
+        #    pending forever. Living in this job is what makes the guard a gate rather than a
+        #    decoration nobody is blocked by.
+        #
+        # 2. Ungated because this drift is not introduced only by migration PRs. A PR that
+        #    edits only a generated artifact, or only CodeGenLib — whose emitted shape the
+        #    guard's extractors are pinned to — can introduce or expose it. The guard needs no
+        #    database and no `pnpm install` and takes ~2s over 660+ migrations, so running it
+        #    always is cheaper than reasoning about when not to.
+        #
+        # `--compare-to` scopes FAILURE to what this branch introduces. Both of the guard's
+        # checks are whole-repo, so without it one bad merge onto the base branch would red
+        # every subsequent PR — and because this context is required, "red" there means
+        # "nobody can merge". Pre-existing drift is still surfaced, as a ::warning. The base
+        # worktree is built from the base tip resolved above — the same base the migration
+        # steps use, and deliberately not `pull_request.base.sha` (see that step's comment).
+        #
+        # The base tree is materialised ONLY when the head tree is actually dirty. A clean
+        # head has nothing to attribute, so on the green path — which is essentially every
+        # PR — this step is one ~2s sweep and never pays for the worktree (a full checkout,
+        # ~1.2 GB, dominated by the 566 MB of migrations). Exit 1 means drift and is the
+        # only code worth a second look; anything else (2 = missing or reshaped artifact)
+        # propagates immediately rather than being re-run against a base that cannot
+        # explain it.
+        run: |
+          set +e
+          node .github/scripts/check-codegen-tail.mjs
+          rc=$?
+          set -e
+          if [ $rc -eq 0 ]; then exit 0; fi
+          if [ $rc -ne 1 ]; then exit $rc; fi
+          echo "Drift found — evaluating the base tree to scope it to this branch."
+          git worktree add --detach "$RUNNER_TEMP/codegen-tail-base" ${{ steps.base.outputs.sha }}
+          node .github/scripts/check-codegen-tail.mjs --compare-to="$RUNNER_TEMP/codegen-tail-base"
 
       - name: Get current version
         if: steps.check_migrations.outputs.has_migrations == 'true'
@@ -98,12 +145,32 @@ jobs:
         run: |
           CURRENT_VERSION="${{ steps.get_version.outputs.CURRENT_VERSION }}"
           IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
-          NEXT_MINOR_VERSION="${VERSION_PARTS[0]}.$(( ${VERSION_PARTS[1]} + 1 ))"
-          EXPECTED_STRING="__v$NEXT_MINOR_VERSION"
+
+          # Which line are migrations building toward?
+          #
+          # Outside pre-mode the version is the LAST release (e.g. 5.50.0), so the next one bumps
+          # the minor and migrations carry v5.51.x.
+          #
+          # In pre-mode the version is 6.1.0-edge.N and the stream is still building toward line
+          # 6.1 — every subsequent edge release stays on 6.1 — so migrations keep v6.1.x. This
+          # matches DEPLOYMENT.md: "use the tuple the Edge stream is building toward — while
+          # `next` streams 6.1.0-edge.N, name it v6.1.x".
+          #
+          # The old unconditional minor+1 only happened to work for the FIRST edge release of a
+          # line (6.0.x -> v6.1.x). On the second (6.1.0-edge.0 -> 6.1.0-edge.1) it demanded
+          # v6.2.x and rejected every correctly-named migration in the release.
+          if [[ "$CURRENT_VERSION" == *-* ]]; then
+            TARGET_LINE="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}"
+            echo "Pre-release version $CURRENT_VERSION — migrations target the line being built toward: v$TARGET_LINE"
+          else
+            TARGET_LINE="${VERSION_PARTS[0]}.$(( ${VERSION_PARTS[1]} + 1 ))"
+            echo "Released version $CURRENT_VERSION — migrations target the next minor: v$TARGET_LINE"
+          fi
+          EXPECTED_STRING="__v$TARGET_LINE"
 
           git diff --name-only --diff-filter=A ${{ steps.base.outputs.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' | while read file; do
             if [[ ! "$file" =~ $EXPECTED_STRING ]]; then
-              echo "::error file=$file::Migration filename doesn't match the next minor version (v$NEXT_MINOR_VERSION)"
+              echo "::error file=$file::Migration filename doesn't match the target line (v$TARGET_LINE)"
               exit 1
             fi
             if [[ ! "$file" =~ "V" ]]; then
@@ -117,6 +184,31 @@ jobs:
         run: |
           # Get new migration files being added in this PR
           NEW_MIGRATIONS=$(git diff --name-only --diff-filter=A ${{ steps.base.outputs.sha }} ${{ github.sha }} | grep -E '^migrations/.*\.sql$' || true)
+
+          # Drop anything already released. A migration present on `main` is not "new" — it is
+          # released history arriving late through the post-release back-merge of main into next,
+          # and it CANNOT be brought into order: renaming a migration that production databases
+          # have already applied strands it as an unresolved applied version, which is strictly
+          # worse than the out-of-order execution this check guards against.
+          #
+          # This only surfaces when a back-merge travels through a PR. publish.yml normally pushes
+          # it straight to next, so this gate never sees one; it did for v6.1.0-edge.1 because the
+          # automated merge hit conflicts and the merge was routed through review instead. The
+          # check stays fully strict for genuinely new migrations, which is every feature PR.
+          git fetch --no-tags --depth=1 origin main >/dev/null 2>&1 || true
+          RELEASED_MIGRATIONS=$(git ls-tree -r --name-only FETCH_HEAD -- migrations/ 2>/dev/null | grep -E '\.sql$' || true)
+          if [ -n "$RELEASED_MIGRATIONS" ]; then
+            FILTERED=""
+            while read -r file; do
+              [ -z "$file" ] && continue
+              if echo "$RELEASED_MIGRATIONS" | grep -qxF "$file"; then
+                echo "↷ $(basename "$file") is already released on main — not a new migration, skipping"
+              else
+                FILTERED="${FILTERED}${file}"$'\n'
+              fi
+            done <<< "$NEW_MIGRATIONS"
+            NEW_MIGRATIONS=$(printf '%s' "$FILTERED")
+          fi
 
           if [ -z "$NEW_MIGRATIONS" ]; then
             echo "No new migration files to check"

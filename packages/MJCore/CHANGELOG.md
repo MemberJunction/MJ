@@ -1,5 +1,380 @@
 # Change Log - @memberjunction/core
 
+## 6.1.0-edge.2
+
+### Minor Changes
+
+- 0967ba7: BEHAVIOR CHANGE: RunView `'simple'` rows are now normalized so `Date` and numeric columns hold real `Date`s and `number`s on every tier, matching what the generated entity types declare. Previously the shape depended on where the code ran — a fresh server-side query returned real `Date`s (driver-parsed), a server-side Redis cache hit returned ISO strings, and a browser client over GraphQL returned ISO strings — three shapes for the same call. Normalization runs unconditionally at the ProviderBase choke point every provider's pipeline flows through, so both sides of the wire now see the one shape the platform's types promise.
+
+  What client code needs to check: code that read simple-row date columns as strings — `localeCompare` sorts, `.slice(0, 10)`, equality against ISO literals, template bindings printing the raw value — now receives `Date` objects and must use Date semantics (defensive `new Date(x)` wrapping keeps working unchanged). Safety rules: existing `Date` instances pass through (idempotent), `NULL` stays `NULL` rather than becoming 1970, unparseable values are left as-is rather than replaced with `Invalid Date`, and integer strings beyond `Number.MAX_SAFE_INTEGER` stay strings so deliberately-string BIGINTs (PostgreSQL) are never precision-corrupted. Rows already in the right shape keep their identity (the server fast path is zero-copy); rows that convert are shallow-copied so cached entries are never written to. Skipped for `entity_object` (BaseEntity already converts), `count_only`, and view-only runs that carry neither `EntityName` nor a loaded `ViewEntity`.
+
+### Patch Changes
+
+- 8288711: Fix process-wide server cache corruption, and make the cache structurally unable to be
+  corrupted by consumers.
+
+  **Take this bump urgently if you run MJAPI.** `ResolverBase` mapped GraphQL transport field
+  names onto the data provider's own result rows, which the server cache holds _by reference_.
+  Preparing one GraphQL response therefore rewrote `__mj_CreatedAt` to the wire alias
+  `_mj__CreatedAt` **inside the live cache**, and every later read served the corrupted shape —
+  failing in `BaseEntity.SetMany` with `Field _mj__CreatedAt does not exist on <Entity>`. The
+  cache is process-wide, so a single response poisoned every subsequent request across all
+  workers. Fixed by mapping onto copies.
+
+  Fixing it at the reader alone left the whole class of bug open — nothing in the type system or
+  the API surface said "this array is shared, do not mutate," and the exposure runs in both
+  directions (a cache _hit_ returns the stored array; a cache _miss_ stores the array it is about
+  to return). So the cache now defends itself:
+  - **`ILocalStorageProvider` gains an optional `readonly SharesReferences?: boolean`**, declaring
+    whether a provider hands back live references (the in-memory providers) or serialized copies
+    (IndexedDB, localStorage, Redis, MMKV). **Fully backward compatible**: existing implementations
+    keep compiling, and omitting the property is not an opt-out — `LocalCacheManager` measures any
+    provider that does not declare one (store a sentinel, read it back, compare identity), so a
+    provider written before this contract still gets the correct protection instead of silently
+    losing it to a falsy default.
+  - **`LocalCacheManager` deep-freezes row data at write time** — rows, their nested values, and
+    the array itself — but only when the provider shares references. Mutations then throw a
+    `TypeError` at the offending line instead of silently corrupting shared state, and cache
+    **hits cost nothing extra** (the freeze is a one-time per-write cost). Applied at both write
+    funnels: `SetRunViewResult` / `SetRunQueryResult` and `storeCachedResults`, the in-place
+    slot-maintenance path that bypasses the first. The freeze lands immediately after the only
+    gate that can decline a write (the synchronous oversized-entry check) and **before** the
+    awaited eviction steps — callers do not always await these methods, so any yield point
+    before the freeze is a window in which shared rows are handed out still mutable. Browser
+    clients are untouched (IndexedDB / localStorage serialize), but **Node-side clients — the
+    CLI, MetadataSync, and anything else on an in-memory provider — do get the freeze**, so
+    "client behavior is unchanged" holds only for the browser. The freeze decision also follows
+    the provider across `SetStorageProvider`: MJAPI initializes on the in-memory provider during
+    engine loading and swaps to Redis afterward, two providers with opposite semantics in one
+    process. The deep-freeze skips **binary payloads**
+    (`Buffer`/TypedArray/`ArrayBuffer`, e.g. `varbinary` columns — `Object.freeze` throws on
+    non-empty views by spec), freezes parent-first so cycles terminate, and a freeze failure of
+    any kind degrades to a logged, unfrozen store — it can never fail a `RunView`/`RunQuery`.
+  - **Dataset cache slots get their own key namespace.** `GetDatasetByName` keyed its
+    write-through cache with the same fingerprint builder ordinary reads use, passing only
+    `{ EntityName, ExtraFilter }` — and every shipped dataset item has a NULL `WhereClause`, so a
+    dataset item and a plain unfiltered `RunView` of the same entity produced an IDENTICAL key and
+    silently shared one slot. That leaked the `MJ_Metadata` scaffolding exemption below to ordinary
+    callers of `MJ: Entities` / `MJ: Entity Fields` (the most-read entities in the process, served
+    unfrozen), and in the other direction let an ordinary read repopulate an evicted slot FROZEN so
+    the next metadata refresh threw. `GenerateRunViewFingerprint` now takes an optional dataset
+    segment, appended only when supplied — ordinary reads keep their exact pre-existing key, so no
+    existing cache entry is invalidated.
+  - **`CacheWriteOptions.ProviderInternalScaffolding`** exempts slots whose only consumer is the
+    provider that wrote them — scoped to the **`MJ_Metadata` dataset only** at its single write
+    site. Metadata bootstrap needs this: the provider's own assembly (`PostProcessEntityMetadata`,
+    plus `GetAllMetadata`'s Applications assembly) hydrates its object graph by mutating those
+    rows in place. Every **other** dataset's cached rows are frozen shared state like any RunView
+    result, because `GetDatasetByName` serves them to arbitrary consumers (`BaseEngine.Load` hands
+    the live arrays to every engine subclass). The flag is persisted and carried forward through
+    slot maintenance so a later save cannot re-freeze the slot.
+
+  Pre-existing consumer bugs surfaced by the freeze and fixed:
+  - **`BaseEntity.Get()` wrote to its own source row.** The raw-mode fast path keeps the caller's
+    row by reference and `Get()` wrote back into it to memoize a converted `Date` or an rtrimmed
+    fixed-width string — so on a cache-served row, _reading_ a `datetime` or `CHAR(n)` field threw.
+    This broke AI cost calculation on `MJ: AI Model Costs.Currency`. `Get()` now memoizes into a
+    per-instance side table and never writes to the row at all. Gating the write on a once-sampled
+    `Object.isFrozen` was not sufficient: the freeze is asynchronous relative to the consumer (cache
+    writes are not always awaited), so the sample could be stale by the first read and the write
+    still threw. Keeping the memo off the row makes freeze timing irrelevant AND restores the
+    optimization for frozen rows, which the isFrozen-guard version had given up.
+  - **`ResolverBase.MapFieldNamesToCodeNames` renamed fields on its argument.** Callers pass rows
+    straight from `findBy`/`RunView` — the cache's own objects — so with the freeze in place
+    `UserByEmail`, `UserByID`, `UserByEmployeeID` and every CodeGen-generated single-record resolver
+    over a cached entity threw `Cannot add property _mj__CreatedAt, object is not extensible`
+    (reproduced live against a running MJAPI). Before the freeze it did something quieter and worse:
+    it rewrote the cached row's keys. It now returns a copy, which fixes every call site at once;
+    `ArrayMapFieldNamesToCodeNames` likewise returns a new array of new objects.
+  - **`GenericDatabaseProvider.serveFromServerCache` and the smart-cache legs** duplicated
+    `CachedRunViewResult` as four inline structural types, which had already caused one silent
+    field drop; they now share the canonical type.
+  - **The singular server RunView path silently dropped a `PostRunView` hook's returned
+    replacement result** (`PostRunView` reassigned a local; `RunView` returned the pre-hook
+    reference), while the client and batch paths honored it. The freeze un-masked this: with
+    in-place row mutation now throwing, no signature-conformant result-modifying hook worked on
+    that path at all. `PostRunView` now copies a hook-supplied replacement onto the result object
+    it was handed, so the change reaches the caller — its `Promise<void>` signature is unchanged,
+    so external subclasses that override it keep compiling. Hook docs (`PostRunViewHook`,
+    `BaseServerMiddleware.PostRunView`) now state that rows may be frozen shared cache state:
+    modify by mapping onto copies (`results.Results = results.Results.map(r => ({ ...r, ... }))`)
+    or return a new result — never mutate rows in place.
+  - **Cache-served reads skipped the `PostRunView` hook chain entirely.** `PostRunView` is the
+    OUTPUT half of the data-hook enforcement seam (masking / audit) and hooks receive
+    `contextUser`, so masking is per-user while a cache slot is shared — there is no correct way
+    to apply it once at write time for a reader who has not arrived yet. Three of the four server
+    paths already ran the chain (miss, mixed batch, client smart-cache); the singular cache hit and
+    the all-cached batch returned early, so masking depended on whether a _sibling_ view in the same
+    batch happened to miss. This looked correct before only by accident: the cache write precedes
+    the hooks, so an in-place masking hook wrote through into the cached rows — which both made
+    later hits appear masked and baked one user's masking decision into a shared slot. Both hit
+    paths now run the chain against the per-hit result wrapper, so a hook's replacement reaches the
+    caller and can never write back into the cache. The zero-hook path (the default — no shipped
+    middleware overrides `PostRunView`) costs ~80ns, down from ~2.4µs: `GetDataHooks` now memoizes
+    the resolved global object store, whose `GetGlobalObjectStore()` probe throws and catches a
+    `ReferenceError` on every call under Node (~1.4µs), and the hit paths check for registered hooks
+    before awaiting the chain.
+
+  The cache result types stay ordinary mutable arrays, documented as shared-and-frozen: the runtime
+  freeze is the enforcement, and a `readonly` marker would have broken existing downstream readers
+  without adding protection. **This release contains no breaking changes** — every public signature
+  it touches is additive or unchanged.
+
+  Consumer-facing contract, documented in `guides/CACHING_AND_PUBSUB_GUIDE.md`: **treat rows from
+  `RunView`/`RunViews`/`RunQuery` as read-only** unless you produced them. Copy before mutating —
+  `rows.map(r => ({ ...r }))`, `[...rows].sort(...)`. Narrow-`Fields` requests and
+  `ResultType: 'entity_object'` results are unaffected (both get per-caller objects).
+
+- fccd0b2: `RelatedRecordCollection.Load()` now refuses to load over unsaved work instead of silently discarding it. `Add()` and `Create()` deliberately do not mark a collection loaded, so a collection that has only ever been appended to still has `IsLoaded === false` — and the "already loaded" early return therefore did not protect it. Any later `Load()` (a lazy read, a refresh, a sibling component sharing the entity) replaced `items` wholesale and took the caller's unsaved children with it, along with any queued removals, reporting nothing: the screen simply showed fewer rows than the user typed and the save wrote fewer children than they entered. The load now throws when the collection is dirty and `force` is not set, naming how many children and removals would have been lost; `Load(true)` still discards, which is what a deliberate refresh means. Merging was rejected — it invents an ordering and can duplicate — and refusing matches what this collection already does elsewhere, where a load that would produce quietly wrong data throws rather than returning something plausible.
+- 15319b4: Fix `ValidateAsync` overrides being silently skipped on save.
+
+  `BaseEntity.ValidateAsync` documents itself as _"automatically called by Save() AFTER the
+  synchronous Validate() passes"_. It was not. `Save()` reached it only when a subclass **also**
+  overrode `DefaultSkipAsyncValidation` — a separate getter the docstring never mentioned, defaulting
+  to `true`. An override written against the documentation alone never ran: it reads as enforced,
+  reviews as enforced, and is not.
+
+  The default cannot be justified on cost. The base `ValidateAsync` returns success immediately, so
+  skipping it saves a subclass that did not override it essentially nothing. The flag's only reachable
+  effect was therefore to disable the async rules of subclasses that had _written_ async rules — which
+  is how `OrderEntityServer.ValidateAsync`, holding both the "cannot confirm an order with no lines"
+  guard and an entire per-line validation loop, was dead on every save in production. It is the same
+  reasoning that already exempts companion validation from the flag.
+
+  Overriding `ValidateAsync` is now what turns it on. Precedence, in order of authority:
+  1. `EntitySaveOptions.SkipAsyncValidation`, when set, wins outright.
+  2. An explicit `DefaultSkipAsyncValidation` override wins next — **either value**. Stating a policy
+     still beats inferring one, so a class that deliberately opts out keeps opting out.
+  3. Only when no policy is stated is it inferred: run `ValidateAsync` if a subclass overrode it.
+
+  Distinguishing "chose `true`" from "never made a choice" is what makes that safe; a getter cannot
+  express it, so the two are told apart by comparing property descriptors against `BaseEntity.prototype`
+  (cached per class, handling accessors and methods, and finding overrides anywhere in a multi-level
+  chain).
+
+  **Blast radius in this repo is zero.** All 17 classes overriding `ValidateAsync` were checked: 16
+  already override `DefaultSkipAsyncValidation` explicitly and so take rule 2 unchanged, and the 17th
+  is `RelatedRecordCollection`, whose `ValidateAsync(result)` is `EntityCompanion`'s method in a
+  different hierarchy. CodeGen never emits `ValidateAsync`, so generated classes are unaffected. Full
+  MJCore suite green: 119 files, 1823 tests.
+
+  **Downstream applications should expect a behaviour change**, and it is the intended one: a
+  `ValidateAsync` that has been quietly dead will start running, and can start refusing saves it was
+  always written to refuse. Pass `SkipAsyncValidation: true`, or override `DefaultSkipAsyncValidation`
+  to return `true`, for any case that should stay off.
+
+- Updated dependencies [080f4cd]
+- Updated dependencies [48ff99f]
+- Updated dependencies [de343b5]
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/sql-dialect@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Minor Changes
+
+- 394d276: Add **entity companions** and **composite graph saves** to `BaseEntity`, and replace the two transaction mechanisms that were blind to each other with one provider-arbitrated primitive.
+
+  ### Composites
+
+  A parent and its related records can now load, validate and persist as one unit, from one call, on both tiers. Declare a collection on a shared (client + server) entity subclass:
+
+  ```typescript
+  public readonly Lines = this.DeclareRelatedRecords<OrderLineEntity>({
+      Name: 'Lines',
+      RelatedEntity: 'MJ_BizApps_Orders: Order Lines',
+      RelatedEntityJoinField: 'OrderHeaderID',
+      OrderBy: 'LineNumber ASC',
+      Load: 'explicit',                            // 'explicit' | 'immediate' | 'lazy' | 'never'
+      OnRemove: 'delete',                          // 'delete' | 'orphan' | 'refuse'
+      Sequence: { Field: 'LineNumber', From: 1 },
+  });
+  ```
+
+  On the server the graph executes locally inside one transaction; from the browser the whole unit of work is routed to the server via the new `MJ.SaveEntityGraph` remote operation, which rebuilds the records as their server-side subclasses and runs the _same_ executor. One cascade implementation, two placements — and **zero changes to any generated GraphQL type**. Every node is persisted through its own `Save()`/`Delete()`, so Record Changes, entity actions, validation, `PreSave` hooks, per-record events and cache invalidation all fire normally; the root additionally raises `graph_save_started` / `graph_save`.
+
+  The option shape mirrors `EntityRelationship` metadata (`RelatedEntity`, `RelatedEntityJoinField`) so the same declaration can be code-generated later — see the schema change below.
+
+  New public API: `EntityCompanion`, `RelatedRecordCollection<T>`, `EntitySavePlan`, `EntityTransactionScope`, `RunInEntityTransaction()`, `SaveEntityGraphOperation`, `LoadRelatedRecordsBatched()`, and on `BaseEntity` — `DeclareRelatedRecords()`, `RegisterCompanion()`, `GetCompanion()`, `Companions`, `HasCompanions`, `SerializeCompanions()`, `DeserializeCompanions()`. `RunViewParams` gains `IncludeRelatedRecords` for batched loading (1+K queries instead of N+1).
+
+  ### Schema
+
+  Adds nullable `EntityRelationship.RelatedRecordCollection` (JSONType `IRelatedRecordCollectionConfig`) — the policy half of a `DeclareRelatedRecords(...)` declaration, so CodeGen can eventually emit these instead of every application hand-writing them. `RelatedEntity` / `RelatedEntityJoinField` are read from the row's existing columns and deliberately not duplicated in the JSON. NULL — every existing row — means "not a declared collection", i.e. exactly current behaviour. CodeGen emission is a follow-up; nothing reads the column yet.
+
+  ### Transaction unification
+
+  `DatabaseProviderBase` gains `BeginEntityTransaction()` / `SupportsEntityTransactions`, delegating to the existing depth-counted `BeginTransaction()` — so it starts a physical transaction _or joins one already in flight_ as a savepoint. Participants never ask who else is in a transaction. IS-A chains now use it.
+
+  This fixes a torn-write defect: `BeginISATransaction()` opened a brand-new physical transaction on the pool with **no depth awareness**, while `BeginTransaction()` (used by every hand-written application cascade) is depth-counted. An IS-A entity saved inside an application transaction therefore wrote into two independent transactions; rolling one back left the other committed, with no error raised.
+
+  ### 🚨 BREAKING
+
+  Removed outright rather than deprecated, since 6.x LTS has not shipped:
+  - `IMetadataProvider.BeginISATransaction` / `CommitISATransaction` / `RollbackISATransaction`, and their `SQLServerDataProvider` implementations. **Migration:** use `BeginEntityTransaction()`, or `RunInEntityTransaction(provider, work)` which handles commit/rollback for you.
+  - `BaseEntity.ProviderTransaction` and `BaseEntity.PropagateTransactionToParents()`. Nothing set them after the unification, and the provider reads that consumed them were already dead: every `ExecuteSQL` call without an explicit `connectionSource` picks up the provider's ambient transaction, which is what the unified scope opens. **Migration:** none needed for code that goes through `Save()`/`Delete()`; code that hand-routed a record onto a specific transaction handle should open a scope instead.
+
+  ### Behaviour changes for adopters
+
+  No effect on entities without companions:
+  - `Dirty` now rolls up companions. A clean parent with new children previously reported `Dirty === false`, took the not-dirty early return, and silently persisted nothing while reporting success.
+  - Companion validation runs regardless of `DefaultSkipAsyncValidation`. That flag governs an entity's own async rules; applying it to cross-child invariants silently disabled them — which is how `OrderEntityServer.ValidateAsync` became dead code on every save.
+
+  Additive and opt-in otherwise — single-record saves take the identical code path they did before.
+
+  See `guides/TRANSACTIONS_AND_BATCHING_GUIDE.md` for when to use provider transactions vs Transaction Groups vs entity graphs.
+
+- 394d276: Phase 0 of the unified workflow DAG engine program (plan: PR #3456) — retires three dead or superseded subsystems so the **Workflow** name is freed for the program's user-facing vocabulary, and so the task-graph engine isn't built alongside a parallel, non-functioning orchestration model.
+
+  **Eleven tables dropped** — the Skip v1-era workflow schema (`Workflow`, `WorkflowRun`, `WorkflowEngine`), the Skip v1-era report artifact (`Report`, `ReportCategory`, `ReportSnapshot`, `ReportUserState`, `ReportVersion`), the legacy `ScheduledAction` / `ScheduledActionParam` pair, and the report-era `OutputTriggerType`. All were verified dead or superseded: nothing outside generated code read the workflow tables, the `Reports` resource type named a `DriverClass` (`ReportResource`) that exists nowhere in the repo, and the legacy scheduled-action cron due-check is mathematically always-false so authored schedules could never fire.
+
+  **Breaking — the report execution surface is gone.** `RunReport` was already marked `@deprecated` ("Reports are no longer supported... Interactive Components and Artifacts are replacements") and read `vwReports`, which this migration drops. Removed: `IRunReportProvider`, the `RunReport` class, `RunReportParams` / `RunReportResult`, `BaseEntity.RunReportProviderToUse`, `BaseAngularComponent.RunReportToUse`, `GraphQLDataProvider.GetReportData`, the `GetReportData` GraphQL query and `CreateReportFromConversationDetailID` mutation, and the `GET /reports/:reportId` REST endpoint. Accepted deliberately in the open v6 breaking-change window. Consumers should use Interactive Components and Artifacts.
+
+  **Scheduled Actions are superseded by Scheduled Jobs, and the UI moved with them.** Contrary to the original plan's read, the entities were live authoring surface: four Knowledge Hub / AI dashboards created and read them. Those surfaces now author a `MJ: Scheduled Jobs` row of type **Action** — the same work, executed by `ActionScheduledJobDriver`, with the action and its parameters carried in the job's `Configuration` JSON rather than in child parameter rows. `ContentSource.ScheduledActionID` becomes `ContentSource.ScheduledJobID`. A shared `action-scheduled-job` helper in `ng-dashboards` owns the mapping so it isn't triplicated across surfaces.
+
+  **Also removed:** the `@memberjunction/scheduled-actions` and `@memberjunction/scheduled-actions-server` packages (nothing depended on either), the `MJScheduledActionEntityExtended` subclass, the "coming soon" Scheduled Actions placeholder dashboard, and the Explorer report wiring (route, `TabService.OpenReport`, `NavigationService.OpenReport`, resource-type map entry, home-pin matcher, and the dashboard add-item Reports branch).
+
+- 394d276: Phase 7 of the unified workflow DAG engine program (plan: PR #3456) — Track D, the trigger layer. Everything here closes a gap where something _claimed_ to work and did not.
+
+  **Entity-change triggers only bind where an agent can safely run.** A `WorkflowSpec` trigger passed its `invocationType` straight through, and `Validate` / `BeforeCreate` / `BeforeUpdate` / `BeforeDelete` are real invocation names — so a workflow could bind an unbounded agent run _inside_ a user's save, in the held transaction, with the power to abort it. Validation now refuses anything but the `After*` forms, and the shorthand an author writes (`Update`) resolves to `AfterUpdate` rather than drifting from the name the platform actually fires. That drift was live: the contract documented `Create | Update | Delete`, none of which the platform matches, so the first trigger ever saved through it failed to resolve.
+
+  **Trigger scope stopped being decorative.** `scopeEntityName` / `scopeRecordID` were declared, documented, accepted by validation — and then referenced nowhere in reconciliation. A workflow the author scoped to one record fired on _every_ record of the entity while the UI showed it as scoped. They now reconcile onto the binding's own `ScopeEntityID` / `ScopeRecordID`, which the engine's scope resolver already honored. `filter` is **refused** rather than accepted-and-ignored: narrowing by predicate needs the before/after values of a change, a contract that does not exist yet, and a workflow runs an agent — over-firing costs real money. Accepting it later is additive; the reverse would break specs already published against it.
+
+  **An entity may bind the same action more than once (`UQ_EntityAction_ActionID_EntityID` dropped).** The v5.37.x junction sweep added that constraint under a stated scope of _"pure junction tables — two foreign-key columns plus ID/Sequence/timestamps, with no other meaningful data columns."_ `EntityAction` never met it: even then it carried `Status`, `Sequence` and `LoggingMode` and owned three child collections. Three months later #3408 added `ScopeEntityID`/`ScopeRecordID` so a binding could attach to "this Deal Type" — a feature the constraint makes unusable, since one binding per (entity, action) means one scope, so "every Deal" and "this Deal Type" cannot coexist. It also forced a single param set, filter set and scope to be shared across _every_ event an action responds to, making "on create run agent X, on update run agent Y" unexpressible. `V202608080100__v6.1.x__Drop_EntityAction_Uniqueness` removes it with no replacement; a narrower index would still refuse two unscoped bindings differing only by invocation type. Nothing in the runtime assumed uniqueness — every accessor already returns a collection and `HandleEntityActions` already iterates — so this is schema-only. Each workflow now owns its own binding, matched on the agent it dispatches to plus its scope; reusing a shared row would have rewritten `AgentID` and silently repointed one workflow's trigger at another's agent.
+
+  **A self-trigger guard, because enrich-and-write-back is the normal shape.** "When a ticket changes, summarize it and store the summary" saves the ticket, which re-fires the action, forever. `EntityActionDispatchGuard` keys every automatic dispatch by `(entity action, entity, record)` and tracks origin through the async call tree with `AsyncLocalStorage`, so re-entry is detected however deep inside an agent run the write-back happens — no call site threads anything. Re-entry is **suppressed**, not deferred: queuing it would turn an infinite loop into an infinite sequence. A merely _overlapping_ save is a different problem with the same key, so it **coalesces** — latest wins, one pending rerun, and a burst of ten saves collapses to two runs instead of ten. Only after-hooks are guarded; `Validate` and `Before*` participate in the save and must neither be skipped nor deferred. Work that has detached from the async context (a durable task graph, a queued job) declares its origin explicitly through the new `EntitySaveOptions.OriginatingEntityActionIDs`.
+
+  **Scheduled-job notifications actually send.** `NotificationManager` logged `"Would send notification to user …"` while `NotificationEngine` sat one package away. It now delivers for real, and composes the two people who have a say: the job's `NotifyViaEmail` / `NotifyViaInApp` toggles are a **ceiling**, the recipient's preferences decide within it. Neither existing knob expressed that — `forceDeliveryChannels` would let a job override a recipient's opt-out, and omitting the toggles would let a type default fire a channel the job never asked for. `SendNotificationParams.allowedDeliveryChannels` is the new primitive; it can only subtract, which is what makes it safe to expose.
+
+  **"Execute Scheduled Job Now" runs the job.** It used to insert a `Status='Running'` run row and report success. Nothing consumed those rows — the poller selects jobs by _schedule_, never by pending run record — so the action left a row that said Running forever and ran nothing. It now executes through `SchedulingEngine`, and a failed job is a failed action rather than a successful insert. `Wait=false` starts it without blocking.
+
+  **The dispatcher has somewhere to deliver.** `StartTaskGraphDispatcher` constructed it with no continuation deliverer at all, so a finished graph logged its outcome, marked itself delivered, and said nothing to the conversation that asked for it. `TaskGraphContinuationDeliverer` posts the roll-up with per-step detail. `Reinvoke` stays unimplemented on purpose: a safe one needs the new agent run to remember it was a continuation at depth N so `MAX_REINVOKE_DEPTH` can stop the chain, and nothing durable records that — a cap that never trips is worse than degrading to a message.
+
+  **IT71 grows to 16 checks.** TG14 drives the save-to-binding round trip that Phase 6 owed; TG15 pins that a scoped trigger actually narrows; TG16 pins that two workflows on one entity keep separate bindings pointing at their own agents, and that re-saving finds its own row rather than adding a third. TG14 caught a second real bug on its first run — the invocation-type mismatch above — and TG16 is what surfaced the unique constraint.
+
+### Patch Changes
+
+- 394d276: fix(core): post-merge review fixes for entity companions / related-record collections / unified transaction scope (PR #3585)
+  - Settle the entity-transaction scope on every `_InnerSave`/`_InnerDelete` exit path (clean-chain save, provider `Delete()` returning false, provider `Save()` returning falsy data)
+  - Run composite graph saves through the in-flight save debounce; refuse TransactionGroup + companion graphs loudly
+  - Skip read-only collections in `Validate`/`ValidateAsync`/`Serialize` — a projection contributes no validation, no FK stamping and no wire payload
+  - Guard `BaseEntity.LoadRelatedRecords` against wiping staged children (unsaved parent / loaded / dirty collections) and escape the parent key in its filter
+  - Skip clean, already-persisted children at save-plan level so header-only edits stay on the single-row path (`IgnoreDirtyState` still forces a full write-out)
+  - Label remote graph CREATEs as `create` (result history + `save` event subtype)
+  - Await `LoadFromData` in `copyRecords`, clone `Date` values into copies
+  - Enforce lazy ⇒ cache ⇒ read-only at declaration time; accurate lazy-miss diagnostic; new non-throwing `IsAvailable` guard for display-tier code (one read path, no null-vs-empty ambiguity)
+  - SQL Server: recover from doomed-transaction savepoint rollback failures (full rollback + state reset); report real nesting via `CurrentTransactionDepth`; detect out-of-order scope settlement on shared providers
+  - `RunInEntityTransaction` preserves the original error when rollback also fails
+
+- 394d276: Stop falsely reporting paginated sweeps as duplicate RunViews, and honour telemetry exemption on batch reads
+
+  A paginated sweep read the same entity page after page, and every page was reported as a **Duplicate RunView**. Surfaced by the "Entity Vector Sync - Daily" job, which logged five bogus warnings on every run.
+
+  The single-RunView fingerprint already carried `StartRow`/`AfterKey` — with a comment explaining exactly why ("otherwise page 2 collides with page 1"). The **batch** fingerprint did not. That gap mattered far more than it looks: `ProviderBase.RunView` delegates to `RunViews([params])` whenever `BypassCache` or `AfterKey` is set, and **unconditionally on the client** — so a keyset sweep never uses the single path at all. Every page arrived as a size-1 batch, all pages collapsed onto one fingerprint, and the analyzer fired from page 2 on.
+
+  Fixed by folding per-view pagination cursors into the batch fingerprint. This is a correctness fix rather than an exemption: each page genuinely _is_ a distinct query. It also clears the same false positive for **all client-side pagination**, since the client routes every `RunView` through `RunViews`.
+
+  **Also fixes `RunViewParams.Telemetry.Exempt` being silently ineffective for batch reads.** Exemption was threaded through the deprecated batch path but not the live one, so a caller who correctly marked an intentional repeat got warned anyway — with nothing to indicate their exemption had been dropped. Because of the delegation above, this also broke exemption for `BypassCache`/`AfterKey` single reads. A batch is exempt only when _every_ view in it is exempt, since one telemetry event covers them all.
+
+  Two hardening fixes that fell out of review:
+  - The batch telemetry `Entities` array now records `''` for a view identified only by `ViewEntity` instead of dropping the entry, keeping it index-parallel with the per-view `Filters`/`OrderBys`/`StartRows`/`AfterKeys` arrays — previously such a view shifted every subsequent view's filter and cursor onto the wrong entity in the fingerprint.
+  - The single-view fingerprint now applies the same `StartRow` normalization as the batch fingerprint (explicit `0` ≡ omitted), so a genuinely duplicated first-page read is detected regardless of how the caller spelled page 1.
+
+  No data path changes — telemetry fingerprint construction and exemption plumbing only.
+  - @memberjunction/global@6.1.0-edge.1
+  - @memberjunction/sql-dialect@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Minor Changes
+
+- 9699d0e: Entity: declare per-verb which entities may be written by SQL that bypasses `BaseEntity`
+
+  MJ's contract is that every mutation flows through `BaseEntity.Save()` / `.Delete()`, because that is
+  the only path where record-change tracking, cache invalidation, entity actions, validation and soft
+  delete actually run. SQL written outside that path skips all of it, and none of those failures are
+  loud — you get an audit trail that looks complete but isn't, and a server cache that serves stale
+  rows indefinitely.
+
+  Three new `Entity` columns make the exception explicit instead of tribal knowledge:
+  - `AllowDirectSQLInsert` — bulk loads, ETL/integration sync, rows created as a side effect of a proc
+  - `AllowDirectSQLUpdate` — bulk backfills, maintenance routines
+  - `AllowDirectSQLDelete` — purge/retention, integration reconciliation
+
+  All default to `0`, which is exactly today's behaviour. Split by verb because the risk differs: a
+  bulk `INSERT` on a staging-shaped entity is routine, a direct `DELETE` on a soft-delete entity
+  destroys rows the platform promised to keep.
+
+  These **declare** intent for the code paths and tooling that consult them — they enforce nothing, and
+  cannot; no constraint or trigger stops anyone executing SQL.
+
+  Two CHECK constraints enforce the invariants, since both failure modes are silent: any direct-SQL
+  flag requires `TrackRecordChanges = 0` **and** `TrustServerCacheCompletely = 0` (direct DML writes no
+  audit row and fires no invalidation event — note `TrustServerCacheCompletely` already documented
+  exactly this scenario), and `AllowDirectSQLDelete` additionally requires `DeleteType = 'Hard'`.
+
+  Surfaced on `EntityInfo` as `AllowDirectSQLInsert` / `AllowDirectSQLUpdate` / `AllowDirectSQLDelete`.
+
+- 1d88e00: Layered base views: an entity can now have BOTH a generated base view and a custom one over it
+
+  `BaseViewGenerated = 0` was all-or-nothing. To add one computed column an application inherited the
+  entire generated view — every related-entity display join, the geo join, the recursive root-ID
+  `OUTER APPLY`, the soft-delete predicate — and had to hand-maintain it from then on. Add a foreign
+  key later and its display field simply never appeared, because nothing regenerated the join: the
+  column was absent rather than wrong, so nothing errored and no test noticed. It also froze the entity
+  at whatever CodeGen produced the day the view was copied.
+
+  New `Entity.GeneratedBaseViewName`: when set, CodeGen writes its full generated view under THAT name
+  and the application owns `BaseView`, wrapping it —
+
+  ```sql
+  CREATE VIEW vwOrderHeaders AS
+  SELECT g.*, CASE WHEN ... END AS IsOverdue
+  FROM   vwOrderHeadersGenerated g;
+  ```
+
+  Everything underneath keeps regenerating, so a new foreign key appears on its own, and the custom
+  layer stays a few reviewable lines. Columns it adds become first-class virtual `EntityField` rows and
+  are returned by `spCreate`/`spUpdate`/`spDelete`, which read `BaseView`.
+
+  Additive: `NULL` — every existing entity — reproduces the previous behaviour exactly. No install
+  changes unless it opts in.
+
+  SQL Server only. CodeGen throws on a layered entity under PostgreSQL, which expands `SELECT *` at
+  view creation and freezes it, has no `sp_refreshview` equivalent, and never recreates the
+  application-owned outer view — so a late-added column would silently never reach it, the exact
+  failure this feature exists to prevent. Fully custom base views are unaffected on both dialects.
+
+  Also adds `EntityInfo.GeneratedViewName` (the single resolution of "which view does CodeGen write",
+  derived from `HasLayeredBaseView` so the two cannot disagree) and `EntityInfo.HasLayeredBaseView`;
+  orders `sp_refreshview` inner-before-outer, since the custom layer's `SELECT g.*` caches its column
+  list and refreshing the outer against a stale inner leaves new columns missing; guards the refresh
+  and grants aimed at the application-owned outer view on its existence, so the first CodeGen pass —
+  which necessarily runs before that view can exist — bootstraps instead of failing; lets a layered
+  entity's inner view self-heal through the failed-refresh regeneration path; and refuses a
+  self-referencing name via a CHECK constraint and a case-insensitive comparison.
+
+- 27e4d09: Open the 6.x Edge stream: first Edge release of line 6.1 (6.1.0-edge.0).
+
+### Patch Changes
+
+- 052b4c7: fix(core): compare UUID primary keys case-insensitively in BaseEngine cache maintenance.
+
+  `BaseEngine.findEntityIndexByPrimaryKeys` matched primary-key values with a raw `===`, so a UUID that arrived in different casing from different sources — a client-minted lowercase id from `BaseEntity.NewRecord` vs. an uppercase value loaded from SQL Server — failed to match and the event-driven "not found → add it" branch **appended a duplicate row** into the engine cache (the DB stayed correct; every consumer showed the row twice). The comparison is now driven off metadata — `EntityFieldInfo.IsUniqueIdentifier` (PG-aware) → `UUIDsEqual` for UUID columns, strict `===` for everything else — so no string-shape heuristic and non-UUID keys keep exact equality.
+
+- 841e6ea: Harden several SQL text-building paths that substituted values into query strings without parameterization or escaping.
+
+  **`@memberjunction/server`** — `ReportResolver.CreateReportFromConversationDetailID` built its `WHERE` clause via direct string interpolation of the `ConversationDetailID` argument. It now binds the value through `mssql`'s parameterized `request.input(...)` as a `UniqueIdentifier`, consistent with the parameterization pattern already used elsewhere in the package, and gets GUID-format validation as a side effect.
+
+  **`@memberjunction/generic-database-provider`** — `GenericDatabaseProvider.CheckRecordRLS` built its primary-key `WHERE` clause without escaping embedded quotes in the key value, unlike the sibling `Load()` path a few lines above, which already escapes. The RLS-check path now mirrors `Load()`'s escaping so a primary key value containing a quote can't alter the query's structure.
+
+  **`@memberjunction/core`** — `RowLevelSecurityFilterInfo.MarkupFilterText` did two things that could weaken a row-level security filter: it let `undefined` user-property values through as the literal string `"undefined"`, and it never escaped quotes in substituted values. Both are fixed — `undefined` now falls through to the existing unresolved-token handling (same as `null` and object-typed values already did), and substituted values now have embedded single quotes doubled.
+
+  Behavior note for deployments with existing role-based RLS filters: equality-style filters (`Col = '{{UserX}}'`) are unaffected. Filters written in negation form (`<>`, `NOT IN`, `NOT LIKE`) against a user property that can be `undefined` previously matched more rows than intended (a permissive gap) and will now correctly match fewer — reviewed as: users may see fewer rows than before the upgrade, which is the deliberate direction of this fix, not a new restriction to work around.
+
+  **`@memberjunction/ng-react`** — `RuntimeUtilities.provider` was initialized directly from the global `Metadata.Provider` at class-field scope. The value was always overwritten before use by `buildUtilities()`'s existing `provider ?? Metadata.Provider` fallback, so this is a no-behavior-change cleanup that stops the class body from touching the global provider directly.
+  - @memberjunction/global@6.1.0-edge.0
+  - @memberjunction/sql-dialect@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Major Changes

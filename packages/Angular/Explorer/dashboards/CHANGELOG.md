@@ -1,5 +1,351 @@
 # @memberjunction/ng-dashboards
 
+## 6.1.0-edge.2
+
+### Minor Changes
+
+- 9a29da4: Retire the Workflows app; make the Flow agent form first-class.
+
+  The Workflows app owned no storage — a workflow's WHAT is a Flow agent and there is no `Workflow` table — so it was a second list of rows the AI app already listed, fronted by a canvas that duplicated the Flow agent editor and had no Save path at all. Removed, and replaced by making the agent record answer what the app was implicitly about.
+
+  **`@memberjunction/ng-core-entity-forms`** — the AI Agents form is now tabbed: the agent type's designer (any type declaring a `UIFormSectionKey`), Details (the existing accordion set, unchanged), and Invocations. The designer pane is hidden with CSS rather than removed from the DOM, so unsaved canvas edits and canvas viewport state survive a tab switch. The default tab is the first that exists, so a Flow agent opens on its diagram.
+
+  **`@memberjunction/ng-agents`** — new `<mj-agent-invocations>`: a read-only index of every automated pathway that invokes an agent (Scheduled Jobs, User Routines, Entity Action bindings, Record Processes, sub-agent steps and relationships, `ExposeAsAction`). Answers "what runs this when I'm not looking?", which no surface could previously answer from the agent's side.
+
+  **`@memberjunction/ai-core-plus`** — `AgentSpec.Status` and `AgentStep.StepType` now derive from their entity fields instead of restating them. Both had drifted: `Status` declared `'Inactive'`, which `AIAgent.Status` has never accepted, so any caller setting it wrote a value the CHECK constraint rejects; `StepType` omitted `ForEach` and `While`, making loops executable but unauthorable. `AgentStep` gains `LoopBodyType` and `Configuration`, and the action mapping fields now admit the object form that callers already pass.
+
+  **`@memberjunction/ai-agent-manager`** — `AgentSpecSync` round-trips loop fields; new pure `ValidateLoopStep` catches a loop that saves cleanly and then iterates zero times; the Architect's status validator accepts `Disabled` rather than the invalid `Inactive`, and `WorkflowAgentWriter` maps Draft/Paused workflows to `Disabled`.
+
+  **`@memberjunction/ai-mcp-server`** — the `List_Agents` status filter no longer offers `Inactive`, which could never match a row.
+
+  **`@memberjunction/ng-dashboards`** — the Workflows dashboard, its module, its resource component and its `ng-task-graph-editor` dependency are removed. `mj-task-graph-editor` itself is unchanged and keeps its read-only consumers.
+
+  The `Workflow.Draft` / `Workflow.Save` / `Workflow.Validate` Remote Operations are deliberately kept — they are the agent- and MCP-facing contract and matter more now that creation is conversational.
+
+  A migration removes the Workflows Application row from existing databases (idempotent; a no-op on a clean install). The Architect prompt template change requires `mj sync push` to take effect.
+
+- 768980d: **A Workflows app, and the Create Workflow front door inside it.**
+
+  Phase 5 shipped every component this composes — the canvas, the properties panel, the runtime-overlay
+  source, both Save-as-Workflow surfaces — but not the front door, because the design was not locked.
+  It is now: `mockups/workflow-ux/front-door-v1.html` carries five ratified answers, and this builds
+  all three of its screens against them.
+
+  **Its own Explorer app, not a tab in AI.** D18 puts _Workflow_ in front of end users while _Flow
+  Agent_ survives in metadata and dev docs — filing the surface under "AI" would contradict that at the
+  navigation level, and D19 exists precisely because the editor is today buried inside a saved agent
+  record. Scheduling and Routines set the precedent for an AI-adjacent domain getting its own app.
+
+  **Three doors**, in the locked order, with "Describe it" pre-selected — the only one that needs no
+  prior knowledge of the product. Each states _when to pick it_, not just what it does, because that is
+  the actual question someone has on this screen. Only settled runs are promotable: an in-flight run
+  may still change shape under a retry or a recovery branch, so the saved workflow would not be the one
+  that ran. That is enforced three ways — the handler guards, the row leaves the tab order, and
+  `aria-disabled` is set — because dimming alone leaves a row clickable and keyboard-reachable.
+
+  **Save as Workflow now names it inline and offers the editor** (answer ④). The card previously
+  emitted a save with no name and no way to continue editing, leaving the host to invent both. The name
+  seeds from the plan's own — making someone invent another is the difference between saving and not
+  bothering — but once touched it keeps what was typed, including empty. "Open in editor" is secondary
+  on purpose: making the editor mandatory turns a two-second capture into a task.
+
+  **Nothing anywhere asks for a trigger or a schedule.** Saving is capture, not scheduling; a workflow
+  runs on demand until someone gives it a cadence, and the card says so rather than leaving it to be
+  discovered.
+
+  **D18 is enforced by test.** The vocabulary rule is invisible to a compiler and erodes one label at a
+  time, so the templates and user-facing copy are asserted to contain no _graph_ / _DAG_ / _node_ /
+  _Flow Agent_ — with a companion assertion that _step_ IS present, so the rule cannot be satisfied by
+  deleting the concept instead of renaming it.
+
+  The front door emits a draft rather than persisting anything, because the middle tile promises
+  "Nothing is saved until you approve it" in so many words, and approval happens on the canvas.
+
+### Patch Changes
+
+- Updated dependencies [2792d97]
+- Updated dependencies [255d506]
+- Updated dependencies [59def38]
+- Updated dependencies [8de5f7e]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [9fc0e2d]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [9a29da4]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [768980d]
+- Updated dependencies [1c0d586]
+  - @memberjunction/ng-composer@6.1.0-edge.2
+  - @memberjunction/ng-conversations@6.1.0-edge.2
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/actions-base@6.1.0-edge.2
+  - @memberjunction/ai-core-plus@6.1.0-edge.2
+  - @memberjunction/ng-base-forms@6.1.0-edge.2
+  - @memberjunction/ng-core-entity-forms@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.2
+  - @memberjunction/ai-engine-base@6.1.0-edge.2
+  - @memberjunction/ng-agents@6.1.0-edge.2
+  - @memberjunction/ng-user-routines@6.1.0-edge.2
+  - @memberjunction/tag-engine-base@6.1.0-edge.2
+  - @memberjunction/api-keys-base@6.1.0-edge.2
+  - @memberjunction/ng-base-application@6.1.0-edge.2
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.2
+  - @memberjunction/ng-shared@6.1.0-edge.2
+  - @memberjunction/ng-testing@6.1.0-edge.2
+  - @memberjunction/ng-action-gallery@6.1.0-edge.2
+  - @memberjunction/ng-actions@6.1.0-edge.2
+  - @memberjunction/ng-agent-requests@6.1.0-edge.2
+  - @memberjunction/ng-ai-test-harness@6.1.0-edge.2
+  - @memberjunction/ng-archive-manager@6.1.0-edge.2
+  - @memberjunction/ng-base-types@6.1.0-edge.2
+  - @memberjunction/ng-clustering@6.1.0-edge.2
+  - @memberjunction/ng-code-editor@6.1.0-edge.2
+  - @memberjunction/ng-credentials@6.1.0-edge.2
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.2
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.2
+  - @memberjunction/ng-list-management@6.1.0-edge.2
+  - @memberjunction/ng-map-view@6.1.0-edge.2
+  - @memberjunction/ng-notifications@6.1.0-edge.2
+  - @memberjunction/ng-query-viewer@6.1.0-edge.2
+  - @memberjunction/ng-react@6.1.0-edge.2
+  - @memberjunction/ng-record-process-studio@6.1.0-edge.2
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.2
+  - @memberjunction/ng-scheduling@6.1.0-edge.2
+  - @memberjunction/ng-search@6.1.0-edge.2
+  - @memberjunction/ng-shared-generic@6.1.0-edge.2
+  - @memberjunction/ng-task-graph-editor@6.1.0-edge.2
+  - @memberjunction/ng-trees@6.1.0-edge.2
+  - @memberjunction/ng-versions@6.1.0-edge.2
+  - @memberjunction/credentials@6.1.0-edge.2
+  - @memberjunction/integration-engine-base@6.1.0-edge.2
+  - @memberjunction/templates-base-types@6.1.0-edge.2
+  - @memberjunction/testing-engine-base@6.1.0-edge.2
+  - @memberjunction/ng-container-directives@6.1.0-edge.2
+  - @memberjunction/ng-entity-relationship-diagram@6.1.0-edge.2
+  - @memberjunction/ng-filter-builder@6.1.0-edge.2
+  - @memberjunction/ng-media-player@6.1.0-edge.2
+  - @memberjunction/interactive-component-types@6.1.0-edge.2
+  - @memberjunction/ng-tabstrip@6.1.0-edge.2
+  - @memberjunction/ng-export-service@6.1.0-edge.2
+  - @memberjunction/ng-markdown@6.1.0-edge.2
+  - @memberjunction/ng-ui-components@6.1.0-edge.2
+  - @memberjunction/ng-word-cloud@6.1.0-edge.2
+  - @memberjunction/predictive-studio-core@6.1.0-edge.2
+  - @memberjunction/lists-base@6.1.0-edge.2
+  - @memberjunction/export-engine@6.1.0-edge.2
+  - @memberjunction/theme-engine@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Minor Changes
+
+- 394d276: Phase 0 of the unified workflow DAG engine program (plan: PR #3456) — retires three dead or superseded subsystems so the **Workflow** name is freed for the program's user-facing vocabulary, and so the task-graph engine isn't built alongside a parallel, non-functioning orchestration model.
+
+  **Eleven tables dropped** — the Skip v1-era workflow schema (`Workflow`, `WorkflowRun`, `WorkflowEngine`), the Skip v1-era report artifact (`Report`, `ReportCategory`, `ReportSnapshot`, `ReportUserState`, `ReportVersion`), the legacy `ScheduledAction` / `ScheduledActionParam` pair, and the report-era `OutputTriggerType`. All were verified dead or superseded: nothing outside generated code read the workflow tables, the `Reports` resource type named a `DriverClass` (`ReportResource`) that exists nowhere in the repo, and the legacy scheduled-action cron due-check is mathematically always-false so authored schedules could never fire.
+
+  **Breaking — the report execution surface is gone.** `RunReport` was already marked `@deprecated` ("Reports are no longer supported... Interactive Components and Artifacts are replacements") and read `vwReports`, which this migration drops. Removed: `IRunReportProvider`, the `RunReport` class, `RunReportParams` / `RunReportResult`, `BaseEntity.RunReportProviderToUse`, `BaseAngularComponent.RunReportToUse`, `GraphQLDataProvider.GetReportData`, the `GetReportData` GraphQL query and `CreateReportFromConversationDetailID` mutation, and the `GET /reports/:reportId` REST endpoint. Accepted deliberately in the open v6 breaking-change window. Consumers should use Interactive Components and Artifacts.
+
+  **Scheduled Actions are superseded by Scheduled Jobs, and the UI moved with them.** Contrary to the original plan's read, the entities were live authoring surface: four Knowledge Hub / AI dashboards created and read them. Those surfaces now author a `MJ: Scheduled Jobs` row of type **Action** — the same work, executed by `ActionScheduledJobDriver`, with the action and its parameters carried in the job's `Configuration` JSON rather than in child parameter rows. `ContentSource.ScheduledActionID` becomes `ContentSource.ScheduledJobID`. A shared `action-scheduled-job` helper in `ng-dashboards` owns the mapping so it isn't triplicated across surfaces.
+
+  **Also removed:** the `@memberjunction/scheduled-actions` and `@memberjunction/scheduled-actions-server` packages (nothing depended on either), the `MJScheduledActionEntityExtended` subclass, the "coming soon" Scheduled Actions placeholder dashboard, and the Explorer report wiring (route, `TabService.OpenReport`, `NavigationService.OpenReport`, resource-type map entry, home-pin matcher, and the dashboard add-item Reports branch).
+
+### Patch Changes
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/ng-ui-components@6.1.0-edge.1
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ng-action-gallery@6.1.0-edge.1
+  - @memberjunction/ng-actions@6.1.0-edge.1
+  - @memberjunction/ng-agent-requests@6.1.0-edge.1
+  - @memberjunction/ng-agents@6.1.0-edge.1
+  - @memberjunction/ng-ai-test-harness@6.1.0-edge.1
+  - @memberjunction/ng-archive-manager@6.1.0-edge.1
+  - @memberjunction/ng-base-application@6.1.0-edge.1
+  - @memberjunction/ng-base-forms@6.1.0-edge.1
+  - @memberjunction/ng-base-types@6.1.0-edge.1
+  - @memberjunction/ng-clustering@6.1.0-edge.1
+  - @memberjunction/ng-code-editor@6.1.0-edge.1
+  - @memberjunction/ng-composer@6.1.0-edge.1
+  - @memberjunction/ng-container-directives@6.1.0-edge.1
+  - @memberjunction/ng-conversations@6.1.0-edge.1
+  - @memberjunction/ng-core-entity-forms@6.1.0-edge.1
+  - @memberjunction/ng-credentials@6.1.0-edge.1
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.1
+  - @memberjunction/ng-entity-relationship-diagram@6.1.0-edge.1
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.1
+  - @memberjunction/ng-export-service@6.1.0-edge.1
+  - @memberjunction/ng-filter-builder@6.1.0-edge.1
+  - @memberjunction/ng-list-management@6.1.0-edge.1
+  - @memberjunction/ng-map-view@6.1.0-edge.1
+  - @memberjunction/ng-markdown@6.1.0-edge.1
+  - @memberjunction/ng-media-player@6.1.0-edge.1
+  - @memberjunction/ng-notifications@6.1.0-edge.1
+  - @memberjunction/ng-query-viewer@6.1.0-edge.1
+  - @memberjunction/ng-record-process-studio@6.1.0-edge.1
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.1
+  - @memberjunction/ng-scheduling@6.1.0-edge.1
+  - @memberjunction/ng-search@6.1.0-edge.1
+  - @memberjunction/ng-shared@6.1.0-edge.1
+  - @memberjunction/ng-shared-generic@6.1.0-edge.1
+  - @memberjunction/ng-tabstrip@6.1.0-edge.1
+  - @memberjunction/ng-testing@6.1.0-edge.1
+  - @memberjunction/ng-trees@6.1.0-edge.1
+  - @memberjunction/ng-user-routines@6.1.0-edge.1
+  - @memberjunction/ng-versions@6.1.0-edge.1
+  - @memberjunction/ng-word-cloud@6.1.0-edge.1
+  - @memberjunction/ai-core-plus@6.1.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.1
+  - @memberjunction/ai-engine-base@6.1.0-edge.1
+  - @memberjunction/tag-engine-base@6.1.0-edge.1
+  - @memberjunction/api-keys-base@6.1.0-edge.1
+  - @memberjunction/actions-base@6.1.0-edge.1
+  - @memberjunction/ng-react@6.1.0-edge.1
+  - @memberjunction/credentials@6.1.0-edge.1
+  - @memberjunction/integration-engine-base@6.1.0-edge.1
+  - @memberjunction/interactive-component-types@6.1.0-edge.1
+  - @memberjunction/templates-base-types@6.1.0-edge.1
+  - @memberjunction/testing-engine-base@6.1.0-edge.1
+  - @memberjunction/predictive-studio-core@6.1.0-edge.1
+  - @memberjunction/lists-base@6.1.0-edge.1
+  - @memberjunction/export-engine@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+  - @memberjunction/theme-engine@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- b895f92: Angular DOM unit-testing — Phase 4 (gates, guardrails & spec hygiene). Dev-only; no runtime change.
+  - **`test:types` spec type-check gate**: each DOM-testing package gains a
+    `"test:types": "tsc --noEmit -p tsconfig.spec.json"` script, run as a cached turbo task in CI
+    before the vitest suite (both the affected and full-suite paths). Closes the Phase-3 hole where
+    vitest/esbuild's transpile-only path let real spec type errors (broken `import type` paths,
+    `Subject`-vs-`EventEmitter`) ride green until the `ngc` build failed.
+  - **DOM-spec placement guard** (`scripts/check-dom-spec-placement.mjs`, fast pre-build CI step):
+    fails when a `*.dom.test.ts` sits inside `__tests__/`, where a dual-preset package silently runs
+    it in neither vitest project. Its one real finding — `ng-markdown`'s service DOM spec — was
+    relocated next to its source (test-file move only).
+  - Fixes the pre-existing latent 2-args-of-3 `MCPDashboardComponent` constructor call in the
+    dashboards node test (the gate's prerequisite).
+  - **Anti-pattern lint** (`scripts/check-spec-antipatterns.mjs`, CI): bans vacuous assertions,
+    skipped specs, blanket schemas, and `any`/`as never` casts in `*.dom.test.ts`. Enabling it drove
+    the spec-hygiene cleanup across `ng-agent-requests` / `ng-query-viewer` / `ng-scheduling` /
+    `ng-agents` / `ng-record-changes` (blanket schemas → explicit child stubs; `as never` → typed
+    doubles) and the Explorer specs (real DOM clicks instead of handler calls, SVG prototype-patch
+    teardown, typed context doubles).
+  - **Explorer DOM coverage gate**: `classify-explorer-components.mjs --min 85` in CI — a testable
+    Explorer component shipped without a DOM spec now fails the PR.
+
+- ea003fc: fix(explorer): guarantee the loading screen is released even when a resource's load throws or hangs.
+
+  The Explorer shell's loading screen blocks on the first resource's `NotifyLoadComplete()` signal. `BaseDashboard` called it _after_ `await this.loadData()` with no `try/finally`, so if `initDashboard()` or `loadData()` threw — e.g. an in-flight query rejecting while MJAPI is restarting, or missing data — the signal never fired and the **entire** Explorer hung on the loading screen forever. This reliably reproduced on any full reload of a deep resource URL (dev-server live-reload after an edit, or a browser refresh) while the API was momentarily down.
+
+  Two-part fix:
+  - **`BaseDashboard`** now wraps `initDashboard()` + `loadData()` (in `ngOnInit`) and `loadData()` (in `Refresh`) in `try/catch/finally`. On error it logs via `LogError` and emits the existing `Error` output so the dashboard/container can show its own error state; `NotifyLoadComplete()` runs in `finally`, so the loading screen always clears.
+  - **`DashboardResource`** (the Explorer host that renders code-based dashboards and the Data Explorer) now **subscribes to the dashboard's `Error` output** and renders its existing "Unable to Load Dashboard" card. Without this the released loading screen cleared to a silent blank page — the failure was only visible in the console. `BaseAdminContainerComponent` (which embeds code dashboards in the Admin shells) does the same via its existing `LoadError` surface.
+  - **`BaseResourceComponent`**'s load-complete watchdog now **fails open**: if a resource hasn't signalled within the window it forces `NotifyLoadComplete()` (still logging a warning naming the culprit) rather than only warning. This covers every `BaseResourceComponent` subclass — including ones whose own `ngOnInit` bypasses `BaseDashboard`'s guarded lifecycle, or whose load genuinely hangs — so no single resource can brick the shell.
+
+- Updated dependencies [b895f92]
+- Updated dependencies [b895f92]
+- Updated dependencies [e4a6fa3]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [ea003fc]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [d26e202]
+- Updated dependencies [27e4d09]
+- Updated dependencies [5c6e36c]
+  - @memberjunction/ng-base-forms@6.1.0-edge.0
+  - @memberjunction/ng-conversations@6.1.0-edge.0
+  - @memberjunction/ng-ui-components@6.1.0-edge.0
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.0
+  - @memberjunction/ng-agents@6.1.0-edge.0
+  - @memberjunction/ng-search@6.1.0-edge.0
+  - @memberjunction/ng-composer@6.1.0-edge.0
+  - @memberjunction/ng-record-process-studio@6.1.0-edge.0
+  - @memberjunction/ng-user-routines@6.1.0-edge.0
+  - @memberjunction/ng-list-management@6.1.0-edge.0
+  - @memberjunction/ng-query-viewer@6.1.0-edge.0
+  - @memberjunction/ng-scheduling@6.1.0-edge.0
+  - @memberjunction/ng-entity-relationship-diagram@6.1.0-edge.0
+  - @memberjunction/ng-actions@6.1.0-edge.0
+  - @memberjunction/ng-testing@6.1.0-edge.0
+  - @memberjunction/ng-core-entity-forms@6.1.0-edge.0
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.0
+  - @memberjunction/ng-markdown@6.1.0-edge.0
+  - @memberjunction/ng-agent-requests@6.1.0-edge.0
+  - @memberjunction/api-keys-base@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/actions-base@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/ng-shared@6.1.0-edge.0
+  - @memberjunction/ng-base-application@6.1.0-edge.0
+  - @memberjunction/ng-react@6.1.0-edge.0
+  - @memberjunction/interactive-component-types@6.1.0-edge.0
+  - @memberjunction/ng-action-gallery@6.1.0-edge.0
+  - @memberjunction/ng-ai-test-harness@6.1.0-edge.0
+  - @memberjunction/ng-archive-manager@6.1.0-edge.0
+  - @memberjunction/ng-clustering@6.1.0-edge.0
+  - @memberjunction/ng-credentials@6.1.0-edge.0
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.0
+  - @memberjunction/ng-filter-builder@6.1.0-edge.0
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.0
+  - @memberjunction/ng-trees@6.1.0-edge.0
+  - @memberjunction/ng-versions@6.1.0-edge.0
+  - @memberjunction/ai-engine-base@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/tag-engine-base@6.1.0-edge.0
+  - @memberjunction/ng-base-types@6.1.0-edge.0
+  - @memberjunction/ng-code-editor@6.1.0-edge.0
+  - @memberjunction/ng-map-view@6.1.0-edge.0
+  - @memberjunction/ng-notifications@6.1.0-edge.0
+  - @memberjunction/ng-shared-generic@6.1.0-edge.0
+  - @memberjunction/credentials@6.1.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.0
+  - @memberjunction/integration-engine-base@6.1.0-edge.0
+  - @memberjunction/templates-base-types@6.1.0-edge.0
+  - @memberjunction/testing-engine-base@6.1.0-edge.0
+  - @memberjunction/ng-container-directives@6.1.0-edge.0
+  - @memberjunction/ng-media-player@6.1.0-edge.0
+  - @memberjunction/ng-export-service@6.1.0-edge.0
+  - @memberjunction/ng-word-cloud@6.1.0-edge.0
+  - @memberjunction/predictive-studio-core@6.1.0-edge.0
+  - @memberjunction/lists-base@6.1.0-edge.0
+  - @memberjunction/export-engine@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+  - @memberjunction/theme-engine@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

@@ -26,15 +26,22 @@ export class MJActionFormComponent extends BaseFormComponent {
             { sectionKey: 'mJActionResultCodes', sectionName: 'Result Codes', isExpanded: false },
             { sectionKey: 'mJAIAgentActions', sectionName: 'AIAgent Actions', isExpanded: false },
             { sectionKey: 'mJMCPServerTools', sectionName: 'MCP Server Tools', isExpanded: false },
-            { sectionKey: 'mJScheduledActions', sectionName: 'Scheduled Actions', isExpanded: false },
             { sectionKey: 'mJActionContexts', sectionName: 'Action Contexts', isExpanded: false },
             { sectionKey: 'mJAIAgentSteps', sectionName: 'AI Agent Steps', isExpanded: false },
             { sectionKey: 'mJEntityActions', sectionName: 'Entity Actions', isExpanded: false },
             { sectionKey: 'mJActionExecutionLogs', sectionName: 'Execution Logs', isExpanded: false },
             { sectionKey: 'mJActionAuthorizations', sectionName: 'Authorizations', isExpanded: false },
             { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false },
+            { sectionKey: 'mJBizAppsTasksTaskNotificationConfigs', sectionName: 'Task Notification Configs', isExpanded: false },
             { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false },
-            { sectionKey: 'mJAISkillActions', sectionName: 'AI Skill Actions', isExpanded: false }
+            { sectionKey: 'mJBizAppsTasksTaskTypesOnOverdueActionID', sectionName: 'Task Types (On Overdue Action ID)', isExpanded: false },
+            { sectionKey: 'mJAISkillActions', sectionName: 'AI Skill Actions', isExpanded: false },
+            { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false },
+            { sectionKey: 'mJBizAppsTasksTaskTypesOnPercentChangeActionID', sectionName: 'Task Types (On Percent Change Action ID)', isExpanded: false },
+            { sectionKey: 'mJBizAppsTasksTaskTypesOnAssignActionID', sectionName: 'Task Types (On Assign Action ID)', isExpanded: false },
+            { sectionKey: 'mJBizAppsTasksTaskTypesOnCompleteActionID', sectionName: 'Task Types (On Complete Action ID)', isExpanded: false },
+            { sectionKey: 'mJBizAppsTasksTaskTypesOnCancelActionID', sectionName: 'Task Types (On Cancel Action ID)', isExpanded: false },
+            { sectionKey: 'mJBizAppsTasksTaskTypesOnRejectActionID', sectionName: 'Task Types (On Reject Action ID)', isExpanded: false }
         ]);
     }
 }

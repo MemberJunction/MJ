@@ -1,5 +1,170 @@
 # Change Log - @memberjunction/actions-base
 
+## 6.1.0-edge.2
+
+### Minor Changes
+
+- 59def38: The entity-action substrate finishes what its schema has been promising. Seven pieces, all of which
+  share a failure shape: a column, a flag or a field that read as configured and did nothing.
+
+  **Action Filters now actually prevent execution.** `RunAction`'s filter-refusal branch built its
+  result, logged it, and then fell through to run the action anyway — there was no `return`. Every
+  Action Filter has therefore recorded that it prevented something while preventing nothing, since the
+  mechanism shipped. The refusal row is why it went unnoticed: the observable said "prevented" and the
+  side effect happened regardless, so #3606's claim that filters fail closed described evaluation,
+  which landed, rather than enforcement, which did not. **Anyone relying on an Action Filter to gate an
+  action has been getting the action anyway; after this it stops, which is the configured behaviour but
+  a visible change.** A prevented run still writes a log row, deliberately — an operator should be able
+  to see that a filter refused rather than wonder why nothing happened — so its `Message` is now an
+  exported constant, since that is the only thing distinguishing a prevented run from an executed one.
+
+  **Transition filters.** An entity action could see a record's current state and nothing else, so
+  "when Status _becomes_ Approved" was indistinguishable from "when Status _is_ Approved" — which is
+  true on every subsequent save too. `EntityChangeContext` now carries both sides of the save to where
+  filters run, built from `EntityField.OldValue`, which `BaseEntity` has tracked all along and simply
+  never carried anywhere. Filter code gets `DidFieldChange`, `DidFieldChangeToValue`, `OldValues` and
+  `NewValues` on `ActionFilterContext`. A create reports no changes, because a record whose Status
+  started at Approved did not _become_ anything. Comparison is loose across the string boundary
+  metadata forces, so a configured `'1'` matches a numeric `1` rather than silently never matching.
+
+  The capture happens as the first statement of `HandleEntityActions`, deliberately before its first
+  `await`: After-hooks are fire-and-forget, and the moment that method yields, the save completes and
+  reloads the entity, resetting every `OldValue`. Reading `IsCreate` from that same synchronous
+  snapshot also closes a latent bug — `entity.IsSaved` was previously read _after_ an await, so a
+  create whose save finalized in that window dispatched as `AfterUpdate`.
+
+  **Two filter-substrate fixes fall out of using it for real.** `EntityActionFilter.Status` was never
+  consulted, so a `Disabled` binding still gated — and filters fail closed, so that was not an inert
+  row but a permanent block whose only symptom is a trigger that quietly stopped firing. And a binding
+  pointing at an unresolvable filter used to reach the evaluator as `undefined` and throw there:
+  fail-closed by accident, with no usable reason logged. It now returns a failed result naming the
+  filter.
+
+  **Workflow triggers accept a filter.** `ValidateWorkflowSpec` refused `WorkflowEntityEventTrigger.filter`
+  outright because the contract to honor it did not exist. It now reconciles onto an owned
+  `ActionFilter` bound through `EntityActionFilter` — the additive path — and validates that the
+  expression parses, because filters fail closed and a syntax error is not a loud failure, it is a
+  trigger that silently never fires.
+
+  **Record Process on-change triggers.** `OnChangeEnabled` has described itself as running "per-record
+  on save via an owned Entity Action" since the column shipped, and `OnChangeFilter` promised to
+  "compile into the owned Entity Action Filter". Neither owned anything. Saving a Record Process now
+  reconciles that binding, matching ownership on the `RecordProcessID` param — `Run Record Process` is
+  one shared action, so matching on entity + action alone would let a second process silently repoint
+  the first one's trigger. `OnChangeFilter` compiles through the same builder workflow triggers use, so
+  one expression vocabulary covers both surfaces.
+
+  **Durable `After*` dispatch (D14).** After-hooks are fire-and-forget, so a process dying mid-flight
+  loses the action with nothing to retry it. `EntityAction.RunMode = 'Durable'` routes the dispatch to
+  the task-graph substrate as a single-node durable graph — the claim protocol, restart recovery and
+  orphan reclaim that already exist there — rather than adding a third async substrate. Opt-in per
+  binding, because it costs a Task row, a dispatcher hop, and params persisted at rest. When no
+  submitter is registered or submission fails, the work runs **inline**: `Durable` asks for the work to
+  be harder to lose, so dropping it would make opting in less reliable than leaving it off. New
+  `Task.ActionID` widens the assignment exclusivity to three ways, and `TaskGraphSpecNode.actionName`
+  joins `agentName`/`assignToUser`.
+
+  Durability replaces _execution_, not _dispatch_: `RunActionParams.DeferExecution` is called by
+  `RunAction` in place of running the action, after validation and filters have passed, so a durable
+  binding is gated by exactly what an inline one is gated by. Submitting at dispatch time instead —
+  which is where this first landed — would have fired a scoped durable trigger for every record of the
+  entity and a filtered one on every save.
+
+  **Execution-log retention.** `Action.RetentionPeriod` and `ActionExecutionLog.RetentionPeriod` shipped
+  with descriptions and no reader anywhere in the codebase; the log grew forever while the schema
+  claimed otherwise. Retention is now stamped onto each row when the run starts — decided at write
+  time, so editing an action's retention is a going-forward change rather than a retroactive deletion —
+  and a new opt-in `Action Log Retention` scheduled job purges expired rows oldest-first, bounded per
+  run, reporting when it stopped at its ceiling rather than because it was finished.
+
+  **The `Validate` invocation hole.** `EntityActionInvocationValidate` overrode single-record invocation
+  with a near-copy that had drifted into a strict subset: no scope resolution (so a binding narrowed to
+  one record ran `Validate` against every record of the entity) and no provenance (so a whole-record
+  parameter was logged raw, ignoring the binding's `LogValue` rows). The override is deleted; the class
+  inherits, which is what keeps both facts true for `Validate` permanently rather than until the copies
+  drift again.
+
+  **The `RunEntityAction` null contract.** `null` means the action did not run — the binding is scoped
+  and this record falls outside it. `HandleEntityActions` guarded for it; the GraphQL resolver did not,
+  so an out-of-scope binding surfaced to clients as a server error. The signature now says so and the
+  resolver reports it as the ordinary outcome it is.
+
+### Patch Changes
+
+- Updated dependencies [255d506]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/code-execution@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/code-execution@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Minor Changes
+
+- 2412415: Entity Action workflow extensions — turn `EntityAction` into the general workflow-hook substrate, and make its execution log safe and diagnosable.
+
+  `EntityAction` was already wired into the save path (`Validate` is a real blocking gate that fails the save) and `Execute Agent` already let any binding run a flow or loop agent. This adds what was missing to use it as the workflow layer across MJ and every OpenApp, rather than each app inventing its own.
+
+  **Schema (additive):**
+  - `EntityAction.ScopeEntityID` + `ScopeRecordID` — bind a workflow to one _configuration_ record (a Deal Type, a Contract Type, a Pipeline, a Company) instead of every record of an entity. `NULL` keeps today's apply-to-all behaviour. This is what stops every app growing a column per type per event.
+  - `EntityAction.Sequence` — deterministic ordering when several bindings share an invocation type.
+  - `EntityAction.LoggingMode` — `All` / `FailuresOnly` / `None`, per binding.
+  - `EntityActionParam.ValueType` gains `'Entity Object Data'` — passes `entity.GetAll()` rather than the live `BaseEntity`. Required for anything that serializes the value, notably `Execute Agent`'s `Data` payload, where a `BaseEntity` yields `{}` because its fields are getters rather than enumerable own properties.
+  - `ActionParam.LogValue` and `EntityActionParam.LogValue` — control whether a parameter's value may be written to the execution log.
+  - `ActionExecutionLog.EntityActionID`, `EntityActionInvocationTypeID`, `TargetEntityID`, `TargetRecordID` — provenance, so a failed workflow can be traced to the binding, the record and the event that fired it.
+  - `ActionExecutionLog.ResultParams` — the final parameter set, so `Params` can stop being overwritten and keep the inputs _as the action was called_.
+
+  **Engine behaviour (built in this change):** whole-record parameter value types (`Entity Object` / `Entity Object Data`) are never written to the execution log — rule 1 of `RedactParams`, which no `LogValue` flag can re-enable; redaction runs through one shared helper applied by every persister rather than inline in the log methods, so no path can write a raw `ActionParam[]` to persistent storage; the input snapshot is taken at the top of `RunAction` so all four exit paths (validation failure, filter refusal, timeout/abort, normal completion) record the same as-called values; `ResultParams` is written on failure exactly as on success, so `NULL` means precisely "the run never finished"; scope resolution is fail-closed — a scoped binding that cannot be resolved declines to fire; and `LoggingMode` gates _logging only_, never execution.
+
+  **⚠️ Semantic change to an existing column — `ActionExecutionLog.Params`.** It previously held the final _merged_ parameter set (inputs plus any outputs the action appended). It now holds the _as-called inputs_, and the merged set moves to the new `ResultParams` column. This is a repurposing, not merely an added column: any existing dashboard, report, query or downstream consumer reading `Params` to see an action's **outputs** will now silently get its **inputs** instead, and must be repointed at `ResultParams`. The column's extended-property description is updated to match. Nothing else about the row changes.
+
+  **Metadata:** `Execute Agent`'s content-bearing parameters (`Data`, `ConversationMessages`, `Payload`, `AgentResult`) ship with `LogValue: false`. Its identifier parameters stay logged, so a run remains diagnosable and the content is one hop away in `MJ: AI Agent Runs`.
+
+  Existing bindings and direct action invocations are unchanged: every new column is nullable or defaulted to today's semantics (`Sequence` DEFAULT 0, `LoggingMode` DEFAULT `'All'`, `LogValue` DEFAULT 1), and an unscoped binding short-circuits to "applies". The one exception to "purely additive" is the `Params` repurposing called out above. Requires `mj codegen` after the migration — see `plans/entity-action-workflow-extensions.md` §6 for the ordering, which matters.
+
+  **Known follow-ups (not blockers, tracked separately):** undeclared output params pushed via `addOutputParam` have no `ActionParam` row to opt out with, so they default to logged; shape recording emits top-level key names, which are schema for a record but content for a map keyed by IDs; and execution-log retention (§5.8 Scheduled Job) is documented but not yet enforced, so row count is unbounded.
+
+### Patch Changes
+
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/code-execution@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

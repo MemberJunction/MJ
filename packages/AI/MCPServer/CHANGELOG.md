@@ -1,5 +1,201 @@
 # @memberjunction/ai-mcp-server
 
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- 9a29da4: Retire the Workflows app; make the Flow agent form first-class.
+
+  The Workflows app owned no storage — a workflow's WHAT is a Flow agent and there is no `Workflow` table — so it was a second list of rows the AI app already listed, fronted by a canvas that duplicated the Flow agent editor and had no Save path at all. Removed, and replaced by making the agent record answer what the app was implicitly about.
+
+  **`@memberjunction/ng-core-entity-forms`** — the AI Agents form is now tabbed: the agent type's designer (any type declaring a `UIFormSectionKey`), Details (the existing accordion set, unchanged), and Invocations. The designer pane is hidden with CSS rather than removed from the DOM, so unsaved canvas edits and canvas viewport state survive a tab switch. The default tab is the first that exists, so a Flow agent opens on its diagram.
+
+  **`@memberjunction/ng-agents`** — new `<mj-agent-invocations>`: a read-only index of every automated pathway that invokes an agent (Scheduled Jobs, User Routines, Entity Action bindings, Record Processes, sub-agent steps and relationships, `ExposeAsAction`). Answers "what runs this when I'm not looking?", which no surface could previously answer from the agent's side.
+
+  **`@memberjunction/ai-core-plus`** — `AgentSpec.Status` and `AgentStep.StepType` now derive from their entity fields instead of restating them. Both had drifted: `Status` declared `'Inactive'`, which `AIAgent.Status` has never accepted, so any caller setting it wrote a value the CHECK constraint rejects; `StepType` omitted `ForEach` and `While`, making loops executable but unauthorable. `AgentStep` gains `LoopBodyType` and `Configuration`, and the action mapping fields now admit the object form that callers already pass.
+
+  **`@memberjunction/ai-agent-manager`** — `AgentSpecSync` round-trips loop fields; new pure `ValidateLoopStep` catches a loop that saves cleanly and then iterates zero times; the Architect's status validator accepts `Disabled` rather than the invalid `Inactive`, and `WorkflowAgentWriter` maps Draft/Paused workflows to `Disabled`.
+
+  **`@memberjunction/ai-mcp-server`** — the `List_Agents` status filter no longer offers `Inactive`, which could never match a row.
+
+  **`@memberjunction/ng-dashboards`** — the Workflows dashboard, its module, its resource component and its `ng-task-graph-editor` dependency are removed. `mj-task-graph-editor` itself is unchanged and keeps its read-only consumers.
+
+  The `Workflow.Draft` / `Workflow.Save` / `Workflow.Validate` Remote Operations are deliberately kept — they are the agent- and MCP-facing contract and matter more now that creation is conversational.
+
+  A migration removes the Workflows Application row from existing databases (idempotent; a no-op on a clean install). The Architect prompt template change requires `mj sync push` to take effect.
+
+- d8adda1: **BREAKING — `UserCache` moved packages. Update the import, not just the call.**
+
+  `UserCache` now lives in `@memberjunction/generic-database-provider`. It is no longer exported
+  from `@memberjunction/sqlserver-dataprovider`, and there is deliberately **no re-export shim**,
+  so every import of the symbol must be repointed or it will fail to resolve:
+
+  ```diff
+  - import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+  + import { UserCache } from '@memberjunction/generic-database-provider';
+  ```
+
+  `Refresh` is now dialect-neutral and takes the configured provider rather than an
+  `mssql.ConnectionPool`:
+
+  ```diff
+  - await UserCache.Instance.Refresh(pool, intervalMs);
+  + await UserCache.Instance.Refresh(provider, intervalMs);
+  ```
+
+  **These are two separate breaks, and the first is much wider than the second.** The import path
+  affects _every_ consumer of the symbol — reads included. The signature affects only the handful
+  of callers of `Refresh`. Anything that imports `UserCache` merely to call `Users`,
+  `GetSystemUser()` or `UserByName()` still has to change its import, so a consumer who reads only
+  "the signature changed" will treat this as a no-op and fail to build. In this repo the split was
+  56 files versus 9 call sites.
+
+  Packages that import `UserCache` must also declare `@memberjunction/generic-database-provider`
+  as a dependency — pnpm resolves strictly, so an undeclared import fails rather than falling
+  through to a hoisted copy.
+
+  **Check for dynamic imports too**, not just static ones. `await import('@memberjunction/sqlserver-dataprovider')`
+  destructuring `UserCache` breaks the same way, and a grep for `import { … } from` will not find it.
+
+  **Unchanged:** the read surface (`Users`, `GetSystemUser`, `UserByName`, `SYSTEM_USER_ID`), and
+  the class name. The name is load-bearing — `BaseSingleton` keys its global store on the
+  constructor name, so keeping it `UserCache` preserves singleton identity across the move.
+
+  **Also fixed:** `_users` now initializes to `[]`. It previously stayed `undefined` after a
+  `Refresh` that never ran or that failed (failures are swallowed into `LogError`), so
+  `GetSystemUser()` threw a `TypeError` off `.find()` instead of returning `undefined` as its
+  callers already assume.
+
+  **Why:** the cache was dialect-neutral except for that one `mssql` type, which left PostgreSQL
+  with no user cache at all and produced four separate hand-rolled "read `vwUsers` + `vwUserRoles`,
+  build `UserInfo[]`" implementations — one of which reached into the singleton's private field
+  through a cast from another package. Those are all removed, and a PostgreSQL process that never
+  goes through the server bootstrap now has a system user.
+
+- Updated dependencies [255d506]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [59def38]
+- Updated dependencies [55d6299]
+- Updated dependencies [11de1a3]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [9fc0e2d]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [9a29da4]
+- Updated dependencies [e26c866]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [ac7a79a]
+- Updated dependencies [2262b40]
+- Updated dependencies [d8adda1]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/ai@6.1.0-edge.2
+  - @memberjunction/ai-agents@6.1.0-edge.2
+  - @memberjunction/actions-base@6.1.0-edge.2
+  - @memberjunction/actions@6.1.0-edge.2
+  - @memberjunction/generic-database-provider@6.1.0-edge.2
+  - @memberjunction/ai-core-plus@6.1.0-edge.2
+  - @memberjunction/server@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/aiengine@6.1.0-edge.2
+  - @memberjunction/ai-agent-manager@6.1.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.2
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.2
+  - @memberjunction/ai-prompts@6.1.0-edge.2
+  - @memberjunction/api-keys@6.1.0-edge.2
+  - @memberjunction/credentials@6.1.0-edge.2
+  - @memberjunction/encryption@6.1.0-edge.2
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.2
+  - @memberjunction/auth-providers@6.1.0-edge.2
+  - @memberjunction/config@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/actions@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ai-agents@6.1.0-edge.1
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.1
+  - @memberjunction/server@6.1.0-edge.1
+  - @memberjunction/ai-core-plus@6.1.0-edge.1
+  - @memberjunction/ai-agent-manager@6.1.0-edge.1
+  - @memberjunction/aiengine@6.1.0-edge.1
+  - @memberjunction/ai-prompts@6.1.0-edge.1
+  - @memberjunction/api-keys@6.1.0-edge.1
+  - @memberjunction/actions-base@6.1.0-edge.1
+  - @memberjunction/auth-providers@6.1.0-edge.1
+  - @memberjunction/credentials@6.1.0-edge.1
+  - @memberjunction/encryption@6.1.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.1
+  - @memberjunction/ai@6.1.0-edge.1
+  - @memberjunction/config@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [e4a6fa3]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [fe7bd9d]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+- Updated dependencies [0acf96e]
+- Updated dependencies [8d0d45a]
+- Updated dependencies [1100077]
+- Updated dependencies [19ca0b4]
+  - @memberjunction/api-keys@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/actions@6.1.0-edge.0
+  - @memberjunction/actions-base@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/server@6.1.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.0
+  - @memberjunction/aiengine@6.1.0-edge.0
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.0
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.0
+  - @memberjunction/ai-agent-manager@6.1.0-edge.0
+  - @memberjunction/ai-agents@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/ai-prompts@6.1.0-edge.0
+  - @memberjunction/credentials@6.1.0-edge.0
+  - @memberjunction/encryption@6.1.0-edge.0
+  - @memberjunction/auth-providers@6.1.0-edge.0
+  - @memberjunction/ai@6.1.0-edge.0
+  - @memberjunction/config@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

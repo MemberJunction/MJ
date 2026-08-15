@@ -34,6 +34,7 @@ import { BaseSingleton, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunct
 import {
     SearchParams,
     SearchResult,
+    SearchSource,
     SearchResultItem,
     SearchStreamEvent,
     SearchFilters,
@@ -64,7 +65,7 @@ import {
     LaneExplanation,
     EntitlementExplanation,
 } from './ScopeExplanation';
-import { DefaultSearchScopePermissionResolver } from '../permissions/SearchScopePermissionResolver';
+import { GetSearchScopePermissionResolver } from '../permissions/SearchScopePermissionResolver';
 
 /**
  * Collects lane problems keyed by the lane's **row ID** instead of throwing.
@@ -966,7 +967,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 this.loadPrincipal<MJAIAgentEntity>('MJ: AI Agents', input.AIAgentID, contextUser),
                 this.loadPrincipal<MJAISkillEntity>('MJ: AI Skills', input.AISkillID, contextUser),
             ]);
-            const permission = await DefaultSearchScopePermissionResolver.ResolveEffectivePermission({
+            const permission = await GetSearchScopePermissionResolver().ResolveEffectivePermission({
                 User: contextUser,
                 SearchScopeID: scopeID,
                 Agent: agent,
@@ -1901,13 +1902,33 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 ''
             );
             if (!rlsClause) {
-                // No RLS clause (or user is exempt) — results pass through
-                permitted.push(...entityResults);
+                // No row filter, or the user is exempt from row filtering. That settles WHICH ROWS of
+                // this entity they may see — it does not establish that these results ARE this
+                // entity's rows. `EntityName` is provider output, and for the vector and 3rd-party
+                // lanes it comes from the index: vector metadata's `Entity` key, or the index name.
+                // Admitting on that label alone lets whoever writes the index choose which entity's
+                // permissions get evaluated, so a label naming an entity the user CAN read admits
+                // documents that are not that entity's records at all.
+                //
+                // Results from a lane that queried the entity directly need no such check — their ids
+                // came out of a RunView against it. So pass those through untouched (this is the hot
+                // path and its cost is unchanged) and verify only the rest.
+                const selfEvident: SearchResultItem[] = [];
+                const unverified: SearchResultItem[] = [];
+                for (const item of entityResults) {
+                    (SearchEngine.LanesWithSelfEvidentOwnership.has(item.SourceType) ? selfEvident : unverified)
+                        .push(item);
+                }
+                permitted.push(...selfEvident);
+                if (unverified.length > 0) {
+                    await this.verifyOwnershipAndRowFilters(entity, unverified, undefined, contextUser, permitted);
+                }
                 return;
             }
 
-            // RLS applies — validate record IDs via RunView
-            await this.filterByRowLevelSecurity(entity, entityResults, rlsClause, contextUser, permitted);
+            // A row filter applies — validate record IDs via RunView. Unchanged: this path already
+            // verified ownership as a side effect of filtering, for every lane.
+            await this.verifyOwnershipAndRowFilters(entity, entityResults, rlsClause, contextUser, permitted);
         } catch (error) {
             // Fail closed — if anything goes wrong, exclude the results
             const msg = error instanceof Error ? error.message : String(error);
@@ -1916,26 +1937,43 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     }
 
     /**
-     * Use RunView to validate which record IDs the user can see under RLS.
-     * Only results whose record IDs survive the RLS filter are added to `permitted`.
+     * Lanes whose results are self-evidently records of the entity they are labelled with, because the
+     * provider obtained them by querying that entity through `RunView`. Everything else — the vector
+     * lane, and any 3rd-party provider keyed by its own `SourceType` — carries a label supplied by
+     * whatever populated the index, and must be verified before its permissions are trusted.
+     *
+     * An allowlist rather than a denylist on purpose: a `SourceType` nobody anticipated is verified by
+     * default instead of trusted by default.
      */
-    private async filterByRowLevelSecurity(
+    private static readonly LanesWithSelfEvidentOwnership: ReadonlySet<string> =
+        new Set<SearchSource>(['entity', 'fulltext']);
+
+    /**
+     * Use RunView to confirm the results really are records of `entity`, and — when a row filter is
+     * supplied — that the user may see them.
+     * Only results whose record IDs come back are added to `permitted`, so a result whose id is not a
+     * record of this entity is dropped whether or not a row filter exists.
+     */
+    private async verifyOwnershipAndRowFilters(
         entity: EntityInfo,
         entityResults: SearchResultItem[],
-        rlsClause: string,
+        rlsClause: string | undefined,
         contextUser: UserInfo,
         permitted: SearchResultItem[]
     ): Promise<void> {
         const pkField = entity.FirstPrimaryKey;
         if (!pkField) {
             // Cannot verify without a primary key — exclude results
-            LogError(`SearchEngine: Entity "${entity.Name}" has no primary key, cannot apply RLS filter`);
+            LogError(`SearchEngine: Entity "${entity.Name}" has no primary key, cannot verify result ownership`);
             return;
         }
 
         const pkFieldName = pkField.Name;
         const recordIDs = entityResults.map(r => `'${r.RecordID.replace(/'/g, "''")}'`).join(',');
-        const filter = `${pkFieldName} IN (${recordIDs}) AND (${rlsClause})`;
+        // Without a row filter this is a pure existence check against the entity's own view.
+        const filter = rlsClause
+            ? `${pkFieldName} IN (${recordIDs}) AND (${rlsClause})`
+            : `${pkFieldName} IN (${recordIDs})`;
 
         const rv = new RunView();
         const result = await rv.RunView<Record<string, string>>({
@@ -1947,7 +1985,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
 
         if (!result.Success) {
             // RunView failed — fail closed, exclude all results
-            LogError(`SearchEngine: RLS RunView failed for entity "${entity.Name}": ${result.ErrorMessage ?? 'unknown error'}`);
+            LogError(`SearchEngine: ownership/RLS RunView failed for entity "${entity.Name}": ${result.ErrorMessage ?? 'unknown error'}`);
             return;
         }
 

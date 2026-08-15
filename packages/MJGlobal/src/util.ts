@@ -65,6 +65,34 @@ export function GetGlobalObjectStore(): GlobalObjectStore | null {
  * @param maxDepth - Maximum recursion depth when resolveCircularReferences is true (default: 10)
  * @returns A new object with scalars and arrays copied
  */
+/**
+ * Type guard for a PLAIN JSON-ish object — a non-null `object` that is not an array.
+ *
+ * This is the predicate every deep-merge, tolerant-parse, and config-cascade routine needs before
+ * recursing into a value, and it had been re-implemented locally in roughly a dozen packages. Use
+ * this one instead of writing another.
+ *
+ * Deliberately structural rather than strict: it accepts class instances, `Date`, `Map`, etc.,
+ * because the callers that need it are merging/walking JSON-shaped data where those either cannot
+ * appear or should be treated as opaque leaves. If you need to exclude them, test for the specific
+ * case at the call site — `IsPlainObject(x) && !(x instanceof Date)`.
+ *
+ * @param value - The value to test
+ * @returns True when `value` is a non-null, non-array object
+ *
+ * @example
+ * ```typescript
+ * if (IsPlainObject(existing) && IsPlainObject(incoming)) {
+ *     mergeInto(existing, incoming);   // both sides are objects — recurse
+ * } else {
+ *     target[key] = incoming;          // scalar / array / null — replace
+ * }
+ * ```
+ */
+export function IsPlainObject(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 export function CopyScalarsAndArrays<T extends object>(
     input: T,
     resolveCircularReferences: boolean = false,
@@ -1637,3 +1665,19 @@ function recursiveReplaceString(str: string, options: Required<ParseJSONOptions>
   return str;
 }
 
+
+/**
+ * Epoch milliseconds for a value that may be a Date, an ISO/parseable string, a numeric
+ * timestamp, or absent. Returns 0 for null/undefined/unparseable input so it is safe to use
+ * directly in a sort comparator.
+ *
+ * Framework date fields such as `__mj_CreatedAt` are typed as `Date` but can hold a raw string
+ * at runtime when rows arrive from a serialized source (cache payloads, wire JSON) rather than
+ * through BaseEntity's coercing accessors. Optional chaining does not protect a `.getTime()`
+ * call in that case — `"…"?.getTime` is `undefined`, and calling it throws.
+ */
+export function ToEpochMs(value: Date | string | number | null | undefined): number {
+    if (value == null) return 0;
+    const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
+    return Number.isNaN(ms) ? 0 : ms;
+}

@@ -1,5 +1,111 @@
 # Change Log - @memberjunction/ng-shared
 
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [255d506]
+- Updated dependencies [59def38]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [9a29da4]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/ai-core-plus@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.2
+  - @memberjunction/ai-engine-base@6.1.0-edge.2
+  - @memberjunction/ng-base-application@6.1.0-edge.2
+  - @memberjunction/ng-base-types@6.1.0-edge.2
+  - @memberjunction/ng-notifications@6.1.0-edge.2
+  - @memberjunction/ng-shared-generic@6.1.0-edge.2
+  - @memberjunction/entity-communications-base@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Minor Changes
+
+- 394d276: Phase 0 of the unified workflow DAG engine program (plan: PR #3456) — retires three dead or superseded subsystems so the **Workflow** name is freed for the program's user-facing vocabulary, and so the task-graph engine isn't built alongside a parallel, non-functioning orchestration model.
+
+  **Eleven tables dropped** — the Skip v1-era workflow schema (`Workflow`, `WorkflowRun`, `WorkflowEngine`), the Skip v1-era report artifact (`Report`, `ReportCategory`, `ReportSnapshot`, `ReportUserState`, `ReportVersion`), the legacy `ScheduledAction` / `ScheduledActionParam` pair, and the report-era `OutputTriggerType`. All were verified dead or superseded: nothing outside generated code read the workflow tables, the `Reports` resource type named a `DriverClass` (`ReportResource`) that exists nowhere in the repo, and the legacy scheduled-action cron due-check is mathematically always-false so authored schedules could never fire.
+
+  **Breaking — the report execution surface is gone.** `RunReport` was already marked `@deprecated` ("Reports are no longer supported... Interactive Components and Artifacts are replacements") and read `vwReports`, which this migration drops. Removed: `IRunReportProvider`, the `RunReport` class, `RunReportParams` / `RunReportResult`, `BaseEntity.RunReportProviderToUse`, `BaseAngularComponent.RunReportToUse`, `GraphQLDataProvider.GetReportData`, the `GetReportData` GraphQL query and `CreateReportFromConversationDetailID` mutation, and the `GET /reports/:reportId` REST endpoint. Accepted deliberately in the open v6 breaking-change window. Consumers should use Interactive Components and Artifacts.
+
+  **Scheduled Actions are superseded by Scheduled Jobs, and the UI moved with them.** Contrary to the original plan's read, the entities were live authoring surface: four Knowledge Hub / AI dashboards created and read them. Those surfaces now author a `MJ: Scheduled Jobs` row of type **Action** — the same work, executed by `ActionScheduledJobDriver`, with the action and its parameters carried in the job's `Configuration` JSON rather than in child parameter rows. `ContentSource.ScheduledActionID` becomes `ContentSource.ScheduledJobID`. A shared `action-scheduled-job` helper in `ng-dashboards` owns the mapping so it isn't triplicated across surfaces.
+
+  **Also removed:** the `@memberjunction/scheduled-actions` and `@memberjunction/scheduled-actions-server` packages (nothing depended on either), the `MJScheduledActionEntityExtended` subclass, the "coming soon" Scheduled Actions placeholder dashboard, and the Explorer report wiring (route, `TabService.OpenReport`, `NavigationService.OpenReport`, resource-type map entry, home-pin matcher, and the dashboard add-item Reports branch).
+
+### Patch Changes
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ng-base-application@6.1.0-edge.1
+  - @memberjunction/ng-base-types@6.1.0-edge.1
+  - @memberjunction/ng-notifications@6.1.0-edge.1
+  - @memberjunction/ng-shared-generic@6.1.0-edge.1
+  - @memberjunction/ai-core-plus@6.1.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.1
+  - @memberjunction/ai-engine-base@6.1.0-edge.1
+  - @memberjunction/entity-communications-base@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- ea003fc: fix(explorer): guarantee the loading screen is released even when a resource's load throws or hangs.
+
+  The Explorer shell's loading screen blocks on the first resource's `NotifyLoadComplete()` signal. `BaseDashboard` called it _after_ `await this.loadData()` with no `try/finally`, so if `initDashboard()` or `loadData()` threw — e.g. an in-flight query rejecting while MJAPI is restarting, or missing data — the signal never fired and the **entire** Explorer hung on the loading screen forever. This reliably reproduced on any full reload of a deep resource URL (dev-server live-reload after an edit, or a browser refresh) while the API was momentarily down.
+
+  Two-part fix:
+  - **`BaseDashboard`** now wraps `initDashboard()` + `loadData()` (in `ngOnInit`) and `loadData()` (in `Refresh`) in `try/catch/finally`. On error it logs via `LogError` and emits the existing `Error` output so the dashboard/container can show its own error state; `NotifyLoadComplete()` runs in `finally`, so the loading screen always clears.
+  - **`DashboardResource`** (the Explorer host that renders code-based dashboards and the Data Explorer) now **subscribes to the dashboard's `Error` output** and renders its existing "Unable to Load Dashboard" card. Without this the released loading screen cleared to a silent blank page — the failure was only visible in the console. `BaseAdminContainerComponent` (which embeds code dashboards in the Admin shells) does the same via its existing `LoadError` surface.
+  - **`BaseResourceComponent`**'s load-complete watchdog now **fails open**: if a resource hasn't signalled within the window it forces `NotifyLoadComplete()` (still logging a warning naming the culprit) rather than only warning. This covers every `BaseResourceComponent` subclass — including ones whose own `ngOnInit` bypasses `BaseDashboard`'s guarded lifecycle, or whose load genuinely hangs — so no single resource can brick the shell.
+
+- d26e202: Mobile records UX for MJ Explorer's records-style record-open model. Below the shell breakpoint (768px — now a canonical constant via the new ExplorerBreakpointService in ng-shared), the records region's golden-layout runs headerless (new GoldenLayoutInitOptions.HideHeaders) and the unusable-at-phone-width tab strip is replaced by a record bar (entity icon in app color, active record title, open count) that opens a bottom-sheet record switcher listing every open record — docked records included — with origin subtitles, tap-to-activate, and per-row close routed through the same path as the tab context menu. Split layouts flatten to a single stack at render time via the new FlattenLayoutToSingleStack transform (deep-cloned) with layout persistence suppressed while mobile, so desktop-made splits survive phone sessions untouched; the records-layout restore gate now requires exact tabId-set equality. Breakpoint crossings destroy and re-initialize the records golden-layout under a rebuild guard (without it, golden-layout's per-pane close events would close every open record). The nav drawer's Records pill now opens the switcher on mobile (previously a no-op while viewing a record) and its mobile badge counts docked records to match the sheet. Move to Workspace / Move to Records are hidden below the breakpoint. Ships a new generic mj-bottom-sheet primitive in ng-ui-components (scrim, grab handle, enter/exit transitions, Escape, focus restore, reduced-motion support, settled transform:none state) — the record switcher is its first consumer; migrating the existing hand-rolled sheets (filter-popover, list-management-dialog) is queued follow-up work. No schema changes.
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [d26e202]
+- Updated dependencies [27e4d09]
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/ng-base-application@6.1.0-edge.0
+  - @memberjunction/ai-engine-base@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/ng-base-types@6.1.0-edge.0
+  - @memberjunction/ng-notifications@6.1.0-edge.0
+  - @memberjunction/ng-shared-generic@6.1.0-edge.0
+  - @memberjunction/entity-communications-base@6.1.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

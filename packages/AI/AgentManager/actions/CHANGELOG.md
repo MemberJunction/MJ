@@ -1,5 +1,79 @@
 # @memberjunction/ai-agent-manager-actions
 
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [255d506]
+- Updated dependencies [59def38]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [9a29da4]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [d8adda1]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/actions-base@6.1.0-edge.2
+  - @memberjunction/actions@6.1.0-edge.2
+  - @memberjunction/ai-core-plus@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/ai-engine-base@6.1.0-edge.2
+  - @memberjunction/ai-agent-manager@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/actions@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ai-core-plus@6.1.0-edge.1
+  - @memberjunction/ai-agent-manager@6.1.0-edge.1
+  - @memberjunction/ai-engine-base@6.1.0-edge.1
+  - @memberjunction/actions-base@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/actions@6.1.0-edge.0
+  - @memberjunction/actions-base@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/ai-agent-manager@6.1.0-edge.0
+  - @memberjunction/ai-engine-base@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

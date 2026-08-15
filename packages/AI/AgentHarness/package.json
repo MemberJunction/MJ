@@ -1,0 +1,37 @@
+{
+  "name": "@memberjunction/ai-agent-harness",
+  "type": "module",
+  "version": "6.1.0-edge.2",
+  "description": "MemberJunction: External Agent Harness integration — run Claude Code, Codex, OpenCode, Gemini CLI or Pi as the reasoning substrate for an MJ agent",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/ai": "6.1.0-edge.2",
+    "@memberjunction/ai-agents": "6.1.0-edge.2",
+    "@memberjunction/ai-core-plus": "6.1.0-edge.2",
+    "@memberjunction/core": "6.1.0-edge.2",
+    "@memberjunction/core-entities": "6.1.0-edge.2",
+    "@memberjunction/global": "6.1.0-edge.2",
+    "@memberjunction/templates": "6.1.0-edge.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.4.5",
+    "tsc-alias": "^1.8.10",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

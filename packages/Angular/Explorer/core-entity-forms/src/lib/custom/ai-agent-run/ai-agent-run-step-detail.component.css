@@ -525,3 +525,45 @@
   font-size: 11px;
   color: var(--mj-text-muted);
 }
+
+/* Workflow tab — the recorded task graph, read-only, with the Save as Workflow action. */
+.detail-graph {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.detail-graph__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-sm, 0.5rem);
+  padding: var(--mj-space-sm, 0.5rem);
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+/* min-height:0 is what lets the canvas actually shrink inside the flex column. */
+.detail-graph__canvas {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Explanation for a step that never executed — see StepNotice. Sits above the tabs because it
+   accounts for the emptiness the reader is about to look at. */
+.step-notice {
+  padding: 0 var(--mj-space-3, 12px) var(--mj-space-2, 8px);
+}
+
+/* The run view fills the tab rather than taking its intrinsic size — a canvas that stops halfway
+   down its pane with dead space beneath reads as a broken layout. */
+.detail-graph {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.detail-graph__canvas {
+  flex: 1 1 auto;
+  min-height: 0;
+}

@@ -5,9 +5,9 @@ dotenv.config({ quiet: true });
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ResolveStartupMode } from '@memberjunction/core';
-import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
-import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { registerIntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
 import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap } from './integration/EntityMapLifecycle.js';
@@ -19,11 +19,12 @@ import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { Session as InspectorSession } from 'node:inspector';
 import { sep } from 'node:path';
 import 'reflect-metadata';
 import { ReplaySubject } from 'rxjs';
-import { BuildSchemaOptions, buildSchemaSync, GraphQLTimestamp, PubSubEngine } from 'type-graphql';
+import { BuildSchemaOptions, buildSchemaSync, getMetadataStorage, GraphQLTimestamp, PubSubEngine } from 'type-graphql';
 import { PubSub } from 'graphql-subscriptions';
 import sql from 'mssql';
 import { WebSocketServer } from 'ws';
@@ -56,6 +57,7 @@ import { DataSourceInfo, raiseEvent } from './types.js';
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
+import { IntegrationSyncWorkerService } from './services/IntegrationSyncWorkerService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, SetVerboseLogging } from '@memberjunction/core';
 import { getSystemUser } from './auth/index.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
@@ -67,6 +69,7 @@ import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResol
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
 import { SessionJanitor } from './agentSessions/index.js';
+import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
 import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
@@ -78,8 +81,11 @@ import {
   MJScheduledJobEntity,
 } from '@memberjunction/core-entities';
 import { ServerExtensionLoader, ServerExtensionConfig } from '@memberjunction/server-extensions-core';
+import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
+
+export { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 
 /**
  * Returns the configured database platform from the `DB_PLATFORM` environment
@@ -137,7 +143,6 @@ export * from './resolvers/IntegrationProgressResolver.js';
 export * from './resolvers/ClientToolRequestResolver.js';
 export * from './resolvers/AutotagPipelineResolver.js';
 export * from './resolvers/TagGovernanceResolver.js';
-export * from './resolvers/TaskResolver.js';
 export * from './generic/KeyValuePairInput.js';
 export * from './generic/KeyInputOutputTypes.js';
 export * from './generic/DeleteOptionsInput.js';
@@ -150,8 +155,13 @@ export * from './resolvers/ComponentRegistryResolver.js';
 export * from './resolvers/DatasetResolver.js';
 export * from './resolvers/EntityRecordNameResolver.js';
 export * from './resolvers/MergeRecordsResolver.js';
-export * from './resolvers/ReportResolver.js';
 export * from './resolvers/QueryResolver.js';
+export * from './services/TaskGraphProviderFactory.js';
+export * from './services/TaskGraphAgentRunner.js';
+export * from './services/StartTaskGraphDispatcher.js';
+export * from './services/TaskGraphPromptRunner.js';
+export * from './services/TaskGraphContinuationDeliverer.js';
+export * from './resolvers/TaskGraphFrameResolver.js';
 export * from './resolvers/TestQuerySQLResolver.js';
 export * from './resolvers/SqlLoggingConfigResolver.js';
 export * from './resolvers/SyncRolesUsersResolver.js';
@@ -199,6 +209,7 @@ import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';
 import { BaseServerMiddleware } from './middleware/BaseServerMiddleware.js';
+import { SuppressTaskGraphSubmission } from '@memberjunction/ai-core-plus';
 
 export type MJServerOptions = {
   onBeforeServe?: () => void | Promise<void>;
@@ -325,8 +336,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     await provider.Config(pgConfigData);
     SetProvider(provider);
 
-    // Refresh user cache using PostgreSQL
-    await refreshUserCacheFromPG(pgPool, mj_core_schema);
+    // Warm the user cache — dialect-neutral, same call the SQL Server path makes
+    await UserCache.Instance.Refresh(provider);
 
     // Run startup actions — same 'full' entry-point default as the SQL Server path
     const sysUser = UserCache.Instance.GetSystemUser();
@@ -484,7 +495,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       startupLog.LogIf('verbose', 'Read-only Connection Pool has been initialized.');
     }
 
-    const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval / 1000); // convert ms to seconds (checkRefreshIntervalSeconds)
+    // cacheRefreshInterval is configured in ms; checkRefreshIntervalSeconds declares seconds — see providerConfigUnits.ts
+    const config = new SQLServerProviderConfigData(pool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
     // MJAPI is a long-running server, so entry-point default is 'full' engine pre-warm;
     // MJ_STARTUP_MODE / mj.config.cjs startup.mode can override per the shared precedence chain
     const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
@@ -519,7 +531,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
         await codegenPool.connect();
 
         const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
-        const codegenConfig = new SQLServerProviderConfigData(codegenPool, mj_core_schema, cacheRefreshInterval / 1000); // convert ms to seconds (checkRefreshIntervalSeconds)
+        // Same ms→seconds seam as the main provider config above — see providerConfigUnits.ts
+        const codegenConfig = new SQLServerProviderConfigData(codegenPool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
         const codegenProvider = new SQLServerDataProvider();
         await codegenProvider.Config(codegenConfig);
         RuntimeSchemaManager.Instance.SetDDLProvider(codegenProvider);
@@ -863,29 +876,90 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   lap('Resolver + Middleware Discovery', tServe);
   tServe = startupLog.BeginPhase('Building GraphQL schema');
 
+  // ── Scale-runtime instrumentation (fix #1 profiling) ─────────────────────────
+  // Split the previously-monolithic "Schema Build" phase into its three real
+  // sub-steps so we can see which one dominates at high entity counts, and capture
+  // the type-graphql metadata cardinality (the O(entities×fields) signal). Guarded
+  // by MJ_SCHEMA_PROFILE, and emits ONE explicit console line (independent of the
+  // startup logger's level, and NOT via EndPhase, so the "schema" summary token and
+  // its total math stay clean). No-op in normal deployments.
+  const schemaProfile = process.env.MJ_SCHEMA_PROFILE === '1';
+  let objectTypeCount = -1, fieldCount = -1;
+  if (schemaProfile) {
+    try {
+      const meta = getMetadataStorage();
+      // Read BEFORE buildSchemaSync — buildSchemaSync's internal build() resets these arrays.
+      objectTypeCount = meta.objectTypes.length;
+      fieldCount = meta.fields.length;
+    } catch {
+      /* metadata cardinality is best-effort; leave sentinels */
+    }
+  }
+
+  // Surgical CPU profile of ONLY buildSchemaSync (behind MJ_SCHEMA_CPUPROF=1), so we can see
+  // whether the ~66s at scale is uniform per-field work (cache is the only fix) or a patchable
+  // hotspot in type-graphql's generator. Deterministic flush (writes before serve continues) —
+  // no dependency on --cpu-prof surviving a process kill.
+  const cpuProf = process.env.MJ_SCHEMA_CPUPROF === '1';
+  let profSession: InspectorSession | undefined;
+  if (cpuProf) {
+    profSession = new InspectorSession();
+    profSession.connect();
+    await new Promise<void>((res, rej) => profSession!.post('Profiler.enable', (e) => (e ? rej(e) : res())));
+    await new Promise<void>((res, rej) => profSession!.post('Profiler.start', (e) => (e ? rej(e) : res())));
+  }
+
+  const tBuild = performance.now();
+  const builtSchema = buildSchemaSync({
+    resolvers: allResolvers,
+    validate: false,
+    scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
+    emitSchemaFile: websiteRunFromPackage !== 1,
+    pubSub,
+    globalMiddlewares: [variablesLoggingMiddleware],
+  });
+  const buildMs = performance.now() - tBuild;
+
+  if (cpuProf && profSession) {
+    const profile = await new Promise<unknown>((res, rej) =>
+      profSession!.post('Profiler.stop', (e, r) => (e ? rej(e) : res((r as { profile: unknown }).profile)))
+    );
+    const outPath = `/tmp/mjapi_schema_build_${process.pid}.cpuprofile`;
+    writeFileSync(outPath, JSON.stringify(profile));
+    profSession.disconnect();
+    // eslint-disable-next-line no-console
+    console.log(`[SCHEMA-CPUPROF] wrote ${outPath} (buildSchemaSync=${buildMs.toFixed(0)}ms)`);
+  }
+
+  const tMerge = performance.now();
   let schema = mergeSchemas({
-    schemas: [
-      buildSchemaSync({
-        resolvers: allResolvers,
-        validate: false,
-        scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
-        emitSchemaFile: websiteRunFromPackage !== 1,
-        pubSub,
-        globalMiddlewares: [variablesLoggingMiddleware],
-      }),
-    ],
+    schemas: [builtSchema],
     typeDefs: [requireSystemUserDirective.typeDefs, publicDirective.typeDefs],
   });
+  const mergeMs = performance.now() - tMerge;
 
   // Verbose-mode-only diagnostic: name custom-resolver args that aren't metadata-bound
   // and aren't @NoLog-marked. No-op in default config (logVariables=false).
   auditResolversForUndecoratedArgs();
+
+  const tTransform = performance.now();
   schema = requireSystemUserDirective.transformer(schema);
   schema = publicDirective.transformer(schema);
 
   // Apply middleware-contributed schema transformers (after built-in directive transformers)
   for (const transformer of mwSchemaTransformers) {
     schema = transformer(schema);
+  }
+  const transformMs = performance.now() - tTransform;
+
+  if (schemaProfile) {
+    const typeMapSize = Object.keys(schema.getTypeMap()).length;
+    // eslint-disable-next-line no-console
+    console.log(
+      `[SCHEMA-PROFILE] resolvers=${allResolvers.length} objectTypes=${objectTypeCount} fields=${fieldCount} ` +
+      `typeMap=${typeMapSize} | buildSchemaSync=${buildMs.toFixed(0)}ms mergeSchemas=${mergeMs.toFixed(0)}ms ` +
+      `transformers=${transformMs.toFixed(0)}ms`
+    );
   }
 
   lap('Schema Build', tServe);
@@ -1049,7 +1123,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     const { callbackRouter, authenticatedRouter } = createOAuthCallbackHandler({
       publicUrl: oauthPublicUrl,
       successRedirectUrl: `${oauthPublicUrl}/oauth/success`,
-      errorRedirectUrl: `${oauthPublicUrl}/oauth/error`
+      errorRedirectUrl: `${oauthPublicUrl}/oauth/error`,
+      // Constrains where a caller-supplied frontendReturnUrl may point (open-redirect guard).
+      allowedFrontendOrigins: configInfo.cors?.allowedOrigins ?? ['*']
     });
     oauthAuthenticatedRouter = authenticatedRouter;
 
@@ -1296,6 +1372,20 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     }
   }
 
+  // Initialize and start the integration sync worker if enabled (PR 1 item 8).
+  // Off by default — deployments that don't opt in keep running syncs inline.
+  let integrationSyncWorker: IntegrationSyncWorkerService | null = null;
+  if (configInfo.integrationSyncWorker?.enabled) {
+    try {
+      integrationSyncWorker = new IntegrationSyncWorkerService(configInfo.integrationSyncWorker);
+      await integrationSyncWorker.Initialize();
+      integrationSyncWorker.Start();
+    } catch (error) {
+      console.error('❌ Failed to start integration sync worker:', error);
+      // Don't throw — an unavailable worker must not prevent the API from serving
+    }
+  }
+
   // Data hooks are now registered via BaseServerMiddleware classes above
   // (e.g., MJTenantFilterMiddleware registers PreRunView and PreSave hooks).
   // No config-bag hook registration needed.
@@ -1350,6 +1440,37 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
   }
 
+  // Launch the durable task-graph dispatcher: claim Pending tasks, execute them with a fresh
+  // provider each, and reconcile claims orphaned by a crash. Without this nothing ever picks up a
+  // submitted graph — submission would be durable and inert, which is strictly worse than the old
+  // client-driven path it replaced. Gated on SQL Server because the provider factory mints
+  // SQLServerDataProvider; the PG branch lands with PG parity. Self-registers with ShutdownRegistry.
+  //
+  // `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1` suppresses it, for the one case where a second dispatcher
+  // is actively harmful: the integration suite's task-graph bundle drives its OWN dispatcher against
+  // a stub runner and asserts exactly-once execution. A dispatcher claims from the whole table, not
+  // from "its own" graphs, so a server sharing that database races the suite for every claim and
+  // executes the suite's tasks with the real agent runner. The bundle then reports tasks that never
+  // ran and graphs that settled to the wrong status — symptoms that read as engine defects and cost
+  // a release cycle to trace back to here. The suite still needs MJAPI up for its client-transport
+  // members, so "stop the server" is not the remedy; this is.
+  const taskGraphPool = dataSources[0]?.dataSource;
+  const taskGraphDispatcherDisabled = process.env.MJ_DISABLE_TASK_GRAPH_DISPATCHER === '1';
+  if (taskGraphDispatcherDisabled) {
+    // AND REFUSE SUBMISSIONS, not just execution (R3-11). The durable submitter registers through
+    // the generated manifest unconditionally, so without this the host went on ACCEPTING graphs it
+    // had no intention of running: the agent submitted, promised the user a follow-up, and parked
+    // its run `Paused` — with the graph `Pending` and the run parked forever, no per-submission
+    // diagnostics anywhere, and the stale graph executing hours later if anyone unset the flag.
+    // The entity-action seam already had this treatment (its submitter registers inside
+    // StartTaskGraphDispatcher); this gives the agent seam the same.
+    SuppressTaskGraphSubmission('MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 is set on this host');
+    LogStatus('[TaskGraphDispatcher] Disabled by MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 — this process will neither accept nor execute task graphs.');
+  } else if (resumeUser && taskGraphPool instanceof sql.ConnectionPool) {
+    StartTaskGraphDispatcher(taskGraphPool, resumeUser)
+      .catch(err => console.warn(`[TaskGraphDispatcher] Startup failed: ${err}`));
+  }
+
   // Launch the calendar / scheduled-bridge loop (M2): poll agent calendars for meeting invites and
   // start due meeting bridges. Mirrors the SessionJanitor lifecycle (run-once + interval, timer
   // unref'd). Gated on Teams meetings being enabled (the provider whose scheduled-join is wired) and
@@ -1388,6 +1509,17 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
         console.log('✅ Scheduled jobs service stopped');
       } catch (error) {
         console.error('❌ Error stopping scheduled jobs service:', error);
+      }
+    }
+
+    // Stop the integration sync worker's polling. In-flight runs finish on their own —
+    // their leases are heartbeat-renewed, and killing them here would only strand rows.
+    if (integrationSyncWorker?.IsRunning) {
+      try {
+        integrationSyncWorker.Stop();
+        console.log(`✅ Integration sync worker stopped (${integrationSyncWorker.InFlightCount} run(s) still in flight)`);
+      } catch (error) {
+        console.error('❌ Error stopping integration sync worker:', error);
       }
     }
 
@@ -1430,14 +1562,31 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 };
 
 /**
+ * Age at which an unprocessed `MJ: RSU Pending Works` row is reported as stranded.
+ * A row older than this survived at least one full restart cycle without being completed.
+ */
+const RSU_PENDING_WORK_STALE_MINUTES = 30;
+
+/**
  * Process pending RSU work left from a pre-restart Apply All.
- * Reads pending work files, creates entity maps + field maps, starts sync.
+ * Reads the durable `MJ: RSU Pending Works` queue, creates entity maps + field maps,
+ * starts sync, and marks each row Completed only AFTER its work actually succeeded —
+ * so a crash mid-processing leaves the row Pending and re-processable on the next boot.
  */
 async function processRSUPendingWork(): Promise<void> {
   // Dynamic import — schema-engine is not yet published to npm, only exists as a workspace package
   const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
   const rsm = RuntimeSchemaManager.Instance;
-  const pendingItems = await rsm.ReadAndClearPendingWork();
+
+  // Get system user for server-side operations — needed to read the queue itself
+  const systemUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+  if (!systemUser) {
+    console.warn(`[RSU] No system user found — cannot process pending work`);
+    return;
+  }
+
+  // Rows older than this were left behind by an earlier process and are surfaced as stale.
+  const pendingItems = await rsm.ReadPendingWork(systemUser, RSU_PENDING_WORK_STALE_MINUTES);
   if (pendingItems.length === 0) return;
 
   console.log(`[RSU] Processing ${pendingItems.length} pending work item(s) from pre-restart...`);
@@ -1445,15 +1594,11 @@ async function processRSUPendingWork(): Promise<void> {
   // Wait a moment for metadata to be fully loaded
   await new Promise(resolve => setTimeout(resolve, 3000));
 
-  for (const item of pendingItems) {
+  for (const pending of pendingItems) {
+    const pendingWorkID = pending.ID;
+    const item = pending.Work;
     try {
       const md = new Metadata(); // global-provider-ok: server startup recovery — runs once before any per-request context exists
-      // Get system user for server-side operations
-      const systemUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
-      if (!systemUser) {
-        console.warn(`[RSU] No system user found, skipping pending work for ${item.CompanyIntegrationID}`);
-        continue;
-      }
 
       await Metadata.Provider.Refresh(); // global-provider-ok: server startup recovery — one-shot global cache refresh
 
@@ -1466,6 +1611,7 @@ async function processRSUPendingWork(): Promise<void> {
       }, systemUser);
       const companyIntegration = ciResult.Results[0];
       if (!companyIntegration) {
+        await rsm.FailPendingWork(pendingWorkID, `CompanyIntegration ${item.CompanyIntegrationID} not found`, systemUser);
         console.warn(`[RSU] CompanyIntegration ${item.CompanyIntegrationID} not found`);
         continue;
       }
@@ -1478,11 +1624,13 @@ async function processRSUPendingWork(): Promise<void> {
       }, systemUser);
       const integrationEntity = integrationResult.Results[0];
       if (!integrationEntity) {
+        await rsm.FailPendingWork(pendingWorkID, `Integration entity for ${integrationName} not found`, systemUser);
         console.warn(`[RSU] Integration entity for ${integrationName} not found`);
         continue;
       }
       const connector = ConnectorFactory.Resolve(integrationEntity);
       if (!connector) {
+        await rsm.FailPendingWork(pendingWorkID, `Connector for ${integrationName} not found`, systemUser);
         console.warn(`[RSU] Connector for ${integrationName} not found`);
         continue;
       }
@@ -1707,8 +1855,13 @@ async function processRSUPendingWork(): Promise<void> {
           console.warn(`[RSU] Schedule creation failed: ${schedErr}`);
         }
       }
+
+      // Only NOW is the work durably done — close the row out.
+      await rsm.CompletePendingWork(pendingWorkID, systemUser);
     } catch (err) {
-      console.error(`[RSU] Failed to process pending work for ${item.CompanyIntegrationID}: ${err}`);
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[RSU] Failed to process pending work for ${item.CompanyIntegrationID}: ${message}`);
+      await rsm.FailPendingWork(pendingWorkID, message, systemUser);
     }
   }
 
@@ -1737,31 +1890,6 @@ function createMSSQLCompatPool(pgPool: import('pg').Pool): sql.ConnectionPool {
     _pgPool: pgPool,
   };
   return wrapper as unknown as sql.ConnectionPool;
-}
-
-/**
- * Refreshes the UserCache using PostgreSQL queries instead of MSSQL.
- * This mirrors the logic in UserCache.Refresh() but uses pg.Pool.
- */
-async function refreshUserCacheFromPG(pgPool: import('pg').Pool, coreSchema: string): Promise<void> {
-  const { UserInfo } = await import('@memberjunction/core');
-  const uResult = await pgPool.query(`SELECT * FROM ${coreSchema}."vwUsers"`);
-  const rResult = await pgPool.query(`SELECT * FROM ${coreSchema}."vwUserRoles"`);
-  const users = uResult.rows;
-  const roles = rResult.rows;
-
-  if (users) {
-    const userInfos = users.map((user: Record<string, unknown>) => {
-      const userWithRoles = {
-        ...user,
-        UserRoles: roles.filter((role: Record<string, unknown>) => UUIDsEqual(role.UserID as string, user.ID as string)),
-      };
-      return new UserInfo(Metadata.Provider, userWithRoles); // global-provider-ok: bootstrap (UserCache initialization)
-    });
-    // Access the UserCache internals to set users
-    const cache = UserCache.Instance;
-    (cache as unknown as Record<string, unknown>)['_users'] = userInfos;
-  }
 }
 
 /**

@@ -1,5 +1,317 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- d430fa5: Auto-created schema "bucket" Applications are now hidden from new users. `createNewApplication`'s
+  INSERT omitted `DefaultForNewUser`, so the DB default of `1` won — every schema-named bucket app
+  (`__mj_MySchema`, "Generated for schema") landed visible in each new user's app switcher, while a
+  UI app's human-authored metadata Application often ships hidden. The bucket exists to carry entity
+  links, role grants, and `SchemaAutoAddNewEntities`; it is plumbing, not a product, and is now
+  emitted with `DefaultForNewUser = 0`. Affects newly emitted captures only — existing captured
+  baselines keep their old INSERT until recaptured.
+- c49a34a: Smart Field Identification could clear `IsNameField` and nominate nothing in its place, leaving an
+  entity with **zero** name fields — and it did that by overriding a correct deterministic answer,
+  not by failing to produce one. The pending-fields SQL emits `IIF(sf.FieldName = 'Name', 1, 0)`, so
+  the flag was already right before the AI pass ran; the AI pass then removed it.
+
+  The trigger is an IS-A (Table-Per-Type) child. Its `Name` is virtual by construction — the column
+  lives on the parent table and reaches the child through the view's IS-A join — and
+  `isFieldEligibleForNameField` blanket-rejected virtual fields. With nothing eligible,
+  `selectNameFieldWinner` returned `null` and `applyNameFieldUpdates`' clear-loop wiped the flag it
+  found. Downstream, everything that resolves a record's display value loses it: FK lookups to that
+  entity render the raw UUID, and `getIsNameFieldForSingleEntity` has no field to denormalize into
+  referencing base views. Silent, and it _removes_ correct metadata rather than merely failing to add
+  any.
+
+  Two independent guards, either of which would have prevented it:
+
+  **Virtual fields are no longer rejected wholesale.** An IS-A inherited field is eligible, identified
+  by `IsVirtual = 1 AND AllowUpdateAPI = 1` — the pair `syncISAParentFields` and
+  `buildParentChainContext` already use, and unambiguous here: every virtual column discovered from a
+  base view is inserted with `AllowUpdateAPI = 0`, and the IS-A sync is the only thing that sets it
+  back. A borrowed FK-name column therefore cannot qualify, so the reasons virtual fields were
+  rejected in the first place — the unbuildable self-FK view join, and a name that is itself a
+  borrowed FK-name resolving circularly — still hold everywhere they applied.
+
+  **Never clear without replacing.** Eligibility splits along the line that was being conflated:
+  `isNameFieldTypeSafe` (a primary key, a non-text type or unbounded MAX text is _wrong_, and
+  corrupts the SQL type of every FK-name virtual field that joins to this entity) versus virtuality (a
+  _worse_ choice than a base-table column, not an invalid one). Winner selection gains a fourth tier
+  that preserves an existing type-safe flag rather than clearing it with nothing to put in its place;
+  an actively-wrong flag is still cleared with no replacement, so the v5.40 uniqueidentifier-PK
+  guardrail behaves exactly as before.
+
+  The sibling writers were checked while in the area — `applyDefaultInViewUpdates`,
+  `applySearchableFieldUpdates` and the field-level full-text path are all SET-only and never clear,
+  so this failure mode was unique to `IsNameField`.
+
+- aa4fbe9: CodeGen can prune entity metadata on PostgreSQL again
+
+  `PostgreSQLCodeGenProvider.callRoutineSQL` invoked every routine as `SELECT * FROM routine(...)`.
+  PostgreSQL rejects that form outright for a function declared `RETURNS SETOF record` —
+  `spDeleteEntityWithCoreDependencies` is one — with "a column definition list is required for
+  functions returning record", and a routine that only performs work has no column list to supply.
+
+  The entity-pruning pass therefore threw once per entity, logged `Error removing metadata for entity
+undefined`, and carried on. CodeGen exited non-zero having pruned nothing, so orphaned `EntityField`
+  rows survived; the engine then built base-view SELECTs for columns the regenerated views no longer
+  had (`column "EntityAction" does not exist`), which broke `mj sync push` and the next CodeGen run.
+  Nothing in that chain pointed back at the call shape.
+
+  `callRoutineSQL` now takes `discardResult`, and emits `DO $$ BEGIN PERFORM routine(...); END $$` when
+  set — PERFORM runs the function and discards whatever it returns. Passed at the one call site whose
+  rows are never read. SQL Server's `EXEC` is unaffected and ignores the flag.
+
+- d8adda1: **BREAKING — `UserCache` moved packages. Update the import, not just the call.**
+
+  `UserCache` now lives in `@memberjunction/generic-database-provider`. It is no longer exported
+  from `@memberjunction/sqlserver-dataprovider`, and there is deliberately **no re-export shim**,
+  so every import of the symbol must be repointed or it will fail to resolve:
+
+  ```diff
+  - import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+  + import { UserCache } from '@memberjunction/generic-database-provider';
+  ```
+
+  `Refresh` is now dialect-neutral and takes the configured provider rather than an
+  `mssql.ConnectionPool`:
+
+  ```diff
+  - await UserCache.Instance.Refresh(pool, intervalMs);
+  + await UserCache.Instance.Refresh(provider, intervalMs);
+  ```
+
+  **These are two separate breaks, and the first is much wider than the second.** The import path
+  affects _every_ consumer of the symbol — reads included. The signature affects only the handful
+  of callers of `Refresh`. Anything that imports `UserCache` merely to call `Users`,
+  `GetSystemUser()` or `UserByName()` still has to change its import, so a consumer who reads only
+  "the signature changed" will treat this as a no-op and fail to build. In this repo the split was
+  56 files versus 9 call sites.
+
+  Packages that import `UserCache` must also declare `@memberjunction/generic-database-provider`
+  as a dependency — pnpm resolves strictly, so an undeclared import fails rather than falling
+  through to a hoisted copy.
+
+  **Check for dynamic imports too**, not just static ones. `await import('@memberjunction/sqlserver-dataprovider')`
+  destructuring `UserCache` breaks the same way, and a grep for `import { … } from` will not find it.
+
+  **Unchanged:** the read surface (`Users`, `GetSystemUser`, `UserByName`, `SYSTEM_USER_ID`), and
+  the class name. The name is load-bearing — `BaseSingleton` keys its global store on the
+  constructor name, so keeping it `UserCache` preserves singleton identity across the move.
+
+  **Also fixed:** `_users` now initializes to `[]`. It previously stayed `undefined` after a
+  `Refresh` that never ran or that failed (failures are swallowed into `LogError`), so
+  `GetSystemUser()` threw a `TypeError` off `.find()` instead of returning `undefined` as its
+  callers already assume.
+
+  **Why:** the cache was dialect-neutral except for that one `mssql` type, which left PostgreSQL
+  with no user cache at all and produced four separate hand-rolled "read `vwUsers` + `vwUserRoles`,
+  build `UserInfo[]`" implementations — one of which reached into the singleton's private field
+  through a cast from another package. Those are all removed, and a PostgreSQL process that never
+  goes through the server bootstrap now has a system user.
+
+- Updated dependencies [255d506]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [59def38]
+- Updated dependencies [11de1a3]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [9a29da4]
+- Updated dependencies [e26c866]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [d8adda1]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/ai@6.1.0-edge.2
+  - @memberjunction/actions-base@6.1.0-edge.2
+  - @memberjunction/actions@6.1.0-edge.2
+  - @memberjunction/generic-database-provider@6.1.0-edge.2
+  - @memberjunction/core-entities-server@6.1.0-edge.2
+  - @memberjunction/ai-core-plus@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/aiengine@6.1.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.2
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.2
+  - @memberjunction/ai-prompts@6.1.0-edge.2
+  - @memberjunction/external-data-sources@6.1.0-edge.2
+  - @memberjunction/external-data-source-databricks@6.1.0-edge.2
+  - @memberjunction/external-data-source-mongodb@6.1.0-edge.2
+  - @memberjunction/external-data-source-mysql@6.1.0-edge.2
+  - @memberjunction/external-data-source-oracle@6.1.0-edge.2
+  - @memberjunction/external-data-source-postgres@6.1.0-edge.2
+  - @memberjunction/external-data-source-sqlserver@6.1.0-edge.2
+  - @memberjunction/external-data-source-snowflake@6.1.0-edge.2
+  - @memberjunction/query-processor@6.1.0-edge.2
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.2
+  - @memberjunction/postgresql-dataprovider@6.1.0-edge.2
+  - @memberjunction/cli-core@6.1.0-edge.2
+  - @memberjunction/config@6.1.0-edge.2
+  - @memberjunction/sql-dialect@6.1.0-edge.2
+  - @memberjunction/sql-parser@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/actions@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.1
+  - @memberjunction/generic-database-provider@6.1.0-edge.1
+  - @memberjunction/external-data-source-databricks@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.1
+  - @memberjunction/ai-core-plus@6.1.0-edge.1
+  - @memberjunction/postgresql-dataprovider@6.1.0-edge.1
+  - @memberjunction/aiengine@6.1.0-edge.1
+  - @memberjunction/ai-prompts@6.1.0-edge.1
+  - @memberjunction/actions-base@6.1.0-edge.1
+  - @memberjunction/external-data-sources@6.1.0-edge.1
+  - @memberjunction/external-data-source-mongodb@6.1.0-edge.1
+  - @memberjunction/external-data-source-mysql@6.1.0-edge.1
+  - @memberjunction/external-data-source-oracle@6.1.0-edge.1
+  - @memberjunction/external-data-source-postgres@6.1.0-edge.1
+  - @memberjunction/external-data-source-sqlserver@6.1.0-edge.1
+  - @memberjunction/external-data-source-snowflake@6.1.0-edge.1
+  - @memberjunction/core-entities-server@6.1.0-edge.1
+  - @memberjunction/query-processor@6.1.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.1
+  - @memberjunction/ai@6.1.0-edge.1
+  - @memberjunction/cli-core@6.1.0-edge.1
+  - @memberjunction/config@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+  - @memberjunction/sql-dialect@6.1.0-edge.1
+  - @memberjunction/sql-parser@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Minor Changes
+
+- cd520e2: perf(codegen): narrow the `vwSQLColumnsAndEntityFields` introspection view to user objects.
+
+  The view that drives CodeGen's per-field metadata sync scanned `sys.all_columns` / `sys.all_objects`, which include every system and internal-table column (~10× the rows actually needed). It now reads the user-object catalog views `sys.columns` / `sys.objects` instead — three catalog references swapped, no columns, joins, or predicates changed.
+
+  On a 500-table synthetic schema a full cold CodeGen run dropped **190.7s → 105.9s (−44.5%)**, almost entirely from the "update existing fields" phase (~53s → ~5s); the gain scales with schema size. Generated output (SQL objects, entity classes, Angular forms) is byte-for-byte identical, verified against a golden-diff gate.
+
+  The swap is behaviorally identical for every entity-bearing row CodeGen consumes. The only rows it drops are `sys`-internal objects (e.g. `sys.trace_xe_*`) that carry no `EntityID` and were already discarded downstream — so it is not a blanket "identical results" for arbitrary catalog introspection, only for the rows CodeGen uses.
+
+  Ships as migration `V202608041347__v6.1.x__CodeGen_Introspection_View_Perf.sql`.
+
+- 1d88e00: Layered base views: an entity can now have BOTH a generated base view and a custom one over it
+
+  `BaseViewGenerated = 0` was all-or-nothing. To add one computed column an application inherited the
+  entire generated view — every related-entity display join, the geo join, the recursive root-ID
+  `OUTER APPLY`, the soft-delete predicate — and had to hand-maintain it from then on. Add a foreign
+  key later and its display field simply never appeared, because nothing regenerated the join: the
+  column was absent rather than wrong, so nothing errored and no test noticed. It also froze the entity
+  at whatever CodeGen produced the day the view was copied.
+
+  New `Entity.GeneratedBaseViewName`: when set, CodeGen writes its full generated view under THAT name
+  and the application owns `BaseView`, wrapping it —
+
+  ```sql
+  CREATE VIEW vwOrderHeaders AS
+  SELECT g.*, CASE WHEN ... END AS IsOverdue
+  FROM   vwOrderHeadersGenerated g;
+  ```
+
+  Everything underneath keeps regenerating, so a new foreign key appears on its own, and the custom
+  layer stays a few reviewable lines. Columns it adds become first-class virtual `EntityField` rows and
+  are returned by `spCreate`/`spUpdate`/`spDelete`, which read `BaseView`.
+
+  Additive: `NULL` — every existing entity — reproduces the previous behaviour exactly. No install
+  changes unless it opts in.
+
+  SQL Server only. CodeGen throws on a layered entity under PostgreSQL, which expands `SELECT *` at
+  view creation and freezes it, has no `sp_refreshview` equivalent, and never recreates the
+  application-owned outer view — so a late-added column would silently never reach it, the exact
+  failure this feature exists to prevent. Fully custom base views are unaffected on both dialects.
+
+  Also adds `EntityInfo.GeneratedViewName` (the single resolution of "which view does CodeGen write",
+  derived from `HasLayeredBaseView` so the two cannot disagree) and `EntityInfo.HasLayeredBaseView`;
+  orders `sp_refreshview` inner-before-outer, since the custom layer's `SELECT g.*` caches its column
+  list and refreshing the outer against a stale inner leaves new columns missing; guards the refresh
+  and grants aimed at the application-owned outer view on its existence, so the first CodeGen pass —
+  which necessarily runs before that view can exist — bootstraps instead of failing; lets a layered
+  entity's inner view self-heal through the failed-refresh regeneration path; and refuses a
+  self-referencing name via a CHECK constraint and a case-insensitive comparison.
+
+### Patch Changes
+
+- 8d0d45a: build: declare dependencies that npm's hoisting was silently supplying, as part of the monorepo's cutover to pnpm.
+
+  Under npm, a package could import a module it never declared and still resolve it, because npm flattens everything into the workspace-root `node_modules`. pnpm's strict, isolated linking gives a package only what it declares — so each of these was a latent bug that happened to work. They are fixed here independently of the package manager; nothing about the published API changes.
+
+  Added declarations: `@types/mssql` (codegen-lib, sqlserver-dataprovider, testing-cli, testing-integration, react-test-harness), `@types/pg` (codegen-lib), `@types/express` (messaging-adapters, server-extensions-core), `@types/fs-extra` (codegen-lib), `@types/babel__traverse` (react-linter), `ora` (ai-cli), `glob` (react-test-harness), `tslib` (ng-bootstrap, which compiles with `importHelpers`), `@auth0/auth0-spa-js` (ng-auth-services), `@memberjunction/core-entities` + `@memberjunction/global` + `@memberjunction/aiengine` (cli), and `@memberjunction/ng-react` (ng-explorer-core, reached from a generated file).
+
+  Two changes are more than a declaration:
+  - **`@memberjunction/server`**: `@types/express` moves `^4.17.25` → `^5.0.6`. The package declares `express@^5.2.1` at runtime, so it was only compiling because hoisting supplied the v5 types that six sibling packages declare. The types now match the express it actually runs.
+  - **`@memberjunction/ng-auth-services`**: `angularProviderFactory` gains an explicit `Provider[]` return type. Declaring `@auth0/auth0-spa-js` alone does not resolve TS2742 — the emitted declaration file still needed a nameable type rather than one inferred through a transitive package path.
+  - **`@memberjunction/scheduled-actions-server`**: drops `@types/axios`, a deprecated stub package that carries no type definitions; its presence made TypeScript auto-include it and then fail to find any types. axios ships its own.
+
+- e76b195: Tighten CodeGen smart-field-identification: prompt template defaults search OFF with a narrow whitelist, anti-pattern list for filter/narrative fields, and FTS-only Contains predicate. New search-guardrails module enforces the rules in code (narrative-field block, per-entity cap, predicate normalization, default-off entity-level enable) so flag drift can't sneak back in regardless of LLM output.
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [fe7bd9d]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+- Updated dependencies [8d0d45a]
+- Updated dependencies [1100077]
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/actions@6.1.0-edge.0
+  - @memberjunction/actions-base@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.0
+  - @memberjunction/generic-database-provider@6.1.0-edge.0
+  - @memberjunction/aiengine@6.1.0-edge.0
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.0
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/ai-prompts@6.1.0-edge.0
+  - @memberjunction/external-data-sources@6.1.0-edge.0
+  - @memberjunction/external-data-source-mongodb@6.1.0-edge.0
+  - @memberjunction/external-data-source-mysql@6.1.0-edge.0
+  - @memberjunction/external-data-source-oracle@6.1.0-edge.0
+  - @memberjunction/external-data-source-postgres@6.1.0-edge.0
+  - @memberjunction/external-data-source-sqlserver@6.1.0-edge.0
+  - @memberjunction/external-data-source-snowflake@6.1.0-edge.0
+  - @memberjunction/core-entities-server@6.1.0-edge.0
+  - @memberjunction/postgresql-dataprovider@6.1.0-edge.0
+  - @memberjunction/ai@6.1.0-edge.0
+  - @memberjunction/cli-core@6.1.0-edge.0
+  - @memberjunction/config@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+  - @memberjunction/sql-dialect@6.1.0-edge.0
+  - @memberjunction/sql-parser@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

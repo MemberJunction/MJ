@@ -86,35 +86,14 @@ import { AIPromptRunner, type ExecutionBound } from '../AIPromptRunner';
 import { AIPromptTimeoutError } from '../AIPromptTimeoutError';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJGlobal } from '@memberjunction/global';
+import { TestLLM } from '@memberjunction/unit-testing';
 import { buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL_TYPE, type AICatalog } from './__fixtures__/ai-metadata.fixtures';
 
-// ---- controllable LLM: one call, resolution controlled per test ----
-type ChatResultLike = { success: boolean; data?: unknown; errorMessage?: string };
-
-/** How long the fake provider takes to answer. `'never'` models a hung socket. */
-let llmDelayMS: number | 'never' = 0;
-let llmCallCount = 0;
-/** ChatParams captured on each call (so we can assert what the driver was handed). */
-const llmCalls: Array<{ cancellationToken?: AbortSignal }> = [];
-
-function makeChatResult(content: string): ChatResultLike {
-  return { success: true, data: { choices: [{ message: { content } }], usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15, cost: 0.001 } } };
-}
-
-const testLLM = {
-  SupportsPrefill: false,
-  GetFileCapabilities: () => null,
-  async ChatCompletion(params: { cancellationToken?: AbortSignal }): Promise<ChatResultLike> {
-    llmCallCount++;
-    llmCalls.push(params);
-    if (llmDelayMS === 'never') {
-      return await new Promise<ChatResultLike>(() => { /* never settles — a hung provider */ });
-    }
-    const delay = llmDelayMS;
-    await new Promise<void>((resolve) => setTimeout(resolve, delay));
-    return makeChatResult('done');
-  },
-};
+// ---- controllable LLM (shared harness TestLLM — extends the REAL BaseLLM) ----
+// Each test sets the default outcome: `{ kind: 'hang' }` models a hung provider
+// socket, `delayMS` a slow-but-finite one. ChatParams are recorded on
+// testLLM.Calls so tests can assert what the driver was handed.
+const testLLM = new TestLLM();
 
 // ---- fake AIPromptRun entity + provider ----
 let prSeq = 0;
@@ -165,7 +144,8 @@ function priv(r: AIPromptRunner): BoundInternals { return r as unknown as BoundI
 let runner: AIPromptRunner;
 beforeEach(() => {
   vi.restoreAllMocks();
-  llmDelayMS = 0; llmCallCount = 0; llmCalls.length = 0;
+  testLLM.Reset();
+  testLLM.SetDefaultOutcome({ kind: 'succeed', content: 'done' });
   loadCatalog(buildRealisticCatalog());
   vi.spyOn(AIEngineBase.Instance, 'EnsureLoaded').mockResolvedValue(undefined as never);
   vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance').mockImplementation(() => testLLM as never);
@@ -249,7 +229,7 @@ describe('createExecutionBound — composing the caller token with the timeout',
 
 describe('ExecutePrompt — timeout enforcement on the single-model path', () => {
   it('aborts a hung model call at the configured timeout even with NO caller cancellation token', async () => {
-    llmDelayMS = 'never';
+    testLLM.SetDefaultOutcome({ kind: 'hang' });
     const start = Date.now();
     const result = await runner.ExecutePrompt(makeParams(makePrompt(), { timeoutMS: 50 }) as never);
     const elapsed = Date.now() - start;
@@ -257,11 +237,11 @@ describe('ExecutePrompt — timeout enforcement on the single-model path', () =>
     expect(result.success).toBe(false);
     expect(result.errorMessage?.toLowerCase()).toContain('timeout');
     expect(elapsed).toBeLessThan(3000); // would hang forever before the fix
-    expect(llmCallCount).toBe(1);
+    expect(testLLM.CallCount).toBe(1);
   });
 
   it('the timeout failure is a typed AIPromptTimeoutError carrying the configured budget', async () => {
-    llmDelayMS = 'never';
+    testLLM.SetDefaultOutcome({ kind: 'hang' });
     const result = await runner.ExecutePrompt(makeParams(makePrompt(), { timeoutMS: 40 }) as never);
     expect(result.success).toBe(false);
     const err = result.chatResult?.exception;
@@ -273,14 +253,14 @@ describe('ExecutePrompt — timeout enforcement on the single-model path', () =>
   });
 
   it('hands the driver the COMPOSED signal on ChatParams.cancellationToken (ready for HTTP-level abort)', async () => {
-    llmDelayMS = 'never';
+    testLLM.SetDefaultOutcome({ kind: 'hang' });
     await runner.ExecutePrompt(makeParams(makePrompt(), { timeoutMS: 40 }) as never);
-    expect(llmCalls[0].cancellationToken).toBeDefined();
-    expect(llmCalls[0].cancellationToken!.aborted).toBe(true); // the timeout aborted it
+    expect(testLLM.Calls[0].cancellationToken).toBeDefined();
+    expect(testLLM.Calls[0].cancellationToken!.aborted).toBe(true); // the timeout aborted it
   });
 
   it('a call that finishes INSIDE the budget succeeds normally', async () => {
-    llmDelayMS = 10;
+    testLLM.SetDefaultOutcome({ kind: 'succeed', content: 'done', delayMS: 10 });
     const result = await runner.ExecutePrompt(makeParams(makePrompt(), { timeoutMS: 5000 }) as never);
     expect(result.success).toBe(true);
     expect(result.result).toBe('done');
@@ -289,7 +269,7 @@ describe('ExecutePrompt — timeout enforcement on the single-model path', () =>
 
 describe('ExecutePrompt — caller cancellation still honored when no timeout is set', () => {
   it('aborts a hung model call when the caller aborts mid-flight (legacy behavior preserved)', async () => {
-    llmDelayMS = 'never';
+    testLLM.SetDefaultOutcome({ kind: 'hang' });
     const controller = new AbortController();
     setTimeout(() => controller.abort(), 30);
 
@@ -299,7 +279,7 @@ describe('ExecutePrompt — caller cancellation still honored when no timeout is
   });
 
   it('with NO timeout and NO token the call is unbounded (a slow-but-finite provider still succeeds)', async () => {
-    llmDelayMS = 120;
+    testLLM.SetDefaultOutcome({ kind: 'succeed', content: 'done', delayMS: 120 });
     const result = await runner.ExecutePrompt(makeParams(makePrompt()) as never);
     expect(result.success).toBe(true);
     expect(result.result).toBe('done');
@@ -308,7 +288,7 @@ describe('ExecutePrompt — caller cancellation still honored when no timeout is
 
 describe('ExecutePrompt — both bounds present: whichever fires first wins', () => {
   it('the timeout fires first => reported as a timeout, not a cancellation', async () => {
-    llmDelayMS = 'never';
+    testLLM.SetDefaultOutcome({ kind: 'hang' });
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000); // caller bound far in the future
 
@@ -321,7 +301,7 @@ describe('ExecutePrompt — both bounds present: whichever fires first wins', ()
   });
 
   it('the caller token fires first => reported as a cancellation, not a timeout', async () => {
-    llmDelayMS = 'never';
+    testLLM.SetDefaultOutcome({ kind: 'hang' });
     const controller = new AbortController();
     setTimeout(() => controller.abort(), 30);
 

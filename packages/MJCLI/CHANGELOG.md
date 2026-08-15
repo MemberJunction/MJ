@@ -1,5 +1,183 @@
 # Change Log - @memberjunction/cli
 
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- d8adda1: **BREAKING — `UserCache` moved packages. Update the import, not just the call.**
+
+  `UserCache` now lives in `@memberjunction/generic-database-provider`. It is no longer exported
+  from `@memberjunction/sqlserver-dataprovider`, and there is deliberately **no re-export shim**,
+  so every import of the symbol must be repointed or it will fail to resolve:
+
+  ```diff
+  - import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+  + import { UserCache } from '@memberjunction/generic-database-provider';
+  ```
+
+  `Refresh` is now dialect-neutral and takes the configured provider rather than an
+  `mssql.ConnectionPool`:
+
+  ```diff
+  - await UserCache.Instance.Refresh(pool, intervalMs);
+  + await UserCache.Instance.Refresh(provider, intervalMs);
+  ```
+
+  **These are two separate breaks, and the first is much wider than the second.** The import path
+  affects _every_ consumer of the symbol — reads included. The signature affects only the handful
+  of callers of `Refresh`. Anything that imports `UserCache` merely to call `Users`,
+  `GetSystemUser()` or `UserByName()` still has to change its import, so a consumer who reads only
+  "the signature changed" will treat this as a no-op and fail to build. In this repo the split was
+  56 files versus 9 call sites.
+
+  Packages that import `UserCache` must also declare `@memberjunction/generic-database-provider`
+  as a dependency — pnpm resolves strictly, so an undeclared import fails rather than falling
+  through to a hoisted copy.
+
+  **Check for dynamic imports too**, not just static ones. `await import('@memberjunction/sqlserver-dataprovider')`
+  destructuring `UserCache` breaks the same way, and a grep for `import { … } from` will not find it.
+
+  **Unchanged:** the read surface (`Users`, `GetSystemUser`, `UserByName`, `SYSTEM_USER_ID`), and
+  the class name. The name is load-bearing — `BaseSingleton` keys its global store on the
+  constructor name, so keeping it `UserCache` preserves singleton identity across the move.
+
+  **Also fixed:** `_users` now initializes to `[]`. It previously stayed `undefined` after a
+  `Refresh` that never ran or that failed (failures are swallowed into `LogError`), so
+  `GetSystemUser()` threw a `TypeError` off `.find()` instead of returning `undefined` as its
+  callers already assume.
+
+  **Why:** the cache was dialect-neutral except for that one `mssql` type, which left PostgreSQL
+  with no user cache at all and produced four separate hand-rolled "read `vwUsers` + `vwUserRoles`,
+  build `UserInfo[]`" implementations — one of which reached into the singleton's private field
+  through a cast from another package. Those are all removed, and a PostgreSQL process that never
+  goes through the server bootstrap now has a system user.
+
+- Updated dependencies [d430fa5]
+- Updated dependencies [c49a34a]
+- Updated dependencies [255d506]
+- Updated dependencies [59def38]
+- Updated dependencies [6bb2e1f]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [aa4fbe9]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [e26c866]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [d8adda1]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/codegen-lib@6.1.0-edge.2
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/generic-database-provider@6.1.0-edge.2
+  - @memberjunction/open-app-engine@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/aiengine@6.1.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.2
+  - @memberjunction/ai-cli@6.1.0-edge.2
+  - @memberjunction/metadata-sync@6.1.0-edge.2
+  - @memberjunction/query-gen@6.1.0-edge.2
+  - @memberjunction/testing-cli@6.1.0-edge.2
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.2
+  - @memberjunction/db-auto-doc@6.1.0-edge.2
+  - @memberjunction/cli-core@6.1.0-edge.2
+  - @memberjunction/config@6.1.0-edge.2
+  - @memberjunction/installer@6.1.0-edge.2
+  - @memberjunction/sql-converter@6.1.0-edge.2
+  - @memberjunction/sqlglot-ts@6.1.0-edge.2
+  - @memberjunction/standards@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.1
+  - @memberjunction/generic-database-provider@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/open-app-engine@6.1.0-edge.1
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.1
+  - @memberjunction/standards@6.1.0-edge.1
+  - @memberjunction/ai-cli@6.1.0-edge.1
+  - @memberjunction/codegen-lib@6.1.0-edge.1
+  - @memberjunction/aiengine@6.1.0-edge.1
+  - @memberjunction/db-auto-doc@6.1.0-edge.1
+  - @memberjunction/metadata-sync@6.1.0-edge.1
+  - @memberjunction/query-gen@6.1.0-edge.1
+  - @memberjunction/testing-cli@6.1.0-edge.1
+  - @memberjunction/cli-core@6.1.0-edge.1
+  - @memberjunction/config@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+  - @memberjunction/installer@6.1.0-edge.1
+  - @memberjunction/sql-converter@6.1.0-edge.1
+  - @memberjunction/sqlglot-ts@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- 8d0d45a: build: declare dependencies that npm's hoisting was silently supplying, as part of the monorepo's cutover to pnpm.
+
+  Under npm, a package could import a module it never declared and still resolve it, because npm flattens everything into the workspace-root `node_modules`. pnpm's strict, isolated linking gives a package only what it declares — so each of these was a latent bug that happened to work. They are fixed here independently of the package manager; nothing about the published API changes.
+
+  Added declarations: `@types/mssql` (codegen-lib, sqlserver-dataprovider, testing-cli, testing-integration, react-test-harness), `@types/pg` (codegen-lib), `@types/express` (messaging-adapters, server-extensions-core), `@types/fs-extra` (codegen-lib), `@types/babel__traverse` (react-linter), `ora` (ai-cli), `glob` (react-test-harness), `tslib` (ng-bootstrap, which compiles with `importHelpers`), `@auth0/auth0-spa-js` (ng-auth-services), `@memberjunction/core-entities` + `@memberjunction/global` + `@memberjunction/aiengine` (cli), and `@memberjunction/ng-react` (ng-explorer-core, reached from a generated file).
+
+  Two changes are more than a declaration:
+  - **`@memberjunction/server`**: `@types/express` moves `^4.17.25` → `^5.0.6`. The package declares `express@^5.2.1` at runtime, so it was only compiling because hoisting supplied the v5 types that six sibling packages declare. The types now match the express it actually runs.
+  - **`@memberjunction/ng-auth-services`**: `angularProviderFactory` gains an explicit `Provider[]` return type. Declaring `@auth0/auth0-spa-js` alone does not resolve TS2742 — the emitted declaration file still needed a nameable type rather than one inferred through a transitive package path.
+  - **`@memberjunction/scheduled-actions-server`**: drops `@types/axios`, a deprecated stub package that carries no type definitions; its presence made TypeScript auto-include it and then fail to find any types. axios ships its own.
+
+- Updated dependencies
+- Updated dependencies [cd520e2]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [fe7bd9d]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+- Updated dependencies [8d0d45a]
+- Updated dependencies [1100077]
+- Updated dependencies [e76b195]
+- Updated dependencies [190db45]
+  - @memberjunction/standards@6.1.0-edge.0
+  - @memberjunction/codegen-lib@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.0
+  - @memberjunction/generic-database-provider@6.1.0-edge.0
+  - @memberjunction/ai-cli@6.1.0-edge.0
+  - @memberjunction/testing-cli@6.1.0-edge.0
+  - @memberjunction/aiengine@6.1.0-edge.0
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.0
+  - @memberjunction/metadata-sync@6.1.0-edge.0
+  - @memberjunction/open-app-engine@6.1.0-edge.0
+  - @memberjunction/query-gen@6.1.0-edge.0
+  - @memberjunction/db-auto-doc@6.1.0-edge.0
+  - @memberjunction/cli-core@6.1.0-edge.0
+  - @memberjunction/config@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+  - @memberjunction/installer@6.1.0-edge.0
+  - @memberjunction/sql-converter@6.1.0-edge.0
+  - @memberjunction/sqlglot-ts@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

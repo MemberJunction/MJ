@@ -1,5 +1,47 @@
 # Change Log - @memberjunction/ng-tabstrip
 
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@6.1.0-edge.2
+- @memberjunction/ng-ui-components@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Minor Changes
+
+- 394d276: One look and one keyboard contract for MJ's tab strips.
+  - **`ng-ui-components`** ships the shared `.mj-tabs*` tab chrome as a global stylesheet (`dist/lib/tabs/tabs.scss`) and `mjTabList`, the ARIA tabs keyboard directive: roving tabindex (one Tab stop per strip), Arrow/Home/End navigation with focus-follows-selection, Enter/Space activation, Delete/Backspace close, hidden-tab skipping, and editable-content passthrough. `mj-workspace-tab-strip` now renders the shared chrome, puts `role="tab"` on the focusable element, and folds unsaved/rejected state into each tab's accessible name. An active tab's border and top accent line follow its STATUS color (brand primary for an ordinary tab, warning when rejected, success when complete) via the `--mj-tab-accent` custom property, overridable per host. Touch devices get hold-to-drag reordering (400ms, the platform idiom) so a horizontal swipe scrolls an overflowing tab list instead of grabbing a tab; a new `AllowReorder` input (strip + card) disables reordering entirely for hosts where every touch gesture should scroll. **Standalone hosts (anything not running inside MJ Explorer's `explorer-app` shell — e.g. the BizApps apps) must add `@import '@memberjunction/ng-ui-components/dist/lib/tabs/tabs';` to their global stylesheet or tab strips render unstyled.**
+  - **`ng-tabstrip`** adopts the same chrome and directive (new dependency on `ng-ui-components`): tokens replace the legacy `--gray-*` styling that never adapted to dark mode, tabs gain full keyboard support plus `aria-controls`/`tabpanel` linkage, and the close button is Font Awesome. **Behavioral change:** the strip and its tab bodies now size to content instead of hardcoding viewport height (`calc(100vh - …)`) — hosts that relied on the old fixed-height, internally-scrolling body should set a height on their own container. Overflow scrolling is native (`scrollLeft`) rather than the old offset animation. `FillWidth`/`FillHeight` inputs are deprecated no-ops. The package's stale "DEPRECATED — use Kendo" notice is gone.
+  - **`ng-core-entity-forms`**: the Entity Actions form's Filters grid gets an explicit `[Height]` now that its tab body no longer imposes viewport height.
+
+### Patch Changes
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/ng-ui-components@6.1.0-edge.1
+  - @memberjunction/ng-container-directives@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- b895f92: Angular DOM unit-testing — Phase 4 coverage push. Dev-only (test files + test-config/CI-gate scoping); no runtime change.
+
+  Drives the Generic DOM-coverage ratchet (`scripts/dom-test-report.mjs … --max-none`) from **185 → 137** by writing DOM specs, in usage-ranked order, for every Generic Angular component appropriate for a DOM unit test. Highlights:
+  - **Highest-leverage primitives** — `MjFormFieldComponent` (the field renderer behind ~4,000 usages) across its read/edit type matrix; the `ui-components` design system (`MJEmptyStateComponent`, the `mj-page-*` chrome family, `MJDropdown`/`MJCombobox`/`MJFilterPopover` via a new CDK-overlay test helper in `ng-test-utils`, the `mj-dialog` family, tabs, filter panel, left-nav).
+  - **Form host stack** — `MjRecordFormContainer`, `MjFormToolbar`, `MjEntityFormHost`, `MjIsaRelatedPanel`, `FormPanelSlot`, `ExplorerEntityDataGrid`, `InteractiveForm`.
+  - **Viewers, grids & dialogs** — `EntityDataGrid` + `QueryDataGrid` (AG-Grid chrome), `EntityViewer`, `ArtifactViewerPanel`, the ERD component family (`ERDComposite`/`MJEntityERD`/`ERDDiagram`), plus a broad set of panels/editors/dialogs across agents, artifacts, search, composer, list-management, scheduling, record-process-studio, user-routines, entity-action-ux, actions, and testing.
+  - **`Angular/Bootstrap` onboarded** — the last untracked library tree gains a DOM test tier (`MJAuthShell`, `MJBootstrap`) and its own `--max-none=0` CI gate, so every shipped Angular library tree (Explorer, Generic, Bootstrap) is now gated.
+
+  Reusable patterns established for the harder components: drive internal state before the first render (`setup`) rather than mutating post-render (unreliable under zoneless CD); stub the heavy core (AG-Grid, React bridge, SVG layout, plugin viewers) and spy async loaders so specs exercise the component's own chrome/wiring; add each component **and its injected services** to enumerated `tsconfig.spec.json` files (or AOT drops decorator metadata → NG0202).
+
+  Deliberately **not** covered, and left at the 137 floor: five integration/e2e-tier orchestrators (`ConversationChatArea`, `MessageInput`, `RealtimeWhiteboardBoard`, `AITestHarness`, `RealtimeSessionOverlay`) — 1,800–4,600-line components with realtime/WebRTC/canvas cores or 14–30 dependencies, which belong in the browser regression suite rather than DOM units.
+  - @memberjunction/ng-container-directives@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

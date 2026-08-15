@@ -563,15 +563,23 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
                     // containing an apostrophe must not break (or rewrite) the predicate —
                     // the same defect class as the tenant-header injection, in the engine
                     // every RLS filter depends on.
-                    ret = ret.replace(new RegExp(`{{User${key}}}`, 'g'), String(val).replace(/'/g, "''"))
+                    const escaped = String(val).replace(/'/g, "''");
+                    // ...and pass it as a replacement FUNCTION, so `$&`/`` $` ``/`$'`/`$$`
+                    // inside the value are data rather than splice directives. A string
+                    // replacement here rewrote the predicate the quote-escaping above is
+                    // there to protect. See issue #3171.
+                    ret = ret.replace(new RegExp(`{{User${key}}}`, 'g'), () => escaped)
                 }
             }
             // Per-session magic-link resource scope. Fail-closed: an absent scope resolves
             // to '' so a resource-pinned predicate (e.g. ID = '{{ScopeResourceID}}') matches
             // NO rows rather than leaking — a session without the scope sees nothing.
             const scope = user.MagicLinkScope;
-            ret = ret.replace(/\{\{ScopeResourceID\}\}/g, (scope?.ResourceID ?? '').replace(/'/g, "''"));
-            ret = ret.replace(/\{\{ScopeResourceType\}\}/g, (scope?.ResourceType ?? '').replace(/'/g, "''"));
+            // Replacement functions — see the note on the user-token loop above (#3171).
+            const scopeID = (scope?.ResourceID ?? '').replace(/'/g, "''");
+            const scopeType = (scope?.ResourceType ?? '').replace(/'/g, "''");
+            ret = ret.replace(/\{\{ScopeResourceID\}\}/g, () => scopeID);
+            ret = ret.replace(/\{\{ScopeResourceType\}\}/g, () => scopeType);
 
             ret = this.resolveActingTokens(ret, user);
         }
@@ -609,7 +617,9 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
         ];
         for (const [token, value] of scalars) {
             if (value != null && value.length > 0) {
-                ret = ret.replace(new RegExp(`\\{\\{${token}\\}\\}`, 'g'), value.replace(/'/g, "''"));
+                // Replacement function — see the note in MarkupFilterText (#3171).
+                const escaped = value.replace(/'/g, "''");
+                ret = ret.replace(new RegExp(`\\{\\{${token}\\}\\}`, 'g'), () => escaped);
             }
         }
         const companies = acting?.ActingCompanyIDs;
@@ -618,7 +628,7 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
                 .sort()
                 .map(c => `'${c.replace(/'/g, "''")}'`)
                 .join(',');
-            ret = ret.replace(/\{\{ActingCompanyIDs\}\}/g, rendered);
+            ret = ret.replace(/\{\{ActingCompanyIDs\}\}/g, () => rendered);
         }
         return ret;
     }

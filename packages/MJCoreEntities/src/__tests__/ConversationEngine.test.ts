@@ -197,11 +197,11 @@ function enqueueDetailsResults(
 ) {
     // Build ConversationDetailComplete-shaped rows: detail fields + AgentRunsJSON
     const rows = details.map((detail) => {
-        const d = detail as Record<string, unknown>;
+        const d = detail as unknown as Record<string, unknown>;
         const detailId = d['ID'] as string;
         // Find agent runs matching this detail
         const matchingRuns = agentRuns.filter(
-            (r) => (r as Record<string, unknown>)['ConversationDetailID'] === detailId
+            (r) => (r as unknown as Record<string, unknown>)['ConversationDetailID'] === detailId
         );
         return {
             ...d,
@@ -491,7 +491,7 @@ describe('ConversationEngine', () => {
 
             const found = engine.GetConversation('c1');
             expect(found).toBeDefined();
-            expect((found as Record<string, unknown>)['IsPinned']).toBe(true);
+            expect((found as unknown as Record<string, unknown>)['IsPinned']).toBe(true);
         });
     });
 
@@ -616,7 +616,7 @@ describe('ConversationEngine', () => {
 
             const retrieved = engine.GetAgentRunForDetail('conv-1', 'd1');
             expect(retrieved).toBeDefined();
-            expect((retrieved as Record<string, unknown>)['ID']).toBe('run-1');
+            expect((retrieved as unknown as Record<string, unknown>)['ID']).toBe('run-1');
         });
 
         it('should return undefined when no cache entry exists', () => {
@@ -691,7 +691,7 @@ describe('ConversationEngine', () => {
 
             const cached = engine.GetCachedDetails('conv-1');
             expect(cached).toHaveLength(1);
-            expect((cached![0] as Record<string, unknown>)['extraField']).toBe('updated');
+            expect((cached![0] as unknown as Record<string, unknown>)['extraField']).toBe('updated');
         });
     });
 
@@ -1097,6 +1097,72 @@ describe('ConversationEngine', () => {
             }, 'save');
 
             expect(engine.GetCachedDetails('conv-1')).toBeUndefined(); // next load re-queries
+        });
+    });
+
+    // ======================================================================
+    // sortConversations with string dates (poisoned cache)
+    // ======================================================================
+
+    /**
+     * `ConversationEngine` is a `BaseEngine` subclass, so `_conversations` is an engine-cached
+     * array — the same class of array a cross-server cache event can replace with plain JSON
+     * objects whose `__mj_UpdatedAt` is a raw ISO string. Pre-fix this comparator called
+     * `.getTime()` on it directly, which throws in exactly that state.
+     *
+     * `BaseEngine.OnExternalCacheChange` no longer produces that state, so this is defence in
+     * depth rather than the live crash path — but the comparator is the one remaining unguarded
+     * date sort over an engine cache, so it gets the same guarantee as the agent-context sorts.
+     */
+    describe('sortConversations tolerates string dates', () => {
+        const OLDER = '2026-08-01T00:00:00.000Z';
+        const NEWER = '2026-08-02T00:00:00.000Z';
+
+        type SortAccess = {
+            sortConversations(conversations: Array<Record<string, unknown>>): Array<Record<string, unknown>>;
+        };
+
+        function sort(rows: Array<Record<string, unknown>>): string[] {
+            const sorted = (engine as unknown as SortAccess).sortConversations(rows);
+            return sorted.map((c) => c.ID as string);
+        }
+
+        it('sorts newest-first on string dates instead of throwing', () => {
+            expect(sort([
+                { ID: 'old', IsPinned: false, __mj_UpdatedAt: OLDER },
+                { ID: 'new', IsPinned: false, __mj_UpdatedAt: NEWER },
+            ])).toEqual(['new', 'old']);
+        });
+
+        it('still puts pinned conversations first', () => {
+            expect(sort([
+                { ID: 'unpinned-new', IsPinned: false, __mj_UpdatedAt: NEWER },
+                { ID: 'pinned-old', IsPinned: true, __mj_UpdatedAt: OLDER },
+            ])).toEqual(['pinned-old', 'unpinned-new']);
+        });
+
+        it('handles a mixed array of real Date and string dates', () => {
+            expect(sort([
+                { ID: 'string-old', IsPinned: false, __mj_UpdatedAt: OLDER },
+                { ID: 'date-new', IsPinned: false, __mj_UpdatedAt: new Date(NEWER) },
+            ])).toEqual(['date-new', 'string-old']);
+        });
+
+        it('treats missing and unparseable dates as epoch 0 rather than NaN', () => {
+            expect(sort([
+                { ID: 'garbage', IsPinned: false, __mj_UpdatedAt: 'not-a-date' },
+                { ID: 'dated', IsPinned: false, __mj_UpdatedAt: OLDER },
+                { ID: 'missing', IsPinned: false, __mj_UpdatedAt: null },
+            ])).toEqual(['dated', 'garbage', 'missing']);
+        });
+
+        it('does not mutate the caller\'s array', () => {
+            const input = [
+                { ID: 'old', IsPinned: false, __mj_UpdatedAt: OLDER },
+                { ID: 'new', IsPinned: false, __mj_UpdatedAt: NEWER },
+            ];
+            (engine as unknown as SortAccess).sortConversations(input);
+            expect(input.map((c) => c.ID)).toEqual(['old', 'new']);
         });
     });
 });

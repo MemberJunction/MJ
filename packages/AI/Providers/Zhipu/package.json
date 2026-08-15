@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-zhipu",
   "type": "module",
-  "version": "6.0.0",
+  "version": "6.1.0-edge.2",
   "description": "MemberJunction Wrapper for Z.AI (Zhipu AI) GLM models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,13 +16,14 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
+    "@memberjunction/unit-testing": "6.1.0-edge.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/ai": "6.0.0",
-    "@memberjunction/ai-openai": "6.0.0",
-    "@memberjunction/global": "6.0.0"
+    "@memberjunction/ai": "6.1.0-edge.2",
+    "@memberjunction/ai-openai": "6.1.0-edge.2",
+    "@memberjunction/global": "6.1.0-edge.2"
   },
   "repository": {
     "type": "git",

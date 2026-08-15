@@ -412,31 +412,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Scheduled Actions Section -->
-    <mj-collapsible-panel
-        SectionKey="mJScheduledActions"
-        SectionName="Scheduled Actions"
-        Icon="fa fa-calendar"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJScheduledActions')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scheduled Actions','ActionID')"
-                [NewRecordValues]="NewRecordValues('MJ: Scheduled Actions')"
-                [AllowLoad]="IsSectionExpanded('mJScheduledActions')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJScheduledActions', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Action Contexts Section -->
     <mj-collapsible-panel
         SectionKey="mJActionContexts"
@@ -587,6 +562,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Task Notification Configs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsTasksTaskNotificationConfigs"
+        SectionName="Task Notification Configs"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsTasksTaskNotificationConfigs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Tasks: Task Notification Configs','OverdueActionID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Tasks: Task Notification Configs')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsTasksTaskNotificationConfigs')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsTasksTaskNotificationConfigs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Record Processes Section -->
     <mj-collapsible-panel
         SectionKey="mJRecordProcesses"
@@ -612,6 +612,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Task Types (On Overdue Action ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsTasksTaskTypesOnOverdueActionID"
+        SectionName="Task Types (On Overdue Action ID)"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsTasksTaskTypesOnOverdueActionID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Tasks: Task Types','OnOverdueActionID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Tasks: Task Types')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsTasksTaskTypesOnOverdueActionID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsTasksTaskTypesOnOverdueActionID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AI Skill Actions Section -->
     <mj-collapsible-panel
         SectionKey="mJAISkillActions"
@@ -631,6 +656,156 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAISkillActions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Tasks Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTasks"
+        SectionName="Tasks"
+        Icon="fa fa-tasks"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTasks')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','ActionID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tasks')"
+                [AllowLoad]="IsSectionExpanded('mJTasks')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTasks', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Task Types (On Percent Change Action ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsTasksTaskTypesOnPercentChangeActionID"
+        SectionName="Task Types (On Percent Change Action ID)"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsTasksTaskTypesOnPercentChangeActionID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Tasks: Task Types','OnPercentChangeActionID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Tasks: Task Types')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsTasksTaskTypesOnPercentChangeActionID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsTasksTaskTypesOnPercentChangeActionID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Task Types (On Assign Action ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsTasksTaskTypesOnAssignActionID"
+        SectionName="Task Types (On Assign Action ID)"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsTasksTaskTypesOnAssignActionID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Tasks: Task Types','OnAssignActionID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Tasks: Task Types')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsTasksTaskTypesOnAssignActionID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsTasksTaskTypesOnAssignActionID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Task Types (On Complete Action ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsTasksTaskTypesOnCompleteActionID"
+        SectionName="Task Types (On Complete Action ID)"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsTasksTaskTypesOnCompleteActionID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Tasks: Task Types','OnCompleteActionID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Tasks: Task Types')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsTasksTaskTypesOnCompleteActionID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsTasksTaskTypesOnCompleteActionID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Task Types (On Cancel Action ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsTasksTaskTypesOnCancelActionID"
+        SectionName="Task Types (On Cancel Action ID)"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsTasksTaskTypesOnCancelActionID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Tasks: Task Types','OnCancelActionID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Tasks: Task Types')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsTasksTaskTypesOnCancelActionID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsTasksTaskTypesOnCancelActionID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Task Types (On Reject Action ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsTasksTaskTypesOnRejectActionID"
+        SectionName="Task Types (On Reject Action ID)"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsTasksTaskTypesOnRejectActionID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Tasks: Task Types','OnRejectActionID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Tasks: Task Types')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsTasksTaskTypesOnRejectActionID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsTasksTaskTypesOnRejectActionID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

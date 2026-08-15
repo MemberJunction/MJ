@@ -37,7 +37,6 @@ import {
   LogError,
   EntityRecordNameInput,
   EntityRecordNameResult,
-  IRunReportProvider,
   RecordDependency,
   EntityDependency,
   LogStatus,
@@ -65,6 +64,7 @@ import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 
 import sql from 'mssql';
 import { BehaviorSubject, Observable, Subject, concatMap, from, tap, catchError, of } from 'rxjs';
+
 import { SQLServerTransactionGroup } from './SQLServerTransactionGroup';
 import {
   ExecuteSQLOptions,
@@ -80,6 +80,16 @@ import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 import { v4 as uuidv4 } from 'uuid';
 import { UUIDsEqual } from '@memberjunction/global';
 import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
+
+/**
+ * Escape every regex metacharacter in `literal` so it can be interpolated into a
+ * `RegExp` and match itself. Exported for tests: the only callers sit inside
+ * batch-execution methods that need a live mssql connection, so this is the
+ * seam where the behaviour can actually be asserted. See issue #3171.
+ */
+export function escapeRegExpLiteral(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 /**
  * Checks whether an error indicates a stale/dead database connection that
  * could be resolved by retrying with a fresh connection from the pool.
@@ -262,7 +272,7 @@ async function executeSQLCore(
  */
 export class SQLServerDataProvider
   extends GenericDatabaseProvider
-  implements IEntityDataProvider, IMetadataProvider, IRunReportProvider, IColocatedVectorHost
+  implements IEntityDataProvider, IMetadataProvider, IColocatedVectorHost
 {
   /**************************************************************************/
   // SQL Dialect Implementations (override abstract methods from DatabaseProviderBase)
@@ -304,6 +314,12 @@ export class SQLServerDataProvider
   // Instance transaction properties
   private _transaction: sql.Transaction;
   private _transactionDepth: number = 0;
+  /**
+   * Set while an OUTERMOST `BeginTransaction` is awaiting `sql.Transaction.begin()`. Concurrent
+   * `BeginTransaction` callers await this first so they cannot take the nested-savepoint branch
+   * before `_transaction` exists. Null whenever no begin is in flight.
+   */
+  private _beginInFlight: Promise<void> | null = null;
   private _savepointCounter: number = 0;
   private _savepointStack: string[] = [];
 
@@ -385,6 +401,15 @@ export class SQLServerDataProvider
    */
   public get transactionDepth(): number {
     // Request-specific depth should be accessed via getTransactionContext
+    return this._transactionDepth;
+  }
+
+  /**
+   * Feeds real nesting depth to the entity-transaction machinery (`IsNested`, out-of-order settle
+   * detection). Deliberately separate from `IsInTransaction`, which this provider leaves `false`
+   * so `RunMaybeSerial` keeps fanning out — see the note in `packages/MJCore/src/generic/util.ts`.
+   */
+  protected override get CurrentTransactionDepth(): number {
     return this._transactionDepth;
   }
   
@@ -727,8 +752,18 @@ export class SQLServerDataProvider
 
     // Build array of SQL statements for batch execution
     const sqlStatements: string[] = [];
-    for (const { entityInfo, whereSQL } of items) {
-      const statusSQL = `SELECT COUNT(*) AS TotalRows, MAX(__mj_UpdatedAt) AS MaxUpdatedAt FROM [${entityInfo.SchemaName}].${entityInfo.BaseView}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+    for (const { entityInfo, whereSQL, item } of items) {
+      // The freshness probe MUST target the same physical view the read targets. For a
+      // DataSource:'Materialized' read that's the materialized_vw<CodeName> wrapper (a full SELECT *
+      // snapshot of the base view, so it carries __mj_UpdatedAt) — NOT the live base view. Probing the
+      // live view would compare the client's snapshot cache against an unrelated source's rowCount/
+      // maxUpdatedAt, yielding a meaningless current/stale verdict. (Materialized reads are normally kept
+      // out of the client cache by runViewCacheEligible, so this is defense-in-depth for any caller that
+      // still supplies a materialized cacheStatus.) Use the status-gated resolveEffectiveBaseView (not the
+      // unconditional GetEffectiveBaseView) so a Building/DriftHold/Disabled/never-minted snapshot probes the
+      // LIVE base view — mirroring the read path — instead of a held or missing materialized_vw wrapper.
+      const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
+      const statusSQL = `SELECT COUNT(*) AS TotalRows, MAX(__mj_UpdatedAt) AS MaxUpdatedAt FROM [${entityInfo.SchemaName}].${effectiveView}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
       sqlStatements.push(statusSQL);
     }
 
@@ -765,20 +800,23 @@ export class SQLServerDataProvider
 
   protected override async executeSQLForUserViewRunLogging(
     viewId: number,
-    entityBaseView: string,
+    entityInfo: EntityInfo,
+    effectiveBaseView: string,
     whereSQL: string,
     orderBySQL: string,
     user: UserInfo,
   ): Promise<{ executeViewSQL: string; runID: string }> {
-    const entityInfo = this.Entities.find((e) => e.BaseView.trim().toLowerCase() === entityBaseView.trim().toLowerCase());
+    // entityInfo + effectiveBaseView are passed in (no reverse-lookup by base-view name) so the logged
+    // read honors DataSource:'Materialized' — effectiveBaseView is the materialized wrapper view then,
+    // and the entity's live base view otherwise.
     const sSQL = `
             DECLARE @ViewIDList TABLE ( ID NVARCHAR(255) );
-            INSERT INTO @ViewIDList (ID) (SELECT ${entityInfo.FirstPrimaryKey.Name} FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE (${whereSQL}))
+            INSERT INTO @ViewIDList (ID) (SELECT ${entityInfo.FirstPrimaryKey.Name} FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `;
     const runIDResult = await this.ExecuteSQL(sSQL, undefined, undefined, user);
     const runID: string = runIDResult[0].UserViewRunID;
-    const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${entityBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN
+    const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
                                  ${orderBySQL && orderBySQL.length > 0 ? ` ORDER BY ${orderBySQL}` : ''}`;
     return { executeViewSQL: sRetSQL, runID };
@@ -1544,20 +1582,6 @@ export class SQLServerDataProvider
     return { dataSource: this._pool };
   }
 
-  protected override BuildSaveExecuteOptions(entity: BaseEntity, sqlDetails: SaveSQLResult): ExecuteSQLOptions {
-    const opts = super.BuildSaveExecuteOptions(entity, sqlDetails);
-    (opts as ExecuteSQLOptions).connectionSource =
-      (entity.ProviderTransaction as sql.Transaction) ?? undefined;
-    return opts;
-  }
-
-  protected override BuildDeleteExecuteOptions(entity: BaseEntity, sqlDetails: DeleteSQLResult): ExecuteSQLOptions {
-    const opts = super.BuildDeleteExecuteOptions(entity, sqlDetails);
-    (opts as ExecuteSQLOptions).connectionSource =
-      (entity.ProviderTransaction as sql.Transaction) ?? undefined;
-    return opts;
-  }
-
   protected override ValidateDeleteResult(
     entity: BaseEntity,
     rawResult: Record<string, unknown>[],
@@ -1934,7 +1958,19 @@ export class SQLServerDataProvider
               const paramName = `q${queryIndex}_${key}`;
               batchParameters[paramName] = value;
               // Replace parameter references in query
-              processedQuery = processedQuery.replace(new RegExp(`@${key}\\b`, 'g'), `@${paramName}`);
+              // `key` is a caller-supplied parameter name, so it is DATA on both
+              // sides. Escaped before interpolation because a `$` in it acts as an
+              // end-anchor — the pattern then matches nothing, the placeholder is
+              // never rewritten, and mssql fails with "Must declare the scalar
+              // variable" while batchParameters holds the prefixed name. Carried
+              // through a replacement function for the same reason on the other
+              // side. Sibling of the escapeRegExp fix in PostgreSQLDataProvider.
+              // See issue #3171.
+              const prefixed = `@${paramName}`;
+              processedQuery = processedQuery.replace(
+                new RegExp(`@${escapeRegExpLiteral(key)}\\b`, 'g'),
+                () => prefixed,
+              );
             }
           }
         }
@@ -2044,7 +2080,19 @@ export class SQLServerDataProvider
               const paramName = `q${queryIndex}_${key}`;
               batchParameters[paramName] = value;
               // Replace parameter references in query
-              processedQuery = processedQuery.replace(new RegExp(`@${key}\\b`, 'g'), `@${paramName}`);
+              // `key` is a caller-supplied parameter name, so it is DATA on both
+              // sides. Escaped before interpolation because a `$` in it acts as an
+              // end-anchor — the pattern then matches nothing, the placeholder is
+              // never rewritten, and mssql fails with "Must declare the scalar
+              // variable" while batchParameters holds the prefixed name. Carried
+              // through a replacement function for the same reason on the other
+              // side. Sibling of the escapeRegExp fix in PostgreSQLDataProvider.
+              // See issue #3171.
+              const prefixed = `@${paramName}`;
+              processedQuery = processedQuery.replace(
+                new RegExp(`@${escapeRegExpLiteral(key)}\\b`, 'g'),
+                () => prefixed,
+              );
             }
           }
         }
@@ -2177,39 +2225,6 @@ export class SQLServerDataProvider
   }
 
   /**
-   * Begin an independent transaction for IS-A chain orchestration.
-   * Returns a new sql.Transaction object that is NOT linked to the provider's
-   * internal transaction state (used by TransactionGroup). Each IS-A chain
-   * gets its own transaction to avoid interference with other operations.
-   */
-  public async BeginISATransaction(): Promise<unknown> {
-    const transaction = new sql.Transaction(this._pool);
-    await transaction.begin();
-    return transaction;
-  }
-
-  /**
-   * Commit an IS-A chain transaction.
-   * @param txn The sql.Transaction object returned from BeginISATransaction()
-   */
-  public async CommitISATransaction(txn: unknown): Promise<void> {
-    if (txn && txn instanceof sql.Transaction) {
-      await txn.commit();
-    }
-  }
-
-  /**
-   * Rollback an IS-A chain transaction.
-   * @param txn The sql.Transaction object returned from BeginISATransaction()
-   */
-  public async RollbackISATransaction(txn: unknown): Promise<void> {
-    if (txn && txn instanceof sql.Transaction) {
-      await txn.rollback();
-    }
-  }
-
-
-  /**
    * Builds a UNION ALL query that probes each child entity's BaseView for a
    * record with the given primary key. Returns the first match (disjoint
    * subtypes guarantee at most one result) unless used with overlapping
@@ -2305,16 +2320,48 @@ IF ${varName} IS NOT NULL
   }
 
   public async BeginTransaction() {
+    // Serialize against an outermost begin that is still in flight. Without this, a second caller
+    // arriving during that window takes the depth-2 savepoint branch and issues
+    // `SAVE TRANSACTION` while `this._transaction` is still null — which silently runs it on the
+    // POOL, outside the transaction it is supposed to be marking. Swallow the in-flight begin's
+    // own rejection: if it failed, the depth is back to 0 and this caller must try its own begin.
+    while (this._beginInFlight) {
+      await this._beginInFlight.catch(() => undefined);
+    }
     try {
       this._transactionDepth++;
 
       if (this._transactionDepth === 1) {
-        // First transaction - actually begin using mssql Transaction object
-        this._transaction = new sql.Transaction(this._pool);
-        await this._transaction.begin();
-        
-        // Emit transaction state change
-        this._transactionState$.next(true);
+        // First transaction - actually begin using mssql Transaction object.
+        //
+        // 🚨 BEGIN LOCALLY, PUBLISH AFTER. `this._transaction` is a SHARED provider field that
+        // every ExecuteSQL call with no explicit connectionSource picks up (see ~1768). Assigning
+        // it before `begin()` resolves publishes an UN-BEGUN transaction to the whole process, and
+        // any concurrent query in that window dies with mssql's
+        //   "Transaction has not begun. Call begin() first."
+        // Worse, if `begin()` THROWS, the old code's catch block restored the depth but left the
+        // un-begun object assigned — poisoning the provider PERMANENTLY, so every later save on it
+        // failed with that same message until the process restarted.
+        //
+        // Found during the 6.1 release: it silently destroyed AI agent run persistence. Agent-run,
+        // step, prompt-run and heartbeat saves all failed ("Failed to create agent run record",
+        // "N step record save(s) failed"), leaving IT56/IT57's live checks with no steps to read.
+        // They therefore reported `model-noncompliance:` — byte-identically across every run and
+        // every model tier — for a defect that had nothing to do with the model.
+        const begun = (async () => {
+          const transaction = new sql.Transaction(this._pool);
+          await transaction.begin();
+          this._transaction = transaction;
+
+          // Emit transaction state change
+          this._transactionState$.next(true);
+        })();
+        this._beginInFlight = begun;
+        try {
+          await begun;
+        } finally {
+          this._beginInFlight = null;
+        }
       } else {
         // Nested transaction - create a savepoint
         const savepointName = `SavePoint_${++this._savepointCounter}`;
@@ -2328,6 +2375,14 @@ IF ${varName} IS NOT NULL
       }
     } catch (e) {
       this._transactionDepth--; // Restore depth on error
+      // Never leave a transaction object published once the depth is back to 0 — a non-null
+      // `_transaction` with no live transaction behind it poisons every subsequent ExecuteSQL on
+      // this provider. The publish-after-begin above already prevents the common case; this is the
+      // backstop that keeps the invariant true no matter how the begin failed.
+      if (this._transactionDepth === 0) {
+        this._transaction = null;
+        this._transactionState$.next(false);
+      }
       LogError(e);
       throw e; // force caller to handle
     }
@@ -2421,14 +2476,47 @@ IF ${varName} IS NOT NULL
         if (!savepointName) {
           throw new Error('Savepoint stack mismatch - no savepoint to rollback to');
         }
-        
-        await this.ExecuteSQL(`ROLLBACK TRANSACTION ${savepointName}`, null, {
-          description: `Rolling back to savepoint ${savepointName}`,
-          ignoreLogging: true
-        });
-        
-        this._savepointStack.pop();
-        this._transactionDepth--;
+
+        try {
+          await this.ExecuteSQL(`ROLLBACK TRANSACTION ${savepointName}`, null, {
+            description: `Rolling back to savepoint ${savepointName}`,
+            ignoreLogging: true
+          });
+
+          this._savepointStack.pop();
+          this._transactionDepth--;
+        } catch (savepointError) {
+          // SQL Server dooms the ENTIRE transaction (XACT_STATE() = -1) on deadlock-victim,
+          // batch-aborting and XACT_ABORT errors. In that state `ROLLBACK TRANSACTION <savepoint>`
+          // is illegal (Msg 3931) and throws — and leaving the depth/stack untouched would strand
+          // a dead physical transaction that every subsequent statement on this provider silently
+          // joins, with nested Commit calls "succeeding" against a transaction that can never
+          // commit. The only recovery is a FULL rollback plus a complete state reset; the outer
+          // scopes' own settles then fail loudly against depth 0 instead of pretending to work.
+          // (The old per-chain BeginISATransaction never hit this — sql.Transaction.rollback() is
+          // legal on an aborted transaction — so this hazard is specific to savepoint joining.)
+          LogError(
+            `Savepoint rollback to ${savepointName} failed — the transaction is likely doomed ` +
+            `(XACT_STATE() = -1). Performing a full rollback and resetting transaction state.`
+          );
+          try {
+            await this._transaction.rollback();
+          } catch (fullRollbackError) {
+            LogError('Full rollback after savepoint rollback failure also failed:', undefined, fullRollbackError);
+          } finally {
+            this._transaction = null;
+            this._transactionDepth = 0;
+            this._savepointStack = [];
+            this._savepointCounter = 0;
+            this._transactionState$.next(false);
+            const deferredCount = this._deferredTasks.length;
+            this._deferredTasks = [];
+            if (deferredCount > 0) {
+              LogStatus(`Cleared ${deferredCount} deferred tasks after doomed-transaction recovery`);
+            }
+          }
+          throw savepointError; // the caller's unit of work still failed — report it
+        }
       }
     } catch (e) {
       // On error in outer transaction, reset everything
@@ -2439,7 +2527,7 @@ IF ${varName} IS NOT NULL
         this._savepointCounter = 0;
         this._transactionState$.next(false);
       }
-      
+
       LogError(e);
       throw e; // force caller to handle
     }

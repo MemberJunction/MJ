@@ -1,4 +1,7 @@
 // @ts-check
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import { remarkMermaidToHtml } from './scripts/lib/remark-mermaid.mjs';
@@ -15,6 +18,21 @@ const base = normalizeBase(process.env.DOCS_BASE ?? '/');
 const site = process.env.DOCS_SITE ?? 'https://memberjunction.github.io';
 const apiHref = base === '/' ? '/api/' : `${base}/api/`;
 
+/**
+ * Upgrade guides are era-specific: each sidebar entry appears only when its
+ * source doc exists at the CONTENT root this build ingests (the repo the
+ * docs-site tooling is overlaid into). lts/5 has no UPGRADE-v6.0.md, so the
+ * v5 site gets only "Upgrading to v5" — hardcoding the slugs would break its
+ * build on the missing page. Newest first.
+ */
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const upgradeItems = [
+  { label: 'Upgrading to v6', slug: 'upgrade-v6', src: 'UPGRADE-v6.0.md' },
+  { label: 'Upgrading to v5', slug: 'upgrade-v5', src: 'UPGRADE-v5.0.md' },
+]
+  .filter((doc) => existsSync(path.join(REPO_ROOT, doc.src)))
+  .map(({ label, slug }) => ({ label, slug }));
+
 export default defineConfig({
   site,
   base,
@@ -25,24 +43,46 @@ export default defineConfig({
     starlight({
       title: 'MemberJunction',
       description: 'The open-source, AI-native data platform — unify your data, add intelligence, build AI-native apps on top of it.',
+      /*
+       * Horizontal lockup (948x132). The previous stacked pair was 200px wide,
+       * which renders soft on retina and reads as a tiny mark once the header
+       * bar constrains it by height. `light`/`dark` name the THEME the file is
+       * shown in, so `light` carries the navy-ink artwork.
+       */
       logo: {
-        light: './src/assets/MJ_logo.webp',
-        dark: './src/assets/MJ_logo_dark.png',
+        light: './src/assets/MJ_logo_wide.png',
+        dark: './src/assets/MJ_logo_wide_dark.png',
         replacesTitle: true,
       },
+      /*
+       * favicon.svg (Starlight's default path) carries the MJ mark with a
+       * prefers-color-scheme swap baked in; these two cover Safari/iOS,
+       * which don't take SVG favicons. Hrefs must carry the base prefix
+       * themselves — Starlight doesn't rewrite head-entry URLs.
+       */
+      head: [
+        { tag: 'link', attrs: { rel: 'icon', type: 'image/png', sizes: '32x32', href: `${base === '/' ? '' : base}/favicon-32.png` } },
+        { tag: 'link', attrs: { rel: 'apple-touch-icon', sizes: '180x180', href: `${base === '/' ? '' : base}/apple-touch-icon.png` } },
+      ],
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/MemberJunction/MJ' }],
       editLink: { baseUrl: 'https://github.com/MemberJunction/MJ/edit/next/docs-site/' },
       lastUpdated: true,
       customCss: ['./src/styles/custom.css'],
-      components: { Footer: './src/components/Footer.astro' },
+      components: {
+        Footer: './src/components/Footer.astro',
+        // Appends the documented-line version pill next to the logo lockup.
+        SiteTitle: './src/components/SiteTitle.astro',
+        // Adds the documentation-version switcher next to the theme select
+        // on versioned deploys (DOCS_VERSION/DOCS_VERSIONS set by docs.yml).
+        ThemeSelect: './src/components/ThemeSelect.astro',
+      },
       sidebar: [
         {
           label: 'Start Here',
           items: [
             { label: 'What is MemberJunction?', slug: 'overview' },
             { label: 'Getting Started', slug: 'getting-started' },
-            { label: 'Deployment', slug: 'deployment' },
-            { label: 'Upgrading to v5', slug: 'upgrade-v5' },
+            ...upgradeItems,
           ],
         },
         { label: 'Release Notes', collapsed: true, autogenerate: { directory: 'releases', collapsed: true } },

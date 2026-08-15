@@ -1,5 +1,123 @@
 # @memberjunction/ng-base-forms
 
+## 6.1.0-edge.2
+
+### Minor Changes
+
+- 8de5f7e: Let a host form own the flow editor's save, and fix the canvas context menu.
+
+  **The flow was never part of the agent form's save.** `InternalSaveRecord` persisted templates, prompts and the agent row; steps and paths were written only by the flow editor's own Save button. That gave one record two save buttons with two failure modes — the form could succeed while the flow failed, leaving an agent that looked saved and step edits that were gone.
+
+  `BaseFormSectionComponent` gains an opt-in contract so a section that owns an editor can join the host's transaction: `HasPendingChanges`, `ContributeToSave(transactionGroup)` and `OnHostSaveCompleted()`. All three are no-ops by default, so existing sections are unaffected. `BaseFormComponent.HasAdditionalUnsavedChanges` (default `false`) feeds the container's `EffectiveIsDirty`, so a form holding unsaved editor state no longer reports itself clean — previously the navigate-away guard would discard those edits without asking.
+
+  `FlowAgentEditorComponent` splits `Save()` into `QueueSaveInto(transactionGroup)` (queue only, caller submits) plus `MarkSaved()`, and exposes `HasUnsavedChanges`. Two new inputs: **`ShowSaveControls`** (default `false`) hides the editor's own Save / Edit / Cancel and its unsaved indicator, for hosts that own persistence — a host that turns it on is declaring it owns its own save; and `CanvasTitle` (`null` hides the toolbar title) for hosts whose chrome already names the record.
+
+  **Context menu fix:** `onContextMenuAction` closed the menu before reading its target, and closing nulls the stored node/connection. Every branch then tested those now-null fields and fell through, so right-click **Remove and Edit both did nothing** — for nodes and connections alike, with the menu closing on click making it look like the action had been taken. The target is now captured before the menu closes, and the undo entry is pushed only once a target is confirmed, so a no-op action no longer leaves a phantom step in the undo stack. Covered by 7 regression tests, 6 of which fail against the old ordering.
+
+### Patch Changes
+
+- Updated dependencies [255d506]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/ng-base-types@6.1.0-edge.2
+  - @memberjunction/ng-code-editor@6.1.0-edge.2
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.2
+  - @memberjunction/ng-list-management@6.1.0-edge.2
+  - @memberjunction/ng-notifications@6.1.0-edge.2
+  - @memberjunction/ng-react@6.1.0-edge.2
+  - @memberjunction/ng-record-changes@6.1.0-edge.2
+  - @memberjunction/ng-record-tags@6.1.0-edge.2
+  - @memberjunction/ng-shared-generic@6.1.0-edge.2
+  - @memberjunction/interactive-component-types@6.1.0-edge.2
+  - @memberjunction/ng-markdown@6.1.0-edge.2
+  - @memberjunction/ng-ui-components@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/ng-ui-components@6.1.0-edge.1
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ng-base-types@6.1.0-edge.1
+  - @memberjunction/ng-code-editor@6.1.0-edge.1
+  - @memberjunction/ng-list-management@6.1.0-edge.1
+  - @memberjunction/ng-markdown@6.1.0-edge.1
+  - @memberjunction/ng-notifications@6.1.0-edge.1
+  - @memberjunction/ng-record-changes@6.1.0-edge.1
+  - @memberjunction/ng-record-tags@6.1.0-edge.1
+  - @memberjunction/ng-shared-generic@6.1.0-edge.1
+  - @memberjunction/ng-react@6.1.0-edge.1
+  - @memberjunction/interactive-component-types@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- b895f92: Angular DOM unit-testing — Phase 4 coverage push. Dev-only (test files + test-config/CI-gate scoping); no runtime change.
+
+  Drives the Generic DOM-coverage ratchet (`scripts/dom-test-report.mjs … --max-none`) from **185 → 137** by writing DOM specs, in usage-ranked order, for every Generic Angular component appropriate for a DOM unit test. Highlights:
+  - **Highest-leverage primitives** — `MjFormFieldComponent` (the field renderer behind ~4,000 usages) across its read/edit type matrix; the `ui-components` design system (`MJEmptyStateComponent`, the `mj-page-*` chrome family, `MJDropdown`/`MJCombobox`/`MJFilterPopover` via a new CDK-overlay test helper in `ng-test-utils`, the `mj-dialog` family, tabs, filter panel, left-nav).
+  - **Form host stack** — `MjRecordFormContainer`, `MjFormToolbar`, `MjEntityFormHost`, `MjIsaRelatedPanel`, `FormPanelSlot`, `ExplorerEntityDataGrid`, `InteractiveForm`.
+  - **Viewers, grids & dialogs** — `EntityDataGrid` + `QueryDataGrid` (AG-Grid chrome), `EntityViewer`, `ArtifactViewerPanel`, the ERD component family (`ERDComposite`/`MJEntityERD`/`ERDDiagram`), plus a broad set of panels/editors/dialogs across agents, artifacts, search, composer, list-management, scheduling, record-process-studio, user-routines, entity-action-ux, actions, and testing.
+  - **`Angular/Bootstrap` onboarded** — the last untracked library tree gains a DOM test tier (`MJAuthShell`, `MJBootstrap`) and its own `--max-none=0` CI gate, so every shipped Angular library tree (Explorer, Generic, Bootstrap) is now gated.
+
+  Reusable patterns established for the harder components: drive internal state before the first render (`setup`) rather than mutating post-render (unreliable under zoneless CD); stub the heavy core (AG-Grid, React bridge, SVG layout, plugin viewers) and spy async loaders so specs exercise the component's own chrome/wiring; add each component **and its injected services** to enumerated `tsconfig.spec.json` files (or AOT drops decorator metadata → NG0202).
+
+  Deliberately **not** covered, and left at the 137 floor: five integration/e2e-tier orchestrators (`ConversationChatArea`, `MessageInput`, `RealtimeWhiteboardBoard`, `AITestHarness`, `RealtimeSessionOverlay`) — 1,800–4,600-line components with realtime/WebRTC/canvas cores or 14–30 dependencies, which belong in the browser regression suite rather than DOM units.
+
+- Updated dependencies [b895f92]
+- Updated dependencies [b895f92]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [d26e202]
+- Updated dependencies [27e4d09]
+- Updated dependencies [5c6e36c]
+  - @memberjunction/ng-ui-components@6.1.0-edge.0
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.0
+  - @memberjunction/ng-list-management@6.1.0-edge.0
+  - @memberjunction/ng-markdown@6.1.0-edge.0
+  - @memberjunction/ng-record-changes@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/ng-react@6.1.0-edge.0
+  - @memberjunction/interactive-component-types@6.1.0-edge.0
+  - @memberjunction/ng-record-tags@6.1.0-edge.0
+  - @memberjunction/ng-base-types@6.1.0-edge.0
+  - @memberjunction/ng-code-editor@6.1.0-edge.0
+  - @memberjunction/ng-notifications@6.1.0-edge.0
+  - @memberjunction/ng-shared-generic@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

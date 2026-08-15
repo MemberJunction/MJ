@@ -357,21 +357,11 @@ describe('BaseEntity.ISAParentEntity', () => {
     });
 });
 
-// ─── ProviderTransaction ───────────────────────────────────────────────────
-
-describe('BaseEntity.ProviderTransaction', () => {
-    it('defaults to null', () => {
-        const entity = createEntity(productEntityInfo);
-        expect(entity.ProviderTransaction).toBeNull();
-    });
-
-    it('can be set and retrieved', () => {
-        const entity = createEntity(productEntityInfo);
-        const mockTx = { id: 'mock-transaction' };
-        entity.ProviderTransaction = mockTx;
-        expect(entity.ProviderTransaction).toBe(mockTx);
-    });
-});
+// NOTE: `BaseEntity.ProviderTransaction` and `PropagateTransactionToParents()` were removed in 6.2.
+// IS-A chains no longer carry a per-entity transaction handle — they run inside the provider's
+// ambient transaction, obtained via `BeginEntityTransaction()`, which every ExecuteSQL call picks up
+// automatically when no explicit `connectionSource` is supplied. Coverage for the replacement lives
+// in `entityTransactionScope.test.ts`.
 
 // ─── GetAll ────────────────────────────────────────────────────────────────
 

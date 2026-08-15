@@ -1,5 +1,144 @@
 # @memberjunction/search-engine
 
+## 6.1.0-edge.2
+
+### Minor Changes
+
+- 71817db: Make the entity-search per-entity timeout configurable and lower its default. `EntitySearchProvider`'s hard per-entity fan-out timeout was a `private static readonly PER_ENTITY_TIMEOUT_MS = 30_000`, so a deployment could not tune it. It is now a **public static `PerEntityTimeoutMS`** (default lowered from 30000ms to **3000ms**), mirroring the existing deployment-adjustable `PerEntityFetchDepth` static.
+
+  The 3s default keeps interactive/omnibar fan-outs responsive by dropping a pathological entity promptly instead of stalling the whole fan-out. Deployments doing large unindexed LIKE scans that need the old behavior can raise it — either by assigning the static at startup or by overriding the default with an environment variable at process start:
+
+  ```ts
+  import { EntitySearchProvider } from "@memberjunction/search-engine";
+  EntitySearchProvider.PerEntityTimeoutMS = 30_000;
+  ```
+
+  ```bash
+  # equivalent env-var override, read once when the module loads
+  MJ_SEARCH_PER_ENTITY_TIMEOUT_MS=30000
+  ```
+
+  All three deployment-adjustable search statics now accept an env-var default override, read once at module load (mirroring the `MJ_INTEGRATION_*` numeric ceilings):
+
+  | Static                                       | Environment variable                        | Default |
+  | -------------------------------------------- | ------------------------------------------- | ------- |
+  | `EntitySearchProvider.PerEntityTimeoutMS`    | `MJ_SEARCH_PER_ENTITY_TIMEOUT_MS`           | `3000`  |
+  | `EntitySearchProvider.PerEntityFetchDepth`   | `MJ_SEARCH_PER_ENTITY_FETCH_DEPTH`          | `15`    |
+  | `FullTextSearchProvider.PerEntityFetchDepth` | `MJ_SEARCH_FULLTEXT_PER_ENTITY_FETCH_DEPTH` | `15`    |
+
+  A positive value is floored to an integer. A value that is _present but invalid_ (non-numeric or non-positive) falls back to the built-in default and logs a `warning`-severity message so an ops-side typo surfaces at boot; an unset variable is silent.
+
+  Behavior change: the per-entity timeout now defaults to 3000ms (was 30000ms). The constant also becomes public and writable (formerly private readonly).
+
+### Patch Changes
+
+- Updated dependencies [255d506]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [11de1a3]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/ai@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/aiengine@6.1.0-edge.2
+  - @memberjunction/storage@6.1.0-edge.2
+  - @memberjunction/ai-vectordb@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/storage@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ai-vectordb@6.1.0-edge.1
+  - @memberjunction/aiengine@6.1.0-edge.1
+  - @memberjunction/ai@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- 0acf96e: Make the SearchScope permission resolver replaceable.
+
+  `SearchEngine` authorizes every search through `SearchScopePermissionResolver`, which answers from `__mj.SearchScopePermission` rows keyed by `UserID` or by one of the user's MJ Roles. That covers MJ's own permission model completely — but it is not the only shape a permission model can take, and until now it was the only one the search path could consult.
+
+  A consumer whose entitlements are neither a user nor an MJ Role has no row that can express them. Its grants are therefore invisible to the check that actually runs, and the failure is silent in the worst way: the grant is configured, an administrator can see it, and the search simply returns nothing. The resolver was a module-level singleton imported directly by `SearchEngine`, so the only remedies were to project the consumer's model into `SearchScopePermission` as derived per-user rows — permission state that can drift from its source — or to fork the search path.
+
+  This adds the seam that was missing:
+  - **`SearchScopePermissionResolverBase`** — the abstract contract registrations bind to.
+  - **`SEARCH_SCOPE_PERMISSION_RESOLVER_KEY`** — the ClassFactory key. There is exactly one resolver per deployment (a consumer _replaces_ the policy rather than selecting among several), so a single shared key is the right shape, and it keeps the registry free of the keyless-registration warning.
+  - **`GetSearchScopePermissionResolver()`** — returns the highest-priority registration, falling back to MJ's own.
+
+  **Every path that authorizes a scope now goes through the seam**, not just `SearchEngine`. This matters more than it sounds: a seam honoured on some paths and not others is worse than no seam, because the resulting behaviour is inconsistent rather than merely absent — the same grant authorizes a search issued one way and silently denies it issued another. The five call sites are `SearchEngine.searchOneScope`, `SearchKnowledgeResolver` (both the single-scope check and the visible-scope-list filter), `SearchKnowledgeStreamResolver`, and the `__Scoped_Search` core action. The last is the agent-facing path, so an override that did not reach it would be invisible to exactly the callers most likely to need it.
+
+  Resolution happens per call rather than being cached at module load. A registration made during application startup would otherwise be missed depending on import order — a failure mode that presents as "my resolver works in tests but not in the server", which is expensive to diagnose. The class is stateless and construction is trivial, so there is nothing to gain by caching.
+
+  The intended shape for an override is to subclass the stock resolver and compose with it, **passing no priority**:
+
+  ```ts
+  @RegisterClass(
+    SearchScopePermissionResolverBase,
+    SEARCH_SCOPE_PERMISSION_RESOLVER_KEY,
+  )
+  export class MyResolver extends SearchScopePermissionResolver {
+    public override async ResolveEffectivePermission(
+      input: ResolvePermissionInput,
+    ) {
+      const stock = await super.ResolveEffectivePermission(input);
+      if (stock.Allowed) return stock; // never narrow what MJ already granted
+      return this.myOwnGrantCheck(input); // only ever widen
+    }
+  }
+  ```
+
+  Subclassing is what orders the registration, and it does so more reliably than a number can. `ClassFactory.Register` treats an omitted priority as _one higher than the highest already registered for this (base, key)_, and a subclass cannot be defined without its parent module having loaded first — so MJ's registration always runs before the consumer's, and the consumer always lands above it. The ordering is a side effect of the language rather than a convention anyone has to remember.
+
+  A hardcoded priority forfeits that. Two consumers that pick the same number collide, `Register` warns, and resolution degrades to whichever was registered last — a load-order bug wearing the costume of a configuration value. The priority argument stays for cases where subclassing is genuinely impossible.
+
+  **Nothing changes for existing consumers.** MJ's resolver registers itself as the default, so behaviour is identical when nothing else is registered. `DefaultSearchScopePermissionResolver` is retained and still exported so existing imports keep compiling; it is marked `@deprecated` because it always yields MJ's own implementation and therefore bypasses any registered override.
+
+  The failure posture is unchanged and worth restating for anyone writing an override: `SearchEngine` treats a resolver throw as **denied**, never as allowed. An override that cannot reach its own store must not accidentally open a scope.
+
+  7 tests covering the default, the fallback, an honoured registration, late registration (imperative, because `@RegisterClass` evaluates at module load and so cannot demonstrate lateness), composition with `super`, the deprecated constant, and that a subclass of the stock resolver satisfies the base contract.
+
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+- Updated dependencies [1100077]
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/aiengine@6.1.0-edge.0
+  - @memberjunction/storage@6.1.0-edge.0
+  - @memberjunction/ai-vectordb@6.1.0-edge.0
+  - @memberjunction/ai@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+
 ## 6.0.0
 
 ### Patch Changes

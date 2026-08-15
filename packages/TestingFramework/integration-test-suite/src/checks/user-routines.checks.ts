@@ -50,6 +50,19 @@ function prov(ctx: IntegrationCheckContext): DatabaseProviderBase {
     return ctx.Provider as unknown as DatabaseProviderBase;
 }
 
+/**
+ * A schema-qualified table name in whichever dialect is running.
+ *
+ * The raw-SQL legs below used T-SQL brackets (`[__mj].[UserRoutine]`), which PostgreSQL rejects
+ * outright with `syntax error at or near "["`. That failed the fixture SETUP, so the bundle lost
+ * five oracles to one unquotable statement — UR10 on the error itself, then UR11-UR14 on the run
+ * rows and notifications the un-seeded fixture never produced. Matches the helper in
+ * `open-app-teardown.checks.ts`, which is the same fix for the same reason.
+ */
+function tbl(provider: DatabaseProviderBase, table: string): string {
+    return provider.Dialect.QuoteSchema(provider.MJCoreSchemaName, table);
+}
+
 /** True-DB-state fetch of a single row by ID (BypassCache) — direct SQL writes below bypass entity events. */
 async function fetchById(entity: string, id: string, user: UserInfo): Promise<Row> {
     const result = await new RunView().RunView({ EntityName: entity, ExtraFilter: `ID='${id}'`, ResultType: 'simple', BypassCache: true }, user);
@@ -290,7 +303,7 @@ export const UserRoutinesChecks: NamedCheck[] = [
             // (bypassing the entity server) to emulate a legacy/externally-created row.
             f.RoutineSeed = await makeRoutine(ctx, 'Seed Candidate', (x) => { x.Status = 'Active'; });
             await provider.ExecuteSQL(
-                `UPDATE [${provider.MJCoreSchemaName}].[UserRoutine] SET NextRunAt = NULL WHERE ID = '${f.RoutineSeed.ID}'`,
+                `UPDATE ${tbl(provider, 'UserRoutine')} SET ${provider.Dialect.QuoteIdentifier('NextRunAt')} = NULL WHERE ${provider.Dialect.QuoteIdentifier('ID')} = ${provider.Dialect.QuoteStringLiteral(f.RoutineSeed.ID)}`,
                 [],
                 { isMutation: true, description: 'user-routines: null NextRunAt for the seeding fixture' },
                 user
@@ -515,7 +528,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('user-routines', {
         for (const runId of f.OrphanedRunIds) {
             try {
                 await provider.ExecuteSQL(
-                    `DELETE FROM [${provider.MJCoreSchemaName}].[UserNotification] WHERE ResourceConfiguration LIKE '%${runId}%'`,
+                    `DELETE FROM ${tbl(provider, 'UserNotification')} WHERE ${provider.Dialect.QuoteIdentifier('ResourceConfiguration')} LIKE ${provider.Dialect.QuoteStringLiteral(`%${runId}%`)}`,
                     [],
                     { isMutation: true, description: 'user-routines: cleanup notifications for cascade-deleted runs' },
                     user
@@ -539,7 +552,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('user-routines', {
                     // direct SQL (scoped to the exact run IDs this suite created).
                     try {
                         await provider.ExecuteSQL(
-                            `DELETE FROM [${provider.MJCoreSchemaName}].[UserNotification] WHERE ResourceConfiguration LIKE '%${run.ID}%'`,
+                            `DELETE FROM ${tbl(provider, 'UserNotification')} WHERE ${provider.Dialect.QuoteIdentifier('ResourceConfiguration')} LIKE ${provider.Dialect.QuoteStringLiteral(`%${run.ID}%`)}`,
                             [],
                             { isMutation: true, description: 'user-routines: cleanup in-app notifications' },
                             user

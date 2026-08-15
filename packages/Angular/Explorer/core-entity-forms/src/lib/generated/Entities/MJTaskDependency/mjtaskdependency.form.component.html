@@ -14,7 +14,7 @@
     <mj-collapsible-panel
         SectionKey="taskReference"
         SectionName="Task Reference"
-        Icon="fa fa-tasks"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -33,7 +33,7 @@
     <mj-collapsible-panel
         SectionKey="dependencyLink"
         SectionName="Dependency Link"
-        Icon="fa fa-link"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -50,6 +50,48 @@
             [ShowLabel]="true"
             FieldName="DependencyType"
             Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Condition"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Dependency Logic Section -->
+    <mj-collapsible-panel
+        SectionKey="dependencyLogic"
+        SectionName="Dependency Logic"
+        Icon="fa fa-sort-numeric-down"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Priority"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Sequence"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ExclusiveGroup"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
