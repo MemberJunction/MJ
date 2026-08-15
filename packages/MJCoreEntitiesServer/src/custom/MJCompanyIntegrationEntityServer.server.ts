@@ -162,6 +162,16 @@ export class MJCompanyIntegrationEntityServer extends MJCompanyIntegrationEntity
             }
         }
 
+        // ONE-SHOT: the opt-out applies to the save that was just performed, and is cleared here so it
+        // cannot leak into a later one. Without this it is "transient" only in the sense of never being
+        // persisted — it still lives for the lifetime of the entity OBJECT, so any code that reuses the
+        // instance (load → activate → save → later edit → save again) would silently suppress a SECOND,
+        // legitimate activation refresh and leave that connection active with no schema.
+        //
+        // Deliberately after the early `return false` above: a save that FAILED has not consumed the
+        // caller's intent, so a retry still gets the behaviour it asked for.
+        this.SuppressActivationSchemaRefresh = false;
+
         return true;
     }
 

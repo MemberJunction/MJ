@@ -85,6 +85,25 @@ describe('MJCompanyIntegrationEntityServer — activation schema refresh', () =>
         expect(entity.ci.SuppressActivationSchemaRefresh).toBe(false);
     });
 
+    it('is a ONE-SHOT — the opt-out is consumed and cannot leak into a later activation', async () => {
+        // First activation, suppressed by the caller.
+        entity.ci.IsActive = true;
+        entity.ci.SuppressActivationSchemaRefresh = true;
+        await entity.ci.Save();
+        expect(entity.fired.count).toBe(0);
+        expect(entity.ci.SuppressActivationSchemaRefresh).toBe(false);
+
+        // Deactivate, then activate the SAME instance again. Reusing an entity object across saves is
+        // ordinary (load → activate → save → edit → save), and the flag never persists to the database
+        // — so if it lingered on the object, this second, legitimate activation would be silently
+        // skipped and leave the connection active with no schema. That is the whole hazard.
+        entity.ci.IsActive = false;
+        await entity.ci.Save();
+        entity.ci.IsActive = true;
+        await entity.ci.Save();
+        expect(entity.fired.count).toBe(1);
+    });
+
     it('does not run the refresh when the record was already active (no transition)', async () => {
         (entity.ci as unknown as { markSaved: (v: unknown) => void }).markSaved(true);
         entity.ci.IsActive = true;
