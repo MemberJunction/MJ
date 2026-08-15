@@ -1,7 +1,17 @@
-import { Component, Input, Output, EventEmitter, ElementRef, ViewChild, AfterViewInit, OnChanges, OnDestroy, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ElementRef, ViewChild, AfterViewInit, OnChanges, OnDestroy, SimpleChanges, ChangeDetectionStrategy, ChangeDetectorRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { UUIDsEqual } from '@memberjunction/global';
 import { GanttItemData, GanttLinkData, GanttColumnDef, GanttItemClickedEvent, GanttItemChangedEvent } from '../models/gantt.models';
+import {
+    AfterZoomChangeEventArgs,
+    BeforeZoomChangeEventArgs,
+    BuildDefaultGanttZoomLevels,
+    GanttZoomPercent,
+    IsGanttZoomLevelName,
+    NextZoomInLevel,
+    NextZoomOutLevel,
+    type GanttZoomLevelName,
+} from '../models/gantt-zoom';
 import type { GanttStatic, Task as DHTask, Link as DHLink } from 'dhtmlx-gantt';
 
 /** Default grid columns if none are provided. */
@@ -37,6 +47,19 @@ const DEFAULT_COLUMNS: GanttColumnDef[] = [
         @if (loading) {
             <div class="mj-gantt-loading">Loading Gantt chart...</div>
         }
+        @if (ShowZoomControls && !loading) {
+            <div class="mj-gantt-zoom" role="group" aria-label="Gantt zoom">
+                <button type="button" class="mj-gantt-zoom__btn" (click)="ZoomOut()"
+                        [disabled]="!CanZoomOut" title="Zoom out (Ctrl + scroll)">
+                    <span aria-hidden="true">−</span>
+                </button>
+                <span class="mj-gantt-zoom__label">{{ CurrentZoomPercent }}%</span>
+                <button type="button" class="mj-gantt-zoom__btn" (click)="ZoomIn()"
+                        [disabled]="!CanZoomIn" title="Zoom in (Ctrl + scroll)">
+                    <span aria-hidden="true">+</span>
+                </button>
+            </div>
+        }
         <div #ganttContainer class="mj-gantt-container" [style.height]="Height"
              [style.display]="loading ? 'none' : 'block'"></div>
     `,
@@ -55,6 +78,39 @@ const DEFAULT_COLUMNS: GanttColumnDef[] = [
             padding: var(--mj-space-16) var(--mj-space-5);
             color: var(--mj-text-muted);
             font-size: var(--mj-text-sm);
+        }
+
+        .mj-gantt-zoom {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--mj-space-1);
+            margin-bottom: var(--mj-space-2);
+        }
+        .mj-gantt-zoom__btn {
+            width: 28px;
+            height: 28px;
+            border: 1px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-sm);
+            background: var(--mj-bg-surface);
+            color: var(--mj-text-primary);
+            cursor: pointer;
+            font-size: var(--mj-text-base);
+            line-height: 1;
+        }
+        .mj-gantt-zoom__btn:hover:not(:disabled) {
+            background: var(--mj-bg-surface-hover);
+            border-color: var(--mj-border-strong);
+        }
+        .mj-gantt-zoom__btn:disabled {
+            color: var(--mj-text-disabled);
+            cursor: default;
+        }
+        .mj-gantt-zoom__label {
+            min-width: 3.25rem;
+            text-align: center;
+            font-size: var(--mj-text-xs);
+            font-weight: var(--mj-font-semibold);
+            color: var(--mj-text-secondary);
         }
 
         /* DHTMLX Gantt style overrides for a cleaner look */
@@ -85,6 +141,31 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
     /** Grid column definitions. Defaults to Name, Start, Duration, Progress. */
     @Input() Columns: GanttColumnDef[] | null = null;
 
+    /** When true, Ctrl/Cmd + wheel and ZoomIn/ZoomOut change the timeline scale. */
+    @Input() EnableZoom = true;
+
+    /** Show built-in +/- zoom controls above the chart. */
+    @Input() ShowZoomControls = false;
+
+    /**
+     * Timeline scale to apply. Callers can bind a persisted level here.
+     * Defaults to week (100%).
+     */
+    @Input()
+    set ZoomLevel(value: GanttZoomLevelName) {
+        if (!IsGanttZoomLevelName(value) || value === this._zoomLevel) {
+            return;
+        }
+        if (this.initialized && this.EnableZoom) {
+            this.applyZoom(value);
+            return;
+        }
+        this._zoomLevel = value;
+    }
+    get ZoomLevel(): GanttZoomLevelName {
+        return this._zoomLevel;
+    }
+
     /** Emitted when an item bar or grid row is clicked. */
     @Output() ItemClicked = new EventEmitter<GanttItemClickedEvent>();
 
@@ -94,12 +175,55 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
     /** Emitted when an item is changed via drag/resize (only if not ReadOnly). */
     @Output() ItemChanged = new EventEmitter<GanttItemChangedEvent>();
 
+    /** Fired before a zoom change. Set `event.Cancel = true` to keep the current level. */
+    @Output() BeforeZoomChange = new EventEmitter<BeforeZoomChangeEventArgs>();
+
+    /** Fired after a zoom change that was not canceled. */
+    @Output() AfterZoomChange = new EventEmitter<AfterZoomChangeEventArgs>();
+
     @ViewChild('ganttContainer', { static: false }) ganttContainer!: ElementRef<HTMLDivElement>;
 
     /** @internal */
     loading = true;
     private gantt: GanttStatic | null = null;
     private initialized = false;
+    private _zoomLevel: GanttZoomLevelName = 'week';
+    private zoomInitialized = false;
+    private readonly cdr = inject(ChangeDetectorRef);
+
+    public get CurrentZoomPercent(): number {
+        return GanttZoomPercent(this._zoomLevel);
+    }
+
+    public get CanZoomIn(): boolean {
+        return NextZoomInLevel(this._zoomLevel) != null;
+    }
+
+    public get CanZoomOut(): boolean {
+        return NextZoomOutLevel(this._zoomLevel) != null;
+    }
+
+    /** One step toward hour / more detail. */
+    public ZoomIn(): void {
+        const next = NextZoomInLevel(this._zoomLevel);
+        if (next) {
+            this.applyZoom(next);
+        }
+    }
+
+    /** One step toward year / more context. */
+    public ZoomOut(): void {
+        const next = NextZoomOutLevel(this._zoomLevel);
+        if (next) {
+            this.applyZoom(next);
+        }
+    }
+
+    public SetZoomLevel(level: GanttZoomLevelName): void {
+        if (IsGanttZoomLevelName(level)) {
+            this.applyZoom(level);
+        }
+    }
 
     async ngAfterViewInit(): Promise<void> {
         try {
@@ -175,6 +299,7 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
         // Initialize
         g.init(this.ganttContainer.nativeElement);
         this.initialized = true;
+        this.initZoom(g);
 
         // Event: click
         g.attachEvent('onTaskClick', (id: string) => {
@@ -269,6 +394,65 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
         g.parse({ data: data as DHTask[], links: links as DHLink[] });
 
         setTimeout(() => g.setSizes(), 0);
+    }
+
+    private initZoom(g: GanttStatic): void {
+        if (!this.EnableZoom || this.zoomInitialized) {
+            return;
+        }
+        const zoom = g.ext?.zoom;
+        if (!zoom) {
+            return;
+        }
+        zoom.init({
+            levels: BuildDefaultGanttZoomLevels(),
+            trigger: 'wheel',
+            useKey: 'ctrlKey',
+            element: () => this.ganttContainer.nativeElement,
+            handler: (event: Event) => this.handleWheelZoom(event),
+        });
+        zoom.setLevel(this._zoomLevel);
+        this.zoomInitialized = true;
+    }
+
+    private handleWheelZoom(event: Event): void {
+        const wheel = event as WheelEvent;
+        if (!wheel.ctrlKey && !wheel.metaKey) {
+            return;
+        }
+        wheel.preventDefault();
+        if (wheel.deltaY < 0) {
+            this.ZoomIn();
+        } else {
+            this.ZoomOut();
+        }
+    }
+
+    private applyZoom(toLevel: GanttZoomLevelName): void {
+        if (!this.EnableZoom || toLevel === this._zoomLevel) {
+            return;
+        }
+        const fromLevel = this._zoomLevel;
+        const before = new BeforeZoomChangeEventArgs(
+            fromLevel,
+            toLevel,
+            GanttZoomPercent(fromLevel),
+            GanttZoomPercent(toLevel),
+        );
+        this.BeforeZoomChange.emit(before);
+        if (before.Cancel) {
+            return;
+        }
+        this._zoomLevel = toLevel;
+        if (this.zoomInitialized) {
+            this.gantt?.ext.zoom.setLevel(toLevel);
+        }
+        this.AfterZoomChange.emit(new AfterZoomChangeEventArgs(
+            toLevel,
+            GanttZoomPercent(toLevel),
+            fromLevel,
+        ));
+        this.cdr.markForCheck();
     }
 
     private formatDate(d: Date): string {

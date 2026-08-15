@@ -1,3 +1,17 @@
+export {
+    GANTT_ZOOM_LEVEL_NAMES,
+    GANTT_ZOOM_PERCENT,
+    AfterZoomChangeEventArgs,
+    BeforeZoomChangeEventArgs,
+    CancellableGanttEventArgs,
+    GanttZoomLevelFromPercent,
+    GanttZoomPercent,
+    IsGanttZoomLevelName,
+    NextZoomInLevel,
+    NextZoomOutLevel,
+} from './gantt-zoom';
+export type { GanttZoomLevelName } from './gantt-zoom';
+
 /**
  * A single item (bar) on the Gantt timeline.
  */
