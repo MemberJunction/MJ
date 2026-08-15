@@ -4,7 +4,7 @@ import {
   ContentChildren, QueryList, AfterContentInit, OnDestroy,
   ViewChild, ViewEncapsulation, ElementRef
 } from '@angular/core';
-import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView, type FormChromeRule } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -44,6 +44,7 @@ import {
   SerializeRailPinnedSetting,
 } from '../chrome/form-chrome-rail-pref';
 import { CollectFormPanelRegistrations } from '../panel-slot/collect-form-panel-registrations';
+import type { FormPanelRegistrationMetadata } from '../panel-slot/base-form-panel';
 import { ContributionHiddenSectionKeys, ResolveFormContributions } from '../panel-slot/form-contribution';
 import { IsFormSectionHidden } from '../types/entity-form-config';
 
@@ -770,6 +771,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       HiddenSectionKeys: [...this.contributionHiddenSectionKeys()],
       ContributionSectionKeys: this.contributionSectionKeys(),
       ContributionChromeGroupByKey: this.contributionChromeGroupByKey(),
+      ContributionInclusionByKey: this.contributionInclusionByKey(),
+      ContributionSortKeyByKey: this.contributionSortKeyByKey(),
       ChromeRules: this.chromeRules,
       Membership: {
         moreSectionKeys: this.fc?.getMoreSectionKeys?.() ?? [],
@@ -922,45 +925,62 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   private contributionSectionKeys(): string[] {
-    const entityName = this.EffectiveEntityInfo?.Name;
-    if (!entityName) return [];
-    const keys: string[] = [];
-    for (const reg of CollectFormPanelRegistrations()) {
-      const meta = reg.Metadata;
-      if (!meta || meta.entity !== entityName) continue;
-      if (meta.contributionKey === 'header') continue;
-      if (meta.contributionKey) keys.push(meta.contributionKey);
-      if (meta.relatedEntity && meta.contributionKey) continue;
-      // Related claims use the widget SectionKey, which is usually the contributionKey
-      // or a short camel name matching the template (contactMethods, addresses).
-      if (meta.relatedEntity && !meta.contributionKey) {
-        const derived = meta.relatedEntity.split(':').pop()?.trim();
-        if (derived) {
-          keys.push(derived.charAt(0).toLowerCase() + derived.slice(1).replace(/\s+/g, ''));
-        }
-      }
-    }
-    return keys;
+    return this.contributionRegistrations().map((row) => row.Key);
   }
 
   private contributionChromeGroupByKey(): Map<string, 'details' | 'more'> {
-    const entityName = this.EffectiveEntityInfo?.Name;
     const map = new Map<string, 'details' | 'more'>();
-    if (!entityName) return map;
-    for (const reg of CollectFormPanelRegistrations()) {
-      const meta = reg.Metadata;
-      if (!meta || meta.entity !== entityName) continue;
-      if (meta.chromeGroup !== 'details' && meta.chromeGroup !== 'more') continue;
-      const key = meta.contributionKey
-        || (meta.relatedEntity
-          ? (meta.relatedEntity.split(':').pop()?.trim() ?? '')
-          : '');
-      if (!key) continue;
-      const sectionKey = meta.contributionKey
-        || (key.charAt(0).toLowerCase() + key.slice(1).replace(/\s+/g, ''));
-      map.set(sectionKey, meta.chromeGroup);
+    for (const row of this.contributionRegistrations()) {
+      if (row.ChromeGroup) map.set(row.Key, row.ChromeGroup);
     }
     return map;
+  }
+
+  private contributionInclusionByKey(): Map<string, FormInclusion> {
+    const map = new Map<string, FormInclusion>();
+    for (const row of this.contributionRegistrations()) {
+      if (row.Inclusion) map.set(row.Key, row.Inclusion);
+    }
+    return map;
+  }
+
+  private contributionSortKeyByKey(): Map<string, number> {
+    const map = new Map<string, number>();
+    for (const row of this.contributionRegistrations()) {
+      if (row.SortKey != null) map.set(row.Key, row.SortKey);
+    }
+    return map;
+  }
+
+  /**
+   * Winning registration per contribution key (highest ClassFactory Priority).
+   * Headers are not rail sections.
+   */
+  private contributionRegistrations(): Array<{
+    Key: string;
+    Inclusion: FormInclusion | null;
+    SortKey: number | null;
+    ChromeGroup: 'details' | 'more' | null;
+  }> {
+    const entityName = this.EffectiveEntityInfo?.Name;
+    if (!entityName) return [];
+    const byKey = new Map<string, { Key: string; Inclusion: FormInclusion | null; SortKey: number | null; ChromeGroup: 'details' | 'more' | null; Priority: number }>();
+    const regs = [...CollectFormPanelRegistrations()].sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0));
+    for (const reg of regs) {
+      const meta = reg.Metadata;
+      if (!meta || meta.entity !== entityName) continue;
+      if (meta.contributionKey === 'header') continue;
+      const key = contributionRailKey(meta);
+      if (!key) continue;
+      byKey.set(key, {
+        Key: key,
+        Inclusion: ReadRegisteredInclusion(meta.inclusion),
+        SortKey: typeof meta.sortKey === 'number' && Number.isFinite(meta.sortKey) ? meta.sortKey : null,
+        ChromeGroup: meta.chromeGroup === 'details' || meta.chromeGroup === 'more' ? meta.chromeGroup : null,
+        Priority: reg.Priority ?? 0,
+      });
+    }
+    return [...byKey.values()];
   }
 
   private contributionHiddenSectionKeys(): Set<string> {
@@ -1601,4 +1621,25 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.ShowSectionManager = false;
     this.cdr.markForCheck();
   }
+}
+
+function contributionRailKey(meta: FormPanelRegistrationMetadata): string | null {
+  if (meta.contributionKey?.trim()) {
+    return meta.contributionKey.trim();
+  }
+  if (!meta.relatedEntity) {
+    return null;
+  }
+  const derived = meta.relatedEntity.split(':').pop()?.trim();
+  if (!derived) {
+    return null;
+  }
+  return derived.charAt(0).toLowerCase() + derived.slice(1).replace(/\s+/g, '');
+}
+
+function ReadRegisteredInclusion(raw: FormInclusion | undefined): FormInclusion | null {
+  if (raw === 'Primary' || raw === 'More' || raw === 'None') {
+    return raw;
+  }
+  return null;
 }

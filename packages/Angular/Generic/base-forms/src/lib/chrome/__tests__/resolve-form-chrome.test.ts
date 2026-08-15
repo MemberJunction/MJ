@@ -427,6 +427,35 @@ describe('StabilizeFirstClassGroupOrder', () => {
         ]);
     });
 
+    it('inserts a new lead contribution before Details instead of appending', () => {
+        const previous = BuildDefaultChromeSpec(
+            [
+                { SectionKey: 'details', SectionName: 'Details', Variant: 'default' },
+                { SectionKey: 'payments', SectionName: 'Payments', Variant: 'related-entity' },
+            ],
+            new Map<string, FormRole>([['payments', 'Primary']]),
+            { Layout: 'left-nav' },
+        );
+        const next = BuildDefaultChromeSpec(
+            [
+                { SectionKey: 'details', SectionName: 'Details', Variant: 'default' },
+                { SectionKey: 'overview', SectionName: 'Overview', Variant: 'default' },
+                { SectionKey: 'payments', SectionName: 'Payments', Variant: 'related-entity' },
+            ],
+            new Map<string, FormRole>([['payments', 'Primary']]),
+            { Layout: 'left-nav' },
+            ['overview'],
+        );
+        const overview = next.Groups.find((g) => g.Key === 'overview');
+        if (overview) overview.IsLead = true;
+        const stabilized = StabilizeFirstClassGroupOrder(previous, next);
+        expect(stabilized.Groups.filter((g) => !g.IsMore).map((g) => g.Title)).toEqual([
+            'Overview',
+            'Details',
+            'Payments',
+        ]);
+    });
+
     it('appends groups that were not on the previous rail', () => {
         const previous = BuildDefaultChromeSpec(
             [
@@ -567,6 +596,92 @@ describe('ResolveFormChrome inclusion None', () => {
         });
         expect(result.Spec.Groups.some((g) => g.SectionKeys.includes('mJBizAppsOrdersOrderHeaders'))).toBe(false);
         expect(result.RelatedRoles.Assignments[0]?.Reason).toBe('install-none');
+    });
+
+    it('puts a Primary contribution in the lead band before Details', () => {
+        const entity = new EntityInfo({
+            ID: '22222222-2222-2222-2222-222222222222',
+            Name: 'MJ_BizApps_Common: People',
+            SchemaName: 'MJ_BizApps_Common',
+            RelatedEntities: [{
+                ID: '33333333-3333-3333-3333-333333333333',
+                RelatedEntity: 'MJ_BizApps_Orders: Payment Headers',
+                RelatedEntityID: '44444444-4444-4444-4444-444444444444',
+                RelatedEntityJoinField: 'BillToPersonID',
+                DisplayInForm: true,
+                DisplayName: 'Payments',
+                Configuration: JSON.stringify({ UI: { inclusion: 'Primary' } }),
+            }],
+        });
+        const result = ResolveFormChrome({
+            Entity: entity,
+            Panels: [
+                { SectionKey: 'identity', SectionName: 'Identity', Variant: 'default' },
+                { SectionKey: 'overview', SectionName: 'Overview', Variant: 'default', Icon: 'fa-solid fa-chart-pie' },
+                {
+                    SectionKey: 'mJBizAppsOrdersPaymentHeaders',
+                    SectionName: 'Payments',
+                    Variant: 'related-entity',
+                },
+            ],
+            RelatedSchemaByEntityId: new Map([['44444444-4444-4444-4444-444444444444', 'MJ_BizApps_Orders']]),
+            ContributionSectionKeys: ['overview'],
+            ContributionInclusionByKey: new Map([['overview', 'Primary']]),
+            ContributionSortKeyByKey: new Map([['overview', 90]]),
+        });
+        const firstClass = result.Spec.Groups.filter((g) => !g.IsMore).map((g) => g.Title);
+        expect(firstClass).toEqual(['Overview', 'Details', 'Payments']);
+        expect(result.Spec.Groups.find((g) => g.Key === 'overview')?.IsLead).toBe(true);
+        expect(result.Spec.Groups.find((g) => g.Key === DETAILS_SECTION_KEY)?.SectionKeys).toEqual(['identity']);
+    });
+
+    it('does not fold a Primary contribution into Details', () => {
+        const entity = new EntityInfo({
+            ID: '55555555-5555-5555-5555-555555555555',
+            Name: 'MJ_BizApps_Common: People',
+            SchemaName: 'MJ_BizApps_Common',
+            RelatedEntities: [],
+        });
+        const result = ResolveFormChrome({
+            Entity: entity,
+            Panels: [
+                { SectionKey: 'identity', SectionName: 'Identity', Variant: 'default' },
+                { SectionKey: 'overview', SectionName: 'Overview', Variant: 'default' },
+            ],
+            RelatedSchemaByEntityId: new Map(),
+            ContributionSectionKeys: ['overview'],
+            ContributionInclusionByKey: new Map([['overview', 'Primary']]),
+        });
+        expect(result.Spec.Groups.find((g) => g.Key === DETAILS_SECTION_KEY)?.SectionKeys).toEqual(['identity']);
+        expect(result.Spec.Groups.find((g) => g.Key === 'overview')?.Title).toBe('Overview');
+    });
+
+    it('lets an L3 More rule park a Primary contribution', () => {
+        const parentId = '66666666-6666-6666-6666-666666666666';
+        const entity = new EntityInfo({
+            ID: parentId,
+            Name: 'MJ_BizApps_Common: People',
+            SchemaName: 'MJ_BizApps_Common',
+            RelatedEntities: [],
+        });
+        const result = ResolveFormChrome({
+            Entity: entity,
+            Panels: [
+                { SectionKey: 'identity', SectionName: 'Identity', Variant: 'default' },
+                { SectionKey: 'overview', SectionName: 'Overview', Variant: 'default' },
+            ],
+            RelatedSchemaByEntityId: new Map(),
+            ContributionSectionKeys: ['overview'],
+            ContributionInclusionByKey: new Map([['overview', 'Primary']]),
+            ChromeRules: [{
+                EntityID: parentId,
+                TargetKind: 'Contribution',
+                ContributionKey: 'overview',
+                Inclusion: 'More',
+            }],
+        });
+        expect(result.Spec.MoreSectionKeys).toContain('overview');
+        expect(result.Spec.Groups.find((g) => g.Key === 'overview')).toBeUndefined();
     });
 
     it('suppresses a contribution by key', () => {

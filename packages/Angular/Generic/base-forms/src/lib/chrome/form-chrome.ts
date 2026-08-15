@@ -48,6 +48,11 @@ export interface FormChromeGroup {
     SectionKeys: string[];
     /** True when this group is the More bucket (Detail related grids). */
     IsMore: boolean;
+    /**
+     * Primary contribution that owns its own rail item and sorts in the
+     * lead band (before Details). Overview is the usual case.
+     */
+    IsLead?: boolean;
 }
 
 export interface FormChromeSpec {

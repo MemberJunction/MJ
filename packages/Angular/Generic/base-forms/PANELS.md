@@ -9,8 +9,10 @@ Related grids appear on the parent form through the chrome stack in
 [FORMS_ARCHITECTURE_GUIDE.md §7d](../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7d-form-chrome--accordion-left-nav-and-more):
 L1 `inclusion` (`Primary` / `More` / `None`), L2 ranker on Auto leftovers,
 L3 `MJ: Form Chrome Rules`, L4 user order. `None` is not a More item.
-In **left-nav** the rail is Details (all field panels) + each Primary
-related + More; the body shows only the selected group, locked open.
+In **left-nav** the rail is Primary contributions (lead band, e.g. Overview)
++ Details (leftover field panels) + each Primary related + More; the body
+shows only the selected group, locked open. `inclusion: 'Primary'` on a
+contribution is its own rail item — it does **not** fold into Details.
 `BaseFormPolicy.DecorateChrome` is cosmetics only — it cannot change
 membership.
 

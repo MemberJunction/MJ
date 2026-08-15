@@ -59,6 +59,13 @@ export interface ResolveFormChromeInput {
     /** contribution SectionKey → details | more. Overrides first-class lift. */
     ContributionChromeGroupByKey?: ReadonlyMap<string, 'details' | 'more'>;
     /**
+     * L1 inclusion from the winning contribution registration.
+     * L3 `ChromeRules` still wins on the same key.
+     */
+    ContributionInclusionByKey?: ReadonlyMap<string, FormInclusion>;
+    /** `sortKey` from the winning registration. Higher = earlier in the lead band. */
+    ContributionSortKeyByKey?: ReadonlyMap<string, number>;
+    /**
      * Install overlay (L3) from `MJ: Form Chrome Rules`. Empty when the
      * entity is not installed or the parent has no rows.
      */
@@ -123,6 +130,7 @@ export function ResolveFormChrome(input: ResolveFormChromeInput): ResolveFormChr
         input.Entity.ID ?? '',
         input.ContributionSectionKeys ?? [],
         input.ContributionChromeGroupByKey ?? new Map(),
+        input.ContributionInclusionByKey ?? new Map(),
         input.ChromeRules ?? [],
     );
     const hidden = new Set(input.HiddenSectionKeys ?? []);
@@ -145,6 +153,8 @@ export function ResolveFormChrome(input: ResolveFormChromeInput): ResolveFormChr
         input.Entity,
         assignments,
         input.ContributionSectionKeys,
+        contributionGroups.leadKeys,
+        input.ContributionSortKeyByKey ?? new Map(),
     );
     ApplyUserChromeMembership(defaultSpec, input.Membership, visiblePanels);
 
@@ -190,15 +200,22 @@ function applyContributionRules(
     parentEntityId: string,
     contributionSectionKeys: readonly string[],
     declared: ReadonlyMap<string, 'details' | 'more'>,
+    l1InclusionByKey: ReadonlyMap<string, FormInclusion>,
     rules: readonly FormChromeRule[],
-): { chromeGroupByKey: Map<string, 'details' | 'more'>; hiddenKeys: string[] } {
+): { chromeGroupByKey: Map<string, 'details' | 'more'>; hiddenKeys: string[]; leadKeys: string[] } {
     const chromeGroupByKey = new Map(declared);
     const hiddenKeys: string[] = [];
+    const leadKeys: string[] = [];
     for (const key of contributionSectionKeys) {
-        const inclusion = ContributionInclusionFromRules(parentEntityId, key, rules);
+        const inclusion = ContributionInclusionFromRules(parentEntityId, key, rules)
+            ?? l1InclusionByKey.get(key)
+            ?? null;
         applyContributionInclusion(key, inclusion, chromeGroupByKey, hiddenKeys);
+        if (isLeadContribution(key, inclusion, chromeGroupByKey)) {
+            leadKeys.push(key);
+        }
     }
-    return { chromeGroupByKey, hiddenKeys };
+    return { chromeGroupByKey, hiddenKeys, leadKeys };
 }
 
 function applyContributionInclusion(
@@ -212,7 +229,20 @@ function applyContributionInclusion(
         hiddenKeys.push(key);
         return;
     }
-    chromeGroupByKey.set(key, inclusion === 'Primary' ? 'details' : 'more');
+    if (inclusion === 'More') {
+        chromeGroupByKey.set(key, 'more');
+    }
+    // Primary is its own first-class rail item. Do not fold into Details.
+}
+
+function isLeadContribution(
+    key: string,
+    inclusion: FormInclusion | null,
+    chromeGroupByKey: ReadonlyMap<string, 'details' | 'more'>,
+): boolean {
+    if (inclusion !== 'Primary') return false;
+    const pinned = chromeGroupByKey.get(key);
+    return pinned !== 'details' && pinned !== 'more';
 }
 
 export function BuildDefaultChromeSpec(
@@ -322,8 +352,10 @@ export function OrderMoreSectionKeys(
 /**
  * Keep the first-class rail order from the previous spec when chrome
  * re-resolves (slot mount, grid load, contribution key appearing).
- * Clicking a rail item must not reshuffle the list. New groups append.
- * More stays last. User drag still wins via {@link OrderChromeGroups}.
+ * Clicking a rail item must not reshuffle the list.
+ * New related groups append. New lead contributions (Overview) insert
+ * into the lead band before Details. More stays last.
+ * User drag still wins via {@link OrderChromeGroups}.
  */
 export function StabilizeFirstClassGroupOrder(
     previous: FormChromeSpec | null | undefined,
@@ -332,31 +364,38 @@ export function StabilizeFirstClassGroupOrder(
     if (!previous || previous.Groups.length === 0) return next;
     const details = next.Groups.filter((g) => g.Key === DETAILS_SECTION_KEY);
     const more = next.Groups.filter((g) => g.IsMore);
-    const related = next.Groups.filter((g) => !g.IsMore && g.Key !== DETAILS_SECTION_KEY);
-    if (related.length === 0) return next;
+    const leads = next.Groups.filter((g) => !!g.IsLead);
+    const related = next.Groups.filter((g) => !g.IsMore && !g.IsLead && g.Key !== DETAILS_SECTION_KEY);
+    if (leads.length === 0 && related.length === 0) return next;
 
     const used = new Set<string>();
-    const ordered: FormChromeGroup[] = [];
-    const take = (group: FormChromeGroup | undefined): void => {
+    const orderedLeads: FormChromeGroup[] = [];
+    const orderedRelated: FormChromeGroup[] = [];
+    const take = (bucket: FormChromeGroup[], group: FormChromeGroup | undefined): void => {
         if (!group || used.has(group.Key)) return;
         used.add(group.Key);
-        ordered.push(group);
+        bucket.push(group);
+    };
+    const matchIn = (pool: FormChromeGroup[], prev: FormChromeGroup): FormChromeGroup | undefined => {
+        const prevTitle = prev.Title.trim().toLowerCase();
+        const prevKeys = new Set(prev.SectionKeys);
+        return pool.find((g) => g.Key === prev.Key)
+            ?? pool.find((g) => g.SectionKeys.some((key) => prevKeys.has(key)))
+            ?? pool.find((g) => g.Title.trim().toLowerCase() === prevTitle);
     };
 
     for (const prev of previous.Groups) {
         if (prev.IsMore || prev.Key === DETAILS_SECTION_KEY) continue;
-        const prevTitle = prev.Title.trim().toLowerCase();
-        const prevKeys = new Set(prev.SectionKeys);
-        take(
-            related.find((g) => g.Key === prev.Key)
-            ?? related.find((g) => g.SectionKeys.some((key) => prevKeys.has(key)))
-            ?? related.find((g) => g.Title.trim().toLowerCase() === prevTitle),
-        );
+        take(orderedLeads, matchIn(leads, prev));
+        take(orderedRelated, matchIn(related, prev));
+    }
+    for (const group of leads) {
+        take(orderedLeads, group);
     }
     for (const group of related) {
-        take(group);
+        take(orderedRelated, group);
     }
-    next.Groups = [...details, ...ordered, ...more];
+    next.Groups = [...orderedLeads, ...details, ...orderedRelated, ...more];
     return next;
 }
 
@@ -569,18 +608,21 @@ function toCandidate(
     };
 }
 
-/** First-class related rail items: explicit Primary first, then ranker score. */
+/** First-class rail: lead contributions, then Details, then related by Primary/score. */
 function sortFirstClassRelatedGroups(
     spec: FormChromeSpec,
     entity: EntityInfo,
     assignments: readonly RelatedFormRoleAssignment[],
     contributionSectionKeys: readonly string[] = [],
+    leadKeys: readonly string[] = [],
+    sortKeyByKey: ReadonlyMap<string, number> = new Map(),
 ): void {
     const displayInForm = entity.RelatedEntities.filter((rel) => rel.DisplayInForm);
     const byId = new Map(assignments.map((a) => [a.RelationshipID.toLowerCase(), a]));
     const scoreByKey = new Map<string, number>();
     const explicitPrimary = new Set<string>();
     const contrib = new Set(contributionSectionKeys);
+    const leadSet = new Set(leadKeys);
     for (const rel of displayInForm) {
         const assignment = byId.get((rel.ID ?? '').toLowerCase());
         if (!assignment) continue;
@@ -595,14 +637,34 @@ function sortFirstClassRelatedGroups(
 
     const details = spec.Groups.filter((g) => g.Key === DETAILS_SECTION_KEY);
     const more = spec.Groups.filter((g) => g.IsMore);
-    const related = spec.Groups.filter((g) => !g.IsMore && g.Key !== DETAILS_SECTION_KEY);
+    const firstClass = spec.Groups.filter((g) => !g.IsMore && g.Key !== DETAILS_SECTION_KEY);
+    const leads: FormChromeGroup[] = [];
+    const related: FormChromeGroup[] = [];
+    for (const group of firstClass) {
+        if (group.SectionKeys.some((key) => leadSet.has(key))) {
+            group.IsLead = true;
+            leads.push(group);
+        } else {
+            related.push(group);
+        }
+    }
+    leads.sort((a, b) => groupSortKey(b, sortKeyByKey) - groupSortKey(a, sortKeyByKey));
     related.sort((a, b) => {
         const aExplicit = a.SectionKeys.some((key) => explicitPrimary.has(key));
         const bExplicit = b.SectionKeys.some((key) => explicitPrimary.has(key));
         if (aExplicit !== bExplicit) return aExplicit ? -1 : 1;
         return groupScore(b, scoreByKey) - groupScore(a, scoreByKey);
     });
-    spec.Groups = [...details, ...related, ...more];
+    spec.Groups = [...leads, ...details, ...related, ...more];
+}
+
+function groupSortKey(group: FormChromeGroup, sortKeyByKey: ReadonlyMap<string, number>): number {
+    let max = Number.NEGATIVE_INFINITY;
+    for (const key of group.SectionKeys) {
+        const value = sortKeyByKey.get(key);
+        if (value != null && value > max) max = value;
+    }
+    return max === Number.NEGATIVE_INFINITY ? 0 : max;
 }
 
 function noneInclusionSectionKeys(
