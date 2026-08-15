@@ -103,6 +103,8 @@
     "check:explorer-deps": "node .github/scripts/check-explorer-external-deps.mjs",
     "check:esm:test": "vitest run --config .github/scripts/vitest.config.mts",
     "check:claude-md": "node .github/scripts/check-claude-md.mjs",
+    "check:codegen-tail": "node .github/scripts/check-codegen-tail.mjs",
+    "check:codegen-tail:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-codegen-tail",
     "check:ui-layers": "mj standards check --check ui-layers",
     "change": "changeset",
     "version": "changeset version",

@@ -178,6 +178,7 @@ npm run check:standards   # every adopted MJ standard (see .mj-standards.json)
 npm run check:esm         # native-ESM import guard for "type": "module" packages
 npm run check:claude-md   # instruction-file budget, link validity, and routing-table coverage
 npm run check:changeset   # changeset bump levels (local only — no CI gate enforces this one)
+npm run check:codegen-tail # new-table migrations ship their generated entity (same command CI runs)
 ```
 
 ---
