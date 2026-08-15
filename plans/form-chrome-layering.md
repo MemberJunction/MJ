@@ -217,3 +217,161 @@ The admin “why is this here” view is the pathway from step 2–5.
 - Policy inventing sections  
 - PG counterpart (build engineer at release)  
 - Sales / Contracts L1 (memo only)
+
+---
+
+## 13. L1 inclusion log — AM review
+
+Inventoried from CodeGen `DisplayInForm` relationships on `bizapps_orders` (Common, Tasks, Orders, Accounting) plus Issues / Committees / Secure Messaging generated entities (those apps are not installed on this DB).
+
+Legend: **P** Primary · **M** More · **N** None · join = same-table OR.
+
+### Person (`MJ_BizApps_Common: People`)
+
+| Related | Join | Inc | Why |
+|---|---|---|---|
+| Contact Methods | PersonID | **P** | Same-app identity |
+| Relationships | FromPersonID | **P** | Outgoing network |
+| Relationships | ToPersonID | **M** | Incoming inverse |
+| Tasks | CreatedByPersonID | **P** | Only direct Tasks ER (assignee is through Assignments — out of scope) |
+| Task Comments / Assignments / Decisions / Activities | * | **N** | Satellites, not the person's work surface |
+| Order Headers | BillToPersonID + ShipToPersonID | **P** + `join.any` | One Orders section |
+| Order Headers | ShipToPersonID (sibling) | **N** | Owned by the Bill-To join |
+| Payment Headers | BillToPersonID | **P** | Money in |
+| Subscriptions | BeneficiaryPersonID | **P** | What they hold |
+| Customer Payment Methods | OwnerPersonID | **M** | Wallet, not the hero |
+| Tax Exemptions, Entitlement Grants, Payment Intents, Price List Assignments, Promotion Codes, Stored Value Accounts | * | **N** | Catalog/audit hang-ons |
+| Order Lines / Event Order Lines | * | already DisplayInForm=false | Line-level |
+| Issues | ReporterPersonID | **P** | Cases they raised |
+| Issues | CreatedByPersonID | **N** | Audit |
+| Issue Comments | AuthorPersonID | **N** | Satellite |
+| Committees: Memberships | PersonID | **P** | Seats they hold |
+| Committees: Attendances | PersonID | **M** | Meeting history |
+| Committees: Comments / Votes / Agenda presenter / Artifact uploader | * | **N** | Not a Person-form surface |
+| Secure Messaging | (soft PersonID, no hard ER) | — | Custom workspace; no grid to punch |
+
+### Organization
+
+| Related | Join | Inc | Why |
+|---|---|---|---|
+| Contact Methods | OrganizationID | **P** | Same-app identity |
+| Organizations | ParentID | **P** | Children; hierarchy widget claims this |
+| Relationships | FromOrganizationID | **P** | Outgoing |
+| Relationships | ToOrganizationID | **M** | Incoming inverse |
+| Order Headers | BillTo + ShipTo | **P** + `join.any` | One Orders section |
+| Payment Headers | BillToOrganizationID | **P** | |
+| Subscriptions | HolderOrganizationID | **P** | |
+| Customer Payment Methods | OwnerOrganizationID | **M** | |
+| Tax Exemptions, Entitlements, Payment Intents, Price List Assignments, Promo Codes, Stored Value | * | **N** | |
+| Order Lines | ShipTo | already off | |
+| Committees: Committees | OrganizationID | **P** | Committees this org sponsors |
+
+### Task
+
+| Related | Inc | Why |
+|---|---|---|
+| Tasks (ParentID) | **P** | Sub-tasks (gantt/kanban claims) |
+| Task Assignments | **P** | Who is on it |
+| Task Dependencies (TaskID) | **P** | Outgoing blockers |
+| Task Dependencies (DependsOnTaskID) | **M** | Incoming |
+| Comments, Activities, Links, Tag Links, Notification Logs, Decisions | **M** | Working overflow |
+| Journal Entry Batches (ApprovalTaskID) | **M** | Accounting hang-on; useful on approval tasks |
+
+### Task Type / Template / Category
+
+| Parent | Related | Inc |
+|---|---|---|
+| Task Types | Templates | **P** |
+| Task Types | Tasks | **M** |
+| Task Types | Notification Configs | **M** |
+| Task Templates | Template Items | **P** |
+| Task Categories | child Categories, Templates | **P** |
+| Task Categories | Tasks | **M** |
+
+### Order Header (custom compose, `ShowRelatedEntities: false`)
+
+Punches still ship so a generated/fill-in surface is clean:
+
+| Related | Inc |
+|---|---|
+| Order Lines | **P** |
+| Order Charges, Order Adjustments | **P** |
+| Payment Intents, Payment Lines | **M** |
+| ReversesOrderHeader, Payment Details, Stored Value Tx, Subscription Events | **N** |
+
+### Payment Header
+
+| Related | Inc |
+|---|---|
+| Payment Lines (Allocations) | **P** |
+| Reversing payments, Stored Value Tx, Subscription Events | **M** |
+
+### Subscription
+
+| Related | Inc |
+|---|---|
+| Subscription Terms (Coverage Terms) | **P** |
+| Entitlement Grants | **P** |
+| Events, migrate-from/to, originating Order Lines | **M** |
+
+### Product
+
+| Related | Inc |
+|---|---|
+| Product Prices, Entitlements, Bundle Items (as bundle) | **P** |
+| Order Lines, Subscriptions, kits that include this, Successor, exploded lines, Promotion Targets | **M** |
+
+### Price List / Promotion
+
+| Parent | Related | Inc |
+|---|---|---|
+| Price Lists | Product Prices, Assignments | **P** |
+| Price Lists | Company Policies | **M** |
+| Promotions | Codes, Targets | **P** |
+| Promotions | Order Adjustments | **M** |
+
+### Journal Entry / Batch / GL / Dimensions
+
+| Parent | Related | Inc |
+|---|---|---|
+| Journal Entries | Lines | **P** (declared collection). Entity uses `keep-all-primary` |
+| Journal Entries | Reverses / ReversedBy | **M** |
+| Journal Entries | Order Lines, Payment Headers (posted source) | **N** |
+| Journal Entry Batches | Journal Entries | **P** (read-only collection) |
+| GL Accounts | child GL Accounts, GL Account Links | **P** |
+| GL Accounts | JE Lines, Intercompany DueFrom/DueTo | **M** / **N** for the inverse DueTo |
+| Dimensions | Dimension Values | **P** |
+| Dimensions | link/JE/order line dimension tags | **M** |
+| Currencies | Spot Rates | **P** |
+| Currencies | Company Profiles, GL Accounts, JE Lines | **N** |
+| Tax Jurisdictions | Rates, child jurisdictions | **P** |
+| Tax Jurisdictions | Nexus, Liabilities | **M** |
+
+### Issue
+
+| Parent | Related | Inc |
+|---|---|---|
+| Person | Issues Reporter | **P** |
+| Person | Issues CreatedBy, Issue Comments | **N** |
+| Issues | Issue Comments | **P** |
+
+### Committee / Meeting
+
+| Parent | Related | Inc |
+|---|---|---|
+| Person | Memberships | **P** |
+| Person | Attendances | **M** |
+| Person | Comments, Votes, presenter, uploader | **N** |
+| Organization | Committees | **P** |
+| Committees | Memberships, Meetings, child Committees | **P** |
+| Committees | Artifacts | **M** |
+| Meetings | Agenda Items, Attendances, Minutes | **P** |
+| Meetings | Motions, Artifacts | **M** |
+
+### Secure Messaging
+
+No hard FK from SM rows to People/Organizations (`PersonID` on messages is a soft reference). The app owns a custom workspace. **No Person/Org grid punches.** Thread form: Messages **P**, Files **M**, File Requests **M**.
+
+### Sales / Contracts
+
+Not decorated in this pass. Memo for Josue / Marcelo.
