@@ -183,6 +183,11 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
                 ref.instance.Record = this.Record;
                 ref.instance.FormComponent = this.FormComponent;
                 if (this.FormContext) ref.instance.FormContext = this.FormContext;
+                // Left-nav leftover height targets mj-collapsible-panel as a
+                // flex child of .mj-forms-all-panels. The slot is already
+                // display:contents; the mounted host must be too.
+                const host = ref.location.nativeElement as HTMLElement | null;
+                if (host) host.style.display = 'contents';
                 // No detectChanges() — Angular's normal CD pass picks the new
                 // component up. Calling detectChanges() synchronously inside
                 // an ongoing CD cycle (which is when ngOnChanges → remount

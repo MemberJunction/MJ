@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { CommonModule } from '@angular/common';
+import { Subject } from 'rxjs';
 import { renderComponentFixture, query, text, hasClass } from '@memberjunction/ng-test-utils';
 import { CompositeKey } from '@memberjunction/core';
 import { MjCollapsiblePanelComponent } from './collapsible-panel.component';
+import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 import type { FormNavigationEvent } from '../types/navigation-events';
 import type { FormContext } from '../types/form-types';
 
@@ -46,9 +48,48 @@ describe('MjCollapsiblePanelComponent (DOM)', () => {
     expect(hasClass(f, '.mj-forms-panel', 'mj-forms-panel--inherited')).toBe(false);
   });
 
+  it('does not pin a persisted pixel height when left-nav hides accordion chrome', () => {
+    const form = {
+      ...formStub(true),
+      GetSectionPanelHeight: () => 48,
+    };
+    const f = renderComponentFixture(MjCollapsiblePanelComponent, {
+      declarations: [MjCollapsiblePanelComponent],
+      imports: [CommonModule],
+      providers: [{
+        provide: FormChromeCoordinator,
+        useValue: {
+          HidesAccordionChrome: () => true,
+          IsRelatedSectionVisible: () => true,
+          IsFirstClassSectionVisible: () => true,
+          Spec: { RelatedRoles: new Map() },
+          Changes: new Subject<void>(),
+        },
+      }],
+      inputs: {
+        SectionName: 'Payments',
+        SectionKey: 'payments',
+        Variant: 'related-entity',
+        Form: form,
+      },
+    });
+    const content = query(f, '.mj-forms-panel-content') as HTMLElement;
+    expect(content.style.height).toBe('');
+  });
+
   it('applies the inherited variant class', () => {
     const f = render({ SectionName: 'Base', Variant: 'inherited', Form: formStub(true) });
     expect(hasClass(f, '.mj-forms-panel', 'mj-forms-panel--inherited')).toBe(true);
+  });
+
+  it('MatchesSearch hits section name, key, and field names without requiring chrome visibility', () => {
+    const f = render({ SectionName: 'Orders', SectionKey: 'orders', Form: formStub(false) });
+    const panel = f.componentInstance;
+    expect(panel.MatchesSearch('ord')).toBe(true);
+    expect(panel.MatchesSearch('orders')).toBe(true);
+    expect(panel.MatchesSearch('xyz')).toBe(false);
+    panel.FieldNames = 'order date total gross';
+    expect(panel.MatchesSearch('gross')).toBe(true);
   });
 
   it('omits the row-count badge when BadgeCount is undefined', () => {

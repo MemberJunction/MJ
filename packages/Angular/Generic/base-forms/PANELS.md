@@ -55,7 +55,11 @@ Every `<mj-form-panel-slot>` host:
 - Queries `MJGlobal.Instance.ClassFactory.GetAllRegistrationsByMetadata(BaseFormPanel, ...)` to find panels for its `(entity, slot)` pair.
 - Sorts results by `metadata.sortKey` desc, then `Priority` desc, then registration order.
 - Mounts each registered panel via `ViewContainerRef.createComponent`, wiring `[Record]` / `[FormComponent]` / `[FormContext]`.
+- Sets the slot host (and `BaseFormPanel` itself) to `display: contents` so left-nav leftover height reaches the related grid, not a wrapper.
 - Coordinates with siblings via the per-container `FormSlotCoordinator` to handle fallbacks (see below).
+
+Related grids call `FormComponent.NewRecordValues(relatedEntity, joinField)`
+so **New** prefills every join field that filters the grid.
 
 ## Available slots
 

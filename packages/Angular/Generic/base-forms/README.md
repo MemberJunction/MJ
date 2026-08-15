@@ -26,7 +26,8 @@ per-surface code and no regeneration.
 | **Per-instance config** | `EntityFormConfig` + `TAB_/DIALOG_/SLIDEIN_FORM_CONFIG` | Toolbar / related sections / collapsibility / width / record-links. Applied via the form reference — **no regeneration**. |
 | **Form resolution** | `FormResolverService` | Picks generated / custom / interactive-override form + variants (cached via `InteractiveFormsEngine`). |
 | **Form extension** | `BaseFormPanel` + `<mj-form-panel-slot>` + `<mj-form-contributions>` | Inject custom sections; claim a related-entity grid; fill in unbaked `DisplayInForm` relationships. See [PANELS.md](./PANELS.md) and [`/plans/form-contributions.md`](../../../../plans/form-contributions.md). |
-| **Form chrome** | `ResolveFormChrome`, `BaseFormPolicy`, `MJ: Form Chrome Rules` | L0–L4 stack: inclusion, Auto ranker, install overlay, user order. Policy is cosmetics only. See [Forms Architecture §7d](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7d-form-chrome--accordion-left-nav-and-more). |
+| **Form chrome** | `ResolveFormChrome`, `BaseFormPolicy`, `MJ: Form Chrome Rules` | L0–L4 stack: inclusion, Auto ranker, install overlay, user order. Policy is cosmetics only. Left-nav related grids fill leftover column height (`display: contents` on slot hosts; no accordion pixel pin). `SetSectionRowCount` upserts so contribution badges appear. Section search matches title/`MatchesSearch`, not `IsVisible`. See [Forms Architecture §7d](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7d-form-chrome--accordion-left-nav-and-more). |
+| **New-record defaults** | `BaseFormComponent.NewRecordValues` / `NewRecordValuesForJoinFields` | Related grids copy every join field onto the child. Explorer persists them as `/record/:entity/new?NewRecordValues=...`. |
 
 ## Quick start
 

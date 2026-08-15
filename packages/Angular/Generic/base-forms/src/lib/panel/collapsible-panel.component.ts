@@ -216,8 +216,19 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
    */
   get PanelContentHeight(): number | undefined {
     if (this.Variant !== 'related-entity') return undefined;
+    // Left-nav sizes the grid from leftover column height. A persisted
+    // accordion pixel height (or a 0 measured while hidden) would pin the
+    // body to the toolbar. Slot-mounted panels cannot inject the coordinator,
+    // so also honor the container-applied `mj-chrome-show` host class.
+    if (this.hidesAccordionChrome()) return undefined;
     const formRef = this.Form as { GetSectionPanelHeight?: (key: string) => number | undefined };
     return formRef?.GetSectionPanelHeight?.(this.SectionKey);
+  }
+
+  private hidesAccordionChrome(): boolean {
+    if (this.chrome?.HidesAccordionChrome(this.SectionKey)) return true;
+    const el = this.elementRef.nativeElement as HTMLElement | undefined;
+    return !!el?.classList.contains('mj-chrome-show');
   }
 
   /** Whether drag-to-reorder is allowed (from FormContext) */
@@ -400,6 +411,19 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
    * `Details` with just unused geo columns) should not take space.
    * Custom widgets and related grids have no FieldComponents — keep them.
    */
+  /**
+   * Whether this panel matches a section-search term by title or field
+   * name. Ignores chrome hide/show — the rail uses this to decide if the
+   * *group* matches, even when another section is currently selected.
+   */
+  public MatchesSearch(term: string): boolean {
+    const filter = (term || '').toLowerCase().trim();
+    if (!filter) return true;
+    if (this.SectionName.toLowerCase().includes(filter)) return true;
+    if (this.SectionKey.toLowerCase().includes(filter)) return true;
+    return this.FieldNames.includes(filter);
+  }
+
   private hasRenderableContent(): boolean {
     if (this.Variant === 'related-entity') return true;
     if (!this.FieldComponents || this.FieldComponents.length === 0) return true;
@@ -461,6 +485,9 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
         // Only a height change while the panel is expanded reflects a genuine user drag of
         // the resize handle. Ignore reflows while collapsed (e.g. content settling on load).
         if (!this.Expanded) return;
+        // Left-nav sizes the grid from the leftover column. Persisting that
+        // computed height would write ~0 (or the toolbar) and then pin it.
+        if (this.hidesAccordionChrome()) return;
         const entry = entries[0];
         if (!entry) return;
         const newHeight = Math.round(entry.contentRect.height);
@@ -506,7 +533,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
 
     const sectionMatches = this.SectionName.toLowerCase().includes(searchTerm);
     const fieldsMatch = this.FieldNames.includes(searchTerm);
-    this.IsVisible = sectionMatches || fieldsMatch;
+    this.IsVisible = this.MatchesSearch(searchTerm);
 
     // DisplayName is bound to `[innerHTML]` in the template — must always be HTML-safe.
     this.DisplayName =

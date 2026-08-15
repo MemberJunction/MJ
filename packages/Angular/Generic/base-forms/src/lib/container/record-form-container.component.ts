@@ -357,11 +357,33 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   get VisibleSectionCount(): number {
+    const filter = this.EffectiveSearchFilter.toLowerCase().trim();
+    if (filter) {
+      const fromPanels = this.allChromePanels().filter((p) => p.MatchesSearch(filter)).length;
+      const fromRail = this.ChromeFirstClassGroups.length + this.ChromeMoreItems.length;
+      return Math.max(fromPanels, fromRail);
+    }
     if (this.fc?.getVisibleSectionCount) {
       return this.fc.getVisibleSectionCount();
     }
-    if (!this.Panels) return 0;
-    return this.Panels.filter(p => p.IsVisible).length;
+    return this.Panels?.filter((p) => p.IsVisible).length ?? 0;
+  }
+
+  /** True when the current section search matches nothing in this layout. */
+  get SearchHasNoMatches(): boolean {
+    const filter = this.EffectiveSearchFilter.toLowerCase().trim();
+    if (!filter) return false;
+    return this.ChromeFirstClassGroups.length === 0 && this.ChromeMoreItems.length === 0
+      && this.allChromePanels().every((p) => !p.MatchesSearch(filter));
+  }
+
+  /** Left-nav rail stays up while searching even if only one group matches. */
+  get ShowChromeRail(): boolean {
+    if (this.ChromeLayout !== 'left-nav') return false;
+    if (this.EffectiveSearchFilter.trim()) {
+      return this.ChromeFirstClassGroups.length > 0 || this.ChromeMoreItems.length > 0;
+    }
+    return this.chrome.Spec.Groups.length > 1;
   }
 
   /**
@@ -723,6 +745,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   private groupMatchesSearch(group: FormChromeGroup, filter: string): boolean {
+    if (!filter) return true;
     if (group.Title.toLowerCase().includes(filter)) return true;
     if (group.IsMore) {
       return group.SectionKeys.some((key) => {
@@ -732,8 +755,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     }
     return group.SectionKeys.some((key) => {
       const panel = this.allChromePanels().find((p) => p.SectionKey === key);
-      if (panel) return panel.IsVisible;
-      return key.toLowerCase().includes(filter);
+      if (panel) return panel.MatchesSearch(filter);
+      const human = HumanizeEntityTitle(key).toLowerCase();
+      return human.includes(filter) || key.toLowerCase().includes(filter);
     });
   }
 
