@@ -633,6 +633,15 @@ describe('ResolveFormChrome inclusion None', () => {
         expect(firstClass).toEqual(['Overview', 'Details', 'Payments']);
         expect(result.Spec.Groups.find((g) => g.Key === 'overview')?.IsLead).toBe(true);
         expect(result.Spec.Groups.find((g) => g.Key === DETAILS_SECTION_KEY)?.SectionKeys).toEqual(['identity']);
+        // Generated form.sections look like this — they must NOT be passed
+        // as the rail order or Overview (absent from that list) sorts last.
+        const formSections = ['identity', 'mJBizAppsOrdersPaymentHeaders'];
+        const undone = OrderChromeGroups(result.Spec.Groups, formSections)
+            .filter((g) => !g.IsMore)
+            .map((g) => g.Title);
+        expect(undone).toEqual(['Details', 'Payments', 'Overview']);
+        expect(OrderChromeGroups(result.Spec.Groups, []).filter((g) => !g.IsMore).map((g) => g.Title))
+            .toEqual(['Overview', 'Details', 'Payments']);
     });
 
     it('does not fold a Primary contribution into Details', () => {

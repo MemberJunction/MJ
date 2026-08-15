@@ -13,6 +13,8 @@ In **left-nav** the rail is Primary contributions (lead band, e.g. Overview)
 + Details (leftover field panels) + each Primary related + More; the body
 shows only the selected group, locked open. `inclusion: 'Primary'` on a
 contribution is its own rail item — it does **not** fold into Details.
+A persisted user section order can override that; the generated
+`form.sections` list is not a custom order and does not.
 `BaseFormPolicy.DecorateChrome` is cosmetics only — it cannot change
 membership.
 

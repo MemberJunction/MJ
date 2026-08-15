@@ -422,7 +422,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   get ChromeGroups(): FormChromeGroup[] {
-    const ordered = OrderChromeGroups(this.chrome.Spec.Groups, this.SectionManagerOrder);
+    const ordered = OrderChromeGroups(this.chrome.Spec.Groups, this.chromeRailOrder);
     const filter = this.EffectiveSearchFilter.toLowerCase().trim();
     if (!filter) return ordered;
     return ordered.filter((group) => this.groupMatchesSearch(group, filter));
@@ -442,7 +442,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const folder = this.ChromeMoreFolder;
     if (!folder) return [];
     const filter = this.EffectiveSearchFilter.toLowerCase().trim();
-    const orderedKeys = OrderMoreSectionKeys(folder.SectionKeys, this.SectionManagerOrder);
+    const orderedKeys = OrderMoreSectionKeys(folder.SectionKeys, this.chromeRailOrder);
     const items = orderedKeys.map((key) => this.moreItemFromKey(key));
     if (!filter) return items;
     return items.filter((item) => this.groupMatchesSearch(item, filter));
@@ -564,6 +564,16 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       return this.fc.getSectionOrder();
     }
     return [];
+  }
+
+  /**
+   * Rail display order. `getSectionOrder()` falls back to generated
+   * `form.sections` — those keys match Details + baked related grids, not
+   * slot-mounted leads — so using that fallback parked Overview after
+   * Payments. Only a user-persisted custom order may override the resolver.
+   */
+  private get chromeRailOrder(): string[] {
+    return this.EffectiveHasCustomSectionOrder ? this.SectionManagerOrder : [];
   }
 
   // ---- Lifecycle ----
