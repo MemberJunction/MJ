@@ -83,6 +83,28 @@ export class UserCache extends BaseSingleton<UserCache> {
     }
 
     /**
+     * Replace the cached set with users the caller already materialized.
+     *
+     * The seam exists for callers that cannot take {@link Refresh}'s path — the PostgreSQL
+     * bootstrap in `testing-cli` builds its `UserInfo[]` before there is a `DatabaseProviderBase`
+     * to read through, so it holds users but has nothing to hand `Refresh`.
+     *
+     * Without this, that caller reached in and assigned the private field by string index:
+     *
+     *     (UserCache.Instance as unknown as Record<string, unknown>)['_users'] = userInfos;
+     *
+     * which type-checks forever and fails silently: rename `_users` and the cache is simply never
+     * populated — no compile error, no exception, and the symptom ("no users") surfaces arbitrarily
+     * far from the cause. A public method makes that rename a build error instead.
+     *
+     * Deliberately does NOT start the auto-refresh timer: the caller supplied this data, so there
+     * is no provider to re-read it through. Use {@link Refresh} when there is one.
+     */
+    public SetUsers(users: UserInfo[]): void {
+      this._users = users;
+    }
+
+    /**
      * Reads `vwUsers` + `vwUserRoles` through the provider and stitches each user's roles onto it.
      */
     protected async LoadUsers(provider: DatabaseProviderBase): Promise<UserInfo[] | undefined> {

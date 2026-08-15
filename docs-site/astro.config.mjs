@@ -54,6 +54,16 @@ export default defineConfig({
         dark: './src/assets/MJ_logo_wide_dark.png',
         replacesTitle: true,
       },
+      /*
+       * favicon.svg (Starlight's default path) carries the MJ mark with a
+       * prefers-color-scheme swap baked in; these two cover Safari/iOS,
+       * which don't take SVG favicons. Hrefs must carry the base prefix
+       * themselves — Starlight doesn't rewrite head-entry URLs.
+       */
+      head: [
+        { tag: 'link', attrs: { rel: 'icon', type: 'image/png', sizes: '32x32', href: `${base === '/' ? '' : base}/favicon-32.png` } },
+        { tag: 'link', attrs: { rel: 'apple-touch-icon', sizes: '180x180', href: `${base === '/' ? '' : base}/apple-touch-icon.png` } },
+      ],
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/MemberJunction/MJ' }],
       editLink: { baseUrl: 'https://github.com/MemberJunction/MJ/edit/next/docs-site/' },
       lastUpdated: true,

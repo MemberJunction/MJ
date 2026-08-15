@@ -25,7 +25,7 @@ per-surface code and no regeneration.
 | **Imperative API** | `MJFormPresenterService.Open(...)` → `MJFormRef` | One call to open any form on any surface. |
 | **Per-instance config** | `EntityFormConfig` + `TAB_/DIALOG_/SLIDEIN_FORM_CONFIG` | Toolbar / related sections / collapsibility / width / record-links. Applied via the form reference — **no regeneration**. |
 | **Form resolution** | `FormResolverService` | Picks generated / custom / interactive-override form + variants (cached via `InteractiveFormsEngine`). |
-| **Form extension** | `BaseFormPanel` + `<mj-form-panel-slot>` | Inject custom sections into a generated form. See [PANELS.md](./PANELS.md). |
+| **Form extension** | `BaseFormPanel` + `<mj-form-panel-slot>` + `<mj-form-contributions>` | Inject custom sections; claim a related-entity grid; fill in unbaked `DisplayInForm` relationships. See [PANELS.md](./PANELS.md) and [`/plans/form-contributions.md`](../../../../plans/form-contributions.md). |
 
 ## Quick start
 

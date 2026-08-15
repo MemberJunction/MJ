@@ -41,8 +41,13 @@ vi.mock('../lib/provider-utils', () => ({
 }));
 
 import { ValidationService } from '../services/ValidationService';
+import { parseMetadataReference } from '../lib/reference-parser';
+import { METADATA_KEYWORDS } from '../constants/metadata-keywords';
 import * as fs from 'fs';
-import { Metadata } from '@memberjunction/core';
+// Type-only imports: erased at runtime, so they bypass the vi.mock above and
+// give the fakes the real compile-time shapes.
+import type { EntityFieldInfo, EntityFieldValueInfo, EntityInfo } from '@memberjunction/core';
+import type { ValidationError, ValidationWarning } from '../types/validation';
 
 describe('ValidationService', () => {
   let service: ValidationService;
@@ -117,18 +122,6 @@ describe('ValidationService', () => {
     });
   });
 
-  describe('parseReference (tested indirectly through ValidationService)', () => {
-    // We test parseReference via its usage patterns since it's private
-    // Testing by creating a service with mocked metadata and examining behavior
-
-    it('should handle @file: references', () => {
-      // parseReference is private, but we can verify its behavior exists
-      // through the isValidReference check
-      const svc = new ValidationService();
-      expect(svc).toBeDefined();
-    });
-  });
-
   describe('applyDirectoryFilters (tested through validateDirectory)', () => {
     it('should process directories with include filter', async () => {
       const svc = new ValidationService({ include: ['users'] });
@@ -156,350 +149,282 @@ describe('ValidationService', () => {
   });
 });
 
-describe('ValidationService - Reference Parsing Logic', () => {
-  // Since parseReference is private, we test the regex patterns it uses directly
-  describe('@file: pattern', () => {
-    const pattern = /^@file:(.+)$/;
+describe('parseMetadataReference — the REAL production parser', () => {
+  // These suites drive parseMetadataReference (extracted from
+  // ValidationService.parseReference), so parser drift fails them.
 
-    it('should match simple file references', () => {
-      const match = '@file:template.md'.match(pattern);
-      expect(match).not.toBeNull();
-      expect(match![1]).toBe('template.md');
+  describe('@file: references', () => {
+    it('parses simple file references', () => {
+      expect(parseMetadataReference('@file:template.md')).toEqual({
+        type: METADATA_KEYWORDS.FILE,
+        value: 'template.md',
+      });
     });
 
-    it('should match file references with paths', () => {
-      const match = '@file:./shared/common-prompt.md'.match(pattern);
-      expect(match).not.toBeNull();
-      expect(match![1]).toBe('./shared/common-prompt.md');
+    it('parses file references with relative paths', () => {
+      expect(parseMetadataReference('@file:./shared/common-prompt.md')).toEqual({
+        type: METADATA_KEYWORDS.FILE,
+        value: './shared/common-prompt.md',
+      });
     });
 
-    it('should match file references with parent directories', () => {
-      const match = '@file:../templates/standard-header.md'.match(pattern);
-      expect(match).not.toBeNull();
-      expect(match![1]).toBe('../templates/standard-header.md');
+    it('parses file references with parent directories', () => {
+      expect(parseMetadataReference('@file:../templates/standard-header.md')).toEqual({
+        type: METADATA_KEYWORDS.FILE,
+        value: '../templates/standard-header.md',
+      });
     });
 
-    it('should not match bare @file:', () => {
-      const match = '@file:'.match(pattern);
-      expect(match).toBeNull();
-    });
-  });
-
-  describe('@lookup: pattern', () => {
-    const pattern = /^@lookup:([^.]+)\.(.+)$/;
-
-    it('should match simple lookup references', () => {
-      const match = '@lookup:Users.Email=john@example.com'.match(pattern);
-      expect(match).not.toBeNull();
-      expect(match![1]).toBe('Users');
-      expect(match![2]).toBe('Email=john@example.com');
-    });
-
-    it('should match lookup with create syntax', () => {
-      const match = '@lookup:Categories.Name=Examples?create'.match(pattern);
-      expect(match).not.toBeNull();
-      expect(match![1]).toBe('Categories');
-      expect(match![2]).toBe('Name=Examples?create');
-    });
-
-    it('should match multi-field lookups', () => {
-      const match = '@lookup:Users.Email=john@example.com&Department=Sales'.match(pattern);
-      expect(match).not.toBeNull();
-      expect(match![1]).toBe('Users');
-      expect(match![2]).toBe('Email=john@example.com&Department=Sales');
-    });
-
-    it('should not match lookup without entity', () => {
-      const match = '@lookup:.Name=Test'.match(pattern);
-      expect(match).toBeNull();
+    it('returns null for a bare @file: with no path', () => {
+      expect(parseMetadataReference('@file:')).toBeNull();
     });
   });
 
-  describe('@parent: pattern', () => {
-    const pattern = /^@parent:(.+)$/;
-
-    it('should match parent field references', () => {
-      const match = '@parent:ID'.match(pattern);
-      expect(match).not.toBeNull();
-      expect(match![1]).toBe('ID');
+  describe('@lookup: references', () => {
+    it('parses a single-field lookup into entity/field/value', () => {
+      const parsed = parseMetadataReference('@lookup:Users.Email=john@example.com');
+      expect(parsed).toEqual({
+        type: METADATA_KEYWORDS.LOOKUP,
+        entity: 'Users',
+        field: 'Email',
+        value: 'john@example.com',
+        fields: [{ field: 'Email', value: 'john@example.com' }],
+        createIfMissing: false,
+        additionalFields: {},
+      });
     });
 
-    it('should match parent with complex field names', () => {
-      const match = '@parent:CategoryID'.match(pattern);
-      expect(match).not.toBeNull();
-      expect(match![1]).toBe('CategoryID');
+    it('parses ?create — flag is stripped from the value and reported structurally', () => {
+      // The retired tautological test asserted the raw remainder
+      // 'Name=Examples?create'. The real parser goes further: it strips the
+      // flag from the value and surfaces it as createIfMissing.
+      const parsed = parseMetadataReference('@lookup:Categories.Name=Examples?create');
+      expect(parsed).toEqual({
+        type: METADATA_KEYWORDS.LOOKUP,
+        entity: 'Categories',
+        field: 'Name',
+        value: 'Examples',
+        fields: [{ field: 'Name', value: 'Examples' }],
+        createIfMissing: true,
+        additionalFields: {},
+      });
+    });
+
+    it('parses multi-field lookups into an ordered fields array with the first as primary', () => {
+      const parsed = parseMetadataReference('@lookup:Users.Email=john@example.com&Department=Sales');
+      expect(parsed).not.toBeNull();
+      expect(parsed!.entity).toBe('Users');
+      expect(parsed!.fields).toEqual([
+        { field: 'Email', value: 'john@example.com' },
+        { field: 'Department', value: 'Sales' },
+      ]);
+      // Backward compatibility: first criterion doubles as field/value
+      expect(parsed!.field).toBe('Email');
+      expect(parsed!.value).toBe('john@example.com');
+    });
+
+    it('parses ?create with additional creation fields (URI-decoded)', () => {
+      const parsed = parseMetadataReference(
+        '@lookup:Categories.Name=Examples?create&Description=Example%20prompts',
+      );
+      expect(parsed).not.toBeNull();
+      expect(parsed!.createIfMissing).toBe(true);
+      expect(parsed!.fields).toEqual([{ field: 'Name', value: 'Examples' }]);
+      expect(parsed!.additionalFields).toEqual({ Description: 'Example prompts' });
+    });
+
+    it('parses ?create with a literal-space additional field', () => {
+      const parsed = parseMetadataReference(
+        '@lookup:Categories.Name=Examples?create&Description=Example prompts',
+      );
+      expect(parsed!.additionalFields).toEqual({ Description: 'Example prompts' });
+    });
+
+    it('reports createIfMissing=false when ?create is absent', () => {
+      const parsed = parseMetadataReference('@lookup:Roles.Name=Admin');
+      expect(parsed!.createIfMissing).toBe(false);
+      expect(parsed!.additionalFields).toEqual({});
+    });
+
+    it('trims whitespace around field names and values', () => {
+      const parsed = parseMetadataReference('@lookup:Users.Name = Jane Doe');
+      expect(parsed!.fields).toEqual([{ field: 'Name', value: 'Jane Doe' }]);
+    });
+
+    it('supports spaces and colons in entity names (MJ: prefix)', () => {
+      const parsed = parseMetadataReference('@lookup:MJ: AI Prompt Types.Name=Chat');
+      expect(parsed!.entity).toBe('MJ: AI Prompt Types');
+      expect(parsed!.fields).toEqual([{ field: 'Name', value: 'Chat' }]);
+    });
+
+    it('returns null for a lookup without an entity name', () => {
+      expect(parseMetadataReference('@lookup:.Name=Test')).toBeNull();
+    });
+
+    it('parses criteria without "=" into an empty fields array (permissive; the sync engine rejects these at push time)', () => {
+      const parsed = parseMetadataReference('@lookup:Users.NoEqualsSign');
+      expect(parsed).not.toBeNull();
+      expect(parsed!.fields).toEqual([]);
+      expect(parsed!.field).toBe('');
+      expect(parsed!.value).toBe('');
+    });
+
+    it('documents the substring quirk: any "?create" occurrence in the value activates create mode', () => {
+      // Real behavior pinned on purpose: hasCreate is a substring test, so a
+      // value containing "?create..." (here "What?createdBy") trips it and the
+      // value is truncated at the first "?".
+      const parsed = parseMetadataReference('@lookup:Notes.Title=What?createdBy');
+      expect(parsed!.createIfMissing).toBe(true);
+      expect(parsed!.fields).toEqual([{ field: 'Title', value: 'What' }]);
     });
   });
 
-  describe('@root: pattern', () => {
-    const pattern = /^@root:(.+)$/;
-
-    it('should match root field references', () => {
-      const match = '@root:ID'.match(pattern);
-      expect(match).not.toBeNull();
-      expect(match![1]).toBe('ID');
+  describe('@parent: references', () => {
+    it('parses parent field references', () => {
+      expect(parseMetadataReference('@parent:ID')).toEqual({
+        type: METADATA_KEYWORDS.PARENT,
+        value: 'ID',
+      });
     });
 
-    it('should match root with complex field names', () => {
-      const match = '@root:Name'.match(pattern);
-      expect(match).not.toBeNull();
-      expect(match![1]).toBe('Name');
-    });
-  });
-
-  describe('@env: pattern', () => {
-    const pattern = /^@env:(.+)$/;
-
-    it('should match env references', () => {
-      const match = '@env:NODE_ENV'.match(pattern);
-      expect(match).not.toBeNull();
-      expect(match![1]).toBe('NODE_ENV');
-    });
-
-    it('should match env with underscores', () => {
-      const match = '@env:DATABASE_CONNECTION_STRING'.match(pattern);
-      expect(match).not.toBeNull();
-      expect(match![1]).toBe('DATABASE_CONNECTION_STRING');
+    it('parses parent references with longer field names', () => {
+      expect(parseMetadataReference('@parent:CategoryID')).toEqual({
+        type: METADATA_KEYWORDS.PARENT,
+        value: 'CategoryID',
+      });
     });
   });
 
-  describe('@template: pattern', () => {
-    const pattern = /^@template:(.+)$/;
+  describe('@root: references', () => {
+    it('parses root field references', () => {
+      expect(parseMetadataReference('@root:ID')).toEqual({
+        type: METADATA_KEYWORDS.ROOT,
+        value: 'ID',
+      });
+    });
 
-    it('should match template references', () => {
-      const match = '@template:templates/standard-ai-models.json'.match(pattern);
-      expect(match).not.toBeNull();
-      expect(match![1]).toBe('templates/standard-ai-models.json');
+    it('parses root references with named fields', () => {
+      expect(parseMetadataReference('@root:Name')).toEqual({
+        type: METADATA_KEYWORDS.ROOT,
+        value: 'Name',
+      });
+    });
+  });
+
+  describe('@env: references', () => {
+    it('parses env references', () => {
+      expect(parseMetadataReference('@env:NODE_ENV')).toEqual({
+        type: METADATA_KEYWORDS.ENV,
+        value: 'NODE_ENV',
+      });
+    });
+
+    it('parses env references with underscores', () => {
+      expect(parseMetadataReference('@env:DATABASE_CONNECTION_STRING')).toEqual({
+        type: METADATA_KEYWORDS.ENV,
+        value: 'DATABASE_CONNECTION_STRING',
+      });
+    });
+  });
+
+  describe('@template: references', () => {
+    it('parses template references', () => {
+      expect(parseMetadataReference('@template:templates/standard-ai-models.json')).toEqual({
+        type: METADATA_KEYWORDS.TEMPLATE,
+        value: 'templates/standard-ai-models.json',
+      });
+    });
+  });
+
+  describe('non-references', () => {
+    it('returns null for plain strings', () => {
+      expect(parseMetadataReference('regular string')).toBeNull();
+    });
+
+    it('returns null for unknown @ prefixes (npm scopes, emails)', () => {
+      expect(parseMetadataReference('@mui/material')).toBeNull();
+      expect(parseMetadataReference('@unknown:value')).toBeNull();
+    });
+
+    it('documents that the validation-side parser does NOT understand @url: (the sync engine does)', () => {
+      expect(parseMetadataReference('@url:https://example.com/prompt.md')).toBeNull();
     });
   });
 });
 
-describe('ValidationService - Lookup Parsing Logic', () => {
-  it('should parse multi-field lookup criteria', () => {
-    const remaining = 'Email=john@example.com&Department=Sales';
-    const lookupPairs = remaining.split('&');
-    const fields: Array<{ field: string; value: string }> = [];
+describe('ValidationService - Topological Sort (real implementation)', () => {
+  // Dependencies are seeded through the REAL pipeline: trackEntityDependencies
+  // parses @lookup references (via parseMetadataReference) and registers
+  // entity → entity edges, then the real topologicalSort orders them.
 
-    for (const pair of lookupPairs) {
-      const fieldMatch = pair.match(/^(.+?)=(.+)$/);
-      if (fieldMatch) {
-        const [, field, value] = fieldMatch;
-        fields.push({ field: field.trim(), value: value.trim() });
-      }
-    }
+  function trackEntity(svc: ValidationService, entityName: string, lookups: string[]): void {
+    const fields: Record<string, string> = {};
+    lookups.forEach((lookup, i) => {
+      fields[`Ref${i}`] = lookup;
+    });
+    svc['trackEntityDependencies']({ fields }, entityName, `/meta/${entityName}.json`);
+  }
 
-    expect(fields).toHaveLength(2);
-    expect(fields[0]).toEqual({ field: 'Email', value: 'john@example.com' });
-    expect(fields[1]).toEqual({ field: 'Department', value: 'Sales' });
+  it('sorts entities with linear dependencies (C→B→A) into dependency order', () => {
+    const svc = new ValidationService();
+    trackEntity(svc, 'C', ['@lookup:B.Name=x']);
+    trackEntity(svc, 'B', ['@lookup:A.Name=x']);
+    trackEntity(svc, 'A', []);
+
+    expect(svc['topologicalSort']()).toEqual(['A', 'B', 'C']);
   });
 
-  it('should parse single-field lookup criteria', () => {
-    const remaining = 'Name=Admin';
-    const lookupPairs = remaining.split('&');
-    const fields: Array<{ field: string; value: string }> = [];
+  it('includes all entities when none have dependencies', () => {
+    const svc = new ValidationService();
+    trackEntity(svc, 'A', []);
+    trackEntity(svc, 'B', []);
+    trackEntity(svc, 'C', []);
 
-    for (const pair of lookupPairs) {
-      const fieldMatch = pair.match(/^(.+?)=(.+)$/);
-      if (fieldMatch) {
-        const [, field, value] = fieldMatch;
-        fields.push({ field: field.trim(), value: value.trim() });
-      }
-    }
-
-    expect(fields).toHaveLength(1);
-    expect(fields[0]).toEqual({ field: 'Name', value: 'Admin' });
-  });
-
-  it('should handle create syntax', () => {
-    const remaining = 'Name=Examples?create';
-    const hasCreate = remaining.includes('?create');
-    const lookupPart = hasCreate ? remaining.split('?')[0] : remaining;
-
-    expect(hasCreate).toBe(true);
-    expect(lookupPart).toBe('Name=Examples');
-  });
-
-  it('should handle create with additional fields', () => {
-    const remaining = 'Name=Examples?create&Description=Example prompts';
-    const hasCreate = remaining.includes('?create');
-    const additionalFields: Record<string, string> = {};
-
-    if (hasCreate && remaining.includes('?create&')) {
-      const createPart = remaining.split('?create&')[1];
-      const pairs = createPart.split('&');
-      for (const pair of pairs) {
-        const [key, val] = pair.split('=');
-        if (key && val) {
-          additionalFields[key] = decodeURIComponent(val);
-        }
-      }
-    }
-
-    expect(additionalFields).toEqual({ Description: 'Example prompts' });
-  });
-
-  it('should handle lookup without create syntax', () => {
-    const remaining = 'Name=Admin';
-    const hasCreate = remaining.includes('?create');
-    expect(hasCreate).toBe(false);
-  });
-});
-
-describe('ValidationService - Topological Sort Logic', () => {
-  it('should sort entities with linear dependencies', () => {
-    const dependencies = new Map<string, Set<string>>();
-    dependencies.set('C', new Set(['B']));
-    dependencies.set('B', new Set(['A']));
-    dependencies.set('A', new Set());
-
-    const result: string[] = [];
-    const visited = new Set<string>();
-    const tempStack = new Set<string>();
-
-    const visit = (entity: string): boolean => {
-      if (tempStack.has(entity)) return false;
-      if (visited.has(entity)) return true;
-      tempStack.add(entity);
-      const deps = dependencies.get(entity);
-      if (deps) {
-        for (const dep of deps) {
-          if (!visit(dep)) return false;
-        }
-      }
-      tempStack.delete(entity);
-      visited.add(entity);
-      result.push(entity);
-      return true;
-    };
-
-    for (const entity of dependencies.keys()) {
-      if (!visited.has(entity)) {
-        visit(entity);
-      }
-    }
-
-    expect(result).toEqual(['A', 'B', 'C']);
-  });
-
-  it('should handle entities with no dependencies', () => {
-    const dependencies = new Map<string, Set<string>>();
-    dependencies.set('A', new Set());
-    dependencies.set('B', new Set());
-    dependencies.set('C', new Set());
-
-    const result: string[] = [];
-    const visited = new Set<string>();
-    const tempStack = new Set<string>();
-
-    const visit = (entity: string): boolean => {
-      if (tempStack.has(entity)) return false;
-      if (visited.has(entity)) return true;
-      tempStack.add(entity);
-      const deps = dependencies.get(entity);
-      if (deps) {
-        for (const dep of deps) {
-          if (!visit(dep)) return false;
-        }
-      }
-      tempStack.delete(entity);
-      visited.add(entity);
-      result.push(entity);
-      return true;
-    };
-
-    for (const entity of dependencies.keys()) {
-      if (!visited.has(entity)) {
-        visit(entity);
-      }
-    }
-
+    const result = svc['topologicalSort']();
     expect(result).toHaveLength(3);
     expect(result).toContain('A');
     expect(result).toContain('B');
     expect(result).toContain('C');
   });
 
-  it('should detect circular dependencies', () => {
-    const dependencies = new Map<string, Set<string>>();
-    dependencies.set('A', new Set(['B']));
-    dependencies.set('B', new Set(['C']));
-    dependencies.set('C', new Set(['A']));
+  it('orders diamond dependency patterns correctly (A→{B,C}→D)', () => {
+    const svc = new ValidationService();
+    trackEntity(svc, 'A', ['@lookup:B.Name=x', '@lookup:C.Name=x']);
+    trackEntity(svc, 'B', ['@lookup:D.Name=x']);
+    trackEntity(svc, 'C', ['@lookup:D.Name=x']);
+    trackEntity(svc, 'D', []);
 
-    const visited = new Set<string>();
-    const tempStack = new Set<string>();
-    let circularDetected = false;
-
-    const visit = (entity: string): boolean => {
-      if (tempStack.has(entity)) {
-        circularDetected = true;
-        return false;
-      }
-      if (visited.has(entity)) return true;
-      tempStack.add(entity);
-      const deps = dependencies.get(entity);
-      if (deps) {
-        for (const dep of deps) {
-          if (!visit(dep)) return false;
-        }
-      }
-      tempStack.delete(entity);
-      visited.add(entity);
-      return true;
-    };
-
-    for (const entity of dependencies.keys()) {
-      if (!visited.has(entity)) {
-        visit(entity);
-      }
-    }
-
-    expect(circularDetected).toBe(true);
+    const result = svc['topologicalSort']();
+    expect(result).toHaveLength(4);
+    expect(result.indexOf('D')).toBeLessThan(result.indexOf('B'));
+    expect(result.indexOf('D')).toBeLessThan(result.indexOf('C'));
+    expect(result.indexOf('B')).toBeLessThan(result.indexOf('A'));
+    expect(result.indexOf('C')).toBeLessThan(result.indexOf('A'));
   });
 
-  it('should handle diamond dependency patterns', () => {
-    // A depends on B and C, both B and C depend on D
-    const dependencies = new Map<string, Set<string>>();
-    dependencies.set('A', new Set(['B', 'C']));
-    dependencies.set('B', new Set(['D']));
-    dependencies.set('C', new Set(['D']));
-    dependencies.set('D', new Set());
+  it('detects circular dependencies and reports the cycle path as an error', () => {
+    const svc = new ValidationService();
+    trackEntity(svc, 'A', ['@lookup:B.Name=x']);
+    trackEntity(svc, 'B', ['@lookup:C.Name=x']);
+    trackEntity(svc, 'C', ['@lookup:A.Name=x']);
 
-    const result: string[] = [];
-    const visited = new Set<string>();
-    const tempStack = new Set<string>();
+    const detected = svc['checkCircularDependency']('A', new Set<string>(), new Set<string>());
 
-    const visit = (entity: string): boolean => {
-      if (tempStack.has(entity)) return false;
-      if (visited.has(entity)) return true;
-      tempStack.add(entity);
-      const deps = dependencies.get(entity);
-      if (deps) {
-        for (const dep of deps) {
-          if (!visit(dep)) return false;
-        }
-      }
-      tempStack.delete(entity);
-      visited.add(entity);
-      result.push(entity);
-      return true;
-    };
+    expect(detected).toBe(true);
+    const circularErrors = svc['errors'].filter((e) => e.type === 'circular');
+    expect(circularErrors).toHaveLength(1);
+    expect(circularErrors[0].message).toBe('Circular dependency detected: A → B → C → A');
+  });
 
-    for (const entity of dependencies.keys()) {
-      if (!visited.has(entity)) {
-        visit(entity);
-      }
-    }
+  it('reports no circular error for an acyclic graph', () => {
+    const svc = new ValidationService();
+    trackEntity(svc, 'B', ['@lookup:A.Name=x']);
+    trackEntity(svc, 'A', []);
 
-    expect(result).toHaveLength(4);
-    // D must come before B and C, and B and C must come before A
-    const dIndex = result.indexOf('D');
-    const bIndex = result.indexOf('B');
-    const cIndex = result.indexOf('C');
-    const aIndex = result.indexOf('A');
-    expect(dIndex).toBeLessThan(bIndex);
-    expect(dIndex).toBeLessThan(cIndex);
-    expect(bIndex).toBeLessThan(aIndex);
-    expect(cIndex).toBeLessThan(aIndex);
+    const detected = svc['checkCircularDependency']('B', new Set<string>(), new Set<string>());
+
+    expect(detected).toBe(false);
+    expect(svc['errors']).toHaveLength(0);
   });
 });
 
@@ -519,32 +444,33 @@ describe('ValidationService - Field Value List Validation (comma-delimited multi
     'Coder',
   ];
 
-  function makeFieldInfo(valueListType: string, allowedValues: string[]): Partial<EntityFieldInfo> {
+  function makeFieldInfo(valueListType: string, allowedValues: string[]): EntityFieldInfo {
+    // Structural subset of EntityFieldInfo consumed by validateFieldValueList
     return {
       Name: 'Phase',
       ValueListType: valueListType,
-      EntityFieldValues: allowedValues.map((v) => ({ Value: v })),
-    };
+      EntityFieldValues: allowedValues.map((v) => ({ Value: v } as EntityFieldValueInfo)),
+    } as EntityFieldInfo;
   }
 
-  function makeEntityInfo(): Partial<EntityInfo> {
-    return { Name: 'Notes' };
+  function makeEntityInfo(): EntityInfo {
+    return { Name: 'Notes' } as EntityInfo;
   }
 
   async function callValidate(
     svc: ValidationService,
     value: string | null | undefined,
-    fieldInfo: Partial<EntityFieldInfo>,
-    entityInfo: Partial<EntityInfo>,
+    fieldInfo: EntityFieldInfo,
+    entityInfo: EntityInfo,
     filePath: string,
-  ): Promise<{ errors: any[]; warnings: any[] }> {
+  ): Promise<{ errors: ValidationError[]; warnings: ValidationWarning[] }> {
     // Reset internal state
-    (svc as any).errors = [];
-    (svc as any).warnings = [];
-    await (svc as any).validateFieldValueList(value, fieldInfo, entityInfo, filePath);
+    svc['errors'] = [];
+    svc['warnings'] = [];
+    await svc['validateFieldValueList'](value, fieldInfo, entityInfo, filePath);
     return {
-      errors: (svc as any).errors,
-      warnings: (svc as any).warnings,
+      errors: svc['errors'],
+      warnings: svc['warnings'],
     };
   }
 
@@ -707,25 +633,30 @@ describe('ValidationService - Required-field warning is NEW-record-only', () => 
   // A NOT-NULL field with no default — e.g. BaseView on MJ: Entities. Existing
   // records already hold its value in the DB, so a metadata file that omits it
   // (because it only updates some other field) must NOT be warned about.
-  function makeEntityInfoWithRequiredField(): any {
+  // Structural subset of EntityFieldInfo read by validateFields' required-field
+  // pass, plus IsForeignKey which the pass probes on sibling fields.
+  type RequiredCheckFieldShape = Partial<EntityFieldInfo> & { IsForeignKey?: boolean };
+
+  function makeEntityInfoWithRequiredField(): EntityInfo {
+    const fields: RequiredCheckFieldShape[] = [
+      { Name: 'Name', AllowsNull: true, DefaultValue: null, RelatedEntity: null, AutoIncrement: false, IsForeignKey: false },
+      { Name: 'BaseView', AllowsNull: false, DefaultValue: null, RelatedEntity: null, AutoIncrement: false, IsForeignKey: false },
+    ];
     return {
       Name: 'MJ: Entities',
-      Fields: [
-        { Name: 'Name', AllowsNull: true, DefaultValue: null, RelatedEntity: null, AutoIncrement: false, ReadOnly: false, IsForeignKey: false },
-        { Name: 'BaseView', AllowsNull: false, DefaultValue: null, RelatedEntity: null, AutoIncrement: false, ReadOnly: false, IsForeignKey: false },
-      ],
-    };
+      Fields: fields as EntityFieldInfo[],
+    } as EntityInfo;
   }
 
   async function callValidateFields(
-    fields: Record<string, any>,
+    fields: Record<string, unknown>,
     isExistingRecord: boolean,
-  ): Promise<{ errors: any[]; warnings: any[] }> {
-    const svc = new ValidationService({ checkBestPractices: true } as any);
-    (svc as any).errors = [];
-    (svc as any).warnings = [];
-    await (svc as any).validateFields(fields, makeEntityInfoWithRequiredField(), '/test/entities.json', undefined, isExistingRecord);
-    return { errors: (svc as any).errors, warnings: (svc as any).warnings };
+  ): Promise<{ errors: ValidationError[]; warnings: ValidationWarning[] }> {
+    const svc = new ValidationService({ checkBestPractices: true });
+    svc['errors'] = [];
+    svc['warnings'] = [];
+    await svc['validateFields'](fields, makeEntityInfoWithRequiredField(), '/test/entities.json', undefined, isExistingRecord);
+    return { errors: svc['errors'], warnings: svc['warnings'] };
   }
 
   it('warns about a missing required field for a NEW record (no primaryKey)', async () => {
@@ -746,74 +677,53 @@ describe('ValidationService - Required-field warning is NEW-record-only', () => 
   });
 });
 
-describe('ValidationService - Dependency Order Checking Logic', () => {
-  it('should detect order violations', () => {
-    const directoryOrder = ['B', 'A']; // B comes first but depends on A
-    const entityDependencies = new Map<string, { entityName: string; dependsOn: Set<string>; file: string }>();
-    entityDependencies.set('B', { entityName: 'B', dependsOn: new Set(['A']), file: '/path/B' });
-    entityDependencies.set('A', { entityName: 'A', dependsOn: new Set(), file: '/path/A' });
+describe('ValidationService - Dependency Order Checking (real implementation)', () => {
+  function trackEntity(svc: ValidationService, entityName: string, lookups: string[]): void {
+    const fields: Record<string, string> = {};
+    lookups.forEach((lookup, i) => {
+      fields[`Ref${i}`] = lookup;
+    });
+    svc['trackEntityDependencies']({ fields }, entityName, `/meta/${entityName}.json`);
+  }
 
-    const violations: Array<{ entity: string; dependency: string; file: string }> = [];
-    const processedEntities = new Set<string>();
+  it('detects order violations when a dependent entity is processed first', () => {
+    const svc = new ValidationService();
+    trackEntity(svc, 'B', ['@lookup:A.Name=x']); // B depends on A
+    trackEntity(svc, 'A', []);
 
-    for (const dir of directoryOrder) {
-      const entityName = dir;
-      const deps = entityDependencies.get(entityName);
-      if (deps) {
-        for (const dep of deps.dependsOn) {
-          if (!processedEntities.has(dep) && directoryOrder.includes(dep)) {
-            violations.push({
-              entity: entityName,
-              dependency: dep,
-              file: deps.file,
-            });
-          }
-        }
-      }
-      processedEntities.add(entityName);
-    }
+    const violations = svc['checkDependencyOrder'](['B', 'A']);
 
     expect(violations).toHaveLength(1);
-    expect(violations[0].entity).toBe('B');
-    expect(violations[0].dependency).toBe('A');
+    expect(violations[0]).toEqual({
+      entity: 'B',
+      dependency: 'A',
+      file: '/meta/B.json',
+    });
   });
 
-  it('should detect no violations when order is correct', () => {
-    const directoryOrder = ['A', 'B']; // A comes first, B depends on A
-    const entityDependencies = new Map<string, { entityName: string; dependsOn: Set<string>; file: string }>();
-    entityDependencies.set('B', { entityName: 'B', dependsOn: new Set(['A']), file: '/path/B' });
-    entityDependencies.set('A', { entityName: 'A', dependsOn: new Set(), file: '/path/A' });
+  it('detects no violations when the order satisfies dependencies', () => {
+    const svc = new ValidationService();
+    trackEntity(svc, 'B', ['@lookup:A.Name=x']);
+    trackEntity(svc, 'A', []);
 
-    const violations: Array<{ entity: string; dependency: string; file: string }> = [];
-    const processedEntities = new Set<string>();
-
-    for (const dir of directoryOrder) {
-      const entityName = dir;
-      const deps = entityDependencies.get(entityName);
-      if (deps) {
-        for (const dep of deps.dependsOn) {
-          if (!processedEntities.has(dep) && directoryOrder.includes(dep)) {
-            violations.push({
-              entity: entityName,
-              dependency: dep,
-              file: deps.file,
-            });
-          }
-        }
-      }
-      processedEntities.add(entityName);
-    }
-
-    expect(violations).toHaveLength(0);
+    expect(svc['checkDependencyOrder'](['A', 'B'])).toHaveLength(0);
   });
 
-  it('should skip self-dependency checks', () => {
-    const entityName = 'Categories';
-    const from = 'Categories';
-    const to = 'Categories';
+  it('ignores dependencies on entities outside the directory order', () => {
+    const svc = new ValidationService();
+    trackEntity(svc, 'B', ['@lookup:External.Name=x']);
 
-    // Mimic addEntityDependency behavior (skip self-references)
-    const skipped = from === to;
-    expect(skipped).toBe(true);
+    // 'External' is not in the processed order, so it cannot be a violation
+    expect(svc['checkDependencyOrder'](['B'])).toHaveLength(0);
+  });
+
+  it('skips self-dependencies (hierarchical ParentID lookups)', () => {
+    const svc = new ValidationService();
+    trackEntity(svc, 'Categories', ['@lookup:Categories.Name=Parent Category']);
+
+    // The self-referencing lookup must not register a dependency edge...
+    expect(svc['entityDependencies'].get('Categories')?.dependsOn.size).toBe(0);
+    // ...so processing order can never violate it
+    expect(svc['checkDependencyOrder'](['Categories'])).toHaveLength(0);
   });
 });

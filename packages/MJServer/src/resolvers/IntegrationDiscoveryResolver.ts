@@ -48,7 +48,7 @@ import {
     ExistingTableInfo,
     SchemaEvolution
 } from "@memberjunction/integration-schema-builder";
-import { RuntimeSchemaManager, type RSUPipelineStep, type RSUPipelineInput } from "@memberjunction/schema-engine";
+import { RuntimeSchemaManager, type RSUPipelineStep, type RSUPipelineInput, type RSUPendingWork } from "@memberjunction/schema-engine";
 import type { SchemaBuilderOutput } from "@memberjunction/integration-schema-builder";
 import { IntegrationProgressEmitter, IntegrationProgressReader } from "@memberjunction/integration-progress-artifacts";
 import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction/integration-progress-artifacts";
@@ -965,7 +965,7 @@ class IntegrationRunEventsOutput {
     @Field() IsInFlight: boolean;
 }
 
-// Sync progress is now tracked inside IntegrationEngine itself via IntegrationEngine.GetSyncProgress()
+// Sync progress is now tracked inside IntegrationEngine itself via IntegrationEngine.GetSyncProgressAsync()
 
 @ObjectType()
 class ConnectionSummaryOutput {
@@ -3529,12 +3529,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             );
 
             // Step 4: Inject integration post-restart payload into RSU input.
-            const { join } = await import('node:path');
-            const rsuWorkDir = process.env.RSU_WORK_DIR || process.cwd();
-            const pendingWorkDir = join(rsuWorkDir, '.rsu_pending');
-            const pendingFilePath = join(pendingWorkDir, `${Date.now()}.json`);
-
-            // Build per-object field map for pending file (null = all fields).
+            // Build per-object field map for the pending payload (null = all fields).
             // resolved.sourceObjects is order-aligned with resolvedNames after the
             // resolveSourceObjectsToNames refactor — pair them directly instead
             // of looking up by ID (which broke for name-only selections).
@@ -3557,7 +3552,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const hadPriorMaps = priorMapsResult.Success && priorMapsResult.Results.length > 0;
             const effectiveFullSync = input.FullSync ?? !hadPriorMaps;
 
-            const pendingPayload = {
+            const pendingPayload: RSUPendingWork = {
                 CompanyIntegrationID: input.CompanyIntegrationID,
                 SourceObjectNames: resolvedNames,
                 SourceObjectFields: sourceObjectFields,
@@ -3566,13 +3561,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 ScheduleTimezone: input.ScheduleTimezone,
                 StartSync: input.StartSync,
                 FullSync: effectiveFullSync,
-                SyncScope: input.SyncScope ?? 'created',
+                SyncScope: input.SyncScope === 'all' ? 'all' : 'created',
                 UnselectedAction: (input.UnselectedAction ?? 'disable') as 'disable' | 'ignore',
                 CreatedAt: new Date().toISOString(),
             };
-            rsuInput.PostRestartFiles = [
-                { Path: pendingFilePath, Content: JSON.stringify(pendingPayload, null, 2) }
-            ];
+            rsuInput.PendingWork = [pendingPayload];
+            rsuInput.ContextUser = user;
 
             // Step 5: Run pipeline (restart kills process at the end).
             // Retrying variant — an install should not die because the migration hit a dropped
@@ -3585,9 +3579,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message, StepIndex: s.StepIndex, StepTotal: s.StepTotal,
             }));
 
-            // If pipeline failed, clean up pending file and return error
+            // Pending work is registered only for migrations that succeeded, so a
+            // failed pipeline has nothing to clean up.
             if (!migrationSucceeded) {
-                try { (await import('node:fs')).unlinkSync(pendingFilePath); } catch { /* may not exist */ }
                 return {
                     Success: false,
                     Message: `Pipeline failed: ${batchResult.Results[0]?.ErrorMessage ?? 'unknown error'}`,
@@ -3645,7 +3639,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     }
                 }
 
-                try { (await import('node:fs')).unlinkSync(pendingFilePath); } catch { /* already consumed */ }
+                // The work just happened inline (no restart), so close out its durable rows.
+                for (const pendingWorkID of batchResult.Results[0]?.PendingWorkIDs ?? []) {
+                    await rsm.CompletePendingWork(pendingWorkID, user);
+                }
 
                 return {
                     Success: true,
@@ -4235,6 +4232,60 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /**
+     * Enqueue a sync for worker execution (PR 1 item 8) instead of running it in this
+     * process. Creates the run row with `Status='Queued'` and returns its ID immediately —
+     * so the caller gets a real, trackable RunID with no fire-and-forget polling window,
+     * and the sync survives this process going away before it starts.
+     *
+     * Requires a process running the integration sync worker (`integrationSyncWorker.enabled`);
+     * without one, rows accumulate in the queue unexecuted.
+     */
+    @Mutation(() => StartSyncOutput)
+    @RequireSystemUser()
+    async IntegrationEnqueueSync(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("fullSync", () => Boolean, { defaultValue: false, description: 'If true, ignores watermarks and re-fetches all records from the source' }) fullSync: boolean,
+        @Arg("entityMapIDs", () => [String], { nullable: true, description: 'Optional: sync only these entity maps. If omitted, syncs all maps for the connector.' }) entityMapIDs: string[],
+        @Arg("syncDirection", () => String, { nullable: true, description: 'Override sync direction: Pull | Push | Bidirectional. If omitted, each entity map\'s own SyncDirection is used.' }) syncDirection: 'Pull' | 'Push' | 'Bidirectional' | undefined,
+        @Ctx() ctx: AppContext
+    ): Promise<StartSyncOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const provider = GetReadWriteProvider(ctx.providers) as unknown as IMetadataProvider;
+            await IntegrationEngine.Instance.Config(false, user, provider);
+
+            // Same upfront gates as IntegrationStartSync — refusing here beats queueing work
+            // that the engine will only refuse later, in another process, out of the caller's sight.
+            const ciCheck = await provider.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+            if (await ciCheck.InnerLoad(CompositeKey.FromID(companyIntegrationID)) && ciCheck.IsActive === false) {
+                return { Success: false, Message: 'Connector is deactivated (IsActive=false); sync not enqueued' };
+            }
+            const maintenance = IntegrationEngine.GetMaintenanceLock(companyIntegrationID);
+            if (maintenance) {
+                return { Success: false, Message: `Sync not enqueued: ${maintenance.Reason} is in progress for this connection (since ${maintenance.AcquiredAt.toISOString()}). Retry after it completes.` };
+            }
+
+            const syncOptions: IntegrationSyncOptions = {};
+            if (fullSync) syncOptions.FullSync = true;
+            if (entityMapIDs?.length) syncOptions.EntityMapIDs = entityMapIDs;
+            if (syncDirection) syncOptions.SyncDirection = syncDirection;
+
+            const runID = await IntegrationEngine.Instance.EnqueueSync(
+                companyIntegrationID,
+                user,
+                'Manual',
+                Object.keys(syncOptions).length > 0 ? syncOptions : undefined,
+                provider
+            );
+
+            return { Success: true, Message: 'Sync enqueued', RunID: runID };
+        } catch (e) {
+            LogError(`IntegrationEnqueueSync error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    /**
      * Cancels a running sync by marking its status as Cancelled.
      */
     @Mutation(() => MutationResultOutput)
@@ -4243,10 +4294,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Ctx() ctx: AppContext
     ): Promise<MutationResultOutput> {
         try {
-            this.getAuthenticatedUser(ctx);
+            const user = this.getAuthenticatedUser(ctx);
+            const provider = GetReadWriteProvider(ctx.providers) as unknown as IMetadataProvider;
 
-            // Signal the engine to abort the running sync
-            const cancelled = IntegrationEngine.CancelSync(companyIntegrationID);
+            // DB-backed cancel (durable runs): stamps CancelRequestedAt on the live run row, so
+            // the request reaches the owning process wherever it is — this server, another API
+            // node, or a worker — via its heartbeat/boundary checks. No in-memory signal.
+            const cancelled = await IntegrationEngine.CancelSyncAsync(companyIntegrationID, user, provider);
             if (!cancelled) {
                 return { Success: false, Message: 'No active sync found for this connector' };
             }
@@ -4843,8 +4897,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Ctx() ctx: AppContext
     ): Promise<OperationProgressOutput> {
         try {
-            this.getAuthenticatedUser(ctx);
-            const syncProgress = IntegrationEngine.GetSyncProgress(companyIntegrationID);
+            const user = this.getAuthenticatedUser(ctx);
+            const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+            // DB-backed progress (durable runs): reads ProgressJSON from the live run row, so
+            // progress is visible from ANY process — not just the one executing the sync.
+            const syncProgress = await IntegrationEngine.GetSyncProgressAsync(companyIntegrationID, user, provider);
             if (syncProgress) {
                 return {
                     Success: true,
@@ -5367,18 +5424,14 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         connInput.CompanyIntegrationID, objects, validatedPlatform, user, skipGitCommit, skipRestart, provider, sourceSchema
                     );
 
-                    // Build per-object field map for pending file
+                    // Build per-object field map for the pending payload
                     const sourceObjectFields: Record<string, string[] | null> = {};
                     for (const name of resolvedNames) {
                         sourceObjectFields[name] = fieldsByName.get(name.toLowerCase()) ?? null;
                     }
 
                     // Inject post-restart pending work payload
-                    const { join } = await import('node:path');
-                    const rsuWorkDir = process.env.RSU_WORK_DIR || process.cwd();
-                    const pendingWorkDir = join(rsuWorkDir, '.rsu_pending');
-                    const pendingFilePath = join(pendingWorkDir, `${Date.now()}_${connInput.CompanyIntegrationID}.json`);
-                    const pendingPayload = {
+                    const pendingPayload: RSUPendingWork = {
                         CompanyIntegrationID: connInput.CompanyIntegrationID,
                         SourceObjectNames: resolvedNames,
                         SourceObjectFields: sourceObjectFields,
@@ -5387,15 +5440,15 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         ScheduleTimezone: connInput.ScheduleTimezone,
                         StartSync: input.StartSync,
                         FullSync: input.FullSync ?? false,
-                        SyncScope: input.SyncScope ?? 'created',
-                        SyncDirection: input.SyncDirection,
-                        ScheduleSyncDirection: input.ScheduleSyncDirection,
+                        SyncScope: input.SyncScope === 'all' ? 'all' : 'created',
+                        // Unrecognized directions fall back to undefined = "use the entity map's own SyncDirection"
+                        SyncDirection: input.SyncDirection && isValidSyncDirection(input.SyncDirection) ? input.SyncDirection : undefined,
+                        ScheduleSyncDirection: input.ScheduleSyncDirection && isValidSyncDirection(input.ScheduleSyncDirection) ? input.ScheduleSyncDirection : undefined,
                         UnselectedAction: (input.UnselectedAction ?? 'disable') as 'disable' | 'ignore',
                         CreatedAt: new Date().toISOString(),
                     };
-                    rsuInput.PostRestartFiles = [
-                        { Path: pendingFilePath, Content: JSON.stringify(pendingPayload, null, 2) }
-                    ];
+                    rsuInput.PendingWork = [pendingPayload];
+                    rsuInput.ContextUser = user;
 
                     return {
                         connInput,
@@ -5405,7 +5458,6 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         objects,
                         schemaOutput,
                         rsuInput,
-                        pendingFilePath,
                     };
                 })
             );
@@ -5419,7 +5471,6 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 objects: SchemaPreviewObjectInput[];
                 schemaOutput: SchemaBuilderOutput;
                 rsuInput: RSUPipelineInput;
-                pendingFilePath: string;
             }> = [];
             const connectorResults: ApplyAllBatchConnectorResult[] = [];
 
@@ -5471,8 +5522,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         Message: pipelineResult?.ErrorMessage ?? 'Pipeline failed',
                         Warnings: build.schemaOutput.Warnings.length > 0 ? build.schemaOutput.Warnings : undefined,
                     });
-                    // Clean up pending file on failure
-                    try { (await import('node:fs')).unlinkSync(build.pendingFilePath); } catch { /* may not exist */ }
+                    // No pending-work cleanup needed — rows are registered only for
+                    // migrations that succeeded.
                     continue;
                 }
 
@@ -5519,10 +5570,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         if (scheduleResult) connResult.ScheduledJobID = scheduleResult;
                     }
 
-                    // Clean up pending file
-                    try { (await import('node:fs')).unlinkSync(build.pendingFilePath); } catch { /* already consumed */ }
+                    // The work just happened inline (no restart), so close out its durable rows.
+                    for (const pendingWorkID of pipelineResult.PendingWorkIDs ?? []) {
+                        await rsm.CompletePendingWork(pendingWorkID, user);
+                    }
 
-                    connResult.Message = `Applied ${build.objects.length} object(s) — ${entityMapsCreated.length} entity maps created${syncRunID ? ', sync started' : ''}`;
+                    connResult.Message =`Applied ${build.objects.length} object(s) — ${entityMapsCreated.length} entity maps created${syncRunID ? ', sync started' : ''}`;
                 }
 
                 connectorResults.push(connResult);
@@ -6089,26 +6142,21 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 // ApplyAll uses. default: created DISABLED (user enables after the refresh);
                 // autoEnableNewObjects opts in. Removal was already handled in Phase 3 → 'ignore'.
                 if (newObjects.length > 0 && !skipRestart) {
-                    const { join } = await import('node:path');
-                    const rsuWorkDir = process.env.RSU_WORK_DIR || process.cwd();
-                    const pendingFilePath = join(rsuWorkDir, '.rsu_pending', `${Date.now()}-evolution.json`);
-                    rsuInput.PostRestartFiles = [
-                        ...(rsuInput.PostRestartFiles ?? []),
+                    rsuInput.PendingWork = [
+                        ...(rsuInput.PendingWork ?? []),
                         {
-                            Path: pendingFilePath,
-                            Content: JSON.stringify({
-                                CompanyIntegrationID: companyIntegrationID,
-                                SourceObjectNames: newObjects,
-                                SourceObjectFields: Object.fromEntries(newObjects.map(n => [n, null])),
-                                SchemaName: schemaName,
-                                StartSync: false,
-                                SyncScope: 'created',
-                                UnselectedAction: 'ignore',
-                                CreateDisabled: !autoEnableNewObjects,
-                                CreatedAt: new Date().toISOString(),
-                            }, null, 2),
+                            CompanyIntegrationID: companyIntegrationID,
+                            SourceObjectNames: newObjects,
+                            SourceObjectFields: Object.fromEntries(newObjects.map(n => [n, null])),
+                            SchemaName: schemaName,
+                            StartSync: false,
+                            SyncScope: 'created',
+                            UnselectedAction: 'ignore',
+                            CreateDisabled: !autoEnableNewObjects,
+                            CreatedAt: new Date().toISOString(),
                         },
                     ];
+                    rsuInput.ContextUser = user;
                 }
 
                 const rsm = RuntimeSchemaManager.Instance;

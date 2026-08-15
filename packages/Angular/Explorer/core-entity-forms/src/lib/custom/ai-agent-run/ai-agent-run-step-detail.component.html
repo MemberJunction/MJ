@@ -110,13 +110,29 @@
                 <i class="fa-solid fa-floppy-disk"></i> Save as Workflow
               </button>
             </div>
-            <mj-task-graph-editor
-              class="detail-graph__canvas"
-              [Spec]="stepTaskGraph"
-              [NodePositions]="stepTaskGraphPositions"
-              [ReadOnly]="true"
-              [ShowPalette]="false">
-            </mj-task-graph-editor>
+            @if (stepTaskGraphParentTaskID; as parentTaskID) {
+              <!-- The RUN, not the plan. Same component the Workflows app uses, so a workflow is
+                   drawn identically wherever it is opened from — declined branches hatched,
+                   untravelled edges absent, toolbar on, legend off. -->
+              <mj-task-graph-run-view
+                class="detail-graph__canvas"
+                [Provider]="Provider"
+                [ParentTaskID]="parentTaskID"
+                [WorkflowName]="stepTaskGraph?.workflowName || 'Workflow'"
+                Height="100%">
+              </mj-task-graph-run-view>
+            } @else {
+              <!-- No dispatcher rows to read: a folded graph never ran. Drawing the spec is the
+                   honest rendering — it is a plan, and it is drawn as one. -->
+              <mj-task-graph-editor
+                class="detail-graph__canvas"
+                [Spec]="stepTaskGraph"
+                [NodePositions]="stepTaskGraphPositions"
+                [ReadOnly]="true"
+                [ShowPalette]="false"
+                [ShowLegend]="false">
+              </mj-task-graph-editor>
+            }
           </div>
         }
         @if (detailPaneTab === 'skills' && showSkillsTab) {

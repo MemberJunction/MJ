@@ -12,6 +12,8 @@ import { ExplorerEntityDataGridComponent } from './lib/explorer-entity-data-grid
 import { MjIsaRelatedCardComponent } from './lib/isa-related-panel/isa-related-card.component';
 import { MjIsaRelatedPanelComponent } from './lib/isa-related-panel/isa-related-panel.component';
 import { FormPanelSlotComponent } from './lib/panel-slot/form-panel-slot.component';
+import { FormContributionsComponent } from './lib/panel-slot/form-contributions.component';
+import { RelatedEntityGridPanelComponent } from './lib/panel-slot/related-entity-grid-panel.component';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
@@ -55,6 +57,8 @@ import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component
     MjIsaRelatedCardComponent,
     MjIsaRelatedPanelComponent,
     FormPanelSlotComponent,
+    FormContributionsComponent,
+    RelatedEntityGridPanelComponent,
     InteractiveFormComponent,
     MjEntityFormHostComponent
   ],
@@ -84,6 +88,8 @@ import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component
     MjIsaRelatedCardComponent,
     MjIsaRelatedPanelComponent,
     FormPanelSlotComponent,
+    FormContributionsComponent,
+    RelatedEntityGridPanelComponent,
     InteractiveFormComponent,
     MjEntityFormHostComponent
   ]

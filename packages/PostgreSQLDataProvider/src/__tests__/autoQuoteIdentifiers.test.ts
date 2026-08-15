@@ -17,9 +17,11 @@ vi.mock('pg', () => {
  * unquoted PascalCase identifiers (`FROM __mj.vwAIAgentRuns`, `WHERE TestRun
  * IS NULL`) works against PG's case-folding identifier rules.
  *
- * These mirror the same patterns covered by PostgreSQLCodeGenProvider's
- * tokenizer tests in CodeGenLib — the runtime version is a copy of the same
- * logic so codegen-time and runtime SQL get equivalent treatment.
+ * The tokenizer itself is shared with PostgreSQLCodeGenProvider and lives in
+ * `@memberjunction/sql-dialect` (`AutoQuotePostgreSQLIdentifiers`), which is where
+ * the exhaustive rule matrix and the baseline-derived collision guard live. These
+ * tests drive the runtime entry point, so they cover both the delegation and the
+ * runtime-specific SQL shapes MJ actually emits.
  */
 describe('PostgreSQLDataProvider.autoQuoteIdentifiers', () => {
     const provider = new PostgreSQLDataProvider();
@@ -70,9 +72,19 @@ describe('PostgreSQLDataProvider.autoQuoteIdentifiers', () => {
             expect(quote('SELECT FROM WHERE AND OR')).toBe('SELECT FROM WHERE AND OR');
         });
 
-        it('does not quote the __mj_ prefixed timestamp columns', () => {
+        it('QUOTES the mixed-case __mj_ framework columns', () => {
+            // Inverted deliberately. This assertion used to pin the `__mj_` carve-out, which made
+            // the five mixed-case framework columns fold to lowercase and fail with
+            // `column "__mj_updatedat" does not exist` — the exact defect this quoting exists to
+            // prevent. They are ordinary columns and must quote.
             expect(quote('WHERE __mj_CreatedAt > now()'))
-                .toBe('WHERE __mj_CreatedAt > now()');
+                .toBe('WHERE "__mj_CreatedAt" > now()');
+            expect(quote('SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt FROM t'))
+                .toBe('SELECT MAX("__mj_UpdatedAt") AS "MaxUpdatedAt" FROM t');
+        });
+
+        it('still leaves all-lowercase __mj_ internals bare', () => {
+            expect(quote('WHERE __mj_deleted_at IS NULL')).toBe('WHERE __mj_deleted_at IS NULL');
         });
     });
 
@@ -275,6 +287,81 @@ SELECT * FROM save_result`;
         it('still quotes Type when dot-qualified', () => {
             expect(quote('SELECT rc.Type FROM __mj.vwRecordChanges rc'))
                 .toBe('SELECT rc."Type" FROM __mj."vwRecordChanges" rc');
+        });
+    });
+
+    /**
+     * Case-sensitive keyword matching (MJ #3604, #3590, #3691). Before this, a column whose
+     * name collided with a SQL keyword — `Name` is on nearly every MJ entity, `Values` is the
+     * field-level-encrypted column on __mj."Credential" — was emitted unquoted, folded to
+     * lowercase on PG, and failed with `column "..." does not exist`.
+     */
+    describe('keyword-colliding column names', () => {
+        const COLLIDING_COLUMNS = [
+            'Action', 'Columns', 'Language', 'Length', 'Log',
+            'Month', 'Name', 'Precision', 'Rank', 'Text', 'Values',
+        ] as const;
+
+        it.each(COLLIDING_COLUMNS)('quotes %s in a SELECT list', (col) => {
+            expect(quote(`SELECT ${col} FROM x`)).toBe(`SELECT "${col}" FROM x`);
+        });
+
+        it.each(COLLIDING_COLUMNS)('quotes %s in a WHERE clause', (col) => {
+            expect(quote(`SELECT 1 FROM x WHERE ${col} = $1`)).toBe(`SELECT 1 FROM x WHERE "${col}" = $1`);
+        });
+
+        it.each(COLLIDING_COLUMNS)('quotes %s in an UPDATE SET clause', (col) => {
+            expect(quote(`UPDATE x SET ${col} = $1`)).toBe(`UPDATE x SET "${col}" = $1`);
+        });
+
+        it('quotes the column list while leaving the VALUES keyword bare', () => {
+            expect(quote(`INSERT INTO __mj."Credential" (Name, Values) VALUES ($1, $2)`))
+                .toBe(`INSERT INTO __mj."Credential" ("Name", "Values") VALUES ($1, $2)`);
+        });
+
+        it('distinguishes the Length column from the LENGTH function in one statement', () => {
+            expect(quote('SELECT Length, LENGTH(Name) FROM x')).toBe('SELECT "Length", LENGTH("Name") FROM x');
+        });
+    });
+
+    describe('ALL-CAPS words that are not keywords', () => {
+        it('quotes the ID and URL acronym columns rather than folding them', () => {
+            expect(quote('SELECT ID, URL FROM x')).toBe('SELECT "ID", "URL" FROM x');
+        });
+    });
+
+    describe('function calls', () => {
+        it('leaves a mixed-case function name bare while quoting its arguments', () => {
+            expect(quote("SELECT Coalesce(Name, 'x') FROM x")).toBe(`SELECT Coalesce("Name", 'x') FROM x`);
+        });
+
+        it('quotes a dot-qualified stored procedure written without quotes', () => {
+            expect(quote('SELECT * FROM __mj.spCreateMJWorkspace($1)'))
+                .toBe('SELECT * FROM __mj."spCreateMJWorkspace"($1)');
+        });
+    });
+
+    /**
+     * Fragments authored outside this repo — stored `UserView.OrderBy` values and GraphQL
+     * `ExtraFilter` strings — predate case-sensitive keyword matching and can spell structural
+     * words in mixed case. Those words stay case-insensitive so existing stored data keeps working.
+     */
+    describe('externally authored SQL fragments', () => {
+        it('leaves a mixed-case sort direction bare while quoting the column', () => {
+            expect(quote('ORDER BY Name Desc')).toBe('ORDER BY "Name" Desc');
+        });
+
+        it('leaves mixed-case boolean operators bare', () => {
+            expect(quote('Length = 1 And Rank = 2 Or Name Is Null'))
+                .toBe('"Length" = 1 And "Rank" = 2 Or "Name" Is Null');
+        });
+    });
+
+    describe('idempotency through the provider entry point', () => {
+        it('produces the same output when applied twice', () => {
+            const sql = `SELECT ID, Name, LENGTH(Values), rc.Type FROM __mj.vwRecordChanges rc WHERE Log Is Null ORDER BY Name Desc`;
+            const once = quote(sql);
+            expect(quote(once)).toBe(once);
         });
     });
 });
