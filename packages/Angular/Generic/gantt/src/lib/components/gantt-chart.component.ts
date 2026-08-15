@@ -65,6 +65,7 @@ interface DhxGridColumn {
     standalone: true,
     imports: [CommonModule],
     changeDetection: ChangeDetectionStrategy.OnPush,
+    styleUrls: ['./gantt-theme.css'],
     template: `
         @if (loading) {
             <div class="mj-gantt-loading">Loading Gantt chart...</div>
@@ -135,20 +136,7 @@ interface DhxGridColumn {
             color: var(--mj-text-secondary);
         }
 
-        /* DHTMLX Gantt style overrides for a cleaner look */
-        :host ::ng-deep .gantt_container { font-family: var(--mj-font-family); font-size: var(--mj-text-sm); }
-        :host ::ng-deep .gantt_grid_scale,
-        :host ::ng-deep .gantt_task_scale { background: var(--mj-bg-surface-sunken); border-bottom: 1px solid var(--mj-border-default); }
         :host ::ng-deep .gantt_task .gantt_task_content { font-weight: var(--mj-font-medium); }
-        :host ::ng-deep .gantt_row { border-bottom: 1px solid var(--mj-border-subtle); }
-        :host ::ng-deep .gantt_task_line { border-radius: var(--mj-radius-sm); }
-        :host ::ng-deep .gantt_layout_cell.gantt_resizer {
-            cursor: col-resize;
-            background: var(--mj-border-default);
-        }
-        :host ::ng-deep .gantt_layout_cell.gantt_resizer:hover {
-            background: var(--mj-brand-primary);
-        }
     `]
 })
 export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestroy {

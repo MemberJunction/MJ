@@ -1,0 +1,98 @@
+/**
+ * Map DHTMLX Gantt's --dhx-gantt-* theme variables onto MJ semantic tokens.
+ * The chart inherits light/dark/white-label from the host --mj-* set.
+ */
+:host {
+    color-scheme: inherit;
+
+    --dhx-gantt-font-family: var(--mj-font-family);
+    --dhx-gantt-font-size: var(--mj-text-sm);
+
+    --dhx-gantt-base-colors-white: var(--mj-bg-surface);
+    --dhx-gantt-base-colors-background: var(--mj-bg-surface);
+    --dhx-gantt-base-colors-background-alt: var(--mj-bg-surface-sunken);
+    --dhx-gantt-base-colors-text-base: var(--mj-text-primary);
+    --dhx-gantt-base-colors-text-light: var(--mj-text-secondary);
+    --dhx-gantt-base-colors-text-on-fill: var(--mj-text-inverse);
+    --dhx-gantt-base-colors-border: var(--mj-border-default);
+    --dhx-gantt-base-colors-border-light: var(--mj-border-subtle);
+    --dhx-gantt-base-colors-icons: var(--mj-text-muted);
+    --dhx-gantt-base-colors-icons-hover: var(--mj-text-secondary);
+    --dhx-gantt-base-colors-icons-active: var(--mj-text-primary);
+    --dhx-gantt-base-colors-disabled: var(--mj-bg-surface-sunken);
+    --dhx-gantt-base-colors-readonly: var(--mj-text-disabled);
+    --dhx-gantt-base-colors-select: color-mix(in srgb, var(--mj-brand-primary) 16%, var(--mj-bg-surface));
+    --dhx-gantt-base-colors-hover-color: var(--mj-bg-surface-hover);
+    --dhx-gantt-base-colors-primary: var(--mj-brand-primary);
+    --dhx-gantt-base-colors-primary-hover: var(--mj-brand-primary-hover);
+    --dhx-gantt-base-colors-primary-active: var(--mj-brand-primary-active);
+    --dhx-gantt-base-colors-primary-lighter: color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+    --dhx-gantt-base-colors-success: var(--mj-status-success);
+    --dhx-gantt-base-colors-warning: var(--mj-status-warning);
+    --dhx-gantt-base-colors-error: var(--mj-status-error);
+    --dhx-gantt-base-colors-error-text: var(--mj-text-inverse);
+
+    --dhx-gantt-container-background: var(--mj-bg-surface);
+    --dhx-gantt-container-color: var(--mj-text-primary);
+    --dhx-gantt-offtime-background: var(--mj-bg-surface-sunken);
+
+    --dhx-gantt-scale-background: var(--mj-bg-surface-sunken);
+    --dhx-gantt-scale-color: var(--mj-text-muted);
+    --dhx-gantt-scale-border-vertical: 1px solid var(--mj-border-subtle);
+    --dhx-gantt-scale-border-horizontal: 1px solid var(--mj-border-default);
+
+    --dhx-gantt-grid-body-background: var(--mj-bg-surface);
+    --dhx-gantt-grid-scale-background: var(--mj-bg-surface-sunken);
+    --dhx-gantt-grid-scale-color: var(--mj-text-muted);
+    --dhx-gantt-timeline-scale-background: var(--mj-bg-surface-sunken);
+    --dhx-gantt-timeline-scale-color: var(--mj-text-muted);
+
+    --dhx-gantt-task-row-background: var(--mj-bg-surface);
+    --dhx-gantt-task-row-background--odd: var(--mj-bg-surface);
+    --dhx-gantt-task-row-border: 1px solid var(--mj-border-subtle);
+    --dhx-gantt-grid-row-border: 1px solid var(--mj-border-subtle);
+
+    --dhx-gantt-task-blue: var(--mj-brand-primary);
+    --dhx-gantt-task-background: var(--mj-brand-primary);
+    --dhx-gantt-task-background-primary: var(--mj-brand-primary);
+    --dhx-gantt-task-color: var(--mj-text-inverse);
+    --dhx-gantt-task-line-text: var(--mj-text-primary);
+    --dhx-gantt-task-border-radius: var(--mj-radius-sm);
+    --dhx-gantt-task-progress-color: color-mix(in srgb, var(--mj-text-inverse) 22%, transparent);
+    --dhx-gantt-project-background: var(--mj-status-success);
+    --dhx-gantt-project-color: var(--mj-text-inverse);
+    --dhx-gantt-milestone-background: var(--mj-brand-accent, var(--mj-status-info));
+
+    --dhx-gantt-link-background: var(--mj-text-muted);
+    --dhx-gantt-link-background-hover: var(--mj-text-secondary);
+    --dhx-gantt-link-critical-background: var(--mj-status-error);
+
+    --dhx-gantt-popup-background: var(--mj-bg-surface-elevated);
+    --dhx-gantt-popup-color: var(--mj-text-primary);
+    --dhx-gantt-popup-border: 1px solid var(--mj-border-default);
+    --dhx-gantt-tooltip-background: var(--mj-text-primary);
+    --dhx-gantt-tooltip-color: var(--mj-bg-surface);
+
+    --dhx-gantt-default-border: 1px solid var(--mj-border-default);
+    --dhx-gantt-border-radius: var(--mj-radius-sm);
+}
+
+:host ::ng-deep .gantt_container {
+    border-color: var(--mj-border-default);
+    border-radius: var(--mj-radius-md);
+    overflow: hidden;
+}
+
+:host ::ng-deep .gantt_layout_cell.gantt_resizer {
+    cursor: col-resize;
+    background: var(--mj-border-default);
+}
+
+:host ::ng-deep .gantt_layout_cell.gantt_resizer:hover {
+    background: var(--mj-brand-primary);
+}
+
+:host ::ng-deep .gantt_hor_scroll,
+:host ::ng-deep .gantt_ver_scroll {
+    color-scheme: inherit;
+}
