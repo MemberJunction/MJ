@@ -38,7 +38,7 @@ import type {
 } from './types.js';
 import { ClassifyError, IsRetryableError } from './types.js';
 import { WithRetry } from './RetryRunner.js';
-import { WithTimeout, DEFAULT_OPERATION_TIMEOUTS } from './BaseIntegrationConnector.js';
+import { WithTimeout, OperationTimeoutError, DEFAULT_OPERATION_TIMEOUTS } from './BaseIntegrationConnector.js';
 import { ConnectorFactory } from './ConnectorFactory.js';
 import { FieldMappingEngine } from './FieldMappingEngine.js';
 import { MatchEngine } from './MatchEngine.js';
@@ -2288,7 +2288,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                         `FetchChanges(${entityMap.ExternalObjectName})`,
                     ),
                     undefined,
-                    (err) => IsRetryableError(ClassifyError(err).Code),
+                    // OUR OWN timeout is terminal for this page; a transport error is not.
+                    //
+                    // `WithTimeout` is a `Promise.race` with no cancellation, so the abandoned attempt
+                    // keeps running. Retrying meant a second full page of vendor requests overlapping
+                    // the first, then a third — up to 3x the load on a source that was already too slow
+                    // to finish once, which is a good way to earn a real 429 (and THAT does cut
+                    // concurrency). And the retry could not succeed on its merits anyway: the same work
+                    // under the same budget exceeds it again.
+                    //
+                    // Deliberately `instanceof` rather than the classified code. `ClassifyError` folds
+                    // `econnreset` in with timeouts under `NETWORK_TIMEOUT`, and a reset socket IS worth
+                    // retrying — so excluding the whole code would lose real resilience. Only the error
+                    // WithTimeout itself minted is excluded.
+                    (err) => !(err instanceof OperationTimeoutError) && IsRetryableError(ClassifyError(err).Code),
                     (attempt, err, delayMs) => logger?.emit('sync.fetch.retry', {
                         externalObjectName: entityMap.ExternalObjectName,
                         batchIndex: batchCount,
