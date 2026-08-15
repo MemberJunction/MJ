@@ -458,6 +458,25 @@ export abstract class BaseIntegrationConnector {
     public get MaxConcurrencyHint(): number | null { return null; }
 
     /**
+     * Per-connector override for the `FetchChanges` timeout, in milliseconds. `null` → use
+     * `DEFAULT_OPERATION_TIMEOUTS.FetchChangesMs` (30s).
+     *
+     * Raise this when a single page is legitimately slow: a connector that fans out one request per
+     * parent (ORCID's per-iD `/record`, any second-layer object) does N requests inside ONE
+     * `FetchChanges` call, so its page time scales with `BatchSize` — and with how much concurrency
+     * the engine's adaptive controller currently allows. The fixed 30s made that interact badly:
+     * after the controller cut concurrency, a page that comfortably fit when parallel no longer fit
+     * sequentially, so it timed out, which kept concurrency pinned down — a spiral that forced
+     * connector authors to shrink `BatchSize` for the sequential worst case and waste the parallel
+     * headroom the rest of the time.
+     *
+     * Precedence (highest first): `CompanyIntegration.Configuration.fetchTimeoutMs` → this property
+     * → `DEFAULT_OPERATION_TIMEOUTS.FetchChangesMs`. Deployments therefore keep the last word without
+     * a code change, while a connector that KNOWS it is slow ships a sane default.
+     */
+    public get FetchChangesTimeoutMs(): number | null { return null; }
+
+    /**
      * Name of a stable, monotonic ordering key (PK/identity) usable for KEYSET/seek resume on
      * watermark-less objects (plan.md §7 — resume from last-seen key, robust to mid-stream
      * insert/delete). `null` → keyset resume unavailable for this object.
