@@ -1,13 +1,17 @@
 // Card Grid & Expandable Card styling using MJ Design Tokens
 
 :host {
-    display: block;
+    display: flex;
+    flex-direction: column;
     width: 100%;
+    height: 100%;
+    min-width: 0;
 }
 
 .mj-card-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
     gap: var(--mj-card-grid-gap, var(--mj-space-4, 16px));
     width: 100%;
     position: relative;
@@ -27,6 +31,7 @@
 mj-card {
     display: flex;
     flex-direction: column;
+    height: 100%;
     min-width: 0;
     width: 100%;
     box-sizing: border-box;
@@ -35,8 +40,9 @@ mj-card {
 .mj-card {
     display: flex;
     flex-direction: column;
-    flex: 1;
-    width: 100%;
+    flex: 1 1 100%;
+    height: 100%;
+    min-height: 290px;
     background: var(--mj-bg-surface-card, var(--mj-bg-surface, #141f33));
     border: 1px solid var(--mj-border-default, #2a3852);
     border-radius: var(--mj-radius-xl, 16px);
@@ -65,27 +71,30 @@ mj-card {
     }
 
     &__header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: var(--mj-space-3, 12px);
-        margin-bottom: var(--mj-space-3, 12px);
-        min-height: 28px;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: flex-start !important;
+        justify-content: space-between !important;
+        gap: var(--mj-space-3, 12px) !important;
+        margin-bottom: var(--mj-space-3, 12px) !important;
+        min-height: 28px !important;
+        width: 100% !important;
     }
 
     &__title-group {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        min-width: 0;
-        flex: 1;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 2px !important;
+        min-width: 0 !important;
+        flex: 1 1 auto !important;
     }
 
     &__title-row {
-        display: flex;
-        align-items: center;
-        gap: var(--mj-space-2, 8px);
-        min-width: 0;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: var(--mj-space-2, 8px) !important;
+        min-width: 0 !important;
     }
 
     &__icon {
@@ -117,11 +126,12 @@ mj-card {
     }
 
     &__actions {
-        display: flex;
-        align-items: center;
-        gap: var(--mj-space-2, 8px);
-        flex-shrink: 0;
-        margin-left: auto;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: var(--mj-space-2, 8px) !important;
+        flex-shrink: 0 !important;
+        margin-left: auto !important;
     }
 
     &__toggle-btn {
