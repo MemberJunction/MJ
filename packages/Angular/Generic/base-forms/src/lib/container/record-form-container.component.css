@@ -69,7 +69,13 @@ mj-record-form-container {
   padding: 16px 20px 24px;
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  /* Definite height = the scroll-area's client box. min-height: 100% alone
+     lets the column grow with content and never gives related grids a
+     containing-block height, so Height:auto (100%) on the grid collapses. */
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
   box-sizing: border-box;
 }
 
@@ -79,9 +85,11 @@ mj-record-form-container {
   max-width: 1160px;
 }
 
-.mj-forms-layout--left-nav {
+.mj-forms-layout-row.mj-forms-layout--left-nav {
   flex: 1;
   min-height: 0;
+  /* Wins over .mj-forms-layout-row { align-items: flex-start } so the
+     body column stretches to the rail / viewport instead of hugging content. */
   align-items: stretch;
   gap: 16px;
 }
@@ -119,8 +127,10 @@ mj-record-form-container {
 }
 
 .mj-forms-layout--left-nav mj-collapsible-panel.mj-panel--related-entity.mj-chrome-show {
-  flex: 1 1 auto;
-  min-height: 360px;
+  /* flex-basis 0 so grow uses the leftover viewport, not content size.
+     Do not set a pixel min-height — that was hiding a broken containing block. */
+  flex: 1 1 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -128,14 +138,36 @@ mj-record-form-container {
 .mj-forms-layout--left-nav mj-collapsible-panel.mj-panel--related-entity.mj-chrome-show .mj-forms-panel,
 .mj-forms-layout--left-nav mj-collapsible-panel.mj-panel--related-entity.mj-chrome-show .mj-forms-panel-body,
 .mj-forms-layout--left-nav mj-collapsible-panel.mj-panel--related-entity.mj-chrome-show .mj-forms-panel-content {
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
+/* Accordion related panels use a 400px resizable box. Left-nav must drop that
+   so height:100% on the grid resolves against the leftover column, not 400px
+   or a circular auto. */
+.mj-forms-layout--left-nav mj-collapsible-panel.mj-panel--related-entity.mj-chrome-show .mj-forms-panel-content {
+  height: auto;
+  max-height: none;
+  overflow: hidden;
+  resize: none;
+}
+
 .mj-forms-layout--left-nav .mj-forms-all-panels {
   gap: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Details (field panels) can be taller than the viewport — scroll inside the
+   column. Related grids scroll inside AG Grid instead. */
+.mj-forms-layout--left-nav .mj-forms-all-panels:has(mj-collapsible-panel.mj-chrome-show:not(.mj-panel--related-entity)) {
+  overflow-y: auto;
+}
+
+.mj-forms-layout--left-nav .mj-forms-all-panels > *:not(mj-collapsible-panel.mj-panel--related-entity) {
+  flex-shrink: 0;
 }
 
 .mj-forms-layout--left-nav .biz-hero {

@@ -94,6 +94,7 @@ If you're about to start work in one of the areas below, **read the guide first*
   - How **generated**, **custom (`*Extended`)**, and **interactive (`EntityFormOverride`)** forms coexist, plus the variant picker
   - **`EntityFormConfig`** — per-instance control over toolbar / related-entity sections / collapsibility / width / in-form navigation, applied **without regenerating** any form
   - **Form contributions** — `BaseFormPanel` metadata can claim a related-entity grid (last-wins); the container fills in `DisplayInForm` relationships the template did not bake. CodeGen output is unchanged. See [PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md) and [`/plans/form-contributions.md`](../plans/form-contributions.md)
+  - **Form chrome** — L0 CodeGen, L1 `inclusion` (`Primary` / `More` / `None`), L2 Auto ranker, L3 `MJ: Form Chrome Rules`, L4 user order. Policy decorates labels/icons only. See [§7d](FORMS_ARCHITECTURE_GUIDE.md#7d-form-chrome--accordion-left-nav-and-more)
   - Imperative (`forms.open({...})`) and declarative (`<mj-form-dialog>` / `<mj-form-slide-in>`) usage
   - **Read this before building any bespoke "edit a record in a dialog/slide-in" component** — the generic capability almost certainly covers it.
 - **[Lazy Loading Guide](LAZY_LOADING_GUIDE.md)** — How MJExplorer's code-split lazy loading works:

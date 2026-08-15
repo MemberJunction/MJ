@@ -332,6 +332,43 @@ export class FieldValueCollection {
     }
 }
 
+/**
+ * Path segment used for an unsaved entity record so the URL can be deeplinked
+ * (`/app/:app/record/:entity/new?NewRecordValues=...`).
+ */
+export const NEW_ENTITY_RECORD_URL_ID = 'new';
+
+/** Query-string key that carries FieldValueCollection.ToURLSegment() defaults. */
+export const NEW_RECORD_VALUES_QUERY_PARAM = 'NewRecordValues';
+
+/** True when the record-id path segment means "create", not a stored key. */
+export function IsNewEntityRecordUrlId(recordId: string | null | undefined): boolean {
+    if (recordId == null) return true;
+    const trimmed = recordId.trim();
+    return trimmed.length === 0 || trimmed.toLowerCase() === NEW_ENTITY_RECORD_URL_ID;
+}
+
+/**
+ * Encode new-record defaults for a deeplink. Objects become
+ * `Field|value||Field2|value2`. Empty / null returns undefined.
+ */
+export function EncodeNewRecordValuesForURL(values: unknown): string | undefined {
+    if (values == null) return undefined;
+    if (typeof values === 'string') {
+        const trimmed = values.trim();
+        return trimmed.length > 0 ? trimmed : undefined;
+    }
+    if (typeof values !== 'object' || Array.isArray(values)) return undefined;
+    const record = values as Record<string, unknown>;
+    const keys = Object.keys(record).filter((key) => record[key] != null);
+    if (keys.length === 0) return undefined;
+    const obj: Record<string, unknown> = {};
+    for (const key of keys) {
+        obj[key] = record[key];
+    }
+    return FieldValueCollection.FromObject(obj).ToURLSegment();
+}
+
 
 /**
  * Composite keys are used to represent database keys and can include one or more key value pairs.
