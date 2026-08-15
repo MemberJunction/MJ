@@ -448,6 +448,15 @@ export async function GetLatestVersion(
  * Only returns tags matching the `v{major}.{minor}.{patch}` pattern (optionally with a
  * prerelease suffix), or `<subpath>@{major}.{minor}.{patch}` in a multi-app repo.
  *
+ * Two constraints of that pattern are worth stating, because they are load-bearing rather than
+ * incidental: a prerelease identifier may NOT contain a hyphen (`-rc.1` matches, `-rc-1` does not),
+ * and build metadata is rejected outright (`v1.2.3+build.7` is not a tag this returns). The second
+ * is why only the RELEASES path could ever surface a `+build` string as a version — this path cannot
+ * produce one.
+ *
+ * Returns the tag TEXT as matched (`v1.0.7`), not a normalized core: `ValidateGitHubTag` and
+ * external callers depend on that shape. Only the ordering is semver-derived.
+ *
  * Paginated: GitHub returns tags in its own order (not semver order), so truncating at the
  * first 100 could hide the newest version entirely in a repo that tags many apps.
  *
