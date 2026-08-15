@@ -49,6 +49,8 @@ export type TaskRunRow = {
 
 /** The dependency columns a run view reads. */
 export type TaskRunEdge = {
+    /** The `MJ: Task Dependencies` row ID — required by debug verbs that name an edge. */
+    ID?: string;
     TaskID: string;
     DependsOnTaskID: string;
     Condition?: string | null;
@@ -84,6 +86,7 @@ export function ProjectTaskRowsToSpec(
         if (!known.has(edge.TaskID) || !known.has(edge.DependsOnTaskID)) continue;
         const list = dependsOnByTask.get(edge.TaskID) ?? [];
         list.push({
+            id: edge.ID,
             tempId: edge.DependsOnTaskID,
             condition: edge.Condition ?? undefined,
             exclusiveGroup: edge.ExclusiveGroup ?? undefined,

@@ -126,6 +126,15 @@ export class IntegrationConnectorCreationPipeline {
      * per CompanyIntegration and hand both callers the same result — no double introspect/persist/
      * classify, no double live API calls, and the resolver still gets a real summary. A legitimate
      * re-refresh later (outside the window) runs fresh.
+     *
+     * COALESCING vs. A CALLER-SUPPLIED `RunID`. A coalesced call never reaches `runInternal`, so
+     * `opts.RunID` is not the ID of the run that served it. That is fine for a caller who awaits the
+     * result (it gets the real `RunID` back), but NOT for a caller that already handed `opts.RunID` to
+     * a client as "the run to tail" — for that client, the ID would resolve to a run directory that
+     * never gets created, and `IntegrationTailRunEvents` would answer "Run not found" forever, which
+     * is indistinguishable from "the run hasn't opened its stream yet". So whenever a caller supplied
+     * a `RunID` and coalescing served a different run, we publish a terminal ALIAS run under the
+     * requested ID pointing at the run that actually did the work. See {@link honourRequestedRunID}.
      */
     public async Run(opts: ConnectorCreationPipelineOptions): Promise<ConnectorCreationPipelineResult> {
         const ciID = opts.CompanyIntegration?.ID;
@@ -133,11 +142,11 @@ export class IntegrationConnectorCreationPipeline {
 
         const cls = IntegrationConnectorCreationPipeline;
         const inFlight = cls.inFlightRuns.get(ciID);
-        if (inFlight) return inFlight; // a concurrent run is already going — share it
+        if (inFlight) return this.honourRequestedRunID(opts, await inFlight); // concurrent run — share it
 
         cls.pruneRecentRuns();
         const recent = cls.recentRuns.get(ciID);
-        if (recent) return recent.result; // a run just completed (within the window) — reuse it
+        if (recent) return this.honourRequestedRunID(opts, recent.result); // just completed — reuse it
 
         const promise = this.runInternal(opts);
         cls.inFlightRuns.set(ciID, promise);
@@ -147,6 +156,88 @@ export class IntegrationConnectorCreationPipeline {
             return result;
         } finally {
             cls.inFlightRuns.delete(ciID);
+        }
+    }
+
+    /**
+     * Keeps a caller-supplied `opts.RunID` tailable even when coalescing served the call from a
+     * DIFFERENT run.
+     *
+     * Why this exists: `IntegrationCreateConnection`/`IntegrationUpdateConnection` can launch the
+     * refresh detached — they mint a run ID, hand it to the client as "tail this", and only then call
+     * `Run()`. On create, the connection's `IsActive` false→true Save has ALREADY awaited a full
+     * pipeline run for the same CompanyIntegration (MJCompanyIntegrationEntityServer), so the
+     * resolver's call lands inside the coalesce window every time. Without this, the minted ID names
+     * a run directory that is never created: the detached promise RESOLVES (so the launcher's
+     * rejection handler never fires) and the client polls `IntegrationTailRunEvents` forever on
+     * `Run '<id>' not found`, which reads exactly like "not started yet".
+     *
+     * So: publish a real, terminal, one-stage run under the requested ID whose events name the run
+     * that actually did the work. The tail resolves, carries the served run's outcome, and
+     * `data.servedByRunID` lets a client hop to the full stream. The returned result is the served
+     * run unchanged — a caller that awaits still gets the true `RunID`.
+     */
+    private async honourRequestedRunID(
+        opts: ConnectorCreationPipelineOptions,
+        served: ConnectorCreationPipelineResult
+    ): Promise<ConnectorCreationPipelineResult> {
+        const requested = opts.RunID;
+        if (!requested || requested === served.RunID) return served;
+        await this.publishCoalescedAlias(requested, opts, served);
+        return served;
+    }
+
+    /**
+     * Writes the alias run described in {@link honourRequestedRunID}. Best-effort: an artifact-write
+     * failure must never turn a schema refresh that genuinely succeeded into a thrown error, so this
+     * only logs. The alias mirrors the served run's success/failure so a client tailing it cannot
+     * read a failed refresh as a clean one.
+     */
+    private async publishCoalescedAlias(
+        requestedRunID: string,
+        opts: ConnectorCreationPipelineOptions,
+        served: ConnectorCreationPipelineResult
+    ): Promise<void> {
+        try {
+            const emitter = new IntegrationProgressEmitter({
+                runID: requestedRunID,
+                runKind: 'ConnectorCreation',
+                integrationID: opts.CompanyIntegration.IntegrationID,
+                companyIntegrationID: opts.CompanyIntegration.ID,
+                triggerType: opts.TriggerType ?? 'Pipeline',
+                startedAt: new Date().toISOString(),
+                expectedStages: ['Coalesced'],
+                context: { servedByRunID: served.RunID, coalesced: true },
+            }, { rootDir: opts.ArtifactRootDir, consoleMirror: opts.ConsoleMirror });
+
+            const pointer = `A schema refresh for this connection was already running (or had just ` +
+                `completed), so this request was served by run ${served.RunID} instead of starting a ` +
+                `second live introspect. Tail that run for the full event stream.`;
+            emitter.runStart(pointer);
+            emitter.stageComplete('Coalesced', { processed: 1, succeeded: served.Success ? 1 : 0 });
+
+            if (served.Success) {
+                const p = served.PersistResult;
+                await emitter.complete(
+                    `${pointer} Outcome: ${p?.ObjectsCreated ?? 0} objects created, ` +
+                    `${p?.ObjectsUpdated ?? 0} updated, ${served.UnresolvedObjects.length} unresolved PKs.`
+                );
+            } else {
+                emitter.stageError('Coalesced', served.FailureMessage ?? 'no reason reported', {
+                    code: 'coalesced-run-failed',
+                    servedByRunID: served.RunID,
+                });
+                await emitter.fail(
+                    `${pointer} That run FAILED: ${served.FailureMessage ?? 'no reason reported'}`,
+                    'coalesced-run-failed'
+                );
+            }
+            await emitter.flush();
+        } catch (err) {
+            console.warn(
+                `[IntegrationConnectorCreationPipeline] Could not publish coalesced-run alias ` +
+                `${requestedRunID} → ${served.RunID}: ${err instanceof Error ? err.message : String(err)}`
+            );
         }
     }
 

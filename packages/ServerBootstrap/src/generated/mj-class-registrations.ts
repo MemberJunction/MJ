@@ -205,7 +205,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (400 classes)
+// @memberjunction/core-entities (403 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -480,6 +480,8 @@ import {
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
+    MJMaterializedResultEntity,
+    MJMaterializedResultQueryEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -506,6 +508,7 @@ import {
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
+    MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -1157,13 +1160,21 @@ import {
     PredictiveStudioTrainModelServerOperation,
 } from '@memberjunction/predictive-studio';
 
-// @memberjunction/task-graph (8 classes)
+// @memberjunction/task-graph (16 classes)
 import {
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
+    TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
+    TaskGraphOverrideEdgeServerOperation,
+    TaskGraphPauseServerOperation,
+    TaskGraphResumeServerOperation,
     TaskGraphRetryTaskServerOperation,
+    TaskGraphSetBreakpointsServerOperation,
+    TaskGraphSkipTaskServerOperation,
+    TaskGraphStepServerOperation,
     TaskGraphSubmitServerOperation,
+    TaskGraphUpdateTaskInputServerOperation,
     WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
@@ -1175,7 +1186,7 @@ import {
     TeamsMessagingExtension,
 } from '@memberjunction/messaging-adapters';
 
-// @memberjunction/scheduling-engine (8 classes)
+// @memberjunction/scheduling-engine (9 classes)
 import {
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
@@ -1183,11 +1194,12 @@ import {
     AgentScheduledJobDriver,
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
+    MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (41 classes)
+// @memberjunction/core-entities-server (42 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1217,6 +1229,7 @@ import {
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
+    MJMaterializedResultEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
     MJRecordProcessEntityServer,
@@ -1765,6 +1778,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
+    MJMaterializedResultEntity,
+    MJMaterializedResultQueryEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -1791,6 +1806,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
+    MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -2194,9 +2210,17 @@ export const CLASS_REGISTRATIONS: any[] = [
     PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
+    TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
+    TaskGraphOverrideEdgeServerOperation,
+    TaskGraphPauseServerOperation,
+    TaskGraphResumeServerOperation,
     TaskGraphRetryTaskServerOperation,
+    TaskGraphSetBreakpointsServerOperation,
+    TaskGraphSkipTaskServerOperation,
+    TaskGraphStepServerOperation,
     TaskGraphSubmitServerOperation,
+    TaskGraphUpdateTaskInputServerOperation,
     WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
@@ -2208,6 +2232,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     AgentScheduledJobDriver,
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
+    MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
     UserRoutineDispatcherDriver,
     MJAIAgentCoAgentEntityServer,
@@ -2238,6 +2263,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
+    MJMaterializedResultEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
     MJRecordProcessEntityServer,
@@ -2421,7 +2447,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 981;
+export const CLASS_REGISTRATIONS_COUNT = 994;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

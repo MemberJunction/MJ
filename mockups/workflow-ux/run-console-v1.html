@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workflow Run Console</title>
+<style>
+  :root{
+    --bg:#eef1f5; --panel:#ffffff; --border:#dfe5ec; --border-strong:#c3ccd8;
+    --ink:#1e2936; --ink-2:#54657a; --ink-3:#8394a8;
+    --blue:#2d6a9f; --blue-soft:#e8f1f8;
+    --action:#0891b2; --agent:#7c5295; --prompt:#2d6a9f; --human:#d97706; --loop:#4f7b48;
+    --ok:#16a34a; --run:#2563eb; --pend:#94a3b8; --warn:#d97706; --err:#dc2626; --bp:#b91c1c;
+    --hold-bg:#fff7e6; --err-bg:#fdf1f1;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,Menlo,monospace;
+    --r:10px; --shadow:0 1px 3px rgba(16,32,51,.09), 0 4px 14px rgba(16,32,51,.06);
+  }
+  *{box-sizing:border-box; margin:0}
+  body{background:var(--bg); color:var(--ink); font:14px/1.45 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; padding:36px 28px 80px}
+  .intro{max-width:1240px; margin:0 auto 34px}
+  .intro h1{font-size:22px; font-weight:700}
+  .intro p{color:var(--ink-2); margin-top:6px; max-width:920px}
+  .mock{max-width:1240px; margin:0 auto 56px}
+  .mock>h2{font-size:15px; font-weight:700; letter-spacing:.02em; text-transform:uppercase; color:var(--blue); margin-bottom:4px}
+  .mock>p.cap{color:var(--ink-2); margin-bottom:14px; max-width:980px}
+  .frame{background:var(--panel); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow-x:auto}
+  .frame-inner{min-width:1238px}
+
+  /* ============ app chrome (shared with phase5-overview-v1) ============ */
+  .topbar{display:flex; align-items:center; gap:14px; padding:12px 18px; border-bottom:1px solid var(--border); background:#fbfcfe}
+  .topbar .back{color:var(--ink-3); font-size:17px}
+  .wf-name{font-size:16px; font-weight:650}
+  .chip{display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; padding:3px 10px; border-radius:999px; border:1px solid var(--border-strong); color:var(--ink-2); background:#fff}
+  .chip.live{color:#1d4ed8; border-color:#bfd3f2; background:#eef4fd}
+  .chip.paused{color:#9a6a00; border-color:#e8c98a; background:#fff8ec}
+  .chip.stuck{color:var(--err); border-color:#f2c4c4; background:var(--err-bg)}
+  .chip.done{color:#0d7a3f; border-color:#bfe3cd; background:#effaf3}
+  .chip.eph{color:var(--agent); border-color:#e0d3ec; background:#f7f2fb}
+  .pulse-dot{width:7px; height:7px; border-radius:50%; background:#1d4ed8; animation:pulse 1.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+  @media (prefers-reduced-motion: reduce){ .pulse-dot, .node.running, .wire.hold{animation:none !important} }
+  .spacer{flex:1}
+  .knob{font-size:12.5px; color:var(--ink-2); display:flex; align-items:center; gap:6px; white-space:nowrap}
+  .knob b{border:1px solid var(--border-strong); border-radius:6px; padding:2px 9px; background:#fff; font-weight:650}
+  .btn{font-size:13px; font-weight:600; border-radius:8px; padding:7px 14px; border:1px solid var(--border-strong); background:#fff; color:var(--ink-2); white-space:nowrap}
+  .btn.primary{background:var(--blue); border-color:var(--blue); color:#fff}
+  .btn.danger{color:var(--err); border-color:#f2c4c4}
+  .btn.go{color:#0d7a3f; border-color:#bfe3cd; background:#f2fbf5}
+  .btn.dis{opacity:.45}
+  .progress{height:7px; border-radius:99px; background:#e2e8f0; width:150px; overflow:hidden}
+  .progress i{display:block; height:100%; background:linear-gradient(90deg, var(--ok), #43b56c)}
+
+  .body2{display:grid; grid-template-columns:1fr 288px; min-height:520px}
+
+  /* ============ canvas ============ */
+  .canvas{position:relative; background:
+      linear-gradient(90deg, rgba(45,106,159,.045) 1px, transparent 1px) 0 0/22px 22px,
+      linear-gradient(rgba(45,106,159,.045) 1px, transparent 1px) 0 0/22px 22px, #f7f9fc}
+  .canvas svg.wires{position:absolute; inset:0; width:100%; height:100%}
+  .wire{fill:none; stroke:#9fb2c6; stroke-width:2}
+  .wire.done{stroke:var(--ok)}
+  .wire.live{stroke:var(--run)}
+  .wire.sat{stroke:var(--ok)}
+  .wire.nottaken{stroke:#c3ccd8; stroke-dasharray:5 5}
+  .wire.rec{stroke:var(--warn); stroke-dasharray:6 5}
+  .wire.hold{stroke:var(--warn); stroke-dasharray:3 5; animation:wirehold 1.6s linear infinite}
+  @keyframes wirehold{to{stroke-dashoffset:-16}}
+  .wire-label{font-size:11px; font-weight:600; fill:#54657a; font-family:var(--mono)}
+  .wire-label.ok{fill:var(--ok)} .wire-label.mut{fill:#a9b6c6} .wire-label.rec{fill:var(--warn)} .wire-label.hold{fill:var(--warn)}
+  .port{fill:#fff; stroke:#9fb2c6; stroke-width:2}
+
+  .node{position:absolute; width:170px; background:#fff; border:1px solid var(--border-strong); border-left-width:4px; border-radius:var(--r); box-shadow:var(--shadow); padding:10px 12px 9px}
+  .node .nt{display:flex; align-items:center; gap:8px}
+  .node .ic{width:24px; height:24px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:12.5px; color:#fff; flex:none}
+  .node .ttl{font-size:12.5px; font-weight:650; line-height:1.25}
+  .node .sub{font-size:11px; color:var(--ink-3); margin-top:4px}
+  .node.action{border-left-color:var(--action)} .node.action .ic{background:var(--action)}
+  .node.agent{border-left-color:var(--agent)}  .node.agent .ic{background:var(--agent)}
+  .node.human{border-left-color:var(--human)}  .node.human .ic{background:var(--human)}
+  .node.sel{outline:2px solid var(--blue); outline-offset:2px}
+  .node .join{position:absolute; top:-11px; left:10px; font-size:10px; font-weight:700; background:#334155; color:#fff; border-radius:999px; padding:2px 8px; letter-spacing:.03em}
+  .start{position:absolute; background:#334155; color:#fff; font-size:12.5px; font-weight:700; border-radius:999px; padding:9px 16px; box-shadow:var(--shadow)}
+
+  .st{position:absolute; top:-11px; right:10px; font-size:10px; font-weight:700; border-radius:999px; padding:2px 8px; color:#fff; white-space:nowrap}
+  .st.ok{background:var(--ok)} .st.run{background:var(--run)} .st.wait{background:var(--warn)} .st.pend{background:var(--pend)}
+  .st.skip{background:#94a3b8} .st.hold{background:var(--warn)} .st.lost{background:var(--err)} .st.bp{background:var(--bp)}
+  .node.dim{opacity:.55}
+  .node.running{outline:2px solid var(--run); outline-offset:2px}
+  .node.holding{outline:2px solid var(--warn); outline-offset:2px; background:var(--hold-bg)}
+  .node.lostclaim{outline:2px solid var(--err); outline-offset:2px; background:var(--err-bg)}
+  .node.atbp{outline:2.5px solid var(--bp); outline-offset:2px}
+  .bpdot{position:absolute; top:-7px; left:-7px; width:14px; height:14px; border-radius:50%; background:var(--bp); border:2.5px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.12)}
+  .bpdot.hollow{background:#fff; border-color:var(--bp)}
+  .meta{font-size:10.5px; color:var(--ink-3); margin-top:6px; display:flex; align-items:center; gap:6px}
+  .meta .ava{width:16px; height:16px; border-radius:50%; background:var(--human); color:#fff; font-size:9px; font-weight:700; display:inline-flex; align-items:center; justify-content:center}
+  /* live drill-in on a running agent node */
+  .drill{margin-top:8px; border-top:1px dashed var(--border); padding-top:7px}
+  .drill .ln{display:flex; gap:6px; font-size:10.5px; color:var(--ink-2); font-family:var(--mono); line-height:1.6}
+  .drill .ln .cur{color:var(--run); font-weight:700}
+  .drill a{font-size:11px; color:var(--blue); font-weight:600; text-decoration:underline; font-family:inherit}
+
+  /* stuck banner */
+  .stuckbar{position:absolute; top:12px; left:12px; right:12px; display:flex; align-items:center; gap:10px; background:#fff; border:1px solid #f2c4c4; border-left:4px solid var(--err); border-radius:10px; padding:9px 13px; box-shadow:var(--shadow); font-size:12.5px; z-index:2}
+  .stuckbar b{color:var(--err)}
+  .stuckbar a{color:var(--blue); font-weight:600; text-decoration:underline; margin-left:8px}
+
+  /* ============ inspector ============ */
+  .insp{border-left:1px solid var(--border); background:#fbfcfe; padding:14px 14px 18px; overflow:hidden}
+  .insp h4{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-3); margin-bottom:10px}
+  .card{border:1px solid var(--border); background:#fff; border-radius:9px; padding:10px 11px; margin-bottom:10px}
+  .card .c-t{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); margin-bottom:7px; display:flex; align-items:center; gap:6px}
+  .card.warn{border-color:#e8c98a; background:var(--hold-bg)}
+  .card.err{border-color:#f2c4c4; background:var(--err-bg)}
+  .kv{display:flex; justify-content:space-between; gap:8px; font-size:12px; padding:2.5px 0; color:var(--ink-2)}
+  .kv b{color:var(--ink); font-weight:650; text-align:right}
+  .kv b.mono{font-family:var(--mono); font-size:11.5px; font-weight:600}
+  .kv b.red{color:var(--err)} .kv b.grn{color:var(--ok)}
+  .code{font-family:var(--mono); font-size:11px; line-height:1.55; background:#f4f7fa; border:1px solid var(--border); border-radius:7px; padding:8px 10px; white-space:pre; overflow-x:auto; color:var(--ink)}
+  .code .k{color:var(--blue)} .code .s{color:#0d7a3f} .code .edit{background:#fef3c7; border-radius:3px}
+  .code.editable{background:#fff; border-color:#bfd3f2; box-shadow:inset 0 0 0 1px #eef4fd}
+  .verdict{display:flex; align-items:flex-start; gap:8px; font-size:12px; padding:5px 0; border-top:1px solid var(--border)}
+  .verdict:first-of-type{border-top:none}
+  .vchip{flex:none; font-size:10px; font-weight:700; border-radius:99px; padding:1.5px 8px; color:#fff; margin-top:1px}
+  .vchip.sat{background:var(--ok)} .vchip.no{background:#94a3b8} .vchip.hold{background:var(--warn)}
+  .verdict code{font-family:var(--mono); font-size:11px}
+  .verdict .why{color:var(--ink-3); font-size:11px; margin-top:2px}
+  .acts{display:flex; flex-direction:column; gap:7px; margin-top:4px}
+  .acts .btn{width:100%; text-align:center; font-size:12.5px; padding:7px 10px}
+  .hintline{font-size:11px; color:var(--ink-3); margin-top:8px; line-height:1.5}
+
+  /* ============ engine strip ============ */
+  .engine{border-top:1px solid var(--border); background:#f3f6fa; padding:8px 14px 10px}
+  .engine .e-h{display:flex; align-items:center; gap:10px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); margin-bottom:7px}
+  .engine .e-h .col{margin-left:auto; font-weight:600; text-transform:none; letter-spacing:0; color:var(--ink-3)}
+  .ticks{display:flex; gap:8px; overflow-x:auto}
+  .tick{flex:none; font-family:var(--mono); font-size:10.5px; line-height:1.6; background:#fff; border:1px solid var(--border); border-radius:7px; padding:5px 9px; color:var(--ink-2); font-variant-numeric:tabular-nums}
+  .tick b{color:var(--ink); font-weight:650}
+  .tick .set{color:var(--ok)} .tick .def{color:var(--warn)} .tick .hl{color:var(--run)}
+  .tick.now{border-color:#bfd3f2; box-shadow:0 0 0 1px #eef4fd}
+  .tick.quiet{opacity:.55}
+  .tick.alert{border-color:#e8c98a; background:var(--hold-bg)}
+  .statusbar{display:flex; gap:18px; align-items:center; border-top:1px solid var(--border); background:#fbfcfe; padding:8px 18px; font-size:12px; color:var(--ink-2)}
+
+  /* ============ replay strip ============ */
+  .replay{display:flex; align-items:center; gap:14px; padding:16px 18px}
+  .replay .pb{width:38px; height:38px; border-radius:50%; border:1px solid var(--border-strong); background:#fff; font-size:15px; color:var(--blue); display:flex; align-items:center; justify-content:center; flex:none}
+  .timeline{position:relative; flex:1; height:44px}
+  .tl-track{position:absolute; left:0; right:0; top:19px; height:6px; border-radius:99px; background:#e2e8f0}
+  .tl-fill{position:absolute; left:0; top:19px; height:6px; border-radius:99px; background:linear-gradient(90deg,var(--ok),#43b56c); width:64%}
+  .tl-cursor{position:absolute; top:8px; left:64%; width:2.5px; height:28px; background:var(--run); border-radius:2px}
+  .tl-cursor::after{content:"14:03"; position:absolute; top:-16px; left:-16px; font-size:10px; font-weight:700; color:var(--run); font-family:var(--mono)}
+  .tl-ev{position:absolute; top:16px; width:11px; height:11px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.12)}
+  .replay .rt{font-family:var(--mono); font-size:11.5px; color:var(--ink-2); flex:none; font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>Workflow Run Console <span style="color:var(--ink-3);font-weight:500">— realtime runner &amp; debugger (v1, for iteration)</span></h1>
+  <p>Extends the Phase 5 runtime overlay (view B of <code>phase5-overview-v1.html</code>) into a live console: frames instead of polling, breakpoints and stepping via claim gating, edge verdicts, claim visibility, and stall diagnosis. Same canvas, same workflow, four states of one surface. Lives in the <b>Workflows</b> app as its run view. D18: users see steps and paths; engine vocabulary stays in the collapsible engine strip.</p>
+</div>
+
+<!-- ============================================================ A -->
+<div class="mock">
+  <h2>A · Live run — frames, not polling</h2>
+  <p class="cap">The run view driven by <code>taskGraphFrames</code>. A running <b>Agent step drills into its child run's live stream</b> (the existing agent pipeline) right on the node. The selected step's inspector shows its claim and live activity; the <b>engine strip</b> at the bottom ticks once per dispatcher pass. A breakpoint is set on a downstream step (red dot).</p>
+  <div class="frame"><div class="frame-inner">
+    <div class="topbar">
+      <span class="back">←</span>
+      <span class="wf-name">Deal Onboarding — Acme Corp</span>
+      <span class="chip">Workflow</span>
+      <span class="chip live"><span class="pulse-dot"></span> Live</span>
+      <div class="spacer"></div>
+      <div class="progress"><i style="width:50%"></i></div>
+      <span class="knob"><b>4 / 8</b> steps</span>
+      <span class="knob">elapsed 3m 41s</span>
+      <button class="btn">⏸ Pause</button>
+      <button class="btn dis">⏭ Step</button>
+      <button class="btn danger">Cancel</button>
+    </div>
+    <div class="body2">
+      <div class="canvas" style="height:520px">
+        <svg class="wires">
+          <path class="wire done" d="M88,258 C96,258 96,258 104,258"/>
+          <path class="wire done" d="M274,258 C288,258 288,118 300,118"/>
+          <path class="wire done" d="M274,258 C286,258 288,258 300,258"/>
+          <path class="wire done" d="M274,258 C288,258 288,398 300,398"/>
+          <path class="wire live" d="M470,118 C496,118 494,228 520,228"/>
+          <path class="wire done" d="M470,258 C496,258 494,250 520,250"/>
+          <path class="wire done" d="M470,398 C496,398 494,272 520,272"/>
+          <path class="wire" d="M720,250 C742,250 738,138 760,138"/>
+          <path class="wire rec" d="M720,250 C742,250 738,368 760,368"/>
+          <text class="wire-label mut" x="724" y="186">approved = true</text>
+          <text class="wire-label rec" x="724" y="316">otherwise · recovery</text>
+          <circle class="port" cx="104" cy="258" r="4"/><circle class="port" cx="274" cy="258" r="4"/>
+          <circle class="port" cx="300" cy="118" r="4"/><circle class="port" cx="470" cy="118" r="4"/>
+          <circle class="port" cx="300" cy="258" r="4"/><circle class="port" cx="470" cy="258" r="4"/>
+          <circle class="port" cx="300" cy="398" r="4"/><circle class="port" cx="470" cy="398" r="4"/>
+          <circle class="port" cx="520" cy="250" r="4"/><circle class="port" cx="720" cy="250" r="4"/>
+          <circle class="port" cx="760" cy="138" r="4"/><circle class="port" cx="760" cy="368" r="4"/>
+        </svg>
+        <div class="start" style="left:18px; top:241px">▶</div>
+        <div class="node action" style="left:104px; top:224px">
+          <span class="st ok">✓ done</span>
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Enrich Deal Data</span></div>
+          <div class="sub">finished in 12s</div>
+        </div>
+        <div class="node agent running sel" style="left:300px; top:66px; width:186px">
+          <span class="st run">● running</span>
+          <div class="nt"><span class="ic">✦</span><span class="ttl">Draft Contract</span></div>
+          <div class="sub">Agent · Contract Writer · 1m 48s</div>
+          <div class="drill">
+            <div class="ln"><span class="cur">▸</span><span>Writing terms section…</span></div>
+            <div class="ln"><span style="color:var(--ink-3)">·</span><span>prompt 3/4 · streaming</span></div>
+            <a href="#">Open live monitor ↗</a>
+          </div>
+        </div>
+        <div class="node action" style="left:300px; top:224px">
+          <span class="st ok">✓ done</span>
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Provision Accounts</span></div>
+          <div class="sub">finished in 41s</div>
+        </div>
+        <div class="node action" style="left:300px; top:364px">
+          <span class="st ok">✓ done</span>
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Notify Finance</span></div>
+          <div class="sub">finished in 3s</div>
+        </div>
+        <div class="node human dim" style="left:520px; top:206px; width:200px">
+          <span class="join">⋀ ALL · 3 inputs</span>
+          <span class="st pend">pending</span>
+          <div class="nt"><span class="ic">👤</span><span class="ttl">Manager Approval</span></div>
+          <div class="sub">2 of 3 inputs complete</div>
+          <div class="meta"><span class="ava">JR</span> J. Rivera · due 2 days</div>
+        </div>
+        <div class="node action dim" style="left:760px; top:104px">
+          <span class="bpdot" title="Breakpoint"></span>
+          <span class="st pend">pending</span>
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Send Kickoff Email</span></div>
+          <div class="sub">◉ will pause here</div>
+        </div>
+        <div class="node agent dim" style="left:760px; top:334px">
+          <span class="st pend">pending</span>
+          <div class="nt"><span class="ic">✦</span><span class="ttl">Revise Terms</span></div>
+          <div class="sub">recovery — only on rejection</div>
+        </div>
+      </div>
+      <div class="insp">
+        <h4>Step · Draft Contract</h4>
+        <div class="card">
+          <div class="c-t">Status</div>
+          <div class="kv"><span>State</span><b style="color:var(--run)">● Running</b></div>
+          <div class="kv"><span>Started</span><b>10:33:02 · 1m 48s ago</b></div>
+          <div class="kv"><span>Agent run</span><b class="mono"><a href="#" style="color:var(--blue)">4d25c9…e2 ↗</a></b></div>
+        </div>
+        <div class="card">
+          <div class="c-t">Worker claim</div>
+          <div class="kv"><span>Claimed by</span><b class="mono">mj-api-01</b></div>
+          <div class="kv"><span>Heartbeat</span><b class="grn">4s ago</b></div>
+          <div class="kv"><span>Claim expires</span><b>in 4m 12s</b></div>
+        </div>
+        <div class="card">
+          <div class="c-t">Input <span style="font-weight:500;text-transform:none">· merged from 1 step</span></div>
+          <div class="code">{
+  <span class="k">"deal"</span>: { <span class="k">"id"</span>: <span class="s">"ACME-4821"</span>,
+    <span class="k">"tier"</span>: <span class="s">"enterprise"</span>, … },
+  <span class="k">"enrichment"</span>: { <span class="k">"employees"</span>: 3400, … }
+}</div>
+        </div>
+        <div class="card">
+          <div class="c-t">Live activity</div>
+          <div class="kv"><span>10:34:12</span><b>Drafting terms section</b></div>
+          <div class="kv"><span>10:33:45</span><b>Loaded deal template</b></div>
+          <div class="kv"><span>10:33:02</span><b>Step started</b></div>
+        </div>
+      </div>
+    </div>
+    <div class="engine">
+      <div class="e-h">Engine · dispatcher passes <span class="col">collapse ▾</span></div>
+      <div class="ticks">
+        <span class="tick quiet">#44 10:33:02<br><b>claimed 3</b> · held 0 · settle —</span>
+        <span class="tick quiet">#45 10:33:07<br>claimed 0 · <b>in flight 3</b> · settle —</span>
+        <span class="tick quiet">#46 10:33:12<br>claimed 0 · in flight 3 · settle —</span>
+        <span class="tick">#47 10:34:02<br><span class="hl">done 2</span> · in flight 1 · settle —</span>
+        <span class="tick now">#48 10:34:07<br>claimed 0 · <b>in flight 1</b> · settle —</span>
+      </div>
+    </div>
+    <div class="statusbar">
+      <span>Run #4821 · started 10:32 AM · triggered from Chat</span>
+      <div class="spacer"></div>
+      <span>live over frames · reconciles from rows on reconnect</span>
+    </div>
+  </div></div>
+</div>
+
+<!-- ============================================================ B -->
+<div class="mock">
+  <h2>B · Paused at a breakpoint — inspect, edit, step</h2>
+  <p class="cap">The breakpoint hit: the graph pauses <i>before claiming</i> the step — in-flight work finished naturally, nothing new starts. The approval's fan-out shows <b>edge verdicts</b>: the taken path ✓, the not-taken path greyed with its verdict. The inspector becomes a payload editor: fix the input, then <b>Step</b> runs exactly this one step and re-pauses.</p>
+  <div class="frame"><div class="frame-inner">
+    <div class="topbar">
+      <span class="back">←</span>
+      <span class="wf-name">Deal Onboarding — Acme Corp</span>
+      <span class="chip">Workflow</span>
+      <span class="chip paused">⏸ Paused · breakpoint</span>
+      <div class="spacer"></div>
+      <div class="progress"><i style="width:75%"></i></div>
+      <span class="knob"><b>6 / 8</b> steps</span>
+      <button class="btn go">▶ Resume</button>
+      <button class="btn">⏭ Step</button>
+      <button class="btn">⏭⏭ Step wave</button>
+      <button class="btn danger">Cancel</button>
+    </div>
+    <div class="body2">
+      <div class="canvas" style="height:520px">
+        <svg class="wires">
+          <path class="wire done" d="M88,258 C96,258 96,258 104,258"/>
+          <path class="wire done" d="M274,258 C288,258 288,118 300,118"/>
+          <path class="wire done" d="M274,258 C286,258 288,258 300,258"/>
+          <path class="wire done" d="M274,258 C288,258 288,398 300,398"/>
+          <path class="wire done" d="M470,118 C496,118 494,228 520,228"/>
+          <path class="wire done" d="M470,258 C496,258 494,250 520,250"/>
+          <path class="wire done" d="M470,398 C496,398 494,272 520,272"/>
+          <path class="wire sat" d="M720,250 C742,250 738,138 760,138"/>
+          <path class="wire nottaken" d="M720,250 C742,250 738,368 760,368"/>
+          <text class="wire-label ok" x="724" y="186">approved = true ✓</text>
+          <text class="wire-label mut" x="724" y="316">otherwise · not taken</text>
+        </svg>
+        <div class="start" style="left:18px; top:241px">▶</div>
+        <div class="node action" style="left:104px; top:224px">
+          <span class="st ok">✓ done</span>
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Enrich Deal Data</span></div>
+          <div class="sub">finished in 12s</div>
+        </div>
+        <div class="node agent" style="left:300px; top:84px">
+          <span class="st ok">✓ done</span>
+          <div class="nt"><span class="ic">✦</span><span class="ttl">Draft Contract</span></div>
+          <div class="sub">2m 04s · artifact created</div>
+        </div>
+        <div class="node action" style="left:300px; top:224px">
+          <span class="st ok">✓ done</span>
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Provision Accounts</span></div>
+          <div class="sub">finished in 41s</div>
+        </div>
+        <div class="node action" style="left:300px; top:364px">
+          <span class="st ok">✓ done</span>
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Notify Finance</span></div>
+          <div class="sub">finished in 3s</div>
+        </div>
+        <div class="node human" style="left:520px; top:206px; width:200px">
+          <span class="join">⋀ ALL · 3 inputs</span>
+          <span class="st ok">✓ approved</span>
+          <div class="nt"><span class="ic">👤</span><span class="ttl">Manager Approval</span></div>
+          <div class="sub">J. Rivera · approved in 14m</div>
+        </div>
+        <div class="node action atbp sel" style="left:760px; top:104px">
+          <span class="bpdot"></span>
+          <span class="st bp">◉ paused here</span>
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Send Kickoff Email</span></div>
+          <div class="sub">eligible · not yet claimed</div>
+        </div>
+        <div class="node agent dim" style="left:760px; top:334px">
+          <span class="st skip">— skipped</span>
+          <div class="nt"><span class="ic">✦</span><span class="ttl">Revise Terms</span></div>
+          <div class="sub">branch not taken</div>
+        </div>
+      </div>
+      <div class="insp">
+        <h4>Step · Send Kickoff Email</h4>
+        <div class="card">
+          <div class="c-t">Why it's next</div>
+          <div class="verdict"><span class="vchip sat">taken</span><div><code>approved = true</code><div class="why">Manager Approval answered yes</div></div></div>
+          <div class="verdict"><span class="vchip no">not taken</span><div><code>otherwise</code><div class="why">Revise Terms skipped</div></div></div>
+        </div>
+        <div class="card">
+          <div class="c-t">Input · editable while paused</div>
+          <div class="code editable">{
+  <span class="k">"to"</span>: <span class="s">"audience:acme-onboarding"</span>,
+  <span class="k">"template"</span>: <span class="s">"kickoff-v2"</span>,
+  <span class="k">"cc"</span>: <span class="edit"><span class="s">"deals-desk@acme.io"</span></span>
+}</div>
+          <div class="hintline">1 field edited — applies to this run only.</div>
+        </div>
+        <div class="acts">
+          <button class="btn primary">⏭ Step this step</button>
+          <button class="btn">Skip step</button>
+          <button class="btn">Mark done with output…</button>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="c-t">If this step fails</div>
+          <div class="kv"><span>Blocked</span><b>0 steps</b></div>
+          <div class="kv"><span>Then</span><b>run settles Failed</b></div>
+          <div class="hintline">Preview uses the engine's own rules — same result live.</div>
+        </div>
+      </div>
+    </div>
+    <div class="engine">
+      <div class="e-h">Engine · dispatcher passes <span class="col">collapse ▾</span></div>
+      <div class="ticks">
+        <span class="tick quiet">#61 10:49:12<br><span class="hl">done 1</span> · in flight 0 · settle —</span>
+        <span class="tick alert">#62 10:49:17<br><b>◉ breakpoint</b> · claiming paused</span>
+        <span class="tick now">#63 10:49:22<br>paused · eligible 1 · settle —</span>
+      </div>
+    </div>
+    <div class="statusbar">
+      <span>Run #4821 · paused by you at 10:49 AM</span>
+      <div class="spacer"></div>
+      <span>in-flight steps finished · nothing new starts while paused</span>
+    </div>
+  </div></div>
+</div>
+
+<!-- ============================================================ C -->
+<div class="mock">
+  <h2>C · A stuck run diagnosing itself</h2>
+  <p class="cap">The hardening review's signature failure — "the graph looks fine while a run strands silently" — made visible. Two real defect classes on one canvas: a path that <b>can't be evaluated</b> because its origin step was skipped and produced nothing (holds forever today), and a step whose <b>worker vanished</b> mid-claim (invisible today). The banner names both; the inspector explains and offers the safe ways out.</p>
+  <div class="frame"><div class="frame-inner">
+    <div class="topbar">
+      <span class="back">←</span>
+      <span class="wf-name">Deal Onboarding — Acme Corp</span>
+      <span class="chip">Workflow</span>
+      <span class="chip stuck">⚠ Stuck — needs attention</span>
+      <div class="spacer"></div>
+      <div class="progress"><i style="width:38%; background:linear-gradient(90deg,var(--warn),#eab308)"></i></div>
+      <span class="knob"><b>3 / 8</b> steps</span>
+      <span class="knob">no progress for 11m</span>
+      <button class="btn danger">Cancel</button>
+    </div>
+    <div class="body2">
+      <div class="canvas" style="height:520px">
+        <div class="stuckbar">
+          <b>⚠ This run is stuck.</b>
+          <span>1 step is waiting on a path that can't be answered, and 1 step lost its worker.</span>
+          <a href="#">Show me</a>
+        </div>
+        <svg class="wires">
+          <path class="wire done" d="M88,258 C96,258 96,258 104,258"/>
+          <path class="wire nottaken" d="M274,258 C288,258 288,118 300,118"/>
+          <path class="wire done" d="M274,258 C286,258 288,258 300,258"/>
+          <path class="wire done" d="M274,258 C288,258 288,398 300,398"/>
+          <path class="wire hold" d="M470,118 C496,118 494,228 520,228"/>
+          <path class="wire" d="M470,258 C496,258 494,250 520,250"/>
+          <path class="wire done" d="M470,398 C496,398 494,272 520,272"/>
+          <path class="wire" d="M720,250 C742,250 738,138 760,138"/>
+          <path class="wire rec" d="M720,250 C742,250 738,368 760,368"/>
+          <text class="wire-label mut" x="332" y="100">dealType = "new"</text>
+          <text class="wire-label hold" x="452" y="160">contract.ready = true · can't answer</text>
+        </svg>
+        <div class="start" style="left:18px; top:241px">▶</div>
+        <div class="node action" style="left:104px; top:224px">
+          <span class="st ok">✓ done</span>
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Enrich Deal Data</span></div>
+          <div class="sub">dealType: "renewal"</div>
+        </div>
+        <div class="node agent dim" style="left:300px; top:84px">
+          <span class="st skip">— skipped</span>
+          <div class="nt"><span class="ic">✦</span><span class="ttl">Draft Contract</span></div>
+          <div class="sub">branch not taken · no output</div>
+        </div>
+        <div class="node action lostclaim" style="left:300px; top:224px">
+          <span class="st lost">⚠ worker lost</span>
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Provision Accounts</span></div>
+          <div class="sub">no heartbeat for 6m</div>
+        </div>
+        <div class="node action" style="left:300px; top:364px">
+          <span class="st ok">✓ done</span>
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Notify Finance</span></div>
+          <div class="sub">finished in 3s</div>
+        </div>
+        <div class="node human holding sel" style="left:520px; top:206px; width:200px">
+          <span class="join">⋀ ALL · 3 inputs</span>
+          <span class="st hold">⏳ can't start</span>
+          <div class="nt"><span class="ic">👤</span><span class="ttl">Manager Approval</span></div>
+          <div class="sub">held · 1 path unanswerable</div>
+        </div>
+        <div class="node action dim" style="left:760px; top:104px">
+          <span class="st pend">pending</span>
+          <div class="nt"><span class="ic">⚡</span><span class="ttl">Send Kickoff Email</span></div>
+          <div class="sub">waiting on approval</div>
+        </div>
+        <div class="node agent dim" style="left:760px; top:334px">
+          <span class="st pend">pending</span>
+          <div class="nt"><span class="ic">✦</span><span class="ttl">Revise Terms</span></div>
+          <div class="sub">recovery — only on rejection</div>
+        </div>
+      </div>
+      <div class="insp">
+        <h4>Step · Manager Approval</h4>
+        <div class="card warn">
+          <div class="c-t">⏳ Why this can't start</div>
+          <div class="verdict" style="border-top:none"><span class="vchip hold">held</span><div><code>contract.ready = true</code><div class="why"><b>Draft Contract</b> was skipped and produced no output — this path can't be answered, so the step is held to be safe.</div></div></div>
+          <div class="acts" style="margin-top:8px">
+            <button class="btn primary">Treat path as "no" — skip its branch</button>
+            <button class="btn">Provide an answer &amp; continue…</button>
+          </div>
+        </div>
+        <div class="card err">
+          <div class="c-t">⚠ Provision Accounts · worker lost</div>
+          <div class="kv"><span>Claimed by</span><b class="mono">mj-api-02</b></div>
+          <div class="kv"><span>Heartbeat</span><b class="red">6m 12s ago</b></div>
+          <div class="kv"><span>Claim expired</span><b class="red">1m 12s ago</b></div>
+          <div class="acts" style="margin-top:8px">
+            <button class="btn primary">Requeue step now</button>
+          </div>
+          <div class="hintline">The engine will also requeue it automatically on its next sweep.</div>
+        </div>
+        <div class="hintline">Both fixes are recorded on the run history.</div>
+      </div>
+    </div>
+    <div class="engine">
+      <div class="e-h">Engine · dispatcher passes <span class="col">collapse ▾</span></div>
+      <div class="ticks">
+        <span class="tick quiet">#118 10:51:42<br>claimed 0 · <b>held 1</b> · settle —</span>
+        <span class="tick alert">#119 10:51:47<br>claimed 0 · <b>held 1</b> · stall detected</span>
+        <span class="tick alert now">#120 10:51:52<br>claimed 0 · <b>held 1</b> · <span class="def">no claimable work</span></span>
+      </div>
+    </div>
+    <div class="statusbar">
+      <span>Run #4977 · started 10:38 AM · triggered by schedule</span>
+      <div class="spacer"></div>
+      <span>stalled 11m · owner notified</span>
+    </div>
+  </div></div>
+</div>
+
+<!-- ============================================================ D -->
+<div class="mock">
+  <h2>D · After it settles — replay</h2>
+  <p class="cap">A settled run scrubs through time on the same canvas (the master-clock pattern from the agent-run flow views), reconstructed from step timestamps and the run's frame log. Step markers on the scrubber are colored by outcome; dragging replays statuses, edge decisions, and the activity feed in sync.</p>
+  <div class="frame"><div class="frame-inner">
+    <div class="topbar">
+      <span class="back">←</span>
+      <span class="wf-name">Deal Onboarding — Acme Corp</span>
+      <span class="chip">Workflow</span>
+      <span class="chip done">✓ Completed · 8/8 · 22m</span>
+      <div class="spacer"></div>
+      <span class="knob">speed <b>4×</b></span>
+      <button class="btn">↺ Restart</button>
+    </div>
+    <div class="replay">
+      <div class="pb">▶</div>
+      <div class="timeline">
+        <div class="tl-track"></div>
+        <div class="tl-fill"></div>
+        <div class="tl-ev" style="left:4%;  background:var(--ok)"></div>
+        <div class="tl-ev" style="left:15%; background:var(--ok)"></div>
+        <div class="tl-ev" style="left:16%; background:var(--ok)"></div>
+        <div class="tl-ev" style="left:17%; background:var(--ok)"></div>
+        <div class="tl-ev" style="left:34%; background:var(--ok)"></div>
+        <div class="tl-ev" style="left:52%; background:var(--warn)"></div>
+        <div class="tl-ev" style="left:88%; background:var(--ok)"></div>
+        <div class="tl-ev" style="left:97%; background:var(--ok)"></div>
+        <div class="tl-cursor"></div>
+      </div>
+      <span class="rt">14:03 / 22:00</span>
+    </div>
+    <div class="statusbar">
+      <span>At 14:03 — Manager Approval waiting on J. Rivera · 2 steps done in parallel before it</span>
+      <div class="spacer"></div>
+      <span>replay is read-only</span>
+    </div>
+  </div></div>
+</div>
+
+<div class="intro" style="margin-top:-18px">
+  <p style="font-size:12.5px"><b>Open questions for iteration:</b> ① is “Step” one step or one wave by default (both shown in B) · ② engine strip — collapsed by default for business users, or hidden entirely outside a builder role · ③ breakpoint persistence — per run, or saved on the workflow · ④ should “Requeue step now” and “Treat path as no” require a confirm with the what-if preview inline · ⑤ does the replay scrubber belong on live runs too (scrub back while it runs)?</p>
+</div>
+
+</body>
+</html>

@@ -73,7 +73,7 @@ export function discoverRlsFixture(provider: IMetadataProvider, users: UserInfo[
         ({ ...fx, TokenFilter: tokenFilter, LivePair: livePair, SeededScopedA: seededScopedA, SeededScopedB: seededScopedB, SeededNoGrant: seededNoGrant });
 
     if (distinct.length < 2) {
-        return attach({ UserA: users[0], UserB: users[0], EntityName: '', Usable: false, Reason: 'fewer than two distinct users in the user cache' });
+        return attach({ UserA: users[0], UserB: users[0], EntityName: '', Usable: false, ClauseA: '', ClauseB: '', Reason: 'fewer than two distinct users in the user cache' });
     }
 
     for (const entity of provider.Entities) {
@@ -91,10 +91,15 @@ export function discoverRlsFixture(provider: IMetadataProvider, users: UserInfo[
         for (let i = 0; i < withClause.length; i++) {
             for (let j = i + 1; j < withClause.length; j++) {
                 if (withClause[i].clause !== withClause[j].clause) {
-                    return attach({ UserA: withClause[i].user, UserB: withClause[j].user, EntityName: entity.Name, Usable: true });
+                    // The clauses travel with the fixture: they are the evidence for `Usable`, and a
+                    // client-transport check cannot re-derive them (see RlsFixture.ClauseA).
+                    return attach({
+                        UserA: withClause[i].user, UserB: withClause[j].user, EntityName: entity.Name, Usable: true,
+                        ClauseA: withClause[i].clause, ClauseB: withClause[j].clause,
+                    });
                 }
             }
         }
     }
-    return attach({ UserA: distinct[0], UserB: distinct[1], EntityName: '', Usable: false, Reason: 'only RLS-exempt users (no entity yields two distinct non-empty clauses)' });
+    return attach({ UserA: distinct[0], UserB: distinct[1], EntityName: '', Usable: false, ClauseA: '', ClauseB: '', Reason: 'only RLS-exempt users (no entity yields two distinct non-empty clauses)' });
 }

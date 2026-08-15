@@ -38,7 +38,7 @@
  * absent and the whole suite skips-as-pass (correct — the invariant is unexercised, not violated).
  */
 import { RunView, LocalCacheManager, EntityPermissionType } from '@memberjunction/core';
-import type { UserInfo, IMetadataProvider, RunViewParams, RowLevelSecurityFilterInfo } from '@memberjunction/core';
+import type { IMetadataProvider, RunViewParams, RowLevelSecurityFilterInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -348,10 +348,17 @@ export async function CheckRls7_ClientSmartCacheNoCrossServe(ctx: IntegrationChe
     // same race Q2 settles with a sleep). The sound oracle is the fingerprint identity
     // itself — the exact mechanism whose failure WOULD leak — plus the settled write
     // proving B populated its OWN slot.
-    const entity = (ctx.Provider as unknown as { EntityByName(n: string): { GetUserRowLevelSecurityWhereClause(u: UserInfo, t: EntityPermissionType, s: string): string } | undefined }).EntityByName(fx.EntityName);
-    Assert(!!entity, `RLS entity '${fx.EntityName}' must resolve from provider metadata`);
-    const aClause = entity!.GetUserRowLevelSecurityWhereClause(fx.UserA, EntityPermissionType.Read, '');
-    const bClause = entity!.GetUserRowLevelSecurityWhereClause(fx.UserB, EntityPermissionType.Read, '');
+    // The clauses come FROM THE FIXTURE, not from a re-derivation against `ctx.Provider`. Discovery
+    // computed them once against the SERVER provider — they are the evidence for `Usable` — and this
+    // bundle runs on the Network provider, which returns an EMPTY clause for every user. Re-deriving
+    // here therefore compared '' to '' and reported an RLS LEAK on the tier's #1 security oracle
+    // every time the fixture was usable, which is to say every time the check actually ran.
+    const aClause = fx.ClauseA;
+    const bClause = fx.ClauseB;
+    Assert(aClause !== bClause && aClause !== '',
+        `the fixture promised divergent non-empty clauses but carried aClause=${JSON.stringify(aClause)}, ` +
+        `bClause=${JSON.stringify(bClause)} — discovery and RlsFixture.Usable disagree`);
+
     const conn = connStrOf(ctx.Provider);
     const aFp = LocalCacheManager.Instance.GenerateRunViewFingerprint(params(), conn, aClause);
     const bFp = LocalCacheManager.Instance.GenerateRunViewFingerprint(params(), conn, bClause);

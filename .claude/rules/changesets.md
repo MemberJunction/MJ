@@ -52,11 +52,34 @@ Two consequences worth knowing before you reason about the number:
 
 - **On a certified line, everything is a patch** — metadata migrations, CodeGen repairs and even
   schema migrations. The migration-⇒-minor rule is Edge-tuple grammar only, so `6.1.5` → `6.1.6`
-  may well contain a migration.
+  may well contain a migration. On a line the rule **inverts**: `patch` is not merely sufficient, it
+  is the only correct level, because a `minor` there consumes the tuple the next certification is
+  targeting. `check:changeset` works this out from **ancestry, not branch names** — a line tip being
+  an ancestor of your HEAD means you are on that line, which holds for `fix/cve-…`-style backport
+  branches and from a detached HEAD, neither of which a name check can see.
 - **The number cannot carry per-package semver.** All ~300 packages share one `fixed` group, so a
   consumer already receives bumps driven entirely by packages they do not use.
 
-## Why one stray `minor` matters
+## Why the accumulated level matters
+
+**The direction that costs a release is a MISSING `minor`.** If a cycle contains a migration but no
+changeset in it declares `minor`, the accumulated tuple stays `X.Y.Z+1` — and the invariant that
+migrations only ever ship in a minor-or-higher-tupled release (`lts-process` §3.1/§12) is broken for
+that whole cycle, not just your PR. It is also the failure that hides: it only shows up when no
+other changeset in the release happens to carry a `minor`, so it fails rarely and unpredictably
+rather than immediately.
+
+**A stray extra `minor` is the cheap direction** — worth avoiding, but understand what it does and
+does not do. Under permanent pre mode the stream is `X.Y.0-edge.N`; once the tuple is already minor,
+another `minor` moves nothing, and every Edge release advances all ~300 packages to `edge.N+1`
+regardless of anyone's level. So a stray `minor` produces **no additional version movement
+mid-stream**. What it costs is meaning: it tells the next author that minor-for-a-feature is normal,
+which is how the rule erodes.
+
+**None of this applies on a certified line.** There the accumulated level is fixed at `patch`
+whatever the branch carries, so neither direction above is available to get wrong — a migration
+backport is a patch, and a `minor` is the error. If you arrived here from a backport, that bullet
+above is the whole rule for you.
 
 `.changeset/config.json` puts every MJ package in a single `fixed` group:
 
@@ -64,9 +87,10 @@ Two consequences worth knowing before you reason about the number:
 "fixed": [["@memberjunction/*"]]
 ```
 
-So the **highest bump in a release decides the version of every package**. Measured, not theorised:
-on PR #3736 a changeset naming three packages `minor` produced a changesets-bot table of
-**301 packages, all 301 Minor**. Three entries, 301 version bumps.
+That is why the level is a *release-wide* fact rather than a per-package one: the highest bump in a
+release decides the tuple for every package. On PR #3736 a changeset naming three packages `minor`
+produced a changesets-bot table of **301 packages, all 301 Minor** — an accurate picture of the
+group's scope, not of 301 version movements caused by those three entries.
 
 **The bot shows you this, but it does not judge it.** Every PR gets a `🦋 Changeset detected`
 comment listing each package and its `Minor`/`Patch` type — so the level is visible, inside a
@@ -89,9 +113,16 @@ pre-existing file using a different level is not yours to fix.
 ## Check before you push
 
 ```bash
-npm run check:changeset          # judges the changesets THIS branch adds, vs origin/next
-npm run check:changeset:test     # its own vitest suite
+npm run check:changeset                          # picks the rule from the branch's ancestry
+npm run check:changeset -- --base origin/lts/5   # force a line base (the inverted, patch-only rule)
+npm run check:changeset:test                     # its own vitest suite
 ```
+
+**Detection is only as good as the refs your clone has.** The line rule is inferred from ancestry,
+so a clone with no `lts/*` refs — a shallow or single-branch checkout, which is `actions/checkout`'s
+default — finds no line and falls back to the Edge rule. On a line PR that is silently the original
+bug. **Anything automated must pass `--base` explicitly** (CI knows the PR's base ref, and an
+explicit base is authoritative) or fetch the line refs first.
 
 **Nothing enforces this in CI, by maintainer decision** — no PR fails on a wrong bump level. This
 rule and that command are the only checks, so run it whenever you add a changeset.
