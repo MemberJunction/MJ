@@ -1,9 +1,22 @@
 import { describe, it, expect } from 'vitest';
 import { EntityInfo, type FormRole } from '@memberjunction/core';
-import { DETAILS_SECTION_KEY, MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection } from '../form-chrome';
+import { DETAILS_SECTION_KEY, MORE_SECTION_KEY, HumanizeEntityTitle, IsAccordionFormChrome, IsAlwaysMoreSection } from '../form-chrome';
 import { ApplyUserChromeMembership, BuildDefaultChromeSpec, MoveChromeGroupInSectionOrder, OrderChromeGroups, OrderMoreSectionKeys, ResolveFormChrome, StabilizeFirstClassGroupOrder, TakeDecoratedChrome } from '../resolve-form-chrome';
 import type { FormChromeSpec } from '../form-chrome';
 import { FormChromeCoordinator } from '../form-chrome-coordinator.service';
+
+describe('IsAccordionFormChrome', () => {
+    it('treats missing and accordion as accordion', () => {
+        expect(IsAccordionFormChrome(undefined)).toBe(true);
+        expect(IsAccordionFormChrome(null)).toBe(true);
+        expect(IsAccordionFormChrome('accordion')).toBe(true);
+    });
+
+    it('hides expand/collapse for left-nav and right-nav', () => {
+        expect(IsAccordionFormChrome('left-nav')).toBe(false);
+        expect(IsAccordionFormChrome('right-nav')).toBe(false);
+    });
+});
 
 describe('HumanizeEntityTitle', () => {
     it('strips a schema entity-name prefix', () => {
