@@ -90,7 +90,8 @@
                     [attr.aria-label]="'Show form sections — ' + ChromeActiveTitle"
                     [title]="'Show sections — ' + ChromeActiveTitle">
               <i [class]="ChromeActiveIcon"></i>
-              <span class="mj-forms-chrome-rail-spine-label">{{ ChromeActiveTitle }}</span>
+              <span class="mj-forms-chrome-rail-spine-label"
+                    (mouseenter)="OnRailLabelHover($event, ChromeActiveTitle)">{{ ChromeActiveTitle }}</span>
             </button>
           } @else {
             <div class="mj-forms-chrome-rail-resizer"
@@ -145,7 +146,8 @@
                 </span>
               }
               <i [class]="group.Icon"></i>
-              <span class="mj-forms-chrome-rail-label" [title]="group.Title">{{ group.Title }}</span>
+              <span class="mj-forms-chrome-rail-label"
+                    (mouseenter)="OnRailLabelHover($event, group.Title)">{{ group.Title }}</span>
               @let rowCount = ChromeGroupRowCount(group);
               @if (rowCount != null) {
                 <span class="mj-forms-chrome-rail-count"
@@ -163,7 +165,8 @@
                  (keydown.space)="$event.preventDefault(); OnMoreFolderToggle()">
               <span class="mj-forms-chrome-rail-handle is-spacer" aria-hidden="true"></span>
               <i [class]="MoreExpanded ? 'fa-solid fa-folder-open' : 'fa-solid fa-folder'"></i>
-              <span class="mj-forms-chrome-rail-label" [title]="more.Title">{{ more.Title }}</span>
+              <span class="mj-forms-chrome-rail-label"
+                    (mouseenter)="OnRailLabelHover($event, more.Title)">{{ more.Title }}</span>
               <i class="fa-solid mj-forms-chrome-rail-more-toggle"
                  [class.fa-minus]="MoreExpanded"
                  [class.fa-plus]="!MoreExpanded"
@@ -195,7 +198,8 @@
                     </span>
                   }
                   <i [class]="child.Icon"></i>
-                  <span class="mj-forms-chrome-rail-label" [title]="child.Title">{{ child.Title }}</span>
+                  <span class="mj-forms-chrome-rail-label"
+                        (mouseenter)="OnRailLabelHover($event, child.Title)">{{ child.Title }}</span>
                   @let childCount = ChromeGroupRowCount(child);
                   @if (childCount != null) {
                     <span class="mj-forms-chrome-rail-count"

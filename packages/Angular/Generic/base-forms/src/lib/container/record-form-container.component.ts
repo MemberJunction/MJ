@@ -49,6 +49,7 @@ import {
   SerializeRailPinnedSetting,
   SerializeRailWidthSetting,
 } from '../chrome/form-chrome-rail-pref';
+import { ApplyClippedTitle } from '../chrome/clipped-title';
 import { CollectFormPanelRegistrations } from '../panel-slot/collect-form-panel-registrations';
 import type { FormPanelRegistrationMetadata } from '../panel-slot/base-form-panel';
 import { ContributionHiddenSectionKeys, ResolveFormContributions } from '../panel-slot/form-contribution';
@@ -709,6 +710,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.RailResizing = false;
     this.PersistChromePrefs();
     this.cdr.detectChanges();
+  }
+
+  public OnRailLabelHover(event: MouseEvent, text: string): void {
+    ApplyClippedTitle(event.currentTarget as HTMLElement, text);
   }
 
   public RailDragOverKey: string | null = null;
