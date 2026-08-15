@@ -10,6 +10,16 @@ import {
   MJIntegrationSourceTypeEntity,
   MJCompanyIntegrationSyncWatermarkEntity,
 } from '@memberjunction/core-entities';
+import type { MJCompanyIntegrationRunEntity } from '@memberjunction/core-entities';
+
+/**
+ * A sync run's status, taken from the entity rather than restated here. The literal union that used
+ * to be written out in both interfaces below had already gone stale — it predated 'Queued', so a
+ * queued run was a value the compiler said could not exist. Indexed access tracks the CHECK
+ * constraint through CodeGen, so a new status shows up as a compile error in the switch-like
+ * helpers below instead of silently falling through to a default colour.
+ */
+type IntegrationRunStatus = MJCompanyIntegrationRunEntity['Status'];
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import {
   GraphQLDataProvider,
@@ -48,7 +58,7 @@ export interface IntegrationRunRow {
   StartedAt: Date | string | null;
   EndedAt: Date | string | null;
   TotalRecords: number;
-  Status: 'Failed' | 'In Progress' | 'Pending' | 'Success';
+  Status: IntegrationRunStatus;
   ErrorLog: string | null;
   Integration: string;
   Company: string;
@@ -161,8 +171,8 @@ export interface IntegrationKPIs {
 export interface ActivityFeedItem {
   RunID: string;
   IntegrationName: string;
-  Status: 'Failed' | 'In Progress' | 'Pending' | 'Success';
-  StatusColor: 'amber' | 'green' | 'red';
+  Status: IntegrationRunStatus;
+  StatusColor: 'amber' | 'green' | 'red' | 'gray';
   StartedAt: Date | string | null;
   RelativeTime: string;
   TotalRecords: number;
@@ -413,8 +423,11 @@ export class IntegrationDataService {
 
   ComputeKPIs(summaries: IntegrationSummary[]): IntegrationKPIs {
     const totalIntegrations = summaries.length;
+    // 'Queued' counts as an active sync: worker-mode enqueues a run that has been asked for and
+    // not yet finished, which is what this KPI means. Omitting it made every worker-mode
+    // deployment under-report in-flight work.
     const activeSyncs = summaries.filter(
-      s => s.LatestRun?.Status === 'In Progress' || s.LatestRun?.Status === 'Pending'
+      s => s.LatestRun?.Status === 'In Progress' || s.LatestRun?.Status === 'Pending' || s.LatestRun?.Status === 'Queued'
     ).length;
     const recordsSyncedToday = summaries.reduce((acc, s) => acc + s.TotalRecordsSyncedToday, 0);
 
@@ -1057,9 +1070,13 @@ export class IntegrationDataService {
     };
   }
 
-  private runStatusColor(run: IntegrationRunRow): 'amber' | 'green' | 'red' {
+  private runStatusColor(run: IntegrationRunRow): 'amber' | 'green' | 'red' | 'gray' {
     if (run.Status === 'Failed') return 'red';
     if (run.Status === 'Success') return 'green';
+    // A cancelled run is neither healthy nor broken — someone stopped it on purpose. Red would
+    // read as a defect to fix; amber would read as work still in flight. Neutral is the truth.
+    if (run.Status === 'Cancelled') return 'gray';
+    // 'Queued' / 'In Progress' / 'Pending' — work outstanding.
     return 'amber';
   }
 
@@ -1102,10 +1119,13 @@ export class IntegrationDataService {
     if (!isActive) return 'gray';
     if (!latestRun) return 'gray';
     if (latestRun.Status === 'Failed') return 'red';
-    if (latestRun.Status === 'In Progress' || latestRun.Status === 'Pending') return 'amber';
+    // 'Queued' belongs with the other work-outstanding states: a run waiting for a worker is
+    // pending, not unknown. It was missing here only because the hand-copied union predated it.
+    if (latestRun.Status === 'In Progress' || latestRun.Status === 'Pending' || latestRun.Status === 'Queued') return 'amber';
     if (latestRun.Status === 'Success') {
       return this.isStale(latestRun.StartedAt) ? 'amber' : 'green';
     }
+    // 'Cancelled' lands here — deliberately neutral, same reasoning as runStatusColor.
     return 'gray';
   }
 

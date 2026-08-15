@@ -55,8 +55,9 @@ export type JSONObjectLike = Record<string, unknown>;
  * The default voice persona — how the agent sounds, independent of who is speaking it.
  *
  * Two halves with two destinations: {@link tone} / {@link speakingStyle} are PROMPT-level (folded into
- * the session system prompt at mint by {@link BuildVoiceMannerSection}), while {@link voice} is
- * WIRE-level (filed onto the resolved driver's config bag by {@link GetProviderVoiceSettings}).
+ * the session system prompt at mint by {@link BuildVoiceMannerSection}), while {@link voice} and
+ * {@link firstMessage} are WIRE-level (filed onto the resolved driver's config bag by
+ * {@link GetProviderVoiceSettings}).
  */
 export interface RealtimeVoicePersona {
     /** Overall vocal tone (e.g. "warm and upbeat"). */
@@ -80,6 +81,28 @@ export interface RealtimeVoicePersona {
      * name different voices per vendor should pin them under `providers.<key>` and leave this unset.
      */
     voice?: string;
+
+    /**
+     * The opening utterance the agent SPEAKS FIRST, before the user has said anything.
+     *
+     * Authored here rather than in the persona prompt because opening behavior is not
+     * instruction-following: a provider whose agent waits for user audio produces nothing at all
+     * until it hears some, no matter how the prompt is worded (issue #3557). This is the
+     * provider-native channel for "speak first", filed onto the resolved driver's bag under the
+     * neutral `firstMessage` key.
+     *
+     * **Spoken VERBATIM.** It is the literal text the agent says, not guidance about how to open.
+     *
+     * Precedence mirrors {@link voice}: this WINS the `firstMessage` key over a matching
+     * {@link RealtimeVoiceConfig.providers} entry, and the matched provider bag still contributes
+     * all of its other keys.
+     *
+     * **Driver support is not universal.** `ElevenLabsRealtime` maps it to the `agent.first_message`
+     * conversation-config override; `AssemblyAIRealtime` maps it to its `greeting` session slot
+     * (where the legacy `greeting` config key remains accepted). Drivers that do not read the key
+     * ignore it and keep waiting for the user — the session still works, it just opens silently.
+     */
+    firstMessage?: string;
 }
 
 /** Voice configuration: a persona plus per-provider native voice settings. */
@@ -914,6 +937,19 @@ function normalizeVideo(raw: unknown): RealtimeVideoConfig | null {
     return Object.keys(video).length > 0 ? video : null;
 }
 
+/**
+ * A raw authored value as a usable string, or `undefined` when it is absent, blank, or not a
+ * string. Blank-is-absent throughout the realtime config: an empty voice id or opening utterance
+ * is the setting being unset, not a value to carry to a driver.
+ */
+function readTrimmedString(raw: unknown): string | undefined {
+    if (typeof raw !== 'string') {
+        return undefined;
+    }
+    const trimmed = raw.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+}
+
 /** Normalizes the `voice` block; returns `null` when nothing usable survives. */
 function normalizeVoice(raw: unknown): RealtimeVoiceConfig | null {
     if (!isPlainObject(raw)) {
@@ -924,14 +960,24 @@ function normalizeVoice(raw: unknown): RealtimeVoiceConfig | null {
     const rawDefault = raw['default'];
     if (isPlainObject(rawDefault)) {
         const persona: RealtimeVoicePersona = {};
-        if (typeof rawDefault['tone'] === 'string' && rawDefault['tone'].trim().length > 0) {
-            persona.tone = rawDefault['tone'].trim();
+        // Assigned conditionally, never as `= undefined`: the emptiness check below counts OWN
+        // keys, so an all-blank persona has to produce an object with none rather than one full
+        // of undefineds that would then read as authored.
+        const tone = readTrimmedString(rawDefault['tone']);
+        if (tone) {
+            persona.tone = tone;
         }
-        if (typeof rawDefault['speakingStyle'] === 'string' && rawDefault['speakingStyle'].trim().length > 0) {
-            persona.speakingStyle = rawDefault['speakingStyle'].trim();
+        const speakingStyle = readTrimmedString(rawDefault['speakingStyle']);
+        if (speakingStyle) {
+            persona.speakingStyle = speakingStyle;
         }
-        if (typeof rawDefault['voice'] === 'string' && rawDefault['voice'].trim().length > 0) {
-            persona.voice = rawDefault['voice'].trim();
+        const voiceId = readTrimmedString(rawDefault['voice']);
+        if (voiceId) {
+            persona.voice = voiceId;
+        }
+        const firstMessage = readTrimmedString(rawDefault['firstMessage']);
+        if (firstMessage) {
+            persona.firstMessage = firstMessage;
         }
         if (Object.keys(persona).length > 0) {
             voice.default = persona;
@@ -983,12 +1029,13 @@ function normalizeKey(value: string): string {
  *    class must START WITH the provider key (`openairealtime`.startsWith(`openai`)). A bare provider
  *    name (e.g. `'openai'` from `ClientRealtimeSessionConfig.Provider`) matches the same way. The
  *    LONGEST matching key wins when several match.
- * 2. **Provider-agnostic** ({@link RealtimeVoicePersona.voice}) — supplies the `voice` key for whatever
- *    driver resolved, and OVERRIDES a matched provider entry's `voice`.
+ * 2. **Provider-agnostic** — the persona's WIRE-level slots ({@link RealtimeVoicePersona.voice} and
+ *    {@link RealtimeVoicePersona.firstMessage}) supply their own keys for whatever driver resolved,
+ *    and OVERRIDE a matched provider entry's value for those keys.
  *
- * The agnostic value wins the `voice` key. The merge is per-key, so a matched provider bag's other
- * (opaque) settings still ride along. When no agnostic voice is authored this is byte-for-byte the
- * pre-#3530 behavior.
+ * Each agnostic value wins its OWN key. The merge is per-key, so a matched provider bag's other
+ * (opaque) settings still ride along. When the persona authors no wire-level slot this is
+ * byte-for-byte the pre-#3530 behavior.
  *
  * "Opaque pact" describes what this function and the drivers DO with the bag at runtime — it is not a
  * statement about what an author may write in agent metadata. The agent type's `ConfigSchema` declares
@@ -1028,11 +1075,34 @@ export function GetProviderVoiceSettings(
     driverClassOrProvider: string | null | undefined
 ): JSONObjectLike | null {
     const matched = MatchProviderVoiceSettings(config, driverClassOrProvider);
-    const agnosticVoice = config?.realtime?.voice?.default?.voice;
-    if (!agnosticVoice) {
+    const agnostic = collectAgnosticWireSettings(config?.realtime?.voice?.default);
+    if (!agnostic) {
         return matched;
     }
-    return { ...(matched ?? {}), voice: agnosticVoice };
+    return { ...(matched ?? {}), ...agnostic };
+}
+
+/**
+ * The persona's WIRE-level slots as a driver config bag — the half of {@link RealtimeVoicePersona}
+ * that goes to the driver rather than into the system prompt (`tone` / `speakingStyle` are
+ * prompt-level and deliberately absent).
+ *
+ * Each slot overlays the matched provider bag key-by-key, which is what makes "agnostic wins its own
+ * key, the provider bag keeps everything else" hold for every slot rather than just for `voice`.
+ *
+ * @param persona The resolved persona, if any.
+ * @returns The overlay bag, or `null` when the persona contributes no wire-level setting — which is
+ *   what keeps a config authoring none of them byte-for-byte identical to its pre-existing behavior.
+ */
+function collectAgnosticWireSettings(persona: RealtimeVoicePersona | undefined): JSONObjectLike | null {
+    const settings: JSONObjectLike = {};
+    if (persona?.voice) {
+        settings['voice'] = persona.voice;
+    }
+    if (persona?.firstMessage) {
+        settings['firstMessage'] = persona.firstMessage;
+    }
+    return Object.keys(settings).length > 0 ? settings : null;
 }
 
 /**

@@ -53,6 +53,7 @@ Components for action execution, workflow editing, and task management.
 | [actions](./actions/README.md) | `@memberjunction/ng-actions` | Reusable components for testing and running actions with no Kendo dependencies |
 | [action-gallery](./action-gallery/README.md) | `@memberjunction/ng-action-gallery` | Filterable gallery component for browsing and selecting actions |
 | [flow-editor](./flow-editor/README.md) | `@memberjunction/ng-flow-editor` | Generic visual flow editor component powered by Foblex Flow, with an agent-specific Flow Agent Editor |
+| [task-graph-editor](./task-graph-editor/README.md) | `@memberjunction/ng-task-graph-editor` | Canvas for a `TaskGraphSpec` plus the drop-in `<mj-task-graph-debugger>` (frames, VCR, left invocation pane) |
 | [tasks](./tasks/README.md) | `@memberjunction/ng-tasks` | Components for task visualization and management with Gantt chart support |
 
 ### Query & Reporting

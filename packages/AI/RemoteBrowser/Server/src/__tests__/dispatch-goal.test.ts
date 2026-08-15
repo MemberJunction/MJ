@@ -13,8 +13,7 @@ function makeSession() {
       Status: 'Completed',
       StepCount: 2,
     })),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any as IRemoteBrowserSession & {
+  } as unknown as IRemoteBrowserSession & {
     InvokeNativeAIControl: ReturnType<typeof vi.fn>;
     RunComputerUseGoal: ReturnType<typeof vi.fn>;
   };

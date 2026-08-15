@@ -1,14 +1,15 @@
 {
   "name": "@memberjunction/actions-bizapps-social",
   "type": "module",
-  "version": "6.1.0-edge.1",
+  "version": "6.1.0-edge.2",
   "description": "Social Media Actions for MemberJunction - Twitter, LinkedIn, Facebook, Instagram, TikTok, YouTube, HootSuite, Buffer",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc && tsc-alias -f",
     "watch": "tsc -w",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "test": "vitest run"
   },
   "keywords": [
     "memberjunction",
@@ -26,11 +27,11 @@
   "author": "MemberJunction.com",
   "license": "SEE LICENSE IN LICENSE.md",
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.1",
-    "@memberjunction/global": "6.1.0-edge.1",
-    "@memberjunction/actions-base": "6.1.0-edge.1",
-    "@memberjunction/actions": "6.1.0-edge.1",
-    "@memberjunction/core-entities": "6.1.0-edge.1",
+    "@memberjunction/core": "6.1.0-edge.2",
+    "@memberjunction/global": "6.1.0-edge.2",
+    "@memberjunction/actions-base": "6.1.0-edge.2",
+    "@memberjunction/actions": "6.1.0-edge.2",
+    "@memberjunction/core-entities": "6.1.0-edge.2",
     "axios": "^1.13.4",
     "form-data": "^4.0.5"
   },

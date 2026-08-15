@@ -662,7 +662,17 @@ export abstract class BaseIntegrationConnector {
         // late-appearing field). Operator-tunable via env or, per-connection, the IntegrationSetSyncConfig
         // `discoveryMaxRecords` knob. Sampling itself is the FALLBACK path — used only when the source lacks a
         // describe endpoint that yields pk+type+columns; a describe-capable connector returns here-unused.
-        const maxRecords = opts.MaxRecords ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', 500);
+        // The Configuration read was MISSING from this line. `discoveryMaxRecords` is declared in the cfg
+        // type above, documented directly above as a per-connection knob, accepted and persisted by
+        // MJServer's IntegrationSetSyncConfig, returned by IntegrationGetSyncConfig, and surfaced in the
+        // product as a settings field ("Max records" - cap on records sampled during discovery). All of
+        // that worked. Nothing read the value back, so setting it saved a number and changed nothing.
+        //
+        // Its two siblings immediately above both read Configuration. This one did not, which made the one
+        // discovery budget an operator actually wants to lower for a slow source the ONLY one that needed
+        // an app setting and a process restart. Same precedence as the others now:
+        // explicit opts > per-connection Configuration > operator env > default.
+        const maxRecords = opts.MaxRecords ?? cfgInt(cfg.discoveryMaxRecords) ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', 500);
         try {
             return await this.DiscoverFieldsViaStream(
                 this.DiscoverySampleRecordStream(companyIntegration, objectName, contextUser, batchSize, maxRecords),

@@ -110,6 +110,8 @@ After making code changes, **always compile the affected package** and fix all T
 
 **pnpm workspace**: add dependencies to the individual package's `package.json`, then run `pnpm install` **at the repository root**. Never run it inside a package directory. pnpm enforces declared dependencies strictly — a package that imports something it doesn't declare fails to resolve rather than falling through to a hoisted copy, so declare every import.
 
+**Multi-repo dev (MJ + Open App repos side by side)**: `mj dev workspace` generates a pnpm workspace over a plain parent folder of sibling clones — never hand-link repos or run installs inside a member. Setup, daily loop, and recovery: [`guides/DEV_WORKSPACE_QUICKSTART.md`](guides/DEV_WORKSPACE_QUICKSTART.md).
+
 **Migration folder**: the `migrations/v*/` folder must match **the major version in the migration's own filename** — `V…__v6.1.x__Name.sql` belongs in `migrations/v6/`, a `v5.x` file in `migrations/v5/`. Read the folder off the name you just chose; never off a number written down here, which goes stale at every era. Flyway scans `./migrations` recursively and reads the version from the filename, so a misfiled migration still runs — but it strands its PostgreSQL counterpart, which is paired per folder (`migrations/vN` ↔ `migrations-pg/vN`).
 
 **PostgreSQL is toolchain territory — do not hand-author it, and do not build tooling for it.** A feature PR ships the **T-SQL migration only**. Never write a `migrations-pg/**` counterpart, and never write a script that checks, generates, or gates PG parity. Converting T-SQL to PG is deterministic transpilation (`mj migrate convert`, the SQLConverter package, `/pg-migrate-v2`) run by the **build engineer at release time** — the same cadence as the consolidated metadata-sync migration. LLM-inferred PG SQL and one-off parity scripts are exactly what that toolchain exists to replace: they drift from the converter, gate feature PRs on work that is not theirs, and rot. If PG conversion looks wrong, fix the converter or tell the build engineer — do not route around it. Details: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
@@ -130,6 +132,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 | [`typescript-style.md`](.claude/rules/typescript-style.md) | `**/*.ts` | No `any`, no `.Get()`/`.Set()`, derive field types from the entity, no cross-package re-exports, `BaseSingleton`, no dynamic `import()`, naming conventions, functional decomposition, OOD |
 | [`design-tokens.md`](.claude/rules/design-tokens.md) | `**/*.scss`, `**/*.css` | No hardcoded colors, the semantic token catalog, hex→token mappings, `color-mix()`, the CI gates |
 | [`testing.md`](.claude/rules/testing.md) | `**/*.test.ts`, `**/__tests__/**` | Vitest conventions, test structure, the scaffold script, fixing test drift, CI integration |
+| [`changesets.md`](.claude/rules/changesets.md) | `.changeset/**` | Bump levels — `minor` is reserved for migration/metadata branches, everything else `patch`; why the `fixed` group makes one stray `minor` repo-wide; the `check:changeset` self-check |
 
 ### Nested `CLAUDE.md` — load when you read a file in that tree
 
@@ -154,7 +157,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 
 ### Guides — the complete index is [`guides/README.md`](guides/README.md)
 
-41 cross-cutting "read this before you build that" guides, categorized. **Consult the index before starting work in an unfamiliar area** — these capture patterns already litigated. Frequently needed: [UI Layering](guides/UI_LAYERING_GUIDE.md), [Caching & Pub/Sub](guides/CACHING_AND_PUBSUB_GUIDE.md), [UUID Comparison](guides/UUID_COMPARISON_GUIDE.md), [Unified Permissions](guides/UNIFIED_PERMISSIONS_GUIDE.md), [Search Overview](guides/SEARCH_OVERVIEW_GUIDE.md), [Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md), [Forms Architecture](guides/FORMS_ARCHITECTURE_GUIDE.md), [Transport Layer](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md), [Remote Operations](guides/REMOTE_OPERATIONS_GUIDE.md).
+41 cross-cutting "read this before you build that" guides, categorized. **Consult the index before starting work in an unfamiliar area** — these capture patterns already litigated. Frequently needed: [Dev Workspace Quickstart](guides/DEV_WORKSPACE_QUICKSTART.md), [UI Layering](guides/UI_LAYERING_GUIDE.md), [Caching & Pub/Sub](guides/CACHING_AND_PUBSUB_GUIDE.md), [UUID Comparison](guides/UUID_COMPARISON_GUIDE.md), [Unified Permissions](guides/UNIFIED_PERMISSIONS_GUIDE.md), [Search Overview](guides/SEARCH_OVERVIEW_GUIDE.md), [Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md), [Forms Architecture](guides/FORMS_ARCHITECTURE_GUIDE.md), [Transport Layer](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md), [Remote Operations](guides/REMOTE_OPERATIONS_GUIDE.md).
 
 **UI work is layered — L0 runtime → L1 widget → L2 composite → L3 Explorer surface.** Nothing below L3 imports `@angular/router` or an Explorer package; nothing at L3 holds domain logic. Read [`guides/UI_LAYERING_GUIDE.md`](guides/UI_LAYERING_GUIDE.md) before building any UI, in this repo or any MJ app repo.
 
@@ -174,6 +177,7 @@ npm run check:ui          # design-token + button gates on changed CSS/SCSS (mir
 npm run check:standards   # every adopted MJ standard (see .mj-standards.json)
 npm run check:esm         # native-ESM import guard for "type": "module" packages
 npm run check:claude-md   # instruction-file budget, link validity, and routing-table coverage
+npm run check:changeset   # changeset bump levels (local only — no CI gate enforces this one)
 ```
 
 ---

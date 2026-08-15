@@ -1,6 +1,6 @@
 ---
-'@memberjunction/integration-engine': minor
-'@memberjunction/server': minor
+'@memberjunction/integration-engine': patch
+'@memberjunction/server': patch
 ---
 
 Make the `FetchChanges` per-page timeout configurable instead of a hard-coded 30s.
@@ -14,6 +14,6 @@ Two new resolution sources, checked before the framework default:
 
 Precedence, highest first: `Configuration.fetchTimeoutMs` → `connector.FetchChangesTimeoutMs` → `DEFAULT_OPERATION_TIMEOUTS.FetchChangesMs`. **Both** override sources go through the same guard: non-numeric, non-finite and non-positive values are rejected and fall through to the next source. That matters for the connector source in particular — its declared type is `number | null`, so `0`, a negative, or the `NaN` you get from `Number(process.env.UNSET)` are all type-legal, and `setTimeout` coerces every one of them to ~1ms rather than erroring, which would silently time out every page. Resolution happens once per entity map.
 
-Fully backward compatible — with neither source set, behavior is byte-identical to before. Minor rather than patch because `FetchChangesTimeoutMs` adds a member to the `BaseIntegrationConnector` public surface.
+Fully backward compatible — with neither source set, behavior is byte-identical to before. `FetchChangesTimeoutMs` is additive to the `BaseIntegrationConnector` public surface, and `patch` is still the right level: every MJ package shares one `fixed` group, so `minor` is reserved for branches that change the database (a migration, or `metadata/**` that becomes one at release). This branch changes neither.
 
 Separately, an **unskippable fetch failure no longer completes silently.** When a persistent error hits a page the engine cannot page past (cursor paging, or the page-skip budget spent), the object stops with an incomplete result set — and previously reported nothing, so an object whose very first page failed was indistinguishable from a clean "nothing changed" run. It now emits a structured `FETCH_ABORTED_INCOMPLETE` warning on the run-event stream **and** records a `Warning`-severity entry in `CompanyIntegrationRun.ErrorLog`, so the condition survives in queryable run history rather than only in a pod-local artifact. The run's `Status` is deliberately unchanged (`Success` unless a record actually errored): the watermark is held, so the unfetched window is retried next run — this is a warning, not a failed run.

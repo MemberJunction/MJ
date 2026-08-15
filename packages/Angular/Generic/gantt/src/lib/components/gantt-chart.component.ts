@@ -88,6 +88,9 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
     /** Emitted when an item bar or grid row is clicked. */
     @Output() ItemClicked = new EventEmitter<GanttItemClickedEvent>();
 
+    /** Emitted when an item bar or grid row is double-clicked. */
+    @Output() ItemDoubleClicked = new EventEmitter<GanttItemClickedEvent>();
+
     /** Emitted when an item is changed via drag/resize (only if not ReadOnly). */
     @Output() ItemChanged = new EventEmitter<GanttItemChangedEvent>();
 
@@ -123,7 +126,11 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
         }
     }
 
+    private destroyDblClick?: () => void;
+
     ngOnDestroy(): void {
+        this.destroyDblClick?.();
+        this.destroyDblClick = undefined;
         if (this.initialized && this.gantt) {
             this.gantt.clearAll();
             this.initialized = false;
@@ -146,6 +153,7 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
         g.config.show_progress = this.ShowProgress;
         g.config.show_links = true;
         g.config.readonly = this.ReadOnly;
+        g.config.details_on_dblclick = false;
         g.config.open_tree_initially = true;
         g.config.fit_tasks = true;
         g.config.row_height = 36;
@@ -176,6 +184,31 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
             }
             return true;
         });
+
+        // Event: dblclick (via DHTMLX attachEvent)
+        g.attachEvent('onTaskDblClick', (id: string) => {
+            const item = this.Items.find(i => UUIDsEqual(i.ID, id));
+            if (item) {
+                this.ItemDoubleClicked.emit({ Item: item });
+            }
+            return false; // Suppress default DHTMLX lightbox
+        });
+
+        // Native DOM dblclick listener guarantees double click fires even when readonly = true
+        this.destroyDblClick?.();
+        const dblClickHandler = (e: MouseEvent) => {
+            const taskId = g.locate(e);
+            if (taskId !== null && taskId !== undefined) {
+                const item = this.Items.find(i => UUIDsEqual(i.ID, String(taskId)));
+                if (item) {
+                    this.ItemDoubleClicked.emit({ Item: item });
+                }
+            }
+        };
+        this.ganttContainer.nativeElement.addEventListener('dblclick', dblClickHandler);
+        this.destroyDblClick = () => {
+            this.ganttContainer?.nativeElement?.removeEventListener('dblclick', dblClickHandler);
+        };
 
         // Event: drag/resize (only fires if not readonly)
         if (!this.ReadOnly) {
@@ -211,12 +244,15 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
                 duration = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000));
             }
 
+            const rawProgress = item.Progress ?? 0;
+            const progress = rawProgress > 1 ? rawProgress / 100 : rawProgress;
+
             return {
                 id: item.ID,
                 text: item.Name,
                 start_date: this.formatDate(startDate) as any,
                 duration,
-                progress: (item.Progress ?? 0) / 100,
+                progress,
                 parent: item.ParentID || 0,
                 open: item.Open !== false,
             };

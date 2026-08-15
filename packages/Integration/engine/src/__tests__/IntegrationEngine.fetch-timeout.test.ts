@@ -77,6 +77,12 @@ function createMockEntity(overrides: Record<string, unknown> = {}) {
 
 vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
+    // Durable run ownership (#3291, merged after this branch was cut): every sync claims its run row,
+    // heartbeats a lease, fences each batch boundary and releases at the end, all through the provider.
+    // Imported HERE rather than at module scope because `vi.mock` factories are hoisted above imports.
+    const { createOwnershipProviderSurface } = await vi.importActual<
+        typeof import('./helpers/ownershipProviderSurface.js')
+    >('./helpers/ownershipProviderSurface.js');
     return {
         ...actual,
         RunView: class MockRunView {
@@ -106,6 +112,9 @@ vi.mock('@memberjunction/core', async () => {
                 }
             }
             MockMetadata.Provider = {
+                // Without this surface the run aborts inside `RunOwnershipService.Claim` before any
+                // FetchChanges happens, so a timeout test never reaches what it measures.
+                ...createOwnershipProviderSurface(),
                 BeginTransaction: vi.fn().mockResolvedValue(undefined),
                 CommitTransaction: vi.fn().mockResolvedValue(undefined),
                 RollbackTransaction: vi.fn().mockResolvedValue(undefined),

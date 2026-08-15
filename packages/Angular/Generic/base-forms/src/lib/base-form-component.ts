@@ -30,6 +30,8 @@ import {
 } from './types/form-types';
 import { FormStateService } from './form-state.service';
 import { EntityFormConfig } from './types/entity-form-config';
+import { CollectFormPanelRegistrations } from './panel-slot/collect-form-panel-registrations';
+import { ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
 
 /**
  * Abstract base class for all entity record forms in MemberJunction.
@@ -167,7 +169,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   /** Subscription to form state changes */
   private formStateSubscription?: Subscription;
 
-  @ViewChildren(MjCollapsiblePanelComponent) collapsiblePanels!: QueryList<MjCollapsiblePanelComponent>;
+  @ViewChildren(MjCollapsiblePanelComponent)
+  collapsiblePanels!: QueryList<MjCollapsiblePanelComponent>;
 
   async ngOnInit() {
     if (this.record) {
@@ -551,6 +554,14 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       return {};
   }
 
+  /**
+   * One grid over several FKs to the same related entity (Bill-To OR Ship-To).
+   */
+  public BuildRelationshipViewParamsForJoinFields(relatedEntityName: string, joinFields: readonly string[]): RunViewParams {
+    if (!this.record) return {};
+    return EntityInfo.BuildRelationshipViewParamsForJoinFields(this.record, relatedEntityName, joinFields);
+  }
+
   public GetEntityRelationshipByRelatedEntityName(relatedEntityName: string, relatedEntityJoinField?: string): EntityRelationshipInfo | undefined {
     if (this.record) {
       const r = <BaseEntity>this.record;
@@ -568,12 +579,37 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return undefined;
   }
 
-  public NewRecordValues(relatedEntityName: string): Record<string, unknown> {
-    const eri = this.GetEntityRelationshipByRelatedEntityName(relatedEntityName);
-    if (eri)
-      return this.NewRecordValuesByEntityRelationship(eri);
-    else
-      return {};
+  /**
+   * Default values for a new related-entity record so it links back here.
+   * Pass `relatedEntityJoinField` when more than one relationship targets the
+   * same entity (Bill-To vs Ship-To). When omitted and several matches exist,
+   * every matching FK is set — same fields the related grid is filtering on.
+   */
+  public NewRecordValues(relatedEntityName: string, relatedEntityJoinField?: string): Record<string, unknown> {
+    if (!this.record) return {};
+    if (relatedEntityJoinField) {
+      const eri = this.GetEntityRelationshipByRelatedEntityName(relatedEntityName, relatedEntityJoinField);
+      if (eri) return this.NewRecordValuesByEntityRelationship(eri);
+      return EntityInfo.BuildRelationshipNewRecordValuesForJoinFields(this.record, [relatedEntityJoinField]);
+    }
+    const matches = this.record.EntityInfo.RelatedEntities.filter(
+      (x) => x.RelatedEntity.trim().toLowerCase() === relatedEntityName.trim().toLowerCase(),
+    );
+    if (matches.length === 0) return {};
+    if (matches.length === 1) return this.NewRecordValuesByEntityRelationship(matches[0]);
+    return EntityInfo.BuildRelationshipNewRecordValuesForJoinFields(
+      this.record,
+      matches.map((m) => m.RelatedEntityJoinField),
+    );
+  }
+
+  /**
+   * Default values for a new related record, setting every listed join field
+   * to this record's key. Pair with {@link BuildRelationshipViewParamsForJoinFields}.
+   */
+  public NewRecordValuesForJoinFields(relatedEntityName: string, joinFields: readonly string[]): Record<string, unknown> {
+    if (!this.record || !relatedEntityName) return {};
+    return EntityInfo.BuildRelationshipNewRecordValuesForJoinFields(this.record, joinFields);
   }
 
   public NewRecordValuesByEntityRelationship(item: EntityRelationshipInfo): Record<string, unknown> {
@@ -748,10 +784,32 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       collapsibleSections: this.Config?.CollapsibleSections,
       enableRecordLinks: this.Config?.EnableRecordLinks,
       showRelatedEntities: this.Config?.ShowRelatedEntities,
-      hiddenSectionKeys: this.Config?.HiddenSectionKeys,
+      hiddenSectionKeys: this.resolveHiddenSectionKeys(),
       visibleSectionKeys: this.Config?.VisibleSectionKeys,
       allowSectionReorder: this.resolveAllowSectionReorder()
     };
+  }
+
+  /**
+   * Config HiddenSectionKeys plus section keys winning contributions asked
+   * to hide (related-entity claims and `replacesSectionKey` field panels).
+   */
+  private resolveHiddenSectionKeys(): string[] | undefined {
+    const claimed = this.contributionHiddenSectionKeys();
+    const configured = this.Config?.HiddenSectionKeys;
+    if (claimed.length === 0) return configured;
+    return [...(configured ?? []), ...claimed];
+  }
+
+  private contributionHiddenSectionKeys(): string[] {
+    const entity = this.record?.EntityInfo;
+    if (!entity) return [];
+    return ContributionHiddenSectionKeys(
+      entity.Name,
+      entity.RelatedEntities,
+      entity.ChildEntities.map((child) => child.ID),
+      CollectFormPanelRegistrations(),
+    );
   }
 
   /**
@@ -830,10 +888,18 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   public SetSectionRowCount(sectionKey: string, rowCount: number): void {
-    const section = this.sectionMap.get(sectionKey);
-    if (section) {
+    let section = this.sectionMap.get(sectionKey);
+    if (!section) {
+      // Contribution panels use their own SectionKey (e.g. 'orders') which
+      // is never seeded by generated initSections(). Upsert so the left-nav
+      // rail badge can read the count the same way baked grids do.
+      section = new BaseFormSectionInfo(sectionKey, sectionKey, false, rowCount);
+      this.sections.push(section);
+      this.sectionMap.set(sectionKey, section);
+    } else {
       section.rowCount = rowCount;
     }
+    this.cdr.markForCheck();
   }
 
   public GetSectionPanelHeight(sectionKey: string): number | undefined {
@@ -997,6 +1063,25 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       return this.formStateService.hasCustomSectionOrder(entityName);
     }
     return false;
+  }
+
+  public getMoreSectionKeys(): string[] {
+    const entityName = this.getEntityName();
+    if (!entityName) return [];
+    return this.formStateService.getMoreSectionKeys(entityName) ?? [];
+  }
+
+  public getFirstClassSectionKeys(): string[] {
+    const entityName = this.getEntityName();
+    if (!entityName) return [];
+    return this.formStateService.getFirstClassSectionKeys(entityName) ?? [];
+  }
+
+  public setChromeMembership(moreSectionKeys: string[], firstClassSectionKeys: string[]): void {
+    const entityName = this.getEntityName();
+    if (entityName) {
+      this.formStateService.setChromeMembership(entityName, moreSectionKeys, firstClassSectionKeys);
+    }
   }
 
   public getSectionDisplayOrder(sectionKey: string): number {
