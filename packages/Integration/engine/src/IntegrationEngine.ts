@@ -2186,6 +2186,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         let fetchGapCount = 0;            // CONSECUTIVE skipped pages (reset on any clean fetch)
         const MAX_FETCH_GAPS = 25;        // give up + hold the watermark if this many pages fail in a row (API down)
         let consecutiveEmptyBatches = 0;  // P3-D: detect a connector that pages empty-but-HasMore forever
+        let oversizeBatchWarned = false;  // pagination rule: warn ONCE per object that the connector ignored BatchSize
         const MAX_BATCHES_PER_MAP = 5000;
         const EMPTY_BATCH_WARN_THRESHOLD = 5; // warn once after this many empty-but-HasMore batches in a row
         const fetchedExternalIDs = new Set<string>(); // Track all IDs seen during this pull for orphan detection
@@ -2332,13 +2333,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 }
             }
 
-            // If the connector returned more records than MaxBatchSize, log it but never truncate —
-            // all records are written, just in sub-batches to keep DB transactions manageable.
-            if (batch.Records.length > this.MaxBatchSize) {
-                console.log(
-                    `[IntegrationEngine] ${entityMap.ExternalObjectName}: connector returned ` +
-                    `${batch.Records.length} records (> MaxBatchSize ${this.MaxBatchSize}), writing in chunks.`
-                );
+            // Engine-side half of the pagination rule: a connector MUST honour ctx.BatchSize. We never
+            // truncate — every record is written, just in sub-batches to keep DB transactions manageable —
+            // but an over-size batch is a real connector defect and has to be visible on the structured
+            // run-event stream, not buried in a console.log nobody reads. Warned ONCE per object (the
+            // CONSECUTIVE_EMPTY_BATCHES pattern) so a paginating-but-over-size connector doesn't flood
+            // the artifact with one warning per page.
+            if (batch.Records.length > this.MaxBatchSize && !oversizeBatchWarned) {
+                oversizeBatchWarned = true;
+                this.warnOversizedBatch(entityMap, batch, batchCount, logger);
             }
 
             if (batch.Records.length > 0) {
@@ -2641,6 +2644,72 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         await this.CreateRunDetail(run, entityMap, result, contextUser);
         return result;
+    }
+
+    /**
+     * Classifies a fetched batch against the `ctx.BatchSize` the engine asked for. Returns null when
+     * the batch is within contract, so the caller can treat "no verdict" as "nothing to warn about".
+     *
+     * Two severities, because they are different defects:
+     *  - `CONNECTOR_UNBOUNDED_BATCH` — the FIRST batch came back over-size AND `HasMore` is not true,
+     *    i.e. the connector ignored pagination entirely and pulled the whole object into memory in one
+     *    request. That is what OOMs a large tenant, and it grows silently with the customer's data.
+     *  - `CONNECTOR_IGNORED_BATCH_SIZE` — the connector IS paging but overshoots the requested size
+     *    (e.g. a hardcoded page size). Bounded memory, still a contract violation worth fixing.
+     *
+     * Public + static because the decision is the interesting part and deserves a unit test that
+     * doesn't have to stand up a whole sync (same rationale as {@link RatchetProgressSnapshot}).
+     */
+    public static ClassifyOversizedBatch(
+        objectName: string,
+        recordCount: number,
+        requestedBatchSize: number,
+        batchIndex: number,
+        hasMore: boolean | undefined
+    ): { Code: 'CONNECTOR_UNBOUNDED_BATCH' | 'CONNECTOR_IGNORED_BATCH_SIZE'; Unbounded: boolean; Message: string } | null {
+        if (recordCount <= requestedBatchSize) return null;
+        const unbounded = batchIndex === 1 && hasMore !== true;
+        return unbounded
+            ? {
+                Code: 'CONNECTOR_UNBOUNDED_BATCH',
+                Unbounded: true,
+                Message: `'${objectName}': connector returned ALL ${recordCount} records in a single batch ` +
+                    `(requested ${requestedBatchSize}, HasMore=false) — pagination is not implemented for this ` +
+                    `object, so the entire object is held in memory. Every record was written, in chunks.`,
+            }
+            : {
+                Code: 'CONNECTOR_IGNORED_BATCH_SIZE',
+                Unbounded: false,
+                Message: `'${objectName}': connector returned ${recordCount} records for batch ${batchIndex} ` +
+                    `(requested ${requestedBatchSize}) — ctx.BatchSize is not being honoured. Every record was ` +
+                    `written, in chunks. Warned once per object.`,
+            };
+    }
+
+    /**
+     * Surfaces an over-size batch onto the structured run-event stream (queryable via
+     * IntegrationTailRunEvents) so the pagination-rule violation is visible instead of console-only.
+     * Never truncates and never fails the sync — the over-size batch is written in chunks either way.
+     */
+    private warnOversizedBatch(
+        entityMap: ICompanyIntegrationEntityMap,
+        batch: FetchBatchResult,
+        batchIndex: number,
+        logger?: SyncLogger
+    ): void {
+        const objectName = entityMap.ExternalObjectName ?? entityMap.ID;
+        const verdict = IntegrationEngine.ClassifyOversizedBatch(
+            objectName, batch.Records.length, this.MaxBatchSize, batchIndex, batch.HasMore,
+        );
+        if (!verdict) return;
+        logger?.warning(objectName, verdict.Code, verdict.Message, {
+            batchIndex,
+            recordCount: batch.Records.length,
+            requestedBatchSize: this.MaxBatchSize,
+            hasMore: batch.HasMore ?? null,
+            unbounded: verdict.Unbounded,
+        });
+        console.warn(`[IntegrationEngine] ${verdict.Message}`);
     }
 
     /**

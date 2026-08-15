@@ -101,6 +101,28 @@ import { buildIntegrationLLMPKCallback } from './IntegrationLLMPKCallback';
  */
 @RegisterClass(BaseEntity, 'MJ: Company Integrations')
 export class MJCompanyIntegrationEntityServer extends MJCompanyIntegrationEntity {
+    /**
+     * Transient (never persisted) opt-out: when true, activating this connection does NOT run the
+     * schema refresh inside `Save()`. Set it only when the CALLER is going to run the refresh itself
+     * — `IntegrationCreateConnection` does exactly that for `awaitSchemaRefresh: false`.
+     *
+     * Two reasons the caller sometimes has to own it:
+     *
+     *  1. LATENCY. The refresh below is awaited, so a create mutation costs one full live introspect
+     *     (minutes on a large catalog) no matter what the caller asked for. A caller that wants to
+     *     hand the client a tailable run ID and return immediately cannot do that while this fires.
+     *
+     *  2. ROLLBACK SAFETY. `IntegrationCreateConnection` saves the connection, THEN optionally runs a
+     *     live connection test, and deletes both the CompanyIntegration and its Credential if that
+     *     test fails. A refresh fired from inside the Save has already written IntegrationObject /
+     *     IntegrationObjectField rows for a connection that is about to be deleted. Deferring the
+     *     refresh past the rollback decision means a rejected connection leaves nothing behind.
+     *
+     * Default false, so every other path (wizard Finish via a direct entity edit, the Update
+     * mutation, any internal code that flips IsActive) keeps the awaited behaviour unchanged.
+     */
+    public SuppressActivationSchemaRefresh: boolean = false;
+
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         // Snapshot the pre-save IsActive value so we can detect the transition
         // AFTER `super.Save()` returns successfully.  When the row is new
@@ -116,7 +138,16 @@ export class MJCompanyIntegrationEntityServer extends MJCompanyIntegrationEntity
         const saved = await super.Save(options);
         if (!saved) return false;
 
-        if (transitionedToActive) {
+        if (transitionedToActive && this.SuppressActivationSchemaRefresh) {
+            // The caller owns the refresh (see SuppressActivationSchemaRefresh). Logged rather than
+            // silent, because "activated but no schema appeared" is otherwise a confusing state to
+            // debug from the server log alone.
+            LogStatus(
+                `[MJCompanyIntegrationEntityServer] IsActive false→true on ${this.Integration ?? this.ID} ` +
+                `(${this.ID}); activation schema refresh SUPPRESSED at the caller's request — the caller ` +
+                `is running it instead.`
+            );
+        } else if (transitionedToActive) {
             // AWAIT the pipeline — the wizard's Finish button stays in its
             // "Saving…" state until the schema refresh completes, so the
             // operator sees real visual feedback during the actual work
@@ -130,6 +161,16 @@ export class MJCompanyIntegrationEntityServer extends MJCompanyIntegrationEntity
                 LogError(`[MJCompanyIntegrationEntityServer] Schema refresh pipeline error (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
             }
         }
+
+        // ONE-SHOT: the opt-out applies to the save that was just performed, and is cleared here so it
+        // cannot leak into a later one. Without this it is "transient" only in the sense of never being
+        // persisted — it still lives for the lifetime of the entity OBJECT, so any code that reuses the
+        // instance (load → activate → save → later edit → save again) would silently suppress a SECOND,
+        // legitimate activation refresh and leave that connection active with no schema.
+        //
+        // Deliberately after the early `return false` above: a save that FAILED has not consumed the
+        // caller's intent, so a retry still gets the behaviour it asked for.
+        this.SuppressActivationSchemaRefresh = false;
 
         return true;
     }
