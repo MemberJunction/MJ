@@ -256,6 +256,7 @@ mj-collapsible-panel.mj-form-role-more {
 }
 
 .mj-forms-chrome-rail-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -264,10 +265,17 @@ mj-collapsible-panel.mj-form-role-more {
   border: 0;
   border-radius: var(--mj-radius-sm);
   background: transparent;
-  color: var(--mj-text-secondary);
+  color: var(--mj-text-muted);
   font-size: var(--mj-text-sm);
   text-align: left;
   cursor: pointer;
+}
+
+.mj-forms-chrome-rail-item > i {
+  width: 1.15em;
+  flex-shrink: 0;
+  text-align: center;
+  color: inherit;
 }
 
 .mj-forms-chrome-rail-item:hover {
@@ -276,9 +284,24 @@ mj-collapsible-panel.mj-form-role-more {
 }
 
 .mj-forms-chrome-rail-item.is-active {
-  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  background: color-mix(in srgb, var(--mj-brand-primary) 16%, var(--mj-bg-surface));
   color: var(--mj-brand-primary);
   font-weight: var(--mj-font-semibold);
+}
+
+.mj-forms-chrome-rail-item.is-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--mj-brand-primary);
+}
+
+.mj-forms-chrome-rail-item.is-active .mj-forms-chrome-rail-label {
+  color: var(--mj-brand-primary);
 }
 
 .mj-forms-chrome-rail-item.is-drag-over {
