@@ -5,9 +5,10 @@
  *    field mapping, transactional role / application / application-entity
  *    provisioning, and every rollback path.
  *  - verifyUserRecord (auth/index.ts): the authorization gate in front of it —
- *    autoCreateNewUsers on/off, authorized-domain restrictions (including
- *    wildcard patterns and suffix/prefix-confusion attempts), cache-refresh
- *    retry, and the UserRoles the created user is stamped with.
+ *    autoCreateNewUsers on/off, authorized-domain restrictions against the
+ *    verified identity's email domain (including wildcards, suffix/prefix
+ *    confusion, and a forged Origin), cache-refresh retry, and the UserRoles
+ *    the created user is stamped with.
  *
  * Both production modules run unmodified; mocking happens at the package
  * boundaries (@memberjunction/core, generic-database-provider, core-entities)
@@ -613,61 +614,84 @@ describe('verifyUserRecord', () => {
             mockConfig.userHandling.newUserAuthorizedDomains = ['example.com'];
         });
 
-        it('creates the user when the request domain matches an authorized domain', async () => {
-            const user = await verifyUserRecord('new@example.com', 'New', 'User', 'example.com');
+        it('creates the user when the email domain is authorized', async () => {
+            const user = await verifyUserRecord('new@example.com', 'New', 'User');
 
             expect(user).toBeDefined();
             expect(entitiesOf('MJ: Users')).toHaveLength(1);
         });
 
-        it('does NOT create when the request domain matches no authorized domain', async () => {
-            const user = await verifyUserRecord('new@evil.com', 'New', 'User', 'evil.com');
+        it('does NOT create when the email domain is not authorized', async () => {
+            const user = await verifyUserRecord('new@evil.com', 'New', 'User');
 
             expect(user).toBeUndefined();
             expect(mockGetEntityObject).not.toHaveBeenCalled();
         });
 
-        it('does NOT create when restricted and no request domain is supplied', async () => {
+        it('creates when restricted and no request Origin is supplied, if the email domain is authorized', async () => {
             const user = await verifyUserRecord('new@example.com', 'New', 'User', undefined);
 
+            expect(user).toBeDefined();
+            expect(entitiesOf('MJ: Users')).toHaveLength(1);
+        });
+
+        it('does NOT create when a forged Origin is authorized but the email domain is not', async () => {
+            const user = await verifyUserRecord('new@evil.com', 'New', 'User', 'example.com');
+
             expect(user).toBeUndefined();
             expect(mockGetEntityObject).not.toHaveBeenCalled();
         });
 
-        it('matches domains case-insensitively', async () => {
-            const user = await verifyUserRecord('new@example.com', 'New', 'User', 'EXAMPLE.COM');
+        it('matches email domains case-insensitively', async () => {
+            const user = await verifyUserRecord('new@EXAMPLE.COM', 'New', 'User');
 
             expect(user).toBeDefined();
         });
 
-        it('supports wildcard patterns for subdomains', async () => {
+        it('supports wildcard patterns for email subdomains', async () => {
             mockConfig.userHandling.newUserAuthorizedDomains = ['*.example.com'];
 
-            const user = await verifyUserRecord('new@example.com', 'New', 'User', 'teams.example.com');
+            const user = await verifyUserRecord('new@mail.example.com', 'New', 'User');
 
             expect(user).toBeDefined();
+        });
+
+        it('does NOT match the apex against "*.example.com" (pattern is matched in full)', async () => {
+            mockConfig.userHandling.newUserAuthorizedDomains = ['*.example.com'];
+
+            const user = await verifyUserRecord('new@example.com', 'New', 'User');
+
+            expect(user).toBeUndefined();
+            expect(mockGetEntityObject).not.toHaveBeenCalled();
         });
 
         it('rejects prefix confusion: "*.example.com" does not match "evilexample.com" (dot is escaped)', async () => {
             mockConfig.userHandling.newUserAuthorizedDomains = ['*.example.com'];
 
-            const user = await verifyUserRecord('new@evilexample.com', 'New', 'User', 'evilexample.com');
+            const user = await verifyUserRecord('new@evilexample.com', 'New', 'User');
 
             expect(user).toBeUndefined();
             expect(mockGetEntityObject).not.toHaveBeenCalled();
         });
 
         it('rejects suffix confusion: the pattern is anchored, so "example.com.evil.com" is not authorized', async () => {
-            const user = await verifyUserRecord('new@example.com.evil.com', 'New', 'User', 'example.com.evil.com');
+            const user = await verifyUserRecord('new@example.com.evil.com', 'New', 'User');
 
             expect(user).toBeUndefined();
             expect(mockGetEntityObject).not.toHaveBeenCalled();
         });
 
         it('rejects "evilexample.com" against the plain "example.com" pattern (anchored at both ends)', async () => {
-            const user = await verifyUserRecord('x@evilexample.com', 'New', 'User', 'evilexample.com');
+            const user = await verifyUserRecord('x@evilexample.com', 'New', 'User');
 
             expect(user).toBeUndefined();
+        });
+
+        it('does NOT create when the identity has no email domain (username-only IdP)', async () => {
+            const user = await verifyUserRecord('bare-username', 'New', 'User');
+
+            expect(user).toBeUndefined();
+            expect(mockGetEntityObject).not.toHaveBeenCalled();
         });
     });
 
