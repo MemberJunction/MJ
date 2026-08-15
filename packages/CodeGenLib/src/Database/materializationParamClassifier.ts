@@ -276,12 +276,26 @@ export function classifyQueryParameters(opts: {
         filterKind: pv.verdict.filterKind,
     }));
 
+    // The qualifier needs the CONCRETE SQL to prove each RowFilter predicate binds to the materialized
+    // output column of the same name (a bare column-name match cannot see a join collision or an alias
+    // rebinding — see proveFilterColumnBinding). The held baseline render is the right instance: it is the
+    // same shape the broad-render step strips, and it still carries the row-filter predicate. If the render
+    // throws, we pass nothing and RowFilter params refuse (fail closed → the query stays live-only).
+    let heldSQL: string | undefined;
+    try {
+        heldSQL = render(held);
+    } catch {
+        heldSQL = undefined;
+    }
+
     const qualification = qualifyParameterizedQuery({
         queryName,
         params: classifications,
         outputColumns,
         allowPerValueCache: opts.allowPerValueCache ?? false,
         allowRowFilterBroad: opts.allowRowFilterBroad ?? false,
+        sql: heldSQL,
+        dialect,
     });
 
     return { qualification, perParam };

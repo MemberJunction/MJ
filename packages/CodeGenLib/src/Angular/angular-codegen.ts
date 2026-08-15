@@ -987,7 +987,7 @@ ${componentCodeWithIndent}
                 const template = `<mj-explorer-entity-data-grid
     [Params]="BuildOrganicKeyViewParamsByNames('${organicKey.Name.replace(/'/g, "\\'")}','${relatedEntity.RelatedEntity.replace(/'/g, "\\'")}')"
     [AllowLoad]="${allowLoadCheck}"
-    [ShowToolbar]="false"
+    [ShowToolbar]="true"
     (Navigate)="OnFormNavigate($event)"
     ${afterDataLoadEvent}
     >

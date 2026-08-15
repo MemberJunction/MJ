@@ -212,14 +212,48 @@ export const DEFAULT_OPERATION_TIMEOUTS: OperationTimeouts = {
 };
 
 /**
- * Wraps a promise with a timeout. Rejects with a timeout error if the
+ * The error {@link WithTimeout} rejects with when ITS OWN budget expires — as distinct from an error
+ * the wrapped operation itself produced.
+ *
+ * That distinction is the whole point of the class. `ClassifyError` maps anything matching "timeout"
+ * to `NETWORK_TIMEOUT`, which `IsRetryableError` treats as transient — correct for a socket that
+ * dropped, wrong for "we gave this operation N ms and it wanted more." Retrying the latter re-runs
+ * the same work under the same budget, so it fails the same way, having spent the budget again.
+ *
+ * The message is deliberately UNCHANGED from the plain `Error` this replaced: `ClassifyError` reads
+ * message text, so existing classification, logging and the run-event stream all behave exactly as
+ * before. Only callers that explicitly check `instanceof` see any difference.
+ */
+export class OperationTimeoutError extends Error {
+    /** The `operationName` passed to {@link WithTimeout}. */
+    public readonly OperationName: string;
+    /** The budget that expired, in milliseconds. */
+    public readonly TimeoutMs: number;
+
+    constructor(operationName: string, timeoutMs: number) {
+        super(`Operation '${operationName}' timed out after ${timeoutMs}ms`);
+        this.name = 'OperationTimeoutError';
+        this.OperationName = operationName;
+        this.TimeoutMs = timeoutMs;
+    }
+}
+
+/**
+ * Wraps a promise with a timeout. Rejects with {@link OperationTimeoutError} if the
  * promise does not resolve within the specified duration.
+ *
+ * CAVEAT — this does NOT cancel the wrapped operation. It is a `Promise.race`, so on timeout the
+ * underlying work keeps running to completion (or its own failure) with nobody awaiting it. A caller
+ * that retries a timed-out operation therefore stacks a second copy on top of the first, still
+ * in-flight — which is why `IntegrationEngine`'s fetch path does not retry
+ * {@link OperationTimeoutError}. Real cancellation needs an `AbortSignal` threaded into the
+ * connector contract; until then, treat a timeout as terminal for that attempt.
  *
  * @param promise - The promise to wrap
  * @param timeoutMs - Timeout in milliseconds
  * @param operationName - Name of the operation for error messaging
  * @returns The result of the promise
- * @throws Error if the operation times out
+ * @throws OperationTimeoutError if the operation times out
  */
 export async function WithTimeout<T>(
     promise: Promise<T>,
@@ -230,7 +264,7 @@ export async function WithTimeout<T>(
 
     const timeoutPromise = new Promise<never>((_resolve, reject) => {
         timeoutHandle = setTimeout(() => {
-            reject(new Error(`Operation '${operationName}' timed out after ${timeoutMs}ms`));
+            reject(new OperationTimeoutError(operationName, timeoutMs));
         }, timeoutMs);
     });
 
@@ -458,6 +492,30 @@ export abstract class BaseIntegrationConnector {
     public get MaxConcurrencyHint(): number | null { return null; }
 
     /**
+     * Per-connector override for the `FetchChanges` timeout, in milliseconds. `null` → use
+     * `DEFAULT_OPERATION_TIMEOUTS.FetchChangesMs` (30s).
+     *
+     * Raise this when a single page is legitimately slow: a connector that fans out one request per
+     * parent (ORCID's per-iD `/record`, any second-layer object) does N requests inside ONE
+     * `FetchChanges` call, so its page time scales with `BatchSize` — and with how much concurrency
+     * the engine's adaptive controller currently allows. Under the fixed 30s, a page that comfortably
+     * fit when parallel no longer fit once the controller had cut concurrency, which forced connector
+     * authors to shrink `BatchSize` for the sequential worst case and waste the parallel headroom the
+     * rest of the time.
+     *
+     * Note the timeout does NOT itself cut concurrency: `ClassifyError` gives it `NETWORK_TIMEOUT`,
+     * and only `RATE_LIMIT_EXCEEDED` feeds the adaptive limiter. A timing-out page simply never ramps
+     * the rate UP (the ramp needs a clean fetch), and the object ends incomplete — reported as
+     * `FETCH_ABORTED_INCOMPLETE`. Earlier revisions of this comment described a self-reinforcing
+     * timeout→concurrency-cut spiral; that is not what the code does.
+     *
+     * Precedence (highest first): `CompanyIntegration.Configuration.fetchTimeoutMs` → this property
+     * → `DEFAULT_OPERATION_TIMEOUTS.FetchChangesMs`. Deployments therefore keep the last word without
+     * a code change, while a connector that KNOWS it is slow ships a sane default.
+     */
+    public get FetchChangesTimeoutMs(): number | null { return null; }
+
+    /**
      * Name of a stable, monotonic ordering key (PK/identity) usable for KEYSET/seek resume on
      * watermark-less objects (plan.md §7 — resume from last-seen key, robust to mid-stream
      * insert/delete). `null` → keyset resume unavailable for this object.
@@ -643,7 +701,17 @@ export abstract class BaseIntegrationConnector {
         // late-appearing field). Operator-tunable via env or, per-connection, the IntegrationSetSyncConfig
         // `discoveryMaxRecords` knob. Sampling itself is the FALLBACK path — used only when the source lacks a
         // describe endpoint that yields pk+type+columns; a describe-capable connector returns here-unused.
-        const maxRecords = opts.MaxRecords ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', 500);
+        // The Configuration read was MISSING from this line. `discoveryMaxRecords` is declared in the cfg
+        // type above, documented directly above as a per-connection knob, accepted and persisted by
+        // MJServer's IntegrationSetSyncConfig, returned by IntegrationGetSyncConfig, and surfaced in the
+        // product as a settings field ("Max records" - cap on records sampled during discovery). All of
+        // that worked. Nothing read the value back, so setting it saved a number and changed nothing.
+        //
+        // Its two siblings immediately above both read Configuration. This one did not, which made the one
+        // discovery budget an operator actually wants to lower for a slow source the ONLY one that needed
+        // an app setting and a process restart. Same precedence as the others now:
+        // explicit opts > per-connection Configuration > operator env > default.
+        const maxRecords = opts.MaxRecords ?? cfgInt(cfg.discoveryMaxRecords) ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', 500);
         try {
             return await this.DiscoverFieldsViaStream(
                 this.DiscoverySampleRecordStream(companyIntegration, objectName, contextUser, batchSize, maxRecords),

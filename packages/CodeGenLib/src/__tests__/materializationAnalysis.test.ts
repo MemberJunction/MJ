@@ -123,6 +123,84 @@ describe('detectAggregationKeyColumns (Phase 3)', () => {
             dialect, fields: [{ Name: 'region', SQLFullType: 'nvarchar(50)' }, { Name: 'total', SQLFullType: 'decimal(18,2)' }],
         })).toBeNull();
     });
+
+    describe('set-operation roots (UNION/EXCEPT/INTERSECT) must refuse — first-branch-only blind spot', () => {
+        // node-sql-parser does NOT emit a distinct union node: a set operation is a SINGLE type:'select'
+        // root carrying set_op/_next whose `groupby` and `columns` describe ONLY THE FIRST BRANCH. Reading
+        // it would report {region} as the key of the WHOLE query, but the combined result legitimately has
+        // ONE ROW PER (branch × region). The caller would then hash {region} into the surrogate PK and pick
+        // the additive MERGE-upsert Incremental path, where the two branches collide on the same hash and
+        // one silently overwrites the other — permanently wrong aggregates, no error, no fallback.
+        const twoFields: QueryFieldShape[] = [
+            { Name: 'Region', SQLFullType: 'nvarchar(50)' },
+            { Name: 'Total', SQLFullType: 'decimal(18,2)' },
+        ];
+
+        it('refuses a UNION ALL of two identically-grouped branches (the reported repro)', () => {
+            const sql =
+                'SELECT Region, SUM(Amount) AS Total FROM CurrentSales GROUP BY Region ' +
+                'UNION ALL ' +
+                'SELECT Region, SUM(Amount) AS Total FROM ArchiveSales GROUP BY Region';
+            expect(detectAggregationKeyColumns({ sql, dialect, fields: twoFields })).toBeNull();
+        });
+
+        it('refuses a plain UNION and an EXCEPT the same way', () => {
+            const union =
+                'SELECT Region, SUM(Amount) AS Total FROM CurrentSales GROUP BY Region ' +
+                'UNION SELECT Region, SUM(Amount) AS Total FROM ArchiveSales GROUP BY Region';
+            const except =
+                'SELECT Region, SUM(Amount) AS Total FROM CurrentSales GROUP BY Region ' +
+                'EXCEPT SELECT Region, SUM(Amount) AS Total FROM ArchiveSales GROUP BY Region';
+            expect(detectAggregationKeyColumns({ sql: union, dialect, fields: twoFields })).toBeNull();
+            expect(detectAggregationKeyColumns({ sql: except, dialect, fields: twoFields })).toBeNull();
+        });
+
+        it('NON-REGRESSION: the first branch on its own (no set op) still keys normally', () => {
+            // Proves the guard fires on the SET OPERATION, not on the branch SQL — i.e. it has not
+            // disabled aggregation keying generally.
+            expect(detectAggregationKeyColumns({
+                sql: 'SELECT Region, SUM(Amount) AS Total FROM CurrentSales GROUP BY Region',
+                dialect, fields: twoFields,
+            })).toEqual([{ name: 'Region', type: 'nvarchar(50)' }]);
+        });
+    });
+
+    describe('join qualifier awareness — a grouping column must be the column that is projected', () => {
+        const joinFields: QueryFieldShape[] = [
+            { Name: 'region', SQLFullType: 'nvarchar(50)' },
+            { Name: 'total', SQLFullType: 'decimal(18,2)' },
+        ];
+
+        it('refuses when GROUP BY groups o.region but the SELECT list projects c.region', () => {
+            // Both are "region" by bare name, so a name-only match would key the materialization on the
+            // CUSTOMER's region while the query groups by the ORDER's — a key that does not identify a row.
+            expect(detectAggregationKeyColumns({
+                sql: 'SELECT c.region, SUM(o.amt) AS total FROM orders o INNER JOIN customers c ON c.id = o.customer_id GROUP BY o.region',
+                dialect, fields: joinFields,
+            })).toBeNull();
+        });
+
+        it('refuses when the join query leaves either side unqualified (unprovable)', () => {
+            expect(detectAggregationKeyColumns({
+                sql: 'SELECT c.region, SUM(o.amt) AS total FROM orders o INNER JOIN customers c ON c.id = o.customer_id GROUP BY region',
+                dialect, fields: joinFields,
+            })).toBeNull();
+        });
+
+        it('NON-REGRESSION: a join whose GROUP BY and projection carry the SAME qualifier still keys', () => {
+            expect(detectAggregationKeyColumns({
+                sql: 'SELECT o.region, SUM(o.amt) AS total FROM orders o INNER JOIN customers c ON c.id = o.customer_id GROUP BY o.region',
+                dialect, fields: joinFields,
+            })).toEqual([{ name: 'region', type: 'nvarchar(50)' }]);
+        });
+
+        it('NON-REGRESSION: a single-table query needs no qualifiers at all (mixed forms still key)', () => {
+            expect(detectAggregationKeyColumns({
+                sql: 'SELECT s.region, SUM(s.amt) AS total FROM sales s GROUP BY region',
+                dialect, fields: joinFields,
+            })).toEqual([{ name: 'region', type: 'nvarchar(50)' }]);
+        });
+    });
 });
 
 describe('detectAdditiveMeasures (Phase 4)', () => {

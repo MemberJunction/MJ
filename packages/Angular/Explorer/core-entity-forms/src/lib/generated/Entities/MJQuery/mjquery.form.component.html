@@ -245,15 +245,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="MaterializedResultID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -489,25 +480,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Materialized Results Section -->
+    <!-- Materialized Result Queries Section -->
     <mj-collapsible-panel
-        SectionKey="mJMaterializedResults"
-        SectionName="Materialized Results"
+        SectionKey="mJMaterializedResultQueries"
+        SectionName="Materialized Result Queries"
         Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJMaterializedResults')"
+        [BadgeCount]="GetSectionRowCount('mJMaterializedResultQueries')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Materialized Results','SourceQueryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Materialized Results')"
-                [AllowLoad]="IsSectionExpanded('mJMaterializedResults')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Materialized Result Queries','QueryID')"
+                [NewRecordValues]="NewRecordValues('MJ: Materialized Result Queries')"
+                [AllowLoad]="IsSectionExpanded('mJMaterializedResultQueries')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJMaterializedResults', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJMaterializedResultQueries', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
