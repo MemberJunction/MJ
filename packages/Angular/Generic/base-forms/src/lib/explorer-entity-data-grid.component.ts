@@ -11,7 +11,7 @@ import {
 } from '@memberjunction/ng-entity-viewer';
 import { EntityInfo } from '@memberjunction/core';
 import { FormNavigationEvent } from './types/navigation-events';
-import { RELATED_GRID_DEFAULT_MAX_PX, RELATED_GRID_TOOLBAR_PX, RELATED_GRID_EMPTY_BODY_PX, RelatedGridHeightPx } from './related-grid-height';
+import { RELATED_GRID_DEFAULT_MAX_PX, RelatedGridHeightPx } from './related-grid-height';
 
 /**
  * Wrapper for EntityDataGridComponent that emits navigation events on row double-click.
@@ -134,7 +134,7 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
      * `height: 100%` of leftover flex space. Re-read the panel each time —
      * `mj-chrome-show` is added when the rail item is selected.
      */
-    private sizedHeightPx = RELATED_GRID_TOOLBAR_PX + RELATED_GRID_EMPTY_BODY_PX;
+    private sizedHeightPx = RelatedGridHeightPx(0);
 
     get ResolvedHeight(): number | 'auto' | 'fit-content' {
         return this.shouldSizeToRows() ? this.sizedHeightPx : this.Height;
