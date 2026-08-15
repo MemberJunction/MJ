@@ -1,8 +1,12 @@
 import {
+    ApplyFormChromeRules,
+    ContributionInclusionFromRules,
     EntityInfo,
     EntityRelationshipInfo,
     ResolveFormLayout,
     ResolveRelatedFormRoles,
+    type FormChromeRule,
+    type FormInclusion,
     type FormRole,
     type IEntityFormConfiguration,
     type RelatedFormRoleAssignment,
@@ -54,6 +58,11 @@ export interface ResolveFormChromeInput {
     ContributionSectionKeys?: readonly string[];
     /** contribution SectionKey → details | more. Overrides first-class lift. */
     ContributionChromeGroupByKey?: ReadonlyMap<string, 'details' | 'more'>;
+    /**
+     * Install overlay (L3) from `MJ: Form Chrome Rules`. Empty when the
+     * entity is not installed or the parent has no rows.
+     */
+    ChromeRules?: readonly FormChromeRule[];
 }
 
 export interface ResolveFormChromeResult {
@@ -93,7 +102,7 @@ export function BuildRelatedFormRoleCandidates(
 
 export function ResolveFormChrome(input: ResolveFormChromeInput): ResolveFormChromeResult {
     const formConfig = input.Entity.ConfigurationObject?.UI?.Form ?? null;
-    const resolution = ResolveRelatedFormRoles(
+    const ranked = ResolveRelatedFormRoles(
         input.Entity.SchemaName,
         formConfig,
         BuildRelatedFormRoleCandidates(
@@ -102,17 +111,31 @@ export function ResolveFormChrome(input: ResolveFormChromeInput): ResolveFormChr
             input.InboundRelationshipCountByEntityId,
         ),
     );
+    const assignments = ApplyFormChromeRules(
+        input.Entity.ID ?? '',
+        ranked.Assignments,
+        input.ChromeRules ?? [],
+    );
+    const resolution: RelatedFormRoleResolution = { ...ranked, Assignments: assignments };
 
-    const relatedRoles = mapRelatedRoles(input.Entity, resolution.Assignments);
+    const relatedRoles = mapRelatedRoles(input.Entity, assignments);
+    const contributionGroups = applyContributionRules(
+        input.Entity.ID ?? '',
+        input.ContributionSectionKeys ?? [],
+        input.ContributionChromeGroupByKey ?? new Map(),
+        input.ChromeRules ?? [],
+    );
     const hidden = new Set(input.HiddenSectionKeys ?? []);
     for (const key of displayInFormFalseSectionKeys(input.Entity)) hidden.add(key);
+    for (const key of noneInclusionSectionKeys(input.Entity, assignments)) hidden.add(key);
+    for (const key of contributionGroups.hiddenKeys) hidden.add(key);
     const visiblePanels = input.Panels.filter((p) => !hidden.has(p.SectionKey));
     const defaultSpec = BuildDefaultChromeSpec(
         visiblePanels,
         relatedRoles,
         formConfig,
         input.ContributionSectionKeys,
-        input.ContributionChromeGroupByKey,
+        contributionGroups.chromeGroupByKey,
     );
     addMissingRelatedGroups(defaultSpec, input.Entity, relatedRoles, hidden);
     applyRelatedDisplayNames(defaultSpec, input.Entity);
@@ -120,7 +143,7 @@ export function ResolveFormChrome(input: ResolveFormChromeInput): ResolveFormChr
     sortFirstClassRelatedGroups(
         defaultSpec,
         input.Entity,
-        resolution.Assignments,
+        assignments,
         input.ContributionSectionKeys,
     );
     ApplyUserChromeMembership(defaultSpec, input.Membership, visiblePanels);
@@ -133,14 +156,63 @@ export function ResolveFormChrome(input: ResolveFormChromeInput): ResolveFormChr
             Panels: input.Panels,
             PrimarySectionCount: countFirstClass(defaultSpec),
         };
-        const override = policy.ResolveChrome(ctx);
-        if (override) {
-            ApplyUserChromeMembership(override, input.Membership, visiblePanels);
-            return { Spec: override, RelatedRoles: resolution, PolicyUsed: true };
-        }
+        const decorated = policy.DecorateChrome(defaultSpec, ctx);
+        const spec = TakeDecoratedChrome(defaultSpec, decorated ?? defaultSpec);
+        ApplyUserChromeMembership(spec, input.Membership, visiblePanels);
+        return { Spec: spec, RelatedRoles: resolution, PolicyUsed: true };
     }
 
     return { Spec: defaultSpec, RelatedRoles: resolution, PolicyUsed: false };
+}
+
+/**
+ * Policy may rename groups and swap icons. Membership (section keys and
+ * More vs first-class) is data — a violating decorate is ignored.
+ */
+export function TakeDecoratedChrome(base: FormChromeSpec, decorated: FormChromeSpec): FormChromeSpec {
+    return sameChromeMembership(base, decorated) ? decorated : base;
+}
+
+function sameChromeMembership(a: FormChromeSpec, b: FormChromeSpec): boolean {
+    return keyFingerprint(collectSectionKeys(a)) === keyFingerprint(collectSectionKeys(b))
+        && keyFingerprint(a.MoreSectionKeys) === keyFingerprint(b.MoreSectionKeys);
+}
+
+function collectSectionKeys(spec: FormChromeSpec): string[] {
+    return [...spec.Groups.flatMap((g) => g.SectionKeys), ...spec.MoreSectionKeys];
+}
+
+function keyFingerprint(keys: readonly string[]): string {
+    return [...new Set(keys.filter((k) => !!k))].sort().join('\0');
+}
+
+function applyContributionRules(
+    parentEntityId: string,
+    contributionSectionKeys: readonly string[],
+    declared: ReadonlyMap<string, 'details' | 'more'>,
+    rules: readonly FormChromeRule[],
+): { chromeGroupByKey: Map<string, 'details' | 'more'>; hiddenKeys: string[] } {
+    const chromeGroupByKey = new Map(declared);
+    const hiddenKeys: string[] = [];
+    for (const key of contributionSectionKeys) {
+        const inclusion = ContributionInclusionFromRules(parentEntityId, key, rules);
+        applyContributionInclusion(key, inclusion, chromeGroupByKey, hiddenKeys);
+    }
+    return { chromeGroupByKey, hiddenKeys };
+}
+
+function applyContributionInclusion(
+    key: string,
+    inclusion: FormInclusion | null,
+    chromeGroupByKey: Map<string, 'details' | 'more'>,
+    hiddenKeys: string[],
+): void {
+    if (inclusion == null) return;
+    if (inclusion === 'None') {
+        hiddenKeys.push(key);
+        return;
+    }
+    chromeGroupByKey.set(key, inclusion === 'Primary' ? 'details' : 'more');
 }
 
 export function BuildDefaultChromeSpec(
@@ -490,6 +562,19 @@ function sortFirstClassRelatedGroups(
         return groupScore(b, scoreByKey) - groupScore(a, scoreByKey);
     });
     spec.Groups = [...details, ...related, ...more];
+}
+
+function noneInclusionSectionKeys(
+    entity: EntityInfo,
+    assignments: readonly RelatedFormRoleAssignment[],
+): string[] {
+    const displayInForm = entity.RelatedEntities.filter((rel) => rel.DisplayInForm);
+    const noneIds = new Set(
+        assignments.filter((a) => a.Inclusion === 'None').map((a) => a.RelationshipID.toLowerCase()),
+    );
+    return displayInForm
+        .filter((rel) => noneIds.has((rel.ID ?? '').toLowerCase()))
+        .map((rel) => RelatedEntitySectionKey(rel, displayInForm));
 }
 
 function displayInFormFalseSectionKeys(entity: EntityInfo): string[] {

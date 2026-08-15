@@ -4,7 +4,7 @@ import {
   ContentChildren, QueryList, AfterContentInit, OnDestroy,
   ViewChild, ViewEncapsulation, ElementRef
 } from '@angular/core';
-import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView, type FormChromeRule } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -35,6 +35,7 @@ import { ListManagementResult } from '@memberjunction/ng-list-management';
 import { FormSlotCoordinator } from '../panel-slot/form-slot-coordinator.service';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder } from '../chrome/resolve-form-chrome';
+import { LoadFormChromeRules } from '../chrome/load-form-chrome-rules';
 import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection } from '../chrome/form-chrome';
 import type { FormChromeGroup, FormChromePanelSnapshot } from '../chrome/form-chrome';
 import { CollectFormPanelRegistrations } from '../panel-slot/collect-form-panel-registrations';
@@ -103,6 +104,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private destroy$ = new Subject<void>();
   private panelNavReset$ = new Subject<void>();
   private chromeResolveTimer: ReturnType<typeof setTimeout> | null = null;
+  private chromeRules: FormChromeRule[] = [];
+  private chromeRulesForEntityId: string | null = null;
 
   // ---- Internal State ----
 
@@ -354,11 +357,33 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   get VisibleSectionCount(): number {
+    const filter = this.EffectiveSearchFilter.toLowerCase().trim();
+    if (filter) {
+      const fromPanels = this.allChromePanels().filter((p) => p.MatchesSearch(filter)).length;
+      const fromRail = this.ChromeFirstClassGroups.length + this.ChromeMoreItems.length;
+      return Math.max(fromPanels, fromRail);
+    }
     if (this.fc?.getVisibleSectionCount) {
       return this.fc.getVisibleSectionCount();
     }
-    if (!this.Panels) return 0;
-    return this.Panels.filter(p => p.IsVisible).length;
+    return this.Panels?.filter((p) => p.IsVisible).length ?? 0;
+  }
+
+  /** True when the current section search matches nothing in this layout. */
+  get SearchHasNoMatches(): boolean {
+    const filter = this.EffectiveSearchFilter.toLowerCase().trim();
+    if (!filter) return false;
+    return this.ChromeFirstClassGroups.length === 0 && this.ChromeMoreItems.length === 0
+      && this.allChromePanels().every((p) => !p.MatchesSearch(filter));
+  }
+
+  /** Left-nav rail stays up while searching even if only one group matches. */
+  get ShowChromeRail(): boolean {
+    if (this.ChromeLayout !== 'left-nav') return false;
+    if (this.EffectiveSearchFilter.trim()) {
+      return this.ChromeFirstClassGroups.length > 0 || this.ChromeMoreItems.length > 0;
+    }
+    return this.chrome.Spec.Groups.length > 1;
   }
 
   /**
@@ -649,9 +674,24 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     }, 0);
   }
 
+  private loadChromeRulesIfNeeded(): void {
+    const entityId = this.EffectiveEntityInfo?.ID ?? null;
+    if (!entityId || this.chromeRulesForEntityId === entityId) return;
+    this.chromeRulesForEntityId = entityId;
+    void this.loadChromeRules(entityId);
+  }
+
+  private async loadChromeRules(entityId: string): Promise<void> {
+    const rules = await LoadFormChromeRules(entityId, this.ProviderToUse);
+    if (this.chromeRulesForEntityId !== entityId) return;
+    this.chromeRules = rules;
+    this.scheduleChromeResolve();
+  }
+
   private ResolveChrome(): void {
     const entity = this.EffectiveEntityInfo;
     if (!entity) return;
+    this.loadChromeRulesIfNeeded();
 
     const result = ResolveFormChrome({
       Entity: entity,
@@ -661,6 +701,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       HiddenSectionKeys: [...this.contributionHiddenSectionKeys()],
       ContributionSectionKeys: this.contributionSectionKeys(),
       ContributionChromeGroupByKey: this.contributionChromeGroupByKey(),
+      ChromeRules: this.chromeRules,
       Membership: {
         moreSectionKeys: this.fc?.getMoreSectionKeys?.() ?? [],
         firstClassSectionKeys: this.fc?.getFirstClassSectionKeys?.() ?? [],
@@ -704,6 +745,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   private groupMatchesSearch(group: FormChromeGroup, filter: string): boolean {
+    if (!filter) return true;
     if (group.Title.toLowerCase().includes(filter)) return true;
     if (group.IsMore) {
       return group.SectionKeys.some((key) => {
@@ -713,8 +755,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     }
     return group.SectionKeys.some((key) => {
       const panel = this.allChromePanels().find((p) => p.SectionKey === key);
-      if (panel) return panel.IsVisible;
-      return key.toLowerCase().includes(filter);
+      if (panel) return panel.MatchesSearch(filter);
+      const human = HumanizeEntityTitle(key).toLowerCase();
+      return human.includes(filter) || key.toLowerCase().includes(filter);
     });
   }
 

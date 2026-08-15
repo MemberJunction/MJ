@@ -39,6 +39,7 @@ import type {
     GenerateIntegrationActionResult
 } from "@memberjunction/integration-engine";
 import { IntegrationEngineBase } from "@memberjunction/integration-engine-base";
+import { buildIntegrationLLMPKCallback } from "@memberjunction/core-entities-server";
 import {
     SchemaBuilder,
     TypeMapper,
@@ -50,11 +51,15 @@ import {
 } from "@memberjunction/integration-schema-builder";
 import { RuntimeSchemaManager, type RSUPipelineStep, type RSUPipelineInput, type RSUPendingWork } from "@memberjunction/schema-engine";
 import type { SchemaBuilderOutput } from "@memberjunction/integration-schema-builder";
-import { IntegrationProgressReader } from "@memberjunction/integration-progress-artifacts";
+import { IntegrationProgressEmitter, IntegrationProgressReader } from "@memberjunction/integration-progress-artifacts";
 import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction/integration-progress-artifacts";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
 import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
+import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
+// Type-only: the registered runtime class for 'MJ: Company Integrations'. Lets the create path name the
+// server subclass it actually gets back from GetEntityObject with a real type rather than a cast.
+import type { MJCompanyIntegrationEntityServer } from "@memberjunction/core-entities-server";
 import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
 import { UserCache } from "@memberjunction/generic-database-provider";
@@ -569,6 +574,21 @@ class CreateConnectionInput {
 @ObjectType()
 class CreateConnectionPipelineSummary {
     @Field() RunID: string;
+    /**
+     * True when the pipeline was launched detached (`awaitSchemaRefresh: false`) and is STILL RUNNING —
+     * every count below is a placeholder zero, not a result. Tail `RunID` via IntegrationTailRunEvents
+     * (or the IntegrationProgress subscription, kind='ConnectorCreation') for the real outcome.
+     */
+    @Field() InProgress: boolean;
+    /**
+     * Whether the refresh pipeline itself succeeded. A pipeline that fails at ConnectionTest still
+     * RETURNS (it does not throw), with every count at zero — so counts alone cannot distinguish
+     * "found nothing to change" from "never got past the credential check". Always false while
+     * `InProgress` is true: a detached run's outcome is not known yet.
+     */
+    @Field() Succeeded: boolean;
+    /** The pipeline's own failure reason when `Succeeded` is false and the run has finished. */
+    @Field({ nullable: true }) FailureMessage?: string;
     @Field() ObjectsCreated: number;
     @Field() ObjectsUpdated: number;
     @Field() FieldsCreated: number;
@@ -2386,9 +2406,42 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         user: UserInfo,
         provider: IMetadataProvider,
         universalPKConvention?: string,
+        runID?: string,
+    ): Promise<CreateConnectionPipelineSummary> {
+        // Sync lock (#3656).  This pipeline rewrites the very IO/IOF rows, field
+        // maps and DDL a sync reads, so it must not overlap a sync or another
+        // maintenance operation for the same connection.  The two other
+        // pipeline call sites — IntegrationRefreshConnectorSchema and
+        // IntegrationSchemaEvolution — already take this lock inline; this is
+        // the third and fourth (create/update/reactivate) finally taking it too.
+        if (!IntegrationEngine.AcquireMaintenanceLock(companyIntegrationID, 'schema refresh')) {
+            throw new Error(
+                'Schema refresh not started: a sync or another maintenance operation is currently running for this connection. Retry after it completes.'
+            );
+        }
+        try {
+            return await this.runSchemaRefreshPipelineLocked(companyIntegrationID, user, provider, universalPKConvention, runID);
+        } finally {
+            IntegrationEngine.ReleaseMaintenanceLock(companyIntegrationID);
+        }
+    }
+
+    /** The body of {@link runSchemaRefreshPipeline}, run with the maintenance lock held. */
+    private async runSchemaRefreshPipelineLocked(
+        companyIntegrationID: string,
+        user: UserInfo,
+        provider: IMetadataProvider,
+        universalPKConvention?: string,
+        runID?: string,
     ): Promise<CreateConnectionPipelineSummary> {
         const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, provider);
         const pipeline = new IntegrationConnectorCreationPipeline();
+        // SoftPKClassifier's LLM tier (universal → naming → statistical → LLM →
+        // synthetic) only runs when this callback is supplied.  It used to be
+        // wired by the CompanyIntegration save hook; with that hook gone
+        // (#3738) it is wired here, so the create/update/reactivate paths keep
+        // the same PK-inference quality they had before.
+        const llmInference = await buildIntegrationLLMPKCallback(user);
         const runOpts = {
             Connector: connector,
             CompanyIntegration: companyIntegration,
@@ -2397,6 +2450,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             UniversalPKConvention: universalPKConvention || undefined,
             ConsoleMirror: true,
             TriggerType: 'Manual' as const,
+            LLMInference: llmInference ?? undefined,
+            // Caller-supplied runID: lets the detached path hand a tailable ID back to the client
+            // BEFORE the pipeline has done any work. Omitted ⇒ the pipeline generates its own.
+            RunID: runID,
         };
         const result = await pipeline.Run(runOpts as unknown as Parameters<typeof pipeline.Run>[0]);
 
@@ -2407,6 +2464,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
         return {
             RunID: result.RunID,
+            InProgress: false,
+            Succeeded: result.Success,
+            FailureMessage: result.FailureMessage,
             ObjectsCreated: result.PersistResult?.ObjectsCreated ?? 0,
             ObjectsUpdated: result.PersistResult?.ObjectsUpdated ?? 0,
             FieldsCreated: result.PersistResult?.FieldsCreated ?? 0,
@@ -2421,6 +2481,94 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Reason: v.Reason,
             })),
         };
+    }
+
+    /**
+     * Launches the schema-refresh pipeline WITHOUT awaiting it and returns a summary carrying the
+     * tailable `RunID` and `InProgress: true`.
+     *
+     * Why: the pipeline is a live vendor introspect — minutes on a large catalog (HubSpot: 130
+     * objects). Awaiting it inline holds the create/update mutation open for that entire time, so the
+     * connection wizard's Finish button sits on an indeterminate spinner with no way to tell progress
+     * from a hang. The pipeline already writes a complete, durable, per-run event stream keyed by its
+     * runID; the only thing missing was handing that ID to the caller BEFORE the work starts. Hence
+     * the caller-supplied runID.
+     *
+     * Trade-off the caller opts into: the mutation no longer reports what the refresh found (counts
+     * are placeholder zeros) and a refresh failure no longer surfaces in the mutation's Message — both
+     * live on the run stream instead. That is why `awaitSchemaRefresh` defaults to true.
+     *
+     * ON CREATE this is the only refresh that runs. #3738 removed the activation hook that used to
+     * fire the same pipeline inside `Save()`, awaited — which had made the create mutation pay a full
+     * introspect before ever reaching this method, and had run it BEFORE the connection test, so a
+     * rejected connection was rolled back with its discovered schema already written.
+     *
+     * Belt and braces: if the launch below IS coalesced onto some other run for this connection (a
+     * concurrent refresh, a repeat click), the pipeline publishes a terminal alias run under `runID`
+     * naming the run that served it — so the ID handed back here is tailable in every case.
+     */
+    private startSchemaRefreshPipelineDetached(
+        companyIntegrationID: string,
+        user: UserInfo,
+        provider: IMetadataProvider,
+        universalPKConvention?: string,
+    ): CreateConnectionPipelineSummary {
+        const runID = IntegrationProgressEmitter.newRunID('connector');
+        // Deliberately not awaited. Once the pipeline is running it records every outcome on this
+        // run's artifact stream under `runID` itself — but it can also throw BEFORE it ever
+        // constructs its emitter (connector-driver resolution, a missing Integration row), and in
+        // the blocking path that throw surfaced in the mutation's Message. Detached, the caller has
+        // already been handed `runID` and has nothing but the stream to watch, so a pre-emitter
+        // throw must be published onto that stream — otherwise the run never appears at all and a
+        // tailer waits forever on a run ID that will never produce an event.
+        void this.runSchemaRefreshPipeline(companyIntegrationID, user, provider, universalPKConvention, runID)
+            .catch(err => this.publishDetachedLaunchFailure(runID, companyIntegrationID, err));
+        return {
+            RunID: runID,
+            InProgress: true,
+            // Not known yet — the run has only just been launched.
+            Succeeded: false,
+            ObjectsCreated: 0,
+            ObjectsUpdated: 0,
+            FieldsCreated: 0,
+            FieldsUpdated: 0,
+            UnresolvedObjects: [],
+            PKVerdicts: [],
+        };
+    }
+
+    /**
+     * Terminates a detached run that failed BEFORE the pipeline could open its own artifact stream.
+     *
+     * The pipeline constructs its emitter inside `Run()`, so anything that throws on the way there —
+     * connector-driver resolution (`No connector registered for driver class "X"`), a missing
+     * Integration row, a CompanyIntegration that vanished — produces no run directory at all. In the
+     * blocking path that throw surfaced in the mutation's Message. Detached, the caller has already
+     * been handed the run ID and has only the stream to watch, so the failure has to be published
+     * there or the run is invisible forever.
+     *
+     * Only ever called on the rejection path: if the pipeline got far enough to build its own emitter
+     * it terminates its own run, and a pipeline that completed never reaches here.
+     */
+    private publishDetachedLaunchFailure(runID: string, companyIntegrationID: string, err: unknown): void {
+        const message = this.formatError(err);
+        LogError(`Detached schema refresh (run ${runID}) failed: ${message}`);
+        try {
+            const emitter = new IntegrationProgressEmitter({
+                runID,
+                runKind: 'ConnectorCreation',
+                companyIntegrationID,
+                triggerType: 'Manual',
+                startedAt: new Date().toISOString(),
+            });
+            emitter.runStart('Detached schema refresh launch');
+            emitter.stageError('Launch', message, { code: 'schema-refresh-launch-failed' });
+            void emitter.fail(`Schema refresh could not start: ${message}`, 'schema-refresh-launch-failed')
+                .catch(e => LogError(`Detached schema refresh (run ${runID}): failure artifact write failed — ${e}`));
+        } catch (e) {
+            // Progress reporting must never mask the original failure, which is already logged above.
+            LogError(`Detached schema refresh (run ${runID}): could not open failure artifact — ${e}`);
+        }
     }
 
     /**
@@ -2594,6 +2742,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("testConnection", () => Boolean, { defaultValue: false }) testConnection: boolean,
         @Arg("runSchemaRefresh", () => Boolean, { defaultValue: true, description: "When true (default) and TestConnection succeeds, automatically runs IntegrationConnectorCreationPipeline (live introspect → persist Declared/Discovered/Custom → SoftPKClassifier). The intermittent server-side work the wizard's Forward step represents." }) runSchemaRefresh: boolean,
         @Arg("universalPKConvention", { nullable: true, description: "Optional vendor-wide PK hint (e.g. 'id' for HubSpot). Improves SoftPKClassifier convergence." }) universalPKConvention: string | undefined,
+        @Arg("awaitSchemaRefresh", () => Boolean, { defaultValue: true, description: "When false, the schema refresh is launched detached and this mutation returns immediately with SchemaRefresh.RunID + InProgress=true — tail that run instead of blocking on a minutes-long live introspect. The introspect happens exactly once either way, and always AFTER the connection test, so a failed test rolls back a connection that left no discovered schema behind. Default true preserves the blocking behaviour (counts returned inline)." }) awaitSchemaRefresh: boolean,
         @Ctx() ctx: AppContext
     ): Promise<CreateConnectionOutput> {
         try {
@@ -2616,15 +2765,24 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const credentialID = credential.ID;
 
             // 2. Create CompanyIntegration linked to the Credential
-            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntityServer>('MJ: Company Integrations', user);
             ci.NewRecord();
             ci.IntegrationID = input.IntegrationID;
             ci.CompanyID = input.CompanyID;
             ci.CredentialID = credentialID;
-            ci.IsActive = true;
+            // Created INACTIVE on purpose (#3738).  A connection is not marked
+            // active until its credential has had a chance to prove itself in
+            // step 3 below — so nothing downstream ever observes an active row
+            // backed by a password that is about to be rejected and rolled back.
+            ci.IsActive = false;
             ci.Name = input.CredentialName; // Name is required on CompanyIntegration
             if (input.ExternalSystemID) ci.ExternalSystemID = input.ExternalSystemID;
             if (input.Configuration) ci.Configuration = input.Configuration;
+
+            // Whether the refresh runs detached (this resolver owns it and returns a tailable RunID)
+            // or inline below. No save-side refresh exists to coordinate with any more — #3738 removed
+            // the activation hook, so every refresh on this path is one this method asked for.
+            const ownSchemaRefresh = runSchemaRefresh && !awaitSchemaRefresh;
 
             const saved = await ci.Save();
             if (!saved) {
@@ -2650,12 +2808,27 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 testMessage = testResult.Message;
             }
 
+            // 3b. Credential has proven itself (or the caller declined a test,
+            // which is the pre-existing default) — activate.  Ordering matters:
+            // this save is what makes the connection usable, and it must not
+            // happen while the credential is still unverified.
+            ci.IsActive = true;
+            if (!await ci.Save()) {
+                await this.rollbackCreatedConnection(ci, credential);
+                return {
+                    Success: false,
+                    Message: `Failed to activate CompanyIntegration: ${ci.LatestResult?.Message || 'Unknown error'}`,
+                };
+            }
+
             // 4. Auto-run schema refresh pipeline (intermittent server-side period).
             // Fires whenever runSchemaRefresh=true, regardless of whether the
             // caller also asked for a test.  The wizard may have tested separately
             // and just be hitting Create to save.
             let schemaRefreshSummary: CreateConnectionPipelineSummary | undefined;
-            if (runSchemaRefresh) {
+            if (ownSchemaRefresh) {
+                schemaRefreshSummary = this.startSchemaRefreshPipelineDetached(ci.ID, user, md, universalPKConvention);
+            } else if (runSchemaRefresh) {
                 try {
                     const refreshResult = await this.runSchemaRefreshPipeline(
                         ci.ID, user, md, universalPKConvention
@@ -2671,9 +2844,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             if (testConnection || schemaRefreshSummary) {
                 return {
                     Success: true,
-                    Message: schemaRefreshSummary
-                        ? `Connection created${testConnection ? ', test passed' : ''}, schema refresh: ${schemaRefreshSummary.ObjectsCreated} created, ${schemaRefreshSummary.ObjectsUpdated} updated, ${schemaRefreshSummary.UnresolvedObjects.length} PK-unresolved`
-                        : 'Connection created and test passed',
+                    Message: BuildCreateConnectionMessage(testConnection, schemaRefreshSummary),
                     CompanyIntegrationID: ci.ID,
                     CredentialID: credentialID,
                     ConnectionTestSuccess: testPassed,
@@ -2706,6 +2877,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("testConnection", () => Boolean, { defaultValue: false }) testConnection: boolean,
         @Arg("runSchemaRefresh", () => Boolean, { defaultValue: true, description: "When true (default) and TestConnection succeeds, automatically runs IntegrationConnectorCreationPipeline. Same intermittent server-side step as the create flow." }) runSchemaRefresh: boolean,
         @Arg("universalPKConvention", { nullable: true, description: "Optional vendor-wide PK hint (e.g. 'id' for HubSpot)" }) universalPKConvention: string | undefined,
+        @Arg("awaitSchemaRefresh", () => Boolean, { defaultValue: true, description: "When false, the schema refresh is launched detached and this mutation returns immediately with the run ID to tail instead of blocking on a minutes-long live introspect. Default true preserves the blocking behaviour." }) awaitSchemaRefresh: boolean,
         @Ctx() ctx: AppContext
     ): Promise<MutationResultOutput> {
         try {
@@ -2752,15 +2924,16 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Fires whenever runSchemaRefresh=true, regardless of whether the
             // caller also asked for a test — the wizard may have tested separately
             // already and is just hitting Update to save edits.
+            if (runSchemaRefresh && !awaitSchemaRefresh) {
+                const detached = this.startSchemaRefreshPipelineDetached(companyIntegrationID, user, md, universalPKConvention);
+                return { Success: true, Message: BuildDetachedRefreshMessage(detached.RunID) };
+            }
             if (runSchemaRefresh) {
                 try {
                     const refreshResult = await this.runSchemaRefreshPipeline(
                         companyIntegrationID, user, md, universalPKConvention
                     );
-                    return {
-                        Success: true,
-                        Message: `Updated, schema refresh: ${refreshResult.ObjectsCreated} created, ${refreshResult.ObjectsUpdated} updated, ${refreshResult.UnresolvedObjects.length} PK-unresolved`,
-                    };
+                    return { Success: true, Message: BuildUpdateConnectionMessage(refreshResult) };
                 } catch (refreshErr) {
                     LogError(`IntegrationUpdateConnection: pipeline error — ${refreshErr}`);
                     return { Success: true, Message: `Updated (schema refresh failed: ${this.formatError(refreshErr)})` };
@@ -2967,10 +3140,16 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
     /**
      * Reactivates a previously deactivated CompanyIntegration by setting IsActive=true.
+     *
+     * Before #3738 this mutation inherited a full schema refresh from the
+     * CompanyIntegration save hook, with no way to decline it.  The refresh is
+     * now this resolver's own, explicit step — same default behaviour, but
+     * visible in the API and suppressible with `runSchemaRefresh: false`.
      */
     @Mutation(() => MutationResultOutput)
     async IntegrationReactivateConnection(
         @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("runSchemaRefresh", () => Boolean, { defaultValue: true, description: "When true (default), re-runs IntegrationConnectorCreationPipeline after reactivating so the catalog reflects the source as it is now. Pass false to reactivate without a live scan — useful when the catalog is known-current, or when the source is large enough that discovery should be scheduled separately." }) runSchemaRefresh: boolean,
         @Ctx() ctx: AppContext
     ): Promise<MutationResultOutput> {
         try {
@@ -2981,6 +3160,23 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             if (!loaded) return { Success: false, Message: 'CompanyIntegration not found' };
             ci.IsActive = true;
             if (!await ci.Save()) return { Success: false, Message: `Failed to reactivate: ${ci.LatestResult?.Message ?? 'Unknown error'}` };
+
+            if (runSchemaRefresh) {
+                try {
+                    const refreshResult = await this.runSchemaRefreshPipeline(companyIntegrationID, user, md);
+                    return {
+                        Success: true,
+                        Message: `Reactivated, schema refresh: ${refreshResult.ObjectsCreated} created, ${refreshResult.ObjectsUpdated} updated, ${refreshResult.UnresolvedObjects.length} PK-unresolved`,
+                    };
+                } catch (refreshErr) {
+                    // Refresh failure does NOT undo the reactivation — the
+                    // connection is active, only discovery failed, and the
+                    // operator can re-run IntegrationRefreshConnectorSchema.
+                    LogError(`IntegrationReactivateConnection: pipeline error — ${refreshErr}`);
+                    return { Success: true, Message: `Reactivated (schema refresh failed: ${this.formatError(refreshErr)})` };
+                }
+            }
+
             return { Success: true, Message: 'Reactivated' };
         } catch (e) {
             LogError(`IntegrationReactivateConnection error: ${e}`);
