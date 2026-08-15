@@ -12,6 +12,7 @@ import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/globa
 import {
     ParseEntityConfiguration,
     ParseEntityRelationshipConfiguration,
+    ReadRelationshipJoinFields,
     type IEntityConfiguration,
     type IEntityRelationshipConfiguration,
 } from "./entityConfiguration"
@@ -137,9 +138,9 @@ export class EntityRelationshipInfo extends BaseInfo  {
 
     /**
      * Optional JSON configuration bag (shape = {@link IEntityRelationshipConfiguration}).
-     * Nested `UI.FormRole` is Primary (first-class chrome), Detail (parked in More),
-     * or omitted (the smart ranker decides). Distinct from RelatedRecordCollection,
-     * DisplayComponentConfiguration, and AdditionalFieldsToInclude.
+     * Nested `UI.inclusion` is Primary, More, or None (omit = Auto ranker).
+     * `UI.FormRole` is an accepted alias (`Detail` = More). Distinct from
+     * RelatedRecordCollection, DisplayComponentConfiguration, and AdditionalFieldsToInclude.
      *
      * @see packages/MJCore/src/generic/entityConfiguration.ts
      */
@@ -2576,6 +2577,15 @@ export class EntityInfo extends BaseInfo {
      * @returns 
      */
     public static BuildRelationshipViewParams(record: BaseEntity, relationship: EntityRelationshipInfo, filter?: string, maxRecords?: number): RunViewParams {
+        const joinFields = ReadRelationshipJoinFields(relationship.Configuration);
+        if (joinFields && joinFields.length > 1) {
+            const multi = EntityInfo.BuildRelationshipViewParamsForJoinFields(record, relationship.RelatedEntity, joinFields);
+            if (filter && filter.length > 0 && multi.ExtraFilter) {
+                multi.ExtraFilter = `(${multi.ExtraFilter}) AND (${filter})`;
+            }
+            if (maxRecords && maxRecords > 0) multi.MaxRows = maxRecords;
+            return multi;
+        }
         const params: RunViewParams = {}
         let quotes: string = '';
         let keyValue: string = '';
