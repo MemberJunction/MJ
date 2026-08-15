@@ -32,29 +32,29 @@
 
 DECLARE @WorkflowsAppID UNIQUEIDENTIFIER = 'A715122C-F912-4BF5-B4BB-9B94DFDD2A9E';
 
-IF EXISTS (SELECT 1 FROM [__mj].[Application] WHERE [ID] = @WorkflowsAppID)
+IF EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Application] WHERE [ID] = @WorkflowsAppID)
 BEGIN
     PRINT 'Retiring the Workflows application...';
 
     -- Per-user application state first: these carry FKs to Application, and a user row surviving its
     -- application is exactly what renders a tile that navigates nowhere.
-    DELETE FROM [__mj].[UserApplicationEntity]
+    DELETE FROM [${flyway:defaultSchema}].[UserApplicationEntity]
     WHERE [UserApplicationID] IN (
-        SELECT [ID] FROM [__mj].[UserApplication] WHERE [ApplicationID] = @WorkflowsAppID
+        SELECT [ID] FROM [${flyway:defaultSchema}].[UserApplication] WHERE [ApplicationID] = @WorkflowsAppID
     );
 
-    DELETE FROM [__mj].[UserApplication] WHERE [ApplicationID] = @WorkflowsAppID;
+    DELETE FROM [${flyway:defaultSchema}].[UserApplication] WHERE [ApplicationID] = @WorkflowsAppID;
 
     -- The app declared no entities and no settings, but delete defensively: an instance that added
     -- its own would otherwise block the parent delete on a foreign key, and the failure would read
     -- as an unrelated FK error rather than as "someone customised this app".
-    DELETE FROM [__mj].[ApplicationEntity]  WHERE [ApplicationID] = @WorkflowsAppID;
-    DELETE FROM [__mj].[ApplicationSetting] WHERE [ApplicationID] = @WorkflowsAppID;
-    DELETE FROM [__mj].[ApplicationRole]    WHERE [ApplicationID] = @WorkflowsAppID;
+    DELETE FROM [${flyway:defaultSchema}].[ApplicationEntity]  WHERE [ApplicationID] = @WorkflowsAppID;
+    DELETE FROM [${flyway:defaultSchema}].[ApplicationSetting] WHERE [ApplicationID] = @WorkflowsAppID;
+    DELETE FROM [${flyway:defaultSchema}].[ApplicationRole]    WHERE [ApplicationID] = @WorkflowsAppID;
 
     -- The nav item is a property of the row (Application.DefaultNavItems, JSON), so it needs no
     -- separate delete — it goes with its parent.
-    DELETE FROM [__mj].[Application] WHERE [ID] = @WorkflowsAppID;
+    DELETE FROM [${flyway:defaultSchema}].[Application] WHERE [ID] = @WorkflowsAppID;
 
     PRINT 'Workflows application retired. Flow agents are authored in the AI app.';
 END

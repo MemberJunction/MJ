@@ -14,7 +14,7 @@
 
 import express from 'express';
 import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { OAuthManager, MCPClientManager } from '@memberjunction/ai-mcp-client';
 import type { MCPServerOAuthConfig } from '@memberjunction/ai-mcp-client';
@@ -38,6 +38,23 @@ export interface OAuthCallbackHandlerOptions {
     successRedirectUrl?: string;
     /** URL to redirect to after failed authorization */
     errorRedirectUrl?: string;
+    /**
+     * Origins a caller-supplied `frontendReturnUrl` is allowed to point at, so the OAuth callback
+     * cannot be turned into an open redirect from the trusted MJAPI origin. Normally wired to
+     * `cors.allowedOrigins`. Pass `['*']` to allow any origin — MJ's backward-compatible default
+     * CORS posture, and what a deployment that has not narrowed `cors.allowedOrigins` gets.
+     *
+     * REQUIRED on purpose. An optional field defaulting to allow-all is fail-open: a construction
+     * site that forgets it loses the open-redirect protection silently, with nothing to notice.
+     * Being required makes that a compile error instead. The handler is not exported from this
+     * package's barrel and the package declares no subpath exports, so no consumer outside MJServer
+     * can construct it — revisit this if it is ever added to the public API.
+     *
+     * Injected rather than read from `configInfo` directly so this module has no import-time
+     * dependency on configuration loading — importing the config module validates the whole config
+     * as a side effect, which makes this handler unimportable in any context without one.
+     */
+    allowedFrontendOrigins: string[];
 }
 
 /**
@@ -46,10 +63,15 @@ export interface OAuthCallbackHandlerOptions {
  * The callback endpoint is unauthenticated because it's called by external auth servers.
  * It uses the state parameter to look up the authorization context and validate the flow.
  *
+ * NOTE: `allowedFrontendOrigins` is what prevents the callback becoming an open redirect, and is
+ * required so it cannot be forgotten. Wire it to `configInfo.cors?.allowedOrigins`; `['*']` allows
+ * any origin, matching MJ's default CORS posture.
+ *
  * @example
  * ```typescript
  * const oauthHandler = new OAuthCallbackHandler({
- *     publicUrl: 'https://api.example.com'
+ *     publicUrl: 'https://api.example.com',
+ *     allowedFrontendOrigins: configInfo.cors?.allowedOrigins ?? ['*']
  * });
  *
  * // Mount unauthenticated callback route
@@ -348,7 +370,10 @@ export class OAuthCallbackHandler {
      * @param res - Express response
      */
     private async initiateFlow(req: express.Request, res: express.Response): Promise<void> {
-        const { connectionId, additionalScopes, frontendReturnUrl } = req.body;
+        // Coerce request-body values to strings up front. A JSON body can carry arrays/objects, and
+        // passing those downstream unvalidated turns a bad request into a confusing internal failure.
+        const connectionId: string = typeof req.body?.connectionId === 'string' ? req.body.connectionId : '';
+        const { additionalScopes, frontendReturnUrl } = req.body;
         const contextUser = req['mjUser'] as UserInfo;
 
         if (!contextUser) {
@@ -364,6 +389,29 @@ export class OAuthCallbackHandler {
                 success: false,
                 errorCode: 'invalid_request',
                 errorMessage: 'connectionId is required'
+            });
+            return;
+        }
+
+        // connectionId is a record ID (UUID). Reject anything else at the boundary so it can never
+        // reach a SQL filter or downstream consumer as injectable input.
+        if (!IsValidUUID(connectionId)) {
+            res.status(400).json({
+                success: false,
+                errorCode: 'invalid_request',
+                errorMessage: 'connectionId must be a valid record identifier'
+            });
+            return;
+        }
+
+        // Reject a disallowed return URL here rather than at the callback. Otherwise the caller only
+        // finds out after the whole OAuth round trip, by being silently sent to the default page.
+        // An absent value is acceptable — see isFrontendReturnUrlAcceptable.
+        if (!this.isFrontendReturnUrlAcceptable(frontendReturnUrl)) {
+            res.status(400).json({
+                success: false,
+                errorCode: 'invalid_request',
+                errorMessage: 'frontendReturnUrl is not an allowed redirect target'
             });
             return;
         }
@@ -644,10 +692,13 @@ export class OAuthCallbackHandler {
         try {
             const rv = new RunView();
 
-            // Get connection to get server ID
+            // Get connection to get server ID.
+            // connectionId is caller-supplied (POST /oauth/initiate body). MJ ExtraFilter is a raw
+            // SQL fragment, so single quotes MUST be doubled to prevent injection — matching the
+            // escaping used for stateParameter in loadAuthorizationState().
             const connResult = await rv.RunView<{ MCPServerID: string }>({
                 EntityName: ENTITY_MCP_SERVER_CONNECTIONS,
-                ExtraFilter: `ID='${connectionId}'`,
+                ExtraFilter: `ID='${connectionId.replace(/'/g, "''")}'`,
                 Fields: ['MCPServerID'],
                 ResultType: 'simple'
             }, contextUser);
@@ -697,31 +748,92 @@ export class OAuthCallbackHandler {
     }
 
     /**
+     * Validates that a caller-supplied frontend return URL points at an allowed origin, so the
+     * OAuth callback cannot be turned into an open redirect from the trusted MJAPI origin.
+     *
+     * Allowed when: the allowlist is "allow all" (`['*']`, the backward-compatible default),
+     * the URL's origin is in `options.allowedFrontendOrigins`, or it matches the origin of a
+     * built-in success/error redirect URL. Anything else is rejected and the caller falls back to
+     * the default redirect page.
+     */
+    private isFrontendReturnUrlAllowed(url: URL): boolean {
+        const allowed = this.options.allowedFrontendOrigins;
+        if (allowed.includes('*')) {
+            return true;
+        }
+        if (allowed.includes(url.origin)) {
+            return true;
+        }
+        for (const builtIn of [this.options.successRedirectUrl, this.options.errorRedirectUrl]) {
+            try {
+                if (builtIn && new URL(builtIn).origin === url.origin) {
+                    return true;
+                }
+            } catch {
+                // Ignore an unparseable built-in URL and keep checking.
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Parses a caller-supplied return URL and applies {@link isFrontendReturnUrlAllowed}.
+     *
+     * @returns the parsed URL when it is well-formed AND points at an allowed origin, otherwise null.
+     */
+    private parseAllowedFrontendReturnUrl(frontendReturnUrl: string): URL | null {
+        let url: URL;
+        try {
+            url = new URL(frontendReturnUrl);
+        } catch {
+            LogError(`[OAuth Callback] Invalid frontend return URL '${frontendReturnUrl}', falling back to default`);
+            return null;
+        }
+        if (!this.isFrontendReturnUrlAllowed(url)) {
+            LogError(`[OAuth Callback] frontend return URL '${frontendReturnUrl}' origin not allowed, falling back to default`);
+            return null;
+        }
+        return url;
+    }
+
+    /**
+     * Boundary check for `/oauth/initiate` — validates the return URL before it is persisted onto
+     * the authorization state, so a caller gets a 400 instead of a silent fallback later.
+     *
+     * An ABSENT value (undefined / null / empty string) is acceptable: it means "no return URL", and
+     * every downstream consumer treats it that way via a truthiness check. Only a value the caller
+     * actually supplied is validated — otherwise omitting the field, or sending an empty one, would
+     * newly fail a request that has always worked.
+     */
+    private isFrontendReturnUrlAcceptable(frontendReturnUrl: unknown): boolean {
+        if (!frontendReturnUrl) {
+            return true;
+        }
+        return typeof frontendReturnUrl === 'string' && this.parseAllowedFrontendReturnUrl(frontendReturnUrl) !== null;
+    }
+
+    /**
      * Redirects to success page with state info.
      * If a frontend return URL is provided, redirects there instead of the default success page.
      */
     private redirectToSuccess(res: express.Response, state: string, connectionId: string, frontendReturnUrl?: string): void {
-        // If frontend return URL is provided, redirect there with success parameters
-        if (frontendReturnUrl) {
-            try {
-                const url = new URL(frontendReturnUrl);
-                url.searchParams.set('oauth', 'success');
-                url.searchParams.set('state', state);
-                url.searchParams.set('connectionId', connectionId);
-                LogStatus(`[OAuth Callback] Redirecting to frontend URL: ${url.toString()}`);
-                res.redirect(302, url.toString());
-                return;
-            } catch (error) {
-                LogError(`[OAuth Callback] Invalid frontend return URL '${frontendReturnUrl}', falling back to default`);
-                // Fall through to default redirect
-            }
+        // If frontend return URL is provided and points at an allowed origin, redirect there with
+        // success parameters. Anything else falls through to the built-in page.
+        const url = frontendReturnUrl ? this.parseAllowedFrontendReturnUrl(frontendReturnUrl) : null;
+        if (url) {
+            url.searchParams.set('oauth', 'success');
+            url.searchParams.set('state', state);
+            url.searchParams.set('connectionId', connectionId);
+            LogStatus(`[OAuth Callback] Redirecting to frontend URL: ${url.toString()}`);
+            res.redirect(302, url.toString());
+            return;
         }
 
         // Default: redirect to built-in success page
-        const url = new URL(this.options.successRedirectUrl!);
-        url.searchParams.set('state', state);
-        url.searchParams.set('connectionId', connectionId);
-        res.redirect(302, url.toString());
+        const defaultUrl = new URL(this.options.successRedirectUrl!);
+        defaultUrl.searchParams.set('state', state);
+        defaultUrl.searchParams.set('connectionId', connectionId);
+        res.redirect(302, defaultUrl.toString());
     }
 
     /**
@@ -729,27 +841,23 @@ export class OAuthCallbackHandler {
      * If a frontend return URL is provided, redirects there instead of the default error page.
      */
     private redirectToError(res: express.Response, errorCode: string, errorMessage: string, frontendReturnUrl?: string): void {
-        // If frontend return URL is provided, redirect there with error parameters
-        if (frontendReturnUrl) {
-            try {
-                const url = new URL(frontendReturnUrl);
-                url.searchParams.set('oauth', 'error');
-                url.searchParams.set('error', errorCode);
-                url.searchParams.set('error_description', errorMessage);
-                LogStatus(`[OAuth Callback] Redirecting to frontend URL with error: ${url.toString()}`);
-                res.redirect(302, url.toString());
-                return;
-            } catch (error) {
-                LogError(`[OAuth Callback] Invalid frontend return URL '${frontendReturnUrl}', falling back to default`);
-                // Fall through to default redirect
-            }
+        // If frontend return URL is provided and points at an allowed origin, redirect there with
+        // error parameters. Anything else falls through to the built-in page.
+        const url = frontendReturnUrl ? this.parseAllowedFrontendReturnUrl(frontendReturnUrl) : null;
+        if (url) {
+            url.searchParams.set('oauth', 'error');
+            url.searchParams.set('error', errorCode);
+            url.searchParams.set('error_description', errorMessage);
+            LogStatus(`[OAuth Callback] Redirecting to frontend URL with error: ${url.toString()}`);
+            res.redirect(302, url.toString());
+            return;
         }
 
         // Default: redirect to built-in error page
-        const url = new URL(this.options.errorRedirectUrl!);
-        url.searchParams.set('error', errorCode);
-        url.searchParams.set('error_description', errorMessage);
-        res.redirect(302, url.toString());
+        const defaultUrl = new URL(this.options.errorRedirectUrl!);
+        defaultUrl.searchParams.set('error', errorCode);
+        defaultUrl.searchParams.set('error_description', errorMessage);
+        res.redirect(302, defaultUrl.toString());
     }
 
     /**

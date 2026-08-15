@@ -76,6 +76,11 @@ function createMockEntity(overrides: Record<string, unknown> = {}) {
 
 vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
+    // Durable runs (PR 1): every sync claims/heartbeats/fences its run row through the
+    // provider, so the mock provider must answer those statements.
+    const { createOwnershipProviderSurface } = await vi.importActual<
+        typeof import('./helpers/ownershipProviderSurface.js')
+    >('./helpers/ownershipProviderSurface.js');
     return {
         ...actual,
         RunView: class MockRunView {
@@ -100,7 +105,7 @@ vi.mock('@memberjunction/core', async () => {
                     Entities: { Name: string; FirstPrimaryKey: { Name: string } }[];
                     EntityByName: (name: string) => { Name: string; FirstPrimaryKey: { Name: string } } | undefined;
                     GetEntityObject: (...args: unknown[]) => Promise<unknown>;
-                };
+                } & ReturnType<typeof createOwnershipProviderSurface>;
                 get Entities() {
                     return [{
                         Name: 'Contacts',
@@ -117,6 +122,7 @@ vi.mock('@memberjunction/core', async () => {
                 }
             }
             MockMetadata.Provider = {
+                ...createOwnershipProviderSurface(),
                 BeginTransaction: vi.fn().mockResolvedValue(undefined),
                 CommitTransaction: vi.fn().mockResolvedValue(undefined),
                 RollbackTransaction: vi.fn().mockResolvedValue(undefined),
@@ -1066,7 +1072,7 @@ describe('IntegrationEngine', () => {
     });
 
     describe('Batch size enforcement', () => {
-        it('should truncate records when connector returns more than MaxBatchSize', async () => {
+        it('should write every record but warn UNBOUNDED when connector returns more than MaxBatchSize', async () => {
             // Create 10 records but set MaxBatchSize to 5
             const records = createMockRecords(10);
             const connector = createMockConnector({
@@ -1127,7 +1133,7 @@ describe('IntegrationEngine', () => {
 
             try {
                 orchestrator.MaxBatchSize = 5;
-                const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+                const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
                 const result = await orchestrator.RunSync('ci-1', contextUser);
 
@@ -1135,12 +1141,14 @@ describe('IntegrationEngine', () => {
                 expect(result.RecordsProcessed).toBe(10);
                 expect(result.RecordsCreated).toBe(10);
 
-                // Should have logged a message that the batch size was exceeded
-                expect(logSpy).toHaveBeenCalledWith(
-                    expect.stringContaining('MaxBatchSize')
+                // The over-size batch is surfaced as a pagination-rule violation. HasMore=false on the
+                // first batch ⇒ the connector paginates not at all, so it's the UNBOUNDED variant.
+                expect(warnSpy).toHaveBeenCalledWith(
+                    expect.stringContaining('pagination is not implemented')
                 );
+                expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('ALL 10 records'));
 
-                logSpy.mockRestore();
+                warnSpy.mockRestore();
             } finally {
                 ConnectorFactory.Resolve = resolveOrig;
             }

@@ -1,5 +1,18 @@
 # @memberjunction/ng-media-player
 
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [8288711]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [15319b4]
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.2
+  - @memberjunction/ng-base-types@6.1.0-edge.2
+
 ## 6.1.0-edge.1
 
 ### Patch Changes

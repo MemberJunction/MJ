@@ -553,3 +553,17 @@
 .step-notice {
   padding: 0 var(--mj-space-3, 12px) var(--mj-space-2, 8px);
 }
+
+/* The run view fills the tab rather than taking its intrinsic size — a canvas that stops halfway
+   down its pane with dead space beneath reads as a broken layout. */
+.detail-graph {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.detail-graph__canvas {
+  flex: 1 1 auto;
+  min-height: 0;
+}

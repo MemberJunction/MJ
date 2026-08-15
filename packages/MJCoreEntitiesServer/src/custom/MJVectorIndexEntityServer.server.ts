@@ -155,25 +155,43 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
             return null;
         }
 
+        // Instantiate BEFORE gating on the key, then wire the host connection. A colocated provider
+        // (SQLServerVectorDatabase, pgvector) stores vectors in this same database: it has no
+        // credentials to present, and it throws "requires a host connection" unless the active data
+        // provider is handed to it. Neither is knowable until the instance exists. Same ordering as
+        // the EntityDocument and ContentSource vectorization pipelines.
+        // The sentinel is required: `VectorDBBase`'s constructor rejects an empty key and colocated
+        // providers do not override it, so '' would throw for the very case this supports.
         const apiKey = GetAIAPIKey(classKey);
-        if (!apiKey) {
-            LogError(`No API key found for vector DB provider "${classKey}"`);
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(
+            VectorDBBase, classKey, apiKey || 'colocated'
+        );
+        if (!instance) {
+            LogError(`Failed to create vector DB instance for "${classKey}"`);
             return null;
         }
 
-        return MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(
-            VectorDBBase, classKey, apiKey
-        );
+        instance.TryWireColocatedHost(this.ProviderToUse);
+        if (!instance.SupportsColocatedQuery && instance.RequiresAPIKey && !apiKey) {
+            LogError(`No API key found for vector DB provider "${classKey}"`);
+            return null;
+        }
+        return instance;
     }
 
     /**
-     * Resolve embedding dimensions from the associated AI model.
-     * Default to 1536 (OpenAI text-embedding-3-small) if not determinable.
+     * Resolve the embedding dimensions to create the provider index at.
+     *
+     * Prefers this index's own `Dimensions` column, which is where the operator states it and what the
+     * embedding call already honors. Falling straight through to 1536 ignored that column entirely, so
+     * an index for any other model was created at the wrong width — harmless with providers that don't
+     * enforce it, and fatal with ones that do: a colocated SQL Server index is a `VECTOR(n)` column, and
+     * inserting 384-dimension vectors into a `VECTOR(1536)` is rejected outright.
+     *
+     * 1536 (OpenAI text-embedding-3-small) remains the fallback for records that never set it.
      */
     private resolveDimensions(): number {
-        // TODO: Look up the embedding model's dimension count from metadata
-        // For now, default to 1536 which covers most common embedding models
-        return 1536;
+        return this.Dimensions ?? 1536;
     }
 
     /**

@@ -48,6 +48,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJUserViewRuns', sectionName: 'User View Runs', isExpanded: false },
             { sectionKey: 'mJUserViews', sectionName: 'User Views', isExpanded: false },
             { sectionKey: 'mJWorkspaces', sectionName: 'Workspaces', isExpanded: false },
+            { sectionKey: 'mJBizAppsCommonPeople', sectionName: 'MJ_BizApps_Common: People', isExpanded: false },
             { sectionKey: 'mJAIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
             { sectionKey: 'mJAIAgentRequestsRequestForUserID', sectionName: 'AI Agent Requests', isExpanded: false },
             { sectionKey: 'mJAPIKeysCreatedByUserID', sectionName: 'API Keys (Created By User)', isExpanded: false },
@@ -118,13 +119,21 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJMagicLinkRedemptions', sectionName: 'Magic Link Redemptions', isExpanded: false },
             { sectionKey: 'mJMagicLinkInvites', sectionName: 'Magic Link Invites', isExpanded: false },
             { sectionKey: 'mJAIAgentSessions', sectionName: 'AI Agent Sessions', isExpanded: false },
+            { sectionKey: 'mJBizAppsTasksTaskNotificationLogs', sectionName: 'Task Notification Logs', isExpanded: false },
             { sectionKey: 'mJAIAgentSessionBridgeParticipants', sectionName: 'AI Agent Session Bridge Participants', isExpanded: false },
             { sectionKey: 'mJRemoteOperations', sectionName: 'Remote Operations', isExpanded: false },
             { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false },
             { sectionKey: 'mJAISkillPermissions', sectionName: 'AI Skill Permissions', isExpanded: false },
             { sectionKey: 'mJAISkills', sectionName: 'AI Skills', isExpanded: false },
             { sectionKey: 'mJUserRoutines', sectionName: 'User Routines', isExpanded: false },
-            { sectionKey: 'mJUserRoutineRecipients', sectionName: 'User Routine Recipients', isExpanded: false }
+            { sectionKey: 'mJUserRoutineRecipients', sectionName: 'User Routine Recipients', isExpanded: false },
+            { sectionKey: 'mJBizAppsOrdersSalesAuthorities', sectionName: 'Sales Authorities', isExpanded: false },
+            { sectionKey: 'mJBizAppsOrdersOrderHeadersPostedByUserID', sectionName: 'Order Headers (Posted By)', isExpanded: false },
+            { sectionKey: 'mJBizAppsAccountingAccountingCompanyProfiles', sectionName: 'Accounting Company Profiles', isExpanded: false },
+            { sectionKey: 'mJBizAppsOrdersOrderHeadersSalesRepUserID', sectionName: 'Order Headers (Sales Rep)', isExpanded: false },
+            { sectionKey: 'mJBizAppsAccountingJournalEntryBatchesApprovedByUserID', sectionName: 'Journal Entry Batches (Approved By User ID)', isExpanded: false },
+            { sectionKey: 'mJBizAppsOrdersPaymentLines', sectionName: 'Payment Lines', isExpanded: false },
+            { sectionKey: 'mJBizAppsAccountingJournalEntryBatchesBatchedByUserID', sectionName: 'Journal Entry Batches (Batched By User ID)', isExpanded: false }
         ]);
     }
 }
