@@ -68,7 +68,7 @@ export type {
 } from './transforms.js';
 
 // Connector
-export { BaseIntegrationConnector, WithTimeout, DEFAULT_OPERATION_TIMEOUTS } from './BaseIntegrationConnector.js';
+export { BaseIntegrationConnector, WithTimeout, OperationTimeoutError, DEFAULT_OPERATION_TIMEOUTS } from './BaseIntegrationConnector.js';
 export type {
   ConnectionTestResult,
   ExternalObjectSchema,

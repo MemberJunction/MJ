@@ -305,6 +305,25 @@ describe('IntegrationEngine — FetchChanges timeout resolution', () => {
         expect(observed.every(ms => ms === 45)).toBe(true);
     }, 30000);
 
+    it('attempts a timed-out page exactly ONCE — no retry of our own timeout', async () => {
+        // `WithTimeout` cannot cancel the work it abandons, so a retry would put a second full page of
+        // vendor requests in flight alongside the first, then a third. Since the retried work runs under
+        // the same budget it just exceeded, it could not have succeeded either. Counting the connector's
+        // FetchChanges invocations through the REAL engine path is what pins that: 1, not MaxAttempts.
+        //
+        // The predicate's semantics — and why the exclusion is instanceof-based rather than dropping the
+        // NETWORK_TIMEOUT code, which would also stop retrying reset sockets — are in
+        // WithTimeoutNoRetry.test.ts.
+        const connector = createHangingConnector(30);
+        wireConfigMocks(createMockCompanyIntegration('{}'), buildIntegration());
+        ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+
+        await orchestrator.RunSync('ci-1', contextUser);
+
+        const fetchChanges = connector.FetchChanges as unknown as ReturnType<typeof vi.fn>;
+        expect(fetchChanges).toHaveBeenCalledTimes(1);
+    }, 30000);
+
 });
 
 /**
