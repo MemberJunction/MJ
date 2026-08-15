@@ -5,15 +5,14 @@ panels to a form via the slot system. -->
 
 # BaseFormPanel: dynamic slot-based form extensions
 
-Related grids are **not** all parked in More. The container ranks
-`DisplayInForm` relationships (`Entity.Configuration.UI.Form.RelatedRolePolicy`,
-default `'smart'`) and only folds the overflow into one More group. Explicit
-`EntityRelationship.Configuration.UI.FormRole` always wins. In **left-nav**
-the rail is Details (all field panels) + each Primary related + More; the
-body shows only the selected group, locked open. See
-[FORMS_ARCHITECTURE_GUIDE.md §7d](../../../guides/FORMS_ARCHITECTURE_GUIDE.md)
-and [`plans/form-chrome-policy.md`](../../../plans/form-chrome-policy.md).
- Optional `BaseFormPolicy` is the last-wins chrome override.
+Related grids appear on the parent form through the chrome stack in
+[FORMS_ARCHITECTURE_GUIDE.md §7d](../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7d-form-chrome--accordion-left-nav-and-more):
+L1 `inclusion` (`Primary` / `More` / `None`), L2 ranker on Auto leftovers,
+L3 `MJ: Form Chrome Rules`, L4 user order. `None` is not a More item.
+In **left-nav** the rail is Details (all field panels) + each Primary
+related + More; the body shows only the selected group, locked open.
+`BaseFormPolicy.DecorateChrome` is cosmetics only — it cannot change
+membership.
 
 Add panels to entity edit forms WITHOUT replacing the generated form. Panels
 self-register against well-known slots and `<mj-form-panel-slot>` mounts them
@@ -56,7 +55,11 @@ Every `<mj-form-panel-slot>` host:
 - Queries `MJGlobal.Instance.ClassFactory.GetAllRegistrationsByMetadata(BaseFormPanel, ...)` to find panels for its `(entity, slot)` pair.
 - Sorts results by `metadata.sortKey` desc, then `Priority` desc, then registration order.
 - Mounts each registered panel via `ViewContainerRef.createComponent`, wiring `[Record]` / `[FormComponent]` / `[FormContext]`.
+- Sets the slot host (and `BaseFormPanel` itself) to `display: contents` so left-nav leftover height reaches the related grid, not a wrapper.
 - Coordinates with siblings via the per-container `FormSlotCoordinator` to handle fallbacks (see below).
+
+Related grids call `FormComponent.NewRecordValues(relatedEntity, joinField)`
+so **New** prefills every join field that filters the grid.
 
 ## Available slots
 

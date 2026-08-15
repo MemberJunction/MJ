@@ -1072,7 +1072,7 @@ describe('IntegrationEngine', () => {
     });
 
     describe('Batch size enforcement', () => {
-        it('should truncate records when connector returns more than MaxBatchSize', async () => {
+        it('should write every record but warn UNBOUNDED when connector returns more than MaxBatchSize', async () => {
             // Create 10 records but set MaxBatchSize to 5
             const records = createMockRecords(10);
             const connector = createMockConnector({
@@ -1133,7 +1133,7 @@ describe('IntegrationEngine', () => {
 
             try {
                 orchestrator.MaxBatchSize = 5;
-                const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+                const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
                 const result = await orchestrator.RunSync('ci-1', contextUser);
 
@@ -1141,12 +1141,14 @@ describe('IntegrationEngine', () => {
                 expect(result.RecordsProcessed).toBe(10);
                 expect(result.RecordsCreated).toBe(10);
 
-                // Should have logged a message that the batch size was exceeded
-                expect(logSpy).toHaveBeenCalledWith(
-                    expect.stringContaining('MaxBatchSize')
+                // The over-size batch is surfaced as a pagination-rule violation. HasMore=false on the
+                // first batch ⇒ the connector paginates not at all, so it's the UNBOUNDED variant.
+                expect(warnSpy).toHaveBeenCalledWith(
+                    expect.stringContaining('pagination is not implemented')
                 );
+                expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('ALL 10 records'));
 
-                logSpy.mockRestore();
+                warnSpy.mockRestore();
             } finally {
                 ConnectorFactory.Resolve = resolveOrig;
             }

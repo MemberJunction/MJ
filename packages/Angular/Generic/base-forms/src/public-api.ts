@@ -73,4 +73,5 @@ export * from './lib/interactive-form/interactive-form.component';
 export * from './lib/chrome/form-chrome';
 export * from './lib/chrome/base-form-policy';
 export * from './lib/chrome/resolve-form-chrome';
+export * from './lib/chrome/load-form-chrome-rules';
 export * from './lib/chrome/form-chrome-coordinator.service';

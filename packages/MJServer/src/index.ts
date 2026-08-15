@@ -1123,7 +1123,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     const { callbackRouter, authenticatedRouter } = createOAuthCallbackHandler({
       publicUrl: oauthPublicUrl,
       successRedirectUrl: `${oauthPublicUrl}/oauth/success`,
-      errorRedirectUrl: `${oauthPublicUrl}/oauth/error`
+      errorRedirectUrl: `${oauthPublicUrl}/oauth/error`,
+      // Constrains where a caller-supplied frontendReturnUrl may point (open-redirect guard).
+      allowedFrontendOrigins: configInfo.cors?.allowedOrigins ?? ['*']
     });
     oauthAuthenticatedRouter = authenticatedRouter;
 

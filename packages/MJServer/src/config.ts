@@ -7,7 +7,19 @@ const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
 const userHandlingInfoSchema = z.object({
   autoCreateNewUsers: z.boolean().optional().default(false),
+  /** When true, auto-provisioning is restricted to the domains in `newUserAuthorizedDomains`. */
   newUserLimitedToAuthorizedDomains: z.boolean().optional().default(false),
+  /**
+   * Authorized **email domains** for auto-provisioned users — e.g. `['example.com', '*.example.org']`.
+   *
+   * These are matched against the domain of the email address in the verified identity token, NOT
+   * against the browser `Origin` / frontend hostname. If you are upgrading from a build that
+   * compared these to the request origin, replace any frontend hostnames here (`app.example.com`,
+   * `localhost`) with the email domains your users actually sign in with.
+   *
+   * `*` wildcards are supported and match in full: `*.example.com` matches `mail.example.com` but
+   * NOT `example.com` — list both if you need both.
+   */
   newUserAuthorizedDomains: z.array(z.string()).optional().default([]),
   newUserRoles: z.array(z.string()).optional().default([]),
   updateCacheWhenNotFound: z.boolean().optional().default(false),

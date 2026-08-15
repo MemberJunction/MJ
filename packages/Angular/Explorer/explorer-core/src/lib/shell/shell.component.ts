@@ -13,7 +13,7 @@ import {
   AppAccessResult,
   NavItem
 } from '@memberjunction/ng-base-application';
-import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey } from '@memberjunction/core';
+import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
 import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
@@ -1428,10 +1428,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const tabAppId = tab.applicationId;
 
     // Helper to append query params to a URL, preserving any existing params
-    const appendQP = (url: string): string => {
-      if (!queryParams || Object.keys(queryParams).length === 0) return url;
+    const appendQP = (url: string, extra?: Record<string, string>): string => {
+      const all = { ...(queryParams ?? {}), ...(extra ?? {}) };
+      if (Object.keys(all).length === 0) return url;
       const separator = url.includes('?') ? '&' : '?';
-      const params = new URLSearchParams(queryParams);
+      const params = new URLSearchParams(all);
       return `${url}${separator}${params.toString()}`;
     };
 
@@ -1550,13 +1551,22 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       switch (resourceType) {
         case 'records':
           // /app/:appName/record/:entityName/:recordId
-          if (entityName && recordId) {
-            // recordId is a CompositeKey URL segment ("ID|<value>") — the '|' MUST be encoded.
-            // Angular's UrlSerializer percent-encodes '|' to %7C in router.url, so if we embed it raw
-            // here, `syncUrlWithWorkspace`'s `currentUrl !== newUrl` check is permanently true and can
-            // drive a re-navigation loop (with onSameUrlNavigation:'reload'). The read side already
-            // decodeURIComponent()s this segment, so encoding here keeps both sides consistent.
-            return appendQP(`/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${encodeURIComponent(recordId)}`);
+          // Unsaved records use the `new` sentinel so they can deeplink with NewRecordValues.
+          if (entityName) {
+            const isNewRecord = config['isNew'] === true || IsNewEntityRecordUrlId(recordId);
+            const idSeg = isNewRecord ? NEW_ENTITY_RECORD_URL_ID : recordId;
+            if (idSeg) {
+              // recordId is a CompositeKey URL segment ("ID|<value>") — the '|' MUST be encoded.
+              // Angular's UrlSerializer percent-encodes '|' to %7C in router.url, so if we embed it raw
+              // here, `syncUrlWithWorkspace`'s `currentUrl !== newUrl` check is permanently true and can
+              // drive a re-navigation loop (with onSameUrlNavigation:'reload'). The read side already
+              // decodeURIComponent()s this segment, so encoding here keeps both sides consistent.
+              const nrv = isNewRecord ? EncodeNewRecordValuesForURL(config['NewRecordValues']) : undefined;
+              return appendQP(
+                `/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${encodeURIComponent(idSeg)}`,
+                nrv ? { [NEW_RECORD_VALUES_QUERY_PARAM]: nrv } : undefined,
+              );
+            }
           }
           break;
 
@@ -1625,10 +1635,18 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Fallback to legacy routes (for backward compatibility during transition)
     switch (resourceType) {
       case 'records':
-        if (entityName && recordId) {
-          // Encode the CompositeKey segment ('|' → %7C) to match Angular's serialized router.url and
-          // the decodeURIComponent() on the read side — see the app-scoped 'records' case above.
-          return appendQP(`/resource/record/${encodeURIComponent(entityName)}/${encodeURIComponent(recordId)}`);
+        if (entityName) {
+          const isNewRecord = config['isNew'] === true || IsNewEntityRecordUrlId(recordId);
+          const idSeg = isNewRecord ? NEW_ENTITY_RECORD_URL_ID : recordId;
+          if (idSeg) {
+            // Encode the CompositeKey segment ('|' → %7C) to match Angular's serialized router.url and
+            // the decodeURIComponent() on the read side — see the app-scoped 'records' case above.
+            const nrv = isNewRecord ? EncodeNewRecordValuesForURL(config['NewRecordValues']) : undefined;
+            return appendQP(
+              `/resource/record/${encodeURIComponent(entityName)}/${encodeURIComponent(idSeg)}`,
+              nrv ? { [NEW_RECORD_VALUES_QUERY_PARAM]: nrv } : undefined,
+            );
+          }
         }
         break;
 
