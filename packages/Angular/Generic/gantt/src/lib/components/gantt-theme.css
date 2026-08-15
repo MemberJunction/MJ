@@ -96,3 +96,9 @@
 :host ::ng-deep .gantt_ver_scroll {
     color-scheme: inherit;
 }
+
+:host ::ng-deep .gantt_tree_content {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

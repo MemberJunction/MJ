@@ -17,3 +17,14 @@ describe('MjGanttChartComponent', () => {
     expect(cmp.outputs['AfterZoomChange']).toBe('AfterZoomChange');
   });
 });
+
+interface AngularCmpInputs {
+  inputs: Record<string, [string, number, unknown]>;
+}
+
+describe('MjGanttChartComponent inputs', () => {
+  it('exposes EnableTooltips as a public input', () => {
+    const cmp = (MjGanttChartComponent as unknown as { ɵcmp: AngularCmpInputs }).ɵcmp;
+    expect(cmp.inputs['EnableTooltips'][0]).toBe('EnableTooltips');
+  });
+});

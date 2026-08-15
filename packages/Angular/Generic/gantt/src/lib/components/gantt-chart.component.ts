@@ -23,6 +23,11 @@ import {
     GANTT_MIN_GRID_WIDTH,
     SanitizeColumnWidths,
 } from '../models/gantt-layout';
+import {
+    BuildGanttTaskTooltipHtml,
+    EnsureGanttTooltipStyles,
+    GANTT_GRID_CELL_TOOLTIP_SELECTOR,
+} from '../models/gantt-tooltip';
 import type { GanttStatic, GridColumn, Task as DHTask, Link as DHLink } from 'dhtmlx-gantt';
 
 /** Default grid columns if none are provided. Pixel widths so the grid can scroll. */
@@ -173,8 +178,17 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
     /** Show the splitter between the grid and the timeline. */
     @Input() EnableGridResize = true;
 
-    /** Let the user drag grid column borders. */
+    /**
+     * Ask DHTMLX to allow dragging grid column borders.
+     * Column-border resize is a DHTMLX Gantt PRO feature — the GPL/community
+     * build we ship does not render those handles. The grid/timeline splitter
+     * (`EnableGridResize`) still works. Hover the Name cell or bar for the
+     * full title when the column is too narrow.
+     */
     @Input() EnableColumnResize = true;
+
+    /** Show the full item name (and dates) on hover for truncated grid/bar text. */
+    @Input() EnableTooltips = true;
 
     @Input()
     set GridWidth(value: number) {
@@ -357,11 +371,13 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
         g.config.fit_tasks = true;
         g.config.row_height = 36;
         this.applyGridConfig(g);
+        this.initTooltips(g);
 
         // Initialize
         g.init(this.ganttContainer.nativeElement);
         this.initialized = true;
         this.initZoom(g);
+        this.bindGridCellTooltips(g);
         this.bindGridEvents(g);
 
         // Event: click
@@ -566,6 +582,65 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
             this.cdr.markForCheck();
             return true;
         });
+    }
+
+    private initTooltips(g: GanttStatic): void {
+        if (!this.EnableTooltips) {
+            return;
+        }
+        EnsureGanttTooltipStyles();
+        g.plugins({ tooltip: true });
+        g.templates.tooltip_text = (start, end, task) => this.tooltipHtmlForTask(task, start, end);
+    }
+
+    private bindGridCellTooltips(g: GanttStatic): void {
+        const tooltips = g.ext?.tooltips;
+        if (!this.EnableTooltips || !tooltips) {
+            return;
+        }
+        tooltips.detach(GANTT_GRID_CELL_TOOLTIP_SELECTOR);
+        tooltips.tooltipFor({
+            selector: GANTT_GRID_CELL_TOOLTIP_SELECTOR,
+            html: (event) => this.gridCellTooltip(g, event),
+        });
+    }
+
+    private gridCellTooltip(g: GanttStatic, event: Event): string | void {
+        const target = event.target;
+        if (!(target instanceof Element)) {
+            return;
+        }
+        const cell = target.closest<HTMLElement>('[data-column-name]');
+        const columnName = cell?.getAttribute('data-column-name');
+        if (!columnName || !this.isNameColumn(columnName)) {
+            return;
+        }
+        const id = g.locate(event);
+        if (id == null || id === '' || !g.isTaskExists(id)) {
+            return;
+        }
+        return this.tooltipHtmlForTask(g.getTask(id));
+    }
+
+    private isNameColumn(columnName: string): boolean {
+        const cols = this.Columns ?? DEFAULT_COLUMNS;
+        return cols.some((col, index) =>
+            col.Name === columnName && (col.Tree === true || col.Name === 'text' || index === 0),
+        );
+    }
+
+    private tooltipHtmlForTask(
+        task: DHTask,
+        start?: Date,
+        end?: Date,
+    ): string | void {
+        const html = BuildGanttTaskTooltipHtml({
+            Name: String(task?.text ?? ''),
+            Start: start ?? task?.start_date ?? null,
+            End: end ?? task?.end_date ?? null,
+            Progress: typeof task?.progress === 'number' ? task.progress : null,
+        });
+        return html || undefined;
     }
 
     private initZoom(g: GanttStatic): void {

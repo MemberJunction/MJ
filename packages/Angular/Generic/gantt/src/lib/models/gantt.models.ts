@@ -20,6 +20,13 @@ export {
     GANTT_DEFAULT_GRID_WIDTH,
     SanitizeColumnWidths,
 } from './gantt-layout';
+export {
+    BuildGanttTaskTooltipHtml,
+    EscapeGanttHtml,
+    EnsureGanttTooltipStyles,
+    GANTT_GRID_CELL_TOOLTIP_SELECTOR,
+} from './gantt-tooltip';
+export type { GanttTooltipFields } from './gantt-tooltip';
 
 /**
  * A single item (bar) on the Gantt timeline.
