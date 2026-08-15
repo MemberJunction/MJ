@@ -32,7 +32,11 @@ export async function LoadFormChromeRules(
     const md = provider ?? Metadata.Provider;
     if (!md?.EntityByName(FORM_CHROME_RULES_ENTITY)) return [];
 
-    const rv = new RunView();
+    // Read through the SAME provider the check above resolved. `new RunView()` binds the GLOBAL
+    // provider, so in a multi-provider app this validated the entity against the caller's provider
+    // and then read the rows from a different one — yielding another environment's chrome rules, or
+    // none at all, depending on which provider happened to be global at the time.
+    const rv = RunView.FromMetadataProvider(md);
     const result = await rv.RunView<FormChromeRuleRow>({
         EntityName: FORM_CHROME_RULES_ENTITY,
         ExtraFilter: `EntityID='${id}'`,
