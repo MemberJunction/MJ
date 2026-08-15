@@ -39,9 +39,15 @@ import { LoadFormChromeRules } from '../chrome/load-form-chrome-rules';
 import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection } from '../chrome/form-chrome';
 import type { FormChromeGroup, FormChromePanelSnapshot } from '../chrome/form-chrome';
 import {
+  ClampRailWidth,
   FORM_CHROME_RAIL_PINNED_DEFAULT,
+  FORM_CHROME_RAIL_WIDTH_DEFAULT,
+  FORM_CHROME_RAIL_WIDTH_MAX,
+  FORM_CHROME_RAIL_WIDTH_MIN,
   ParseRailPinnedSetting,
+  ParseRailWidthSetting,
   SerializeRailPinnedSetting,
+  SerializeRailWidthSetting,
 } from '../chrome/form-chrome-rail-pref';
 import { CollectFormPanelRegistrations } from '../panel-slot/collect-form-panel-registrations';
 import type { FormPanelRegistrationMetadata } from '../panel-slot/base-form-panel';
@@ -148,6 +154,14 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Session-only: the rail is showing its items. Follows pin on load. */
   private chromeRailExpanded = FORM_CHROME_RAIL_PINNED_DEFAULT;
+
+  /** Expanded rail width in px. Persisted per entity. */
+  ChromeRailWidthPx = FORM_CHROME_RAIL_WIDTH_DEFAULT;
+  readonly RailWidthMin = FORM_CHROME_RAIL_WIDTH_MIN;
+  readonly RailWidthMax = FORM_CHROME_RAIL_WIDTH_MAX;
+  RailResizing = false;
+  private railResizeStartX = 0;
+  private railResizeStartWidth = FORM_CHROME_RAIL_WIDTH_DEFAULT;
 
   // ---- Primary Inputs ----
 
@@ -672,6 +686,31 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.cdr.detectChanges();
   }
 
+  public OnRailResizeStart(event: PointerEvent): void {
+    if (this.ChromeRailCollapsed) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.RailResizing = true;
+    this.railResizeStartX = event.clientX;
+    this.railResizeStartWidth = this.ChromeRailWidthPx;
+    (event.target as HTMLElement).setPointerCapture(event.pointerId);
+  }
+
+  public OnRailResizeMove(event: PointerEvent): void {
+    if (!this.RailResizing) return;
+    const delta = event.clientX - this.railResizeStartX;
+    const signed = this.ChromeLayout === 'left-nav' ? delta : -delta;
+    this.ChromeRailWidthPx = ClampRailWidth(this.railResizeStartWidth + signed);
+    this.cdr.markForCheck();
+  }
+
+  public OnRailResizeEnd(): void {
+    if (!this.RailResizing) return;
+    this.RailResizing = false;
+    this.PersistChromePrefs();
+    this.cdr.detectChanges();
+  }
+
   public RailDragOverKey: string | null = null;
 
   public OnRailDragStart(event: DragEvent, groupKey: string): void {
@@ -1105,6 +1144,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.ChromeRailPinned = ParseRailPinnedSetting(
       UserInfoEngine.Instance.GetSetting(this.chromePrefKey('railPinned')),
     );
+    this.ChromeRailWidthPx = ParseRailWidthSetting(
+      UserInfoEngine.Instance.GetSetting(this.chromePrefKey('railWidth')),
+    );
     this.chromeRailExpanded = this.ChromeRailPinned;
   }
 
@@ -1122,6 +1164,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     UserInfoEngine.Instance.SetSettingDebounced(
       this.chromePrefKey('railPinned'),
       SerializeRailPinnedSetting(this.ChromeRailPinned),
+    );
+    UserInfoEngine.Instance.SetSettingDebounced(
+      this.chromePrefKey('railWidth'),
+      SerializeRailWidthSetting(this.ChromeRailWidthPx),
     );
   }
 

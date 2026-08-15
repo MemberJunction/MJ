@@ -17,7 +17,9 @@ A persisted user section order can override that; the generated
 `form.sections` list is not a custom order and does not.
 First-class related items (and non-lead contributions) sort by
 `UI.sortKey` / registration `sortKey` descending, then explicit
-Primary, then ranker score.
+Primary, then ranker score. The left/right rail width is user-resizable
+and persisted per entity (`mj.formChrome.<entity>.railWidth`); collapsed
+is always the 36px spine.
 `BaseFormPolicy.DecorateChrome` is cosmetics only — it cannot change
 membership.
 

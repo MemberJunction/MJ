@@ -230,9 +230,9 @@ mj-collapsible-panel.mj-form-role-more {
 }
 
 .mj-forms-chrome-rail {
-  flex: 0 1 200px;
+  flex: 0 0 auto;
   width: 200px;
-  max-width: 200px;
+  max-width: 360px;
   min-width: 160px;
   display: flex;
   flex-direction: column;
@@ -242,16 +242,54 @@ mj-collapsible-panel.mj-form-role-more {
   align-self: stretch;
   min-height: 0;
   padding: 4px;
-  overflow-x: hidden;
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-subtle);
   border-radius: var(--mj-radius-md);
 }
 
+.mj-forms-chrome-rail.is-resizing {
+  user-select: none;
+}
+
 .mj-forms-chrome-rail.is-collapsed {
   flex: 0 0 36px;
   width: 36px;
+  min-width: 36px;
+  max-width: 36px;
   padding: 8px 0;
+  overflow: hidden;
+}
+
+.mj-forms-chrome-rail-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 3;
+  touch-action: none;
+}
+
+.mj-forms-chrome-rail-resizer::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 3px;
+  width: 2px;
+  border-radius: 1px;
+  background: transparent;
+}
+
+.mj-forms-chrome-rail:hover .mj-forms-chrome-rail-resizer::after,
+.mj-forms-chrome-rail.is-resizing .mj-forms-chrome-rail-resizer::after {
+  background: var(--mj-border-strong);
+}
+
+.mj-forms-layout--right-nav .mj-forms-chrome-rail-resizer {
+  right: auto;
+  left: -4px;
 }
 
 .mj-forms-chrome-rail-spine {
@@ -498,9 +536,15 @@ mj-collapsible-panel.mj-form-role-more {
     flex-wrap: wrap;
   }
 
+  .mj-forms-chrome-rail-resizer {
+    display: none;
+  }
+
   .mj-forms-chrome-rail.is-collapsed {
     flex: 0 0 auto;
     width: 100%;
+    min-width: 0;
+    max-width: none;
     height: 36px;
     padding: 0;
   }

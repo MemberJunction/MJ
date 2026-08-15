@@ -79,6 +79,8 @@
       @if (ShowChromeRail) {
         <nav class="mj-forms-chrome-rail"
              [class.is-collapsed]="ChromeRailCollapsed"
+             [class.is-resizing]="RailResizing"
+             [style.width.px]="ChromeRailCollapsed ? null : ChromeRailWidthPx"
              [attr.aria-expanded]="!ChromeRailCollapsed"
              aria-label="Form sections">
           @if (ChromeRailCollapsed) {
@@ -91,6 +93,17 @@
               <span class="mj-forms-chrome-rail-spine-label">{{ ChromeActiveTitle }}</span>
             </button>
           } @else {
+            <div class="mj-forms-chrome-rail-resizer"
+                 role="separator"
+                 aria-orientation="vertical"
+                 [attr.aria-valuenow]="ChromeRailWidthPx"
+                 [attr.aria-valuemin]="RailWidthMin"
+                 [attr.aria-valuemax]="RailWidthMax"
+                 title="Drag to resize sections"
+                 (pointerdown)="OnRailResizeStart($event)"
+                 (pointermove)="OnRailResizeMove($event)"
+                 (pointerup)="OnRailResizeEnd()"
+                 (pointercancel)="OnRailResizeEnd()"></div>
             <div class="mj-forms-chrome-rail-toolbar">
               <button type="button"
                       class="mj-forms-chrome-rail-pin"
