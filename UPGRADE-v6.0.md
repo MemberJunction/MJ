@@ -29,7 +29,7 @@ The BUSL grants the following without any further agreement:
 
 What now requires certification is **providing professional services to clients on MemberJunction** —
 implementation, integration, customization, or consulting performed in a client's environment on their
-behalf. That runs through the [MemberJunction Certified Program](https://docs.memberjunction.org/v6/mjcertified).
+behalf. That runs through the [MemberJunction Certified Program](https://docs.memberjunction.org/mjcertified).
 
 The controlling terms, including the definitions that govern the Nonprofit grant and the documentation a
 nonprofit may be asked to provide, are in [`LICENSE`](./LICENSE). If your usage doesn't fit the grants
