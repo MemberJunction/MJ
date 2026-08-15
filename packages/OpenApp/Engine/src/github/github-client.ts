@@ -10,6 +10,10 @@
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { Octokit } from '@octokit/rest';
+// Already a dependency of this package (package.json) and already used by
+// install/install-orchestrator.ts. Version parsing, precedence and prerelease detection all come
+// from here rather than being hand-rolled, so the next semver edge case is the library's problem.
+import semver from 'semver';
 
 /**
  * Options for configuring the GitHub client.
@@ -297,14 +301,20 @@ export async function ListGitHubReleases(
     }
 
     try {
-        const octokit = CreateOctokit(repoUrl, options);
-        const data = await octokit.paginate(octokit.repos.listReleases, { owner: parsed.Owner, repo: parsed.Repo, per_page: 100 });
-        return data.map(r => ({
-            TagName: r.tag_name,
-            PreRelease: r.prerelease,
-            Draft: r.draft,
-            CreatedAt: r.created_at
-        }));
+        // Memoized on the same (repo, token) key and TTL as the tag path. Pagination is required for
+        // correctness — truncating at 100 hid the newest version entirely — but it made every call
+        // cost one request per page, and both GetLatestVersion and ResolveVersionRange call this. A
+        // page cap instead would reintroduce exactly the silent truncation the pagination removed.
+        return await MemoizedFetch(releaseListCache, FetchCacheKey(repoUrl, parsed, options), async () => {
+            const octokit = CreateOctokit(repoUrl, options);
+            const data = await octokit.paginate(octokit.repos.listReleases, { owner: parsed.Owner, repo: parsed.Repo, per_page: 100 });
+            return data.map(r => ({
+                TagName: r.tag_name,
+                PreRelease: r.prerelease,
+                Draft: r.draft,
+                CreatedAt: r.created_at
+            }));
+        });
     }
     catch (error: unknown) {
         // Surface a 403/429 (rate limit / access denied) instead of swallowing it into an empty
@@ -402,18 +412,30 @@ export async function GetLatestVersion(
         // `mj app upgrade` would then act on. Falling through to the tag path is the honest
         // outcome: for a repo-wide app that path matches only `v?<semver>` tags and correctly
         // resolves to null when a repo tags nothing repo-wide.
-        const stableReleases = releases.filter(r => !r.PreRelease && !r.Draft);
-        const versioned = stableReleases.filter(r => IsPlainVersionTag(r.TagName));
-        if (versioned.length > 0) {
-            const stable = versioned.sort((a, b) => CompareSemver(b.TagName, a.TagName))[0];
-            return stable.TagName.replace(/^v/, '');
+        // Normalize to the semver CORE, not the tag text. Returning the tag verbatim let build
+        // metadata through (`v1.2.3+build.7` → `'1.2.3+build.7'`), which can never equal an installed
+        // `1.2.3` and so reads as a permanent "update available".
+        //
+        // Prereleases are excluded by the version STRING, not only by GitHub's `prerelease` flag. The
+        // flag is a checkbox a maintainer can forget: tag `v2.1.0-rc.1`, leave the box unticked, and
+        // a release-guarded-by-boolean path offers a release candidate as the upgrade target for an
+        // installed app — the exact outcome this stable preference exists to prevent. Guarding on both
+        // also makes the two paths below agree, which they previously did not.
+        const versioned = releases
+            .filter(r => !r.PreRelease && !r.Draft)
+            .map(r => SemverCore(r.TagName))
+            .filter((v): v is string => v !== null);
+        const stable = versioned.filter(v => semver.prerelease(v) === null);
+        const candidates = stable.length > 0 ? stable : versioned;
+        if (candidates.length > 0) {
+            return candidates.sort(semver.rcompare)[0];
         }
     }
 
     const tags = await ListGitHubTags(repoUrl, options, subpath);
     if (tags.length > 0) {
-        // Mirror the releases path's stable preference: never offer a prerelease as the latest
-        // version an installed app should upgrade to, unless nothing stable is tagged at all.
+        // Same stable preference as the releases path above: never offer a prerelease as the version
+        // an installed app should upgrade to, unless nothing stable is tagged at all.
         const stableTag = tags.find(t => !IsPrereleaseVersion(t));
         return (stableTag ?? tags[0]).replace(/^v/, '');
     }
@@ -444,18 +466,29 @@ export async function ListGitHubTags(
     }
 
     const prefix = ScopedTagPrefix(subpath ?? parsed.Subpath);
-    const semver = '\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+(\\.[a-zA-Z0-9]+)*)?';
+    // Named to avoid shadowing the imported `semver` library below. Kept as a regex rather than
+    // delegating to `semver.valid` because this also has to LOCATE the version inside a scoped tag
+    // (`<prefix>@1.2.3`); `SemverCore` then normalizes whatever it captures.
+    const SEMVER_PATTERN = '\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+(\\.[a-zA-Z0-9]+)*)?';
     // Multi-app repo: match this connector's scoped tags `<prefix>@<semver>` and return the versions.
     // Single-app repo: match repo-wide `v<semver>` tags as before.
     const pattern = prefix
-        ? new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}@(${semver})$`)
-        : new RegExp(`^(v?${semver})$`);
+        ? new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}@(${SEMVER_PATTERN})$`)
+        : new RegExp(`^(v?${SEMVER_PATTERN})$`);
 
     try {
+        // Returns the matched TAG TEXT (`v1.0.7`), unchanged from before — callers and
+        // `ValidateGitHubTag` rely on that shape. Only the ORDER changes: sorting goes through the
+        // normalized core, because `semver.rcompare` throws on anything it cannot parse. Tags whose
+        // core will not parse are dropped rather than left to poison the sort, which is what the old
+        // NaN-returning comparator did.
         return (await FetchRepoTagNames(repoUrl, parsed, options))
             .map(name => name.match(pattern)?.[1])
             .filter((v): v is string => v != null)
-            .sort((a, b) => CompareSemver(b, a));
+            .map(tag => ({ Tag: tag, Core: SemverCore(tag) }))
+            .filter((t): t is { Tag: string; Core: string } => t.Core !== null)
+            .sort((a, b) => semver.rcompare(a.Core, b.Core))
+            .map(t => t.Tag);
     }
     catch (error: unknown) {
         // Surface a 403/429 (rate limit / access denied) instead of swallowing it into an empty
@@ -472,15 +505,104 @@ export async function ListGitHubTags(
  */
 const TAG_CACHE_TTL_MS = 60_000;
 
-/** Cached raw tag names, keyed by repository AND resolved token. */
-const tagListCache = new Map<string, { ExpiresAt: number; TagNames: string[] }>();
+/** One memoized paginated fetch: the in-flight promise plus when it stops being reusable. */
+type FetchCacheEntry<T> = { ExpiresAt: number; Value: Promise<T> };
 
 /**
- * Drops every cached tag list. Exported for tests and for any caller that has just pushed a tag
- * and needs the next lookup to reflect it immediately.
+ * Cached tag-name fetches, keyed by repository AND resolved token.
+ *
+ * Holds the IN-FLIGHT PROMISE, not the settled array. Caching the resolved value only collapses
+ * requests for a caller that awaits between apps: `mj app check-updates` happens to be a sequential
+ * `for…of`, so it saw the full benefit, but a `Promise.all` sweep starts every fetch before any has
+ * resolved and got no benefit at all — measured as 18 HTTP calls against 2. That left the saving
+ * contingent on a loop shape in a package this one does not own, with no test that would fail if it
+ * changed. Sharing the promise makes it hold either way.
+ */
+const tagListCache = new Map<string, FetchCacheEntry<string[]>>();
+
+/**
+ * Cached release fetches, same keying and lifetime as {@link tagListCache}.
+ *
+ * `ListGitHubReleases` is fully paginated, so without this a single-app repo with 2,000 releases
+ * costs 20 sequential requests on EVERY `GetLatestVersion` call — against an unauthenticated budget
+ * of 60/hour. `ResolveVersionRange` calls it too, once per version-range resolution. Pagination
+ * fixed the correctness problem (silent truncation at 100) and created this cost one; memoizing is
+ * the other half. Capping pages instead would reintroduce the truncation the pagination removed.
+ */
+const releaseListCache = new Map<string, FetchCacheEntry<GitHubRelease[]>>();
+
+/**
+ * Upper bound on distinct (repo, token) pairs held per cache.
+ *
+ * The caches are only swept on write, so without a bound they grow for the life of the process —
+ * and each key embeds a token, which is not something to retain indefinitely. Generous relative to
+ * any real sweep (an install set is single- or low-double-digit apps), so eviction is a backstop
+ * rather than something a normal run reaches.
+ */
+const FETCH_CACHE_MAX_ENTRIES = 64;
+
+/**
+ * Drops every cached tag AND release list. Exported for tests and for any caller that has just
+ * pushed a tag or published a release and needs the next lookup to reflect it immediately.
+ *
+ * Named for tags because that is what it originally cleared; it clears both, because a "clear" that
+ * left stale releases behind would be a trap.
  */
 export function ClearGitHubTagCache(): void {
     tagListCache.clear();
+    releaseListCache.clear();
+}
+
+/**
+ * Returns the cached fetch for `cacheKey`, or starts one and caches it.
+ *
+ * Shared by the tag and release paths so the promise-sharing, rejection handling and eviction rules
+ * cannot drift apart between them.
+ *
+ * @returns A COPY of the resolved array — the cached promise is shared by every joiner, so handing
+ *   back the same array would let one caller's in-place sort corrupt what the others see.
+ */
+async function MemoizedFetch<T>(
+    cache: Map<string, FetchCacheEntry<T[]>>,
+    cacheKey: string,
+    fetcher: () => Promise<T[]>
+): Promise<T[]> {
+    const now = Date.now();
+
+    const cached = cache.get(cacheKey);
+    if (cached && cached.ExpiresAt > now) {
+        return [...(await cached.Value)];
+    }
+
+    // Evict expired entries, then the oldest, until within the bound. Map iterates in insertion
+    // order, so the first keys are the oldest.
+    for (const [key, entry] of cache) {
+        if (entry.ExpiresAt <= now) cache.delete(key);
+    }
+    while (cache.size >= FETCH_CACHE_MAX_ENTRIES) {
+        const oldest = cache.keys().next();
+        if (oldest.done) break;
+        cache.delete(oldest.value);
+    }
+
+    const inFlight = fetcher();
+    // Published BEFORE anything awaits it, so concurrent callers join this fetch instead of each
+    // starting their own. A rejection is deleted rather than left to be replayed for the rest of the
+    // TTL: a rate-limited or forbidden call must still surface through
+    // ThrowIfRateLimitedOrForbidden on the next attempt.
+    cache.set(cacheKey, { ExpiresAt: now + TAG_CACHE_TTL_MS, Value: inFlight });
+    inFlight.catch(() => { cache.delete(cacheKey); });
+
+    return [...(await inFlight)];
+}
+
+/** The full identity of a fetch: the repository plus the token it would be made with. */
+function FetchCacheKey(repoUrl: string, parsed: { Owner: string; Repo: string }, options: GitHubClientOptions): string {
+    // NUL as the delimiter: it cannot appear in an owner, a repo name or a token, so the two halves
+    // can never be confused for one another. Written as the ESCAPE rather than a literal byte — a raw
+    // NUL in the source makes the whole file read as binary to grep, `file`, code search and diff
+    // viewers, which hides it from exactly the tools a reviewer uses.
+    return `${parsed.Owner}/${parsed.Repo}\u0000${ResolveToken(repoUrl, options) ?? ''}`;
 }
 
 /**
@@ -502,20 +624,11 @@ async function FetchRepoTagNames(
     parsed: { Owner: string; Repo: string },
     options: GitHubClientOptions
 ): Promise<string[]> {
-    const cacheKey = `${parsed.Owner}/${parsed.Repo} ${ResolveToken(repoUrl, options) ?? ''}`;
-    const now = Date.now();
-
-    const cached = tagListCache.get(cacheKey);
-    if (cached && cached.ExpiresAt > now) {
-        return cached.TagNames;
-    }
-
-    const octokit = CreateOctokit(repoUrl, options);
-    const data = await octokit.paginate(octokit.repos.listTags, { owner: parsed.Owner, repo: parsed.Repo, per_page: 100 });
-    const tagNames = data.map(t => t.name);
-
-    tagListCache.set(cacheKey, { ExpiresAt: now + TAG_CACHE_TTL_MS, TagNames: tagNames });
-    return tagNames;
+    return MemoizedFetch(tagListCache, FetchCacheKey(repoUrl, parsed, options), async () => {
+        const octokit = CreateOctokit(repoUrl, options);
+        const data = await octokit.paginate(octokit.repos.listTags, { owner: parsed.Owner, repo: parsed.Repo, per_page: 100 });
+        return data.map(t => t.name);
+    });
 }
 
 /**
@@ -554,87 +667,35 @@ export async function ValidateGitHubTag(
 }
 
 /**
- * Compares two semver version strings (with optional 'v' prefix) by semver precedence.
- * Returns negative if a < b, positive if a > b, zero if they have equal precedence.
+ * The semver core of a tag name, or `null` when the tag is not itself a version.
  *
- * Prerelease-aware: `1.2.0-beta.1` sorts BELOW `1.2.0`. The prior implementation ran
- * `Number()` across the dot-split string, so any prerelease produced NaN
- * (`'1.2.0-beta.1'` → `[1, 2, NaN, 1]`); `NaN !== 0` is true, so the comparator returned
- * NaN and `Array.prototype.sort` ordering became implementation-defined — letting
- * {@link GetLatestVersion} report an arbitrary tag as the newest version.
+ * This is the single normalization point for every version string this module returns or sorts, and
+ * it is deliberately `semver.valid` rather than a local regex:
  *
- * Build metadata (`+sha`) is ignored, per the semver spec.
+ *  - It strips a leading `v` AND build metadata, returning the canonical core. That matters: a
+ *    release tagged `v1.2.3+build.7` used to come back verbatim, and `'1.2.3+build.7'` can never
+ *    equal an installed `1.2.3`, so it read as a permanent "update available" pointing at a target
+ *    `mj app upgrade` would then act on.
+ *  - It rejects anything that merely CONTAINS a version. A scoped release name such as
+ *    `@memberjunction/connector-wild-apricot@1.3.0` is not a repo-wide version, and ordering those
+ *    by semver precedence produces an ordering with no meaning (the `-` inside `wild-apricot` reads
+ *    as a prerelease delimiter).
+ *
+ * `semver` is already a dependency of this package and already imported by
+ * `install/install-orchestrator.ts`, which uses this same `valid()`-filter-then-compare shape.
  */
-export function CompareSemver(a: string, b: string): number {
-    const va = ParseSemver(a);
-    const vb = ParseSemver(b);
-    for (let i = 0; i < 3; i++) {
-        const diff = va.Release[i] - vb.Release[i];
-        if (diff !== 0) return diff;
-    }
-    return ComparePrerelease(va.Prerelease, vb.Prerelease);
+function SemverCore(tagName: string): string | null {
+    return semver.valid(tagName, { loose: false }) ?? semver.valid(tagName.replace(/^v/, ''));
 }
 
 /**
- * True when a tag name IS a repo-wide semver version (`1.2.3`, `v1.2.3-beta.1+sha`) rather than
- * something that merely contains one. A scoped release name such as
- * `@memberjunction/connector-wild-apricot@1.3.0` is not a repo-wide version, and comparing those
- * by semver precedence produces an ordering with no meaning — `ParseSemver` reads the `-` inside
- * `wild-apricot` as the prerelease delimiter.
+ * True when a version string carries a prerelease suffix (e.g. `1.2.0-beta.1`).
+ *
+ * Total by construction: an unparseable string has no prerelease, so it is not one. `semver.compare`
+ * throws on invalid input, which is why every sort in this module filters through {@link SemverCore}
+ * first rather than relying on the comparator to be forgiving.
  */
-function IsPlainVersionTag(tagName: string): boolean {
-    return /^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(tagName);
-}
-
-/** True when a version string carries a prerelease suffix (e.g. `1.2.0-beta.1`). */
 export function IsPrereleaseVersion(version: string): boolean {
-    return ParseSemver(version).Prerelease.length > 0;
-}
-
-/** Splits a version into its numeric release triple and its dot-separated prerelease identifiers. */
-function ParseSemver(version: string): { Release: [number, number, number]; Prerelease: string[] } {
-    // Strip a leading 'v' and any build metadata, neither of which affects precedence.
-    const core = version.replace(/^v/, '').split('+')[0];
-    const dash = core.indexOf('-');
-    const releasePart = dash === -1 ? core : core.slice(0, dash);
-    const prereleasePart = dash === -1 ? '' : core.slice(dash + 1);
-
-    // A non-numeric release segment coerces to 0 rather than NaN so the comparator stays total.
-    const nums = releasePart.split('.').map((segment) => {
-        const parsed = Number(segment);
-        return Number.isFinite(parsed) ? parsed : 0;
-    });
-
-    return {
-        Release: [nums[0] ?? 0, nums[1] ?? 0, nums[2] ?? 0],
-        Prerelease: prereleasePart.length > 0 ? prereleasePart.split('.') : []
-    };
-}
-
-/**
- * Semver prerelease precedence: a version WITH a prerelease ranks below the same version
- * without one, and when both have prereleases the identifiers are compared left to right,
- * with a shorter identifier list ranking lower when all shared identifiers are equal.
- */
-function ComparePrerelease(a: string[], b: string[]): number {
-    if (a.length === 0 && b.length === 0) return 0;
-    if (a.length === 0) return 1;   // 1.2.0 > 1.2.0-beta.1
-    if (b.length === 0) return -1;  // 1.2.0-beta.1 < 1.2.0
-
-    const shared = Math.min(a.length, b.length);
-    for (let i = 0; i < shared; i++) {
-        const diff = ComparePrereleaseIdentifier(a[i], b[i]);
-        if (diff !== 0) return diff;
-    }
-    return a.length - b.length;     // 1.2.0-beta < 1.2.0-beta.1
-}
-
-/** Numeric identifiers compare numerically and rank below alphanumeric ones, which compare ASCII-lexically. */
-function ComparePrereleaseIdentifier(a: string, b: string): number {
-    const aNumeric = /^\d+$/.test(a);
-    const bNumeric = /^\d+$/.test(b);
-    if (aNumeric && bNumeric) return Number(a) - Number(b);
-    if (aNumeric) return -1;
-    if (bNumeric) return 1;
-    return a < b ? -1 : a > b ? 1 : 0;
+    const core = SemverCore(version);
+    return core !== null && semver.prerelease(core) !== null;
 }

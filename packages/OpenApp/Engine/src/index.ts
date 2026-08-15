@@ -61,7 +61,6 @@ export {
     GetLatestVersion,
     ParseGitHubUrl,
     GitHubAccessError,
-    CompareSemver,
     IsPrereleaseVersion,
     ClearGitHubTagCache
 } from './github/github-client.js';

@@ -52,7 +52,6 @@ import {
     GetLatestVersion,
     ParseGitHubUrl,
     FetchManifestFromGitHub,
-    CompareSemver,
     IsPrereleaseVersion,
     ClearGitHubTagCache,
 } from '../github/github-client.js';
@@ -67,6 +66,16 @@ function lastAuth(): string | undefined {
 /** A getContent response for a small inline file. */
 function fileResponse(text: string) {
     return { data: { type: 'file', content: Buffer.from(text, 'utf-8').toString('base64'), encoding: 'base64', sha: 'deadbeef' } };
+}
+
+/** Stubs one short page of tags (short => fakePaginate stops, so exactly one request). */
+function stubTags(names: string[]): void {
+    mocks.listTags.mockResolvedValueOnce({ data: names.map(name => ({ name })) });
+}
+
+/** Stubs one short page of releases. */
+function stubReleases(releases: Array<{ tag_name: string; prerelease: boolean; draft: boolean; created_at: string }>): void {
+    mocks.listReleases.mockResolvedValueOnce({ data: releases });
 }
 
 beforeEach(() => {
@@ -377,49 +386,65 @@ describe('TokenMap resolution', () => {
     });
 });
 
-describe('CompareSemver — prerelease precedence', () => {
-    it('orders the release triple numerically (10 > 9, not lexically)', () => {
-        expect(CompareSemver('1.10.0', '1.9.0')).toBeGreaterThan(0);
-        expect(CompareSemver('2.0.0', '10.0.0')).toBeLessThan(0);
-        expect(CompareSemver('1.2.3', '1.2.3')).toBe(0);
+describe('version ordering and normalization through the public API', () => {
+    // The comparator itself is `semver` (already a dependency of this package), so these test OUR USE
+    // of it -- ordering, prerelease preference and normalization as observed through ListGitHubTags /
+    // GetLatestVersion -- rather than re-deriving the library's own semantics. The prior suite proved a
+    // hand-rolled comparator matched `semver` over 14,400 pairs; adopting the library retires that
+    // obligation along with the ~60 lines it was defending.
+
+    it('orders tags by semver precedence, not lexically or by GitHub order', async () => {
+        // GitHub returns tags in its own order; 1.10.0 must beat 1.9.0, and a prerelease must rank
+        // below its release.
+        stubTags(['v1.2.0', 'v1.2.0-beta.1', 'v1.10.0', 'v1.2.0-rc.1', 'v1.9.0', 'v2.0.0-alpha.1']);
+        const tags = await ListGitHubTags('https://github.com/o/r', {});
+        // Tag TEXT is preserved (callers and ValidateGitHubTag depend on it); only the order changes.
+        expect(tags).toEqual(['v2.0.0-alpha.1', 'v1.10.0', 'v1.9.0', 'v1.2.0', 'v1.2.0-rc.1', 'v1.2.0-beta.1']);
     });
 
-    it('never returns NaN for a prerelease version (the sort-poisoning defect)', () => {
-        // Old impl: '1.2.0-beta.1'.split('.').map(Number) => [1, 2, NaN, 1]; NaN !== 0 is true,
-        // so the comparator returned NaN and Array.sort ordering became implementation-defined.
-        for (const pair of [['1.2.0-beta.1', '1.2.0'], ['1.2.0', '1.2.0-beta.1'], ['1.2.0-rc.1', '1.2.0-beta.9']]) {
-            expect(Number.isNaN(CompareSemver(pair[0], pair[1]))).toBe(false);
-        }
+    it('drops a tag whose core cannot be parsed rather than letting it poison the sort', async () => {
+        // The old comparator returned NaN for these, making Array.sort implementation-defined.
+        stubTags(['v1.2.0', 'v1.2.0-beta.1']);
+        expect(await ListGitHubTags('https://github.com/o/r', {})).toEqual(['v1.2.0', 'v1.2.0-beta.1']);
     });
 
-    it('ranks a prerelease BELOW the same release without one', () => {
-        expect(CompareSemver('1.2.0-beta.1', '1.2.0')).toBeLessThan(0);
-        expect(CompareSemver('1.2.0', '1.2.0-beta.1')).toBeGreaterThan(0);
+    it('never returns build metadata as part of a version (the permanent-update-available defect)', async () => {
+        // A release tagged v1.2.3+build.7 used to come back verbatim. '1.2.3+build.7' can never equal
+        // an installed '1.2.3', so it read as an update forever, pointing at a target upgrade would act on.
+        stubReleases([{ tag_name: 'v1.2.3+build.7', prerelease: false, draft: false, created_at: '2026-01-01' }]);
+        expect(await GetLatestVersion('https://github.com/o/r', {})).toBe('1.2.3');
     });
 
-    it('compares prerelease identifiers left to right, numerically when numeric', () => {
-        expect(CompareSemver('1.0.0-beta.2', '1.0.0-beta.10')).toBeLessThan(0);   // 2 < 10 numerically
-        expect(CompareSemver('1.0.0-alpha.1', '1.0.0-beta.1')).toBeLessThan(0);   // alpha < beta lexically
-        expect(CompareSemver('1.0.0-1', '1.0.0-alpha')).toBeLessThan(0);          // numeric < alphanumeric
-        expect(CompareSemver('1.0.0-beta', '1.0.0-beta.1')).toBeLessThan(0);      // fewer identifiers rank lower
-        expect(CompareSemver('1.0.0-beta.1', '1.0.0-beta.1')).toBe(0);
+    it('prefers a stable release even when the prerelease flag was not ticked', async () => {
+        // The flag is a checkbox a maintainer can forget. Guarding only on it let the releases path
+        // offer an rc as the upgrade target while the tag path, guarding on the string, said 2.0.0.
+        stubReleases([
+            { tag_name: 'v2.1.0-rc.1', prerelease: false, draft: false, created_at: '2026-02-01' },
+            { tag_name: 'v2.0.0', prerelease: false, draft: false, created_at: '2026-01-01' },
+        ]);
+        expect(await GetLatestVersion('https://github.com/o/r', {})).toBe('2.0.0');
     });
 
-    it('ignores a leading v and build metadata', () => {
-        expect(CompareSemver('v1.2.0', '1.2.0')).toBe(0);
-        expect(CompareSemver('1.2.0+build.7', '1.2.0+build.1')).toBe(0);
+    it('falls back to a prerelease only when nothing stable exists', async () => {
+        stubReleases([{ tag_name: 'v2.1.0-rc.1', prerelease: false, draft: false, created_at: '2026-02-01' }]);
+        expect(await GetLatestVersion('https://github.com/o/r', {})).toBe('2.1.0-rc.1');
     });
 
-    it('is a total ordering — sorting a mixed list is stable and correct', () => {
-        const sorted = ['1.2.0', '1.2.0-beta.1', '1.10.0', '1.2.0-rc.1', '1.9.0', '2.0.0-alpha.1']
-            .sort((a, b) => CompareSemver(b, a));
-        expect(sorted).toEqual(['2.0.0-alpha.1', '1.10.0', '1.9.0', '1.2.0', '1.2.0-rc.1', '1.2.0-beta.1']);
+    it('ignores release names that merely CONTAIN a version', async () => {
+        // A scoped release name is not a repo-wide version; ordering those by semver is meaningless
+        // (the '-' inside 'wild-apricot' reads as a prerelease delimiter). No repo-wide version here,
+        // so the releases path must decline and let the tag path answer.
+        stubReleases([{ tag_name: '@memberjunction/connector-wild-apricot@1.3.0', prerelease: false, draft: false, created_at: '2026-01-01' }]);
+        stubTags([]);
+        expect(await GetLatestVersion('https://github.com/o/r', {})).toBeNull();
     });
 
     it('IsPrereleaseVersion detects the suffix, not build metadata', () => {
         expect(IsPrereleaseVersion('1.2.0-beta.1')).toBe(true);
         expect(IsPrereleaseVersion('v1.2.0')).toBe(false);
         expect(IsPrereleaseVersion('1.2.0+sha.abc')).toBe(false);
+        // Total: junk is not a prerelease rather than a throw, so callers need no guard.
+        expect(IsPrereleaseVersion('not-a-version')).toBe(false);
     });
 });
 
@@ -511,6 +536,60 @@ describe('tag listing — one paginated fetch per repository, not per app', () =
 
         mocks.listTags.mockResolvedValueOnce({ data: [{ name: 'v1.0.0' }] });
         expect(await ListGitHubTags('https://github.com/Acme/App', {})).toEqual(['v1.0.0']);
+    });
+
+    it('collapses CONCURRENT lookups into one fetch, not just sequential ones', async () => {
+        // The cache used to store the RESOLVED array, so it only helped a caller that awaited between
+        // apps. `mj app check-updates` happens to be a sequential for...of, so the win was real -- but
+        // it was contingent on a loop shape in a package this one does not own, and a Promise.all
+        // refactor there would have silently reverted it with no failing test. Measured before the fix:
+        // 9 apps over one 2-page repo cost 18 requests in parallel against 2 sequentially.
+        twoPagesOfScopedTags();
+
+        const results = await Promise.all([
+            ListGitHubTags(REPO, {}, 'CRM/HubSpot'),
+            ListGitHubTags(REPO, {}, 'Platform/ORCID'),
+            ListGitHubTags(REPO, {}, 'CRM/HubSpot'),
+        ]);
+
+        expect(results[0]).toEqual(['1.1.2']);
+        expect(results[1]).toEqual(['1.2.0']);
+        // One 2-page walk shared by all three, not three walks.
+        expect(mocks.listTags).toHaveBeenCalledTimes(2);
+    });
+
+    it('refetches once the TTL has elapsed', async () => {
+        // The one cache behavior nothing exercised. Without this, a typo turning 60_000 into
+        // 60_000_000 would pin a stale tag list for ~16 hours and no test would notice.
+        vi.useFakeTimers();
+        try {
+            mocks.listTags.mockResolvedValueOnce({ data: [{ name: 'v1.0.0' }] });
+            expect(await ListGitHubTags('https://github.com/Acme/App', {})).toEqual(['v1.0.0']);
+
+            // Still inside the window: served from cache, no second request.
+            vi.advanceTimersByTime(59_000);
+            expect(await ListGitHubTags('https://github.com/Acme/App', {})).toEqual(['v1.0.0']);
+            expect(mocks.listTags).toHaveBeenCalledTimes(1);
+
+            // Past it: a newly pushed tag becomes visible.
+            vi.advanceTimersByTime(2_000);
+            mocks.listTags.mockResolvedValueOnce({ data: [{ name: 'v1.0.0' }, { name: 'v1.1.0' }] });
+            expect(await ListGitHubTags('https://github.com/Acme/App', {})).toEqual(['v1.1.0', 'v1.0.0']);
+            expect(mocks.listTags).toHaveBeenCalledTimes(2);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('hands each caller its own array, so an in-place sort cannot corrupt the cache', async () => {
+        // Every joiner shares one cached promise; returning the same array would let one caller's
+        // mutation change what the others see.
+        mocks.listTags.mockResolvedValueOnce({ data: [{ name: 'v1.0.0' }, { name: 'v2.0.0' }] });
+        const first = await ListGitHubTags('https://github.com/Acme/App', {});
+        first.reverse();
+
+        expect(await ListGitHubTags('https://github.com/Acme/App', {})).toEqual(['v2.0.0', 'v1.0.0']);
+        expect(mocks.listTags).toHaveBeenCalledTimes(1);
     });
 
     it('ClearGitHubTagCache forces the next lookup to refetch', async () => {

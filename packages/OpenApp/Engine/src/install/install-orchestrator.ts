@@ -2224,13 +2224,12 @@ async function ExtractDeclaredApplicationIds(
   } catch {
     return [];
   } finally {
-    // Clean up the downloaded-migrations temp dir (best-effort — never mask the result).
+    // Same shared helper as the migration and teardown sites, rather than a third hand-rolled
+    // `try { rmSync } catch {}`. The inline version swallowed a cleanup failure silently; the helper
+    // reports it through OnWarn, so "temp dir could not be removed" is visible in one place instead
+    // of being invisible in one of three lookalike blocks.
     if (tempDir) {
-      try {
-        rmSync(tempDir, { recursive: true, force: true });
-      } catch {
-        /* best-effort cleanup */
-      }
+      CleanupTempDir(tempDir, 'Metadata', context);
     }
   }
 }
