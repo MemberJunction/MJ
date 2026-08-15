@@ -11,7 +11,7 @@ import {
 } from '@memberjunction/ng-entity-viewer';
 import { EntityInfo } from '@memberjunction/core';
 import { FormNavigationEvent } from './types/navigation-events';
-import { RELATED_GRID_MIN_PX, RelatedGridHeightPx } from './related-grid-height';
+import { RELATED_GRID_DEFAULT_MAX_PX, RELATED_GRID_TOOLBAR_PX, RELATED_GRID_EMPTY_BODY_PX, RelatedGridHeightPx } from './related-grid-height';
 
 /**
  * Wrapper for EntityDataGridComponent that emits navigation events on row double-click.
@@ -120,16 +120,21 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     @Input() ShowCommunicationButton: boolean = false;
     @Input() ShowRecycleBin: boolean = true;
     @Input() Height: number | 'auto' | 'fit-content' = 'auto';
+    /**
+     * When the grid sizes to its rows (left-nav related panels), this is the
+     * cap. Content taller than the cap scrolls inside AG Grid — it does not
+     * switch to paging. `null` means grow with the rows, no cap.
+     */
+    @Input() MaxHeight: number | null = RELATED_GRID_DEFAULT_MAX_PX;
     @Input() ToolbarConfig: GridToolbarConfig = {};
     @Input() SelectionMode: GridSelectionMode = 'single';
 
     /**
-     * Left-nav related grids size to their rows (capped) instead of
-     * `height: 100%` of leftover flex space, which can collapse to zero
-     * under a form header. Re-read the panel each time — `mj-chrome-show`
-     * is added when the rail item is selected, after the first view init.
+     * Left-nav related grids size to toolbar + header + rows instead of
+     * `height: 100%` of leftover flex space. Re-read the panel each time —
+     * `mj-chrome-show` is added when the rail item is selected.
      */
-    private sizedHeightPx = RELATED_GRID_MIN_PX;
+    private sizedHeightPx = RELATED_GRID_TOOLBAR_PX + RELATED_GRID_EMPTY_BODY_PX;
 
     get ResolvedHeight(): number | 'auto' | 'fit-content' {
         return this.shouldSizeToRows() ? this.sizedHeightPx : this.Height;
@@ -252,7 +257,7 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
         if (!this.shouldSizeToRows()) {
             return;
         }
-        this.sizedHeightPx = RelatedGridHeightPx(event.loadedRowCount);
+        this.sizedHeightPx = RelatedGridHeightPx(event.loadedRowCount, this.MaxHeight);
         this.cdr.markForCheck();
     }
 

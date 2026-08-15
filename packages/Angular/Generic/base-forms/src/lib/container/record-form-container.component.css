@@ -137,7 +137,7 @@ mj-record-form-container {
    set their own pixel height from row count (RelatedGridHeightPx). */
 .mj-forms-layout--left-nav mj-collapsible-panel.mj-panel--related-entity.mj-chrome-show .mj-forms-panel-content {
   height: auto;
-  max-height: min(560px, 65vh);
+  max-height: none;
   overflow: hidden;
   resize: none;
 }

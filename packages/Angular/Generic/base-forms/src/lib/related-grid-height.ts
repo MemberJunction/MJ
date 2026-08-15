@@ -4,18 +4,25 @@ export const RELATED_GRID_TOOLBAR_PX = 52;
 export const RELATED_GRID_HEADER_PX = 40;
 /** One data row. */
 export const RELATED_GRID_ROW_PX = 40;
-/** Always tall enough for the toolbar plus one row. */
-export const RELATED_GRID_MIN_PX = 200;
-/** Cap so a large related list scrolls inside the grid. */
-export const RELATED_GRID_MAX_PX = 560;
+/** Empty-state body when there are no rows (no 200px floor). */
+export const RELATED_GRID_EMPTY_BODY_PX = 88;
+/** Default cap for nav-related grids. `null` on the input means unbounded. */
+export const RELATED_GRID_DEFAULT_MAX_PX = 560;
 
 /**
- * Pixel height for a related-entity grid that sizes to its rows.
- * Used in left-nav / right-nav so the grid is not `height: 100%` of a
- * leftover flex slot that can collapse to zero under a form header.
+ * Pixel height for a related-entity grid: toolbar + header + rows.
+ * No minimum floor. When `maxHeight` is a positive number and the content
+ * is taller, the returned height is that cap and AG Grid scrolls inside.
+ * Omit / null `maxHeight` to grow with the rows.
  */
-export function RelatedGridHeightPx(rowCount: number): number {
-    const rows = Number.isFinite(rowCount) ? Math.max(1, Math.floor(rowCount)) : 1;
-    const raw = RELATED_GRID_TOOLBAR_PX + RELATED_GRID_HEADER_PX + rows * RELATED_GRID_ROW_PX;
-    return Math.min(RELATED_GRID_MAX_PX, Math.max(RELATED_GRID_MIN_PX, raw));
+export function RelatedGridHeightPx(rowCount: number, maxHeight?: number | null): number {
+    const rows = Number.isFinite(rowCount) ? Math.max(0, Math.floor(rowCount)) : 0;
+    const body = rows === 0
+        ? RELATED_GRID_EMPTY_BODY_PX
+        : RELATED_GRID_HEADER_PX + rows * RELATED_GRID_ROW_PX;
+    const raw = RELATED_GRID_TOOLBAR_PX + body;
+    if (typeof maxHeight === 'number' && maxHeight > 0) {
+        return Math.min(maxHeight, raw);
+    }
+    return raw;
 }
