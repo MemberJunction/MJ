@@ -5,6 +5,7 @@ tableOfContents: true
 ---
 
 import PreviewOnly from '../../components/PreviewOnly.astro';
+import CertifiedInquiryForm from '../../components/CertifiedInquiryForm.astro';
 
 The MemberJunction Certified Program authorizes qualified firms to provide professional services using MemberJunction. Under MemberJunction's Business Source License 1.1, production use of MemberJunction for professional services requires certification through this program.
 
@@ -67,9 +68,5 @@ Charter Partners hold the same MemberJunction Certified Partner status and execu
 For inquiries about the MemberJunction Certified Program, email [support@memberjunction.org](mailto:support@memberjunction.org).
 
 <PreviewOnly label="Certified Program inquiry form">
-  {/* The form lands here once the backend is settled. The docs site is static
-      Astro on GitHub Pages with nothing to POST to, so the intended destination
-      is a form page on memberjunction.org (WordPress — it has a backend and an
-      owned inbox). Replace this block with the link or embed at that point. */}
-  <p>Inquiry form pending — backend not yet wired up.</p>
+  <CertifiedInquiryForm />
 </PreviewOnly>
