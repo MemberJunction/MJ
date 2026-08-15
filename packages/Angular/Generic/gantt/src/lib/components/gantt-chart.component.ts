@@ -12,15 +12,37 @@ import {
     NextZoomOutLevel,
     type GanttZoomLevelName,
 } from '../models/gantt-zoom';
-import type { GanttStatic, Task as DHTask, Link as DHLink } from 'dhtmlx-gantt';
+import {
+    AfterColumnResizeEventArgs,
+    AfterGridResizeEventArgs,
+    BeforeColumnResizeEventArgs,
+    BeforeGridResizeEventArgs,
+    ClampGanttGridWidth,
+    GANTT_DEFAULT_GRID_WIDTH,
+    GANTT_MAX_GRID_WIDTH,
+    GANTT_MIN_GRID_WIDTH,
+    SanitizeColumnWidths,
+} from '../models/gantt-layout';
+import type { GanttStatic, GridColumn, Task as DHTask, Link as DHLink } from 'dhtmlx-gantt';
 
-/** Default grid columns if none are provided. */
+/** Default grid columns if none are provided. Pixel widths so the grid can scroll. */
 const DEFAULT_COLUMNS: GanttColumnDef[] = [
-    { Name: 'text', Label: 'Name', Tree: true, Width: '*' },
-    { Name: 'start_date', Label: 'Start', Align: 'center', Width: 90 },
-    { Name: 'duration', Label: 'Days', Align: 'center', Width: 60 },
-    { Name: 'progress', Label: '%', Align: 'center', Width: 50, Template: (obj: any) => Math.round((obj.progress || 0) * 100) + '%' },
+    { Name: 'text', Label: 'Name', Tree: true, Width: 220 },
+    { Name: 'start_date', Label: 'Start', Align: 'center', Width: 96 },
+    { Name: 'duration', Label: 'Days', Align: 'center', Width: 64 },
+    { Name: 'progress', Label: '%', Align: 'center', Width: 52, Template: (obj: DHTask) => Math.round((obj.progress || 0) * 100) + '%' },
 ];
+
+interface DhxGridColumn {
+    name: string;
+    label: string;
+    width: number;
+    align?: 'left' | 'center' | 'right';
+    tree?: boolean;
+    template?: (item: DHTask) => string;
+    resize?: boolean;
+    min_width?: number;
+}
 
 /**
  * Generic Gantt chart component wrapping DHTMLX Gantt.
@@ -120,6 +142,13 @@ const DEFAULT_COLUMNS: GanttColumnDef[] = [
         :host ::ng-deep .gantt_task .gantt_task_content { font-weight: var(--mj-font-medium); }
         :host ::ng-deep .gantt_row { border-bottom: 1px solid var(--mj-border-subtle); }
         :host ::ng-deep .gantt_task_line { border-radius: var(--mj-radius-sm); }
+        :host ::ng-deep .gantt_layout_cell.gantt_resizer {
+            cursor: col-resize;
+            background: var(--mj-border-default);
+        }
+        :host ::ng-deep .gantt_layout_cell.gantt_resizer:hover {
+            background: var(--mj-brand-primary);
+        }
     `]
 })
 export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestroy {
@@ -146,6 +175,42 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
 
     /** Show built-in +/- zoom controls above the chart. */
     @Input() ShowZoomControls = false;
+
+    /**
+     * Give the left grid its own horizontal scrollbar so columns can be
+     * wider than the pane without growing the timeline.
+     */
+    @Input() EnableGridScroll = true;
+
+    /** Show the splitter between the grid and the timeline. */
+    @Input() EnableGridResize = true;
+
+    /** Let the user drag grid column borders. */
+    @Input() EnableColumnResize = true;
+
+    @Input()
+    set GridWidth(value: number) {
+        const next = ClampGanttGridWidth(value);
+        if (next === this._gridWidth) {
+            return;
+        }
+        this._gridWidth = next;
+        if (this.initialized && this.gantt) {
+            this.gantt.config.grid_width = next;
+            this.gantt.setSizes();
+        }
+    }
+    get GridWidth(): number {
+        return this._gridWidth;
+    }
+
+    @Input()
+    set ColumnWidths(value: Record<string, number> | null) {
+        this._columnWidths = SanitizeColumnWidths(value);
+    }
+    get ColumnWidths(): Record<string, number> {
+        return this._columnWidths;
+    }
 
     /**
      * Timeline scale to apply. Callers can bind a persisted level here.
@@ -181,6 +246,18 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
     /** Fired after a zoom change that was not canceled. */
     @Output() AfterZoomChange = new EventEmitter<AfterZoomChangeEventArgs>();
 
+    /** Fired before the grid/timeline splitter drag starts. */
+    @Output() BeforeGridResize = new EventEmitter<BeforeGridResizeEventArgs>();
+
+    /** Fired after the grid/timeline splitter is released. */
+    @Output() AfterGridResize = new EventEmitter<AfterGridResizeEventArgs>();
+
+    /** Fired before a grid column resize starts. */
+    @Output() BeforeColumnResize = new EventEmitter<BeforeColumnResizeEventArgs>();
+
+    /** Fired after a grid column is resized. */
+    @Output() AfterColumnResize = new EventEmitter<AfterColumnResizeEventArgs>();
+
     @ViewChild('ganttContainer', { static: false }) ganttContainer!: ElementRef<HTMLDivElement>;
 
     /** @internal */
@@ -189,7 +266,17 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
     private initialized = false;
     private _zoomLevel: GanttZoomLevelName = 'week';
     private zoomInitialized = false;
+    private _gridWidth = GANTT_DEFAULT_GRID_WIDTH;
+    private _columnWidths: Record<string, number> = {};
     private readonly cdr = inject(ChangeDetectorRef);
+
+    public get CurrentGridWidth(): number {
+        return this._gridWidth;
+    }
+
+    public get CurrentColumnWidths(): Record<string, number> {
+        return { ...this._columnWidths };
+    }
 
     public get CurrentZoomPercent(): number {
         return GanttZoomPercent(this._zoomLevel);
@@ -281,25 +368,13 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
         g.config.open_tree_initially = true;
         g.config.fit_tasks = true;
         g.config.row_height = 36;
-
-        // Grid columns
-        const cols = this.Columns ?? DEFAULT_COLUMNS;
-        g.config.columns = cols.map(c => {
-            const col: any = {
-                name: c.Name,
-                label: c.Label,
-                width: c.Width === '*' ? '*' : (c.Width ?? 100),
-            };
-            if (c.Align) col.align = c.Align;
-            if (c.Tree) col.tree = true;
-            if (c.Template) col.template = c.Template;
-            return col;
-        });
+        this.applyGridConfig(g);
 
         // Initialize
         g.init(this.ganttContainer.nativeElement);
         this.initialized = true;
         this.initZoom(g);
+        this.bindGridEvents(g);
 
         // Event: click
         g.attachEvent('onTaskClick', (id: string) => {
@@ -394,6 +469,115 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
         g.parse({ data: data as DHTask[], links: links as DHLink[] });
 
         setTimeout(() => g.setSizes(), 0);
+    }
+
+    private applyGridConfig(g: GanttStatic): void {
+        g.config.autofit = false;
+        g.config.keep_grid_width = true;
+        g.config.grid_elastic_columns = false;
+        g.config.min_grid_column_width = 48;
+        g.config.grid_width = this._gridWidth;
+        g.config.columns = this.buildGridColumns();
+        if (this.EnableGridScroll || this.EnableGridResize) {
+            g.config.layout = this.buildScrollableLayout();
+        }
+    }
+
+    private buildGridColumns(): DhxGridColumn[] {
+        const cols = this.Columns ?? DEFAULT_COLUMNS;
+        return cols.map((col) => {
+            const mapped: DhxGridColumn = {
+                name: col.Name,
+                label: col.Label,
+                width: this.resolveColumnWidth(col),
+                min_width: 48,
+                resize: this.EnableColumnResize && col.Resize !== false,
+            };
+            if (col.Align) {
+                mapped.align = col.Align;
+            }
+            if (col.Tree) {
+                mapped.tree = true;
+            }
+            if (col.Template) {
+                mapped.template = col.Template;
+            }
+            return mapped;
+        });
+    }
+
+    private resolveColumnWidth(col: GanttColumnDef): number {
+        const override = this._columnWidths[col.Name];
+        if (typeof override === 'number' && override >= 40) {
+            return Math.round(override);
+        }
+        if (typeof col.Width === 'number' && col.Width > 0) {
+            return col.Width;
+        }
+        if (typeof col.Width === 'string' && col.Width !== '*') {
+            const parsed = Number(col.Width);
+            if (Number.isFinite(parsed) && parsed > 0) {
+                return parsed;
+            }
+        }
+        return 120;
+    }
+
+    private buildScrollableLayout(): GanttStatic['config']['layout'] {
+        return {
+            css: 'gantt_container',
+            cols: [
+                {
+                    width: this._gridWidth,
+                    min_width: GANTT_MIN_GRID_WIDTH,
+                    max_width: GANTT_MAX_GRID_WIDTH,
+                    rows: [
+                        { view: 'grid', scrollable: true, scrollX: 'gridScroll', scrollY: 'scrollVer' },
+                        { view: 'scrollbar', id: 'gridScroll', height: 20 },
+                    ],
+                },
+                { resizer: this.EnableGridResize, width: 1 },
+                {
+                    rows: [
+                        { view: 'timeline', scrollX: 'scrollHor', scrollY: 'scrollVer' },
+                        { view: 'scrollbar', id: 'scrollHor', height: 20 },
+                    ],
+                },
+                { view: 'scrollbar', id: 'scrollVer' },
+            ],
+        };
+    }
+
+    private bindGridEvents(g: GanttStatic): void {
+        g.attachEvent('onGridResizeStart', (oldWidth: number) => {
+            const before = new BeforeGridResizeEventArgs(oldWidth);
+            this.BeforeGridResize.emit(before);
+            return !before.Cancel;
+        });
+        g.attachEvent('onGridResizeEnd', (oldWidth: number, newWidth: number) => {
+            const width = ClampGanttGridWidth(newWidth);
+            this._gridWidth = width;
+            this.AfterGridResize.emit(new AfterGridResizeEventArgs(width, oldWidth));
+            this.cdr.markForCheck();
+            return true;
+        });
+        g.attachEvent('onColumnResizeStart', (_index: number, column: GridColumn) => {
+            const name = String(column.name ?? '');
+            const before = new BeforeColumnResizeEventArgs(name, Number(column.width) || 0);
+            this.BeforeColumnResize.emit(before);
+            return !before.Cancel;
+        });
+        g.attachEvent('onColumnResizeEnd', (_index: number, column: GridColumn, newWidth: number) => {
+            const name = String(column.name ?? '');
+            this._columnWidths = { ...this._columnWidths, [name]: Math.round(newWidth) };
+            this.AfterColumnResize.emit(new AfterColumnResizeEventArgs(
+                name,
+                Math.round(newWidth),
+                this.CurrentColumnWidths,
+            ));
+            this.cdr.markForCheck();
+            return true;
+        });
     }
 
     private initZoom(g: GanttStatic): void {
