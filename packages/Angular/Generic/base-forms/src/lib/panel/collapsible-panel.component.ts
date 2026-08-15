@@ -211,8 +211,9 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   private resizeObserverPrimed = false;
 
   /**
-   * Persisted panel height for related-entity panels.
-   * Returns undefined to let CSS default (400px) apply.
+   * Persisted accordion resize height for related-entity panels.
+   * Undefined lets CSS apply (400px accordion, leftover column in left-nav).
+   * Left-nav must not apply a pixel height — that would beat the flex fill.
    */
   get PanelContentHeight(): number | undefined {
     if (this.Variant !== 'related-entity') return undefined;
@@ -244,7 +245,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
    */
   get Collapsible(): boolean {
     // Selected left-nav item has no accordion chrome. More keeps collapse/expand.
-    if (this.chrome?.HidesAccordionChrome(this.SectionKey)) return false;
+    if (this.hidesAccordionChrome()) return false;
     return this.FormContext?.collapsibleSections !== false;
   }
 
