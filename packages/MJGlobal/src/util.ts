@@ -1665,3 +1665,19 @@ function recursiveReplaceString(str: string, options: Required<ParseJSONOptions>
   return str;
 }
 
+
+/**
+ * Epoch milliseconds for a value that may be a Date, an ISO/parseable string, a numeric
+ * timestamp, or absent. Returns 0 for null/undefined/unparseable input so it is safe to use
+ * directly in a sort comparator.
+ *
+ * Framework date fields such as `__mj_CreatedAt` are typed as `Date` but can hold a raw string
+ * at runtime when rows arrive from a serialized source (cache payloads, wire JSON) rather than
+ * through BaseEntity's coercing accessors. Optional chaining does not protect a `.getTime()`
+ * call in that case — `"…"?.getTime` is `undefined`, and calling it throws.
+ */
+export function ToEpochMs(value: Date | string | number | null | undefined): number {
+    if (value == null) return 0;
+    const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
+    return Number.isNaN(ms) ? 0 : ms;
+}

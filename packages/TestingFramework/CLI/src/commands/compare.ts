@@ -430,6 +430,11 @@ export class CompareCommand {
                 change = 'new';
             } else if (!curr) {
                 change = 'removed';
+            } else if (prevStatus === 'Skipped' || currStatus === 'Skipped') {
+                // A skip is "not executed", not a pass or fail — a Passed↔Skipped transition is an env
+                // gate opening/closing, not a regression/improvement, and its score is meaningless.
+                // Keep it out of both buckets rather than pollute the regression count.
+                change = 'unchanged';
             } else if (prevStatus === 'Passed' && currStatus !== 'Passed') {
                 change = 'regression';
             } else if (prevStatus !== 'Passed' && currStatus === 'Passed') {

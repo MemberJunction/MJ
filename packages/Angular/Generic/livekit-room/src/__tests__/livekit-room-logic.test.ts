@@ -24,8 +24,9 @@ function view(identity: string, overrides: Partial<LiveKitParticipantView> = {})
     HasVideo: false,
     IsScreenSharing: false,
     ConnectionQuality: 'good',
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    Raw: {} as any,
+    // Empty double — tests never touch Raw; derive the type from the view so it
+    // tracks the real field.
+    Raw: {} as LiveKitParticipantView['Raw'],
     ...overrides,
   };
 }

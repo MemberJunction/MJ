@@ -13,6 +13,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { TaskClaimStore } from '../TaskClaimStore';
 import { ParseTaskGraphParentMetadata } from '../TaskGraphService';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { SQLServerDialect } from '@memberjunction/sql-dialect';
 
 /** Captures the SQL a method issues, and answers with a caller-chosen rowcount. */
 function recordingProvider(rowsAffected = 1) {
@@ -20,6 +21,13 @@ function recordingProvider(rowsAffected = 1) {
     const provider = {
         MJCoreSchemaName: '__mj',
         QuoteIdentifier: (id: string) => `[${id}]`,
+        // The REAL dialect, not a stub. `affectedRows` wraps every guarded write in
+        // `Dialect.AffectedRowCountSQL(...)`, so a provider without one throws — and because that
+        // helper catches and returns 0, the throw is silent: `ExecuteSQL` is never reached and
+        // every assertion below reads `statements[0]` as `undefined`. Using the shipped dialect
+        // rather than a hand-written stub keeps these assertions honest if its output shape
+        // changes; the `[bracket]` expectations here are SQL Server's, which is what it emits.
+        Dialect: new SQLServerDialect(),
         ExecuteSQL: async (sql: string) => {
             statements.push(sql);
             return [{ AffectedRows: rowsAffected }];
@@ -81,14 +89,17 @@ describe('TrySkipPending — a skip must not overwrite work that started (R3-1)'
 
     it('refuses a task that is no longer Pending — the status IS the claim test', () => {
         const { provider, statements } = recordingProvider();
-        return store.TrySkipPending(provider, PARENT, USER).then(() => {
+        return store.TrySkipPending(provider, PARENT, WORKFLOW_TYPE, USER).then(() => {
             expect(statements[0]).toContain(`[Status] = 'Pending'`);
+            // And type-scoped: MJ: Tasks also holds conversation tasks and personal to-dos, and the
+            // operator verbs hand this statement caller-supplied IDs.
+            expect(statements[0]).toContain(`[TypeID] = '${WORKFLOW_TYPE}'`);
         });
     });
 
     it('writes Status and nothing else', async () => {
         const { provider, statements } = recordingProvider();
-        await store.TrySkipPending(provider, PARENT, USER);
+        await store.TrySkipPending(provider, PARENT, WORKFLOW_TYPE, USER);
         const setClause = statements[0].split('WHERE')[0];
         expect(setClause).toContain(`[Status] = 'Skipped'`);
         expect(setClause).not.toContain('[ClaimedBy]');
@@ -102,13 +113,13 @@ describe('TrySkipPending — a skip must not overwrite work that started (R3-1)'
         // would look like defence in depth and would instead refuse to skip a notified human step,
         // which is a case the early-finish path exists to handle.
         const { provider, statements } = recordingProvider();
-        await store.TrySkipPending(provider, PARENT, USER);
+        await store.TrySkipPending(provider, PARENT, WORKFLOW_TYPE, USER);
         expect(statements[0]).not.toContain('[ClaimedBy] IS NULL');
     });
 
     it('reports the loss when something claimed it first — the rowcount is the verdict', async () => {
         const { provider } = recordingProvider(0);
-        expect(await store.TrySkipPending(provider, PARENT, USER)).toBe(false);
+        expect(await store.TrySkipPending(provider, PARENT, WORKFLOW_TYPE, USER)).toBe(false);
     });
 });
 

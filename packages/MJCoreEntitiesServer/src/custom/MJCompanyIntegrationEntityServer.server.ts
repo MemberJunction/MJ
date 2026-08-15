@@ -134,7 +134,7 @@ export class MJCompanyIntegrationEntityServer extends MJCompanyIntegrationEntity
         // single `as` won't compile — narrow to `as IMetadataProvider` via unknown.
         const provider: IMetadataProvider | undefined = this.ProviderToUse as unknown as IMetadataProvider | undefined;
 
-        LogStatus(`[MJCompanyIntegrationEntityServer] IsActive false→true detected on ${this.Integration ?? this.ID} (${this.ID}); firing schema refresh pipeline.`);
+        LogStatus(`[MJCompanyIntegrationEntityServer] Schema refresh requested for ${this.Integration ?? this.ID} (${this.ID}); running pipeline.`);
 
         // Make sure the IntegrationEngine cache is hot so ConnectorFactory.Resolve
         // can look up the registered class for this Integration.

@@ -42,5 +42,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
+  },
+  "optionalDependencies": {
+    "@memberjunction/postgresql-dataprovider": "6.1.0-edge.2"
   }
 }
