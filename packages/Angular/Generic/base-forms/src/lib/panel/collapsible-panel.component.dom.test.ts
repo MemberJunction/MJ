@@ -77,9 +77,41 @@ describe('MjCollapsiblePanelComponent (DOM)', () => {
     expect(content.style.height).toBe('');
   });
 
+  it('does not pin a persisted pixel height when the host has mj-chrome-show', () => {
+    const form = {
+      ...formStub(true),
+      GetSectionPanelHeight: () => 48,
+    };
+    const f = renderComponentFixture(MjCollapsiblePanelComponent, {
+      declarations: [MjCollapsiblePanelComponent],
+      imports: [CommonModule],
+      inputs: {
+        SectionName: 'Payments',
+        SectionKey: 'payments',
+        Variant: 'related-entity',
+        Form: form,
+      },
+      setup: (_c, ref) => {
+        ref.location.nativeElement.classList.add('mj-chrome-show');
+      },
+    });
+    const content = query(f, '.mj-forms-panel-content') as HTMLElement;
+    expect(content.style.height).toBe('');
+  });
+
   it('applies the inherited variant class', () => {
     const f = render({ SectionName: 'Base', Variant: 'inherited', Form: formStub(true) });
     expect(hasClass(f, '.mj-forms-panel', 'mj-forms-panel--inherited')).toBe(true);
+  });
+
+  it('MatchesSearch hits section name, key, and field names without requiring chrome visibility', () => {
+    const f = render({ SectionName: 'Orders', SectionKey: 'orders', Form: formStub(false) });
+    const panel = f.componentInstance;
+    expect(panel.MatchesSearch('ord')).toBe(true);
+    expect(panel.MatchesSearch('orders')).toBe(true);
+    expect(panel.MatchesSearch('xyz')).toBe(false);
+    panel.FieldNames = 'order date total gross';
+    expect(panel.MatchesSearch('gross')).toBe(true);
   });
 
   it('omits the row-count badge when BadgeCount is undefined', () => {

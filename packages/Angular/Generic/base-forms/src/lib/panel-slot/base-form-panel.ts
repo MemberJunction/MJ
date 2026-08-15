@@ -1,4 +1,4 @@
-import { Directive, Input } from '@angular/core';
+import { Directive, HostBinding, Input } from '@angular/core';
 import { BaseEntity, ValidationResult } from '@memberjunction/core';
 import { BaseFormComponent } from '../base-form-component';
 import { FormContext } from '../types/form-types';
@@ -112,6 +112,14 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
  */
 @Directive()
 export abstract class BaseFormPanel<TRecord extends BaseEntity = BaseEntity> {
+    /**
+     * Slot-mounted hosts must not sit in the left-nav flex column — leftover
+     * height targets `mj-collapsible-panel` as a direct child of
+     * `.mj-forms-all-panels`. `display: contents` makes the inner panel that child.
+     */
+    @HostBinding('style.display')
+    readonly HostDisplay = 'contents';
+
     /** The entity record being edited. Set by the slot host before view init. */
     @Input() Record!: TRecord;
     /** The host form component (use for EditMode, dirty notifications, etc). Set by the slot host. */

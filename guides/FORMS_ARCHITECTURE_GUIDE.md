@@ -101,7 +101,7 @@ shows a loading state until the record is ready (and an error state on failure).
   [EntityName]="'Users'"
   [PrimaryKey]="pk"          <!-- omit/empty → new record -->
   [Record]="preloaded"        <!-- OR bind an already-loaded BaseEntity -->
-  [NewRecordValues]="defaults"
+  [NewRecordValues]="defaults"   <!-- object or Field|value||Field2|value2 URL segment -->
   [EditMode]="null"           <!-- null = new→edit, existing→read -->
   [Config]="myConfig"
   [Provider]="Provider"
@@ -124,6 +124,24 @@ handle.
 host: it maps `Navigate` → `NavigationService`, `Notification` → `SharedService`,
 and record loads → `RecentAccessService`. That's the only Explorer-specific glue;
 all mechanics are Generic.
+
+Related-entity grids pass `NewRecordValues` from the join fields that filter the
+grid so **New** opens a child already linked to the parent.
+
+- `BaseFormComponent.NewRecordValues(relatedEntity, joinField?)` — one
+  relationship, or every join field when several `EntityRelationship` rows
+  share the related entity (Bill-To + Ship-To on the same Orders grid).
+- `NewRecordValuesForJoinFields(relatedEntity, fields)` — explicit list when
+  the grid already knows the FKs (Person Orders, Organization Orders).
+- `EntityInfo.BuildRelationshipNewRecordValues` / `…ForJoinFields` — typed
+  core helpers. When `EntityRelationship.Configuration.UI.join.fields` is set,
+  every named FK is copied, not only `RelatedEntityJoinField`.
+
+Explorer persists those defaults on the new-record URL
+(`/record/:entity/new?NewRecordValues=Field|value||Field2|value2`, using
+`NEW_ENTITY_RECORD_URL_ID` and `NEW_RECORD_VALUES_QUERY_PARAM` from
+`@memberjunction/core`). Refresh and share keep the child linked. Overlay
+hosts accept the same object or URL-segment string on `[NewRecordValues]`.
 
 ---
 
@@ -476,17 +494,36 @@ container.
 #### Left-nav
 
 The rail picks one group; the body shows only that group. Selected content
-has **no accordion chrome** (the rail is the header) and related grids fill
-the remaining height. **More** is a folder on the rail — click to expand
-sub-nodes, then pick one item like any other rail entry. Field panels
-collapse into one **Details** item. Related Primary grids stay first-class
-(same related entity and same-title grids merge). `System Metadata` and
-More related always sit in More. Rail items use the same icon as the
-accordion header (entity `Icon` when present) and show related-grid row
-counts after they load. Users reorder first-class items by dragging the
-rail grip (or Manage Sections / reset in the toolbar). Section search
-filters the rail the same way it filters accordion panels. The centered /
-full-width toolbar toggle still applies.
+has **no accordion chrome** (the rail is the header). Related grids fill the
+**leftover column height** — the selected panel is `flex: 1 1 auto` in the
+column, not a pinned pixel height. Accordion-persisted heights are not
+applied while the rail is showing the panel.
+
+Slot-mounted contributions (`<mj-form-panel-slot>` / `BaseFormPanel` hosts)
+use `display: contents` so they do not sit as an extra wrapper in that flex
+column. `SetSectionRowCount` **upserts** the key: contribution sections are
+not seeded by generated `initSections()`, so the rail badge still appears
+(Orders on Person, Payments, etc.).
+
+**More** is a folder on the rail — click to expand sub-nodes, then pick one
+item like any other rail entry. Field panels collapse into one **Details**
+item. Related Primary grids stay first-class (same related entity and
+same-title grids merge). `System Metadata` and More related always sit in
+More. Rail items use the same icon as the accordion header (entity `Icon`
+when present). Users reorder first-class items by dragging the rail grip
+(or Manage Sections / reset in the toolbar). The centered / full-width
+toolbar toggle still applies.
+
+#### Section search
+
+Search matches a group's **title** and each panel's `MatchesSearch` (title
+plus registered keywords). It does **not** use `IsVisible` — chrome hides
+inactive left-nav groups, so visibility would make search miss everything
+except the selected item. Contribution titles (Orders, Payments) match in
+both accordion and left-nav. The rail stays visible whenever more than one
+chrome group exists **or** search is active, even if only one group hits.
+The empty state is **SearchHasNoMatches** (live match), not a baked
+ContentChildren snapshot that would miss slot-mounted panels.
 
 Authoring: `Entity.Configuration` / `EntityRelationship.Configuration`
 JSONType interfaces, [`PANELS.md`](../packages/Angular/Generic/base-forms/PANELS.md).

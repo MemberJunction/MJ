@@ -75,7 +75,7 @@
          [class.mj-forms-layout--left-nav]="ChromeLayout === 'left-nav'"
          [class.mj-forms-layout--accordion]="ChromeLayout === 'accordion'"
          [class.mj-forms-layout--more]="IsChromeMoreActive">
-      @if (ChromeLayout === 'left-nav' && ChromeGroups.length > 1) {
+      @if (ShowChromeRail) {
         <nav class="mj-forms-chrome-rail" aria-label="Form sections">
           @for (group of ChromeFirstClassGroups; track group.Key) {
             <div class="mj-forms-chrome-rail-item"
@@ -216,7 +216,7 @@
         }
 
         <!-- Empty state when no sections match search -->
-        @if (EffectiveSearchFilter && VisibleSectionCount === 0) {
+        @if (EffectiveSearchFilter && SearchHasNoMatches) {
           <mj-empty-state class="mj-forms-empty-search-state"
             Variant="no-results"
             Title="No sections found"
