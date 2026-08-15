@@ -4,8 +4,8 @@ export const RELATED_GRID_TOOLBAR_PX = 52;
 export const RELATED_GRID_HEADER_PX = 40;
 /** One data row. */
 export const RELATED_GRID_ROW_PX = 40;
-/** Breathing room under the last row so the bottom border is not clipped. */
-export const RELATED_GRID_BOTTOM_PAD_PX = 12;
+/** 2–3px so the last row's bottom border is not clipped by the grid edge. */
+export const RELATED_GRID_BOTTOM_PAD_PX = 3;
 /** Empty-state body when there are no rows (no 200px floor). */
 export const RELATED_GRID_EMPTY_BODY_PX = 88;
 /** Default cap for nav-related grids. `null` on the input means unbounded. */

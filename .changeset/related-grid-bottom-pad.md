@@ -2,4 +2,4 @@
 "@memberjunction/ng-base-forms": patch
 ---
 
-Give left-nav related grids a few extra pixels under the last row so the bottom border is not clipped.
+Give left-nav related grids 3px under the last row so the bottom border is not clipped, without a visible gap above the grid edge.
