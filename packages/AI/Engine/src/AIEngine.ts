@@ -1453,7 +1453,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             markupTokens.forEach(token => {
                 const fieldName = token.replace('{','').replace('}','');
                 const fieldValue = entityRecord.Get(fieldName);
-                temp = temp.replace(token, fieldValue ? fieldValue : '');
+                // Function replacement — field data may contain `$`. See issue #3171.
+                const replacement = fieldValue ? String(fieldValue) : '';
+                temp = temp.replace(token, () => replacement);
             });
         }
         return temp;
