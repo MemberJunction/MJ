@@ -98,6 +98,8 @@ import { ModelPredictionPanel } from "../panels/model-predictions/model-predicti
 // dialog + SKILL.md export/import actions, mounted on the generated MJ: AI
 // Skills form. Imported so the @RegisterClassEx decorator runs at module load.
 import { AISkillSharingPanel } from "../panels/ai-skill-sharing/ai-skill-sharing-panel.component";
+import { EntityFormChromeEditorComponent } from "../panels/form-chrome/entity-form-chrome-editor.component";
+import { EntityRelationshipFormRolePanel } from "../panels/form-chrome/entity-relationship-form-role.panel";
 import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissions";
 
 @NgModule({
@@ -159,6 +161,8 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
         MJAIBridgeAgentIdentityFormComponentExtended,
         AgentRealtimePanel,
         RecordProcessFormComponentExtended,
+        EntityFormChromeEditorComponent,
+        EntityRelationshipFormRolePanel,
     ],
     imports: [
         CommonModule,

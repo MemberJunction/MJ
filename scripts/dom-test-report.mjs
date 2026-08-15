@@ -48,6 +48,10 @@ const DEFERRALS = [
   [/\/task-graph-debug-toolbar\.component\.ts$/, "new task-graph-editor debug UI; DOM spec pending"],
   [/\/task-graph-debugger\.component\.ts$/, "new task-graph-editor debug UI; DOM spec pending"],
   [/\/task-graph-variables\.component\.ts$/, "new task-graph-editor variables UI; DOM spec pending"],
+  // New base-forms panel-slot components landed on `next` in #3811 without DOM specs; deferred
+  // here so the ratchet stays honest until the forms team backfills specs (then remove these).
+  [/\/form-contributions\.component\.ts$/, "new base-forms panel-slot UI; DOM spec pending"],
+  [/\/related-entity-grid-panel\.component\.ts$/, "new base-forms panel-slot UI; DOM spec pending"],
 ];
 const deferralReason = (rel) => (DEFERRALS.find(([re]) => re.test(rel)) || [])[1] || "";
 

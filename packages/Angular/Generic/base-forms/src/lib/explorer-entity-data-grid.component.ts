@@ -29,7 +29,7 @@ import { FormNavigationEvent } from './types/navigation-events';
             [Params]="Params"
             [NewRecordValues]="NewRecordValues"
             [AllowLoad]="EffectiveAllowLoad"
-            [ShowToolbar]="ShowToolbar"
+            [ShowToolbar]="EffectiveShowToolbar"
             [ShowSearch]="ShowSearch"
             [ShowNewButton]="ShowNewButton"
             [ShowRefreshButton]="ShowRefreshButton"
@@ -71,6 +71,27 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     @Input() NewRecordValues: Record<string, unknown> = {};
     @Input() AllowLoad: boolean = true;
     @Input() ShowToolbar: boolean = true;
+
+    /**
+     * Existing generated forms still emit `[ShowToolbar]="false"` on related
+     * grids. Inside a related-entity panel we restore the toolbar so search /
+     * new / export / refresh come back without waiting for CodeGen.
+     */
+    get EffectiveShowToolbar(): boolean {
+        if (this.ShowToolbar) return true;
+        return this.isInsideRelatedEntityPanel();
+    }
+
+    private isInsideRelatedEntityPanel(): boolean {
+        let el: HTMLElement | null = this.elementRef.nativeElement?.parentElement ?? null;
+        while (el) {
+            if (el.tagName?.toLowerCase() === 'mj-collapsible-panel') {
+                return el.getAttribute('data-variant') === 'related-entity';
+            }
+            el = el.parentElement;
+        }
+        return false;
+    }
     /** Search box on the left of the toolbar. Default true. */
     @Input() ShowSearch: boolean = true;
     /** Forwarded to the inner grid. Defaults match `<mj-entity-data-grid>`. */
