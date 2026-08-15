@@ -212,13 +212,12 @@ mj-collapsible-panel.mj-dragging .mj-forms-drag-handle {
   max-height: 800px;
 }
 
-/* Ensure child chain fills the resizable content area */
-.mj-forms-panel--related .mj-forms-panel-content > *,
-.mj-forms-panel--related .mj-forms-panel-content > .ng-star-inserted {
-  height: 100%;
-}
-
-.mj-forms-panel--related .mj-forms-panel-content > * > * {
+/* AG Grid must fill the 400px / leftover box. Do not stretch every
+   descendant — custom widgets (relationship list) put their section
+   header as the first child, and height:100% on it parks the title
+   mid-column and hides the list below the fold. */
+.mj-forms-panel--related .mj-forms-panel-content > mj-explorer-entity-data-grid,
+.mj-forms-panel--related .mj-forms-panel-content > .ng-star-inserted > mj-explorer-entity-data-grid {
   height: 100%;
 }
 

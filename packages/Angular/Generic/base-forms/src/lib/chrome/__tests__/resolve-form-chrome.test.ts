@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { EntityInfo, type FormRole } from '@memberjunction/core';
 import { DETAILS_SECTION_KEY, MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection } from '../form-chrome';
-import { ApplyUserChromeMembership, BuildDefaultChromeSpec, MoveChromeGroupInSectionOrder, OrderChromeGroups, OrderMoreSectionKeys, ResolveFormChrome, TakeDecoratedChrome } from '../resolve-form-chrome';
+import { ApplyUserChromeMembership, BuildDefaultChromeSpec, MoveChromeGroupInSectionOrder, OrderChromeGroups, OrderMoreSectionKeys, ResolveFormChrome, StabilizeFirstClassGroupOrder, TakeDecoratedChrome } from '../resolve-form-chrome';
 import type { FormChromeSpec } from '../form-chrome';
 import { FormChromeCoordinator } from '../form-chrome-coordinator.service';
 
@@ -371,6 +371,73 @@ describe('OrderChromeGroups / MoveChromeGroupInSectionOrder', () => {
             details,
         );
         expect(next).toEqual(['orders', 'addresses', 'profile']);
+    });
+});
+
+describe('StabilizeFirstClassGroupOrder', () => {
+    it('keeps the previous first-class rail order when a contribution key appears', () => {
+        const previous = BuildDefaultChromeSpec(
+            [
+                { SectionKey: 'details', SectionName: 'Details', Variant: 'default' },
+                { SectionKey: 'people', SectionName: 'People', Variant: 'related-entity' },
+                { SectionKey: 'addresses', SectionName: 'Addresses', Variant: 'related-entity' },
+                { SectionKey: 'orderHeadersBillTo', SectionName: 'Orders', Variant: 'related-entity' },
+            ],
+            new Map<string, FormRole>([
+                ['people', 'Primary'],
+                ['addresses', 'Primary'],
+                ['orderHeadersBillTo', 'Primary'],
+            ]),
+            { Layout: 'left-nav' },
+        );
+        const next = BuildDefaultChromeSpec(
+            [
+                { SectionKey: 'details', SectionName: 'Details', Variant: 'default' },
+                { SectionKey: 'people', SectionName: 'People', Variant: 'related-entity' },
+                { SectionKey: 'addresses', SectionName: 'Addresses', Variant: 'related-entity' },
+                { SectionKey: 'orders', SectionName: 'Orders', Variant: 'related-entity' },
+            ],
+            new Map<string, FormRole>([
+                ['people', 'Primary'],
+                ['addresses', 'Primary'],
+                ['orders', 'Primary'],
+            ]),
+            { Layout: 'left-nav' },
+            ['orders'],
+        );
+        const stabilized = StabilizeFirstClassGroupOrder(previous, next);
+        expect(stabilized.Groups.filter((g) => !g.IsMore).map((g) => g.Title)).toEqual([
+            'Details',
+            'People',
+            'Addresses',
+            'Orders',
+        ]);
+    });
+
+    it('appends groups that were not on the previous rail', () => {
+        const previous = BuildDefaultChromeSpec(
+            [
+                { SectionKey: 'details', SectionName: 'Details', Variant: 'default' },
+                { SectionKey: 'people', SectionName: 'People', Variant: 'related-entity' },
+            ],
+            new Map<string, FormRole>([['people', 'Primary']]),
+            { Layout: 'left-nav' },
+        );
+        const next = BuildDefaultChromeSpec(
+            [
+                { SectionKey: 'details', SectionName: 'Details', Variant: 'default' },
+                { SectionKey: 'people', SectionName: 'People', Variant: 'related-entity' },
+                { SectionKey: 'orders', SectionName: 'Orders', Variant: 'related-entity' },
+            ],
+            new Map<string, FormRole>([['people', 'Primary'], ['orders', 'Primary']]),
+            { Layout: 'left-nav' },
+        );
+        const stabilized = StabilizeFirstClassGroupOrder(previous, next);
+        expect(stabilized.Groups.filter((g) => !g.IsMore).map((g) => g.Title)).toEqual([
+            'Details',
+            'People',
+            'Orders',
+        ]);
     });
 });
 

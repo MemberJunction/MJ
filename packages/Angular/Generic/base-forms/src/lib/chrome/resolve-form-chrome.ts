@@ -319,6 +319,47 @@ export function OrderMoreSectionKeys(
     });
 }
 
+/**
+ * Keep the first-class rail order from the previous spec when chrome
+ * re-resolves (slot mount, grid load, contribution key appearing).
+ * Clicking a rail item must not reshuffle the list. New groups append.
+ * More stays last. User drag still wins via {@link OrderChromeGroups}.
+ */
+export function StabilizeFirstClassGroupOrder(
+    previous: FormChromeSpec | null | undefined,
+    next: FormChromeSpec,
+): FormChromeSpec {
+    if (!previous || previous.Groups.length === 0) return next;
+    const details = next.Groups.filter((g) => g.Key === DETAILS_SECTION_KEY);
+    const more = next.Groups.filter((g) => g.IsMore);
+    const related = next.Groups.filter((g) => !g.IsMore && g.Key !== DETAILS_SECTION_KEY);
+    if (related.length === 0) return next;
+
+    const used = new Set<string>();
+    const ordered: FormChromeGroup[] = [];
+    const take = (group: FormChromeGroup | undefined): void => {
+        if (!group || used.has(group.Key)) return;
+        used.add(group.Key);
+        ordered.push(group);
+    };
+
+    for (const prev of previous.Groups) {
+        if (prev.IsMore || prev.Key === DETAILS_SECTION_KEY) continue;
+        const prevTitle = prev.Title.trim().toLowerCase();
+        const prevKeys = new Set(prev.SectionKeys);
+        take(
+            related.find((g) => g.Key === prev.Key)
+            ?? related.find((g) => g.SectionKeys.some((key) => prevKeys.has(key)))
+            ?? related.find((g) => g.Title.trim().toLowerCase() === prevTitle),
+        );
+    }
+    for (const group of related) {
+        take(group);
+    }
+    next.Groups = [...details, ...ordered, ...more];
+    return next;
+}
+
 /** Reorder first-class rail groups from a persisted section-key order. More stays last. */
 export function OrderChromeGroups(
     groups: readonly FormChromeGroup[],
