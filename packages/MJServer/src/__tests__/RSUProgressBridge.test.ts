@@ -28,9 +28,13 @@ describe('RSUProgressBridge', () => {
         bridge.Configure({ rootDir });
     });
 
-    afterEach(() => {
-        // Reset BEFORE the temp dir goes away, so a lingering heartbeat cannot write into a deleted
-        // path — and so a stray interval cannot keep the test process alive.
+    afterEach(async () => {
+        // Drain FIRST. The emitter writes through chained promises, and `Reset()` only drops this
+        // bridge's reference to it — it cannot cancel a write already queued. A test that starts a run
+        // without awaiting `settle()` would otherwise have its manifest.json land after the rmSync
+        // below, surfacing as an unhandled ENOENT that fails the suite while every test still reports
+        // as passing. Then Reset, so no heartbeat interval outlives the test or keeps the process up.
+        await settle();
         bridge.Reset();
         rmSync(rootDir, { recursive: true, force: true });
     });
@@ -59,7 +63,7 @@ describe('RSUProgressBridge', () => {
             .map(line => JSON.parse(line) as IntegrationProgressEvent);
     }
 
-    it('is a singleton, so a resolver can reach the in-flight run to tail it', () => {
+    it('is a singleton, so a resolver can reach the in-flight run to tail it', async () => {
         // The point of the singleton. Previously the bridge was constructed inside
         // RegisterRSUProgressBridge and the only surviving reference was the observer closure handed
         // to RuntimeSchemaManager -- so CurrentRunID, whose whole purpose is letting a caller that
@@ -69,11 +73,13 @@ describe('RSUProgressBridge', () => {
         bridge.Observe(RUN_START);
         expect(RSUProgressBridge.Instance.CurrentRunID).toBe(bridge.CurrentRunID);
         expect(RSUProgressBridge.Instance.CurrentRunID).toMatch(/^rsu-/);
+        await settle();
     });
 
-    it('Reset returns the bridge to idle without emitting a terminal event', () => {
+    it('Reset returns the bridge to idle without emitting a terminal event', async () => {
         bridge.Observe(RUN_START);
         expect(bridge.CurrentRunID).not.toBeNull();
+        await settle();
 
         bridge.Reset();
 
