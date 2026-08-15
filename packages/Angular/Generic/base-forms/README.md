@@ -26,6 +26,7 @@ per-surface code and no regeneration.
 | **Per-instance config** | `EntityFormConfig` + `TAB_/DIALOG_/SLIDEIN_FORM_CONFIG` | Toolbar / related sections / collapsibility / width / record-links. Applied via the form reference — **no regeneration**. |
 | **Form resolution** | `FormResolverService` | Picks generated / custom / interactive-override form + variants (cached via `InteractiveFormsEngine`). |
 | **Form extension** | `BaseFormPanel` + `<mj-form-panel-slot>` + `<mj-form-contributions>` | Inject custom sections; claim a related-entity grid; fill in unbaked `DisplayInForm` relationships. See [PANELS.md](./PANELS.md) and [`/plans/form-contributions.md`](../../../../plans/form-contributions.md). |
+| **Form chrome** | `ResolveFormChrome`, `BaseFormPolicy`, `MJ: Form Chrome Rules` | L0–L4 stack: inclusion, Auto ranker, install overlay, user order. Policy is cosmetics only. See [Forms Architecture §7d](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7d-form-chrome--accordion-left-nav-and-more). |
 
 ## Quick start
 
@@ -50,4 +51,5 @@ const saved = await ref.AfterSaved(); // BaseEntity | null
 
 - **Architecture (read first):** [/guides/FORMS_ARCHITECTURE_GUIDE.md](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md)
 - **Inject custom sections into a form:** [PANELS.md](./PANELS.md)
+- **Form chrome (rail / More / inclusion):** [Forms Architecture §7d](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7d-form-chrome--accordion-left-nav-and-more)
 - **Custom-form override + toolbar pattern:** [packages/Angular/CLAUDE.md](../../CLAUDE.md)

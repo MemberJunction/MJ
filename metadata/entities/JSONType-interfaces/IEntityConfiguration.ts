@@ -5,16 +5,16 @@
  * `ConfigurationObject` accessor on `MJEntityEntity` that returns
  * `IEntityConfiguration | null`.
  *
- * **NULL / `{}` / omitted keys = today's behavior.** Nothing is required of any
- * application. Apps that want last-wins chrome or cancelable section events
- * still register an optional `BaseFormPolicy`; this bag is only the
- * tenant-editable default the container reads when no policy overrides it.
+ * **NULL / `{}` / omitted keys** use the defaults on
+ * {@link IEntityFormConfiguration} (`Layout: auto`, `RelatedRolePolicy: smart`).
+ * Membership itself is L1 inclusion + L2 ranker + L3 `MJ: Form Chrome Rules`
+ * + L4 user order. `BaseFormPolicy.DecorateChrome` is cosmetics only.
  *
  * Expand by adding a property here — no schema migration. Anything the engine
  * filters, sorts, or joins on stays a **column** on `Entity`. Anything the UI
- * or a policy consumes at render time belongs in this bag.
+ * consumes at render time belongs in this bag.
  *
- * @see plans/form-chrome-policy.md
+ * @see guides/FORMS_ARCHITECTURE_GUIDE.md §7d
  */
 export interface IEntityConfiguration {
     /**
@@ -40,16 +40,17 @@ export interface IEntityUIConfiguration {
 }
 
 /**
- * Generated-form chrome for this entity.
+ * Generated-form chrome for this entity (L2 defaults).
  *
- * Consumed by `<mj-record-form-container>` (and by a winning
- * `BaseFormPolicy.ResolveChrome`, which may ignore these defaults).
+ * Consumed by `<mj-record-form-container>`. L1 `inclusion` and L3
+ * `MJ: Form Chrome Rules` decide membership; this bag only ranks Auto
+ * leftovers and chooses accordion vs left-nav.
  */
 export interface IEntityFormConfiguration {
     /**
      * Layout chrome for the generated form.
      *
-     * - `'accordion'` — every first-class section is a collapsible panel (today).
+     * - `'accordion'` — every first-class section is a collapsible panel.
      * - `'left-nav'` — a left rail of section groups; the body shows one group.
      * - `'auto'` — accordion until the first-class section count reaches
      *   {@link AutoLeftNavAt}, then left-nav.
@@ -65,22 +66,22 @@ export interface IEntityFormConfiguration {
     AutoLeftNavAt?: number;
 
     /**
-     * How omitted `FormRole` on a relationship is resolved.
+     * How Auto (omitted inclusion) relationships are resolved.
      *
-     * - `'keep-all-primary'` — every `DisplayInForm` related grid stays first-class (today).
+     * - `'keep-all-primary'` — every remaining Auto related stays first-class.
      * - `'smart'` — budgeted ranker: same-schema 1:N / collections / custom
      *   display components stay top-level; cross-schema hang-ons and platform
-     *   plumbing fold into More once the untagged pool exceeds
-     *   {@link PrimaryRelatedBudget}. **Not** "everything in More".
+     *   plumbing fold into More once the Auto pool exceeds
+     *   {@link PrimaryRelatedBudget}.
      *
      * Omit to treat as `'smart'`.
      */
     RelatedRolePolicy?: 'keep-all-primary' | 'smart';
 
     /**
-     * Max untagged related grids that stay first-class when
+     * Max Auto related grids that stay first-class when
      * {@link RelatedRolePolicy} is `'smart'`. Default 6. Explicit
-     * `FormRole: 'Primary'` punches are never capped by this number.
+     * `inclusion: 'Primary'` is never capped by this number.
      */
     PrimaryRelatedBudget?: number;
 }

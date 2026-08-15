@@ -4,7 +4,7 @@ import {
   ContentChildren, QueryList, AfterContentInit, OnDestroy,
   ViewChild, ViewEncapsulation, ElementRef
 } from '@angular/core';
-import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView, type FormChromeRule } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -35,6 +35,7 @@ import { ListManagementResult } from '@memberjunction/ng-list-management';
 import { FormSlotCoordinator } from '../panel-slot/form-slot-coordinator.service';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder } from '../chrome/resolve-form-chrome';
+import { LoadFormChromeRules } from '../chrome/load-form-chrome-rules';
 import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection } from '../chrome/form-chrome';
 import type { FormChromeGroup, FormChromePanelSnapshot } from '../chrome/form-chrome';
 import { CollectFormPanelRegistrations } from '../panel-slot/collect-form-panel-registrations';
@@ -103,6 +104,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private destroy$ = new Subject<void>();
   private panelNavReset$ = new Subject<void>();
   private chromeResolveTimer: ReturnType<typeof setTimeout> | null = null;
+  private chromeRules: FormChromeRule[] = [];
+  private chromeRulesForEntityId: string | null = null;
 
   // ---- Internal State ----
 
@@ -649,9 +652,24 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     }, 0);
   }
 
+  private loadChromeRulesIfNeeded(): void {
+    const entityId = this.EffectiveEntityInfo?.ID ?? null;
+    if (!entityId || this.chromeRulesForEntityId === entityId) return;
+    this.chromeRulesForEntityId = entityId;
+    void this.loadChromeRules(entityId);
+  }
+
+  private async loadChromeRules(entityId: string): Promise<void> {
+    const rules = await LoadFormChromeRules(entityId, this.ProviderToUse);
+    if (this.chromeRulesForEntityId !== entityId) return;
+    this.chromeRules = rules;
+    this.scheduleChromeResolve();
+  }
+
   private ResolveChrome(): void {
     const entity = this.EffectiveEntityInfo;
     if (!entity) return;
+    this.loadChromeRulesIfNeeded();
 
     const result = ResolveFormChrome({
       Entity: entity,
@@ -661,6 +679,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       HiddenSectionKeys: [...this.contributionHiddenSectionKeys()],
       ContributionSectionKeys: this.contributionSectionKeys(),
       ContributionChromeGroupByKey: this.contributionChromeGroupByKey(),
+      ChromeRules: this.chromeRules,
       Membership: {
         moreSectionKeys: this.fc?.getMoreSectionKeys?.() ?? [],
         firstClassSectionKeys: this.fc?.getFirstClassSectionKeys?.() ?? [],

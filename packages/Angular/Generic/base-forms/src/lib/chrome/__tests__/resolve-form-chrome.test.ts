@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { EntityInfo, type FormRole } from '@memberjunction/core';
 import { DETAILS_SECTION_KEY, MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection } from '../form-chrome';
-import { ApplyUserChromeMembership, BuildDefaultChromeSpec, MoveChromeGroupInSectionOrder, OrderChromeGroups, OrderMoreSectionKeys, ResolveFormChrome } from '../resolve-form-chrome';
+import { ApplyUserChromeMembership, BuildDefaultChromeSpec, MoveChromeGroupInSectionOrder, OrderChromeGroups, OrderMoreSectionKeys, ResolveFormChrome, TakeDecoratedChrome } from '../resolve-form-chrome';
+import type { FormChromeSpec } from '../form-chrome';
 import { FormChromeCoordinator } from '../form-chrome-coordinator.service';
 
 describe('HumanizeEntityTitle', () => {
@@ -418,6 +419,132 @@ describe('ApplyUserChromeMembership', () => {
 describe('OrderMoreSectionKeys', () => {
     it('orders More children from the persisted section order', () => {
         expect(OrderMoreSectionKeys(['b', 'a', 'c'], ['a', 'c', 'b'])).toEqual(['a', 'c', 'b']);
+    });
+});
+
+describe('ResolveFormChrome inclusion None', () => {
+    it('hides a relationship with inclusion None', () => {
+        const relatedId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+        const entity = new EntityInfo({
+            ID: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+            Name: 'MJ_BizApps_Common: People',
+            SchemaName: 'MJ_BizApps_Common',
+            RelatedEntities: [{
+                ID: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+                RelatedEntity: 'MJ_BizApps_Tasks: Task Comments',
+                RelatedEntityID: relatedId,
+                RelatedEntityJoinField: 'PersonID',
+                DisplayInForm: true,
+                DisplayName: 'Task Comments',
+                Configuration: JSON.stringify({ UI: { inclusion: 'None' } }),
+            }],
+        });
+        const result = ResolveFormChrome({
+            Entity: entity,
+            Panels: [{
+                SectionKey: 'mJBizAppsTasksTaskComments',
+                SectionName: 'Task Comments',
+                Variant: 'related-entity',
+            }],
+            RelatedSchemaByEntityId: new Map([[relatedId, 'MJ_BizApps_Tasks']]),
+        });
+        expect(result.Spec.Groups.some((g) => g.SectionKeys.includes('mJBizAppsTasksTaskComments'))).toBe(false);
+        expect(result.Spec.MoreSectionKeys).not.toContain('mJBizAppsTasksTaskComments');
+        expect(result.RelatedRoles.Assignments[0]?.Inclusion).toBe('None');
+    });
+
+    it('applies an install overlay None after the ranker', () => {
+        const relatedId = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+        const parentId = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+        const entity = new EntityInfo({
+            ID: parentId,
+            Name: 'MJ_BizApps_Common: People',
+            SchemaName: 'MJ_BizApps_Common',
+            RelatedEntities: [{
+                ID: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+                RelatedEntity: 'MJ_BizApps_Orders: Order Headers',
+                RelatedEntityID: relatedId,
+                RelatedEntityJoinField: 'BillToPersonID',
+                DisplayInForm: true,
+                DisplayName: 'Orders',
+                Configuration: JSON.stringify({ UI: { inclusion: 'Primary' } }),
+            }],
+        });
+        const result = ResolveFormChrome({
+            Entity: entity,
+            Panels: [{
+                SectionKey: 'mJBizAppsOrdersOrderHeaders',
+                SectionName: 'Orders',
+                Variant: 'related-entity',
+            }],
+            RelatedSchemaByEntityId: new Map([[relatedId, 'MJ_BizApps_Orders']]),
+            ChromeRules: [{
+                EntityID: parentId,
+                TargetKind: 'Relationship',
+                RelatedEntityID: relatedId,
+                Inclusion: 'None',
+            }],
+        });
+        expect(result.Spec.Groups.some((g) => g.SectionKeys.includes('mJBizAppsOrdersOrderHeaders'))).toBe(false);
+        expect(result.RelatedRoles.Assignments[0]?.Reason).toBe('install-none');
+    });
+
+    it('suppresses a contribution by key', () => {
+        const entity = new EntityInfo({
+            ID: '11111111-1111-1111-1111-111111111111',
+            Name: 'MJ_BizApps_Common: People',
+            SchemaName: 'MJ_BizApps_Common',
+            RelatedEntities: [],
+        });
+        const result = ResolveFormChrome({
+            Entity: entity,
+            Panels: [{
+                SectionKey: 'addresses',
+                SectionName: 'Addresses',
+                Variant: 'default',
+            }],
+            RelatedSchemaByEntityId: new Map(),
+            ContributionSectionKeys: ['addresses'],
+            ChromeRules: [{
+                EntityID: '11111111-1111-1111-1111-111111111111',
+                TargetKind: 'Contribution',
+                ContributionKey: 'addresses',
+                Inclusion: 'None',
+            }],
+        });
+        expect(result.Spec.Groups.some((g) => g.SectionKeys.includes('addresses'))).toBe(false);
+    });
+});
+
+describe('TakeDecoratedChrome', () => {
+    it('keeps cosmetic title changes', () => {
+        const base = BuildDefaultChromeSpec(
+            [{ SectionKey: 'details', SectionName: 'Details', Variant: 'default' }],
+            new Map(),
+            null,
+        );
+        const decorated: FormChromeSpec = {
+            ...base,
+            Groups: base.Groups.map((g) => ({ ...g, Title: g.Key === DETAILS_SECTION_KEY ? 'Profile' : g.Title })),
+        };
+        const taken = TakeDecoratedChrome(base, decorated);
+        expect(taken.Groups.find((g) => g.Key === DETAILS_SECTION_KEY)?.Title).toBe('Profile');
+    });
+
+    it('rejects a decorate that removes a section', () => {
+        const base = BuildDefaultChromeSpec(
+            [
+                { SectionKey: 'details', SectionName: 'Details', Variant: 'default' },
+                { SectionKey: 'orders', SectionName: 'Orders', Variant: 'related-entity' },
+            ],
+            new Map<string, FormRole>([['orders', 'Primary']]),
+            null,
+        );
+        const decorated: FormChromeSpec = {
+            ...base,
+            Groups: base.Groups.filter((g) => g.Key !== 'orders'),
+        };
+        expect(TakeDecoratedChrome(base, decorated)).toBe(base);
     });
 });
 
