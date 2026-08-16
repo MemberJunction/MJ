@@ -22,7 +22,7 @@
             "IsRequired": true
           },
           "primaryKey": {
-            "ID": "C9072F26-ABEC-4384-BEA6-5840D581B47F"
+            "ID": "791E3210-E968-48DD-8282-361A137FD2B5"
           }
         },
         {
@@ -37,7 +37,7 @@
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "77F9B273-255D-4966-880A-DC6EAC20799F"
+            "ID": "1A54C90A-1377-49A1-8575-FE9C5F0899B7"
           }
         },
         {
@@ -52,7 +52,7 @@
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "278353EC-A194-4B07-A89E-AA470BC6373A"
+            "ID": "04D762AD-0EF5-481D-A711-889808E18997"
           }
         },
         {
@@ -67,7 +67,7 @@
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "D890F1E4-3A49-4351-BF2C-FBB8C60E917D"
+            "ID": "1595E573-B03B-4F2B-A58E-E71CC8335139"
           }
         },
         {
@@ -82,7 +82,7 @@
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "980E56A3-8AA5-4E7F-B5D1-08BF20653FC0"
+            "ID": "2A85A364-DB0E-4A89-82C2-E5FA6DF84773"
           }
         },
         {
@@ -97,7 +97,7 @@
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "03CB5AFD-6747-4309-9888-C76D080C21E0"
+            "ID": "1514E150-E778-4C28-88BF-292495E6C63B"
           }
         },
         {
@@ -111,7 +111,7 @@
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "6B55A279-B8A1-4AF3-B374-51B66D9A50CA"
+            "ID": "ADA38CE8-DBDD-427A-802E-6BC849EA6317"
           }
         },
         {
@@ -125,7 +125,7 @@
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "624140C1-6057-4263-8AEB-B4CA6173CB7A"
+            "ID": "1395E343-A116-4C67-B1B0-118083F54AD3"
           }
         },
         {
@@ -139,7 +139,7 @@
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "392F03DE-EA99-4DE1-A90D-4F629E9DEE5B"
+            "ID": "E592FC0F-92B9-4818-A7B6-1FFB2C239243"
           }
         },
         {
@@ -153,7 +153,7 @@
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "AFA3868D-1965-4DA5-8998-4F53A4AD5BB8"
+            "ID": "151145FC-C45D-40A2-94FF-1D0DDF918738"
           }
         },
         {
@@ -167,7 +167,7 @@
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "CCCCCC97-256A-442D-BA01-5332CA569B1E"
+            "ID": "0F7D0CDC-AA04-4F33-BEC9-4AD6CEA41D32"
           }
         },
         {
@@ -181,7 +181,7 @@
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "4DB81C64-69E8-42AF-883B-A68FB4445B09"
+            "ID": "84183F43-BED7-45D6-BDEF-DE24F589F415"
           }
         }
       ],
@@ -194,7 +194,7 @@
             "Description": "Search completed and returned results."
           },
           "primaryKey": {
-            "ID": "BCD0B8E7-B345-40A8-AED8-304DFF34A2B6"
+            "ID": "E757A6D4-8172-425E-BA12-8BB074D290DB"
           }
         },
         {
@@ -205,7 +205,7 @@
             "Description": "Query is required but was not provided."
           },
           "primaryKey": {
-            "ID": "B51113AB-E220-49C4-AA00-5E7F39276E88"
+            "ID": "781679AE-4D42-485E-A1AC-61EED5BA178A"
           }
         },
         {
@@ -216,7 +216,7 @@
             "Description": "Tavily API key not configured. Set tavily.apiKey in mj.config.cjs or TAVILY_API_KEY in the environment."
           },
           "primaryKey": {
-            "ID": "736D3A16-A7EF-4034-8BD8-1B1AB62A33A7"
+            "ID": "1A749B75-F039-4853-AAD4-3F73D775E158"
           }
         },
         {
@@ -227,7 +227,7 @@
             "Description": "Tavily rejected the API key."
           },
           "primaryKey": {
-            "ID": "FD24D964-5FE6-4802-98FB-A21BB3C10E75"
+            "ID": "15622B60-A73A-4F76-8646-2E3E060138D8"
           }
         },
         {
@@ -238,7 +238,7 @@
             "Description": "SearchDepth must be 'basic' or 'advanced'."
           },
           "primaryKey": {
-            "ID": "3C5C152F-C5CB-4CB8-9365-79A2DCC6A284"
+            "ID": "C62404CC-ABD9-4518-B970-4FF6BA93A0E3"
           }
         },
         {
@@ -249,7 +249,7 @@
             "Description": "Topic must be 'general' or 'news'."
           },
           "primaryKey": {
-            "ID": "CE8E3B3C-4F65-4436-AB32-D20E7F4499AC"
+            "ID": "9AEFE2FF-F932-4F1C-9FA3-AEB457937D34"
           }
         },
         {
@@ -260,7 +260,7 @@
             "Description": "Tavily rejected the request as malformed."
           },
           "primaryKey": {
-            "ID": "44A9C30E-AB04-4CBC-A406-F4913828A737"
+            "ID": "387DBCE6-F8E9-40B3-BCF5-213CD7BF5507"
           }
         },
         {
@@ -271,7 +271,7 @@
             "Description": "Tavily rate limit reached. Retry later."
           },
           "primaryKey": {
-            "ID": "B5A70AF5-0695-4365-AC90-9B0B7CA5050F"
+            "ID": "DB52278B-143D-48A3-B775-AE70B8770939"
           }
         },
         {
@@ -282,7 +282,7 @@
             "Description": "Tavily returned an empty response."
           },
           "primaryKey": {
-            "ID": "451690F7-BFA0-4D25-9432-554865033348"
+            "ID": "45B75840-B7D2-4AD2-A4A7-517F3B4CFE9B"
           }
         },
         {
@@ -293,7 +293,7 @@
             "Description": "Tavily returned an error. The message carries the detail."
           },
           "primaryKey": {
-            "ID": "099EFB7A-79AB-46EA-AE30-7A5F23204DD3"
+            "ID": "C730E3CD-3CC1-4F59-9BDE-3D28C216ED3C"
           }
         },
         {
@@ -304,13 +304,13 @@
             "Description": "The search failed unexpectedly."
           },
           "primaryKey": {
-            "ID": "ED64925F-9467-4288-B852-4B364A85DE1A"
+            "ID": "0EA34061-6E51-4B87-9F68-78F7FDC52B05"
           }
         }
       ]
     },
     "primaryKey": {
-      "ID": "290B0012-9822-414A-9CFE-862F5F0B5B14"
+      "ID": "4BA4B621-6882-424D-87BE-6A963351BBA2"
     }
   }
 ]
