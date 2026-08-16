@@ -134,6 +134,7 @@ flowchart LR
 | `entityTransactionScope.ts` | `EntityTransactionScope` + `RunInEntityTransaction()` — the one provider-arbitrated transaction primitive, shared by IS-A, composites and application cascades |
 | `entityCompanion.ts` | `EntityCompanion` — named, serialisable state attached to a record (the "bag") |
 | `relatedRecordCollection.ts` | `RelatedRecordCollection<T>` — the typed parent/children companion |
+| `embeddedRecord.ts` | `EmbeddedRecord<T>` — owner-held 1:1 peer (`Deal.OrderID` → Order), inverted save order |
 | `relatedRecordBatchLoader.ts` | One batched child query per collection across a whole result set (`RunView.IncludeRelatedRecords`) |
 | `entitySavePlan.ts` | `EntitySavePlan` + executor — the ordered unit of work a composite save produces |
 | `saveEntityGraphOperation.ts` | `MJ.SaveEntityGraph` — routes a whole composite save to the server from a client provider |

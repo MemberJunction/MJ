@@ -361,23 +361,21 @@ Plus extensive unit tests against the mock provider (create/load/ensure/clear/sa
 
 ## 10. Implementation checklist
 
-- [ ] Plan doc (this file)
-- [ ] `IEmbeddedRecordConfig` + metadata bind file
-- [ ] Migration: `EntityField.EmbeddedRecord` + extended property
-- [ ] `mj migrate` on the agent DB (confirm no other session)
-- [ ] `mj codegen --skipfiles` with `includeSchemas: ['__mj']` only
-- [ ] `mj sync push --dir=metadata --ci` for the JSONType bind; revert sync-block write-back
-- [ ] `mj codegen --skipdb` with `__mj` only
-- [ ] Append CodeGen SQL (50 blank lines + header) to the migration; delete `CodeGen_Run_*.sql`; discard any non-`__mj` residue
-- [ ] Commit 1: migration + emitted TS + JSONType + this plan + changeset
-- [ ] `EmbeddedRecord<T>` companion
-- [ ] `EntitySavePlan.InsertBeforeRoot` / `AddRootPrepare` / post-delete hook
-- [ ] `BaseEntity` lifecycle hooks
-- [ ] `ProviderBase.GetEntityObject` calls `InitializeEmbeddedRecords`
-- [ ] CodeGen emission + hoisted imports
-- [ ] Unit tests (MJCore + CodeGenLib)
-- [ ] Integration bundle `entity-embedded` (test subclass on Actions → Action Categories)
-- [ ] Build affected packages; run unit tests; run the new integration bundle
-- [ ] Commit 2: implementation + tests
-- [ ] Docs (MJCore docs/, guides/, READMEs, JSDoc)
-- [ ] Commit 3: docs
+- [x] Plan doc (this file)
+- [x] `IEmbeddedRecordConfig` + metadata bind file
+- [x] Migration: `EntityField.EmbeddedRecord` + extended property
+- [x] `mj migrate` on the agent DB
+- [x] `mj codegen --skipfiles` scoped to `__mj`; FormChromeRule residue discarded from the append
+- [x] `mj sync push` for the JSONType bind; sync-block write-back reverted
+- [x] Generated `entity_subclasses.ts` accessors + GraphQL `EmbeddedRecord` field
+- [x] Append CodeGen SQL (50 blank lines + header) to the migration
+- [x] `EmbeddedRecord<T>` companion
+- [x] `EntitySavePlan.InsertBeforeRoot` / `AddRootPrepare` / post-delete hook
+- [x] `BaseEntity` lifecycle hooks
+- [x] `ProviderBase.GetEntityObject` calls `InitializeEmbeddedRecords`
+- [x] CodeGen emission + hoisted imports
+- [x] Unit tests (MJCore 2053, CodeGenLib embedded suite)
+- [x] Integration bundle `entity-embedded` EE1–EE5 (test subclass on Action Categories.ParentID)
+- [ ] Commit remaining generated SQL/TS (sibling agent already landed the runtime in `d79fe39083`)
+- [ ] Docs
+- [ ] Docs commit

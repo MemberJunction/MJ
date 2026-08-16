@@ -3,7 +3,9 @@
 > **Not what you want?** IS-A is *vertical* — one logical record spread across parent and child
 > tables sharing a primary key. For a header plus N rows that carry a foreign key back to it (order
 > lines, an action's parameters), see [Related-Record Collections](./related-record-collections.md).
-> MJCore reserves the word **child** for IS-A subtypes; FK dependents are **related records**.
+> For an owner-held 1:1 such as `Deal.OrderID`, see [Embedded Records](./embedded-records.md).
+> MJCore reserves the word **child** for IS-A subtypes; FK dependents that point at you are
+> **related records**; a peer you point at is an **embedded record**.
 
 > **Package**: [@memberjunction/core](../readme.md)
 > **Related Guides**: [Virtual Entities](./virtual-entities.md) | [RunQuery Pagination](./runquery-pagination.md)
