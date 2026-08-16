@@ -48,6 +48,9 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
       [class.mj-dropdown--open]="IsOpen"
       [class.mj-dropdown--disabled]="IsDisabled"
       role="combobox"
+      [attr.id]="InputId || null"
+      [attr.aria-label]="AriaLabel || null"
+      [attr.aria-describedby]="AriaDescribedBy || null"
       [attr.aria-expanded]="IsOpen"
       aria-haspopup="listbox"
       tabindex="0"
@@ -70,7 +73,7 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
       cdkConnectedOverlayBackdropClass="mj-dropdown-backdrop"
       (backdropClick)="Close()"
       (detach)="Close()">
-      <div class="mj-dropdown-panel" role="listbox">
+      <div class="mj-dropdown-panel" role="listbox" [attr.aria-label]="AriaLabel || null">
         @if (Filterable) {
           <div class="mj-dropdown-filter-wrap">
             <input
@@ -78,6 +81,7 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
               class="mj-input mj-dropdown-filter"
               type="text"
               placeholder="Search..."
+              [attr.aria-label]="AriaLabel ? 'Filter ' + AriaLabel : 'Filter options'"
               [value]="filterText"
               (input)="OnFilterInput($event)"
               (keydown)="OnKeyDown($event)" />
@@ -122,6 +126,25 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
   }]
 })
 export class MJDropdownComponent implements ControlValueAccessor, OnDestroy {
+  /**
+   * Accessible name for the combobox (#3860). Without one — and with no external label wired via
+   * {@link InputId} — the control announces as an UNNAMED combobox, which fails WCAG 2.1 4.1.2
+   * (Name, Role, Value): "combobox, collapsed" with no hint of what it selects. Applied as
+   * `aria-label` on the trigger AND on the popup listbox, so both halves announce the same name.
+   */
+  @Input() AriaLabel = '';
+
+  /**
+   * `id` for the combobox trigger, so a host can associate a VISIBLE `<label for="…">` — the
+   * preferred naming when a label already exists on screen (an `aria-label` duplicates it for
+   * sighted users of screen readers). Either input alone names the control; `InputId` + external
+   * label wins where both are present, per the accessible-name computation.
+   */
+  @Input() InputId = '';
+
+  /** `aria-describedby` passthrough for hint/error text — same shape of gap as the name. */
+  @Input() AriaDescribedBy = '';
+
   @Input() Data: Record<string, unknown>[] | string[] | readonly unknown[] | null = [];
   @Input() TextField = '';
   @Input() ValueField = '';
