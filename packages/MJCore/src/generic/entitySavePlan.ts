@@ -176,6 +176,70 @@ export class EntitySavePlan {
     public AddDelete(entity: BaseEntity, label: string): EntitySavePlan {
         return this.Add({ Entity: entity, Operation: 'Delete', Label: label });
     }
+
+    /**
+     * Index of the root `SelfOnly` node, or `-1` when the plan has not been seeded yet.
+     */
+    private rootIndex(): number {
+        return this.nodes.findIndex(n => n.SelfOnly === true && n.Entity === this.Root);
+    }
+
+    /**
+     * Inserts a node immediately before the root. Used by owner-held embeddeds: the
+     * peer must persist (and receive its PK) before the owner stamps the FK.
+     *
+     * @param node - The unit of work to insert.
+     * @returns This plan, for chaining.
+     */
+    public InsertBeforeRoot(node: EntitySavePlanNode): EntitySavePlan {
+        const idx = this.rootIndex();
+        if (idx < 0) {
+            this.nodes.unshift(node);
+        } else {
+            this.nodes.splice(idx, 0, node);
+        }
+        return this;
+    }
+
+    /**
+     * Convenience wrapper over {@link InsertBeforeRoot} for a save node.
+     */
+    public AddSaveBeforeRoot(
+        entity: BaseEntity,
+        label: string,
+        prepare?: () => void,
+        selfOnly = false,
+    ): EntitySavePlan {
+        return this.InsertBeforeRoot({
+            Entity: entity,
+            Operation: 'Save',
+            Label: label,
+            Prepare: prepare,
+            SelfOnly: selfOnly,
+        });
+    }
+
+    /**
+     * Composes a callback onto the root node's `Prepare`. Later callbacks run after
+     * earlier ones. Used to stamp an owner-held FK after the embedded node has
+     * assigned its primary key.
+     *
+     * @param fn - Applied immediately before the root node executes.
+     */
+    public AddRootPrepare(fn: () => void): void {
+        const idx = this.rootIndex();
+        if (idx < 0) {
+            return;
+        }
+        const root = this.nodes[idx];
+        const previous = root.Prepare;
+        root.Prepare = () => {
+            if (previous) {
+                previous();
+            }
+            fn();
+        };
+    }
 }
 
 /**

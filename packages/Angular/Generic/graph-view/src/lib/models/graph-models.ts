@@ -75,13 +75,21 @@ export interface GraphNode<TData = Record<string, unknown>> {
     /** Distance from root/selected focus node in hops (0 = focal center) */
     HopDistance?: number;
 
-    /** Current 2D simulation coordinates (managed by layout engine) */
+    /** Current 2D simulation coordinates (uppercase for MJ models, lowercase for D3 compatibility) */
     X?: number;
     Y?: number;
     VX?: number;
     VY?: number;
     FX?: number | null;
     FY?: number | null;
+
+    x?: number;
+    y?: number;
+    vx?: number;
+    vy?: number;
+    fx?: number | null;
+    fy?: number | null;
+    index?: number;
 
     /** Underlying business entity reference / data payload */
     Data?: TData;
@@ -99,6 +107,11 @@ export interface GraphEdge<TData = Record<string, unknown>> {
 
     /** Target node identifier */
     TargetID: string;
+
+    /** D3 simulation link object references */
+    source?: string | GraphNode;
+    target?: string | GraphNode;
+    index?: number;
 
     /** Relationship semantic label (e.g. 'Employed By', 'Board Member', 'Subsidiary Of') */
     Label: string;

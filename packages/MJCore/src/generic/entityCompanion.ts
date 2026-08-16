@@ -228,6 +228,19 @@ export abstract class EntityCompanion<TWire = unknown> {
     }
 
     /**
+     * Contributes work that must run **after** the owner's own delete node.
+     *
+     * Related-record collections delete first (they point at the owner). Embedded
+     * records delete last (the owner points at them — the FK dies with the owner
+     * row, then the peer can go). Default is a no-op.
+     *
+     * @param _plan - The plan being assembled; the owner's delete node already exists.
+     */
+    public ContributePostDeleteWork(_plan: EntitySavePlan): void {
+        /* no-op by default */
+    }
+
+    /**
      * Populates this companion from the database, when it is configured to load eagerly.
      *
      * Called by `BaseEntity.Load()` after the record's own fields are populated. **Never** called

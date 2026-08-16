@@ -1,0 +1,37 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on EntityField.EmbeddedRecord so CodeGen emits a",
+      "strongly-typed EmbeddedRecordObject accessor. The column declares an owner-held",
+      "FK as a first-class embedded record — the policy half of a DeclareEmbeddedRecord(...)",
+      "call. RelatedEntity and the FK field name are NOT part of the JSON shape: they are",
+      "already columns on the same row.",
+      "Added by migration V202608161200__v6.1.x__EntityField_EmbeddedRecord.sql.",
+      "The EntityField row must exist (created by a CodeGen pass over the new column) before",
+      "this @lookup resolves on push."
+    ],
+    "fields": {
+      "Name": "MJ: Entity Fields"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IEmbeddedRecordConfig",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IEmbeddedRecordConfig.ts"
+          },
+          "_comments": [
+            "EmbeddedRecord — OnClear, LoadNested. AllowsNull on this same row decides provision."
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Fields&Name=EmbeddedRecord"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entity Fields"
+    }
+  }
+]
