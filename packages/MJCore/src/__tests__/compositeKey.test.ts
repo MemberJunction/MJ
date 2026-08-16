@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { CompositeKey, KeyValuePair, FieldValueCollection, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM, RecordUrlMatchesTab } from '../generic/compositeKey';
+import { CompositeKey, KeyValuePair, FieldValueCollection, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM, RecordUrlMatchesTab, ResourceUrlsEquivalent } from '../generic/compositeKey';
 import type { EntityInfo } from '../generic/entityInfo';
 
 /**
@@ -606,5 +606,28 @@ describe('RecordUrlMatchesTab', () => {
 
   it('does not match a different entity even when both sides are new', () => {
     expect(RecordUrlMatchesTab('Orders', 'new', 'People', '')).toBe(false);
+  });
+});
+
+describe('ResourceUrlsEquivalent', () => {
+  it('treats a colon-encoded OpenApp entity name as the same path', () => {
+    expect(ResourceUrlsEquivalent(
+      '/app/orders/record/MJ_BizApps_Orders:%20Order%20Headers/new',
+      '/app/orders/record/MJ_BizApps_Orders%3A%20Order%20Headers/new',
+    )).toBe(true);
+  });
+
+  it('treats encoded NewRecordValues pipes as the same query', () => {
+    expect(ResourceUrlsEquivalent(
+      '/app/orders/record/Orders/new?NewRecordValues=BillToPersonID|p1',
+      '/app/orders/record/Orders/new?NewRecordValues=BillToPersonID%7Cp1',
+    )).toBe(true);
+  });
+
+  it('does not equate a missing NewRecordValues query with one that has it', () => {
+    expect(ResourceUrlsEquivalent(
+      '/app/orders/record/Orders/new',
+      '/app/orders/record/Orders/new?NewRecordValues=BillToPersonID%7Cp1',
+    )).toBe(false);
   });
 });

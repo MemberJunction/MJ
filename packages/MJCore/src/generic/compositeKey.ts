@@ -392,6 +392,53 @@ export function EncodeNewRecordValuesForURL(values: unknown): string | undefined
     return FieldValueCollection.FromObject(obj).ToURLSegment();
 }
 
+/**
+ * Compare two Explorer resource URLs after decoding. Angular's serializer
+ * leaves `:` in `MJ_BizApps_Orders: Order Headers` while `encodeURIComponent`
+ * writes `%3A`. A raw `!==` on those strings is permanently true and, with
+ * `onSameUrlNavigation: 'reload'`, navigates until Chrome dies.
+ */
+export function ResourceUrlsEquivalent(left: string, right: string): boolean {
+    const a = splitResourceUrl(left);
+    const b = splitResourceUrl(right);
+    if (safeDecodePath(a.path) !== safeDecodePath(b.path)) {
+        return false;
+    }
+    return resourceQueryEqual(a.query, b.query);
+}
+
+function splitResourceUrl(raw: string): { path: string; query: Record<string, string> } {
+    const trimmed = (raw ?? '').trim();
+    const q = trimmed.indexOf('?');
+    const path = q === -1 ? trimmed : trimmed.slice(0, q);
+    const search = q === -1 ? '' : trimmed.slice(q + 1);
+    const query: Record<string, string> = {};
+    if (search.length > 0) {
+        new URLSearchParams(search).forEach((value, key) => {
+            query[key] = value;
+        });
+    }
+    return { path, query };
+}
+
+function safeDecodePath(path: string): string {
+    try {
+        return decodeURIComponent(path);
+    } catch {
+        return path;
+    }
+}
+
+function resourceQueryEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+    return keysA.every((key) =>
+        decodeURIComponent((a[key] ?? '').replace(/\+/g, ' ')) ===
+        decodeURIComponent((b[key] ?? '').replace(/\+/g, ' ')),
+    );
+}
+
 
 /**
  * Composite keys are used to represent database keys and can include one or more key value pairs.

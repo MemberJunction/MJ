@@ -13,7 +13,7 @@ import {
   AppAccessResult,
   NavItem
 } from '@memberjunction/ng-base-application';
-import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM, RecordUrlMatchesTab } from '@memberjunction/core';
+import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM, RecordUrlMatchesTab, ResourceUrlsEquivalent } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
 import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
@@ -924,8 +924,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       const currentUrl = this.router.url;
       const newUrl = resourceUrl;
 
-      // Only update if URL is different (path or query params changed)
-      if (currentUrl !== newUrl) {
+      // Decode before compare. encodeURIComponent writes `%3A` for the
+      // colon in `MJ_BizApps_Orders: Order Headers`; Angular's serializer
+      // leaves `:`. A raw !== is permanently true and reloads the route
+      // until the tab dies (Person → Orders → New).
+      if (!ResourceUrlsEquivalent(currentUrl, newUrl)) {
         // Suppress ResourceResolver for this navigation - we're just syncing the URL
         // to reflect the current active tab, not requesting a new tab to be opened
         this.tabService.SuppressNextResolve();
