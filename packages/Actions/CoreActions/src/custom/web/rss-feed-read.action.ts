@@ -192,10 +192,26 @@ export class ReadRSSFeedAction extends BaseAction {
                 const body = await response.text().catch(() => '');
                 throw new Error(`HTTP ${response.status}${body ? `: ${body.slice(0, 200)}` : ''}`);
             }
-            const text = await response.text();
-            if (text.length > ReadRSSFeedAction.MAX_FEED_BYTES) {
+            // Reject on the DECLARED size before reading a byte of the body. Checking only after
+            // `await response.text()` bounded nothing: the whole feed was already buffered in memory
+            // by the time the limit was consulted, which is exactly what the limit exists to prevent.
+            const declared = Number(response.headers.get('content-length'));
+            if (Number.isFinite(declared) && declared > ReadRSSFeedAction.MAX_FEED_BYTES) {
                 throw new Error(
-                    `feed body is ${text.length} bytes, above the ${ReadRSSFeedAction.MAX_FEED_BYTES}-byte limit`
+                    `feed declares ${declared} bytes, above the ${ReadRSSFeedAction.MAX_FEED_BYTES}-byte limit`
+                );
+            }
+
+            const text = await response.text();
+            // Second check for a server that sends no Content-Length (chunked transfer). This one
+            // cannot prevent the buffering, but it still stops an oversized feed from being parsed.
+            //
+            // Measured in BYTES rather than `text.length`, which counts UTF-16 code units — a feed of
+            // multi-byte characters was reported, and bounded, at well under its real size.
+            const bytes = Buffer.byteLength(text, 'utf-8');
+            if (bytes > ReadRSSFeedAction.MAX_FEED_BYTES) {
+                throw new Error(
+                    `feed body is ${bytes} bytes, above the ${ReadRSSFeedAction.MAX_FEED_BYTES}-byte limit`
                 );
             }
             return text;

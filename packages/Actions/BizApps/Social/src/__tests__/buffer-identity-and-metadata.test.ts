@@ -36,11 +36,38 @@ vi.mock('@memberjunction/global', () => ({
     RegisterClass: () => (target: unknown) => target,
 }));
 
-/** What the next `MJ: Credentials` RunView returns, and every view it was asked for. */
-const credentialView = {
-    reply: { Success: true, Results: [] as Array<{ ID: string; Values: string }> },
-    filters: [] as string[],
+/**
+ * Stands in for `CredentialEngine`, which extends `BaseEngine` and reaches for a provider these
+ * suites deliberately do not have.
+ *
+ * `rows` is what the engine has cached; `values` is what `getCredential` resolves to. Both are
+ * settable per test. `getCredential` is a spy, so "did the credential path go through the engine"
+ * is itself an assertion — a regression to a raw `RunView` would show up as it never being called.
+ */
+const credentialStore = {
+    rows: [] as Array<{ ID: string; Name: string; IsActive: boolean }>,
+    values: {} as Record<string, string>,
+    config: vi.fn(async () => undefined),
+    getCredential: vi.fn(async () => ({ values: credentialStore.values })),
 };
+
+/**
+ * `CredentialEngine` is mocked, not exercised: it extends `BaseEngine` and reaches for a provider,
+ * which these suites deliberately do not have. What IS asserted is that the credential path goes
+ * THROUGH the engine — `getCredential` is a spy, so a regression back to a raw `RunView` would show
+ * up as this never being called.
+ */
+vi.mock('@memberjunction/credentials', () => ({
+  CredentialEngine: {
+    Instance: {
+      Config: (...args: unknown[]) => credentialStore.config(...args),
+      get Credentials() {
+        return credentialStore.rows;
+      },
+      getCredential: (...args: unknown[]) => credentialStore.getCredential(...args),
+    },
+  },
+}));
 
 vi.mock('@memberjunction/core', () => ({
     UserInfo: class UserInfo {},
@@ -131,15 +158,19 @@ function mutationInput(action: TestCreatePostAction, index = 0): Record<string, 
     return action.Calls[index].variables?.input as Record<string, unknown>;
 }
 
-function credentialRow(values: string) {
-    credentialView.reply = { Success: true, Results: [{ ID: 'cred-1', Values: values }] };
+/** An active credential the engine can resolve, carrying `values`. */
+function credentialRow(values: Record<string, string>, opts: { active?: boolean } = {}) {
+    credentialStore.rows = [{ ID: 'cred-1', Name: 'Employee Buffer', IsActive: opts.active !== false }];
+    credentialStore.values = values;
 }
 
 const BASE = { CompanyIntegrationID: 'ci-1', ChannelIDs: ['chan-1'], Content: 'Hello' };
 
 beforeEach(() => {
-    credentialView.reply = { Success: true, Results: [] };
-    credentialView.filters = [];
+    credentialStore.rows = [];
+    credentialStore.values = {};
+    credentialStore.config.mockClear();
+    credentialStore.getCredential.mockClear();
 });
 
 // ---------------------------------------------------------------------------
@@ -152,76 +183,92 @@ describe('Buffer CredentialID — acting as another identity', () => {
         expect(result.Success).toBe(true);
         expect(action.Calls[0].token).toBe(TENANT_TOKEN);
         // Nothing should have been asked of the credential store at all.
-        expect(credentialView.filters).toHaveLength(0);
+        expect(credentialStore.getCredential).not.toHaveBeenCalled();
     });
 
     it('uses the credential token when a CredentialID is given', async () => {
-        credentialRow(JSON.stringify({ accessToken: 'employee-personal-token' }));
+        credentialRow({ accessToken: 'employee-personal-token' });
         const { result, action } = await run({ ...BASE, CredentialID: 'cred-1' });
         expect(result.Success).toBe(true);
         expect(action.Calls[0].token).toBe('employee-personal-token');
     });
 
     it('still requires CompanyIntegrationID, which says which integration this is', async () => {
-        credentialRow(JSON.stringify({ accessToken: 'employee-personal-token' }));
+        credentialRow({ accessToken: 'employee-personal-token' });
         const { result } = await run({ ChannelIDs: ['chan-1'], Content: 'Hello', CredentialID: 'cred-1' });
         expect(result.Success).toBe(false);
         expect(result.ResultCode).toBe('MISSING_PARAM');
     });
 
-    it('looks the credential up by id and only when active', async () => {
-        credentialRow(JSON.stringify({ accessToken: 'tok' }));
+    it('resolves through CredentialEngine, so the access is audited', async () => {
+        // The engine's getCredential writes an MJ: Audit Logs row and stamps LastUsedAt. For a
+        // feature whose whole purpose is publishing as SOMEONE ELSE, that record is the point --
+        // so "went through the engine" is asserted directly rather than assumed.
+        credentialRow({ accessToken: 'tok' });
         await run({ ...BASE, CredentialID: 'cred-1' });
-        expect(credentialView.filters[0]).toContain("ID='cred-1'");
-        expect(credentialView.filters[0]).toContain('IsActive=1');
+        expect(credentialStore.getCredential).toHaveBeenCalledTimes(1);
+        expect(credentialStore.getCredential.mock.calls[0][1]).toMatchObject({
+            credentialId: 'cred-1',
+            subsystem: 'Buffer',
+        });
     });
 
-    it('escapes a quote in the credential id rather than building broken SQL', async () => {
-        credentialRow(JSON.stringify({ accessToken: 'tok' }));
-        await run({ ...BASE, CredentialID: "cred-'1" });
-        expect(credentialView.filters[0]).toContain("ID='cred-''1'");
+    it('refuses an INACTIVE credential, which the engine does not check on the by-id path', async () => {
+        // CredentialEngine filters IsActive on its by-NAME path only; this resolves by ID. Dropping
+        // the explicit check while adopting the engine would have silently widened what is accepted.
+        credentialRow({ accessToken: 'tok' }, { active: false });
+        const { result, action } = await run({ ...BASE, CredentialID: 'cred-1' });
+        expect(result.Success).toBe(false);
+        expect(result.ResultCode).toBe('INVALID_CREDENTIAL');
+        expect(result.Message).toMatch(/not active/);
+        expect(action.Calls).toHaveLength(0);
+        expect(credentialStore.getCredential).not.toHaveBeenCalled();
     });
 
     it('fails rather than falling back to the tenant token when the credential is missing', async () => {
         // Falling back would publish under the wrong identity with nothing to notice.
-        credentialView.reply = { Success: true, Results: [] };
+        credentialStore.rows = [];
         const { result, action } = await run({ ...BASE, CredentialID: 'cred-1' });
         expect(result.Success).toBe(false);
         expect(result.ResultCode).toBe('INVALID_CREDENTIAL');
-        expect(result.Message).toMatch(/not found, or not active/);
+        expect(result.Message).toMatch(/not found/);
         expect(action.Calls).toHaveLength(0);
     });
 
-    it('fails when the credential Values cannot be read, naming decrypt as the likely cause', async () => {
-        credentialRow('not json at all');
+    it('fails when the engine cannot resolve the credential', async () => {
+        // Previously this asserted a decrypt-shaped message from a manual JSON.parse. The engine
+        // owns parsing and schema validation now, so what matters is that a resolution failure is
+        // fatal rather than a silent fallback to the tenant token.
+        credentialRow({ accessToken: 'tok' });
+        credentialStore.getCredential.mockRejectedValueOnce(new Error('values failed schema validation'));
         const { result, action } = await run({ ...BASE, CredentialID: 'cred-1' });
         expect(result.ResultCode).toBe('INVALID_CREDENTIAL');
-        expect(result.Message).toMatch(/decrypt/);
+        expect(result.Message).toMatch(/could not be resolved/);
         expect(action.Calls).toHaveLength(0);
     });
 
     it('fails when the credential carries no accessToken', async () => {
-        credentialRow(JSON.stringify({ apiKey: 'wrong-field' }));
+        credentialRow({ apiKey: 'wrong-field' });
         const { result } = await run({ ...BASE, CredentialID: 'cred-1' });
         expect(result.ResultCode).toBe('INVALID_CREDENTIAL');
         expect(result.Message).toMatch(/no accessToken/);
     });
 
     it('fails on an empty accessToken rather than sending an empty bearer header', async () => {
-        credentialRow(JSON.stringify({ accessToken: '' }));
+        credentialRow({ accessToken: '' });
         const { result } = await run({ ...BASE, CredentialID: 'cred-1' });
         expect(result.ResultCode).toBe('INVALID_CREDENTIAL');
     });
 
     it('applies the credential token to every channel in a multi-channel post', async () => {
-        credentialRow(JSON.stringify({ accessToken: 'employee-personal-token' }));
+        credentialRow({ accessToken: 'employee-personal-token' });
         const { action } = await run({ ...BASE, ChannelIDs: ['chan-1', 'chan-2', 'chan-3'], CredentialID: 'cred-1' });
         expect(action.Calls).toHaveLength(3);
         expect(action.Calls.map(c => c.token)).toEqual(Array(3).fill('employee-personal-token'));
     });
 
     it('does not leak one action run\'s credential token into another', async () => {
-        credentialRow(JSON.stringify({ accessToken: 'employee-personal-token' }));
+        credentialRow({ accessToken: 'employee-personal-token' });
         await run({ ...BASE, CredentialID: 'cred-1' });
 
         const { action } = await run(BASE);
@@ -353,7 +400,7 @@ describe('Buffer assets — the AssetInput array shape', () => {
 
 describe('Buffer create post — publishing as an employee with a mention', () => {
     it('sends the employee token and the LinkedIn annotations in one call', async () => {
-        credentialRow(JSON.stringify({ accessToken: 'employee-personal-token' }));
+        credentialRow({ accessToken: 'employee-personal-token' });
         const annotations = [{ entity: 'urn:li:organization:42', start: 6, length: 9 }];
         const { result, action } = await run({
             CompanyIntegrationID: 'ci-1',
@@ -375,7 +422,7 @@ describe('Buffer create post — publishing as an employee with a mention', () =
     });
 
     it('reports a mutation failure without claiming a post was made', async () => {
-        credentialRow(JSON.stringify({ accessToken: 'employee-personal-token' }));
+        credentialRow({ accessToken: 'employee-personal-token' });
         const { result } = await run(
             { ...BASE, CredentialID: 'cred-1' },
             a => { a.FailWith = new Error('channel is disconnected'); },

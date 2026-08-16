@@ -123,6 +123,45 @@ function stuckNote(possiblyStuckCount: number, kind: string): string {
 }
 
 /**
+ * Builds the caller-facing outcome, counting ids that were never ATTEMPTED as well as those that
+ * failed.
+ *
+ * This reads only page 1 of the source list, so ids beyond it land in `notOnSourcePage` and are
+ * silently skipped. The previous message was `Moved N of ${toMove.length}` where `toMove` counted
+ * only what page 1 contained — so passing 300 ids reported `Moved 100 of 100` with `Success: true`
+ * while 200 were never touched. `LogStatus` said so; the caller-facing result did not, and a caller
+ * acting on `Success` had no way to discover it.
+ *
+ * Skipped ids are therefore a PARTIAL_FAILURE, not a success: the caller asked for work that did not
+ * happen. `NotOnSourcePage` carries exactly which ones, so a retry is mechanical.
+ */
+function moveOutcome(
+    result: { movedCount: number; failedCount: number; possiblyStuckCount: number },
+    attempted: number,
+    requested: number,
+    notOnSourcePage: string[],
+    from: string,
+    to: string,
+    kind: string,
+): { Success: boolean; Message: string; ResultCode: string } {
+    const skipped = notOnSourcePage.length;
+    const incomplete = result.failedCount > 0 || skipped > 0;
+    return {
+        // Reported against what the caller ASKED for, not against what page 1 happened to contain.
+        Success: !incomplete,
+        Message:
+            `Moved ${result.movedCount} of ${requested} ${kind} from '${from}' to '${to}'` +
+            `${result.failedCount > 0 ? `; ${result.failedCount} failed` : ''}` +
+            `${skipped > 0
+                ? `; ${skipped} not on page 1 of '${from}' and NOT attempted — see NotOnSourcePage` +
+                  `${attempted !== requested ? ` (${attempted} attempted)` : ''}`
+                : ''}` +
+            `.${stuckNote(result.possiblyStuckCount, kind)}`,
+        ResultCode: incomplete ? 'PARTIAL_FAILURE' : 'SUCCESS',
+    };
+}
+
+/**
  * Moves accounts from one Apollo list to another.
  *
  * Inputs:
@@ -197,11 +236,15 @@ export class ApolloMoveListAccountsAction extends ApolloRESTBaseAction {
             );
 
             return {
-                Success: result.failedCount === 0,
-                Message:
-                    `Moved ${result.movedCount} of ${toMove.length} account(s) from '${labels.from.name}' to '${labels.to.name}'` +
-                    `${result.failedCount > 0 ? `; ${result.failedCount} failed` : ''}.${stuckNote(result.possiblyStuckCount, 'account(s)')}`,
-                ResultCode: result.failedCount === 0 ? 'SUCCESS' : 'PARTIAL_FAILURE',
+                ...moveOutcome(
+                    result,
+                    toMove.length,
+                    new Set(ids).size,
+                    notOnSourcePage,
+                    labels.from.name,
+                    labels.to.name,
+                    'account(s)',
+                ),
                 Params: params.Params,
             };
         } catch (err) {
@@ -273,11 +316,15 @@ export class ApolloMoveListContactsAction extends ApolloRESTBaseAction {
             );
 
             return {
-                Success: result.failedCount === 0,
-                Message:
-                    `Moved ${result.movedCount} of ${toMove.length} contact(s) from '${labels.from.name}' to '${labels.to.name}'` +
-                    `${result.failedCount > 0 ? `; ${result.failedCount} failed` : ''}.${stuckNote(result.possiblyStuckCount, 'contact(s)')}`,
-                ResultCode: result.failedCount === 0 ? 'SUCCESS' : 'PARTIAL_FAILURE',
+                ...moveOutcome(
+                    result,
+                    toMove.length,
+                    new Set(ids).size,
+                    notOnSourcePage,
+                    labels.from.name,
+                    labels.to.name,
+                    'contact(s)',
+                ),
                 Params: params.Params,
             };
         } catch (err) {

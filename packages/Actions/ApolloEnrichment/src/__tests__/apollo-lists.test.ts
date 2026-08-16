@@ -33,6 +33,26 @@ vi.mock('@memberjunction/global', () => ({
     RegisterClass: () => (target: unknown) => target,
 }));
 
+/**
+ * `CredentialEngine` is mocked, not exercised: it extends `BaseEngine` and reaches for a provider,
+ * which these suites deliberately do not have. What IS asserted is that the credential path goes
+ * THROUGH the engine — `getCredential` is a spy, so a regression back to a raw `RunView` would show
+ * up as this never being called.
+ */
+vi.mock('@memberjunction/credentials', () => {
+  const getCredential = vi.fn(async () => ({ values: { accessToken: 'cred-token', apiKey: 'cred-apollo-key' } }));
+  return {
+    CredentialEngine: {
+      Instance: {
+        Config: vi.fn(async () => undefined),
+        Credentials: [{ ID: 'cred-1', Name: 'Test Credential', IsActive: true }],
+        getCredential,
+      },
+    },
+    __getCredentialSpy: getCredential,
+  };
+});
+
 vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
     LogStatus: vi.fn(),
@@ -1035,14 +1055,25 @@ describe('ApolloMoveListAccountsAction', () => {
         expect(searchAccounts).toHaveBeenCalledWith({ labelIds: ['lab-cold'] }, { page: 1, perPage: 100 });
     });
 
-    it('reports ids that were not on the source page instead of failing the whole batch', async () => {
+    it('reports skipped ids as a PARTIAL_FAILURE rather than a clean success', async () => {
+        // The batch is still NOT aborted — acc-1 moves, and NotOnSourcePage names what did not.
+        // But it is no longer `Success: true`: only page 1 of the source list is read, so ids
+        // beyond it are never attempted, and the caller asked for work that did not happen.
+        //
+        // The message used to read `Moved 1 of 1`, counted against what page 1 contained rather
+        // than what was requested — so 300 ids could report `Moved 100 of 100` with Success true
+        // while 200 were silently skipped.
         const { result, params } = await run(
             ApolloMoveListAccountsAction,
             { AccountIDs: 'acc-1, acc-999', FromList: 'Cold', ToList: 'Warm' },
             moveClient(),
         );
-        expect(result.Success).toBe(true);
+        expect(result.Success).toBe(false);
+        expect(result.ResultCode).toBe('PARTIAL_FAILURE');
         expect(output(params, 'NotOnSourcePage')).toEqual(['acc-999']);
+        // Counted against what was REQUESTED (2), with the skip named in the caller-facing message.
+        expect(result.Message).toContain('of 2');
+        expect(result.Message).toMatch(/1 not on page 1 .*NOT attempted/);
     });
 
     it('de-duplicates the supplied ids', async () => {

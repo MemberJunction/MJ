@@ -26,6 +26,7 @@
 import { LogError, Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntityType, MJCredentialEntity } from '@memberjunction/core-entities';
 import { ApolloAPIKey } from '../config.js';
+import { CredentialEngine } from '@memberjunction/credentials';
 
 /** The integration name looked up on the CompanyIntegration row. */
 export const APOLLO_INTEGRATION_NAME = 'Apollo';
@@ -102,7 +103,20 @@ export async function resolveApolloAPIKey(
     return null;
 }
 
+/** Canonical 8-4-4-4-12 hex form. `CompanyID` is a uniqueidentifier, so anything else is not one. */
+const UUID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
 async function resolveFromCompany(companyID: string, contextUser: UserInfo | undefined): Promise<ResolvedApolloKey | null> {
+    // VALIDATE rather than escape. This value is interpolated into an ExtraFilter, and while
+    // `ValidateUserProvidedSQLClause` blocks `;`, `--`, UNION and DML, it does NOT block boolean
+    // logic: `x' OR '1'='1` passes the screen, which is enough to select a DIFFERENT TENANT'S
+    // CompanyIntegration row and therefore resolve their Apollo key. A UUID check admits nothing
+    // that could alter the clause's shape, which escaping alone does not guarantee.
+    if (!UUID_PATTERN.test(companyID)) {
+        LogError(`resolveApolloAPIKey: CompanyID '${companyID}' is not a UUID; refusing to build a filter from it.`);
+        return null;
+    }
+
     const rv = new RunView();
     const result = await rv.RunView<MJCompanyIntegrationEntityType>(
         {
@@ -130,18 +144,43 @@ async function resolveFromCompany(companyID: string, contextUser: UserInfo | und
         return null;
     }
 
-    const md = new Metadata();
-    const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
-    const loaded = await credential.Load(row.CredentialID);
-    if (!loaded) {
+    // Through CredentialEngine rather than GetEntityObject + Load: that path reads the row but
+    // records nothing. The engine's `logAccess` writes an `MJ: Audit Logs` row and stamps
+    // LastUsedAt, validates Values against the credential type's schema, and serves from cache
+    // instead of a load per action invocation.
+    await CredentialEngine.Instance.Config(false, contextUser);
+
+    const credential = CredentialEngine.Instance.Credentials.find(
+        (c) => c.ID.toLowerCase() === row.CredentialID!.toLowerCase(),
+    );
+    if (!credential) {
         LogError(`resolveApolloAPIKey: MJ: Credentials record ${row.CredentialID} could not be loaded.`);
         return null;
     }
+    // Kept explicitly: the engine filters IsActive on its by-NAME path only, and this resolves by
+    // ID. Relying on the engine here would silently accept an inactive credential.
     if (credential.IsActive === false) {
         LogError(`resolveApolloAPIKey: MJ: Credentials record '${credential.Name}' is inactive.`);
         return null;
     }
-    const apiKey = extractApolloKey(credential.Values, credential.Name);
+
+    let values: Record<string, string> | undefined;
+    try {
+        const resolved = await CredentialEngine.Instance.getCredential<Record<string, string>>(credential.Name, {
+            credentialId: row.CredentialID,
+            contextUser,
+            subsystem: 'Apollo',
+        });
+        values = resolved.values;
+    } catch (err) {
+        LogError(
+            `resolveApolloAPIKey: MJ: Credentials record '${credential.Name}' could not be resolved — ` +
+            `${err instanceof Error ? err.message : String(err)}`,
+        );
+        return null;
+    }
+
+    const apiKey = extractApolloKey(values ? JSON.stringify(values) : null, credential.Name);
     if (!apiKey) {
         LogError(`resolveApolloAPIKey: MJ: Credentials record '${credential.Name}' contains no apiKey value.`);
         return null;

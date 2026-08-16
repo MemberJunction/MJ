@@ -67,6 +67,26 @@ vi.mock('@memberjunction/global', () => ({
   UUIDsEqual: (a: string, b: string) => a === b,
 }));
 
+/**
+ * `CredentialEngine` is mocked, not exercised: it extends `BaseEngine` and reaches for a provider,
+ * which these suites deliberately do not have. What IS asserted is that the credential path goes
+ * THROUGH the engine — `getCredential` is a spy, so a regression back to a raw `RunView` would show
+ * up as this never being called.
+ */
+vi.mock('@memberjunction/credentials', () => {
+  const getCredential = vi.fn(async () => ({ values: { accessToken: 'cred-token', apiKey: 'cred-apollo-key' } }));
+  return {
+    CredentialEngine: {
+      Instance: {
+        Config: vi.fn(async () => undefined),
+        Credentials: [{ ID: 'cred-1', Name: 'Test Credential', IsActive: true }],
+        getCredential,
+      },
+    },
+    __getCredentialSpy: getCredential,
+  };
+});
+
 vi.mock('@memberjunction/core', () => ({
   UserInfo: class UserInfo {},
   Metadata: vi.fn(),

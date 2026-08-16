@@ -4,6 +4,7 @@ import { LogStatus, RunView } from '@memberjunction/core';
 import axios from 'axios';
 import { BaseAction } from '@memberjunction/actions';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { CredentialEngine } from '@memberjunction/credentials';
 
 // ---------------------------------------------------------------------------
 // Buffer API string unions
@@ -323,31 +324,40 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
       Params: params.Params,
     });
 
-    const rv = new RunView();
-    const result = await rv.RunView<{ ID: string; Values: string }>(
-      {
-        EntityName: 'MJ: Credentials',
-        ExtraFilter: `ID='${credentialId.replace(/'/g, "''")}' AND IsActive=1`,
-        ResultType: 'simple',
-        Fields: ['ID', 'Values'],
-        MaxRows: 1,
-      },
-      params.ContextUser,
+    // Resolved through CredentialEngine rather than a direct RunView, which buys three things a
+    // raw read cannot: an ACCESS AUDIT TRAIL (`logAccess` writes an `MJ: Audit Logs` row carrying
+    // the credential's EntityID/RecordID, and stamps LastUsedAt), JSON-schema validation of Values
+    // against the credential type, and the engine's cache instead of a query per invocation.
+    //
+    // The audit row is the part that matters most here: this seam exists to publish under ANOTHER
+    // IDENTITY, and "who posted as whom, when" should not be unrecorded.
+    await CredentialEngine.Instance.Config(false, params.ContextUser);
+
+    // IsActive is still checked HERE. CredentialEngine's by-name path filters on it, but the
+    // by-ID path (`resolveCredential` -> `getCredentialById`) does not — so dropping this check
+    // while switching would have quietly widened what this accepts.
+    const credential = CredentialEngine.Instance.Credentials.find(
+      (c) => c.ID.toLowerCase() === credentialId.toLowerCase(),
     );
-    if (!result.Success || result.Results.length === 0) {
-      return notUsable('not found, or not active');
+    if (!credential) {
+      return notUsable('not found');
+    }
+    if (!credential.IsActive) {
+      return notUsable('not active');
     }
 
-    let parsed: unknown;
+    let resolved: { values?: Record<string, string> };
     try {
-      parsed = JSON.parse(result.Results[0].Values);
-    } catch {
-      // Values arriving unparseable is the signature of a failed decrypt, so say so
-      // rather than reporting a malformed-JSON error the operator cannot act on.
-      return notUsable('its Values could not be read as JSON (the value may not have decrypted)');
+      resolved = await CredentialEngine.Instance.getCredential<Record<string, string>>(credential.Name, {
+        credentialId,
+        contextUser: params.ContextUser,
+        subsystem: 'Buffer',
+      });
+    } catch (err) {
+      return notUsable(`it could not be resolved (${err instanceof Error ? err.message : String(err)})`);
     }
 
-    const token = (parsed as { accessToken?: unknown })?.accessToken;
+    const token = resolved.values?.accessToken;
     if (typeof token !== 'string' || token.length === 0) {
       return notUsable('its Values carry no accessToken');
     }
