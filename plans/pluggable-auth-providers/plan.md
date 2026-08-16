@@ -43,7 +43,7 @@ Secrets follow the File Storage model: a nullable `CredentialID` FK → `MJ: Cre
 
 ## 4. The entity: `__mj.AuthenticationProvider`
 
-Created by the migration in this PR (`migrations/v6/V202608150900__v6.1.x__Pluggable_Auth_Providers.sql`). Table `__mj.AuthenticationProvider` → CodeGen entity name **`MJ: Authentication Providers`** → generated class `MJAuthenticationProviderEntity`.
+Created by the migration in this PR (`migrations/v6/V202608160030__v6.1.x__Pluggable_Auth_Providers.sql`). Table `__mj.AuthenticationProvider` → CodeGen entity name **`MJ: Authentication Providers`** → generated class `MJAuthenticationProviderEntity`.
 
 Columns (see migration for full descriptions):
 
@@ -154,7 +154,7 @@ The picker must be reusable by **any** MJ-based application, not baked into Expl
 
 | Piece | Location |
 |---|---|
-| Migration | `migrations/v6/V202608150900__v6.1.x__Pluggable_Auth_Providers.sql` (this PR) |
+| Migration | `migrations/v6/V202608160030__v6.1.x__Pluggable_Auth_Providers.sql` (this PR) |
 | Generated entity `MJAuthenticationProviderEntity` | `@memberjunction/core-entities` (CodeGen, local) |
 | `AuthProviderEngine` (+ base, if a browser-safe metadata read is ever needed) | server-side auth package / `MJServer` auth dir |
 | `initializeProviders.ts` layered resolver | `@memberjunction/server` |
@@ -171,7 +171,7 @@ The picker must be reusable by **any** MJ-based application, not baked into Expl
 
 | Piece | Where |
 |---|---|
-| `__mj.AuthenticationProvider` + CodeGen output | `migrations/v6/V202608150900__v6.1.x__Pluggable_Auth_Providers.sql` |
+| `__mj.AuthenticationProvider` + CodeGen output | `migrations/v6/V202608160030__v6.1.x__Pluggable_Auth_Providers.sql` |
 | `PublicAuthProviderInfo` / `PublicAuthProviderCatalog` contract | `@memberjunction/core` (`authTypes.ts`) |
 | `AuthProviderEngine` (`@RegisterForStartup`, catalog → `AuthProviderFactory`) | `@memberjunction/server` (`auth/AuthProviderEngine.ts`) |
 | Layered `initializeProviders` (config baseline + metadata layer) | `@memberjunction/server` (`auth/initializeProviders.ts`) |
