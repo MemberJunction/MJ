@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { CompositeKey, KeyValuePair, FieldValueCollection } from '../generic/compositeKey';
+import { CompositeKey, KeyValuePair, FieldValueCollection, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM } from '../generic/compositeKey';
 import type { EntityInfo } from '../generic/entityInfo';
 
 /**
@@ -543,5 +543,37 @@ describe('CompositeKey', () => {
       expect(loaded.KeyValuePairs[0].Value).not.toBe('ID|11055');
       expect(loaded.KeyValuePairs[0].Value).not.toBe('ID');
     });
+  });
+});
+
+describe('new-record URL helpers', () => {
+  it('treats empty, missing, and the new sentinel as a create', () => {
+    expect(IsNewEntityRecordUrlId(undefined)).toBe(true);
+    expect(IsNewEntityRecordUrlId(null)).toBe(true);
+    expect(IsNewEntityRecordUrlId('')).toBe(true);
+    expect(IsNewEntityRecordUrlId('  ')).toBe(true);
+    expect(IsNewEntityRecordUrlId(NEW_ENTITY_RECORD_URL_ID)).toBe(true);
+    expect(IsNewEntityRecordUrlId('NEW')).toBe(true);
+    expect(IsNewEntityRecordUrlId('abc')).toBe(false);
+  });
+
+  it('encodes an object as a FieldValueCollection URL segment', () => {
+    expect(EncodeNewRecordValuesForURL({
+      BillToPersonID: 'p1',
+      ShipToPersonID: 'p1',
+    })).toBe('BillToPersonID|p1||ShipToPersonID|p1');
+  });
+
+  it('passes through a non-empty string and drops empty values', () => {
+    expect(EncodeNewRecordValuesForURL('BillToPersonID|p1')).toBe('BillToPersonID|p1');
+    expect(EncodeNewRecordValuesForURL('  ')).toBeUndefined();
+    expect(EncodeNewRecordValuesForURL(null)).toBeUndefined();
+    expect(EncodeNewRecordValuesForURL({})).toBeUndefined();
+    expect(EncodeNewRecordValuesForURL({ BillToPersonID: null })).toBeUndefined();
+    expect(EncodeNewRecordValuesForURL(['BillToPersonID', 'p1'])).toBeUndefined();
+  });
+
+  it('keeps the query-param name stable for deeplinks', () => {
+    expect(NEW_RECORD_VALUES_QUERY_PARAM).toBe('NewRecordValues');
   });
 });

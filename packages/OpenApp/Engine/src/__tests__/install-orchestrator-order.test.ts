@@ -17,6 +17,7 @@
  * times (and in the wrong order).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { existsSync } from 'node:fs';
 
 // ── Stub every external collaborator the install path touches ──────────────
 vi.mock('../github/github-client.js', () => ({
@@ -320,6 +321,26 @@ describe('HandleMigrations — platform-aware dialect directory', () => {
         expect(vi.mocked(DownloadMigrations)).toHaveBeenCalledWith(
             'https://github.com/MemberJunction/Integrations', '1.0.0', 'migrations-pg', expect.any(String), expect.anything(), 'CRM/HubSpot',
         );
+    });
+
+    /** The temp dir the engine created for this install (4th arg of the download call). */
+    function downloadedTempDir(): string {
+        const call = vi.mocked(DownloadMigrations).mock.calls[0];
+        return call[3] as string;
+    }
+
+    it('removes the migration temp directory after a successful install', async () => {
+        const r = await InstallApp({ Source: source }, ctxFor('sqlserver'));
+        expect(r.Success).toBe(true);
+        // Without cleanup, every install/upgrade leaves a copy of the app's .sql files in the OS temp dir.
+        expect(existsSync(downloadedTempDir())).toBe(false);
+    });
+
+    it('removes the migration temp directory even when the migration run fails', async () => {
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: false, ErrorMessage: 'V2 failed' });
+        const r = await InstallApp({ Source: source }, ctxFor('sqlserver'));
+        expect(r.Success).toBe(false);
+        expect(existsSync(downloadedTempDir())).toBe(false);
     });
 });
 

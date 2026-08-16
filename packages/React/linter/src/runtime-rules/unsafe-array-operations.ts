@@ -178,6 +178,8 @@ export class UnsafeArrayOperationsRule extends BaseLintRule {
                 severity: 'low',
                 line: path.node.loc?.start.line || 0,
                 column: path.node.loc?.start.column || 0,
+                // safe-replace: the replacement is the static literal '?.[' — no runtime
+                // data reaches it, so there is nothing for `$` expansion to corrupt.
                 message: `Direct array access "${code}" may be undefined. Consider using optional chaining: ${code.replace('[', '?.[')} or check array bounds first.`,
                 code: code.substring(0, 50),
               });

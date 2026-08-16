@@ -1682,30 +1682,49 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
   const tempDir = join(tmpdir(), `mj-app-${manifest.name}-${Date.now()}`);
   mkdirSync(tempDir, { recursive: true });
 
-  // Live DB platform — selects the Skyway provider for RunAppMigrations below.
-  const platform = context.DatabaseProvider.Dialect.PlatformKey;
+  try {
+    // Live DB platform — selects the Skyway provider for RunAppMigrations below.
+    const platform = context.DatabaseProvider.Dialect.PlatformKey;
 
-  // Platform-aware download with PG fallback (uses `<directory>-pg/` on Postgres when present,
-  // else the declared directory) + subpath-aware for multi-app repos.
-  const downloadResult = await DownloadAppMigrations(manifest, context, tempDir, subpath);
+    // Platform-aware download with PG fallback (uses `<directory>-pg/` on Postgres when present,
+    // else the declared directory) + subpath-aware for multi-app repos.
+    const downloadResult = await DownloadAppMigrations(manifest, context, tempDir, subpath);
 
-  if (!downloadResult.Success) {
-    return { Success: false, ErrorMessage: downloadResult.ErrorMessage };
+    if (!downloadResult.Success) {
+      return { Success: false, ErrorMessage: downloadResult.ErrorMessage };
+    }
+
+    context.Callbacks?.OnProgress?.('Migration', `Running ${downloadResult.Files?.length ?? 0} migration(s)...`);
+
+    const migrationResult = await RunAppMigrations({
+      MigrationsDir: tempDir,
+      SchemaName: manifest.schema.name,
+      DatabaseConfig: context.DatabaseConfig,
+      MJCoreSchema: context.MJCoreSchema,
+      ExtraPlaceholders: context.MigrationPlaceholders,
+      // Select the Skyway provider matching the live DB platform.
+      Platform: platform,
+    });
+
+    return { Success: migrationResult.Success, ErrorMessage: migrationResult.ErrorMessage };
+  } finally {
+    // Downloaded .sql files are consumed by the run above; leaving them behind accumulates a
+    // copy of every app's migrations in the OS temp dir on every install/upgrade.
+    CleanupTempDir(tempDir, 'Migration', context);
   }
+}
 
-  context.Callbacks?.OnProgress?.('Migration', `Running ${downloadResult.Files?.length ?? 0} migration(s)...`);
-
-  const migrationResult = await RunAppMigrations({
-    MigrationsDir: tempDir,
-    SchemaName: manifest.schema.name,
-    DatabaseConfig: context.DatabaseConfig,
-    MJCoreSchema: context.MJCoreSchema,
-    ExtraPlaceholders: context.MigrationPlaceholders,
-    // Select the Skyway provider matching the live DB platform.
-    Platform: platform,
-  });
-
-  return { Success: migrationResult.Success, ErrorMessage: migrationResult.ErrorMessage };
+/**
+ * Removes a temp directory the engine created for a download. Best-effort by design: a cleanup
+ * failure must never fail — or mask the result of — the operation that created the directory.
+ */
+function CleanupTempDir(tempDir: string, phase: string, context: OrchestratorContext): void {
+  try {
+    rmSync(tempDir, { recursive: true, force: true });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    context.Callbacks?.OnWarn?.(phase, `Could not remove temp directory '${tempDir}': ${message}`);
+  }
 }
 
 /**
@@ -1730,40 +1749,45 @@ async function HandleTeardown(manifest: MJAppManifest, context: OrchestratorCont
   const tempDir = join(tmpdir(), `mj-app-${manifest.name}-teardown-${Date.now()}`);
   mkdirSync(tempDir, { recursive: true });
 
-  context.Callbacks?.OnProgress?.('Metadata', 'Downloading teardown scripts...');
-  const download = await DownloadMigrations(manifest.repository, manifest.version, dir, tempDir, context.GitHubOptions, subpath);
-  if (!download.Success) {
-    return { Success: false, ErrorMessage: `Failed to download teardown scripts: ${download.ErrorMessage}` };
-  }
-  // DownloadMigrations only writes .sql; sort by filename so a numbered teardown runs in order.
-  const files = (download.Files ?? []).filter((f) => f.endsWith('.sql')).sort();
-  if (files.length === 0) {
-    context.Callbacks?.OnWarn?.('Metadata', `No teardown scripts in '${dir}' — this app's rows in the shared core schema will NOT be retired on remove.`);
-    return { Success: true };
-  }
-
-  const mjSchema = context.MJCoreSchema ?? '__mj';
-  context.Callbacks?.OnProgress?.('Metadata', `Running ${files.length} teardown script(s) against '${mjSchema}'...`);
-  // Atomic: the inverse-DELETEs across all teardown files run in ONE transaction so a mid-list
-  // failure rolls back the whole teardown rather than leaving the app's rows half-retired (some
-  // files committed, some not) — which would orphan rows AND block a clean reinstall.
-  await context.DatabaseProvider.BeginTransaction();
   try {
-    for (const file of files) {
-      const sql = readFileSync(join(tempDir, file), 'utf-8').split('${mjSchema}').join(mjSchema);
-      if (sql.trim()) {
-        await context.DatabaseProvider.ExecuteSQL(sql);
-      }
+    context.Callbacks?.OnProgress?.('Metadata', 'Downloading teardown scripts...');
+    const download = await DownloadMigrations(manifest.repository, manifest.version, dir, tempDir, context.GitHubOptions, subpath);
+    if (!download.Success) {
+      return { Success: false, ErrorMessage: `Failed to download teardown scripts: ${download.ErrorMessage}` };
     }
-    await context.DatabaseProvider.CommitTransaction();
-  } catch (error: unknown) {
-    await context.DatabaseProvider.RollbackTransaction();
-    const message = error instanceof Error ? error.message : String(error);
-    return { Success: false, ErrorMessage: `Teardown failed for '${manifest.name}' (rolled back): ${message}` };
-  }
+    // DownloadMigrations only writes .sql; sort by filename so a numbered teardown runs in order.
+    const files = (download.Files ?? []).filter((f) => f.endsWith('.sql')).sort();
+    if (files.length === 0) {
+      context.Callbacks?.OnWarn?.('Metadata', `No teardown scripts in '${dir}' — this app's rows in the shared core schema will NOT be retired on remove.`);
+      return { Success: true };
+    }
 
-  context.Callbacks?.OnSuccess?.('Metadata', `Retired this app's rows from '${mjSchema}' (${files.length} teardown script(s)).`);
-  return { Success: true };
+    const mjSchema = context.MJCoreSchema ?? '__mj';
+    context.Callbacks?.OnProgress?.('Metadata', `Running ${files.length} teardown script(s) against '${mjSchema}'...`);
+    // Atomic: the inverse-DELETEs across all teardown files run in ONE transaction so a mid-list
+    // failure rolls back the whole teardown rather than leaving the app's rows half-retired (some
+    // files committed, some not) — which would orphan rows AND block a clean reinstall.
+    await context.DatabaseProvider.BeginTransaction();
+    try {
+      for (const file of files) {
+        const sql = readFileSync(join(tempDir, file), 'utf-8').split('${mjSchema}').join(mjSchema);
+        if (sql.trim()) {
+          await context.DatabaseProvider.ExecuteSQL(sql);
+        }
+      }
+      await context.DatabaseProvider.CommitTransaction();
+    } catch (error: unknown) {
+      await context.DatabaseProvider.RollbackTransaction();
+      const message = error instanceof Error ? error.message : String(error);
+      return { Success: false, ErrorMessage: `Teardown failed for '${manifest.name}' (rolled back): ${message}` };
+    }
+
+    context.Callbacks?.OnSuccess?.('Metadata', `Retired this app's rows from '${mjSchema}' (${files.length} teardown script(s)).`);
+    return { Success: true };
+  } finally {
+    // The downloaded teardown scripts have been executed above; don't leave them in the OS temp dir.
+    CleanupTempDir(tempDir, 'Metadata', context);
+  }
 }
 
 /**
@@ -2285,13 +2309,12 @@ async function ExtractDeclaredApplicationIds(
   } catch {
     return [];
   } finally {
-    // Clean up the downloaded-migrations temp dir (best-effort — never mask the result).
+    // Same shared helper as the migration and teardown sites, rather than a third hand-rolled
+    // `try { rmSync } catch {}`. The inline version swallowed a cleanup failure silently; the helper
+    // reports it through OnWarn, so "temp dir could not be removed" is visible in one place instead
+    // of being invisible in one of three lookalike blocks.
     if (tempDir) {
-      try {
-        rmSync(tempDir, { recursive: true, force: true });
-      } catch {
-        /* best-effort cleanup */
-      }
+      CleanupTempDir(tempDir, 'Metadata', context);
     }
   }
 }

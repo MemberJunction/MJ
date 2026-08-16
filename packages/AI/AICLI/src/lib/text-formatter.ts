@@ -176,12 +176,16 @@ export class TextFormatter {
    * Basic JSON syntax highlighting
    */
   private static highlightJSON(json: string): string {
+    // safe-replace: the `$1` here IS an intentional back-reference — chalk only
+    // wraps it in ANSI codes, and the expansion is the point. Converting these to
+    // replacement functions would emit a literal "$1". Unlike the #3171 sites, no
+    // caller-supplied data reaches these replacement strings.
     return json
-      .replace(/"([^"]+)":/g, chalk.cyan('"$1":')) // Keys
-      .replace(/: "([^"]+)"/g, ': ' + chalk.green('"$1"')) // String values
-      .replace(/: (\d+)/g, ': ' + chalk.yellow('$1')) // Numbers
-      .replace(/: (true|false)/g, ': ' + chalk.blue('$1')) // Booleans
-      .replace(/: null/g, ': ' + chalk.gray('null')); // Null
+      .replace(/"([^"]+)":/g, chalk.cyan('"$1":')) // Keys — safe-replace: intentional $1
+      .replace(/: "([^"]+)"/g, ': ' + chalk.green('"$1"')) // String values — safe-replace: intentional $1
+      .replace(/: (\d+)/g, ': ' + chalk.yellow('$1')) // Numbers — safe-replace: intentional $1
+      .replace(/: (true|false)/g, ': ' + chalk.blue('$1')) // Booleans — safe-replace: intentional $1
+      .replace(/: null/g, ': ' + chalk.gray('null')); // Null — safe-replace: no capture groups
   }
 
   /**

@@ -912,6 +912,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- MJ_BizApps_Common: People Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsCommonPeople"
+        SectionName="MJ_BizApps_Common: People"
+        Icon="fa fa-users"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsCommonPeople')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Common: People','LinkedUserID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Common: People')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsCommonPeople')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCommonPeople', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AI Agent Notes Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentNotes"
@@ -2662,6 +2687,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Task Notification Logs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsTasksTaskNotificationLogs"
+        SectionName="Task Notification Logs"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsTasksTaskNotificationLogs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Tasks: Task Notification Logs','NotifiedUserID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Tasks: Task Notification Logs')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsTasksTaskNotificationLogs')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsTasksTaskNotificationLogs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AI Agent Session Bridge Participants Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentSessionBridgeParticipants"
@@ -2831,6 +2881,181 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJUserRoutineRecipients', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Sales Authorities Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsOrdersSalesAuthorities"
+        SectionName="Sales Authorities"
+        Icon="fa fa-user-shield"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsOrdersSalesAuthorities')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Orders: Sales Authorities','SalesRepUserID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Sales Authorities')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsOrdersSalesAuthorities')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsOrdersSalesAuthorities', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Order Headers (Posted By) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsOrdersOrderHeadersPostedByUserID"
+        SectionName="Order Headers (Posted By)"
+        Icon="fa fa-shopping-cart"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsOrdersOrderHeadersPostedByUserID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Orders: Order Headers','PostedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Order Headers')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsOrdersOrderHeadersPostedByUserID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsOrdersOrderHeadersPostedByUserID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Accounting Company Profiles Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsAccountingAccountingCompanyProfiles"
+        SectionName="Accounting Company Profiles"
+        Icon="fa fa-building"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsAccountingAccountingCompanyProfiles')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Accounting: Accounting Company Profiles','ApprovalCFOUserID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Accounting Company Profiles')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsAccountingAccountingCompanyProfiles')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsAccountingAccountingCompanyProfiles', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Order Headers (Sales Rep) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsOrdersOrderHeadersSalesRepUserID"
+        SectionName="Order Headers (Sales Rep)"
+        Icon="fa fa-shopping-cart"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsOrdersOrderHeadersSalesRepUserID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Orders: Order Headers','SalesRepUserID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Order Headers')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsOrdersOrderHeadersSalesRepUserID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsOrdersOrderHeadersSalesRepUserID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Journal Entry Batches (Approved By User ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsAccountingJournalEntryBatchesApprovedByUserID"
+        SectionName="Journal Entry Batches (Approved By User ID)"
+        Icon="fa fa-file-invoice-dollar"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsAccountingJournalEntryBatchesApprovedByUserID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Accounting: Journal Entry Batches','ApprovedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Journal Entry Batches')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsAccountingJournalEntryBatchesApprovedByUserID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsAccountingJournalEntryBatchesApprovedByUserID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Payment Lines Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsOrdersPaymentLines"
+        SectionName="Payment Lines"
+        Icon="fa fa-money-bill-wave"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsOrdersPaymentLines')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Orders: Payment Lines','AllocatedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Orders: Payment Lines')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsOrdersPaymentLines')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsOrdersPaymentLines', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Journal Entry Batches (Batched By User ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsAccountingJournalEntryBatchesBatchedByUserID"
+        SectionName="Journal Entry Batches (Batched By User ID)"
+        Icon="fa fa-file-invoice-dollar"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsAccountingJournalEntryBatchesBatchedByUserID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Accounting: Journal Entry Batches','BatchedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Accounting: Journal Entry Batches')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsAccountingJournalEntryBatchesBatchedByUserID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsAccountingJournalEntryBatchesBatchedByUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -78,7 +78,12 @@ sections and related-entity grids are `<mj-collapsible-panel>`s.
 You rarely touch Layer 1 directly. Two things you should know:
 
 - **Extending a form without replacing it:** register a `BaseFormPanel` against a
-  slot — see [base-forms/PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md).
+  slot — see [base-forms/PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md)
+  and [§7c](#7c-form-contributions--add-replace-or-fill-in-no-regen). Claim
+  `relatedEntity` to replace a baked related grid, or `replacesSectionKey` to
+  replace a field panel (including a hero that is not a collapsible panel).
+  `<mj-form-contributions>` fills in `DisplayInForm` relationships the template
+  did not bake. CodeGen keeps emitting those sections; override is runtime.
 - **Replacing a form entirely:** a custom `*Extended` class — see the "Extending
   Entity Forms" section of [packages/Angular/CLAUDE.md](../packages/Angular/CLAUDE.md).
 
@@ -96,7 +101,7 @@ shows a loading state until the record is ready (and an error state on failure).
   [EntityName]="'Users'"
   [PrimaryKey]="pk"          <!-- omit/empty → new record -->
   [Record]="preloaded"        <!-- OR bind an already-loaded BaseEntity -->
-  [NewRecordValues]="defaults"
+  [NewRecordValues]="defaults"   <!-- object or Field|value||Field2|value2 URL segment -->
   [EditMode]="null"           <!-- null = new→edit, existing→read -->
   [Config]="myConfig"
   [Provider]="Provider"
@@ -119,6 +124,24 @@ handle.
 host: it maps `Navigate` → `NavigationService`, `Notification` → `SharedService`,
 and record loads → `RecentAccessService`. That's the only Explorer-specific glue;
 all mechanics are Generic.
+
+Related-entity grids pass `NewRecordValues` from the join fields that filter the
+grid so **New** opens a child already linked to the parent.
+
+- `BaseFormComponent.NewRecordValues(relatedEntity, joinField?)` — one
+  relationship, or every join field when several `EntityRelationship` rows
+  share the related entity (Bill-To + Ship-To on the same Orders grid).
+- `NewRecordValuesForJoinFields(relatedEntity, fields)` — explicit list when
+  the grid already knows the FKs (Person Orders, Organization Orders).
+- `EntityInfo.BuildRelationshipNewRecordValues` / `…ForJoinFields` — typed
+  core helpers. When `EntityRelationship.Configuration.UI.join.fields` is set,
+  every named FK is copied, not only `RelatedEntityJoinField`.
+
+Explorer persists those defaults on the new-record URL
+(`/record/:entity/new?NewRecordValues=Field|value||Field2|value2`, using
+`NEW_ENTITY_RECORD_URL_ID` and `NEW_RECORD_VALUES_QUERY_PARAM` from
+`@memberjunction/core`). Refresh and share keep the child linked. Overlay
+hosts accept the same object or URL-segment string on `[NewRecordValues]`.
 
 ---
 
@@ -256,6 +279,254 @@ required touching the generated form. Full authoring contract:
 > / `ShowRelatedEntities`) apply uniformly. So a dialog can open the Content
 > Sources form and hide the crawler section with
 > `Config: { HiddenSectionKeys: ['websiteCrawlerSettings'] }` — no per-panel code.
+
+### 7c. Form contributions — add, replace, or fill in (no regen)
+
+A form is a list of **contributions**. CodeGen still bakes field panels and
+related-entity grids. At runtime, registered `BaseFormPanel`s can:
+
+- **add** a section (existing slot behavior)
+- **claim a related-entity grid** (`relatedEntity`) so the baked grid hides and yours mounts
+- **fill in** a `DisplayInForm` relationship the template never baked (other OpenApp installed)
+- **replace a named field panel** (`replacesSectionKey`) — hide `details` / `personalIdentity` and mount a hero that is **not** a collapsible panel
+
+Discovery is `GetAllRegistrationsByMetadata`. Last-wins is ClassFactory `Priority` per `contributionKey`. Plan: [`/plans/form-contributions.md`](../plans/form-contributions.md). Authoring: [PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md).
+
+`replacesSectionKey` is the CodeGen `SectionKey` on the baked `<mj-collapsible-panel>` (camelCase of the section name — look at the generated form HTML). Must name a concrete `entity`, not `'*'`.
+
+#### Scenario A — Extra settings on a generated form (Content Sources)
+
+```typescript
+@RegisterClassEx(BaseFormPanel, {
+  key: 'content-sources:website-crawler-settings',
+  metadata: { entity: 'MJ: Content Sources', slot: 'after-fields', sortKey: 80 },
+})
+export class WebsiteCrawlerSettingsPanel extends BaseFormPanel { /* gate in template */ }
+```
+
+Generated form untouched. Panel is a normal collapsible section.
+
+#### Scenario B — Form hero that is not a panel (Orders)
+
+The Order Header money strip + Confirm button is not a collapsible section. Register it at `before-fields` (the top of every generated form) and hide the generic Details panel if the hero owns those fields:
+
+```typescript
+@RegisterClassEx(BaseFormPanel, {
+  key: 'form-panel:OrderHeaders:header',
+  metadata: {
+    entity: 'MJ_BizApps_Orders: Order Headers',
+    slot: 'before-fields',
+    sortKey: 100,
+    contributionKey: 'header',
+    replacesSectionKey: 'details',
+  },
+})
+@Component({ standalone: false, selector: 'mjo-order-header-hero', template: `
+  <div class="mjo-oh-hero">
+    <h1>{{ Record.OrderNumber }}</h1>
+    <span>{{ Record.Status }}</span>
+    <button type="button" mjButton variant="primary" (click)="confirm()">Confirm order</button>
+  </div>
+` })
+export class OrderHeaderHeroPanel extends BaseFormPanel<OrderHeaderEntity> {
+  public async confirm(): Promise<void> { await this.Record.Confirm(); }
+}
+```
+
+No `<mj-collapsible-panel>`. The generated Details section disappears. The rest of the generated form (lines, payment, related grids) stays. A second app that also ships a header uses the same `contributionKey: 'header'` and a higher `Priority`.
+
+#### Scenario C — Replace Personal Identity on a Person with a richer header (Common)
+
+```typescript
+@RegisterClassEx(BaseFormPanel, {
+  key: 'form-panel:People:header',
+  metadata: {
+    entity: 'MJ_BizApps_Common: People',
+    slot: 'before-fields',
+    contributionKey: 'header',
+    replacesSectionKey: 'personalIdentity',
+  },
+})
+export class PersonHeroPanel extends BaseFormPanel { /* photo, display name, primary org — not a panel */ }
+```
+
+Addresses / contacts widgets can stay as later slots or as the custom form's own markup.
+
+#### Scenario D — Orders claims Event tickets on Person (related grid takeover)
+
+```typescript
+@RegisterClassEx(BaseFormPanel, {
+  key: 'form-panel:People:related:EventOrderLines',
+  metadata: {
+    entity: 'MJ_BizApps_Common: People',
+    slot: 'after-related',
+    sortKey: 80,
+    relatedEntity: 'MJ_BizApps_Orders: Event Order Lines',
+    relatedJoinField: 'PersonID',
+  },
+})
+export class PersonEventTicketsPanel extends BaseFormPanel { /* ticket cards */ }
+```
+
+Common does not import Orders. If CodeGen baked a generic Event Order Lines grid, it hides. If it never baked one (OpenApp install), the composer does not add a stock grid either — your panel is the contribution.
+
+Omit `relatedJoinField` only when there is a single FK to that entity. Bill-to vs ship-to on the same Person must pass `BillToPersonID` / `ShipToPersonID`.
+
+#### Scenario E — Another app installed: stock grid appears with no code
+
+Accounting (or Sales) adds `DisplayInForm` from Deals → Person. Person's generated form was CodeGen'd before Sales existed, so it has no Deals panel. `<mj-form-contributions>` in the container mounts the stock related grid. No Common change, no regen.
+
+#### Scenario F — Two apps ship a Person header; highest Priority wins
+
+```typescript
+// Common, Priority default 0
+metadata: { entity: PEOPLE, slot: 'before-fields', contributionKey: 'header', replacesSectionKey: 'personalIdentity' }
+
+// A vertical app, @RegisterClassEx(..., { priority: 10, metadata: { ..., contributionKey: 'header' } })
+```
+
+One header mounts. The loser is not shown. Same rule as related claims.
+
+#### Scenario G — Subscription term waterfall (not a grid, not a header)
+
+```typescript
+@RegisterClassEx(BaseFormPanel, {
+  key: 'form-panel:Subscriptions:waterfall',
+  metadata: {
+    entity: 'MJ_BizApps_Orders: Subscriptions',
+    slot: 'after-fields',
+    sortKey: 60,
+    contributionKey: 'rev-rec-waterfall',
+  },
+})
+export class SubscriptionWaterfallPanel extends BaseFormPanel { /* deferred-rev chart */ }
+```
+
+Extra pane. Does not replace anything. Generated subscription fields stay.
+
+#### Scenario H — Custom form still uses the container
+
+Orders' full custom form already wraps `<mj-record-form-container>` and emits `before-fields`. A contribution registered for Order Headers still mounts there. You do **not** have to replace the whole form to get a hero — start with B, grow to a custom form only when the line editor / tab strip demand it.
+
+### 7d. Form chrome — accordion, left-nav, and More
+
+Contributions decide *what* is on the form. Chrome decides *which of those
+items appear* and *how the container arranges them*. Membership is data.
+`BaseFormPolicy.DecorateChrome` may rename groups, swap icons, or wrap
+labels. It cannot add, remove, or re-bucket sections.
+
+Five layers, later wins on the same target:
+
+| Layer | What it is | Who writes it |
+|---|---|---|
+| **L0** | CodeGen: field panels, `DisplayInForm`, `Sequence` | Schema / CodeGen |
+| **L1** | Inclusions: `Primary` \| `More` \| `None` | The OpenApp that owns the related entity or contribution |
+| **L2** | Ranker over remaining **Auto** leftovers | `Entity.Configuration.UI.Form` |
+| **L3** | Install overlay: `MJ: Form Chrome Rules` | Site admin (never app-synced) |
+| **L4** | User rail order and More membership | `UserInfoEngine` |
+
+#### L1 — inclusion, keyed by (parent, related entity)
+
+An **inclusion** is one parent-form section, not one FK. Bill-To and Ship-To
+are two `EntityRelationship` rows and **one** Orders section.
+
+`EntityRelationship.Configuration.UI`:
+
+- `inclusion`: `'Primary'` — first-class rail
+- `inclusion`: `'More'` — candidate, parked in More
+- `inclusion`: `'None'` — not a candidate. Not in More. Ranker never sees it
+- omit — **Auto** (L2 ranker)
+- `join`: `{ mode: 'any', fields: string[] }` — same-table OR of FKs (Bill-To OR Ship-To)
+- `FormRole`: `'Primary'` \| `'Detail'` — accepted alias (`Detail` = More)
+
+`None` is how an app keeps satellite records off a hub form (Task Comments
+on Person, Sold-To when Orders is already joined on Bill-To/Ship-To).
+
+When one relationship to a related entity carries `join.fields`, sibling
+FKs to that same entity with no explicit inclusion are `None`. Through-filters
+(junction tables) are not same-table OR — use a contribution widget for those.
+
+The app that **owns the related entity** (or the contribution) ships the L1
+row. Downstream may override upstream; the admin pathway shows that.
+
+#### L2 — ranker
+
+`Entity.Configuration.UI.Form`:
+
+- `Layout`: `'accordion'` \| `'left-nav'` \| `'auto'` (omit = auto)
+- `AutoLeftNavAt`: first-class section count that flips auto to left-nav (omit = 8)
+- `RelatedRolePolicy`: `'smart'` (default) or `'keep-all-primary'`
+- `PrimaryRelatedBudget`: max **Auto** related grids that stay first-class under smart (omit = 6). Does not cap explicit `inclusion: 'Primary'`
+
+The ranker only sees Auto leftovers. Same-schema 1:N children, declared
+collections, and custom display components score above cross-schema hang-ons
+and `__mj` plumbing. If the Auto pool is at or under the budget, every Auto
+related stays Primary.
+
+#### L3 — install overlay
+
+`MJ: Form Chrome Rules` is the admin's global default. It is **not** in
+OpenApp `metadata/` push filters. A row pins a (parent entity, related entity)
+or (parent entity, contribution key) to Primary, More, or None, and may set
+`JoinFields`. L3 can suppress a contribution for the site. L4 cannot.
+
+#### L4 — user overlay
+
+Users reorder first-class rail items and move visible items in or out of
+More (`UserInfoEngine`). They cannot suppress a contribution.
+
+#### Contributions
+
+No L0 (CodeGen did not emit them). No L2 (they are not the related-grid
+pool). Installed package → the contribution exists by `contributionKey`.
+L3 can turn it off. L4 rearranges what remains.
+
+#### Policy
+
+Register with `@RegisterClassEx(BaseFormPolicy, { metadata: { entity } })`.
+Downstream subclasses upstream (`OrdersPersonFormPolicy extends
+CommonPersonFormPolicy`). `DecorateChrome(spec, ctx)` returns cosmetics.
+A decorate that changes section membership is ignored.
+
+Cancelable `BeforeLayoutResolve` / `BeforeSectionActivate` live on the
+container.
+
+#### Left-nav
+
+The rail picks one group; the body shows only that group. Selected content
+has **no accordion chrome** (the rail is the header). Related grids fill the
+**leftover column height** — the selected panel is `flex: 1 1 auto` in the
+column, not a pinned pixel height. Accordion-persisted heights are not
+applied while the rail is showing the panel.
+
+Slot-mounted contributions (`<mj-form-panel-slot>` / `BaseFormPanel` hosts)
+use `display: contents` so they do not sit as an extra wrapper in that flex
+column. `SetSectionRowCount` **upserts** the key: contribution sections are
+not seeded by generated `initSections()`, so the rail badge still appears
+(Orders on Person, Payments, etc.).
+
+**More** is a folder on the rail — click to expand sub-nodes, then pick one
+item like any other rail entry. Field panels collapse into one **Details**
+item. Related Primary grids stay first-class (same related entity and
+same-title grids merge). `System Metadata` and More related always sit in
+More. Rail items use the same icon as the accordion header (entity `Icon`
+when present). Users reorder first-class items by dragging the rail grip
+(or Manage Sections / reset in the toolbar). The centered / full-width
+toolbar toggle still applies.
+
+#### Section search
+
+Search matches a group's **title** and each panel's `MatchesSearch` (title
+plus registered keywords). It does **not** use `IsVisible` — chrome hides
+inactive left-nav groups, so visibility would make search miss everything
+except the selected item. Contribution titles (Orders, Payments) match in
+both accordion and left-nav. The rail stays visible whenever more than one
+chrome group exists **or** search is active, even if only one group hits.
+The empty state is **SearchHasNoMatches** (live match), not a baked
+ContentChildren snapshot that would miss slot-mounted panels.
+
+Authoring: `Entity.Configuration` / `EntityRelationship.Configuration`
+JSONType interfaces, [`PANELS.md`](../packages/Angular/Generic/base-forms/PANELS.md).
 
 ### 7b. Render a single section standalone (`SectionName`)
 

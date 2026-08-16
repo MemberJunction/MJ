@@ -1779,7 +1779,9 @@ export class FlowAgentType extends BaseAgentType {
         // Replace [index] with [0], [1], etc.
         resolvedOutputMapping = resolvedOutputMapping.replace(
             new RegExp(`\\[${indexVar}\\]`, 'g'),
-            `[${iterationResult.index}]`
+            // Function replacement — see issue #3171. The index is numeric today, but
+            // the string form is the shape that silently corrupted data elsewhere.
+            () => `[${iterationResult.index}]`
         );
 
         // Apply output mapping with resolved paths

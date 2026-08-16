@@ -21,6 +21,10 @@ on:
       - '.github/scripts/check-esm-imports.mjs'
       - '.github/scripts/vitest.config.mts'
       - '.github/scripts/__tests__/**'
+      # Same reasoning for the dynamic-replace guard (see that step). Without this
+      # entry a PR editing only the gate script runs neither the gate nor its own
+      # vitest suite — the one change that most needs both.
+      - '.github/scripts/check-dynamic-replace.mjs'
       # The DOM-spec guards/gates run in this workflow too.
       - 'scripts/check-dom-spec-placement.mjs'
       - 'scripts/check-spec-antipatterns.mjs'
@@ -30,6 +34,11 @@ on:
       # script itself lives in scripts/ — without this entry a detector-only PR never
       # runs its tests.
       - 'scripts/check-pg-migration-content.mjs'
+      # Same trap, same fix, for the CodeGen-tail guard: its unit suite lives in __tests__
+      # above, but a PR touching only the guard would never run the tests that prove its
+      # parsing is sane. Those extractors are pinned to CodeGen's exact emitted shape, so
+      # "matches zero and therefore passes everything" is the precise regression to catch.
+      - '.github/scripts/check-codegen-tail.mjs'
   # Full-suite backstop: every merge into next runs ALL package tests, so a runtime-only
   # break (MJ's dynamic @RegisterClass / ClassFactory wiring can couple packages without a
   # package.json edge that turbo's graph sees) can never slip through PR affected-filtering.
@@ -152,7 +161,7 @@ jobs:
       - name: DOM-spec placement guard
         run: node scripts/check-dom-spec-placement.mjs packages
 
-      - name: DOM-spec anti-pattern lint
+      - name: Spec anti-pattern lint
         run: node scripts/check-spec-antipatterns.mjs packages
 
       - name: Explorer DOM coverage gate
@@ -163,6 +172,39 @@ jobs:
 
       - name: Bootstrap DOM coverage ratchet
         run: node scripts/dom-test-report.mjs packages/Angular/Bootstrap --max-none=0
+
+      # Dynamic-replace guard (#3171): `.replace(search, replacement)` expands
+      # $$, $&, $` and $' when `replacement` is a STRING, so any '$' in runtime
+      # data passed there is silently executed instead of inserted. That wrote
+      # corrupted DB passwords into MJAPI's .env and rewrote RLS predicates.
+      # Line-aware on purpose: ~90 pre-existing sites remain (many benign), so
+      # this gates only the lines a change actually touches, preventing new
+      # occurrences without failing PRs for code they merely brushed past.
+      #
+      # Lives with the pure-file guards, NOT after the build: it reads source
+      # text only, costs about a second, and needs no dist/. Sitting after the
+      # ~20-minute build+test step meant any unit-test failure stopped it from
+      # running at all — the gate went silent exactly when a PR was already in
+      # trouble and most needed checking.
+      #
+      # `!cancelled()` for that same reason, one step further: a step's default
+      # `if: success()` also skips it when any EARLIER step failed, which is how
+      # the unrelated Generic DOM ratchet silenced it on run 31848972923. Moving
+      # it above the DOM guards would only hand the same silence to them —
+      # ordering can protect exactly one gate, and these are independent. This
+      # makes the gate's result independent of every other step's outcome; it
+      # still fails the job when it finds something. (Needs only git + node,
+      # both present from checkout, so it holds even if an earlier setup step is
+      # what broke.)
+      - name: Dynamic-replace guard
+        if: ${{ !cancelled() }}
+        env:
+          # Via env, never interpolated into the run: string — a ref name must not
+          # be able to reach the shell. On push/schedule base_ref is empty and HEAD
+          # IS origin/next, so the diff is empty and this is a no-op by design;
+          # the PR run is where it does its work.
+          PR_BASE_REF: ${{ github.base_ref || 'next' }}
+        run: node .github/scripts/check-dynamic-replace.mjs --base "origin/$PR_BASE_REF"
 
       # Decide what to run:
       #  - pull_request: only packages changed since the base branch PLUS everything that
@@ -219,6 +261,24 @@ jobs:
             npx turbo run test:types
             npm test -- --concurrency=4
           fi
+
+      # Class-registration manifest freshness gate. The committed manifests (the anti-tree-
+      # shaking import lists wiring 100+ packages of @RegisterClass classes) demonstrably go
+      # stale and get hand-patched (commit 4e00e67fd). On the FULL-suite path, `pnpm run build`
+      # has just regenerated them via the mj:manifest postbuild — so any diff against the
+      # committed files means a package added/removed a registered class and the manifest
+      # commit was forgotten. Fail loudly with the exact fix. (PR-filtered runs skip this:
+      # `npx turbo run build` doesn't run the root postbuild, so there's nothing regenerated
+      # to compare — the merge backstop always catches it.)
+      - name: Class-registration manifest freshness gate
+        if: env.TURBO_FILTER == ''
+        run: |
+          MANIFESTS=$(git ls-files '*mj-class-registrations.ts' '*class-registrations-manifest.ts' '*lazy-feature-config.ts')
+          if ! git diff --exit-code -- $MANIFESTS; then
+            echo "::error::Committed class-registration manifests are STALE — a @RegisterClass class was added/removed without regenerating them. Fix: run 'pnpm run mj:manifest' locally and commit the result. A stale manifest lets tree-shaking silently drop the class in bundled apps."
+            exit 1
+          fi
+          echo "Class-registration manifests are fresh."
 
       # The cache directory is restored, added to, and saved again every backstop run, so without
       # a bound it grows monotonically: each merge's entries pile on top of every previous merge's.
@@ -307,14 +367,6 @@ jobs:
           npx vitest run --config .github/scripts/vitest.config.mts
           node .github/scripts/check-esm-imports.mjs packages
 
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage/
-          retention-days: 30
-
       # Backstop-failure alert (rkihm-BC #2990): a red PUSH (merge to next) or nightly SCHEDULE run
       # means a runtime-only break (e.g. @RegisterClass/ClassFactory coupling with no package.json edge)
       # slipped past PR affected-filtering and `next` is now red. These runs gate nothing, so surface the
@@ -330,3 +382,118 @@ jobs:
             --title "🔴 Unit-test backstop failed on next (${GITHUB_SHA:0:7})" \
             --body "The full-suite **backstop** (\`${{ github.event_name }}\`) failed on \`next\` — a break slipped past PR affected-filtering, so \`next\` is red. Run: ${RUN_URL}. Please triage per CONTRIBUTING (owner TBD)." \
             || echo "::error::Backstop failed AND alert-issue creation failed — see ${RUN_URL}"
+
+  # Nightly coverage lane. Runs ONLY on the scheduled backstop (plus manual dispatch), in its
+  # own job so the backstop suite above is untouched: it executes the curated node-tier
+  # project list in the root vitest.config.ts with V8 coverage enabled (`--coverage` flips
+  # the config's `enabled: false`) and publishes the report as an artifact + a step summary.
+  # Report-only: no thresholds gate this job yet — ratchets come after a baseline exists
+  # from real reports. Angular DOM coverage is deliberately excluded here (jsdom projects
+  # are memory-heavy; the DOM tier is gated separately by the coverage ratchets in `test`).
+  coverage:
+    name: Nightly coverage report
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TURBO_CACHE_DIR: .turbo/cache
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Restore-only: this job never writes cache entries (the backstop's save is the
+      # canonical writer). A warm restore makes the build below a near-total cache replay.
+      - name: Restore turbo build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
+
+      - name: Create MJExplorer environment file
+        run: |
+          mkdir -p packages/MJExplorer/src/environments
+          cat > packages/MJExplorer/src/environments/environment.ts << 'ENVEOF'
+          export const environment = {
+            GRAPHQL_URI: "http://localhost:4000",
+            GRAPHQL_WS_URI: "ws://localhost:4000",
+            REDIRECT_URI: "http://localhost:4200",
+            CLIENT_ID: "00000000-0000-0000-0000-000000000000",
+            TENANT_ID: "00000000-0000-0000-0000-000000000000",
+            CLIENT_AUTHORITY: "https://login.microsoftonline.com/common",
+            AUTH_TYPE: "msal" as const,
+            NODE_ENV: "test",
+            AUTOSAVE_DEBOUNCE_MS: 1200,
+            SEARCH_DEBOUNCE_MS: 800,
+            MIN_SEARCH_LENGTH: 3,
+            MJ_CORE_SCHEMA_NAME: "__mj",
+            production: false,
+            APPLICATION_NAME: "MJ Explorer CI",
+            APPLICATION_INSTANCE: "CI",
+            AUTH0_DOMAIN: "",
+            AUTH0_CLIENTID: ""
+          };
+          ENVEOF
+          sed -i 's/^          //' packages/MJExplorer/src/environments/environment.ts
+
+      - name: Build
+        run: pnpm run build
+
+      # Report-first: this lane's deliverable is the coverage NUMBERS, not a pass/fail verdict —
+      # the `test` job above is what gates on test failures. So run with reportOnFailure (v8
+      # emits the report even when some tests fail) and never let a test failure red THIS job.
+      # A real failure still shows red in the `test` job; here it becomes a warning so the
+      # coverage report is always produced and uploaded. (First surfaced by CodeGenLib's
+      # pre-existing pg-connection.test.ts, which passes under a plain run but breaks under v8
+      # coverage instrumentation — a report lane must not be hostage to that.)
+      - name: Run tests with coverage
+        run: |
+          set -o pipefail
+          npx vitest run --coverage --coverage.reportOnFailure 2>&1 | tee /tmp/coverage.log || echo "COVERAGE_TESTS_FAILED=1" >> "$GITHUB_ENV"
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            node -e '
+              const s = require("./coverage/coverage-summary.json").total;
+              const row = (k) => `| ${k} | ${s[k].pct}% (${s[k].covered}/${s[k].total}) |`;
+              console.log("## Nightly coverage (node-tier projects)");
+              console.log("");
+              console.log("| Metric | Coverage |");
+              console.log("|---|---|");
+              for (const k of ["statements", "branches", "functions", "lines"]) console.log(row(k));
+            ' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No coverage-summary.json produced — see the coverage run logs." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "${COVERAGE_TESTS_FAILED:-0}" = "1" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "> ⚠️ Some tests failed during the coverage run (coverage still reported). The blocking \`test\` job is the source of truth for pass/fail — check it." >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Coverage run had test failures (report still produced). See the 'test' job for the gating result."
+          fi
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 30

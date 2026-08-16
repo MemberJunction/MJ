@@ -187,6 +187,16 @@ describe('R2-3: data absence is the data answering no, not a broken guard', () =
     ])('R3-6: still HOLDS a broken guard (%s)', (message) => {
         expect(DecideGate('Complete', 'edges', () => broken(message))).toBe('hold');
     });
+
+    it('HOLDS a condition the evaluator REFUSES on policy — that is a guard, not absent data', () => {
+        // `SafeExpressionEvaluator` screens the AST before compiling, so a construct outside its
+        // allowlist fails on every input rather than on this one's data. Reading that as absence
+        // would REROUTE a stored graph the moment an upgrade narrows the screen — and silently,
+        // since the dispatcher records a reason only on `hold`. A hold makes the incompatibility a
+        // sentence somebody reads during upgrade testing.
+        expect(DecideGate('Complete', 'edges',
+            () => broken('Expression contains a forbidden construct: the operator "instanceof"'))).toBe('hold');
+    });
 });
 
 describe('R3-2: a failure decides an ordinary edge only where the dialect says failures decide', () => {

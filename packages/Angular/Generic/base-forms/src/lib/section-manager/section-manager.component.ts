@@ -15,6 +15,11 @@ export interface SectionManagerItem {
   Icon: string;
 }
 
+export interface ChromeMembershipChange {
+  moreSectionKeys: string[];
+  firstClassSectionKeys: string[];
+}
+
 /**
  * Slide-in drawer for managing section order.
  *
@@ -49,11 +54,20 @@ export class MjSectionManagerComponent implements OnChanges {
   /** Current section order (array of section keys) */
   @Input() SectionOrder: string[] = [];
 
+  /** Section keys currently in More. Empty keeps a single list. */
+  @Input() MoreSectionKeys: string[] = [];
+
+  /** Keys that cannot leave More (System Metadata). */
+  @Input() LockedMoreKeys: string[] = [];
+
   /** Whether the drawer is visible */
   @Input() Visible = false;
 
   /** Emits the new section order when the user reorders */
   @Output() SectionOrderChange = new EventEmitter<string[]>();
+
+  /** Emits when the user moves a section in or out of More. */
+  @Output() MembershipChange = new EventEmitter<ChromeMembershipChange>();
 
   /** Emits when the drawer is closed */
   @Output() Closed = new EventEmitter<void>();
@@ -63,11 +77,21 @@ export class MjSectionManagerComponent implements OnChanges {
 
   /** Ordered list of sections for display */
   OrderedSections: SectionManagerItem[] = [];
+  FirstClassSections: SectionManagerItem[] = [];
+  MoreSections: SectionManagerItem[] = [];
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['Sections'] || changes['SectionOrder']) {
+    if (changes['Sections'] || changes['SectionOrder'] || changes['MoreSectionKeys'] || changes['LockedMoreKeys']) {
       this.RebuildOrderedSections();
     }
+  }
+
+  get HasMoreGroup(): boolean {
+    return this.MoreSections.length > 0 || this.MoreSectionKeys.length > 0;
+  }
+
+  IsLockedInMore(section: SectionManagerItem): boolean {
+    return this.LockedMoreKeys.includes(section.SectionKey);
   }
 
   OnClose(): void {
@@ -95,6 +119,46 @@ export class MjSectionManagerComponent implements OnChanges {
     [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
     this.SectionOrderChange.emit(newOrder);
     this.ApplyOrder(newOrder);
+  }
+
+  OnMoveGroupUp(list: SectionManagerItem[], index: number): void {
+    if (index <= 0) return;
+    this.emitReorderedGroup(list, index, index - 1);
+  }
+
+  OnMoveGroupDown(list: SectionManagerItem[], index: number): void {
+    if (index >= list.length - 1) return;
+    this.emitReorderedGroup(list, index, index + 1);
+  }
+
+  OnMoveToMore(section: SectionManagerItem): void {
+    if (this.MoreSectionKeys.includes(section.SectionKey)) return;
+    const more = [...this.MoreSectionKeys, section.SectionKey];
+    const firstClass = this.FirstClassSections
+      .map((s) => s.SectionKey)
+      .filter((key) => key !== section.SectionKey);
+    this.MembershipChange.emit({ moreSectionKeys: more, firstClassSectionKeys: firstClass });
+  }
+
+  OnMoveToForm(section: SectionManagerItem): void {
+    if (this.IsLockedInMore(section)) return;
+    const more = this.MoreSectionKeys.filter((key) => key !== section.SectionKey);
+    const firstClass = [
+      ...this.FirstClassSections.map((s) => s.SectionKey),
+      section.SectionKey,
+    ];
+    this.MembershipChange.emit({ moreSectionKeys: more, firstClassSectionKeys: firstClass });
+  }
+
+  private emitReorderedGroup(list: SectionManagerItem[], from: number, to: number): void {
+    const keys = list.map((s) => s.SectionKey);
+    [keys[from], keys[to]] = [keys[to], keys[from]];
+    const other = list === this.FirstClassSections ? this.MoreSections : this.FirstClassSections;
+    const combined = list === this.FirstClassSections
+      ? [...keys, ...other.map((s) => s.SectionKey)]
+      : [...other.map((s) => s.SectionKey), ...keys];
+    this.SectionOrderChange.emit(combined);
+    this.ApplyOrder(combined);
   }
 
   OnReset(): void {
@@ -147,6 +211,9 @@ export class MjSectionManagerComponent implements OnChanges {
     }
 
     this.OrderedSections = ordered;
+    const moreSet = new Set(this.MoreSectionKeys);
+    this.FirstClassSections = ordered.filter((s) => !moreSet.has(s.SectionKey));
+    this.MoreSections = ordered.filter((s) => moreSet.has(s.SectionKey));
     this.cdr.markForCheck();
   }
 
@@ -158,6 +225,9 @@ export class MjSectionManagerComponent implements OnChanges {
     this.OrderedSections = newOrder
       .map(key => sectionMap.get(key))
       .filter((s): s is SectionManagerItem => s !== undefined);
+    const moreSet = new Set(this.MoreSectionKeys);
+    this.FirstClassSections = this.OrderedSections.filter((s) => !moreSet.has(s.SectionKey));
+    this.MoreSections = this.OrderedSections.filter((s) => moreSet.has(s.SectionKey));
     this.cdr.markForCheck();
   }
 }

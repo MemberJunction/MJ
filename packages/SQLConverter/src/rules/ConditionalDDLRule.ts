@@ -16,7 +16,35 @@
  *   END $$;
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate, convertCommonFunctions, removeNPrefix, castBooleanInsertValues, convertBooleanLiteralComparisons } from './ExpressionHelpers.js';
+import { convertIdentifiers, removeCollate, convertCommonFunctions, removeNPrefix, castBooleanInsertValues, convertBooleanLiteralComparisons, StripComments } from './ExpressionHelpers.js';
+
+/** One migration placeholder — `${mjSchema}`, `${flyway:defaultSchema}` — as it appears in source SQL. */
+const PLACEHOLDER = /\$\{[\w:.-]+\}/;
+
+/**
+ * True when the identifier is made up only of migration placeholders and plain identifier
+ * characters, and so is still a legal unquoted identifier once the placeholders are substituted
+ * as plain text. It must contain at least one placeholder — a purely literal name is handled by
+ * the simpler check at the call site.
+ */
+function isPlaceholderIdentifier(name: string): boolean {
+  if (!PLACEHOLDER.test(name)) return false;
+  const withoutPlaceholders = name.replace(new RegExp(PLACEHOLDER, 'g'), '');
+  return /^\w*$/.test(withoutPlaceholders);
+}
+
+/**
+ * Lowercases the literal parts of a placeholder identifier and leaves each `${...}` verbatim —
+ * the placeholder's contents name a migration variable and are matched exactly at substitution
+ * time, so folding them would break the lookup. The substituted value folds on its own once the
+ * identifier is emitted unquoted.
+ */
+function lowerCaseOutsidePlaceholders(name: string): string {
+  return name.replace(
+    new RegExp(`(${PLACEHOLDER.source})|([^$]+)`, 'g'),
+    (match, placeholder: string | undefined) => (placeholder ? placeholder : match.toLowerCase())
+  );
+}
 
 export class ConditionalDDLRule implements IConversionRule {
   Name = 'ConditionalDDLRule';
@@ -49,6 +77,10 @@ export class ConditionalDDLRule implements IConversionRule {
     // (prevents GETUTCDATE from being quoted as "GETUTCDATE" before conversion to NOW())
     result = convertCommonFunctions(result);
 
+    // Try guarded constraint drop → PG-native DROP CONSTRAINT IF EXISTS
+    const dropConstraintResult = this.tryConvertGuardedDropConstraint(result);
+    if (dropConstraintResult) return dropConstraintResult + '\n';
+
     // Try CREATE INDEX IF NOT EXISTS pattern first (no BEGIN/END wrapper)
     const indexResult = this.tryConvertConditionalIndex(result);
     if (indexResult) return indexResult + '\n';
@@ -79,6 +111,86 @@ export class ConditionalDDLRule implements IConversionRule {
     result = convertBooleanLiteralComparisons(result, context.TableColumns);
 
     return result + '\n';
+  }
+
+  /**
+   * The SQL Server catalog views that identify a guard as a CONSTRAINT-existence probe.
+   *
+   * A guard naming one of these is asking "does this constraint exist" and nothing more, which
+   * is precisely the question `DROP CONSTRAINT IF EXISTS` answers natively — so discarding it
+   * loses nothing.
+   */
+  private static readonly CONSTRAINT_CATALOG_VIEW =
+    /\bsys\.(check_constraints|key_constraints|foreign_keys|default_constraints)\b/i;
+
+  /**
+   * `sys.objects` is the GENERIC object catalog, so naming it proves nothing on its own.
+   *
+   * `IF EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'[__mj].[Legacy]') AND
+   * type in (N'U'))` is a TABLE-existence test — "if the legacy table is still here, drop the FK
+   * that points at it" — and discarding it makes PostgreSQL drop unconditionally while SQL Server
+   * does not. So a `sys.objects` guard only counts as a constraint probe when its predicate also
+   * restricts to constraint object types (`C` check, `F` foreign key, `UQ` unique, `PK` primary
+   * key, `D` default) or joins on `parent_object_id`, which only constraint rows carry meaningfully.
+   */
+  private static readonly OBJECTS_CONSTRAINT_PREDICATE =
+    /\bparent_object_id\b|\btype\s*(?:=|\bIN\b)\s*\(?\s*N?'(?:C|F|UQ|PK|D)'/i;
+
+  /** True when the guard is asking only "does this constraint exist". */
+  private static isConstraintExistenceProbe(guard: string): boolean {
+    if (ConditionalDDLRule.CONSTRAINT_CATALOG_VIEW.test(guard)) return true;
+    return /\bsys\.objects\b/i.test(guard)
+      && ConditionalDDLRule.OBJECTS_CONSTRAINT_PREDICATE.test(guard);
+  }
+
+  /**
+   * Convert a guarded constraint drop to PG's native idempotent form:
+   *
+   *     IF EXISTS (SELECT 1 FROM sys.check_constraints cc JOIN ... WHERE cc.name = 'CK_X')
+   *     BEGIN
+   *         ALTER TABLE [s].[T] DROP CONSTRAINT [CK_X];
+   *     END
+   *
+   * becomes
+   *
+   *     ALTER TABLE s."T" DROP CONSTRAINT IF EXISTS "CK_X";
+   *
+   * Only a guard that PROBES THE CATALOG for the constraint is discarded. That form exists
+   * solely because SQL Server has no DROP CONSTRAINT IF EXISTS, so on PG it is redundant and
+   * its joins (sys.schemas / sys.tables) have no pg_constraint analogue worth reconstructing.
+   *
+   * Any other predicate is a real condition and is NOT ours to throw away — a guard like
+   * `IF EXISTS (SELECT 1 FROM [__mj].[Payment] WHERE [Status] = 'Legacy')` means the drop is
+   * conditional on data, and discarding it makes PostgreSQL drop unconditionally while SQL
+   * Server does not, diverging the two schemas with no error on either side. Gating on a
+   * catalog reference mirrors what tryConvertConditionalIndex already does with `sys.indexes`.
+   *
+   * Returns null unless the guard is a catalog probe AND the guarded body consists solely of
+   * DROP CONSTRAINT statements, so anything richer keeps falling through to the generic
+   * DO-block conversion (which comments out what it cannot express).
+   */
+  private tryConvertGuardedDropConstraint(sql: string): string | null {
+    const ifMatch = sql.match(/IF\s+EXISTS\s*\(/i);
+    if (!ifMatch || ifMatch.index === undefined) return null;
+    const openPos = sql.indexOf('(', ifMatch.index);
+    const closePos = ConditionalDDLRule.findCloseParen(sql, openPos);
+    if (closePos < 0) return null;
+
+    const guard = sql.slice(openPos, closePos + 1);
+    if (!ConditionalDDLRule.isConstraintExistenceProbe(guard)) return null;
+
+    const body = sql.slice(closePos + 1).replace(/^\s*BEGIN\b/i, '').replace(/\bEND\s*;?\s*$/i, '');
+    const statements = body.split(';').map(s => s.trim()).filter(Boolean);
+    if (statements.length === 0) return null;
+
+    const dropRe = /^ALTER\s+TABLE\s+(\S+)\s+DROP\s+CONSTRAINT\s+("?[\w]+"?)$/i;
+    const converted: string[] = [];
+    for (const statement of statements) {
+      const m = statement.match(dropRe);
+      if (!m) return null;
+      converted.push(`ALTER TABLE ${m[1]} DROP CONSTRAINT IF EXISTS ${m[2]};`);
+    }
+    return converted.join('\n');
   }
 
   /** Convert IF NOT EXISTS (sys.indexes...) CREATE INDEX → CREATE INDEX IF NOT EXISTS */
@@ -209,11 +321,60 @@ export class ConditionalDDLRule implements IConversionRule {
     // Extract the schema name from CREATE SCHEMA — handles both [X], "X", and bare X.
     // EXEC('CREATE SCHEMA [X]') after PostProcess identifier conversion may already be
     // EXEC('CREATE SCHEMA "X"'), so accept either bracket or quote forms.
-    const schemaMatch = sql.match(/CREATE\s+SCHEMA\s+(?:\[([^\]]+)\]|"([^"]+)"|(\w+))/i);
+    //
+    // Match against the COMMENT-STRIPPED batch. A migration that explains itself above the
+    // statement ("-- ... the guarded CREATE SCHEMA form ...") otherwise has its prose matched
+    // first, and the rule emits a schema named after a word in the comment while the real
+    // statement is dropped — creating a phantom schema and silently omitting the one every
+    // table below it depends on.
+    const schemaMatch = StripComments(sql).match(
+      /CREATE\s+SCHEMA\s+(?:\[([^\]]+)\]|"([^"]+)"|(\w+))/i);
     if (!schemaMatch) return null;
     const schemaName = schemaMatch[1] || schemaMatch[2] || schemaMatch[3];
     if (!schemaName) return null;
 
+    // Emit the name UNQUOTED so PostgreSQL folds it to lowercase.
+    //
+    // Every reference to this schema is emitted unquoted too — convertIdentifiers turns
+    // `[Schema].[Name]` into `Schema."Name"`, leaving the schema bare — so a quoted CREATE here
+    // produces a case-preserved schema that none of those references resolve to. In practice the
+    // migration set then creates BOTH: `__mj_BizAppsSecureMessaging` from this line and
+    // `__mj_bizappssecuremessaging` from an unquoted CREATE elsewhere, with the tables landing in
+    // one and an arbitrary subset of references pointing at the other.
+    //
+    // Lowercase is the correct target: it is what MJ's PostgreSQL CodeGen emits and what a live
+    // MJ PostgreSQL database holds. A name that is not a plain identifier still has to be quoted,
+    // since it cannot survive unquoted at all.
+    //
+    // A name built from a migration placeholder — `[${mjSchema}_BizAppsCommon]`, how an open app
+    // names a sibling app's schema — also has to come out unquoted: convertIdentifiers deliberately
+    // leaves placeholder schema REFERENCES unquoted, so quoting the CREATE reproduces defect 6 for
+    // exactly the case the placeholder exists to serve. The placeholder is substituted as plain
+    // text at apply time, so `${mjSchema}_BizAppsCommon` becomes `__mj_BizAppsCommon` unquoted and
+    // folds to `__mj_bizappscommon` — the same thing every reference to it folds to.
+    //
+    // A schema with a RUNTIME producer is EXEMPT from the fold, because folding it here puts the
+    // two producers in disagreement and the runtime is the one a migration cannot correct.
+    // `__mj_UDT` is the whole of that set: `UDT_SCHEMA_NAME` in `AI/DatabaseDesigner/core` is the
+    // mixed-case literal, and every path that emits it quotes it — `CreateSchemaDDL`,
+    // `QuoteSchema`, and the schema-builder's `QuotePostgres` — so a live database holds
+    // `"__mj_UDT"` case-preserved and the Database Designer creates its tables there. Folding the
+    // CREATE would leave the Designer writing into a schema no migration made, and CodeGen's
+    // `vwSQLTablesAndEntities` joins `nspname = e."SchemaName"` case-sensitively, so metadata
+    // saying `__mj_UDT` would stop matching a folded `__mj_udt` and orphan every UDT entity from
+    // its table. Verified against the shipped corpus: `migrations-pg/` contains not one unquoted
+    // `__mj_udt` reference — all 272 other occurrences of the name are prose or JSON string
+    // content — so nothing in the migration set wants the folded spelling either.
+    const RUNTIME_CREATED_SCHEMAS = new Set(['__mj_UDT']);
+    if (RUNTIME_CREATED_SCHEMAS.has(schemaName)) {
+      return `CREATE SCHEMA IF NOT EXISTS "${schemaName}";`;
+    }
+    const literalOnly = /^[A-Za-z_]\w*$/.test(schemaName);
+    if (literalOnly) return `CREATE SCHEMA IF NOT EXISTS ${schemaName.toLowerCase()};`;
+    if (isPlaceholderIdentifier(schemaName)) {
+      return `CREATE SCHEMA IF NOT EXISTS ${lowerCaseOutsidePlaceholders(schemaName)};`;
+    }
+    // Anything else cannot survive unquoted at all, so it stays quoted.
     return `CREATE SCHEMA IF NOT EXISTS "${schemaName}";`;
   }
 

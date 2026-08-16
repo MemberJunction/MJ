@@ -41,8 +41,26 @@ jobs:
             exit 1
           fi
 
+      # A workflow_run checkout without a ref resolves to the DEFAULT branch tip
+      # (`next`), so we pin to a specific SHA instead.
+      #
+      # CAVEAT — the two paths read different versions, and only one is correct:
+      #   * workflow_dispatch (how a certified image is actually built, per the header):
+      #     `github.sha` is the dispatched ref, i.e. the certified TAG's commit, which
+      #     carries the bumped version. Correct.
+      #   * workflow_run (automatic, after publish.yml): `head_sha` is the commit that
+      #     TRIGGERED publish.yml — publish.yml then runs `pnpm run version` and pushes
+      #     the bump as a LATER commit, so `head_sha` still holds the PRE-bump (previous)
+      #     version. Reading it here would tag one release behind. This is currently
+      #     inert because every next->main publish is Edge-suffixed and the `channel`
+      #     job skips it — but if an unsuffixed version ever ships through this trigger,
+      #     the tag would be wrong. Fix before then: trigger off `release: published`
+      #     (its payload carries the tag) or have publish.yml expose the pushed release
+      #     commit/tag as a workflow output, and checkout that.
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Get version
         id: version
@@ -75,8 +93,12 @@ jobs:
     if: needs.channel.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
+      # Same head-SHA pin as the channel job: the image content (MJAPI source,
+      # migrations, Dockerfile) must come from the released commit, not next's tip.
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -87,6 +109,78 @@ jobs:
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      # ---- Boot verification: never push an image that has never been started. ----
+      # The container's real boot sequence (mj migrate → mj codegen → pm2-runtime,
+      # docker/MJAPI/entrypoint.sh) used to execute for the first time on a customer
+      # machine. Build the amd64 image locally first, boot it against a throwaway SQL
+      # Server, and require MJServer's unauthenticated /healthcheck to answer before
+      # any registry push. (arm64 is still built via QEMU and not booted — running a
+      # full migrate+codegen under emulation is prohibitively slow; accepted gap.)
+      - name: Build amd64 image for boot verification
+        uses: docker/build-push-action@v6
+        with:
+          load: true
+          push: false
+          tags: memberjunction/api:ci-boot-check
+          platforms: linux/amd64
+          file: docker/MJAPI/Dockerfile
+          context: .
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Boot image against a fresh SQL Server and verify /healthcheck
+        run: |
+          set -u
+          docker network create boot-net
+          docker run --rm -d --network boot-net --name sql \
+            -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD='VeryStr0ngP@ssw0rd' \
+            mcr.microsoft.com/mssql/server:2022-latest
+
+          echo "Waiting for SQL Server..."
+          SQL_READY=0
+          for i in $(seq 1 60); do
+            if docker run --rm --network boot-net mcr.microsoft.com/mssql-tools \
+                 /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "SELECT 1" >/dev/null 2>&1; then
+              SQL_READY=1; break
+            fi
+            sleep 2
+          done
+          if [ "$SQL_READY" != "1" ]; then echo "::error::SQL Server never became ready"; exit 1; fi
+          docker run --rm --network boot-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [mj];"
+
+          docker run -d --network boot-net --name mjapi -p 4000:4000 \
+            -e DB_HOST=sql -e DB_PORT=1433 -e DB_DATABASE=mj \
+            -e DB_USERNAME=sa -e DB_PASSWORD='VeryStr0ngP@ssw0rd' \
+            -e CODEGEN_DB_USERNAME=sa -e CODEGEN_DB_PASSWORD='VeryStr0ngP@ssw0rd' \
+            -e DB_TRUST_SERVER_CERTIFICATE=true \
+            memberjunction/api:ci-boot-check
+
+          # Entrypoint runs mj migrate + mj codegen on the fresh DB before the API
+          # starts — allow up to 15 minutes, but fail fast if the container dies.
+          OK=0
+          for i in $(seq 1 90); do
+            if curl -fsS http://localhost:4000/healthcheck >/dev/null 2>&1; then
+              OK=1; break
+            fi
+            if [ -z "$(docker ps -q -f name=mjapi)" ]; then
+              echo "::error::MJAPI container exited during boot"
+              break
+            fi
+            sleep 10
+          done
+          echo "---- MJAPI logs (tail) ----"
+          docker logs --tail 300 mjapi || true
+          docker rm -f mjapi >/dev/null 2>&1 || true
+          docker rm -f sql >/dev/null 2>&1 || true
+          docker network rm boot-net >/dev/null 2>&1 || true
+          if [ "$OK" != "1" ]; then
+            echo "::error::MJAPI /healthcheck never answered — refusing to push the image"
+            exit 1
+          fi
+          echo "MJAPI booted and answered /healthcheck — proceeding to push."
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -99,6 +193,8 @@ jobs:
             linux/arm64
           file: docker/MJAPI/Dockerfile
           context: .
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Log in to the AskSkip Azure Container Registry
         uses: docker/login-action@v3
