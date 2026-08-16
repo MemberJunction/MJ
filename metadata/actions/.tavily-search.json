@@ -1,0 +1,316 @@
+[
+  {
+    "fields": {
+      "Name": "Tavily Search",
+      "Description": "Web search through the Tavily API, built for AI consumption: returns cleaned page content and an optional synthesised answer rather than only links.",
+      "DriverClass": "Tavily Search",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-magnifying-glass-chart",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Web"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Query",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Search query text. Required.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "C9072F26-ABEC-4384-BEA6-5840D581B47F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchDepth",
+            "DefaultValue": "basic",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "'basic' (default) or 'advanced'. Advanced costs more Tavily credits and returns deeper content.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "77F9B273-255D-4966-880A-DC6EAC20799F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Topic",
+            "DefaultValue": "general",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "'general' (default) or 'news'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "278353EC-A194-4B07-A89E-AA470BC6373A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "DefaultValue": "5",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum results to return.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D890F1E4-3A49-4351-BF2C-FBB8C60E917D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeAnswer",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include Tavily's synthesised answer. Default false.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "980E56A3-8AA5-4E7F-B5D1-08BF20653FC0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeRawContent",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include the full cleaned page text per result. Default false \u2014 this is large.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "03CB5AFD-6747-4309-9888-C76D080C21E0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeDomains",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Restrict results to these domains.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6B55A279-B8A1-4AF3-B374-51B66D9A50CA"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExcludeDomains",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Exclude these domains from results.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "624140C1-6057-4263-8AEB-B4CA6173CB7A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Results",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Search results with title, url, content and score.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "392F03DE-EA99-4DE1-A90D-4F629E9DEE5B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Answer",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Tavily's synthesised answer, when IncludeAnswer was set.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AFA3868D-1965-4DA5-8998-4F53A4AD5BB8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResultCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of results returned.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CCCCCC97-256A-442D-BA01-5332CA569B1E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchResultDetails",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "The complete Tavily response envelope.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4DB81C64-69E8-42AF-883B-A68FB4445B09"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Search completed and returned results."
+          },
+          "primaryKey": {
+            "ID": "BCD0B8E7-B345-40A8-AED8-304DFF34A2B6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_QUERY",
+            "IsSuccess": false,
+            "Description": "Query is required but was not provided."
+          },
+          "primaryKey": {
+            "ID": "B51113AB-E220-49C4-AA00-5E7F39276E88"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_KEY",
+            "IsSuccess": false,
+            "Description": "Tavily API key not configured. Set tavily.apiKey in mj.config.cjs or TAVILY_API_KEY in the environment."
+          },
+          "primaryKey": {
+            "ID": "736D3A16-A7EF-4034-8BD8-1B1AB62A33A7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_API_KEY",
+            "IsSuccess": false,
+            "Description": "Tavily rejected the API key."
+          },
+          "primaryKey": {
+            "ID": "FD24D964-5FE6-4802-98FB-A21BB3C10E75"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_SEARCH_DEPTH",
+            "IsSuccess": false,
+            "Description": "SearchDepth must be 'basic' or 'advanced'."
+          },
+          "primaryKey": {
+            "ID": "3C5C152F-C5CB-4CB8-9365-79A2DCC6A284"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_TOPIC",
+            "IsSuccess": false,
+            "Description": "Topic must be 'general' or 'news'."
+          },
+          "primaryKey": {
+            "ID": "CE8E3B3C-4F65-4436-AB32-D20E7F4499AC"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_REQUEST",
+            "IsSuccess": false,
+            "Description": "Tavily rejected the request as malformed."
+          },
+          "primaryKey": {
+            "ID": "44A9C30E-AB04-4CBC-A406-F4913828A737"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RATE_LIMITED",
+            "IsSuccess": false,
+            "Description": "Tavily rate limit reached. Retry later."
+          },
+          "primaryKey": {
+            "ID": "B5A70AF5-0695-4365-AC90-9B0B7CA5050F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EMPTY_RESPONSE",
+            "IsSuccess": false,
+            "Description": "Tavily returned an empty response."
+          },
+          "primaryKey": {
+            "ID": "451690F7-BFA0-4D25-9432-554865033348"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "API_ERROR",
+            "IsSuccess": false,
+            "Description": "Tavily returned an error. The message carries the detail."
+          },
+          "primaryKey": {
+            "ID": "099EFB7A-79AB-46EA-AE30-7A5F23204DD3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SEARCH_FAILED",
+            "IsSuccess": false,
+            "Description": "The search failed unexpectedly."
+          },
+          "primaryKey": {
+            "ID": "ED64925F-9467-4288-B852-4B364A85DE1A"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "290B0012-9822-414A-9CFE-862F5F0B5B14"
+    }
+  }
+]

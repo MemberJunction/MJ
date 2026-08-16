@@ -1,5 +1,5 @@
 ---
-"@memberjunction/actions-apollo": patch
+"@memberjunction/actions-apollo": minor
 ---
 
 Add Apollo's other half to this package: **list management, saved-record search and prospecting**, as seven new actions alongside the two enrichment actions it has always had.
@@ -28,4 +28,4 @@ Credentials resolve through `CompanyID` → the company's active `Apollo` **MJ: 
 
 The two enrichment actions are unchanged.
 
-`patch`, not `minor`, despite being additive: every MJ package shares one `fixed` group in `.changeset/config.json`, so `minor` is reserved for branches that change the database — a migration, or `metadata/**`, which becomes one at release. New actions are neither.
+`minor` because this branch now ships `metadata/**` — the `MJ: Actions` / `MJ: Action Params` / `MJ: Action Result Codes` records these classes need to be invocable. Metadata becomes a migration at release via the build engineer's `mj sync push`, which is exactly what the `minor` trigger tracks. Without the metadata this would be `patch`.

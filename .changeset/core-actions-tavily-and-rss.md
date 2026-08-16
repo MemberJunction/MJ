@@ -1,5 +1,5 @@
 ---
-"@memberjunction/core-actions": patch
+"@memberjunction/core-actions": minor
 ---
 
 Add two web-read actions — **Tavily Search** and **Read RSS Feed** — and fix an environment-variable fallback that never worked.
@@ -18,4 +18,4 @@ One feed failing is a `FeedStatuses` entry, not an action failure, unless `Requi
 
 103 new tests cover both actions and the parsing module.
 
-`patch`, not `minor`, despite being additive: every MJ package shares one `fixed` group in `.changeset/config.json`, so `minor` is reserved for branches that change the database — a migration, or `metadata/**`, which becomes one at release. New actions are neither.
+`minor` because this branch now ships `metadata/**` — the `MJ: Actions` / `MJ: Action Params` / `MJ: Action Result Codes` records these classes need to be invocable. Metadata becomes a migration at release via the build engineer's `mj sync push`, which is exactly what the `minor` trigger tracks. Without the metadata this would be `patch`.

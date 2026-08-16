@@ -1,0 +1,1334 @@
+[
+  {
+    "fields": {
+      "Name": "Apollo - Get Lists",
+      "Description": "Lists the Apollo labels (lists and tags) with each one's kind. Run this to discover the exact list names the other Apollo list actions require.",
+      "DriverClass": "ApolloGetListsAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-rocket",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional \u2014 falls back to the APOLLO_API_KEY environment key.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "165A8DDA-893B-4B5B-82EC-0B034C5ED788"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Lists",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of { id, name, kind, cachedCount, createdAt, updatedAt }.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FF4A297B-0C68-4E4B-B06D-5F6248027455"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Count",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of labels returned.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A84A88FA-A53E-4C17-8945-1FFA4CFA1C9F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "KeySource",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Which path supplied the API key: 'credential' or 'environment'. Present so a wrong-key failure is diagnosable without re-running.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "08878A7E-D4B9-41BC-8341-E0D61272C4C2"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Labels retrieved."
+          },
+          "primaryKey": {
+            "ID": "2A0A02CF-0563-4C4E-BB87-5D26D82A7207"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Listing Apollo labels failed. The message carries the Apollo error."
+          },
+          "primaryKey": {
+            "ID": "44D03C31-567E-4BFE-B1B2-9163D093D1F7"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1E4B759B-D2BD-40BB-8A55-F261B16D78BF"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Apollo - Create List",
+      "Description": "Creates an Apollo list (label) idempotently \u2014 an existing label with the same name is reused rather than duplicated, because Apollo will happily create two labels with one name.",
+      "DriverClass": "ApolloCreateListAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-rocket",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ListName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The label to create. Required.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "5DBC9DC2-70A6-409E-ACC3-82483B4D938C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Modality",
+            "DefaultValue": "contacts",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "'contacts' (default) or 'accounts'. Apollo rejects a mismatched modality on later use.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F3B44191-EDD1-4F79-8766-7EA837C2E185"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional \u2014 falls back to the APOLLO_API_KEY environment key.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A62BAD9C-F4C7-4C20-A803-E117C2127BC1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ListID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The label's Apollo id.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EA8121EE-5425-4866-8839-BFAE8062AADA"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResolvedListName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The label name as Apollo stores it.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "06A905CE-949F-4BCA-B008-50C31C63D1CB"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AlreadyExisted",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "True when an existing label was reused instead of a new one created.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "47E32B6A-3C8D-4C23-81C9-E6A6CD5445A4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Modality",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The label's modality.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8EC15754-B05D-463A-8E47-F5EC6B309ADB"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "KeySource",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Which path supplied the API key: 'credential' or 'environment'. Present so a wrong-key failure is diagnosable without re-running.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "07707799-DDC1-49C4-80FD-DEA289E5A76D"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Label created, or an existing one reused."
+          },
+          "primaryKey": {
+            "ID": "BE6E5453-B56D-42AD-B89C-3FB54AD0A391"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Creating the Apollo label failed. The message carries the Apollo error."
+          },
+          "primaryKey": {
+            "ID": "49A95D1F-CD66-4582-9490-55B997D85591"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F03A3647-CDB9-4A07-9039-046856DE5EFC"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Apollo - Get List Accounts",
+      "Description": "Pages through the accounts in an Apollo list, addressed by exact list name.",
+      "DriverClass": "ApolloGetListAccountsAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-rocket",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ListName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Exact label name. Required \u2014 run Apollo - Get Lists to see them.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "00C42C74-278D-47F1-825D-8D06EF0FA0AA"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Keywords",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Organization-name filter applied within the list.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "394184D1-39A9-4519-B457-E4C7BA7AC56F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Page",
+            "DefaultValue": "1",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "1-based page number, max 500.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8522851A-EF24-4701-9D46-179B8FC99787"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PerPage",
+            "DefaultValue": "100",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records per page, max 100.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4BD9D820-8AA3-4420-93F9-C63F5DF65B1F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional \u2014 falls back to the APOLLO_API_KEY environment key.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B054C530-5975-4ADD-87A4-D18951500C73"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Accounts",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "The accounts on this page.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "04DBF61B-87B1-4A23-A9FD-5E2834973384"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Pagination",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Apollo's pagination envelope for this response.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DF427C7B-0309-436C-993D-D0D868FA6778"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Count",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of accounts returned on this page.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "96BB6EE2-9C57-4B80-9F65-FFE835710F4B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResolvedListName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The label name as Apollo stores it.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7D8CA86-B7B5-4DA2-AB47-EF6E54B894AD"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ListID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The resolved label's Apollo id.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B1EB798D-65E9-44D6-B18C-9457F7CDDFE7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "KeySource",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Which path supplied the API key: 'credential' or 'environment'. Present so a wrong-key failure is diagnosable without re-running.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7D46975E-E0B1-4782-B541-6F0269403FCF"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Accounts retrieved."
+          },
+          "primaryKey": {
+            "ID": "EF74AF89-8D63-4F66-A74F-044C56369440"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No Apollo label matches the supplied ListName."
+          },
+          "primaryKey": {
+            "ID": "028CE53F-582E-478B-BEC3-D27787941B77"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Reading the Apollo list failed. The message carries the Apollo error."
+          },
+          "primaryKey": {
+            "ID": "57D0001C-EFC4-48B5-962C-755A872A6678"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "EAE16F7C-8A64-41FE-9114-018AC55B8335"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Apollo - Get List Contacts",
+      "Description": "Pages through the contacts in an Apollo list, addressed by exact list name.",
+      "DriverClass": "ApolloGetListContactsAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-rocket",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ListName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Exact label name. Required \u2014 run Apollo - Get Lists to see them.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B614B61C-79E1-46AA-AF81-AFE64AD80509"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Keywords",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name filter applied within the list.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "08D8781E-CB83-49BF-8936-57D039D022D7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Page",
+            "DefaultValue": "1",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "1-based page number, max 500.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "27158824-255C-4FF1-B097-A7D83FDF11C3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PerPage",
+            "DefaultValue": "100",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records per page, max 100.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DB4747B1-41E1-4272-9748-BB0CD62D72E2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional \u2014 falls back to the APOLLO_API_KEY environment key.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A63A94D1-EAE5-4C53-B6EC-80BB75EEC949"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Contacts",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "The contacts on this page.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A6E20525-782A-45B0-BC8D-FC43C71770CD"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Pagination",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Apollo's pagination envelope for this response.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BA87863A-5949-40A7-A9F1-642696523FF4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Count",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of contacts returned on this page.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C104EE8C-6118-48DF-81CF-2E20E5C43418"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResolvedListName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The label name as Apollo stores it.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A51EAD89-8550-470E-A167-9DA2C58FADCD"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ListID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The resolved label's Apollo id.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AA065E0F-C66F-4D85-B324-65ADC3F5DA18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "KeySource",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Which path supplied the API key: 'credential' or 'environment'. Present so a wrong-key failure is diagnosable without re-running.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BAAE710F-6744-4E39-9296-EA7EBEAFE2F4"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Contacts retrieved."
+          },
+          "primaryKey": {
+            "ID": "2BC0F8B1-50AE-4211-A5E9-02238D487410"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No Apollo label matches the supplied ListName."
+          },
+          "primaryKey": {
+            "ID": "35BBF10B-970C-47A8-89D9-C6ABBBAEC6DA"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Reading the Apollo list failed. The message carries the Apollo error."
+          },
+          "primaryKey": {
+            "ID": "2F68B5D2-0584-42B1-9630-220345B59C06"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "BF2B1CD8-CE62-441F-94F2-CC83D9EADAD7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Apollo - Search People",
+      "Description": "Searches Apollo's people database for net-new prospects by organization, title and seniority. Does NOT return emails or phones \u2014 that is Apollo's design for this endpoint. At least one filter should be supplied; Apollo accepts a request with none and returns an unhelpfully broad result.",
+      "DriverClass": "ApolloSearchPeopleAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-rocket",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OrganizationDomains",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Company domains to search within, e.g. [\"acme.com\"].",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6758B5E9-0077-4707-BF98-678CC6BAB87A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OrganizationIDs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Apollo organization ids to search within.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5E08CDF2-0CC5-4D77-8604-EC352C58799B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Titles",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Job titles, e.g. [\"VP of Marketing\"].",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "26E59255-5D88-4201-8E4E-D6D3613BEC38"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Seniorities",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "One or more of owner, founder, c_suite, vp, director, manager.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7B28398-DF99-41D0-89D4-DF58B9A9EE39"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Page",
+            "DefaultValue": "1",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "1-based page number.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C96F7A0D-8012-4C64-A5CB-0FD80371DE6B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PerPage",
+            "DefaultValue": "100",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records per page, max 100.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "053E334A-0190-4796-9571-D98C9E62A452"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional \u2014 falls back to the APOLLO_API_KEY environment key.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B5A62FD2-871F-4BE4-B983-EEDD16A132FA"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "People",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Matching people. No email or phone \u2014 see the description.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F6130399-E248-4AD5-BC63-C9E9EF0B4BE1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Pagination",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Apollo's pagination envelope for this response.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E83B8131-39FF-48F5-BD72-E29BFA513308"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Count",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of people returned on this page.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2AFE2894-E0A5-4F8A-9D7B-337AB989E896"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "KeySource",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Which path supplied the API key: 'credential' or 'environment'. Present so a wrong-key failure is diagnosable without re-running.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A1F813A9-AC1A-474E-91B1-E74C475147A4"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Search completed."
+          },
+          "primaryKey": {
+            "ID": "F3980980-A5CA-4BAA-8513-E64A5440FD42"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "The search matched no people."
+          },
+          "primaryKey": {
+            "ID": "66CE5AA4-831C-445F-8A50-84BAFEC88433"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "The Apollo people search failed. The message carries the Apollo error."
+          },
+          "primaryKey": {
+            "ID": "691C8A50-9630-4CFC-8B3F-4965BF26C065"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "149FD336-0F8E-42E2-9026-3453AC41A15B"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Apollo - Move List Accounts",
+      "Description": "Moves accounts from one Apollo list to another. Labels are full-replace in Apollo, so the add is performed BEFORE the remove \u2014 a failed add can then never strip the source label. Reads page 1 of the source list only; ids not found there are reported in NotOnSourcePage rather than treated as failures.",
+      "DriverClass": "ApolloMoveListAccountsAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-rocket",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AccountIDs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "JSON array or comma-separated Apollo account ids. Required.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B24EB4D1-F4D9-4F17-AECA-A9CF244F5AB2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FromList",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Exact source label name. Required.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B50D8C1A-56D3-4031-A5B4-622DA4AB1273"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ToList",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Exact destination label name. Required.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "C5472906-F1A9-4322-BF3D-5AA3B0E7652A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional \u2014 falls back to the APOLLO_API_KEY environment key.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CED14590-D127-478A-826A-AE1F804C6206"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MovedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of accounts confirmed moved.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A4216A22-1395-4231-AF99-5A1F8DD50B11"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FailedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number whose write failed.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "849042C0-773F-4C61-BF69-816904DD2A7F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PossiblyStuckCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number whose write SUCCEEDED but which Apollo did not appear to honour. Not failures \u2014 Apollo silently ignores some removes.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "78937D8D-C4F4-4956-92BF-B12CFEA6934B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Results",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Per-record { id, added, removed, possiblyStuck, error }.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "10B30A6E-37A7-42B7-AA8E-3C7325F0F75B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NotOnSourcePage",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Supplied ids that were not on page 1 of the source list, and so were never attempted.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C3918F5A-AED5-430D-92B1-8765479C04BB"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "KeySource",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Which path supplied the API key: 'credential' or 'environment'. Present so a wrong-key failure is diagnosable without re-running.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0A2B05C8-6CC3-41BB-828E-576BFD43386D"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Every supplied id was moved."
+          },
+          "primaryKey": {
+            "ID": "128CB051-4D25-4ECE-8A6D-C68EDB95F735"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PARTIAL_FAILURE",
+            "IsSuccess": false,
+            "Description": "Some ids moved and some did not. Read Results, FailedCount and NotOnSourcePage \u2014 a partial move is NOT rolled back."
+          },
+          "primaryKey": {
+            "ID": "BCDE3190-7376-413C-8DE8-4EC113693EED"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "None of the supplied ids were found on the source list."
+          },
+          "primaryKey": {
+            "ID": "E2FE862D-F924-4300-891F-E6DE0FD04E09"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_REQUIRED_FIELDS",
+            "IsSuccess": false,
+            "Description": "FromList or ToList was not supplied."
+          },
+          "primaryKey": {
+            "ID": "A08A5E75-78C0-4F85-9A3C-8213B6A5153A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "The id list could not be parsed, or FromList and ToList are the same label."
+          },
+          "primaryKey": {
+            "ID": "9F720199-C125-484F-83E8-C0840EC06530"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "The move failed. The message carries the Apollo error."
+          },
+          "primaryKey": {
+            "ID": "5FA4A0DE-E650-43C6-A332-5A92945701A7"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "AE87A2FD-89F0-421F-BFBE-1FE92D7C1728"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Apollo - Move List Contacts",
+      "Description": "Moves contacts from one Apollo list to another. Labels are full-replace in Apollo, so the add is performed BEFORE the remove \u2014 a failed add can then never strip the source label. Reads page 1 of the source list only; ids not found there are reported in NotOnSourcePage rather than treated as failures.",
+      "DriverClass": "ApolloMoveListContactsAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-rocket",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContactIDs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "JSON array or comma-separated Apollo contact ids. Required.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "F8CB6142-51CF-48A4-AE43-91979F1A9306"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FromList",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Exact source label name. Required.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "1F86506D-13E5-4D67-AD11-C0AB4A087AC6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ToList",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Exact destination label name. Required.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "0A5506B8-5ECF-4056-AEDE-BFFDD9E91A2B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional \u2014 falls back to the APOLLO_API_KEY environment key.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7243DF8E-62D7-4354-BA0D-09C4DF0D1F93"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MovedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of contacts confirmed moved.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "08011032-D654-4915-9C55-12034083DB9C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FailedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number whose write failed.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2857AE6D-D446-4354-B1F4-D19A780CA459"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PossiblyStuckCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number whose write SUCCEEDED but which Apollo did not appear to honour. Not failures \u2014 Apollo silently ignores some removes.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7CF6D119-BFA0-473C-A71D-2B3C32416177"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Results",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Per-record { id, added, removed, possiblyStuck, error }.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "54BAF388-DD1B-493F-A631-E4B2983BAD59"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NotOnSourcePage",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Supplied ids that were not on page 1 of the source list, and so were never attempted.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FD0B5D05-40C4-4FA3-8912-BBD008DD6DD6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "KeySource",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Which path supplied the API key: 'credential' or 'environment'. Present so a wrong-key failure is diagnosable without re-running.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8A601864-15B2-44BF-9CBD-B8E07D64E27A"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Every supplied id was moved."
+          },
+          "primaryKey": {
+            "ID": "895ACBB9-5CEF-44D0-A337-166C664515A4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PARTIAL_FAILURE",
+            "IsSuccess": false,
+            "Description": "Some ids moved and some did not. Read Results, FailedCount and NotOnSourcePage \u2014 a partial move is NOT rolled back."
+          },
+          "primaryKey": {
+            "ID": "73AB159B-95E7-4985-BA00-EF27886DD1CE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "None of the supplied ids were found on the source list."
+          },
+          "primaryKey": {
+            "ID": "54F4F42E-8C6D-4DDB-8D53-F77A25A3B80B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_REQUIRED_FIELDS",
+            "IsSuccess": false,
+            "Description": "FromList or ToList was not supplied."
+          },
+          "primaryKey": {
+            "ID": "CBD1D042-2C49-4C9B-A1B6-CE9B4444866E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "The id list could not be parsed, or FromList and ToList are the same label."
+          },
+          "primaryKey": {
+            "ID": "4C4E33CF-B00C-4D16-8437-D06ADFA7006B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "The move failed. The message carries the Apollo error."
+          },
+          "primaryKey": {
+            "ID": "529F3B88-3E3F-4332-B1DD-83D05B6A46F9"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4A6FEF28-06E6-4258-B16E-1469581D7074"
+    }
+  }
+]
