@@ -23,6 +23,7 @@ import type {
     GraphEdge,
     GraphLayoutMode,
     GraphNodeCategory,
+    GraphCategoryConfig,
     GraphViewportTransform,
     GraphPhysicsConfig
 } from '../models/graph-models';
@@ -39,6 +40,21 @@ import {
     NodeNavigatedEventArgs,
     ViewportTransformEventArgs
 } from '../events/graph-events';
+
+export const DEFAULT_GRAPH_CATEGORIES: GraphCategoryConfig[] = [
+    { Category: 'person', Label: 'Person', Color: '#10b981', IconClass: 'fa-solid fa-user' },
+    { Category: 'organization', Label: 'Organization', Color: '#38bdf8', IconClass: 'fa-solid fa-building' },
+    { Category: 'committee', Label: 'Committee', Color: '#8b5cf6', IconClass: 'fa-solid fa-landmark' },
+    { Category: 'account', Label: 'Holding / Account', Color: '#f59e0b', IconClass: 'fa-solid fa-building-flag' },
+    { Category: 'asset', Label: 'Asset', Color: '#ec4899', IconClass: 'fa-solid fa-gem' },
+    { Category: 'group', Label: 'Group', Color: '#06b6d4', IconClass: 'fa-solid fa-users' },
+    { Category: 'custom', Label: 'Custom', Color: '#64748b', IconClass: 'fa-solid fa-circle-nodes' }
+];
+
+const DYNAMIC_CATEGORY_PALETTE = [
+    '#10b981', '#38bdf8', '#8b5cf6', '#f59e0b', '#ec4899',
+    '#06b6d4', '#84cc16', '#f43f5e', '#a855f7', '#14b8a6'
+];
 
 const GRAPH_VIEW_CSS = `
 :host {
@@ -372,21 +388,15 @@ const GRAPH_VIEW_CSS = `
                 </div>
             }
 
-            <!-- 2. Floating Category Legend -->
-            @if (ShowLegend) {
+            <!-- 2. Floating Dynamic Category Legend -->
+            @if (ShowLegend && ActiveCategories.length > 0) {
                 <div class="mj-graph-legend">
-                    <div class="mj-graph-legend-item">
-                        <div class="mj-graph-legend-dot" style="background: #10b981;"></div> Person
-                    </div>
-                    <div class="mj-graph-legend-item">
-                        <div class="mj-graph-legend-dot" style="background: #38bdf8;"></div> Organization
-                    </div>
-                    <div class="mj-graph-legend-item">
-                        <div class="mj-graph-legend-dot" style="background: #8b5cf6;"></div> Committee
-                    </div>
-                    <div class="mj-graph-legend-item">
-                        <div class="mj-graph-legend-dot" style="background: #f59e0b;"></div> Holding / Account
-                    </div>
+                    @for (cat of ActiveCategories; track cat.Category) {
+                        <div class="mj-graph-legend-item">
+                            <div class="mj-graph-legend-dot" [style.background]="cat.Color"></div>
+                            {{ cat.Label }}
+                        </div>
+                    }
                 </div>
             }
 
@@ -532,6 +542,7 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     // ── Inputs ────────────────────────────────────────────────────────
     @Input() public Nodes: GraphNode[] = [];
     @Input() public Edges: GraphEdge[] = [];
+    @Input() public Categories: GraphCategoryConfig[] = DEFAULT_GRAPH_CATEGORIES;
     @Input() public LayoutMode: GraphLayoutMode = 'force';
     @Input() public MaxHopDistance = 2;
     @Input() public SelectedNodeId?: string;
@@ -960,26 +971,48 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
         return node ? (node.Y ?? node.y ?? 0) : 0;
     }
 
-    public GetNodeColor(node: GraphNode): string {
-        if (node.Color) return node.Color;
-        switch (node.Category) {
-            case 'person': return '#10b981';
-            case 'organization': return '#38bdf8';
-            case 'committee': return '#8b5cf6';
-            case 'account': return '#f59e0b';
-            default: return '#38bdf8';
+    public GetCategoryConfig(category?: string): GraphCategoryConfig {
+        const key = String(category || '').toLowerCase();
+        const found = this.Categories?.find(c => c.Category.toLowerCase() === key);
+        if (found) return found;
+
+        const builtin = DEFAULT_GRAPH_CATEGORIES.find(c => c.Category.toLowerCase() === key);
+        if (builtin) return builtin;
+
+        // Deterministic palette hash for arbitrary consumer-defined categories
+        const hash = Math.abs(key.split('').reduce((acc, ch) => ((acc << 5) - acc) + ch.charCodeAt(0), 0));
+        const fallbackColor = DYNAMIC_CATEGORY_PALETTE[hash % DYNAMIC_CATEGORY_PALETTE.length];
+        const formattedLabel = category ? category.charAt(0).toUpperCase() + category.slice(1) : 'Item';
+        return {
+            Category: category || 'custom',
+            Label: formattedLabel,
+            Color: fallbackColor,
+            IconClass: 'fa-solid fa-circle-dot'
+        };
+    }
+
+    public get ActiveCategories(): GraphCategoryConfig[] {
+        const present = new Set<string>();
+        for (const n of this.Nodes) {
+            if (n.Category) present.add(n.Category.toLowerCase());
         }
+        const result: GraphCategoryConfig[] = [];
+        for (const catKey of present) {
+            result.push(this.GetCategoryConfig(catKey));
+        }
+        return result;
+    }
+
+    public GetCategoryLabel(category?: string): string {
+        return this.GetCategoryConfig(category).Label;
+    }
+
+    public GetNodeColor(node: GraphNode): string {
+        return node.Color ?? this.GetCategoryConfig(node.Category).Color;
     }
 
     public GetNodeIcon(node: GraphNode): string {
-        if (node.IconClass) return node.IconClass;
-        switch (node.Category) {
-            case 'person': return 'fa-solid fa-user';
-            case 'organization': return 'fa-solid fa-building';
-            case 'committee': return 'fa-solid fa-landmark';
-            case 'account': return 'fa-solid fa-building-flag';
-            default: return 'fa-solid fa-circle-dot';
-        }
+        return node.IconClass ?? this.GetCategoryConfig(node.Category).IconClass ?? 'fa-solid fa-circle-dot';
     }
 
     public GetNodeEdgeCount(id: string): number {

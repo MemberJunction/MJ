@@ -8,7 +8,7 @@
  */
 
 /**
- * Standard semantic category of a graph node.
+ * Standard semantic category of a graph node, or any custom category key defined by the consumer.
  */
 export type GraphNodeCategory =
     | 'person'
@@ -17,7 +17,25 @@ export type GraphNodeCategory =
     | 'account'
     | 'asset'
     | 'group'
-    | 'custom';
+    | 'custom'
+    | (string & {});
+
+/**
+ * Configuration for a graph node category defining its visual appearance in the canvas,
+ * dynamic legend, and inspector drawer.
+ */
+export interface GraphCategoryConfig {
+    /** Unique category key matching GraphNode.Category (e.g. 'person', 'organization', 'vendor', 'role') */
+    Category: string;
+    /** Human-readable display label shown in the legend and node inspector */
+    Label: string;
+    /** Hex code, HSL, or CSS color variable (e.g. '#10b981' or 'var(--mj-brand-primary)') */
+    Color: string;
+    /** Font Awesome icon class (e.g. 'fa-solid fa-user') */
+    IconClass?: string;
+    /** Optional secondary stroke / accent color */
+    StrokeColor?: string;
+}
 
 /**
  * Directional behavior of an edge in the network graph.
