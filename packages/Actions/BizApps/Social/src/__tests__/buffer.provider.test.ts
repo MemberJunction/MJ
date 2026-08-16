@@ -230,7 +230,11 @@ describe('BufferCreatePostAction', () => {
         text: 'Queued post',
         mode: 'addToQueue',
         dueAt: undefined,
-        assets: { images: [{ url: 'https://img/1.jpg' }] },
+        // One AssetInput entry per attachment, each naming its kind. Buffer moved createPost to this
+        // array form on 2026-05-25 and REJECTS the older `{ images: [...] }` object this used to
+        // assert — so the previous expectation pinned a payload the vendor no longer accepts.
+        assets: [{ image: { url: 'https://img/1.jpg' } }],
+        metadata: undefined,
       },
     });
     expect(result.Success).toBe(true);

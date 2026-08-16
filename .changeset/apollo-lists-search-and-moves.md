@@ -1,5 +1,5 @@
 ---
-"@memberjunction/actions-apollo": minor
+"@memberjunction/actions-apollo": patch
 ---
 
 Add Apollo's other half to this package: **list management, saved-record search and prospecting**, as seven new actions alongside the two enrichment actions it has always had.
@@ -27,3 +27,5 @@ Credentials resolve through `CompanyID` → the company's active `Apollo` **MJ: 
 92 tests cover the surface, driving the client through an injected `fetch` so the request bodies Apollo would receive are asserted directly — which matters more than usual here, because a move that sends the wrong label array is invisible in the response. Nothing in the suite can reach api.apollo.io: a live read would spend credits and a live write would mutate a real account's lists with no undo.
 
 The two enrichment actions are unchanged.
+
+`patch`, not `minor`, despite being additive: every MJ package shares one `fixed` group in `.changeset/config.json`, so `minor` is reserved for branches that change the database — a migration, or `metadata/**`, which becomes one at release. New actions are neither.

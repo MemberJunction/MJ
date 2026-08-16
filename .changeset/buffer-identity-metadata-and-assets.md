@@ -1,5 +1,5 @@
 ---
-"@memberjunction/actions-bizapps-social": minor
+"@memberjunction/actions-bizapps-social": patch
 ---
 
 Buffer: publish as another identity, pass per-service metadata, and fix the createPost assets shape.
@@ -13,3 +13,5 @@ Buffer: publish as another identity, pass per-service metadata, and fix the crea
 This is a breaking change for any caller passing a hand-built `assets` object to the protected `createBufferPost`; the action's own `ImageURLs`/`VideoURLs`/`MediaLink` params are unchanged.
 
 27 tests cover the credential override, the metadata passthrough and the asset shape.
+
+`patch`, not `minor`, despite being additive: every MJ package shares one `fixed` group in `.changeset/config.json`, so `minor` is reserved for branches that change the database — a migration, or `metadata/**`, which becomes one at release. New actions are neither.

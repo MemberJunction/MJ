@@ -1,5 +1,5 @@
 ---
-"@memberjunction/core-actions": minor
+"@memberjunction/core-actions": patch
 ---
 
 Add two web-read actions — **Tavily Search** and **Read RSS Feed** — and fix an environment-variable fallback that never worked.
@@ -17,3 +17,5 @@ One feed failing is a `FeedStatuses` entry, not an action failure, unless `Requi
 **Fix:** `getCoreActionsConfig()` early-returned an empty parsed config whenever no `mj.config.cjs` was found, so environment variables were ignored entirely — contradicting every schema doc comment and every "or `X_API_KEY` environment variable" error message in the package. A deployment configured only through the environment got a config with no keys and every affected action reported its key as missing. The config build is now hoisted out of that early return, so the documented fallbacks (`PERPLEXITY_API_KEY`, `TAVILY_API_KEY`, `GAMMA_API_KEY`, the Google keys) work as described.
 
 103 new tests cover both actions and the parsing module.
+
+`patch`, not `minor`, despite being additive: every MJ package shares one `fixed` group in `.changeset/config.json`, so `minor` is reserved for branches that change the database — a migration, or `metadata/**`, which becomes one at release. New actions are neither.
