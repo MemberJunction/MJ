@@ -13,6 +13,15 @@ export const DETAILS_SECTION_KEY = '__mj_form_details';
 
 export const SYSTEM_METADATA_SECTION_KEY = 'systemMetadata';
 
+/**
+ * Expand-all / collapse-all only apply to stacked accordion panels.
+ * Left-nav and right-nav show one section at a time, so those buttons
+ * would be noise.
+ */
+export function IsAccordionFormChrome(layout: string | null | undefined): boolean {
+    return (layout ?? 'accordion') === 'accordion';
+}
+
 /** Audit / timestamp leftover sections always fold into More. */
 export function IsAlwaysMoreSection(sectionKey: string, sectionName?: string): boolean {
     const key = (sectionKey ?? '').trim().toLowerCase();
@@ -39,6 +48,11 @@ export interface FormChromeGroup {
     SectionKeys: string[];
     /** True when this group is the More bucket (Detail related grids). */
     IsMore: boolean;
+    /**
+     * Primary contribution that owns its own rail item and sorts in the
+     * lead band (before Details). Overview is the usual case.
+     */
+    IsLead?: boolean;
 }
 
 export interface FormChromeSpec {

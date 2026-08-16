@@ -506,4 +506,24 @@ module.exports = {
   //
   // Note: If MJAPI_PUBLIC_URL env var is set, it will be used automatically.
   // If neither is set, the server constructs it from baseUrl + port + path.
+
+  // ── LOCAL DEV WORKSPACE ONLY — NEVER COMMIT ──────────────────────────────
+  // Registers the BizApps Open Apps into this host (MJAPI + MJExplorer) for the
+  // joined M5 parent workspace, running against the bizapps_orders database.
+  // Server order matters: common registers its base classes before accounting
+  // resolves them, and accounting before orders (orders-server imports both).
+  dynamicPackages: {
+    server: [
+      { PackageName: '@mj-biz-apps/common-server', StartupExport: 'LoadBizAppsCommonServer', AppName: 'mj-bizapps-common', Enabled: true },
+      { PackageName: '@mj-biz-apps/accounting-server', StartupExport: 'LoadBizAppsAccountingServer', AppName: 'mj-bizapps-accounting', Enabled: true },
+      { PackageName: '@mj-biz-apps/orders-server', StartupExport: 'LoadBizAppsOrdersServer', AppName: 'mj-bizapps-orders', Enabled: true },
+      { PackageName: '@mj-biz-apps/tasks-server', StartupExport: 'LoadBizAppsTasksServer', AppName: 'mj-bizapps-tasks', Enabled: true },
+    ],
+    client: [
+      { PackageName: '@mj-biz-apps/common-ng', AppName: 'mj-bizapps-common', Enabled: true },
+      { PackageName: '@mj-biz-apps/accounting-ng', AppName: 'mj-bizapps-accounting', Enabled: true },
+      { PackageName: '@mj-biz-apps/orders-ng', AppName: 'mj-bizapps-orders', Enabled: true },
+      { PackageName: '@mj-biz-apps/tasks-ng', AppName: 'mj-bizapps-tasks', Enabled: true },
+    ],
+  },
 };

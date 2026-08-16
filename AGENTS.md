@@ -104,6 +104,10 @@ Sub-directory `CLAUDE.md` files extend this root guide with topic-specific rules
 - **NEVER update title/description of merged PRs** without explicit approval each time
 - Always ask before modifying any historical git data
 
+### 3b. NO HAND-LINKING IN THE M5 JOINED WORKSPACE
+
+This clone sits under `/Users/amith/Dropbox/develop/M5/`, a pnpm mega-workspace that already live-links every `@memberjunction/*` and `@mj-biz-apps/*` package. **Never** add per-package `node_modules` symlinks, `pnpm link`, or `rsync` another worktree's `dist/` to unstick a resolve. That duplicates `type-graphql`. Then `Int`/`Float`/`ID` imported from `@memberjunction/server` are `undefined` and MJAPI fails schema build (`CannotDetermineGraphQLTypeError` on `MaxRows` / `RowCount`). Explorer shows `GraphQL Error (Code: unknown)`. **Do not patch `generated.js` or `MJServer/dist` to work around it.** Undo the extra link, `pnpm install` **only at `M5/`**, rebuild the package you changed, restart with `pnpm start` from `packages/MJAPI`. Full do/don't: the M5 workspace `CLAUDE.md` one directory above this repo.
+
 ### 4. ANGULAR COMPONENT & MODULE STRATEGY
 
 MemberJunction supports both standalone and NgModule-declared components. Choose the right approach for each situation:

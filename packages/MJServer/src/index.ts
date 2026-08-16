@@ -105,6 +105,10 @@ export function getDbType(): DatabasePlatform {
 
 export { MaxLength } from 'class-validator';
 export * from 'type-graphql';
+// Named re-export so Open App generated resolvers get a live ESM binding for
+// Int/Float/ID. `export *` from type-graphql can leave these undefined for
+// later importers, which makes schema build fail on ViewResult.RowCount.
+export { Int, Float, ID } from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
 export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
 export { ServerExtensionLoader, BaseServerExtension } from '@memberjunction/server-extensions-core';
