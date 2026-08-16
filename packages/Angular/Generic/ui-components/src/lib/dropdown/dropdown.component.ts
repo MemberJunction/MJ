@@ -50,6 +50,7 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
       role="combobox"
       [attr.id]="InputId || null"
       [attr.aria-label]="AriaLabel || null"
+      [attr.aria-labelledby]="AriaLabelledBy || null"
       [attr.aria-describedby]="AriaDescribedBy || null"
       [attr.aria-expanded]="IsOpen"
       aria-haspopup="listbox"
@@ -73,7 +74,9 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
       cdkConnectedOverlayBackdropClass="mj-dropdown-backdrop"
       (backdropClick)="Close()"
       (detach)="Close()">
-      <div class="mj-dropdown-panel" role="listbox" [attr.aria-label]="AriaLabel || null">
+      <div class="mj-dropdown-panel" role="listbox"
+        [attr.aria-label]="AriaLabel || null"
+        [attr.aria-labelledby]="AriaLabelledBy || null">
         @if (Filterable) {
           <div class="mj-dropdown-filter-wrap">
             <input
@@ -127,18 +130,27 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
 })
 export class MJDropdownComponent implements ControlValueAccessor, OnDestroy {
   /**
-   * Accessible name for the combobox (#3860). Without one — and with no external label wired via
-   * {@link InputId} — the control announces as an UNNAMED combobox, which fails WCAG 2.1 4.1.2
-   * (Name, Role, Value): "combobox, collapsed" with no hint of what it selects. Applied as
+   * Accessible name for the combobox (#3860). Without one — and with no visible label wired via
+   * {@link AriaLabelledBy} — the control announces as an UNNAMED combobox, which fails WCAG 2.1
+   * 4.1.2 (Name, Role, Value): "combobox, collapsed" with no hint of what it selects. Applied as
    * `aria-label` on the trigger AND on the popup listbox, so both halves announce the same name.
    */
   @Input() AriaLabel = '';
 
   /**
-   * `id` for the combobox trigger, so a host can associate a VISIBLE `<label for="…">` — the
-   * preferred naming when a label already exists on screen (an `aria-label` duplicates it for
-   * sighted users of screen readers). Either input alone names the control; `InputId` + external
-   * label wins where both are present, per the accessible-name computation.
+   * The id of a VISIBLE label element that names this control — the preferred wiring when a label
+   * already exists on screen (an `aria-label` would duplicate its text and drift on rename). This,
+   * not `<label for>`, is the visible-label path: the trigger is a `div[role=combobox]`, and the
+   * label-for association only names labelable form elements. `aria-labelledby` beats `AriaLabel`
+   * in the accessible-name computation where both are present. Applied to trigger AND listbox.
+   */
+  @Input() AriaLabelledBy = '';
+
+  /**
+   * `id` for the combobox trigger, so other markup can REFERENCE it — `aria-controls`, hint text,
+   * test hooks. It is deliberately not documented as a `<label for>` target: the trigger is a div,
+   * which `label[for]` neither names nor focuses. To name the control from a visible label, put an
+   * id on the LABEL and pass it as {@link AriaLabelledBy}.
    */
   @Input() InputId = '';
 

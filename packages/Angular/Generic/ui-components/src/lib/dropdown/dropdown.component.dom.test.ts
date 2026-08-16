@@ -110,7 +110,16 @@ describe('MJDropdownComponent (DOM)', () => {
     expect(overlayQuery('.mj-dropdown-panel')?.getAttribute('aria-label')).toBe('Interview persona');
   });
 
-  it('exposes InputId so a visible <label for> can name the control', () => {
+  it('names the combobox from a visible label via AriaLabelledBy — trigger AND popup listbox', () => {
+    // The visible-label path. NOT <label for>: the trigger is a div[role=combobox], which
+    // label-for neither names nor focuses — the label carries an id and the combobox points at it.
+    const f = render({ AriaLabelledBy: 'persona-label' });
+    expect(trigger(f).getAttribute('aria-labelledby')).toBe('persona-label');
+    open(f);
+    expect(overlayQuery('.mj-dropdown-panel')?.getAttribute('aria-labelledby')).toBe('persona-label');
+  });
+
+  it('exposes InputId so other markup can reference the trigger', () => {
     const f = render({ InputId: 'persona-select' });
     expect(trigger(f).getAttribute('id')).toBe('persona-select');
   });
@@ -125,6 +134,7 @@ describe('MJDropdownComponent (DOM)', () => {
     // explicitly empty name in the accessible-name computation.
     const f = render({});
     expect(trigger(f).hasAttribute('aria-label')).toBe(false);
+    expect(trigger(f).hasAttribute('aria-labelledby')).toBe(false);
     expect(trigger(f).hasAttribute('id')).toBe(false);
     expect(trigger(f).hasAttribute('aria-describedby')).toBe(false);
   });
