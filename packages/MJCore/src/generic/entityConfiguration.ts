@@ -137,6 +137,13 @@ export interface FormChromeRule {
     Inclusion: FormInclusion;
     JoinFields?: string[] | null;
     Sequence?: number | null;
+    /**
+     * Admin display title. Null / blank keeps the L1 DisplayName or
+     * humanized entity name. Keyed with the rule, not the previous label,
+     * so an OpenApp upgrade that renames the related entity does not
+     * overwrite a site-specific title.
+     */
+    Title?: string | null;
 }
 
 export interface RelatedFormRoleCandidate {

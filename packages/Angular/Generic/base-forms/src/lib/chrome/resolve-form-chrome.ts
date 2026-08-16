@@ -71,6 +71,13 @@ export interface ResolveFormChromeInput {
      * entity is not installed or the parent has no rows.
      */
     ChromeRules?: readonly FormChromeRule[];
+    /**
+     * When false, do not invent chrome groups for DisplayInForm related
+     * that have no baked / contributed panel. Custom forms that set
+     * `ShowRelatedEntities: false` use this so leftover More does not
+     * appear for grids the template already owns (or chose not to show).
+     */
+    IncludeUnbakedRelated?: boolean;
 }
 
 export interface ResolveFormChromeResult {
@@ -146,7 +153,9 @@ export function ResolveFormChrome(input: ResolveFormChromeInput): ResolveFormChr
         input.ContributionSectionKeys,
         contributionGroups.chromeGroupByKey,
     );
-    addMissingRelatedGroups(defaultSpec, input.Entity, relatedRoles, hidden);
+    if (input.IncludeUnbakedRelated !== false) {
+        addMissingRelatedGroups(defaultSpec, input.Entity, relatedRoles, hidden);
+    }
     applyRelatedDisplayNames(defaultSpec, input.Entity);
     mergeRelatedGroupsByEntity(defaultSpec, input.Entity);
     sortFirstClassRelatedGroups(
@@ -170,9 +179,11 @@ export function ResolveFormChrome(input: ResolveFormChromeInput): ResolveFormChr
         const decorated = policy.DecorateChrome(defaultSpec, ctx);
         const spec = TakeDecoratedChrome(defaultSpec, decorated ?? defaultSpec);
         ApplyUserChromeMembership(spec, input.Membership, visiblePanels);
+        ApplyFormChromeRuleTitles(spec, input.Entity, input.ChromeRules ?? []);
         return { Spec: spec, RelatedRoles: resolution, PolicyUsed: true };
     }
 
+    ApplyFormChromeRuleTitles(defaultSpec, input.Entity, input.ChromeRules ?? []);
     return { Spec: defaultSpec, RelatedRoles: resolution, PolicyUsed: false };
 }
 
@@ -182,6 +193,69 @@ export function ResolveFormChrome(input: ResolveFormChromeInput): ResolveFormChr
  */
 export function TakeDecoratedChrome(base: FormChromeSpec, decorated: FormChromeSpec): FormChromeSpec {
     return sameChromeMembership(base, decorated) ? decorated : base;
+}
+
+/**
+ * L3 Title overlay. Last Sequence wins. Blank Title is ignored so an
+ * incomplete rule cannot wipe DisplayName. Applied after policy decorate
+ * so an admin title survives an OpenApp policy rename.
+ */
+export function ApplyFormChromeRuleTitles(
+    spec: FormChromeSpec,
+    entity: EntityInfo,
+    rules: readonly FormChromeRule[],
+): void {
+    const parent = (entity.ID ?? '').trim().toLowerCase();
+    if (!parent) return;
+    const titled = rules
+        .filter((rule) => chromeIdsEqual(rule.EntityID, parent) && hasChromeTitle(rule.Title))
+        .sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0));
+    if (titled.length === 0) return;
+
+    const displayInForm = entity.RelatedEntities.filter((rel) => rel.DisplayInForm);
+    const keysByRelatedId = new Map<string, string[]>();
+    for (const rel of displayInForm) {
+        const id = (rel.RelatedEntityID ?? '').trim().toLowerCase();
+        if (!id) continue;
+        const key = RelatedEntitySectionKey(rel, displayInForm);
+        const list = keysByRelatedId.get(id) ?? [];
+        list.push(key);
+        keysByRelatedId.set(id, list);
+    }
+
+    const titleByKey = new Map<string, string>(spec.TitleBySectionKey);
+    for (const rule of titled) {
+        const title = (rule.Title ?? '').trim();
+        if (rule.TargetKind === 'Contribution') {
+            const key = (rule.ContributionKey ?? '').trim();
+            if (key) titleByKey.set(key, title);
+            continue;
+        }
+        const relatedId = (rule.RelatedEntityID ?? '').trim().toLowerCase();
+        for (const key of keysByRelatedId.get(relatedId) ?? []) {
+            titleByKey.set(key, title);
+        }
+    }
+    if (titleByKey.size === 0) return;
+
+    spec.TitleBySectionKey = titleByKey;
+    for (const group of spec.Groups) {
+        if (group.IsMore) continue;
+        const override = group.SectionKeys
+            .map((key) => titleByKey.get(key))
+            .find((value): value is string => !!value);
+        if (override) group.Title = override;
+    }
+}
+
+function hasChromeTitle(title: string | null | undefined): boolean {
+    return (title ?? '').trim().length > 0;
+}
+
+function chromeIdsEqual(a: string | null | undefined, b: string | null | undefined): boolean {
+    const left = (a ?? '').trim().toLowerCase();
+    const right = (b ?? '').trim().toLowerCase();
+    return left.length > 0 && left === right;
 }
 
 function sameChromeMembership(a: FormChromeSpec, b: FormChromeSpec): boolean {
