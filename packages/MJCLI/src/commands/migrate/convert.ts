@@ -19,10 +19,16 @@ import type {
   BakedMigrationResult,
   BakerWorkingDB,
 } from '@memberjunction/sql-converter';
-import { MJPostgresTranspiler } from '@memberjunction/sqlglot-ts';
+import { MJPostgresTranspiler, type BitColumnRef } from '@memberjunction/sqlglot-ts';
 // Type-only import: erased at runtime, so the heavy codegen-lib value graph is NOT loaded
 // by a plain `convert --split` — only the dynamic import() inside buildBaker() loads it.
 import type { DataSourceResult } from '@memberjunction/codegen-lib';
+
+/**
+ * MJ core's schema — where the boolean columns an Open App migration seeds (EntityField.AllowsNull
+ * and friends) actually live. The app's own schema is read from `--schema`.
+ */
+const MJ_CORE_SCHEMA = '__mj';
 
 /**
  * The fields runSplit consumes from a per-migration conversion, shared by the transpile-only
@@ -512,11 +518,11 @@ export default class MigrateConvert extends Command {
       .filter((f) => /^B\d.*\.sql$/.test(f) && !f.endsWith('.pg.sql') && !f.endsWith('.pg-only.sql'))
       .sort();
     const latestBaseline = baselines.at(-1);
-    const bitColumns: string[] = [];
+    const bitColumns: BitColumnRef[] = [];
     if (latestBaseline) {
       try {
         const cols = await probe.collectBitColumns(fs.readFileSync(path.join(sourceDir, latestBaseline), 'utf8'));
-        bitColumns.push(...new Set(cols));
+        bitColumns.push(...cols);
       } catch (err) {
         // A baseline that fails bit-column collection degrades 1/0→TRUE/FALSE
         // coercion for tables it declares — warn loudly, don't proceed silently.
@@ -551,6 +557,42 @@ export default class MigrateConvert extends Command {
       this.error(
         `--bake-codegen could not connect/load metadata from the working PG database: ${err instanceof Error ? err.message : String(err)}. ` +
           'Seed the working DB to the baseline (its __mj views + metadata must exist) before baking.',
+      );
+    }
+
+    // Seed the BIT/BOOLEAN registry from the LIVE catalog (issue #3839).
+    //
+    // buildTranspiler() collects BIT columns from the migration set's own baseline, which declares
+    // the app's tables and never MJ core's. A migration that seeds `__mj.EntityField` therefore had
+    // no type information for AllowsNull / IsVirtual / IsPrimaryKey, so BIT 0/1 reached a
+    // PostgreSQL BOOLEAN column and the apply failed with
+    //   column "AllowsNull" is of type boolean but expression is of type integer
+    // which — because the bake applies as it advances — halted the whole chain.
+    //
+    // The working database is authoritative and version-correct, which a checked-in column map is
+    // not: the copies in the bizapps repos are generated against core 5.37 and already miss columns
+    // that exist in 6.x. Failure to read the catalog degrades coercion rather than stopping the
+    // run, so it warns loudly instead of aborting.
+    try {
+      const { rows } = await ds.connection.query(
+        `SELECT table_name, column_name
+           FROM information_schema.columns
+          WHERE data_type = 'boolean' AND table_schema = ANY($1::text[])`,
+        [[MJ_CORE_SCHEMA, schema]],
+      );
+      // The dialect's registry keys are LOWERCASED [table, column] pairs.
+      const catalogBitCols: BitColumnRef[] = rows.map((r: { table_name: string; column_name: string }) => [
+        r.table_name.toLowerCase(),
+        r.column_name.toLowerCase(),
+      ]);
+      transpiler.addExtraBitColumns(catalogBitCols);
+      if (catalogBitCols.length === 0) {
+        this.warn('No boolean columns found in the working database — bit/boolean coercion will rely on the baseline registry alone.');
+      }
+    } catch (err) {
+      this.warn(
+        `Could not read boolean columns from the working database (${err instanceof Error ? err.message : String(err)}). ` +
+          'Seed INSERT/UPDATE values targeting core boolean columns may not be coerced.',
       );
     }
 
