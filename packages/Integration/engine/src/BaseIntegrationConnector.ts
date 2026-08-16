@@ -150,6 +150,45 @@ export interface FetchContext {
     RateLimitAcquire?: () => Promise<void>;
     RateLimitReport?: (throttledErr?: unknown) => void;
     MaxConcurrency?: number;
+    /**
+     * SAMPLING, NOT SYNCING — and the wall-clock this call must not outlive.
+     *
+     * Discovery wants a corpus, not a corpus of everything: ~50 records is enough to infer columns,
+     * types, string widths and a provable primary key. `DiscoverFieldsViaFetch` already knows that
+     * and already computes a budget — but it hands that budget to the code CONSUMING the record
+     * stream, and the consumer only regains control BETWEEN `FetchChanges` calls. Nothing was ever
+     * passed to the connector itself, so a connector could not honour a budget even if it wanted to:
+     * it had no way to know it was being sampled rather than synced.
+     *
+     * That is survivable while one `FetchChanges` is one HTTP page — the consumer stops after 50
+     * records and the gap never shows. It is NOT survivable for a parent-scoped object, where a
+     * single call fans out internally into one request per parent. There the consumer cannot
+     * interrupt anything, because control does not come back until every parent has been walked.
+     *
+     * Observed live 2026-08-12: a Totara discovery spent 28 minutes inside ONE `FetchChanges` call,
+     * walking every parent, and returned `rows=0` — half an hour of correct, pointless work to
+     * collect a sample it could never have found there. A sampling operation had silently become an
+     * exhaustive one.
+     *
+     * So the intent now travels with the call. A connector that ignores these behaves exactly as
+     * before; one that fans out internally can stop early and return what it has.
+     *
+     * STOP ON RECORDS, NOT ON PARENTS. A child object only yields through its parents, so capping the
+     * number of parents visited would be wrong — if the first three courses have no enrolments you
+     * genuinely must keep walking to find fifty rows. `SampleTargetRecords` is therefore the primary
+     * stop and the walk should honour it the moment it is met, whichever parent it happens to be on.
+     * `DeadlineMs` is the BACKSTOP for the other case: parents that will never yield anything, where
+     * no record count can ever be reached and only the clock can end it.
+     *
+     * - `IsDiscoverySample`    — this call exists to characterise the shape of the data, not to move it.
+     * - `SampleTargetRecords`  — stop as soon as this many records have been collected. Enough is enough.
+     * - `DeadlineMs`           — epoch ms after which the connector should stop and return what it has.
+     *                            A partial sample is the CORRECT result here: discovery infers from
+     *                            whatever it gets, and returning little beats half an hour of silence.
+     */
+    IsDiscoverySample?: boolean;
+    SampleTargetRecords?: number;
+    DeadlineMs?: number;
 }
 
 /**
@@ -714,7 +753,13 @@ export abstract class BaseIntegrationConnector {
         const maxRecords = opts.MaxRecords ?? cfgInt(cfg.discoveryMaxRecords) ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', 500);
         try {
             return await this.DiscoverFieldsViaStream(
-                this.DiscoverySampleRecordStream(companyIntegration, objectName, contextUser, batchSize, maxRecords),
+                this.DiscoverySampleRecordStream(
+                    companyIntegration, objectName, contextUser, batchSize, maxRecords,
+                    // The SAME budget the stream consumer is given, now also reaching the producer —
+                    // the consumer can only act between FetchChanges calls, which is no help at all
+                    // when one call fans out into thousands of requests internally.
+                    Date.now() + timeBudgetMs,
+                ),
                 { Discovery: { TimeBudgetMs: timeBudgetMs }, ReadOnly: true },
             );
         } catch (err) {
@@ -736,6 +781,11 @@ export abstract class BaseIntegrationConnector {
         contextUser: UserInfo,
         batchSize: number,
         maxRecords: number,
+        /**
+         * Epoch ms this sample must not outlive, forwarded to the connector as `FetchContext.DeadlineMs`.
+         * Optional so existing overrides of this method keep compiling and keep their current behaviour.
+         */
+        deadlineMs?: number,
     ): AsyncGenerator<Record<string, unknown>> {
         let ctx: FetchContext = {
             CompanyIntegration: companyIntegration,
@@ -743,6 +793,12 @@ export abstract class BaseIntegrationConnector {
             WatermarkValue: null,   // FULL fetch — discovery wants breadth, not the incremental delta
             BatchSize: batchSize,
             ContextUser: contextUser,
+            // TELL THE CONNECTOR WHAT THIS CALL IS FOR. Stopping after `maxRecords` here only works
+            // when one FetchChanges is one page; a connector that fans out internally (one request
+            // per parent) never hands control back for us to stop it. See FetchContext.DeadlineMs.
+            IsDiscoverySample: true,
+            SampleTargetRecords: maxRecords,
+            DeadlineMs: deadlineMs,
         };
         let yielded = 0;
         for (;;) {

@@ -6,6 +6,7 @@ import type { EntityInfo } from '@memberjunction/core';
 import type { AfterRowClickEventArgs, AfterRowDoubleClickEventArgs, AfterDataLoadEventArgs } from '@memberjunction/ng-entity-viewer';
 import { renderComponentFixture, capture } from '@memberjunction/ng-test-utils';
 import { ExplorerEntityDataGridComponent } from './explorer-entity-data-grid.component';
+import { RelatedGridHeightPx } from './related-grid-height';
 
 /**
  * DOM coverage for <mj-explorer-entity-data-grid> — the CodeGen-emitted related-entity grid wrapper
@@ -126,6 +127,22 @@ describe('ExplorerEntityDataGridComponent (DOM)', () => {
     inner(f).AfterRowDoubleClick.emit({ row: { ID: '1' } } as unknown as AfterRowDoubleClickEventArgs);
     expect(dbl.length).toBe(1);
     expect(nav.length).toBe(0);
+  });
+
+  it('sizes a related-entity accordion grid to toolbar + header + rows', () => {
+    const f = render();
+    const host = f.debugElement.nativeElement as HTMLElement;
+    const wrap = document.createElement('mj-collapsible-panel');
+    wrap.setAttribute('data-variant', 'related-entity');
+    host.parentElement?.insertBefore(wrap, host);
+    wrap.appendChild(host);
+
+    inner(f).AfterDataLoad.emit({ loadedRowCount: 2 } as unknown as AfterDataLoadEventArgs);
+    f.detectChanges();
+
+    expect(f.componentInstance.ResolvedHeight).toBe(RelatedGridHeightPx(2));
+    expect(inner(f).Height).toBe(RelatedGridHeightPx(2));
+    expect(host.style.height).toBe(`${RelatedGridHeightPx(2)}px`);
   });
 
   it('translates a new-record request into a Navigate event', () => {

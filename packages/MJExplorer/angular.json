@@ -139,7 +139,7 @@
           "options": {
             "hmr": true,
             "prebundle": {
-              "exclude": ["@memberjunction/*"]
+              "exclude": ["@memberjunction/*", "@mj-biz-apps/*"]
             }
           },
           "configurations": {

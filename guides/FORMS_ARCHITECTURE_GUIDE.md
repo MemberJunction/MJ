@@ -468,7 +468,11 @@ related stays Primary.
 `MJ: Form Chrome Rules` is the admin's global default. It is **not** in
 OpenApp `metadata/` push filters. A row pins a (parent entity, related entity)
 or (parent entity, contribution key) to Primary, More, or None, and may set
-`JoinFields`. L3 can suppress a contribution for the site. L4 cannot.
+`JoinFields` and an optional `Title`. `Title` is the site-specific rail /
+accordion label — keyed by RelatedEntityID or contribution key, so an
+OpenApp upgrade that renames "Payments" does not overwrite a local "Pmts".
+Blank / omitted `Title` keeps the L1 DisplayName. L3 can suppress a
+contribution for the site. L4 cannot.
 
 #### L4 — user overlay
 

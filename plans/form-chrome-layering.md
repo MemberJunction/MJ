@@ -128,6 +128,7 @@ Admin must not edit the same bag apps sync. That requires a **new entity**, whic
 | `ContributionKey` | When TargetKind = Contribution |
 | `Inclusion` | `Primary` \| `More` \| `None` |
 | `JoinFields` | JSON string array; optional OR of FKs |
+| `Title` | Optional admin label. Null keeps DisplayName. Survives OpenApp upgrades because the row is keyed by RelatedEntityID / ContributionKey, not the previous string. |
 | `Sequence` | Tie-break |
 
 No ApplicationID on L3 — install is global. App-authored intent stays in L1 files.

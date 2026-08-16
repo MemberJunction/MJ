@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { CompositeKey, KeyValuePair, FieldValueCollection, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM } from '../generic/compositeKey';
+import { CompositeKey, KeyValuePair, FieldValueCollection, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM, RecordUrlMatchesTab, ResourceUrlsEquivalent } from '../generic/compositeKey';
 import type { EntityInfo } from '../generic/entityInfo';
 
 /**
@@ -575,5 +575,59 @@ describe('new-record URL helpers', () => {
 
   it('keeps the query-param name stable for deeplinks', () => {
     expect(NEW_RECORD_VALUES_QUERY_PARAM).toBe('NewRecordValues');
+  });
+});
+
+describe('RecordUrlMatchesTab', () => {
+  it('matches a new-record URL to a tab that stored an empty recordId', () => {
+    expect(RecordUrlMatchesTab(
+      'MJ_BizApps_Orders: Order Headers',
+      'new',
+      'MJ_BizApps_Orders: Order Headers',
+      '',
+    )).toBe(true);
+  });
+
+  it('matches a new-record URL to a tab that also used the new sentinel', () => {
+    expect(RecordUrlMatchesTab('Orders', 'NEW', 'orders', 'new')).toBe(true);
+  });
+
+  it('does not match a new URL to a saved record of the same entity', () => {
+    expect(RecordUrlMatchesTab('Orders', 'new', 'Orders', 'ID|abc')).toBe(false);
+  });
+
+  it('does not match a saved URL to an unsaved tab of the same entity', () => {
+    expect(RecordUrlMatchesTab('Orders', 'ID|abc', 'Orders', '')).toBe(false);
+  });
+
+  it('matches a saved record by entity and id', () => {
+    expect(RecordUrlMatchesTab('Orders', 'ID|abc', 'Orders', 'ID|abc')).toBe(true);
+  });
+
+  it('does not match a different entity even when both sides are new', () => {
+    expect(RecordUrlMatchesTab('Orders', 'new', 'People', '')).toBe(false);
+  });
+});
+
+describe('ResourceUrlsEquivalent', () => {
+  it('treats a colon-encoded OpenApp entity name as the same path', () => {
+    expect(ResourceUrlsEquivalent(
+      '/app/orders/record/MJ_BizApps_Orders:%20Order%20Headers/new',
+      '/app/orders/record/MJ_BizApps_Orders%3A%20Order%20Headers/new',
+    )).toBe(true);
+  });
+
+  it('treats encoded NewRecordValues pipes as the same query', () => {
+    expect(ResourceUrlsEquivalent(
+      '/app/orders/record/Orders/new?NewRecordValues=BillToPersonID|p1',
+      '/app/orders/record/Orders/new?NewRecordValues=BillToPersonID%7Cp1',
+    )).toBe(true);
+  });
+
+  it('does not equate a missing NewRecordValues query with one that has it', () => {
+    expect(ResourceUrlsEquivalent(
+      '/app/orders/record/Orders/new',
+      '/app/orders/record/Orders/new?NewRecordValues=BillToPersonID%7Cp1',
+    )).toBe(false);
   });
 });
