@@ -10,6 +10,9 @@ import {
     MJAIAgentRunEntityType,
     MJConversationDetailRatingEntityType,
     MJConversationDetailArtifactEntityType,
+    MJArtifactVersionEntityType,
+    MJArtifactEntityType,
+    MJUserEntityType,
     MJProjectEntity
 } from "../generated/entity_subclasses";
 import { ArtifactMetadataEngine } from "./artifacts";
@@ -237,6 +240,211 @@ export interface ConversationDetailCache {
      * for junction entities whose joined fields can't be reconstructed from events alone.
      */
     PeripheralDataStale: boolean;
+}
+ 
+
+/**
+ * Timeline items the UI asks for per page. Mirrors `DEFAULT_TRANSCRIPT_PAGE_SIZE` in
+ * `@memberjunction/ng-conversations` — duplicated rather than imported because the
+ * dependency runs Angular → core-entities and must never run the other way.
+ */
+const DEFAULT_WINDOW_PAGE_SIZE = 10;
+
+/**
+ * Raw rows read per window fetch, as a multiple of the page size. A page of exactly
+ * `PageSize` rows can collapse to a single session card, so the fetch over-reads.
+ */
+const DETAIL_WINDOW_OVERREAD_FACTOR = 3;
+
+/**
+ * Ceiling on the session-completion read. A pathological realtime session must not be
+ * able to drag the whole conversation into a single window.
+ */
+const MAX_SESSION_EXPANSION_ROWS = 200;
+
+/**
+ * Inputs to {@link ConversationEngine.LoadDetailWindow}.
+ */
+export interface LoadDetailWindowParams {
+    ConversationID: string;
+    /**
+     * Exclusive: return rows with `Sequence` below this. Omit for the latest window.
+     *
+     * `Sequence` is the cursor, NOT the primary key — `MJ: Conversation Details.ID` is a
+     * uniqueidentifier, and `RunViewParams.AfterKey` is a PK seek that rejects any non-PK
+     * `OrderBy`, so it cannot express chat order.
+     */
+    BeforeSequence?: number;
+    /** Timeline items the caller is trying to fill. Default {@link DEFAULT_WINDOW_PAGE_SIZE}. */
+    PageSize?: number;
+    /** Raw rows to pull per attempt. Default `PageSize * 3`. */
+    RawOverread?: number;
+}
+
+/**
+ * One page of a conversation's transcript plus the peripheral data its rows need.
+ *
+ * Deliberately NOT a {@link ConversationDetailCache} — that type is the FULL-history
+ * contract and is what `GetAgentContextWindow` consumes. Keeping the shapes distinct is
+ * what stops a window from being written into `_detailCache` by accident.
+ */
+export interface DetailWindowLoadResult {
+    /** The window's rows, chronological by `Sequence`. */
+    Details: MJConversationDetailEntity[];
+    /** Agent runs keyed by conversation detail ID. */
+    AgentRunsByDetailId: Map<string, MJAIAgentRunEntity>;
+    /** User avatars keyed by UserID. */
+    UserAvatars: Map<string, UserAvatarInfo>;
+    /** Ratings keyed by conversation detail ID. */
+    RatingsByDetailId: Map<string, RatingJSON[]>;
+    /** Parsed artifacts keyed by conversation detail ID. */
+    ArtifactsByDetailId: Map<string, ArtifactJSON[]>;
+    /** True when at least one row exists below {@link OldestSequence}. */
+    HasMoreAbove: boolean;
+    /** `Sequence` of the oldest loaded row — the next older fetch's exclusive bound. */
+    OldestSequence: number | null;
+    /** `Sequence` of the newest loaded row. Used to detect live appends. */
+    NewestSequence: number | null;
+}
+
+/** The peripheral maps of a window, loaded separately from its rows. */
+type WindowPeripherals = Pick<
+    DetailWindowLoadResult,
+    'AgentRunsByDetailId' | 'UserAvatars' | 'RatingsByDetailId' | 'ArtifactsByDetailId'
+>;
+
+/** Empty peripherals — the "no rows" and "peripheral load failed" shape. */
+function emptyWindowPeripherals(): WindowPeripherals {
+    return {
+        AgentRunsByDetailId: new Map<string, MJAIAgentRunEntity>(),
+        UserAvatars: new Map<string, UserAvatarInfo>(),
+        RatingsByDetailId: new Map<string, RatingJSON[]>(),
+        ArtifactsByDetailId: new Map<string, ArtifactJSON[]>()
+    };
+}
+
+/**
+ * Empty window — the UI-path failure shape. `LoadDetailWindow` never throws (matching
+ * `LoadConversationDetails`); a failed transcript load renders empty rather than
+ * breaking the chat area.
+ */
+function emptyDetailWindowResult(): DetailWindowLoadResult {
+    return {
+        Details: [],
+        ...emptyWindowPeripherals(),
+        HasMoreAbove: false,
+        OldestSequence: null,
+        NewestSequence: null
+    };
+}
+
+/** Quotes a UUID list for an `IN (...)` predicate. */
+function quoteIdList(ids: string[]): string {
+    return ids.map(id => `'${id}'`).join(',');
+}
+
+/** `ConversationDetailID IN (...)` over the window's rows. */
+function detailIdInFilter(detailIds: string[]): string {
+    return `ConversationDetailID IN (${quoteIdList(detailIds)})`;
+}
+
+/** `ID IN (...)` for a follow-up lookup keyed by primary key. */
+function idInFilter(ids: string[]): string {
+    return `ID IN (${quoteIdList(ids)})`;
+}
+
+/** Keys agent runs by the detail they belong to. */
+function groupAgentRunsByDetailId(runs: MJAIAgentRunEntity[]): Map<string, MJAIAgentRunEntity> {
+    const byDetailId = new Map<string, MJAIAgentRunEntity>();
+    for (const run of runs) {
+        if (run.ConversationDetailID) {
+            byDetailId.set(run.ConversationDetailID, run);
+        }
+    }
+    return byDetailId;
+}
+
+/**
+ * Keys ratings by detail, denormalizing the rater's name onto each row the way
+ * GetConversationComplete's `UserName` join does.
+ */
+function groupRatingsByDetailId(
+    ratings: MJConversationDetailRatingEntityType[],
+    usersById: Map<string, MJUserEntityType>
+): Map<string, RatingJSON[]> {
+    const byDetailId = new Map<string, RatingJSON[]>();
+    for (const rating of ratings) {
+        const withUserName: RatingJSON = {
+            ...rating,
+            UserName: usersById.get(rating.UserID)?.Name ?? ''
+        };
+        const list = byDetailId.get(rating.ConversationDetailID) ?? [];
+        list.push(withUserName);
+        byDetailId.set(rating.ConversationDetailID, list);
+    }
+    return byDetailId;
+}
+
+/** Distinct UserIDs referenced by a window — message authors plus raters. */
+function collectWindowUserIds(
+    details: MJConversationDetailEntity[],
+    ratings: MJConversationDetailRatingEntityType[]
+): string[] {
+    const ids = new Set<string>();
+    for (const detail of details) {
+        if (detail.Role?.toLowerCase() === 'user' && detail.UserID) {
+            ids.add(detail.UserID);
+        }
+    }
+    for (const rating of ratings) {
+        if (rating.UserID) {
+            ids.add(rating.UserID);
+        }
+    }
+    return [...ids];
+}
+
+/** Avatar lookup for the window's message authors. */
+function buildUserAvatarMap(
+    details: MJConversationDetailEntity[],
+    usersById: Map<string, MJUserEntityType>
+): Map<string, UserAvatarInfo> {
+    const avatars = new Map<string, UserAvatarInfo>();
+    for (const detail of details) {
+        if (detail.Role?.toLowerCase() !== 'user' || !detail.UserID || avatars.has(detail.UserID)) {
+            continue;
+        }
+        const user = usersById.get(detail.UserID);
+        avatars.set(detail.UserID, {
+            ImageURL: user?.UserImageURL ?? null,
+            IconClass: user?.UserImageIconClass ?? null
+        });
+    }
+    return avatars;
+}
+
+/**
+ * Rebuilds one {@link ArtifactJSON} from the three rows GetConversationComplete joins:
+ * the detail↔version junction, the version, and the artifact.
+ */
+function mergeArtifactJSON(
+    junction: MJConversationDetailArtifactEntityType,
+    version: MJArtifactVersionEntityType,
+    artifact: MJArtifactEntityType
+): ArtifactJSON {
+    return {
+        ...junction,
+        ArtifactVersionID: version.ID,
+        VersionNumber: version.VersionNumber,
+        VersionName: version.Name,
+        VersionDescription: version.Description,
+        VersionCreatedAt: version.__mj_CreatedAt,
+        ArtifactID: artifact.ID,
+        ArtifactName: artifact.Name,
+        ArtifactType: artifact.Type,
+        ArtifactDescription: artifact.Description,
+        Visibility: artifact.Visibility
+    };
 }
 
 /**
@@ -1144,6 +1352,155 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         return cacheEntry;
     }
 
+
+   
+    /**
+     * Loads ONE page of a conversation's transcript — the chat area's windowed history read.
+     *
+     * Additive counterpart to {@link LoadConversationDetails}, which stays the FULL-history
+     * API. Opening a long conversation must not transfer and hydrate every row, so this
+     * reads the newest `RawOverread` rows below an optional `Sequence` bound, completes any
+     * realtime session the page landed inside, probes whether older rows remain, and loads
+     * peripherals for just those rows.
+     *
+     * The result is deliberately NOT written to `_detailCache`. That cache is keyed by
+     * conversation id alone, and {@link GetAgentContextWindow} reads it as complete history —
+     * a partial entry there would silently starve the agent of everything before the summary
+     * boundary, with no error. Use a separate partial cache if incremental caching is needed.
+     *
+     * Never throws: a failed load returns an empty window so the transcript renders empty
+     * rather than breaking the chat area.
+     *
+     * @param params - Conversation, optional `Sequence` bound, and page sizing
+     * @param contextUser - The requesting user (entity RLS applies)
+     */
+    public async LoadDetailWindow(
+        params: LoadDetailWindowParams,
+        contextUser: UserInfo
+    ): Promise<DetailWindowLoadResult> {
+        const pageSize = params.PageSize ?? DEFAULT_WINDOW_PAGE_SIZE;
+        const overread = params.RawOverread ?? pageSize * DETAIL_WINDOW_OVERREAD_FACTOR;
+
+        const page = await this.fetchDetailRowsBySequence(
+            params.ConversationID, params.BeforeSequence, overread, contextUser
+        );
+        if (!page || page.length === 0) {
+            return emptyDetailWindowResult();
+        }
+
+        const details = await this.expandOldestSession(params.ConversationID, page, contextUser);
+        const oldestSequence = details[0].Sequence;
+        const newestSequence = details[details.length - 1].Sequence;
+
+        const hasMoreAbove = await this.hasOlderDetails(params.ConversationID, oldestSequence, contextUser);
+        const peripherals = await this.buildWindowPeripherals(details, contextUser);
+
+        return {
+            Details: details,
+            ...peripherals,
+            HasMoreAbove: hasMoreAbove,
+            OldestSequence: oldestSequence,
+            NewestSequence: newestSequence
+        };
+    }
+
+    /**
+     * Reads the newest `maxRows` detail rows below an optional `Sequence` bound and returns
+     * them in CHRONOLOGICAL order.
+     *
+     * The query is `Sequence DESC` because the interesting end of a transcript is the tail;
+     * the reversal happens here so every caller downstream sees oldest-to-newest.
+     *
+     * @returns The page in ascending `Sequence` order, or null when the read failed.
+     */
+    private async fetchDetailRowsBySequence(
+        conversationId: string,
+        beforeSequence: number | undefined,
+        maxRows: number,
+        contextUser: UserInfo
+    ): Promise<MJConversationDetailEntity[] | null> {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const filter = beforeSequence == null
+            ? `ConversationID='${conversationId}'`
+            : `ConversationID='${conversationId}' AND Sequence < ${beforeSequence}`;
+
+        const result = await rv.RunView<MJConversationDetailEntity>({
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: filter,
+            OrderBy: 'Sequence DESC',
+            MaxRows: maxRows,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (!result.Success) {
+            console.error('[ConversationEngine] Failed to load detail window:', result.ErrorMessage);
+            return null;
+        }
+        return [...(result.Results || [])].reverse();
+    }
+
+    /**
+     * Completes a realtime session the page landed part-way through.
+     *
+     * Rows stamped with an `AgentSessionID` collapse into ONE session card in the UI. When
+     * the oldest row of a page is stamped, the rest of that session sits below the page
+     * boundary — without this read the card renders from a partial row set AND the same
+     * session reappears on the next older page.
+     *
+     * @returns The page with any missing session rows prepended, still chronological.
+     */
+    private async expandOldestSession(
+        conversationId: string,
+        details: MJConversationDetailEntity[],
+        contextUser: UserInfo
+    ): Promise<MJConversationDetailEntity[]> {
+        const sessionId = details[0].AgentSessionID?.trim();
+        if (!sessionId) {
+            return details;
+        }
+
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<MJConversationDetailEntity>({
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: `ConversationID='${conversationId}' AND AgentSessionID='${sessionId}' `
+                + `AND Sequence < ${details[0].Sequence}`,
+            OrderBy: 'Sequence DESC',
+            MaxRows: MAX_SESSION_EXPANSION_ROWS,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (!result.Success || !result.Results?.length) {
+            return details;
+        }
+        return [...[...result.Results].reverse(), ...details];
+    }
+
+    /**
+     * Probes whether any row exists below the window's oldest `Sequence` — i.e. whether the
+     * UI should show its "earlier messages" sentinel.
+     *
+     * A one-row probe rather than `page.length === MaxRows`: session expansion changes the
+     * row count, so a full page can look short and a short page can look full.
+     */
+    private async hasOlderDetails(
+        conversationId: string,
+        oldestSequence: number,
+        contextUser: UserInfo
+    ): Promise<boolean> {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const probe = await rv.RunView<Pick<MJConversationDetailEntityType, 'ID'>>({
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: `ConversationID='${conversationId}' AND Sequence < ${oldestSequence}`,
+            OrderBy: 'Sequence DESC',
+            MaxRows: 1,
+            Fields: ['ID'],
+            ResultType: 'simple'
+        }, contextUser);
+
+        return probe.Success && (probe.Results?.length ?? 0) > 0;
+    }
+
+
     /**
      * Builds a full ConversationDetailCache from raw GetConversationComplete query results.
      * Hydrates entity objects and parses peripheral JSON data in one pass.
@@ -1219,6 +1576,141 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             LoadedAt: new Date(),
             PeripheralDataStale: false
         };
+    }
+
+
+
+    /**
+     * Loads peripheral data for ONE window's rows.
+     *
+     * Sibling of {@link buildDetailCacheFromRawData}, which cannot be reused here: that
+     * method parses the `AgentRunsJSON` / `ArtifactsJSON` / `RatingsJSON` columns that only
+     * the GetConversationComplete stored query produces. A windowed RunView returns none of
+     * them, so each peripheral is a real query.
+     *
+     * A failing peripheral degrades to an empty map — the transcript still renders.
+     */
+    private async buildWindowPeripherals(
+        details: MJConversationDetailEntity[],
+        contextUser: UserInfo
+    ): Promise<WindowPeripherals> {
+        const detailIds = details.map(d => d.ID).filter(id => !!id);
+        if (detailIds.length === 0) {
+            return emptyWindowPeripherals();
+        }
+
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const byDetail = detailIdInFilter(detailIds);
+        const [runsResult, ratingsResult, junctionsResult] = await rv.RunViews<
+            MJAIAgentRunEntity | MJConversationDetailRatingEntityType | MJConversationDetailArtifactEntityType
+        >([
+            { EntityName: 'MJ: AI Agent Runs', ExtraFilter: byDetail, ResultType: 'entity_object' },
+            { EntityName: 'MJ: Conversation Detail Ratings', ExtraFilter: byDetail, ResultType: 'simple' },
+            // Direction='Output' mirrors GetConversationComplete — input artifacts aren't shown.
+            {
+                EntityName: 'MJ: Conversation Detail Artifacts',
+                ExtraFilter: `${byDetail} AND Direction='Output'`,
+                ResultType: 'simple'
+            }
+        ], contextUser);
+
+        const runs = (runsResult?.Success ? runsResult.Results : []) as MJAIAgentRunEntity[];
+        const ratings = (ratingsResult?.Success ? ratingsResult.Results : []) as MJConversationDetailRatingEntityType[];
+        const junctions = (junctionsResult?.Success ? junctionsResult.Results : []) as MJConversationDetailArtifactEntityType[];
+
+        const usersById = await this.loadWindowUsers(collectWindowUserIds(details, ratings), contextUser);
+
+        return {
+            AgentRunsByDetailId: groupAgentRunsByDetailId(runs),
+            UserAvatars: buildUserAvatarMap(details, usersById),
+            RatingsByDetailId: groupRatingsByDetailId(ratings, usersById),
+            ArtifactsByDetailId: await this.buildWindowArtifactMap(junctions, contextUser)
+        };
+    }
+
+    /**
+     * Loads the users a window references — message authors (for avatars) and raters (for
+     * the denormalized `UserName` on each rating).
+     */
+    private async loadWindowUsers(
+        userIds: string[],
+        contextUser: UserInfo
+    ): Promise<Map<string, MJUserEntityType>> {
+        if (userIds.length === 0) {
+            return new Map<string, MJUserEntityType>();
+        }
+
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<MJUserEntityType>({
+            EntityName: 'MJ: Users',
+            ExtraFilter: idInFilter(userIds),
+            Fields: ['ID', 'Name', 'UserImageURL', 'UserImageIconClass'],
+            ResultType: 'simple'
+        }, contextUser);
+
+        if (!result.Success) {
+            console.error('[ConversationEngine] Failed to load window users:', result.ErrorMessage);
+            return new Map<string, MJUserEntityType>();
+        }
+        return new Map((result.Results || []).map(user => [user.ID, user]));
+    }
+
+    /**
+     * Rebuilds the window's artifact cards from the three tables GetConversationComplete
+     * joins: the detail↔version junction, the version, then the artifact.
+     *
+     * This cannot be one batched call — the version ids come from the junction rows, and
+     * the artifact ids from the versions — so it is two sequential follow-up reads. Rows
+     * whose version or artifact is missing are dropped, matching the stored query's INNER
+     * JOIN semantics.
+     */
+    private async buildWindowArtifactMap(
+        junctions: MJConversationDetailArtifactEntityType[],
+        contextUser: UserInfo
+    ): Promise<Map<string, ArtifactJSON[]>> {
+        const byDetailId = new Map<string, ArtifactJSON[]>();
+        if (junctions.length === 0) {
+            return byDetailId;
+        }
+
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const versionResult = await rv.RunView<MJArtifactVersionEntityType>({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: idInFilter([...new Set(junctions.map(j => j.ArtifactVersionID))]),
+            ResultType: 'simple'
+        }, contextUser);
+        const versions = versionResult.Success ? (versionResult.Results || []) : [];
+        const versionById = new Map(versions.map(v => [v.ID, v]));
+
+        const artifactIds = [...new Set(versions.map(v => v.ArtifactID))];
+        const artifacts = artifactIds.length === 0 ? [] : await this.loadArtifactsByIds(artifactIds, contextUser);
+        const artifactById = new Map(artifacts.map(a => [a.ID, a]));
+
+        for (const junction of junctions) {
+            const version = versionById.get(junction.ArtifactVersionID);
+            const artifact = version ? artifactById.get(version.ArtifactID) : undefined;
+            if (!version || !artifact) {
+                continue;
+            }
+            const list = byDetailId.get(junction.ConversationDetailID) ?? [];
+            list.push(mergeArtifactJSON(junction, version, artifact));
+            byDetailId.set(junction.ConversationDetailID, list);
+        }
+        return byDetailId;
+    }
+
+    /** Reads the artifact rows behind a window's artifact versions. */
+    private async loadArtifactsByIds(
+        artifactIds: string[],
+        contextUser: UserInfo
+    ): Promise<MJArtifactEntityType[]> {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<MJArtifactEntityType>({
+            EntityName: 'MJ: Artifacts',
+            ExtraFilter: idInFilter(artifactIds),
+            ResultType: 'simple'
+        }, contextUser);
+        return result.Success ? (result.Results || []) : [];
     }
 
     /**
