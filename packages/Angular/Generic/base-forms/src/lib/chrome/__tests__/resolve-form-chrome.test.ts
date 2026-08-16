@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { EntityInfo, type FormRole } from '@memberjunction/core';
 import { DETAILS_SECTION_KEY, MORE_SECTION_KEY, HumanizeEntityTitle, IsAccordionFormChrome, IsAlwaysMoreSection } from '../form-chrome';
-import { ApplyUserChromeMembership, BuildDefaultChromeSpec, MoveChromeGroupInSectionOrder, OrderChromeGroups, OrderMoreSectionKeys, ResolveFormChrome, StabilizeFirstClassGroupOrder, TakeDecoratedChrome } from '../resolve-form-chrome';
-import type { FormChromeSpec } from '../form-chrome';
+import { ApplyUserChromeMembership, BuildDefaultChromeSpec, MoveChromeGroupInSectionOrder, OrderChromeGroups, OrderMoreSectionKeys, OverlayChromeSectionOrder, ResolveFormChrome, StabilizeFirstClassGroupOrder, TakeDecoratedChrome } from '../resolve-form-chrome';
+import type { FormChromeGroup, FormChromeSpec } from '../form-chrome';
 import { FormChromeCoordinator } from '../form-chrome-coordinator.service';
 
 describe('IsAccordionFormChrome', () => {
@@ -369,6 +369,63 @@ describe('OrderChromeGroups / MoveChromeGroupInSectionOrder', () => {
         expect(ordered.map((g) => g.Key)).toEqual(['orders', DETAILS_SECTION_KEY, MORE_SECTION_KEY]);
     });
 
+    it('keeps unranked keys in their default slots instead of dumping them at the end', () => {
+        expect(OverlayChromeSectionOrder(
+            ['overview', 'details', 'payments', 'addresses', 'relationships'],
+            ['details', 'payments', 'relationships', 'addresses'],
+        )).toEqual(['overview', 'details', 'payments', 'relationships', 'addresses']);
+    });
+
+    it('keeps Overview first when the user order is the baked form.sections list', () => {
+        const groups: FormChromeGroup[] = [
+            { Key: 'overview', Title: 'Overview', Icon: '', SectionKeys: ['overview'], IsMore: false, IsLead: true },
+            { Key: DETAILS_SECTION_KEY, Title: 'Details', Icon: '', SectionKeys: ['details'], IsMore: false },
+            { Key: 'payments', Title: 'Payments', Icon: '', SectionKeys: ['payments'], IsMore: false },
+            { Key: 'addresses', Title: 'Addresses', Icon: '', SectionKeys: ['addresses'], IsMore: false },
+            { Key: 'relationships', Title: 'Relationships', Icon: '', SectionKeys: ['relationships'], IsMore: false },
+        ];
+        const ordered = OrderChromeGroups(
+            groups,
+            ['details', 'payments', 'addresses', 'relationships'],
+        );
+        expect(ordered.map((g) => g.Key)).toEqual([
+            'overview',
+            DETAILS_SECTION_KEY,
+            'payments',
+            'addresses',
+            'relationships',
+        ]);
+    });
+
+    it('moves Relationships in front of Addresses on top of an incomplete user order', () => {
+        const overlaid = OverlayChromeSectionOrder(
+            ['overview', 'details', 'payments', 'subscriptions', 'addresses', 'relationships'],
+            ['details', 'payments', 'subscriptions', 'addresses', 'relationships'],
+        );
+        const relationships = {
+            Key: 'relationships',
+            Title: 'Relationships',
+            Icon: '',
+            SectionKeys: ['relationships'],
+            IsMore: false,
+        };
+        const addresses = {
+            Key: 'addresses',
+            Title: 'Addresses',
+            Icon: '',
+            SectionKeys: ['addresses'],
+            IsMore: false,
+        };
+        expect(MoveChromeGroupInSectionOrder(overlaid, relationships, addresses)).toEqual([
+            'overview',
+            'details',
+            'payments',
+            'subscriptions',
+            'relationships',
+            'addresses',
+        ]);
+    });
+
     it('moves a rail group as a block in the section order', () => {
         const orders = { Key: 'orders', Title: 'Orders', Icon: '', SectionKeys: ['orders'], IsMore: false };
         const details = {
@@ -634,10 +691,10 @@ describe('ResolveFormChrome inclusion None', () => {
         expect(result.Spec.Groups.find((g) => g.Key === 'overview')?.IsLead).toBe(true);
         expect(result.Spec.Groups.find((g) => g.Key === DETAILS_SECTION_KEY)?.SectionKeys).toEqual(['identity']);
         const formSections = ['identity', 'mJBizAppsOrdersPaymentHeaders'];
-        const undone = OrderChromeGroups(result.Spec.Groups, formSections)
+        const overlaid = OrderChromeGroups(result.Spec.Groups, formSections)
             .filter((g) => !g.IsMore)
             .map((g) => g.Title);
-        expect(undone).toEqual(['Details', 'Payments', 'Overview']);
+        expect(overlaid).toEqual(['Overview', 'Details', 'Payments']);
         expect(OrderChromeGroups(result.Spec.Groups, []).filter((g) => !g.IsMore).map((g) => g.Title))
             .toEqual(['Overview', 'Details', 'Payments']);
     });

@@ -335,19 +335,42 @@ export function ChromeGroupOrderIndex(group: FormChromeGroup, sectionOrder: read
     return min;
 }
 
+/**
+ * Layer a (possibly incomplete) user ranking on the current default rail.
+ * Keys the user ranked keep that relative order. Keys they never ranked
+ * (Overview, a new related grid) stay in their default slots instead of
+ * falling to the end — `form.sections` does not list slot-mounted leads.
+ */
+export function OverlayChromeSectionOrder(
+    defaultOrder: readonly string[],
+    userOrder: readonly string[],
+): string[] {
+    if (userOrder.length === 0) return [...defaultOrder];
+    const defaultSet = new Set(defaultOrder);
+    const userSet = new Set(userOrder);
+    const result = userOrder.filter((key) => defaultSet.has(key));
+    for (let i = 0; i < defaultOrder.length; i++) {
+        const key = defaultOrder[i];
+        if (userSet.has(key)) continue;
+        let insertAt = 0;
+        for (let j = i - 1; j >= 0; j--) {
+            const idx = result.indexOf(defaultOrder[j]);
+            if (idx >= 0) {
+                insertAt = idx + 1;
+                break;
+            }
+        }
+        result.splice(insertAt, 0, key);
+    }
+    return result;
+}
+
 /** Reorder More children from a persisted section-key order. */
 export function OrderMoreSectionKeys(
     moreKeys: readonly string[],
     sectionOrder: readonly string[],
 ): string[] {
-    if (sectionOrder.length === 0) return [...moreKeys];
-    return [...moreKeys].sort((a, b) => {
-        const ai = sectionOrder.indexOf(a);
-        const bi = sectionOrder.indexOf(b);
-        const av = ai < 0 ? Number.MAX_SAFE_INTEGER : ai;
-        const bv = bi < 0 ? Number.MAX_SAFE_INTEGER : bi;
-        return av - bv;
-    });
+    return OverlayChromeSectionOrder(moreKeys, sectionOrder);
 }
 
 /**
@@ -408,9 +431,11 @@ export function OrderChromeGroups(
     if (sectionOrder.length === 0) return [...groups];
     const more = groups.filter((g) => g.IsMore);
     const rest = groups.filter((g) => !g.IsMore);
+    const defaultKeys = rest.flatMap((g) => g.SectionKeys);
+    const overlaid = OverlayChromeSectionOrder(defaultKeys, sectionOrder);
     rest.sort((a, b) => {
-        const ai = ChromeGroupOrderIndex(a, sectionOrder);
-        const bi = ChromeGroupOrderIndex(b, sectionOrder);
+        const ai = ChromeGroupOrderIndex(a, overlaid);
+        const bi = ChromeGroupOrderIndex(b, overlaid);
         return ai - bi;
     });
     return [...rest, ...more];

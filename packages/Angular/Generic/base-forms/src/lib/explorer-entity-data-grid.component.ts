@@ -86,13 +86,13 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
         return this.isInsideRelatedEntityPanel();
     }
 
+    /**
+     * Related-entity accordion AND left-nav panels. Accordion used to leave
+     * Height='auto' (100% of an auto-sized parent) so AG Grid's viewport
+     * collapsed to 0 while the toolbar still showed "N rows".
+     */
     private isInsideRelatedEntityPanel(): boolean {
         return this.findRelatedEntityPanel() != null;
-    }
-
-    /** Left-nav / right-nav related panels get `mj-chrome-show` from the container. */
-    private isInsideNavRelatedPanel(): boolean {
-        return !!this.findRelatedEntityPanel()?.classList.contains('mj-chrome-show');
     }
 
     private findRelatedEntityPanel(): HTMLElement | null {
@@ -130,9 +130,10 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     @Input() SelectionMode: GridSelectionMode = 'single';
 
     /**
-     * Left-nav related grids size to toolbar + header + rows instead of
-     * `height: 100%` of leftover flex space. Re-read the panel each time —
-     * `mj-chrome-show` is added when the rail item is selected.
+     * Related-entity grids (accordion and left-nav) size to toolbar + header
+     * + rows instead of `height: 100%` of leftover / auto space. Re-read the
+     * panel each time — the host may mount before it is wrapped, and left-nav
+     * adds `mj-chrome-show` only when the rail item is selected.
      */
     private sizedHeightPx = RelatedGridHeightPx(0);
 
@@ -145,7 +146,7 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     }
 
     private shouldSizeToRows(): boolean {
-        return this.isInsideNavRelatedPanel();
+        return this.isInsideRelatedEntityPanel();
     }
 
     /**

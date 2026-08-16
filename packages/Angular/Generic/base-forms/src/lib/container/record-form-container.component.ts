@@ -34,7 +34,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListManagementResult } from '@memberjunction/ng-list-management';
 import { FormSlotCoordinator } from '../panel-slot/form-slot-coordinator.service';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
-import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder } from '../chrome/resolve-form-chrome';
+import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder, OverlayChromeSectionOrder } from '../chrome/resolve-form-chrome';
 import { LoadFormChromeRules } from '../chrome/load-form-chrome-rules';
 import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection } from '../chrome/form-chrome';
 import type { FormChromeGroup, FormChromePanelSnapshot } from '../chrome/form-chrome';
@@ -762,12 +762,15 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (!dragged || !target) return;
     if (!draggedMore && (dragged.IsMore || target.IsMore)) return;
     if (!!draggedMore !== !!targetMore) return;
-    const current = this.SectionManagerOrder;
-    const next = MoveChromeGroupInSectionOrder(
-      current.length > 0 ? current : groups.flatMap((g) => g.SectionKeys),
-      dragged,
-      target,
+    const defaultKeys = [
+      ...groups.filter((g) => !g.IsMore).flatMap((g) => g.SectionKeys),
+      ...moreItems.flatMap((g) => g.SectionKeys),
+    ];
+    const current = OverlayChromeSectionOrder(
+      defaultKeys,
+      this.EffectiveHasCustomSectionOrder ? this.SectionManagerOrder : [],
     );
+    const next = MoveChromeGroupInSectionOrder(current, dragged, target);
     if (this.fc?.setSectionOrder) {
       this.fc.setSectionOrder(next);
       this.cdr.detectChanges();
