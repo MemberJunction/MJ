@@ -18117,6 +18117,12 @@ export const MJEntityFieldSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, this field is a SQL Server computed column or PostgreSQL generated column — physically present in the base table but read-only at the SQL layer. Distinct from IsVirtual, which means the column is not in the base table at all (e.g., joined name lookups in the base view). A computed column has both IsVirtual=1 (read-only at the API layer) and IsComputed=1 (physically in the table). The difference matters for base-view JOIN target selection: when an FK's related Name Field is computed, the generated view joins to the related entity's base table instead of its view.`),
+    EmbeddedRecord: z.any().nullable().describe(`
+        * * Field Name: EmbeddedRecord
+        * * Display Name: Embedded Record
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJEntityFieldEntity_IEmbeddedRecordConfig
+        * * Description: Optional JSON policy object that declares this foreign-key field as a first-class embedded record, so CodeGen can emit {FieldName}_Object / {FieldName}_EnsureObject() on the entity subclass. Shape is IEmbeddedRecordConfig: OnClear ('delete' | 'orphan' | 'refuse', default orphan) and LoadNested ('inherit' | 'related', default inherit). RelatedEntity and the FK field name are NOT repeated here — they are this row's RelatedEntityID and Name. AllowsNull on this same row decides whether the object is provisioned with GetEntityObject (required FK) or via Ensure (nullable FK). NULL means the field is an ordinary FK, which is the default and reproduces pre-feature behaviour exactly.`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -81270,6 +81276,22 @@ export class MJEntityFieldValueEntity extends BaseEntity<MJEntityFieldValueEntit
 
 
 /**
+ * Declares an `EntityField` (a foreign key on **this** entity) as a first-class
+ * **embedded record** — a 1:1 peer `BaseEntity` that loads, validates and persists
+ * as one unit with its owner.
+ *
+ * Stored in the `EmbeddedRecord` column of `MJ: Entity Fields`. When non-null,
+ * CodeGen emits `{FieldName}_Object` / `{FieldName}_EnsureObject()` on the
+ * generated entity subclass.
+ *
+ * @see packages/MJCore/docs/embedded-records.md
+ */
+export interface MJEntityFieldEntity_IEmbeddedRecordConfig {
+    OnClear?: 'delete' | 'orphan' | 'refuse';
+    LoadNested?: 'inherit' | 'related';
+}
+
+/**
  * MJ: Entity Fields - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: EntityField
@@ -82111,6 +82133,41 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     }
     set JSONTypeDefinition(value: string | null) {
         this.Set('JSONTypeDefinition', value);
+    }
+
+    /**
+    * * Field Name: EmbeddedRecord
+    * * Display Name: Embedded Record
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJEntityFieldEntity_IEmbeddedRecordConfig
+    * * Description: Optional JSON policy object that declares this foreign-key field as a first-class embedded record, so CodeGen can emit {FieldName}_Object / {FieldName}_EnsureObject() on the entity subclass. Shape is IEmbeddedRecordConfig: OnClear ('delete' | 'orphan' | 'refuse', default orphan) and LoadNested ('inherit' | 'related', default inherit). RelatedEntity and the FK field name are NOT repeated here — they are this row's RelatedEntityID and Name. AllowsNull on this same row decides whether the object is provisioned with GetEntityObject (required FK) or via Ensure (nullable FK). NULL means the field is an ordinary FK, which is the default and reproduces pre-feature behaviour exactly.
+    */
+    get EmbeddedRecord(): string | null {
+        return this.Get('EmbeddedRecord');
+    }
+    set EmbeddedRecord(value: string | null) {
+        this.Set('EmbeddedRecord', value);
+    }
+
+    private _EmbeddedRecordObject_cached: MJEntityFieldEntity_IEmbeddedRecordConfig | null | undefined = undefined;
+    private _EmbeddedRecordObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for EmbeddedRecord — returns parsed JSON as MJEntityFieldEntity_IEmbeddedRecordConfig.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get EmbeddedRecordObject(): MJEntityFieldEntity_IEmbeddedRecordConfig | null {
+        const raw = this.EmbeddedRecord;
+        if (raw !== this._EmbeddedRecordObject_lastRaw) {
+            this._EmbeddedRecordObject_cached = raw ? JSON.parse(raw) : null;
+            this._EmbeddedRecordObject_lastRaw = raw;
+        }
+        return this._EmbeddedRecordObject_cached!;
+    }
+    set EmbeddedRecordObject(value: MJEntityFieldEntity_IEmbeddedRecordConfig | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.EmbeddedRecord = raw;
+        this._EmbeddedRecordObject_cached = value;
+        this._EmbeddedRecordObject_lastRaw = raw;
     }
 
     /**
