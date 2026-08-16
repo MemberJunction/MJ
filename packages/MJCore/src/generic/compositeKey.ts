@@ -349,6 +349,29 @@ export function IsNewEntityRecordUrlId(recordId: string | null | undefined): boo
 }
 
 /**
+ * True when a workspace tab is the record named by a `/record/:entity/:id` URL.
+ *
+ * New-record tabs store `recordId: ''` while the URL uses the `new` sentinel.
+ * Those must match. Comparing the raw strings (`'' === 'new'`) is false, so
+ * URL sync thinks the tab is missing and opens another one — an infinite
+ * tab storm that kills the browser tab.
+ */
+export function RecordUrlMatchesTab(
+    urlEntityName: string,
+    urlRecordId: string,
+    tabEntityName: string | null | undefined,
+    tabRecordId: string | null | undefined,
+): boolean {
+    if ((tabEntityName ?? '').trim().toLowerCase() !== urlEntityName.trim().toLowerCase()) {
+        return false;
+    }
+    if (IsNewEntityRecordUrlId(urlRecordId) && IsNewEntityRecordUrlId(tabRecordId)) {
+        return true;
+    }
+    return (tabRecordId ?? '') === urlRecordId;
+}
+
+/**
  * Encode new-record defaults for a deeplink. Objects become
  * `Field|value||Field2|value2`. Empty / null returns undefined.
  */
