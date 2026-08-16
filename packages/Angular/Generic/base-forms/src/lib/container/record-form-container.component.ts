@@ -831,6 +831,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       ContributionInclusionByKey: this.contributionInclusionByKey(),
       ContributionSortKeyByKey: this.contributionSortKeyByKey(),
       ChromeRules: this.chromeRules,
+      IncludeUnbakedRelated: this.EffectiveShowRelatedEntities,
       Membership: {
         moreSectionKeys: this.fc?.getMoreSectionKeys?.() ?? [],
         firstClassSectionKeys: this.fc?.getFirstClassSectionKeys?.() ?? [],
@@ -892,9 +893,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   private moreItemFromKey(key: string): FormChromeGroup {
     const panel = this.allChromePanels().find((p) => p.SectionKey === key);
+    const override = this.chrome.Spec.TitleBySectionKey?.get(key);
     return {
       Key: key,
-      Title: HumanizeEntityTitle(panel?.SectionName || key),
+      Title: override || HumanizeEntityTitle(panel?.SectionName || key),
       Icon: panel?.Icon || 'fa-solid fa-table',
       SectionKeys: [key],
       IsMore: true,
@@ -929,7 +931,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       const titled = this.chrome.Spec.Groups.find(
         (g) => !g.IsMore && g.SectionKeys.length === 1 && g.SectionKeys[0] === panel.SectionKey,
       );
-      if (titled?.Title) {
+      const override = this.chrome.Spec.TitleBySectionKey?.get(panel.SectionKey);
+      if (override) {
+        panel.SectionName = override;
+      } else if (titled?.Title) {
         panel.SectionName = titled.Title;
       }
       if (claimed.has(panel.SectionKey)) {

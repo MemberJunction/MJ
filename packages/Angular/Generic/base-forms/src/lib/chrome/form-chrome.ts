@@ -61,6 +61,12 @@ export interface FormChromeSpec {
     /** SectionKey → role for related-entity panels. Field panels are omitted. */
     RelatedRoles: ReadonlyMap<string, FormRole>;
     MoreSectionKeys: string[];
+    /**
+     * L3 admin Title overlays, keyed by section key or contribution key.
+     * First-class group titles are already rewritten; More items and
+     * accordion headers read this map so the same override reaches both.
+     */
+    TitleBySectionKey?: ReadonlyMap<string, string>;
 }
 
 export interface FormChromePanelSnapshot {

@@ -17,6 +17,7 @@ interface FormChromeRuleRow {
     Inclusion: FormInclusion;
     JoinFields: string | null;
     Sequence: number | null;
+    Title?: string | null;
 }
 
 /**
@@ -30,17 +31,31 @@ export async function LoadFormChromeRules(
     const id = parentEntityId.trim();
     if (!isEntityId(id)) return [];
     const md = provider ?? Metadata.Provider;
-    if (!md?.EntityByName(FORM_CHROME_RULES_ENTITY)) return [];
+    const rulesEntity = md?.EntityByName(FORM_CHROME_RULES_ENTITY);
+    if (!rulesEntity) return [];
 
     // Read through the SAME provider the check above resolved. `new RunView()` binds the GLOBAL
     // provider, so in a multi-provider app this validated the entity against the caller's provider
     // and then read the rows from a different one — yielding another environment's chrome rules, or
     // none at all, depending on which provider happened to be global at the time.
     const rv = RunView.FromMetadataProvider(md);
+    const fields = [
+        'EntityID',
+        'TargetKind',
+        'RelatedEntityID',
+        'ContributionKey',
+        'Inclusion',
+        'JoinFields',
+        'Sequence',
+    ];
+    // Title is additive — skip it until migrate + CodeGen have published the column.
+    if (rulesEntity.Fields.some((field) => field.Name === 'Title')) {
+        fields.push('Title');
+    }
     const result = await rv.RunView<FormChromeRuleRow>({
         EntityName: FORM_CHROME_RULES_ENTITY,
         ExtraFilter: `EntityID='${id}'`,
-        Fields: ['EntityID', 'TargetKind', 'RelatedEntityID', 'ContributionKey', 'Inclusion', 'JoinFields', 'Sequence'],
+        Fields: fields,
         OrderBy: 'Sequence ASC',
         ResultType: 'simple',
     });
@@ -49,6 +64,7 @@ export async function LoadFormChromeRules(
 }
 
 function toRule(row: FormChromeRuleRow): FormChromeRule {
+    const title = row.Title?.trim();
     return {
         EntityID: row.EntityID,
         TargetKind: row.TargetKind,
@@ -57,6 +73,7 @@ function toRule(row: FormChromeRuleRow): FormChromeRule {
         Inclusion: row.Inclusion,
         JoinFields: parseJoinFields(row.JoinFields),
         Sequence: row.Sequence,
+        Title: title && title.length > 0 ? title : null,
     };
 }
 

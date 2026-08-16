@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { EntityInfo, type FormRole } from '@memberjunction/core';
 import { DETAILS_SECTION_KEY, MORE_SECTION_KEY, HumanizeEntityTitle, IsAccordionFormChrome, IsAlwaysMoreSection } from '../form-chrome';
-import { ApplyUserChromeMembership, BuildDefaultChromeSpec, MoveChromeGroupInSectionOrder, OrderChromeGroups, OrderMoreSectionKeys, OverlayChromeSectionOrder, ResolveFormChrome, StabilizeFirstClassGroupOrder, TakeDecoratedChrome } from '../resolve-form-chrome';
+import { ApplyFormChromeRuleTitles, ApplyUserChromeMembership, BuildDefaultChromeSpec, MoveChromeGroupInSectionOrder, OrderChromeGroups, OrderMoreSectionKeys, OverlayChromeSectionOrder, ResolveFormChrome, StabilizeFirstClassGroupOrder, TakeDecoratedChrome } from '../resolve-form-chrome';
 import type { FormChromeGroup, FormChromeSpec } from '../form-chrome';
 import { FormChromeCoordinator } from '../form-chrome-coordinator.service';
 
@@ -829,6 +829,190 @@ describe('ResolveFormChrome inclusion None', () => {
             }],
         });
         expect(result.Spec.Groups.some((g) => g.SectionKeys.includes('addresses'))).toBe(false);
+    });
+
+    it('applies an L3 Title over DisplayName and last Sequence wins', () => {
+        const relatedId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+        const parentId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+        const entity = new EntityInfo({
+            ID: parentId,
+            Name: 'MJ_BizApps_Common: People',
+            SchemaName: 'MJ_BizApps_Common',
+            RelatedEntities: [{
+                ID: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+                RelatedEntity: 'MJ_BizApps_Orders: Payment Headers',
+                RelatedEntityID: relatedId,
+                RelatedEntityJoinField: 'PersonID',
+                DisplayInForm: true,
+                DisplayName: 'Payments',
+                Configuration: JSON.stringify({ UI: { inclusion: 'Primary' } }),
+            }],
+        });
+        const result = ResolveFormChrome({
+            Entity: entity,
+            Panels: [{
+                SectionKey: 'mJBizAppsOrdersPaymentHeaders',
+                SectionName: 'Payment Headers',
+                Variant: 'related-entity',
+            }],
+            RelatedSchemaByEntityId: new Map([[relatedId, 'MJ_BizApps_Orders']]),
+            ChromeRules: [
+                {
+                    EntityID: parentId,
+                    TargetKind: 'Relationship',
+                    RelatedEntityID: relatedId,
+                    Inclusion: 'Primary',
+                    Title: 'Pay',
+                    Sequence: 1,
+                },
+                {
+                    EntityID: parentId,
+                    TargetKind: 'Relationship',
+                    RelatedEntityID: relatedId,
+                    Inclusion: 'Primary',
+                    Title: 'Pmts',
+                    Sequence: 2,
+                },
+            ],
+        });
+        const group = result.Spec.Groups.find((g) => g.SectionKeys.includes('mJBizAppsOrdersPaymentHeaders'));
+        expect(group?.Title).toBe('Pmts');
+        expect(result.Spec.TitleBySectionKey?.get('mJBizAppsOrdersPaymentHeaders')).toBe('Pmts');
+    });
+
+    it('applies an L3 Title to a contribution key', () => {
+        const parentId = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+        const entity = new EntityInfo({
+            ID: parentId,
+            Name: 'MJ_BizApps_Common: People',
+            SchemaName: 'MJ_BizApps_Common',
+            RelatedEntities: [],
+        });
+        const result = ResolveFormChrome({
+            Entity: entity,
+            Panels: [{
+                SectionKey: 'overview',
+                SectionName: 'Overview',
+                Variant: 'default',
+            }],
+            RelatedSchemaByEntityId: new Map(),
+            ContributionSectionKeys: ['overview'],
+            ContributionInclusionByKey: new Map([['overview', 'Primary']]),
+            ChromeRules: [{
+                EntityID: parentId,
+                TargetKind: 'Contribution',
+                ContributionKey: 'overview',
+                Inclusion: 'Primary',
+                Title: 'At a glance',
+            }],
+        });
+        expect(result.Spec.Groups.find((g) => g.Key === 'overview')?.Title).toBe('At a glance');
+    });
+
+    it('ignores a blank L3 Title so DisplayName stays', () => {
+        const relatedId = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+        const parentId = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+        const entity = new EntityInfo({
+            ID: parentId,
+            Name: 'MJ_BizApps_Common: People',
+            SchemaName: 'MJ_BizApps_Common',
+            RelatedEntities: [{
+                ID: '11111111-1111-1111-1111-111111111112',
+                RelatedEntity: 'MJ_BizApps_Orders: Payment Headers',
+                RelatedEntityID: relatedId,
+                RelatedEntityJoinField: 'PersonID',
+                DisplayInForm: true,
+                DisplayName: 'Payments',
+                Configuration: JSON.stringify({ UI: { inclusion: 'Primary' } }),
+            }],
+        });
+        const result = ResolveFormChrome({
+            Entity: entity,
+            Panels: [{
+                SectionKey: 'mJBizAppsOrdersPaymentHeaders',
+                SectionName: 'Payment Headers',
+                Variant: 'related-entity',
+            }],
+            RelatedSchemaByEntityId: new Map([[relatedId, 'MJ_BizApps_Orders']]),
+            ChromeRules: [{
+                EntityID: parentId,
+                TargetKind: 'Relationship',
+                RelatedEntityID: relatedId,
+                Inclusion: 'Primary',
+                Title: '   ',
+            }],
+        });
+        expect(result.Spec.Groups.find((g) => g.SectionKeys.includes('mJBizAppsOrdersPaymentHeaders'))?.Title)
+            .toBe('Payments');
+    });
+
+    it('does not invent leftover related groups when IncludeUnbakedRelated is false', () => {
+        const relatedId = '12121212-1212-1212-1212-121212121212';
+        const entity = new EntityInfo({
+            ID: '13131313-1313-1313-1313-131313131313',
+            Name: 'MJ_BizApps_Orders: Order Headers',
+            SchemaName: 'MJ_BizApps_Orders',
+            RelatedEntities: [{
+                ID: '14141414-1414-1414-1414-141414141414',
+                RelatedEntity: 'MJ_BizApps_Orders: Payment Intents',
+                RelatedEntityID: relatedId,
+                RelatedEntityJoinField: 'OrderHeaderID',
+                DisplayInForm: true,
+                DisplayName: 'Payment Intents',
+                Configuration: JSON.stringify({ UI: { inclusion: 'More' } }),
+            }],
+        });
+        const result = ResolveFormChrome({
+            Entity: entity,
+            Panels: [{
+                SectionKey: 'mJBizAppsOrdersOrderLines',
+                SectionName: 'Lines',
+                Variant: 'related-entity',
+            }],
+            RelatedSchemaByEntityId: new Map([[relatedId, 'MJ_BizApps_Orders']]),
+            IncludeUnbakedRelated: false,
+        });
+        expect(result.Spec.Groups.some((g) => g.Title === 'Payment Intents')).toBe(false);
+        expect(result.Spec.MoreSectionKeys).toEqual([]);
+    });
+});
+
+describe('ApplyFormChromeRuleTitles', () => {
+    it('rewrites first-class group titles from a TitleBySectionKey map', () => {
+        const spec: FormChromeSpec = {
+            Layout: 'accordion',
+            Groups: [{
+                Key: 'payments',
+                Title: 'Payments',
+                Icon: 'fa-solid fa-table',
+                SectionKeys: ['mJBizAppsOrdersPaymentHeaders'],
+                IsMore: false,
+            }],
+            RelatedRoles: new Map(),
+            MoreSectionKeys: [],
+        };
+        const relatedId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaab';
+        const parentId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbc';
+        const entity = new EntityInfo({
+            ID: parentId,
+            Name: 'People',
+            SchemaName: 'MJ_BizApps_Common',
+            RelatedEntities: [{
+                ID: 'cccccccc-cccc-cccc-cccc-cccccccccccd',
+                RelatedEntity: 'MJ_BizApps_Orders: Payment Headers',
+                RelatedEntityID: relatedId,
+                RelatedEntityJoinField: 'PersonID',
+                DisplayInForm: true,
+            }],
+        });
+        ApplyFormChromeRuleTitles(spec, entity, [{
+            EntityID: parentId,
+            TargetKind: 'Relationship',
+            RelatedEntityID: relatedId,
+            Inclusion: 'Primary',
+            Title: 'Pmts',
+        }]);
+        expect(spec.Groups[0].Title).toBe('Pmts');
     });
 });
 

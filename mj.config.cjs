@@ -518,12 +518,18 @@ module.exports = {
       { PackageName: '@mj-biz-apps/accounting-server', StartupExport: 'LoadBizAppsAccountingServer', AppName: 'mj-bizapps-accounting', Enabled: true },
       { PackageName: '@mj-biz-apps/orders-server', StartupExport: 'LoadBizAppsOrdersServer', AppName: 'mj-bizapps-orders', Enabled: true },
       { PackageName: '@mj-biz-apps/tasks-server', StartupExport: 'LoadBizAppsTasksServer', AppName: 'mj-bizapps-tasks', Enabled: true },
+      { PackageName: '@mj-biz-apps/issues-server', StartupExport: 'LoadBizAppsIssuesServer', AppName: 'mj-bizapps-issues', Enabled: true },
+      { PackageName: '@mj-biz-apps/committees-server', StartupExport: 'LoadBizAppsCommitteesServer', AppName: 'mj-bizapps-committees', Enabled: true },
+      { PackageName: '@mj-biz-apps/secure-messaging-server', StartupExport: 'LoadBizAppsSecureMessagingServer', AppName: 'mj-bizapps-secure-messaging', Enabled: true },
     ],
     client: [
       { PackageName: '@mj-biz-apps/common-ng', AppName: 'mj-bizapps-common', Enabled: true },
       { PackageName: '@mj-biz-apps/accounting-ng', AppName: 'mj-bizapps-accounting', Enabled: true },
       { PackageName: '@mj-biz-apps/orders-ng', AppName: 'mj-bizapps-orders', Enabled: true },
       { PackageName: '@mj-biz-apps/tasks-ng', AppName: 'mj-bizapps-tasks', Enabled: true },
+      { PackageName: '@mj-biz-apps/issues-ng', AppName: 'mj-bizapps-issues', Enabled: true },
+      { PackageName: '@mj-biz-apps/committees-ng', AppName: 'mj-bizapps-committees', Enabled: true },
+      { PackageName: '@mj-biz-apps/secure-messaging-ng', AppName: 'mj-bizapps-secure-messaging', Enabled: true },
     ],
   },
 };
