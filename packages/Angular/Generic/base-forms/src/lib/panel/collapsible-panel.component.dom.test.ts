@@ -77,6 +77,36 @@ describe('MjCollapsiblePanelComponent (DOM)', () => {
     expect(content.style.height).toBe('');
   });
 
+  it('does not pin a toolbar-only persisted height in accordion', () => {
+    const form = {
+      ...formStub(true),
+      GetSectionPanelHeight: () => 52,
+    };
+    const f = render({
+      SectionName: 'Products',
+      SectionKey: 'products',
+      Variant: 'related-entity',
+      Form: form,
+    });
+    const content = query(f, '.mj-forms-panel-content') as HTMLElement;
+    expect(content.style.height).toBe('');
+  });
+
+  it('honors a user-resized accordion height at or above the min', () => {
+    const form = {
+      ...formStub(true),
+      GetSectionPanelHeight: () => 240,
+    };
+    const f = render({
+      SectionName: 'Products',
+      SectionKey: 'products',
+      Variant: 'related-entity',
+      Form: form,
+    });
+    const content = query(f, '.mj-forms-panel-content') as HTMLElement;
+    expect(content.style.height).toBe('240px');
+  });
+
   it('does not pin a persisted pixel height when the host has mj-chrome-show', () => {
     const form = {
       ...formStub(true),

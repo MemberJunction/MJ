@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Subject } from 'rxjs';
 import { DEFAULT_FORM_CHROME_SPEC, MORE_SECTION_KEY, type FormChromeSpec } from './form-chrome';
+import { StabilizeFirstClassGroupOrder } from './resolve-form-chrome';
 
 /**
  * Per-container chrome state. Provided by `<mj-record-form-container>` so
@@ -14,7 +15,7 @@ export class FormChromeCoordinator {
     public readonly Changes = new Subject<void>();
 
     public Apply(spec: FormChromeSpec): void {
-        this.Spec = spec;
+        this.Spec = StabilizeFirstClassGroupOrder(this.Spec, spec);
         if (spec.Layout === 'left-nav') {
             const stillValid = spec.Groups.some((g) => g.Key === this.ActiveGroupKey);
             if (!stillValid) {

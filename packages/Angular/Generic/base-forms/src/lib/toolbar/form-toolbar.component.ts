@@ -3,6 +3,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { BaseEntity, EntityInfo, CompositeKey } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
+import { IsAccordionFormChrome } from '../chrome/form-chrome';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { DiscoverISADescendants, BuildDescendantTree, IsaRelatedItem } from '../isa-related-panel/isa-hierarchy-utils';
 import { FormWidthMode, FormContext } from '../types/form-types';
@@ -118,6 +119,16 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   @Input() ShowEmptyFields = false;
   @Input() WidthMode: FormWidthMode = 'centered';
   @Input() HasCustomSectionOrder = false;
+
+  /**
+   * Form chrome layout. Expand/collapse-all only render for accordion.
+   * Left-nav and right-nav show one section at a time.
+   */
+  @Input() ChromeLayout: 'accordion' | 'left-nav' | 'right-nav' = 'accordion';
+
+  get ShowExpandCollapseAll(): boolean {
+    return this.Config.ShowExpandCollapseAllButtons && IsAccordionFormChrome(this.ChromeLayout);
+  }
 
   /** Optional template for additional toolbar actions */
   @Input() AdditionalActionsTemplate: TemplateRef<unknown> | null = null;

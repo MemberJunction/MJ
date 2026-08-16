@@ -170,6 +170,18 @@ describe('MjFormToolbarComponent (DOM)', () => {
       expect(collapse.length).toBe(1);
     });
 
+    it('hides expand/collapse-all in left-nav chrome', () => {
+      const f = render({ ChromeLayout: 'left-nav', VisibleSectionCount: 3, ExpandedSectionCount: 1 });
+      expect(btn(f, 'button[title="Expand all sections"]')).toBeNull();
+      expect(btn(f, 'button[title="Collapse all sections"]')).toBeNull();
+    });
+
+    it('hides expand/collapse-all in right-nav chrome', () => {
+      const f = render({ ChromeLayout: 'right-nav', VisibleSectionCount: 3, ExpandedSectionCount: 1 });
+      expect(btn(f, 'button[title="Expand all sections"]')).toBeNull();
+      expect(btn(f, 'button[title="Collapse all sections"]')).toBeNull();
+    });
+
     it('emits FilterChange as the user types in the section filter', () => {
       const f = render();
       const out = capture(f.componentInstance.FilterChange);

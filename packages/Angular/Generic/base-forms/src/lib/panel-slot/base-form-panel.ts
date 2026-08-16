@@ -1,5 +1,5 @@
 import { Directive, HostBinding, Input } from '@angular/core';
-import { BaseEntity, ValidationResult } from '@memberjunction/core';
+import { BaseEntity, ValidationResult, type FormInclusion } from '@memberjunction/core';
 import { BaseFormComponent } from '../base-form-component';
 import { FormContext } from '../types/form-types';
 
@@ -90,6 +90,13 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
      * `'details'` — leftover own-fields group. `'more'` — overflow folder.
      */
     chromeGroup?: 'details' | 'more';
+    /**
+     * L1 inclusion for this contribution (same verbs as relationships).
+     * `'Primary'` — own first-class rail item, in the lead band before Details.
+     * `'More'` — overflow folder. `'None'` — hidden.
+     * L3 `MJ: Form Chrome Rules` still wins. `chromeGroup` still merges.
+     */
+    inclusion?: FormInclusion;
 }
 
 /**
