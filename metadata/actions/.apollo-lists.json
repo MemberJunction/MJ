@@ -90,6 +90,50 @@
           "primaryKey": {
             "ID": "7AE2DAB1-1658-44DF-ADF0-C5F12E99031C"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CONFIGURATION_ERROR",
+            "IsSuccess": false,
+            "Description": "The Apollo credential resolved but its Values carry no usable apiKey."
+          },
+          "primaryKey": {
+            "ID": "D311B8A4-2FEA-435A-8ED0-DCCF478C8B3C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CREDENTIALS_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No Apollo API key could be resolved for the supplied CompanyID or the environment."
+          },
+          "primaryKey": {
+            "ID": "8913116B-45B5-4C90-9B0A-321D64E9452F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_REQUIRED_FIELDS",
+            "IsSuccess": false,
+            "Description": "A required input was absent. The message names the field."
+          },
+          "primaryKey": {
+            "ID": "8D8B2BFD-573E-44AE-8853-25EEE9F347C0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "An input was present but not usable. The message explains why."
+          },
+          "primaryKey": {
+            "ID": "CE9951DB-875D-4F40-9CB1-48C6BDC5EABF"
+          }
         }
       ]
     },
@@ -230,6 +274,50 @@
           },
           "primaryKey": {
             "ID": "3A9879F1-933C-4912-B549-275BDDDAFC8C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CONFIGURATION_ERROR",
+            "IsSuccess": false,
+            "Description": "The Apollo credential resolved but its Values carry no usable apiKey."
+          },
+          "primaryKey": {
+            "ID": "CF09845C-4DAA-4300-BA89-1B12123011EB"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CREDENTIALS_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No Apollo API key could be resolved for the supplied CompanyID or the environment."
+          },
+          "primaryKey": {
+            "ID": "A9CC06EE-8028-4F26-83BF-AE4C3CC28EC4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_REQUIRED_FIELDS",
+            "IsSuccess": false,
+            "Description": "A required input was absent. The message names the field."
+          },
+          "primaryKey": {
+            "ID": "14C355CE-BF21-4634-9957-B55224839972"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "An input was present but not usable. The message explains why."
+          },
+          "primaryKey": {
+            "ID": "BFDEF6FC-D982-4A22-856D-E4BE9AE07E27"
           }
         }
       ]
@@ -440,6 +528,50 @@
           "primaryKey": {
             "ID": "195954F2-DDC8-4C94-9AC7-BAE810468B40"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CONFIGURATION_ERROR",
+            "IsSuccess": false,
+            "Description": "The Apollo credential resolved but its Values carry no usable apiKey."
+          },
+          "primaryKey": {
+            "ID": "A43DFB2B-4536-41F0-9867-3ECBDFE9112E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CREDENTIALS_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No Apollo API key could be resolved for the supplied CompanyID or the environment."
+          },
+          "primaryKey": {
+            "ID": "F9F79F0A-0516-44B2-9B68-618415BAF396"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_REQUIRED_FIELDS",
+            "IsSuccess": false,
+            "Description": "A required input was absent. The message names the field."
+          },
+          "primaryKey": {
+            "ID": "F615BE17-030C-4036-8246-54DB07F979A5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "An input was present but not usable. The message explains why."
+          },
+          "primaryKey": {
+            "ID": "187A2198-3E9E-4FE2-AD8D-BD85058441FF"
+          }
         }
       ]
     },
@@ -649,6 +781,50 @@
           "primaryKey": {
             "ID": "3409CAE7-6A5E-4299-A1E1-DA5934492144"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CONFIGURATION_ERROR",
+            "IsSuccess": false,
+            "Description": "The Apollo credential resolved but its Values carry no usable apiKey."
+          },
+          "primaryKey": {
+            "ID": "15DD5B93-BE49-454C-940B-7807DC09A4E3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CREDENTIALS_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No Apollo API key could be resolved for the supplied CompanyID or the environment."
+          },
+          "primaryKey": {
+            "ID": "E1794F3C-9040-4C38-8345-F9D71CF2D995"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_REQUIRED_FIELDS",
+            "IsSuccess": false,
+            "Description": "A required input was absent. The message names the field."
+          },
+          "primaryKey": {
+            "ID": "5875CC8D-0A9A-4089-8687-54A29BCA1087"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "An input was present but not usable. The message explains why."
+          },
+          "primaryKey": {
+            "ID": "90CCDDBD-54E0-4C11-9D0A-929B922A9208"
+          }
         }
       ]
     },
@@ -857,6 +1033,50 @@
           },
           "primaryKey": {
             "ID": "2CD61405-2B04-4102-9877-683C9C7AA17B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CONFIGURATION_ERROR",
+            "IsSuccess": false,
+            "Description": "The Apollo credential resolved but its Values carry no usable apiKey."
+          },
+          "primaryKey": {
+            "ID": "D4B0207D-B4D8-4CFF-8CA7-185F509AFFFC"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CREDENTIALS_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No Apollo API key could be resolved for the supplied CompanyID or the environment."
+          },
+          "primaryKey": {
+            "ID": "09A49803-0545-408C-975C-832C67506088"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_REQUIRED_FIELDS",
+            "IsSuccess": false,
+            "Description": "A required input was absent. The message names the field."
+          },
+          "primaryKey": {
+            "ID": "5F89B1ED-824F-4400-ADEF-AB509F6872BA"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "An input was present but not usable. The message explains why."
+          },
+          "primaryKey": {
+            "ID": "AABAEA51-EDF7-4A79-B6A0-A0ABC84E2F94"
           }
         }
       ]
@@ -1084,6 +1304,28 @@
           "primaryKey": {
             "ID": "7A49CFDD-55F1-4AF2-A0F5-CEDABADB8FE2"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CONFIGURATION_ERROR",
+            "IsSuccess": false,
+            "Description": "The Apollo credential resolved but its Values carry no usable apiKey."
+          },
+          "primaryKey": {
+            "ID": "E30DFDD8-50C8-43D9-B49D-4265F3492B30"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CREDENTIALS_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No Apollo API key could be resolved for the supplied CompanyID or the environment."
+          },
+          "primaryKey": {
+            "ID": "CD975FA6-6686-428A-BC4A-09E10D007642"
+          }
         }
       ]
     },
@@ -1309,6 +1551,28 @@
           },
           "primaryKey": {
             "ID": "F70E945D-7DFC-49F0-965C-5D932F8918CB"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CONFIGURATION_ERROR",
+            "IsSuccess": false,
+            "Description": "The Apollo credential resolved but its Values carry no usable apiKey."
+          },
+          "primaryKey": {
+            "ID": "0195712E-8529-4861-A1B7-603BF3C7FA57"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CREDENTIALS_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No Apollo API key could be resolved for the supplied CompanyID or the environment."
+          },
+          "primaryKey": {
+            "ID": "5C64F794-E2DB-4CCD-9D37-50C7F489ACCD"
           }
         }
       ]
