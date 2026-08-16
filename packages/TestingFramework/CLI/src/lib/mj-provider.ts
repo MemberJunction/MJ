@@ -9,10 +9,17 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { loadMJConfig, type MJConfig } from '../utils/config-loader';
 
-// Load environment variables from .env file
-// Note: config-loader.ts also loads dotenv with override:true, but we include it here
-// for completeness in case mj-provider is used standalone
-dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true, quiet: true });
+// Load environment variables from .env file.
+// `override` is deliberately FALSE so an explicitly-set variable wins over `.env`
+// — see the note in config-loader.ts, which is where that decision is explained.
+//
+// This call is effectively a no-op: config-loader is imported statically above, so
+// its own dotenv.config() has already run by the time this line executes, and with
+// override:false a second pass cannot change anything it already set. It is kept
+// only so the module states its own requirement rather than inheriting one
+// silently. (It is NOT a standalone-use safety net, as this comment used to
+// claim — a static import makes standalone use impossible to reach.)
+dotenv.config({ path: path.resolve(process.cwd(), '.env'), quiet: true });
 
 let isInitialized = false;
 let connectionPool: sql.ConnectionPool | null = null;

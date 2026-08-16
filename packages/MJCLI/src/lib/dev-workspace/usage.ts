@@ -42,11 +42,24 @@ export const DEV_WORKSPACE_USAGE: PluginUsage = {
     `Writes ${WORKSPACE_FILE_NAMES.join(', ')} plus the ${SENTINEL_FILE_NAME} sentinel manifest at the parent, then ` +
     `runs pnpm install there (disable with --no-install). Members are detected among the parent's immediate ` +
     `subdirectories: a sibling qualifies when it has a root package.json AND any of (a) an mj-app.json marker, ` +
-    `(b) a package under its packages/ dir naming or depending on the @mj-biz-apps scope, (c) a root package name ` +
-    `of memberjunction-workspace (the MJ monorepo). Use --include to add a repo detection missed and --exclude to ` +
-    `drop one. Existing files are NEVER overwritten silently — the run refuses unless --force, which keeps a ` +
-    `<name>.bak copy of each. Workspace globs cover each member's repo root and packages/* only, never apps/*, ` +
-    `because app-shell names collide across repos. Auth SDKs and @angular/service-worker are peerDependencies of ` +
+    `(b) a package its workspace globs enumerate naming or depending on the @mj-biz-apps scope, (c) a root package ` +
+    `name of memberjunction-workspace (the MJ monorepo). Use --include to add a repo detection missed and --exclude ` +
+    `to drop one. Existing files are NEVER overwritten silently — the run refuses unless --force, which keeps a ` +
+    `<name>.bak copy of each. Workspace globs cover each member's repo root plus the packages-rooted globs of the ` +
+    `member's own pnpm-workspace.yaml (packages/* when it has none) — never apps/*, ` +
+    `because app-shell names collide across repos. The generated parent package.json ABSORBS what each member's own ` +
+    `config would otherwise lose at a workspace root: member pnpm.overrides/patchedDependencies/packageExtensions/` +
+    `peerDependencyRules are hoisted (patch paths re-rooted to <member>/...); every member-provided package name gets ` +
+    `a workspace:* override so local source always beats registry copies; and pnpm.overrides pins every direct ` +
+    `dependency of each member's importers (plus every @types/* at any depth) to the member's COMMITTED lockfile ` +
+    `resolution — EXACT versions, with per-major override selectors (name@^N) when the committed graphs hold more ` +
+    `than one major of a name — pure file derivation, no network (unsupported lockfile formats are warned about ` +
+    `per member, never a silent zero). @types/* ` +
+    `are excluded from the devDependency union (duplicate @types break nominal typing) and workspace: specifiers on ` +
+    `packages no member provides are dropped — every drop, conflict and skip is reported. Members carrying a ` +
+    `standalone install (root or nested node_modules, detected depth-independently) are offered cleanup before the ` +
+    `parent install (--clean-members / --no-clean-members for non-interactive runs); skipping leaves overlapping ` +
+    `stores that surface as dangling symlinks. Auth SDKs and @angular/service-worker are peerDependencies of ` +
     `the MJ libraries that expose them: a shell serving those features declares its own picks in its own ` +
     `package.json — the command prints that guidance instead of hoisting them. Light command: no MJ bootstrap, ` +
     `no database. Generated files are ephemeral — never commit them; remove them with dev workspace clean. ` +
@@ -57,7 +70,12 @@ export const DEV_WORKSPACE_USAGE: PluginUsage = {
     { name: '--exclude', type: 'string (repeatable)', description: 'Repo directory name to drop from the member set' },
     { name: '--no-install', type: 'boolean', description: 'Generate the files but skip pnpm install' },
     { name: '--force', type: 'boolean', description: 'Overwrite existing generated files, keeping a .bak of each' },
-    { name: '--verbose', type: 'boolean', description: 'Show detailed output' },
+    {
+      name: '--clean-members / --no-clean-members',
+      type: 'boolean',
+      description: 'Remove (or keep) members\' standalone node_modules trees before installing; omit both to be asked interactively',
+    },
+    { name: '--verbose', type: 'boolean', description: 'Show detailed output (per-entry lockfile skips, superseded pins, skipped @types)' },
   ],
   examples: [
     'mj dev workspace --dir ~/code/bluecypress',
@@ -94,6 +112,36 @@ export const DEV_WORKSPACE_STATUS_USAGE: PluginUsage = {
   runtime: { class: 'fast', typicalSeconds: 1, note: 'one `pnpm --version` probe plus directory reads' },
 };
 
+/** Usage for `mj dev workspace doctor` — the read-only health check. */
+export const DEV_WORKSPACE_DOCTOR_USAGE: PluginUsage = {
+  domain: 'dev',
+  command: 'dev:workspace:doctor',
+  summary: 'Health-check a generated cross-repo workspace and exit non-zero on any failure.',
+  description:
+    `Read-only: writes nothing, deletes nothing, no network. Prints one [PASS]/[WARN]/[FAIL]/[SKIP] line per check ` +
+    `and EXITS NON-ZERO when any check FAILS, so it can gate a script (status never exits non-zero — that is the ` +
+    `difference between the two). FAIL: the parent is itself a git repo root; a generated file is missing; a member ` +
+    `named in pnpm-workspace.yaml has no directory on disk (the parent manifest overrides that member's packages to ` +
+    `workspace:*, so pnpm install fails outright); a member carries a STANDALONE INSTALL — a member-root ` +
+    `${NODE_MODULES_NAME}/.pnpm store or npm .package-lock.json marker, NOT the plain ${NODE_MODULES_NAME} a healthy ` +
+    `parent install leaves inside every member; or the one-copy census finds more than one version of a package that ` +
+    `must be single-copy. WARN: not installed yet, no valid ${SENTINEL_FILE_NAME}, a pnpm pin/active mismatch, or a ` +
+    `detected repo that is not a workspace member. The one-copy census reads the DIRECTORY NAMES in the parent's ` +
+    `${NODE_MODULES_NAME}/.pnpm store (each already encodes name@version) and counts distinct versions of ` +
+    `@angular/core, @angular/common, @angular/compiler, rxjs, zone.js, @memberjunction/core and ` +
+    `@memberjunction/global — two copies of any of them is a second, mutually invisible runtime (Angular DI throws ` +
+    `NG0203; two Global Object Stores make every BaseSingleton two singletons), which is why it is a FAIL and not a ` +
+    `warning. Packages absent from the store are skipped, not failed. Light command: no MJ bootstrap. ` +
+    PARENT_DIR_RULE,
+  flags: [DIR_FLAG],
+  examples: [
+    'mj dev workspace doctor',
+    'mj dev workspace doctor --dir ~/code/bluecypress',
+    `${WORKSPACE_DIR_ENV_VAR}=~/code/bluecypress mj dev workspace doctor`,
+  ],
+  runtime: { class: 'fast', typicalSeconds: 1, note: 'one `pnpm --version` probe, directory reads, and one listing of the parent store' },
+};
+
 /** Usage for `mj dev workspace clean` — the teardown. */
 export const DEV_WORKSPACE_CLEAN_USAGE: PluginUsage = {
   domain: 'dev',
@@ -128,6 +176,7 @@ export const DEV_WORKSPACE_CLEAN_USAGE: PluginUsage = {
 export const DEV_DOMAIN_USAGE: readonly PluginUsage[] = [
   DEV_WORKSPACE_USAGE,
   DEV_WORKSPACE_STATUS_USAGE,
+  DEV_WORKSPACE_DOCTOR_USAGE,
   DEV_WORKSPACE_CLEAN_USAGE,
 ];
 

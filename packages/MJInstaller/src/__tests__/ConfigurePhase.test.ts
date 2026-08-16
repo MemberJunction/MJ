@@ -942,4 +942,91 @@ describe('ConfigurePhase', () => {
       expect(result.Config.BaseEncryptionKey).toMatch(/^[A-Za-z0-9+/]+=*$/);
     });
   });
+
+  // ─── `$` in secrets (issue #3171) ──────────────────────────────────
+
+  /**
+   * `String.prototype.replace` expands `$$`, `$&`, `` $` ``, `$'` and `$1`-`$99`
+   * inside a *string* replacement. Every secret below is real-world-plausible
+   * (SQL Server complexity rules encourage `$`), and each one previously either
+   * silently lost characters or spliced neighbouring `.env` lines into the value.
+   *
+   * The existing sync test above uses `Strong!Pass` — a special character, but
+   * not one `replace` treats as a metacharacter, which is why this class of bug
+   * survived a test that otherwise covers exactly this code path.
+   */
+  describe('$-bearing secrets survive the root → MJAPI sync', () => {
+    const SECRETS = [
+      'pa$$w0rd',      // $$  → collapses to a single $
+      'pa$&w0rd',      // $&  → splices the matched line
+      'pa$`w0rd',      // $`  → splices everything before the match
+      "pa$'w0rd",      // $'  → splices everything after the match
+      'pa$1w0rd',      // $1  → capture-group reference
+      'pa$w0rd',       // not a special sequence — must keep working
+      'S3cret$&$`$\'$$end',
+    ];
+
+    for (const secret of SECRETS) {
+      it(`writes ${JSON.stringify(secret)} to MJAPI .env byte-exact`, async () => {
+        mockFs.FileExists.mockResolvedValue(true);
+        mockFs.DirectoryExists.mockResolvedValue(true);
+        mockFs.ListFiles.mockResolvedValue([]);
+
+        const rootEnv = `DB_HOST='localhost'\nDB_PASSWORD='${secret}'\n`;
+        const mjapiEnv = "DB_HOST='localhost'\nDB_PASSWORD='stale-old-password'\n";
+        mockFs.ReadText.mockImplementation(async (p: string) =>
+          p.includes('MJAPI') && p.endsWith('.env') ? mjapiEnv : p.endsWith('.env') ? rootEnv : '',
+        );
+
+        await phase.Run(makeContext({ Yes: true }));
+
+        const written = (mockFs.WriteText.mock.calls as [string, string][])
+          .reverse()
+          .find(([p]) => p.includes('MJAPI') && p.endsWith('.env'))?.[1];
+
+        expect(written).toContain(`DB_PASSWORD='${secret}'`);
+        // The stale value must be gone, not spliced into the new one.
+        expect(written).not.toContain('stale-old-password');
+      });
+    }
+  });
+
+  // ─── `$` in Explorer auth values (issue #3171) ─────────────────────
+
+  /**
+   * The Explorer environment patcher uses capture groups (`$1`, `$3`) that ARE
+   * intentional, with the dynamic value interpolated between them — so the value
+   * has to be carried by a replacement *function* rather than escaped, or the
+   * groups stop working.
+   */
+  describe('$-bearing auth values survive the Explorer environment patch', () => {
+    const CLIENT_IDS = ['cid$&x', 'cid$`x', "cid$'x", 'cid$$x', 'cid$1x'];
+
+    for (const clientId of CLIENT_IDS) {
+      it(`patches CLIENT_ID ${JSON.stringify(clientId)} byte-exact`, async () => {
+        const config = sampleConfig();
+        config.AuthProvider = 'msal';
+        config.AuthProviderValues = { CLIENT_ID: clientId, TENANT_ID: 'tenant-1' };
+
+        mockFs.DirectoryExists.mockResolvedValue(true);
+        mockFs.FileExists.mockResolvedValue(false);
+        mockFs.ListFiles.mockImplementation(async (dir: string) =>
+          dir.includes('environments') ? ['environment.ts'] : [],
+        );
+        mockFs.ReadText.mockImplementation(async (p: string) =>
+          p.endsWith('environment.ts')
+            ? "export const environment = {\n  CLIENT_ID: '',\n  TENANT_ID: '',\n};\n"
+            : '',
+        );
+
+        await phase.Run(makeContext({ Yes: true, Config: config }));
+
+        const written = (mockFs.WriteText.mock.calls as [string, string][])
+          .reverse()
+          .find(([p]) => p.endsWith('environment.ts'))?.[1];
+
+        expect(written).toContain(`CLIENT_ID: '${clientId}'`);
+      });
+    }
+  });
 });

@@ -190,9 +190,12 @@ export interface DriverExecutionResult {
   targetLogId: string;
 
   /**
-   * Execution status
+   * Execution status. 'Skipped' means the driver did not execute the test's checks at
+   * all (env-gated tier, unreachable dependency) — it must NEVER be reported as
+   * 'Passed': a green run that silently didn't execute is indistinguishable from real
+   * coverage. The MJ: Test Runs entity's Status value list already includes 'Skipped'.
    */
-  status: 'Passed' | 'Failed' | 'Error' | 'Timeout';
+  status: 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Timeout';
 
   /**
    * Overall score
@@ -215,9 +218,16 @@ export interface DriverExecutionResult {
   failedChecks: number;
 
   /**
-   * Total number of checks
+   * Total number of checks EXECUTED (passed + failed). Skipped checks are counted
+   * separately in skippedChecks and never inflate the executed totals.
    */
   totalChecks: number;
+
+  /**
+   * Number of checks that were skipped (tier-gated, mutation-gated, or environment
+   * gaps). Optional so existing drivers that never skip need no change.
+   */
+  skippedChecks?: number;
 
   /**
    * Input data used

@@ -93,4 +93,23 @@ describe('MjSectionManagerComponent (DOM)', () => {
     click(f, '.mj-sm-reset');
     expect(reset.length).toBe(1);
   });
+
+  it('splits first-class and More groups and can move a section into More', () => {
+    const f = render({
+      Sections: SECTIONS,
+      SectionOrder: [],
+      MoreSectionKeys: ['c'],
+      Visible: true,
+    });
+    expect(text(f, '.mj-sm-group-label')).toContain('On the form');
+    const labels = queryAll(f, '.mj-sm-group-label').map((e) => e.textContent?.trim());
+    expect(labels).toEqual(['On the form', 'More']);
+
+    const emitted = capture(f.componentInstance.MembershipChange);
+    click(f, '.mj-sm-move');
+    expect(emitted).toEqual([{
+      moreSectionKeys: ['c', 'a'],
+      firstClassSectionKeys: ['b'],
+    }]);
+  });
 });
