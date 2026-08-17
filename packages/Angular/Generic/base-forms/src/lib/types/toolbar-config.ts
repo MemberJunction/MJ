@@ -73,8 +73,9 @@ export interface FormToolbarConfig {
 
   /**
    * Show the Expand-All and Collapse-All chevron buttons. Only relevant for
-   * forms that render MJ collapsible panels — custom layouts that manage
-   * their own open/closed state should set this to false. Default: true
+   * accordion chrome — left-nav / right-nav hide these even when true.
+   * Custom layouts that manage their own open/closed state should set this
+   * to false. Default: true
    */
   ShowExpandCollapseAllButtons: boolean;
 

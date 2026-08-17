@@ -24,6 +24,7 @@ class ToolbarStub {
   @Input() IsSaving = false; @Input() VisibleSectionCount = 0; @Input() TotalSectionCount = 0; @Input() ExpandedSectionCount = 0;
   @Input() SearchFilter = ''; @Input() ShowEmptyFields = false; @Input() WidthMode = ''; @Input() HasCustomSectionOrder = false;
   @Input() Variants: unknown; @Input() CurrentVariantID: unknown;
+  @Input() ChromeLayout = 'accordion';
   @Output() Navigate = new EventEmitter<unknown>();
   @Output() EditModeChange = new EventEmitter<boolean>();
   @Output() BeforeSave = new EventEmitter<unknown>();
@@ -32,7 +33,13 @@ class ToolbarStub {
   @Output() DeleteRequested = new EventEmitter<void>();
 }
 @Component({ standalone: true, selector: 'mj-section-manager', template: '' })
-class SectionManagerStub { @Input() Sections: unknown; @Input() SectionOrder: unknown; @Input() Visible = false; }
+class SectionManagerStub {
+  @Input() Sections: unknown;
+  @Input() SectionOrder: unknown;
+  @Input() MoreSectionKeys: unknown;
+  @Input() LockedMoreKeys: unknown;
+  @Input() Visible = false;
+}
 @Component({ standalone: true, selector: 'mj-form-panel-slot', template: '' })
 class PanelSlotStub { @Input() Entity: unknown; @Input() Record: unknown; @Input() FormComponent: unknown; }
 @Component({ standalone: true, selector: 'mj-empty-state', template: '' })

@@ -7,7 +7,19 @@ const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
 const userHandlingInfoSchema = z.object({
   autoCreateNewUsers: z.boolean().optional().default(false),
+  /** When true, auto-provisioning is restricted to the domains in `newUserAuthorizedDomains`. */
   newUserLimitedToAuthorizedDomains: z.boolean().optional().default(false),
+  /**
+   * Authorized **email domains** for auto-provisioned users — e.g. `['example.com', '*.example.org']`.
+   *
+   * These are matched against the domain of the email address in the verified identity token, NOT
+   * against the browser `Origin` / frontend hostname. If you are upgrading from a build that
+   * compared these to the request origin, replace any frontend hostnames here (`app.example.com`,
+   * `localhost`) with the email domains your users actually sign in with.
+   *
+   * `*` wildcards are supported and match in full: `*.example.com` matches `mail.example.com` but
+   * NOT `example.com` — list both if you need both.
+   */
   newUserAuthorizedDomains: z.array(z.string()).optional().default([]),
   newUserRoles: z.array(z.string()).optional().default([]),
   updateCacheWhenNotFound: z.boolean().optional().default(false),
@@ -129,6 +141,23 @@ const scheduledJobsSchema = z.object({
   maxConcurrentJobs: z.number().optional().default(5),
   defaultLockTimeout: z.number().optional().default(600000), // 10 minutes in ms
   staleLockCleanupInterval: z.number().optional().default(300000), // 5 minutes in ms
+});
+
+/**
+ * Integration sync worker (PR 1 item 8). When enabled, this process polls
+ * `CompanyIntegrationRun` for `Status='Queued'` rows, atomically claims them, executes
+ * the sync, and releases. The claim sproc is the mutual exclusion, so any number of
+ * processes may run a worker against the same database.
+ */
+const integrationSyncWorkerSchema = z.object({
+  /** Master switch — off by default so existing deployments keep running syncs inline. */
+  enabled: z.boolean().optional().default(false),
+  /** Email of the user the worker executes syncs as. */
+  systemUserEmail: z.string().optional().default('system@memberjunction.org'),
+  /** How often to poll the queue, in ms. */
+  pollingIntervalMs: z.number().optional().default(15000),
+  /** Maximum runs this worker executes concurrently. */
+  maxConcurrentRuns: z.number().optional().default(3),
 });
 
 const queryDialectSchema = z.object({
@@ -501,6 +530,7 @@ const configInfoSchema = z.object({
   authProviders: z.array(authProviderSchema).optional(),
   componentRegistries: z.array(componentRegistrySchema).optional(),
   scheduledJobs: scheduledJobsSchema.optional().default({}),
+  integrationSyncWorker: integrationSyncWorkerSchema.optional().default({}),
   telemetry: telemetrySchema.optional().default({}),
   queryDialects: queryDialectSchema.optional().default({}),
   multiTenancy: multiTenancySchema.optional().default({}),
@@ -559,6 +589,7 @@ export type SqlLoggingInfo = z.infer<typeof sqlLoggingSchema>;
 export type AuthProviderConfig = z.infer<typeof authProviderSchema>;
 export type ComponentRegistryConfig = z.infer<typeof componentRegistrySchema>;
 export type ScheduledJobsConfig = z.infer<typeof scheduledJobsSchema>;
+export type IntegrationSyncWorkerConfig = z.infer<typeof integrationSyncWorkerSchema>;
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
 export type QueryDialectConfig = z.infer<typeof queryDialectSchema>;
 export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
@@ -669,6 +700,14 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     maxConcurrentJobs: 5,
     defaultLockTimeout: 600000,
     staleLockCleanupInterval: 300000
+  },
+
+  // Integration sync worker defaults (off — syncs run inline unless a worker is enabled)
+  integrationSyncWorker: {
+    enabled: false,
+    systemUserEmail: 'not.set@nowhere.com',
+    pollingIntervalMs: 15000,
+    maxConcurrentRuns: 3
   },
 
   // Telemetry defaults

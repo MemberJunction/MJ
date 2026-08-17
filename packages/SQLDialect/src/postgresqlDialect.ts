@@ -267,6 +267,13 @@ export class PostgreSQLDialect extends SQLDialect {
         return "(NOW() AT TIME ZONE 'UTC')";
     }
 
+    AffectedRowCountSQL(dmlStatement: string, alias: string): string {
+        // A data-modifying CTE is PostgreSQL's equivalent of @@ROWCOUNT: the statement runs once,
+        // RETURNING emits one row per affected row, and the outer SELECT counts them.
+        return `WITH ${this.QuoteIdentifier('__mj_affected')} AS (\n${dmlStatement}\nRETURNING 1\n)\n`
+            + `SELECT COUNT(*)::int AS ${this.QuoteColumnAlias(alias)} FROM ${this.QuoteIdentifier('__mj_affected')}`;
+    }
+
     // ─── Type-Name Sets ──────────────────────────────────────────────
     // PostgreSQL's column-type names as they appear in `pg_catalog` /
     // `information_schema` / `EntityField.Type` for entities backed by PG.

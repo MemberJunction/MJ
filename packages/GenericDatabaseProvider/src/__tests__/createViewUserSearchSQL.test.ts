@@ -259,6 +259,25 @@ describe('createViewUserSearchSQL — UserSearchParamFormatAPI override', () => 
         const sql = provider.buildSQL(e, '2026');
         expect(sql).toBe(`(([Year]  = 2026))`);
     });
+
+    /**
+     * The search term is end-user input. Substituting it into the `{0}` slot with a
+     * string replacement expanded `$$`/`$&`/`` $` ``/`$'` in the term, splicing the
+     * format string's own text into the SQL predicate. See issue #3171.
+     */
+    for (const term of ['a$$b', 'a$&b', 'a$`b', "a$'b", 'a$1b', 'a$b']) {
+        it(`Custom format substitutes a term containing ${JSON.stringify(term)} verbatim`, () => {
+            const e = makeEntity({ fields: [makeField({
+                name: 'Phone',
+                predicate: 'Exact',
+                paramFormat: " = '{0}'",
+            })] });
+            const sql = provider.buildSQL(e, term);
+            // `'` is SQL-escaped by doubling; `$` must pass through untouched.
+            const escaped = term.replace(/'/g, "''");
+            expect(sql).toBe(`(([Phone]  = '${escaped}'))`);
+        });
+    }
 });
 
 describe('createViewUserSearchSQL — type guards', () => {

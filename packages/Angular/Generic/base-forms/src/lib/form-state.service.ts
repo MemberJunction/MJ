@@ -317,8 +317,43 @@ export class FormStateService {
     resetSectionOrder(entityName: string): void {
         const subject = this.getOrCreateSubject(entityName);
         const currentState = subject.value;
-        const { sectionOrder: _, ...stateWithoutOrder } = currentState;
-        subject.next(stateWithoutOrder as FormState);
+        const {
+            sectionOrder: _order,
+            moreSectionKeys: _more,
+            firstClassSectionKeys: _first,
+            ...stateWithoutChrome
+        } = currentState;
+        subject.next(stateWithoutChrome as FormState);
+        this.queueSave(entityName);
+    }
+
+    getMoreSectionKeys(entityName: string): string[] | undefined {
+        return this.getCurrentState(entityName).moreSectionKeys;
+    }
+
+    setMoreSectionKeys(entityName: string, moreSectionKeys: string[]): void {
+        const subject = this.getOrCreateSubject(entityName);
+        subject.next({ ...subject.value, moreSectionKeys });
+        this.queueSave(entityName);
+    }
+
+    getFirstClassSectionKeys(entityName: string): string[] | undefined {
+        return this.getCurrentState(entityName).firstClassSectionKeys;
+    }
+
+    setFirstClassSectionKeys(entityName: string, firstClassSectionKeys: string[]): void {
+        const subject = this.getOrCreateSubject(entityName);
+        subject.next({ ...subject.value, firstClassSectionKeys });
+        this.queueSave(entityName);
+    }
+
+    setChromeMembership(
+        entityName: string,
+        moreSectionKeys: string[],
+        firstClassSectionKeys: string[],
+    ): void {
+        const subject = this.getOrCreateSubject(entityName);
+        subject.next({ ...subject.value, moreSectionKeys, firstClassSectionKeys });
         this.queueSave(entityName);
     }
 

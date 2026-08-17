@@ -207,6 +207,10 @@ export class SQLServerDialect extends SQLDialect {
         return 'GETUTCDATE()';
     }
 
+    AffectedRowCountSQL(dmlStatement: string, alias: string): string {
+        return `${dmlStatement};\nSELECT @@ROWCOUNT AS ${this.QuoteColumnAlias(alias)}`;
+    }
+
     // ─── Type-Name Sets ──────────────────────────────────────────────
     // SQL Server's column-type names as they appear in `sys.columns.name`
     // / `EntityField.Type` for entities backed by a SQL Server schema.

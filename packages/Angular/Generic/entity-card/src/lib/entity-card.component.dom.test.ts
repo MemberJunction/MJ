@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderComponentFixture, query, queryAll, text, attr, hasClass, click, capture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, attr, hasClass, click, capture, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
 import { MJEntityCardComponent } from './entity-card.component';
 import { CardTemplate, CardDisplayField, CardFieldType } from './entity-card.types';
 
@@ -214,6 +214,21 @@ describe('MJEntityCardComponent (DOM)', () => {
       click(f, '.mj-ec-open-btn');
       expect(opens).toHaveLength(1);
       expect(clicks).toHaveLength(0);
+    });
+  });
+
+  describe('accessibility', () => {
+    it('has no axe accessibility violations (jsdom-safe rule set)', async () => {
+      // Full-surface render: thumbnail image, display fields, subtitle, and the open button.
+      const f = renderComponentFixture(MJEntityCardComponent, {
+        inputs: {
+          Template: tpl({ SubtitleField: 'Status', DisplayFields: [field('Email')], ThumbnailFields: ['Photo'] }),
+          Record: { Name: 'Acme', Status: 'Active', Email: 'a@b.com', Photo: 'https://example.com/p.png', Entity: 'Accounts' },
+          Variant: 'card',
+          ShowOpenButton: true,
+        },
+      });
+      await ExpectNoAxeViolations(f);
     });
   });
 });

@@ -9,7 +9,15 @@
  * In-memory concurrency mutex (one operation at a time).
  */
 import { BaseSingleton } from '@memberjunction/global';
-import { LogError, Metadata, type DatabaseProviderBase } from '@memberjunction/core';
+import {
+  LogError,
+  Metadata,
+  RunView,
+  type DatabaseProviderBase,
+  type IMetadataProvider,
+  type UserInfo,
+} from '@memberjunction/core';
+import type { MJRSUPendingWorkEntity } from '@memberjunction/core-entities';
 import { Octokit } from '@octokit/rest';
 import { RSUMetrics } from './RSUMetrics.js';
 import { GetDialect } from './DDLGenerator.js';
@@ -84,9 +92,6 @@ class RSUConfig {
   get IsAuditLogEnabled(): boolean {
     return process.env.RSU_AUDIT_LOG_ENABLED !== '0';
   }
-  get PendingWorkPath(): string {
-    return process.env.RSU_PENDING_WORK_PATH || '.rsu_pending';
-  }
   get ProtectedSchemas(): string[] {
     const envSchemas = process.env.RSU_PROTECTED_SCHEMAS;
     return envSchemas ? envSchemas.split(',').map((s) => s.trim()) : [];
@@ -138,6 +143,20 @@ export interface RSUPipelineInput {
    * restart. The caller is responsible for reading them on the other side.
    */
   PostRestartFiles?: Array<{ Path: string; Content: string }>;
+
+  /**
+   * Post-restart work to register durably in the database (`MJ: RSU Pending Works`).
+   * Rows are inserted ONLY for migrations that succeeded, before the restart, and are
+   * marked Completed only after the post-restart consumer finishes them successfully —
+   * so a crash mid-consumption leaves the row visible and re-processable rather than
+   * silently lost (which is what the old delete-on-read `.rsu_pending` files did).
+   */
+  PendingWork?: RSUPendingWork[];
+
+  /**
+   * User context used for the durable PendingWork writes. Required when PendingWork is set.
+   */
+  ContextUser?: UserInfo;
 }
 
 /**
@@ -159,6 +178,60 @@ export interface RSUPipelineStep {
 }
 
 /**
+ * A lifecycle notification from the RSU pipeline, delivered to an out-of-band
+ * {@link RSUPipelineObserver}.
+ *
+ * Why an observer instead of emitting progress directly: an RSU run's steps (CodeGen, compile,
+ * restart) take minutes, and until now the only live signal was `GetStatus()` polling — a caller had
+ * no durable record of what a run did, and a restart mid-run left nothing to read. The durable
+ * artifact stream that solves that lives in `@memberjunction/integration-progress-artifacts`, which
+ * is a LAYER ABOVE this package. So SchemaEngine publishes plain lifecycle events and lets the
+ * server wire them to the emitter, keeping the dependency direction intact.
+ */
+export type RSUObserverEvent =
+  | {
+      Kind: 'run.start';
+      /** Number of migrations in this batch. */
+      ItemCount: number;
+      /** One description per input, in input order. */
+      Descriptions: string[];
+      /** Union of every input's AffectedTables, de-duplicated. */
+      AffectedTables: string[];
+      /** Expected total steps for the run — the denominator of a determinate progress bar. */
+      StepTotal: number;
+    }
+  | { Kind: 'step.start'; Name: string; StepIndex?: number; StepTotal?: number }
+  | {
+      Kind: 'step.end';
+      Name: string;
+      Status: RSUPipelineStep['Status'];
+      DurationMs: number;
+      Message: string;
+      StepIndex?: number;
+      StepTotal?: number;
+    }
+  | {
+      Kind: 'run.end';
+      Success: boolean;
+      SuccessCount: number;
+      FailureCount: number;
+      TotalCount: number;
+      /** Present when the run failed — the first failing step's message. */
+      ErrorMessage?: string;
+      /** Present when the run failed — the name of the step that failed. */
+      ErrorStep?: string;
+    };
+
+/**
+ * Receives {@link RSUObserverEvent}s for every RSU pipeline run in this process.
+ *
+ * Synchronous and fire-and-forget by contract: the pipeline never awaits an observer and never
+ * fails because one threw. A throw is logged and swallowed — progress reporting must not be able
+ * to break a schema migration.
+ */
+export type RSUPipelineObserver = (event: RSUObserverEvent) => void;
+
+/**
  * Result of a full RSU pipeline run.
  */
 export interface RSUPipelineResult {
@@ -171,6 +244,12 @@ export interface RSUPipelineResult {
   Steps: RSUPipelineStep[];
   ErrorMessage?: string;
   ErrorStep?: string;
+  /**
+   * IDs of the `MJ: RSU Pending Works` rows registered for this input (one per
+   * RSUPipelineInput.PendingWork entry). Callers that consume the work inline
+   * (SkipRestart) must mark these Completed via {@link RuntimeSchemaManager.CompletePendingWork}.
+   */
+  PendingWorkIDs?: string[];
 }
 
 /**
@@ -211,13 +290,22 @@ interface PostMigrationResult {
    * failed, so this flows into each per-caller result's Success.
    */
   CodeGenSucceeded?: boolean;
+  /** Durable `MJ: RSU Pending Works` row IDs registered per input (successful migrations only). */
+  PendingWorkIDs?: Map<RSUPipelineInput, string[]>;
+  /**
+   * Pending-work rows that could NOT be registered, per input. Non-empty means the
+   * migration applied but its post-restart work was never persisted, so the restart
+   * discards it — the caller's result is failed rather than silently successful.
+   */
+  PendingWorkErrors?: Map<RSUPipelineInput, string[]>;
   /** The RunCodeGen failure message, surfaced when CodeGenSucceeded is false. */
   CodeGenError?: string;
 }
 
 /**
- * @deprecated Use RSUPipelineInput.PostRestartFiles instead. This type is
- * retained temporarily for backward compatibility with existing callers.
+ * The payload contract for durable post-restart work. Serialized into
+ * `MJ: RSU Pending Works`.PayloadJSON by {@link RuntimeSchemaManager.WritePendingWork}
+ * and read back by the post-restart consumer via {@link RuntimeSchemaManager.ReadPendingWork}.
  */
 export interface RSUPendingWork {
   CompanyIntegrationID: string;
@@ -421,40 +509,215 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
   // ─── Pending Work (post-restart tasks) ─────────────────────────
 
-  /** Write pending work to disk so it can be processed after restart. */
-  public async WritePendingWork(data: RSUPendingWork): Promise<string> {
-    const { writeFileSync, mkdirSync } = await import('node:fs');
-    const { join } = await import('node:path');
-    const dir = join(rsuConfig.WorkDir, rsuConfig.PendingWorkPath);
-    mkdirSync(dir, { recursive: true });
-    const filePath = join(dir, `${Date.now()}.json`);
-    writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
-    this.rsuLog(`Wrote pending work to ${filePath}`);
-    return filePath;
+  /**
+   * Register pending work durably in `MJ: RSU Pending Works` so it survives the
+   * post-migration restart. Returns the new row's ID.
+   *
+   * Unlike the `.rsu_pending` files this replaces, the row is NOT consumed on read —
+   * it stays Pending until the consumer explicitly calls {@link CompletePendingWork}
+   * or {@link FailPendingWork}, so a crash mid-consumption leaves visible, resumable work.
+   */
+  public async WritePendingWork(
+    data: RSUPendingWork,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<string> {
+    // `contextUser` is optional only to keep the published 1-arg signature compiling
+    // (see the deprecation note above the class). A durable row cannot be written
+    // without a user, and silently pretending to have persisted the work would defeat
+    // the entire point of this queue — so the 1-arg form fails loudly instead.
+    if (!contextUser) {
+      throw new Error(
+        'RuntimeSchemaManager.WritePendingWork now persists to `MJ: RSU Pending Works` and requires a contextUser. ' +
+          'Call WritePendingWork(data, contextUser) — the previous 1-argument form wrote a .rsu_pending file and no longer exists.',
+      );
+    }
+    const md = provider ?? new Metadata();
+    const row = await md.GetEntityObject<MJRSUPendingWorkEntity>('MJ: RSU Pending Works', contextUser);
+    row.NewRecord();
+    row.CompanyIntegrationID = data.CompanyIntegrationID;
+    row.PayloadJSON = JSON.stringify(data);
+    row.Status = 'Pending';
+    if (!(await row.Save())) {
+      throw new Error(`Failed to register RSU pending work: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+    }
+    this.rsuLog(`Registered pending work ${row.ID} for company integration ${data.CompanyIntegrationID}`);
+    return row.ID;
   }
 
-  /** Read all pending work files, return them, and delete them. */
-  public async ReadAndClearPendingWork(): Promise<RSUPendingWork[]> {
-    const { readdirSync, readFileSync, unlinkSync, existsSync } = await import('node:fs');
-    const { join } = await import('node:path');
-    const dir = join(rsuConfig.WorkDir, rsuConfig.PendingWorkPath);
-    if (!existsSync(dir)) return [];
-    const files = readdirSync(dir).filter((f) => f.endsWith('.json'));
-    const results: RSUPendingWork[] = [];
-    for (const file of files) {
-      const filePath = join(dir, file);
+  /**
+   * Read every still-Pending work row. Never deletes or mutates — the caller marks each
+   * row Completed/Failed once it has actually finished processing it. Rows whose payload
+   * fails to parse are reported as Failed so they stop being retried forever.
+   *
+   * @param staleAfterMinutes when set, rows created more than this many minutes ago are
+   *        logged as stale so an operator can see work that a previous process abandoned.
+   */
+  public async ReadPendingWork(
+    contextUser: UserInfo,
+    staleAfterMinutes?: number,
+    provider?: IMetadataProvider,
+  ): Promise<Array<{ ID: string; Work: RSUPendingWork; CreatedAt: Date }>> {
+    // Read through the SAME provider the caller writes through. Defaulting to the global
+    // provider here would read a different connection's rows than WritePendingWork just
+    // wrote, which is the whole reason the provider is threaded through these methods.
+    const rv = new RunView(provider as DatabaseProviderBase | undefined);
+    const result = await rv.RunView<MJRSUPendingWorkEntity>(
+      {
+        EntityName: 'MJ: RSU Pending Works',
+        ExtraFilter: `Status = 'Pending'`,
+        OrderBy: '__mj_CreatedAt ASC',
+        ResultType: 'entity_object',
+        BypassCache: true,
+      },
+      contextUser,
+    );
+    if (!result.Success) {
+      LogError(`[RSU] Failed to read pending work: ${result.ErrorMessage}`);
+      return [];
+    }
+
+    const items: Array<{ ID: string; Work: RSUPendingWork; CreatedAt: Date }> = [];
+    for (const row of result.Results) {
+      const createdAt = row.__mj_CreatedAt ?? new Date();
       try {
-        const data = JSON.parse(readFileSync(filePath, 'utf-8')) as RSUPendingWork;
-        results.push(data);
-        unlinkSync(filePath);
-      } catch {
-        /* skip corrupt files */
+        items.push({ ID: row.ID, Work: JSON.parse(row.PayloadJSON) as RSUPendingWork, CreatedAt: createdAt });
+      } catch (err) {
+        await this.FailPendingWork(
+          row.ID,
+          `Corrupt PayloadJSON: ${err instanceof Error ? err.message : String(err)}`,
+          contextUser,
+          provider,
+        );
       }
     }
-    if (results.length > 0) {
-      this.rsuLog(`Found ${results.length} pending work item(s)`);
+
+    if (staleAfterMinutes !== undefined) {
+      const cutoff = Date.now() - staleAfterMinutes * 60_000;
+      const stale = items.filter((i) => i.CreatedAt.getTime() < cutoff);
+      if (stale.length > 0) {
+        LogError(
+          `[RSU] ${stale.length} pending work item(s) older than ${staleAfterMinutes} minute(s) are still unprocessed: ${stale.map((s) => s.ID).join(', ')}`,
+        );
+      }
     }
-    return results;
+
+    if (items.length > 0) this.rsuLog(`Found ${items.length} pending work item(s)`);
+    return items;
+  }
+
+  /**
+   * @deprecated Use {@link ReadPendingWork} instead, and mark each item terminal with
+   * {@link CompletePendingWork} / {@link FailPendingWork} once you have processed it.
+   *
+   * Retained with its original signature so consumers taking this minor upgrade still
+   * compile. It is NO LONGER FUNCTIONAL: pending work lives in `MJ: RSU Pending Works`
+   * rather than in `.rsu_pending` files, and reading it requires a context user this
+   * signature has no way to supply. Returns an empty array — the value that previously
+   * meant "no pending work" — rather than pretending to have drained a queue.
+   */
+  public async ReadAndClearPendingWork(): Promise<RSUPendingWork[]> {
+    this.warnDeprecatedOnce(
+      'ReadAndClearPendingWork',
+      'RuntimeSchemaManager.ReadAndClearPendingWork() is deprecated and no longer functional. ' +
+        'Pending work is now durable in `MJ: RSU Pending Works`; call ReadPendingWork(contextUser) and then ' +
+        'CompletePendingWork/FailPendingWork per item. Returning an empty array.',
+    );
+    return [];
+  }
+
+  /** Names of deprecated members already warned about, so a hot path logs once, not per call. */
+  private readonly warnedDeprecations = new Set<string>();
+
+  private warnDeprecatedOnce(member: string, message: string): void {
+    if (this.warnedDeprecations.has(member)) return;
+    this.warnedDeprecations.add(member);
+    LogError(`[RSU] ${message}`);
+  }
+
+  /** Mark a pending work row Completed. Call ONLY after the work actually succeeded. */
+  public async CompletePendingWork(
+    id: string,
+    contextUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<boolean> {
+    return this.setPendingWorkTerminalStatus(id, 'Completed', undefined, contextUser, provider);
+  }
+
+  /** Mark a pending work row Failed, recording why. */
+  public async FailPendingWork(
+    id: string,
+    errorMessage: string,
+    contextUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<boolean> {
+    return this.setPendingWorkTerminalStatus(id, 'Failed', errorMessage, contextUser, provider);
+  }
+
+  private async setPendingWorkTerminalStatus(
+    id: string,
+    status: 'Completed' | 'Failed',
+    errorMessage: string | undefined,
+    contextUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<boolean> {
+    const md = provider ?? new Metadata();
+    const row = await md.GetEntityObject<MJRSUPendingWorkEntity>('MJ: RSU Pending Works', contextUser);
+    if (!(await row.Load(id))) {
+      LogError(`[RSU] Pending work ${id} not found when marking ${status}`);
+      return false;
+    }
+    row.Status = status;
+    row.ErrorMessage = errorMessage ?? null;
+    row.ProcessedAt = new Date();
+    if (!(await row.Save())) {
+      LogError(`[RSU] Failed to mark pending work ${id} as ${status}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Register every input's PendingWork rows. Called for successful migrations only,
+   * before the restart. Returns row IDs keyed by the input's index within `inputs`.
+   *
+   * Registration failures are collected, NOT swallowed. This step is the durability
+   * boundary: once the restart fires, work that never became a row is gone, and the
+   * post-restart consumer has nothing to find. A run whose rows failed to register
+   * therefore reports the failure on its result instead of appearing to have succeeded.
+   */
+  private async registerPendingWork(
+    inputs: RSUPipelineInput[],
+  ): Promise<{ IDs: Map<RSUPipelineInput, string[]>; Errors: Map<RSUPipelineInput, string[]> }> {
+    const registered = new Map<RSUPipelineInput, string[]>();
+    const errors = new Map<RSUPipelineInput, string[]>();
+    const addError = (input: RSUPipelineInput, message: string) => {
+      LogError(`[RSU] ${message}`);
+      const list = errors.get(input) ?? [];
+      list.push(message);
+      errors.set(input, list);
+    };
+    for (const input of inputs) {
+      if (!input.PendingWork?.length) continue;
+      if (!input.ContextUser) {
+        addError(input, `PendingWork supplied without ContextUser for "${input.Description}" — nothing was registered, so this work will NOT run after the restart`);
+        continue;
+      }
+      const ids: string[] = [];
+      for (const work of input.PendingWork) {
+        try {
+          ids.push(await this.WritePendingWork(work, input.ContextUser));
+        } catch (err) {
+          addError(
+            input,
+            `Failed to register post-restart work for company integration ${work.CompanyIntegrationID}: ` +
+              `${err instanceof Error ? err.message : String(err)} — this work will NOT run after the restart`,
+          );
+        }
+      }
+      registered.set(input, ids);
+    }
+    return { IDs: registered, Errors: errors };
   }
 
   // ─── Generic Post-Restart File Injection ──────────────────────
@@ -558,6 +821,85 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     this._stepTotal = null;
   }
 
+  // ── Pipeline observer ──────────────────────────────────────────────
+  /**
+   * Optional observer notified of every step and run boundary. Set once at process startup (see
+   * the RSU progress bridge in MJServer) — a single observer is sufficient because RSU runs are
+   * serialized by the pipeline lock, so events can never interleave between runs.
+   *
+   * Never awaited, never allowed to fail the pipeline. See {@link RSUPipelineObserver}.
+   */
+  public PipelineObserver: RSUPipelineObserver | null = null;
+
+  /** Delivers an event to {@link PipelineObserver}, swallowing (but logging) any throw. */
+  private notifyObserver(event: RSUObserverEvent): void {
+    const observer = this.PipelineObserver;
+    if (!observer) return;
+    try {
+      observer(event);
+    } catch (error: unknown) {
+      // Progress reporting must never break a schema migration.
+      this.rsuLog(`Pipeline observer threw on ${event.Kind} (ignored): ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Records a completed step onto `steps` AND publishes it to the observer, so a step is never
+   * visible in the result but absent from the event stream. Every step recording goes through
+   * here — including the ones computed inline rather than via {@link runStep}.
+   */
+  private recordStep(steps: RSUPipelineStep[], step: RSUPipelineStep): void {
+    steps.push(step);
+    this.notifyObserver({
+      Kind: 'step.end',
+      Name: step.Name,
+      Status: step.Status,
+      DurationMs: step.DurationMs,
+      Message: step.Message,
+      StepIndex: step.StepIndex,
+      StepTotal: step.StepTotal,
+    });
+  }
+
+  /**
+   * Maps a finished batch onto its terminal `run.end` event.
+   *
+   * `result` is undefined when a throw escaped the pipeline before a result existed — that case
+   * must still produce a FAILED run.end, otherwise an observer's run would hang in-flight forever.
+   *
+   * Public + static so the mapping is unit-testable without a live pipeline.
+   */
+  public static BuildRunEndEvent(
+    result: RSUPipelineBatchResult | undefined,
+    totalCount: number
+  ): Extract<RSUObserverEvent, { Kind: 'run.end' }> {
+    if (!result) {
+      return {
+        Kind: 'run.end',
+        Success: false,
+        SuccessCount: 0,
+        FailureCount: totalCount,
+        TotalCount: totalCount,
+        ErrorMessage: 'Pipeline threw before producing a result',
+      };
+    }
+    const firstFailure = result.Results.find((r) => !r.Success);
+    return {
+      Kind: 'run.end',
+      Success: result.FailureCount === 0,
+      SuccessCount: result.SuccessCount,
+      FailureCount: result.FailureCount,
+      TotalCount: result.TotalCount,
+      ErrorMessage: firstFailure?.ErrorMessage,
+      ErrorStep: firstFailure?.ErrorStep,
+    };
+  }
+
+  /** Publishes the terminal run boundary. `result` is undefined when a throw escaped the pipeline. */
+  private notifyRunEnd(result: RSUPipelineBatchResult | undefined, totalCount: number): void {
+    this.notifyObserver(RuntimeSchemaManager.BuildRunEndEvent(result, totalCount));
+  }
+
   // ─── Pipeline ────────────────────────────────────────────────────
 
   /**
@@ -600,10 +942,24 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     // U11 — arm the determinate step counter (index of expected total) for this run.
     this.beginStepTracking(inputs.length);
+    this.notifyObserver({
+      Kind: 'run.start',
+      ItemCount: inputs.length,
+      Descriptions: inputs.map((i) => i.Description),
+      AffectedTables: [...new Set(inputs.flatMap((i) => i.AffectedTables))],
+      StepTotal: this._stepTotal ?? 0,
+    });
+
+    // Captured so the `finally` can publish the terminal run boundary on EVERY exit path —
+    // early validation failure, normal completion, or a throw (which leaves it undefined).
+    let batchResult: RSUPipelineBatchResult | undefined;
     try {
       // Phase 1: Validate
       const validationFailure = await this.validateBatch(inputs, sharedSteps);
-      if (validationFailure) return validationFailure;
+      if (validationFailure) {
+        batchResult = validationFailure;
+        return batchResult;
+      }
 
       // Phase 2: Execute migrations under lock
       const itemResults = await this.executeMigrations(inputs, sharedSteps);
@@ -613,9 +969,11 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       const postResult = await this.runPostMigrationPipeline(inputs, successfulItems, sharedSteps);
 
       // Phase 4: Build per-caller results
-      return this.buildPerCallerResults(itemResults, successfulItems, sharedSteps, postResult);
+      batchResult = this.buildPerCallerResults(itemResults, successfulItems, sharedSteps, postResult);
+      return batchResult;
     } finally {
       this.endStepTracking();
+      this.notifyRunEnd(batchResult, inputs.length);
     }
   }
 
@@ -629,11 +987,11 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     for (const input of inputs) {
       const validation = ValidateMigrationSQL(input.MigrationSQL, this.getProtectedSchemas());
       if (!validation.Valid) {
-        sharedSteps.push({ Name: 'ValidateSQL', Status: 'failed', DurationMs: 0, Message: validation.Errors.join('; ') });
+        this.recordStep(sharedSteps, { Name: 'ValidateSQL', Status: 'failed', DurationMs: 0, Message: validation.Errors.join('; ') });
         return this.buildBatchResult(inputs.map((i) => this.buildFailedResult(i, 'ValidateSQL', sharedSteps)));
       }
     }
-    sharedSteps.push({ Name: 'ValidateSQL', Status: 'success', DurationMs: 0, Message: `Validated ${inputs.length} migration(s)` });
+    this.recordStep(sharedSteps, { Name: 'ValidateSQL', Status: 'success', DurationMs: 0, Message: `Validated ${inputs.length} migration(s)` });
     return null;
   }
 
@@ -675,7 +1033,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
       if (itemResults.some((r) => r.Success)) {
         this.MarkOutOfSync();
-        sharedSteps.push({ Name: 'MarkOutOfSync', Status: 'success', DurationMs: 0, Message: 'DB changed, API out-of-sync until CodeGen completes' });
+        this.recordStep(sharedSteps, { Name: 'MarkOutOfSync', Status: 'success', DurationMs: 0, Message: 'DB changed, API out-of-sync until CodeGen completes' });
       }
     } finally {
       await this.releaseLock();
@@ -733,6 +1091,13 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     const successfulInputs = successfulItems.map(r => r.Input);
     await this.writePostRestartFiles(successfulInputs);
 
+    // Register durable pending work for successful migrations. Rows stay Pending
+    // until the post-restart consumer completes them, so a crash between here and
+    // consumption leaves the work visible instead of losing it.
+    const pendingWork = await this.registerPendingWork(successfulInputs);
+    result.PendingWorkIDs = pendingWork.IDs;
+    result.PendingWorkErrors = pendingWork.Errors;
+
     // Restart LAST — PM2 restart kills this process, nothing runs after this
     if (!inputs.every((i) => i.SkipRestart)) {
       const restartOk = await this.runStep('RestartMJAPI', () => this.restartMJAPI(), sharedSteps);
@@ -760,19 +1125,31 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       // A migration that executed but whose run-wide CodeGen failed is NOT a success —
       // the entity may have no spCreate/spUpdate procs and would silently skip on sync.
       const codeGenFailedThisCaller = codeGenFailed && item.Success;
+      // Same reasoning as the CodeGen case above: the migration ran, but work the caller
+      // asked to happen after the restart was never persisted, so the restart drops it.
+      // Reporting success here would tell the caller their sync is coming when it is not.
+      const pendingWorkErrors = postResult.PendingWorkErrors?.get(item.Input) ?? [];
+      const pendingWorkFailedThisCaller = pendingWorkErrors.length > 0 && item.Success;
       const result: RSUPipelineResult = {
-        Success: item.Success && successfulItems.length > 0 && !codeGenFailed,
+        Success: item.Success && successfulItems.length > 0 && !codeGenFailed && !pendingWorkFailedThisCaller,
         MigrationFilePath: item.FilePath,
         APIRestarted: postResult.ApiRestarted,
         GitCommitSuccess: postResult.GitCommitSuccess,
         BranchName: postResult.BranchName,
         Steps: allSteps,
-        ErrorMessage: codeGenFailedThisCaller ? postResult.CodeGenError ?? item.Error : item.Error,
+        ErrorMessage: codeGenFailedThisCaller
+          ? postResult.CodeGenError ?? item.Error
+          : pendingWorkFailedThisCaller
+            ? pendingWorkErrors.join('; ')
+            : item.Error,
         ErrorStep: codeGenFailedThisCaller
           ? 'RunCodeGen'
-          : item.Error
-            ? item.Steps.find((s) => s.Status === 'failed')?.Name
-            : undefined,
+          : pendingWorkFailedThisCaller
+            ? 'RegisterPendingWork'
+            : item.Error
+              ? item.Steps.find((s) => s.Status === 'failed')?.Name
+              : undefined,
+        PendingWorkIDs: postResult.PendingWorkIDs?.get(item.Input),
       };
 
       this.writeAuditLog(item.Input, result).catch((err) => LogError(`[RSU] Audit log failed: ${err instanceof Error ? err.message : String(err)}`));
@@ -962,7 +1339,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * Verify ALL filesystem paths RSU may write to are actually writable.
    * Paths checked:
    *  - MigrationsPath     (migration SQL files)
-   *  - PendingWorkPath    (post-restart task JSONs)
    *  - AdditionalSchemaInfoPath parent dir (soft FK / soft PK config)
    *  - CodeGenDir         (temp codegen script)
    *  - WorkDir            (pipeline log file)
@@ -974,7 +1350,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     const directoriesToCheck = [
       nodePath.join(workDir, rsuConfig.MigrationsPath),
-      nodePath.join(workDir, rsuConfig.PendingWorkPath),
       dirname(nodePath.join(workDir, this.additionalSchemaInfoPath)),
       rsuConfig.CodeGenDir,
       workDir, // pipeline log
@@ -1349,8 +1724,9 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     // When running inside the MJAPI process that PM2 manages, `pm2 restart`
     // sends SIGINT to THIS process. We will die before execAsync resolves.
-    // That's fine — the pending-work file (.rsu_pending/) was already written
-    // before this step, and the newly restarted process picks it up on boot.
+    // That's fine — the pending-work rows were already committed to
+    // `MJ: RSU Pending Works` before this step, and the newly restarted process
+    // picks them up on boot.
     //
     // Strategy: fire the restart command, catch the inevitable rejection
     // (our process gets killed mid-flight), and return true. If the process
@@ -1993,17 +2369,18 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     const stepIndex = this._currentStepIndex ?? undefined;
     const stepTotal = this._stepTotal ?? undefined;
     this.rsuLog(`▶ Starting step${stepIndex && stepTotal ? ` ${stepIndex}/${stepTotal}` : ''}: ${name}`);
+    this.notifyObserver({ Kind: 'step.start', Name: name, StepIndex: stepIndex, StepTotal: stepTotal });
     try {
       const result = await fn();
       const durationMs = Date.now() - start;
       const msg = `${name} completed successfully`;
-      steps.push({ Name: name, Status: 'success', DurationMs: durationMs, Message: msg, StepIndex: stepIndex, StepTotal: stepTotal });
+      this.recordStep(steps, { Name: name, Status: 'success', DurationMs: durationMs, Message: msg, StepIndex: stepIndex, StepTotal: stepTotal });
       this.rsuLog(`✓ ${name} — ${durationMs}ms`);
       return result;
     } catch (error: unknown) {
       const durationMs = Date.now() - start;
       const msg = error instanceof Error ? error.message : String(error);
-      steps.push({ Name: name, Status: 'failed', DurationMs: durationMs, Message: msg, StepIndex: stepIndex, StepTotal: stepTotal });
+      this.recordStep(steps, { Name: name, Status: 'failed', DurationMs: durationMs, Message: msg, StepIndex: stepIndex, StepTotal: stepTotal });
       this.rsuLog(`✗ ${name} — FAILED after ${durationMs}ms: ${msg}`);
       return undefined;
     }

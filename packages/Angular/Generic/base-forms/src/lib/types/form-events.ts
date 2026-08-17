@@ -36,6 +36,54 @@ export class BeforeDeleteEventArgs extends CancellableFormEvent {}
 export class BeforeCancelEventArgs extends CancellableFormEvent {}
 
 /**
+ * Fired before the container commits accordion vs left-nav. Cancel to keep
+ * the previously applied chrome.
+ */
+export class BeforeLayoutResolveEventArgs extends CancellableFormEvent {
+    Layout: 'accordion' | 'left-nav';
+
+    constructor(layout: 'accordion' | 'left-nav') {
+        super();
+        this.Layout = layout;
+    }
+}
+
+/**
+ * Fired after chrome has been applied.
+ */
+export class AfterLayoutResolvedEventArgs {
+    Layout: 'accordion' | 'left-nav';
+
+    constructor(layout: 'accordion' | 'left-nav') {
+        this.Layout = layout;
+    }
+}
+
+/**
+ * Fired before a left-nav group is activated or More is expanded. Cancel
+ * to keep the current group (dirty-guard hook).
+ */
+export class BeforeSectionActivateEventArgs extends CancellableFormEvent {
+    GroupKey: string;
+
+    constructor(groupKey: string) {
+        super();
+        this.GroupKey = groupKey;
+    }
+}
+
+/**
+ * Fired after a left-nav group is activated or More is expanded.
+ */
+export class AfterSectionActivatedEventArgs {
+    GroupKey: string;
+
+    constructor(groupKey: string) {
+        this.GroupKey = groupKey;
+    }
+}
+
+/**
  * Event args for BeforeHistoryView event
  */
 export class BeforeHistoryViewEventArgs extends CancellableFormEvent {}
