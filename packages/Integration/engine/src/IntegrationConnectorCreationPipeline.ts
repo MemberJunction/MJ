@@ -357,12 +357,18 @@ export class IntegrationConnectorCreationPipeline {
         // but it can be stopped being waited on — which is the difference between a run that fails and
         // one that is in-flight forever. See RunDeadlineMs.
         const deadlineMs = opts.RunDeadlineMs ?? IntegrationConnectorCreationPipeline.DEFAULT_RUN_DEADLINE_MS;
+        // The default is 45min, but RunDeadlineMs is a public knob and a caller may set seconds — in
+        // which case rounding to minutes reported the failure as a "deadline of 0min", which reads as
+        // a bug in the pipeline rather than the limit the caller actually asked for.
+        const deadlineLabel = deadlineMs >= 60_000
+            ? `${Math.round(deadlineMs / 60_000)}min`
+            : `${(deadlineMs / 1000).toFixed(deadlineMs % 1000 === 0 ? 0 : 1)}s`;
         let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
         const withDeadline = async <T>(stage: string, work: Promise<T>): Promise<T> => {
             if (deadlineMs <= 0) return work;
             const remaining = deadlineMs - (Date.now() - startedMs);
             if (remaining <= 0) {
-                throw new Error(`Run deadline of ${Math.round(deadlineMs / 60000)}min exceeded before stage "${stage}" could start.`);
+                throw new Error(`Run deadline of ${deadlineLabel} exceeded before stage "${stage}" could start.`);
             }
             return Promise.race([
                 work,
@@ -370,7 +376,7 @@ export class IntegrationConnectorCreationPipeline {
                     deadlineTimer = setTimeout(
                         () => reject(new Error(
                             `Stage "${stage}" did not finish within the run deadline of ` +
-                            `${Math.round(deadlineMs / 60000)}min. The work may still be running on this ` +
+                            `${deadlineLabel}. The work may still be running on this ` +
                             `process — it cannot be cancelled — but the run is being failed so it stops ` +
                             `reporting itself in-flight and can be retried.`)),
                         remaining,
