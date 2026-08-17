@@ -17,6 +17,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { CompositeKey } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type {
     GraphNode,
     GraphEdge,
@@ -478,7 +479,7 @@ const GRAPH_VIEW_CSS = `
                             (click)="OnNodeClick(node, $event)">
 
                             <!-- Outer Selection Glow -->
-                            @if (SelectedNode?.ID === node.ID) {
+                            @if (IsNodeSelected(node)) {
                                 <circle r="36" fill="rgba(56, 189, 248, 0.2)" stroke="#38bdf8" stroke-width="2"></circle>
                             }
 
@@ -584,7 +585,7 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
             this.SimulatePhysics();
         }
         if (changes['SelectedNodeId'] && this.SelectedNodeId) {
-            const found = this.Nodes.find(n => n.ID === this.SelectedNodeId);
+            const found = this.Nodes.find(n => UUIDsEqual(n.ID, this.SelectedNodeId));
             if (found) this.SelectedNode = found;
         }
     }
@@ -648,8 +649,8 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
 
             // 2. Link Attraction
             this.Edges.forEach(edge => {
-                const src = this.Nodes.find(n => n.ID === edge.SourceID);
-                const tgt = this.Nodes.find(n => n.ID === edge.TargetID);
+                const src = this.Nodes.find(n => UUIDsEqual(n.ID, edge.SourceID));
+                const tgt = this.Nodes.find(n => UUIDsEqual(n.ID, edge.TargetID));
                 if (src && tgt) {
                     const dx = (tgt.X || 0) - (src.X || 0);
                     const dy = (tgt.Y || 0) - (src.Y || 0);
@@ -736,7 +737,7 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     public SelectNode(id: string): void {
-        const node = this.Nodes.find(n => n.ID === id);
+        const node = this.Nodes.find(n => UUIDsEqual(n.ID, id));
         if (node) this.OnNodeClick(node, new MouseEvent('click'));
     }
 
@@ -752,7 +753,7 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     public ExpandHops(nodeId: string, depth: number): void {
-        const node = this.Nodes.find(n => n.ID === nodeId);
+        const node = this.Nodes.find(n => UUIDsEqual(n.ID, nodeId));
         if (!node) return;
 
         const beforeEvent = new BeforeHopExpandEventArgs(node, (node.HopDistance || 0) + depth, node.HopDistance || 0);
@@ -779,8 +780,8 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
 
     public OnEdgeClick(edge: GraphEdge, event: MouseEvent): void {
         event.stopPropagation();
-        const src = this.Nodes.find(n => n.ID === edge.SourceID) || null;
-        const tgt = this.Nodes.find(n => n.ID === edge.TargetID) || null;
+        const src = this.Nodes.find(n => UUIDsEqual(n.ID, edge.SourceID)) || null;
+        const tgt = this.Nodes.find(n => UUIDsEqual(n.ID, edge.TargetID)) || null;
 
         const beforeEvent = new BeforeEdgeSelectEventArgs(edge, src, tgt);
         this.BeforeEdgeSelect.emit(beforeEvent);
@@ -865,11 +866,11 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     public GetNodeX(id: string): number {
-        return this.Nodes.find(n => n.ID === id)?.X || 0;
+        return this.Nodes.find(n => UUIDsEqual(n.ID, id))?.X || 0;
     }
 
     public GetNodeY(id: string): number {
-        return this.Nodes.find(n => n.ID === id)?.Y || 0;
+        return this.Nodes.find(n => UUIDsEqual(n.ID, id))?.Y || 0;
     }
 
     public GetNodeColor(node: GraphNode): string {
@@ -895,11 +896,21 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     public GetNodeEdgeCount(id: string): number {
-        return this.Edges.filter(e => e.SourceID === id || e.TargetID === id).length;
+        return this.Edges.filter(e => UUIDsEqual(e.SourceID, id) || UUIDsEqual(e.TargetID, id)).length;
     }
 
     public IsEdgeHighlighted(edge: GraphEdge): boolean {
-        return this.SelectedEdge?.ID === edge.ID || this.SelectedNode?.ID === edge.SourceID || this.SelectedNode?.ID === edge.TargetID;
+        return UUIDsEqual(this.SelectedEdge?.ID, edge.ID) ||
+            UUIDsEqual(this.SelectedNode?.ID, edge.SourceID) ||
+            UUIDsEqual(this.SelectedNode?.ID, edge.TargetID);
+    }
+
+    /**
+     * Whether this node is the selected one. Exists as a method because the template cannot call
+     * an imported function directly, and the comparison must go through UUIDsEqual rather than ===.
+     */
+    public IsNodeSelected(node: GraphNode): boolean {
+        return UUIDsEqual(this.SelectedNode?.ID, node.ID);
     }
 
     public TruncateLabel(text: string, maxLen: number): string {
