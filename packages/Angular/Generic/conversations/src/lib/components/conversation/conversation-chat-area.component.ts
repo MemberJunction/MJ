@@ -892,6 +892,43 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.windowStore.GetSnapshot().IsLoadingOlder;
   }
 
+  /**
+   * The element that actually scrolls the transcript, handed to the message list so its
+   * "earlier messages" observer has a correct root.
+   *
+   * The list's own container does not scroll — this one carries the `overflow-y: auto` and
+   * `min-height: 0` that make it a real scroller. Passing it down beats having the list
+   * discover it, which depends on layout having settled.
+   */
+  public get messageScrollRoot(): HTMLElement | null {
+    return this.scrollContainer?.nativeElement ?? null;
+  }
+
+  /**
+   * Loads the next older page — fired by the message list's "earlier messages" sentinel.
+   *
+   * `LoadOlder` already no-ops when nothing is above or a load is in flight, so repeated
+   * observer fires during a fast scroll are harmless. `messages` is reassigned to a NEW
+   * array so the list's ngOnChanges runs; the list then detects the prepend and holds the
+   * user's scroll position rather than jumping.
+   */
+  public async onOlderMessagesRequested(): Promise<void> {
+    const conversationId = this.conversationId;
+    await this.windowStore.LoadOlder(this.currentUser);
+    if (!this.isActiveConversation(conversationId)) {
+      return;
+    }
+
+    const snapshot = this.windowStore.GetSnapshot();
+    this.messages = [...snapshot.Details];
+
+    // Older rows carry their own artifacts/ratings/runs — clear the once-per-conversation
+    // guard so loadPeripheralData reprocesses the now-larger window.
+    this.lastLoadedConversationId = null;
+    await this.loadPeripheralData(conversationId!, snapshot);
+    this.cdr.detectChanges();
+  }
+
   // Test feedback dialog state
   public showTestFeedbackDialog: boolean = false;
   public testFeedbackDialogData: TestFeedbackDialogData | null = null;

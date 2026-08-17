@@ -98,3 +98,19 @@
 .date-nav-option.jump-to:hover {
   background: none;
 }
+
+/* ── Windowed transcript sentinel ─────────────────────────────────────────────
+   Sits above the first loaded message while older pages remain. Needs real height
+   so the IntersectionObserver has something to observe. */
+.transcript-older-sentinel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: 0.75rem 1rem;
+}
+
+.transcript-older-label {
+  font-size: 0.8125rem;
+  color: var(--mj-text-secondary);
+}

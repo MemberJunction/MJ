@@ -282,6 +282,8 @@
               [messages]="messages"
               [HasMoreAbove]="hasMoreMessagesAbove"
               [IsLoadingOlder]="isLoadingOlderMessages"
+              [ScrollRoot]="messageScrollRoot"
+              (OlderRequested)="onOlderMessagesRequested()"
               [conversation]="conversation"
               [currentUser]="currentUser"
               [isProcessing]="isProcessing"

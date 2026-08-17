@@ -97,11 +97,56 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   // describe what lies above it. Unused until the Phase 5 sentinel lands; wired now so
   // the host binding is in place and the component's contract is stable.
 
-  /** True when older pages remain above the loaded window. */
-  @Input() public HasMoreAbove: boolean = false;
+  /**
+   * True when older pages remain above the loaded window.
+   *
+   * Setter rather than a plain input: flipping this creates or destroys the sentinel via
+   * `@if`, and the observer has to be re-pointed at the new element. Relying on an ambient
+   * `ngAfterViewChecked` tick to notice is fragile — once the list settles there may not be
+   * another one.
+   */
+  @Input()
+  public set HasMoreAbove(value: boolean) {
+    if (value === this._hasMoreAbove) {
+      return;
+    }
+    this._hasMoreAbove = value;
+    // Deferred: the `@if` has not rendered the sentinel yet at set time.
+    Promise.resolve().then(() => this.syncOlderObserver());
+  }
+  public get HasMoreAbove(): boolean {
+    return this._hasMoreAbove;
+  }
+  private _hasMoreAbove = false;
 
   /** True while an older page is in flight. */
   @Input() public IsLoadingOlder: boolean = false;
+
+  /**
+   * The host's scrolling element, used as the sentinel observer's root.
+   *
+   * This component's own container does NOT scroll — hosts wrap it in their own scroller
+   * (in the chat area, `.chat-messages-container`, which carries the `min-height: 0` a flex
+   * child needs). Passing it in is deterministic; discovering it by walking the DOM depends
+   * on layout having settled, which is not knowable from in here.
+   *
+   * Optional: when omitted the component falls back to walking its ancestors.
+   */
+  @Input()
+  public set ScrollRoot(value: HTMLElement | null | undefined) {
+    const next = value ?? null;
+    if (next === this._scrollRoot) {
+      return;
+    }
+    this._scrollRoot = next;
+    this._scrollParent = next;
+    // The root changed, so any live observer is pointed at the wrong element.
+    Promise.resolve().then(() => this.syncOlderObserver());
+  }
+  public get ScrollRoot(): HTMLElement | null {
+    return this._scrollRoot;
+  }
+  private _scrollRoot: HTMLElement | null = null;
 
   // ── Assistant identity overrides — static host config forwarded to every message
   //    item (null = engine identity). Setters (not ngOnChanges) so an imperative
@@ -193,8 +238,17 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   /** Forwarded from MessageItemComponent — see its docs. */
   @Output() public afterResponseFormSubmitted = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
 
+  /**
+   * Asks the host to load the next older page. Fired when the "earlier messages"
+   * sentinel scrolls into view — never on a raw scroll event, so a fast scroll costs
+   * one emit rather than one per pixel.
+   */
+  @Output() public OlderRequested = new EventEmitter<void>();
+
   @ViewChild('messageContainer', { read: ViewContainerRef }) messageContainerRef!: ViewContainerRef;
   @ViewChild('scrollContainer') scrollContainer!: ElementRef;
+  /** Only present while `HasMoreAbove` is true — the `@if` creates and destroys it. */
+  @ViewChild('olderSentinel') olderSentinel?: ElementRef<HTMLElement>;
 
   /**
    * Per-message rendered entries — see `RenderedMessageEntry` for the 3-way
@@ -205,11 +259,40 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   private _shouldScrollToBottom = false;
   private _previousMessageCount = 0; // Track previous count to detect new messages
 
+  /** Watches the "earlier messages" sentinel. Rebuilt whenever the sentinel comes or goes. */
+  private _olderObserver?: IntersectionObserver;
+  /**
+   * Set when the newest render PREPENDED older content, so `ngAfterViewChecked` can hold
+   * the user's reading position instead of letting the browser's pixel-based `scrollTop`
+   * slide them to unfamiliar content.
+   */
+  private _restoreScrollAfterPrepend = false;
+  /** `scrollHeight` captured immediately before a prepend render. */
+  private _heightBeforePrepend = 0;
+  /** Memoized result of {@link resolveScrollParent} — the host's scroller, not ours. */
+  private _scrollParent: HTMLElement | null = null;
+  /** What the live observer is currently watching, so a stale pairing can be detected. */
+  private _observedSentinel: HTMLElement | null = null;
+  private _observedRoot: HTMLElement | null = null;
+  /** Guards the no-scroll-parent warning so it fires once, not every checked cycle. */
+  private _warnedNoScrollParent = false;
+  /** Frames spent waiting for a scroller to appear, and the pending rAF handle. */
+  private _scrollParentRetries = 0;
+  private _scrollParentRetryHandle: number | null = null;
+  /** ~1s at 60fps — long enough for layout to settle, short enough to report a real fault. */
+  private static readonly MAX_SCROLL_PARENT_RETRIES = 60;
+  /**
+   * Render key of the FIRST timeline item last time we rendered. A change here means older
+   * content arrived at the head — the only reliable way to tell a prepend from an append,
+   * since both grow `messages.length`.
+   */
+  private _previousFirstKey: string | null = null;
+
   public currentDateDisplay: string = 'Today';
   public showDateNav: boolean = false;
   public shouldShowDateFilter: boolean = false;
 
-  constructor(private cdRef: ChangeDetectorRef) {
+  constructor(private cdRef: ChangeDetectorRef, private hostRef: ElementRef<HTMLElement>) {
     super();
   }
 
@@ -261,6 +344,10 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     // In that case, ngAfterViewInit will handle the initial render
     if (changes['messages'] && this.messages && this.messageContainerRef) {
       this._initialRenderComplete = true;
+      // Capture the pre-render height so a prepend can be corrected for. Must happen
+      // BEFORE updateMessages — afterwards the new rows are already in the layout — and
+      // must read the HOST's scroller, which is the element whose height actually changes.
+      this._heightBeforePrepend = this.resolveScrollParent()?.scrollHeight ?? 0;
       this.updateMessages(this.messages);
       this.updateDateFilterVisibility();
     }
@@ -307,13 +394,234 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   }
 
   ngAfterViewChecked() {
-    if (this._shouldScrollToBottom) {
+    // Mutually exclusive on purpose: scrolling to the bottom would undo a prepend restore.
+    if (this._restoreScrollAfterPrepend) {
+      this.restoreScrollAfterPrepend();
+      this._restoreScrollAfterPrepend = false;
+    } else if (this._shouldScrollToBottom) {
       this.scrollToBottom();
       this._shouldScrollToBottom = false;
     }
+    this.syncOlderObserver();
+  }
+
+  /** The rendered sentinel, read from the DOM so it does not depend on view-query timing. */
+  private findSentinelElement(): HTMLElement | null {
+    return this.hostRef.nativeElement.querySelector('.transcript-older-sentinel');
+  }
+
+  /**
+   * Whether this instance is actually on screen.
+   *
+   * `offsetParent` is null for any element in a `display: none` subtree — which is how the
+   * chat area parks the message lists of conversations you are not currently looking at.
+   */
+  private isHostVisible(): boolean {
+    const host = this.hostRef.nativeElement;
+    return host.offsetParent !== null || getComputedStyle(host).position === 'fixed';
+  }
+
+  /**
+   * Retries {@link syncOlderObserver} on animation frames until a scroller appears.
+   *
+   * Bounded: after {@link MAX_SCROLL_PARENT_RETRIES} frames it gives up and logs the DOM
+   * chain it walked, so a genuine host-layout problem names itself instead of presenting
+   * as "paging silently doesn't work".
+   */
+  private scheduleScrollParentRetry(): void {
+    if (this._scrollParentRetryHandle !== null) {
+      return;   // one retry loop at a time
+    }
+    // A HIDDEN instance can never resolve a scroller: the chat area keeps one message list
+    // alive per visited conversation in a DOM cache, and a display:none subtree reports
+    // every height as 0, so `scrollHeight > clientHeight` is false all the way up. Keep
+    // waiting (it may be shown later) but never burn the retry budget or warn — that noise
+    // would point at the wrong instance entirely.
+    if (!this.isHostVisible()) {
+      this._scrollParentRetryHandle = requestAnimationFrame(() => {
+        this._scrollParentRetryHandle = null;
+        this.syncOlderObserver();
+      });
+      return;
+    }
+    if (this._scrollParentRetries >= MessageListComponent.MAX_SCROLL_PARENT_RETRIES) {
+      this.warnNoScrollParentOnce();
+      return;
+    }
+    this._scrollParentRetries++;
+    this._scrollParentRetryHandle = requestAnimationFrame(() => {
+      this._scrollParentRetryHandle = null;
+      this.syncOlderObserver();
+    });
+  }
+
+  /** One-time diagnostic dump of the ancestor chain, so the failure is self-explaining. */
+  private warnNoScrollParentOnce(): void {
+    if (this._warnedNoScrollParent) {
+      return;
+    }
+    this._warnedNoScrollParent = true;
+
+    const chain: Array<Record<string, unknown>> = [];
+    let el: HTMLElement | null =
+      this.findSentinelElement() ?? this.scrollContainer?.nativeElement ?? null;
+    while (el && chain.length < 20) {
+      const style = getComputedStyle(el);
+      chain.push({
+        el: el.className || el.tagName,
+        overflowY: style.overflowY,
+        scrollHeight: el.scrollHeight,
+        clientHeight: el.clientHeight
+      });
+      el = el.parentElement;
+    }
+
+    console.warn(
+      '[MessageList] "Earlier messages" is showing but no scrolling ancestor was found, so '
+      + 'older pages cannot auto-load. The host must give the transcript a scrollable container '
+      + '(overflow-y: auto AND a bounded height, e.g. min-height: 0 on a flex child). '
+      + 'Walked from '
+      + (this.olderSentinel ? 'the sentinel' : this.scrollContainer ? 'the list container' : 'NOTHING — both view children are undefined')
+      + ':',
+      chain
+    );
+  }
+
+  /**
+   * The element that ACTUALLY scrolls the transcript.
+   *
+   * This component's own `.message-list-container` does not scroll: the chat area wraps it
+   * in `.chat-messages-container`, and that outer div is the one carrying `min-height: 0`
+   * alongside `overflow-y: auto` — the pair a flex child needs before it will scroll instead
+   * of growing to fit its content. Targeting the inner div means writing `scrollTop` on an
+   * element whose `scrollHeight === clientHeight`, which silently does nothing, and giving
+   * an IntersectionObserver a root that never scrolls.
+   *
+   * Walking up keeps this component agnostic about the host's markup — any consumer that
+   * wraps it in its own scroller works the same way.
+   */
+  private resolveScrollParent(): HTMLElement | null {
+    // Host-supplied root wins — no discovery, no timing dependency.
+    if (this._scrollRoot?.isConnected) {
+      return this._scrollRoot;
+    }
+    if (this._scrollParent && this._scrollParent.isConnected) {
+      return this._scrollParent;
+    }
+    // Start from the sentinel when it exists: it is the element being observed, so it is
+    // guaranteed present exactly when the walk matters. `@ViewChild('scrollContainer')`
+    // resolves on Angular's own schedule and can still be undefined here, which would end
+    // the walk before it began.
+    let el: HTMLElement | null =
+      this.findSentinelElement() ?? this.scrollContainer?.nativeElement ?? null;
+    while (el) {
+      const overflowY = getComputedStyle(el).overflowY;
+      if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
+        this._scrollParent = el;
+        return el;
+      }
+      el = el.parentElement;
+    }
+    return null;   // nothing overflows yet — short conversation, nothing to scroll
+  }
+
+  /**
+   * Holds the user's reading position after older content is spliced in above.
+   *
+   * `scrollTop` is a pixel offset from the top, so inserting content above silently shifts
+   * everything down — the user ends up looking at messages they never scrolled to. Adding
+   * the height delta puts the same message back under their eyes.
+   */
+  private restoreScrollAfterPrepend(): void {
+    const el = this.resolveScrollParent();
+    if (!el) {
+      return;
+    }
+    const delta = el.scrollHeight - this._heightBeforePrepend;
+    if (delta > 0) {
+      el.scrollTop = el.scrollTop + delta;
+    }
+  }
+
+  /**
+   * Keeps the IntersectionObserver attached to the current sentinel element.
+   *
+   * The sentinel lives inside `@if (HasMoreAbove)`, so it is created and destroyed as the
+   * user reaches the top of the loaded window and as older pages arrive. Runs every checked
+   * cycle and is a no-op once attached.
+   *
+   * Observer-on-sentinel rather than a scroll listener: a fast scroll costs one callback,
+   * not one per frame.
+   */
+  private syncOlderObserver(): void {
+    if (!this.HasMoreAbove) {
+      this._olderObserver?.disconnect();
+      this._olderObserver = undefined;
+      this._observedSentinel = null;
+      this._observedRoot = null;
+      return;
+    }
+
+    // Query the DOM rather than reading `@ViewChild('olderSentinel')`.
+    //
+    // The sentinel lives inside `@if`, so the view query resolves on Angular's own
+    // schedule — and `updateMessages` detaches/reattaches this component's change detector
+    // around every render, which makes that schedule hard to reason about. Reading the host
+    // element directly is timing-independent: if the div is on the page, we find it.
+    const el = this.findSentinelElement();
+    if (!el) {
+      this.scheduleScrollParentRetry();   // not rendered yet — look again next frame
+      return;
+    }
+
+    // The scroll parent is not resolvable until something actually overflows, which is not
+    // true on the first checked cycle. Bailing (rather than observing with a null root)
+    // matters: a viewport-rooted observer never sees a sentinel clipped inside a scrolled
+    // container, so it would silently never fire.
+    const root = this.resolveScrollParent();
+    if (!root) {
+      // A scroller only becomes findable once its content overflows, which is not true on
+      // the tick the sentinel first renders. Retry on animation frames rather than waiting
+      // for another change-detection pass — once the list settles there may not be one.
+      this.scheduleScrollParentRetry();
+      return;
+    }
+    this._scrollParentRetries = 0;
+
+    // Rebuild whenever EITHER end of the relationship changes — `@if` swaps the sentinel
+    // element as HasMoreAbove toggles, and the root only becomes known once content
+    // overflows. Observing a stale element or a stale root is silent, not loud.
+    if (this._olderObserver && this._observedSentinel === el && this._observedRoot === root) {
+      return;
+    }
+    this._olderObserver?.disconnect();
+
+    this._olderObserver = new IntersectionObserver(
+      entries => {
+        // Re-check the flags at fire time: the observer can fire while a load is already
+        // running, and LoadOlder's own guard shouldn't be the only thing standing between
+        // a fast scroll and a burst of duplicate requests.
+        if (entries.some(e => e.isIntersecting) && this.HasMoreAbove && !this.IsLoadingOlder) {
+          this.OlderRequested.emit();
+        }
+      },
+      // Root must be the REAL scroller, not this component's own container — an observer
+      // rooted on a non-scrolling ancestor reports the sentinel as permanently visible.
+      { root, threshold: 0.01 }
+    );
+    this._olderObserver.observe(el);
+    this._observedSentinel = el;
+    this._observedRoot = root;
   }
 
   ngOnDestroy() {
+    this._olderObserver?.disconnect();
+    this._olderObserver = undefined;
+    if (this._scrollParentRetryHandle !== null) {
+      cancelAnimationFrame(this._scrollParentRetryHandle);
+      this._scrollParentRetryHandle = null;
+    }
+
     // Clean up all dynamically created components AND embedded views (both have destroy()).
     this._renderedMessages.forEach((entry) => {
       if (entry) {
@@ -371,21 +679,37 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       // internally branches on the slot template (messageRenderer) vs the
       // default MessageItemComponent; `renderSessionBlock` always creates a
       // RealtimeSessionTimelineCardComponent.
+      // The timeline index is passed through so newly created views land at the RIGHT
+      // position. `createComponent` appends by default, which would put prepended older
+      // messages at the bottom of the DOM despite being the oldest content.
       const lastMessageKey = this.findLastMessageKey(timeline);
-      for (const item of timeline) {
+      for (let i = 0; i < timeline.length; i++) {
+        const item = timeline[i];
         if (item.Kind === 'session') {
-          this.renderSessionBlock(item.Group);
+          this.renderSessionBlock(item.Group, i);
         } else {
-          this.renderMessageItem(item.Detail, messages, this.getMessageKey(item.Detail) === lastMessageKey);
+          this.renderMessageItem(item.Detail, messages, this.getMessageKey(item.Detail) === lastMessageKey, i);
         }
       }
 
-      // Only scroll to bottom if new messages were added (not just updates)
-      // This prevents scrolling when the message list is merely refreshed (e.g., during agent run timer)
+      // Decide where the viewport should end up.
+      //
+      // A raw `length > previousCount` check cannot tell an append from a prepend — paging
+      // older history also grows the array, and treating that as "someone sent a message"
+      // would snap the user to the newest message every time they scrolled up. Compare the
+      // FIRST timeline key instead: if it changed, older content arrived at the head.
       const previousCount = this._previousMessageCount;
       this._previousMessageCount = messages.length;
 
-      if (messages.length > previousCount) {
+      const firstKey = timeline.length > 0 ? this.getTimelineKey(timeline[0]) : null;
+      const prepended = this._previousFirstKey !== null
+        && firstKey !== null
+        && firstKey !== this._previousFirstKey;
+      this._previousFirstKey = firstKey;
+
+      if (prepended) {
+        this._restoreScrollAfterPrepend = true;
+      } else if (messages.length > previousCount) {
         this._shouldScrollToBottom = true;
       }
     } finally {
@@ -421,7 +745,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * Click/Open on the card bubbles up via {@link realtimeSessionOpenRequested} so the
    * chat area can host the SESSION REVIEW overlay for it.
    */
-  private renderSessionBlock(group: RealtimeSessionTimelineGroup): void {
+  private renderSessionBlock(group: RealtimeSessionTimelineGroup, timelineIndex: number): void {
     const key = this.getSessionKey(group.SessionID);
     const meta = this.sessionMetaMap.get(NormalizeUUID(group.SessionID)) ?? null;
     const existing = this._renderedMessages.get(key);
@@ -441,7 +765,10 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       this._renderedMessages.delete(key);
     }
 
-    const componentRef = this.messageContainerRef.createComponent(RealtimeSessionTimelineCardComponent);
+    const componentRef = this.messageContainerRef.createComponent(
+      RealtimeSessionTimelineCardComponent,
+      { index: timelineIndex }
+    );
     componentRef.instance.Group = group;
     componentRef.instance.Meta = meta;
     componentRef.instance.UserName = this.currentUser?.Name || 'You';
@@ -456,7 +783,12 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * dynamic-component path. Both paths flow through the shared
    * `createRenderedEntry` / `updateMessageItemInstance` helpers.
    */
-  private renderMessageItem(message: MJConversationDetailEntity, messages: MJConversationDetailEntity[], isLastMessage: boolean): void {
+  private renderMessageItem(
+    message: MJConversationDetailEntity,
+    messages: MJConversationDetailEntity[],
+    isLastMessage: boolean,
+    timelineIndex: number
+  ): void {
     const key = this.getMessageKey(message);
     // `index` is only used for the `isLastMessage` heuristic inside
     // updateMessageItemInstance — synthesize a value that produces the right
@@ -485,7 +817,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       this._renderedMessages.delete(key);
     }
 
-    this.createRenderedEntry(message, messages, index, key, useCustomRenderer);
+    this.createRenderedEntry(message, messages, index, key, useCustomRenderer, timelineIndex);
   }
 
   /**
@@ -550,7 +882,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     messages: MJConversationDetailEntity[],
     index: number,
     key: string,
-    useCustomRenderer: boolean
+    useCustomRenderer: boolean,
+    timelineIndex: number
   ): void {
     if (useCustomRenderer && this.messageRendererTemplate) {
       // The slot directive carries TemplateRef<unknown>; assert the contract here
@@ -558,7 +891,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       const template = this.messageRendererTemplate as TemplateRef<MessageRendererContext>;
       const viewRef = this.messageContainerRef.createEmbeddedView<MessageRendererContext>(
         template,
-        { $implicit: message, message }
+        { $implicit: message, message },
+        { index: timelineIndex }
       );
       this._renderedMessages.set(key, { kind: 'embedded', ref: viewRef });
       // Stamp back-ref for parity with the component path.
@@ -566,7 +900,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       return;
     }
 
-    const componentRef = this.messageContainerRef.createComponent(MessageItemComponent);
+    const componentRef = this.messageContainerRef.createComponent(MessageItemComponent, { index: timelineIndex });
     const instance = componentRef.instance;
 
     instance.message = message;
