@@ -443,6 +443,10 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       this.scrollToBottom();
       this._shouldScrollToBottom = false;
     }
+    // Measure while things are on screen, so an item has a real height recorded before it
+    // ever needs a spacer — the plan's "measure offsetHeight the first time an item is
+    // mounted and remember it by key".
+    this.measureMountedItems();
     this.syncOlderObserver();
     this.syncSpacerObserver();
   }
@@ -843,6 +847,28 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       ? MessageListComponent.ESTIMATED_SESSION_HEIGHT
       : MessageListComponent.ESTIMATED_MESSAGE_HEIGHT;
   }
+
+  /**
+   * Measures every currently-mounted item.
+   *
+   * Runs each checked cycle so an item has a real height recorded BEFORE it scrolls far
+   * enough to be unmounted — otherwise its first spacer is always a guess.
+   */
+  private measureMountedItems(): void {
+    this._renderedMessages.forEach((entry, key) => {
+      if (entry.kind === 'spacer') {
+        return;
+      }
+      const node = entry.kind === 'embedded'
+        ? (entry.ref.rootNodes[0] as HTMLElement | undefined)
+        : (entry.ref.location.nativeElement as HTMLElement | undefined);
+      const height = node?.offsetHeight ?? 0;
+      if (height > 0) {
+        this._measuredHeights.set(key, height);
+      }
+    });
+  }
+
 
   /**
    * Replaces a mounted item with a height-holding spacer, or leaves an existing spacer

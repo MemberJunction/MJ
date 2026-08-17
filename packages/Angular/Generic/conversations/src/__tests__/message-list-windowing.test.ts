@@ -51,6 +51,7 @@ function createHarness(scrollHeight = 1000, scrollTop = 200): Harness {
   // assertions aren't entangled with observer setup.
   open['syncOlderObserver'] = vi.fn();
   open['syncSpacerObserver'] = vi.fn();
+  open['measureMountedItems'] = vi.fn();
 
   return { component, open, scrollEl, olderRequestedEmit, scrollToBottom };
 }
