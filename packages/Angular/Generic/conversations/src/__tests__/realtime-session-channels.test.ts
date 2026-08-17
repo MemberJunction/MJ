@@ -331,3 +331,137 @@ describe('RealtimeSessionService — debounced channel saves + teardown flush/di
     expect(error).toHaveBeenCalledWith(expect.stringContaining("Channel 'Echo' Dispose failed"), expect.any(Error));
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// #3497 — the live surface roster.
+//
+// The model is told its tool vocabulary at connect and nothing else, so it infers surfaces from
+// tools and answers questions about its own screen by guessing. These drive the real service:
+// composing the roster from live plugins, and pushing it only when the answer changes.
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** A channel that describes itself, and one that refuses to. */
+@RegisterClass(BaseRealtimeChannelClient, 'TestDescribingChannel')
+class TestDescribingChannel extends TestEchoChannel {
+  public Summary: string | null = 'showing https://example.com';
+  public ThrowOnDescribe = false;
+  public override get ChannelName(): string { return 'Describer'; }
+  public override get ToolNamePrefix(): string { return 'Describer.'; }
+  public override get TabTitle(): string { return 'Describer'; }
+  public override DescribeState(): string | null {
+    if (this.ThrowOnDescribe) {
+      throw new Error('describe boom');
+    }
+    return this.Summary;
+  }
+}
+
+/** Reaches the private members the roster tests drive. */
+interface RosterInternals {
+  announceChannelRoster(): void;
+  focusedChannelName: string | null;
+  startChannels(): Promise<RealtimeToolDefinition[]>;
+}
+
+describe('RealtimeSessionService — the live surface roster (#3497)', () => {
+  let service: RealtimeSessionService;
+  let notes: string[];
+
+  beforeEach(() => {
+    service = new RealtimeSessionService();
+    notes = [];
+    vi.spyOn(service, 'SendContextNote').mockImplementation((text: string) => { notes.push(text); });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const roster = (s: RealtimeSessionService) => s as unknown as RosterInternals;
+
+  it('composes the roster from the LIVE plugins, not from the registry', async () => {
+    mockChannelRegistry([
+      { ID: '1', Name: 'Echo', ClientPluginClass: 'TestEchoChannel' },
+      { ID: '2', Name: 'Describer', ClientPluginClass: 'TestDescribingChannel' },
+    ]);
+    await roster(service).startChannels();
+
+    // The registry lists what a deployment CONFIGURED; the roster must report what actually
+    // resolved, because a row whose plugin class is missing is exactly the surface the agent
+    // would otherwise believe it has.
+    expect(service.ChannelRoster.map(e => e.ChannelName)).toEqual(['Echo', 'Describer']);
+    expect(service.ChannelRoster.find(e => e.ChannelName === 'Describer')?.State)
+      .toBe('showing https://example.com');
+  });
+
+  it('leaves a channel out of the roster when its plugin never resolved', async () => {
+    mockChannelRegistry([
+      { ID: '1', Name: 'Echo', ClientPluginClass: 'TestEchoChannel' },
+      { ID: '2', Name: 'Ghost', ClientPluginClass: 'NoSuchPluginClass' },
+    ]);
+    await roster(service).startChannels();
+
+    expect(service.ChannelRoster.map(e => e.ChannelName)).toEqual(['Echo']);
+    expect(service.DescribeChannelRoster()).not.toContain('Ghost');
+  });
+
+  it('survives a channel that throws while describing itself', async () => {
+    mockChannelRegistry([
+      { ID: '1', Name: 'Describer', ClientPluginClass: 'TestDescribingChannel' },
+      { ID: '2', Name: 'Echo', ClientPluginClass: 'TestEchoChannel' },
+    ]);
+    await roster(service).startChannels();
+    (service.ActiveChannels[0] as TestDescribingChannel).ThrowOnDescribe = true;
+
+    // One broken description must not put every OTHER surface back into the dark.
+    expect(() => service.DescribeChannelRoster()).not.toThrow();
+    expect(service.DescribeChannelRoster()).toContain('Echo');
+    expect(service.ChannelRoster[0].State).toBeNull();
+  });
+
+  it('announces the roster once, and stays quiet while it is unchanged', async () => {
+    mockChannelRegistry([{ ID: '1', Name: 'Echo', ClientPluginClass: 'TestEchoChannel' }]);
+    await roster(service).startChannels();
+
+    roster(service).announceChannelRoster();
+    roster(service).announceChannelRoster();
+    roster(service).announceChannelRoster();
+
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toContain('1 surface open');
+  });
+
+  it('announces again once the answer actually changes', async () => {
+    mockChannelRegistry([{ ID: '1', Name: 'Describer', ClientPluginClass: 'TestDescribingChannel' }]);
+    await roster(service).startChannels();
+    roster(service).announceChannelRoster();
+
+    (service.ActiveChannels[0] as TestDescribingChannel).Summary = 'showing https://example.com/jobs';
+    roster(service).announceChannelRoster();
+
+    expect(notes).toHaveLength(2);
+    expect(notes[1]).toContain('https://example.com/jobs');
+  });
+
+  it('tells the model when a channel takes over the screen', async () => {
+    mockChannelRegistry([
+      { ID: '1', Name: 'Echo', ClientPluginClass: 'TestEchoChannel' },
+      { ID: '2', Name: 'Describer', ClientPluginClass: 'TestDescribingChannel' },
+    ]);
+    await roster(service).startChannels();
+    const echo = service.ActiveChannels[0] as TestEchoChannel;
+
+    echo.Ctx?.SetFocusMode(true);
+
+    expect(notes.at(-1)).toContain('Echo — focused');
+    echo.Ctx?.SetFocusMode(false);
+    expect(notes.at(-1)).not.toContain('focused');
+  });
+
+  it('reports an empty session as having no surfaces, not as silence', async () => {
+    mockChannelRegistry([]);
+    await roster(service).startChannels();
+
+    expect(service.DescribeChannelRoster()).toContain('none open');
+  });
+});

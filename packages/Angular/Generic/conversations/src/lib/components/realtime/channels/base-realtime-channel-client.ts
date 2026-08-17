@@ -385,6 +385,25 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
   }
 
   /**
+   * ONE SHORT SENTENCE describing what this surface currently holds, for the model to read (#3497).
+   * `null` — the default — means the channel has nothing worth saying, and it is simply omitted from
+   * the roster rather than listed as empty.
+   *
+   * **Not `SerializeState` in prose.** That payload is for RESUME: it is a machine format, it can be
+   * large, and it is written for a future instance of this same channel. This is written for a
+   * language model that is about to speak, so it should read like a person describing their screen —
+   * `'showing https://careers.acme.com'`, `'12 shapes, last edit 30s ago'` — not a JSON dump. A
+   * channel that returns its serialized state here spends the session's context on syntax.
+   *
+   * Called when the roster is composed, so treat it as a cheap synchronous read of state the channel
+   * already has. Never throw: a channel that cannot describe itself is omitted, and a description is
+   * never worth breaking a session over.
+   */
+  public DescribeState(): string | null {
+    return null;
+  }
+
+  /**
    * Restores a PRIOR session's saved channel state (the payload a previous session
    * persisted via {@link SerializeState} / {@link RealtimeChannelContext.RequestSave}).
    * Invoked by the session host AFTER {@link Initialize} and BEFORE any surface binding,

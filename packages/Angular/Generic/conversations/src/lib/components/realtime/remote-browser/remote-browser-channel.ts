@@ -305,6 +305,12 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
   private streaming = false;
 
   /**
+   * The page the browser was last known to be on, kept so the surface roster can say where this
+   * channel is pointing (#3497). Fed from the same results that tell the agent about a navigation.
+   */
+  private lastKnownUrl: string | null = null;
+
+  /**
    * Whether the server confirmed it is PUSHING tab-audio chunks for this session (the backend can capture
    * audio). When `true` {@link OnAudioChunk} feeds each pushed chunk to {@link audioPlayer}; when `false`
    * no audio plays.
@@ -627,8 +633,20 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
       // In streaming mode the surface's snapshot poll (which carries the URL) is stopped, so push the new
       // URL to the live-view bar directly — otherwise it stays stuck on "No page loaded yet".
       this.surface?.SetCurrentUrl(result.CurrentUrl);
+      this.lastKnownUrl = result.CurrentUrl;
     }
     return this.ok(result.CurrentUrl, result.Detail);
+  }
+
+  /**
+   * Where this browser is pointing, for the surface roster (#3497).
+   *
+   * "A browser is open" is not the useful fact — the agent could already infer that from having
+   * `browser_*` tools, and inferring it is what made it guess. WHICH page is open is the part it
+   * could not know.
+   */
+  public override DescribeState(): string | null {
+    return this.lastKnownUrl ? `showing ${this.lastKnownUrl}` : 'no page loaded yet';
   }
 
   /** Builds the flat mutation variables from a normalized action (omitted fields ride as null). */
@@ -690,6 +708,7 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
     if (result.CurrentUrl) {
       this.Context?.SendContextNote(`[browser] current page: ${result.CurrentUrl}`);
       this.surface?.SetCurrentUrl(result.CurrentUrl);
+      this.lastKnownUrl = result.CurrentUrl;
     }
     if (!result.Success) {
       return this.fail(result.Detail ?? `The goal could not be completed (${result.Status ?? 'unknown'}).`);
