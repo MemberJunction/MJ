@@ -5,7 +5,7 @@ import { BehaviorSubject, Observable, Subject, catchError, filter, from, map, of
 import { MsalBroadcastService, MsalService, MSAL_INSTANCE, MSAL_GUARD_CONFIG, MSAL_INTERCEPTOR_CONFIG, MsalGuard } from '@azure/msal-angular';
 import { AccountInfo, AuthenticationResult } from '@azure/msal-common';
 import { CacheLookupPolicy, ClientAuthError, InteractionRequiredAuthError, InteractionStatus, PublicClientApplication, InteractionType, BrowserAuthError } from '@azure/msal-browser';
-import { LogError } from '@memberjunction/core';
+import { LogError, type PublicAuthProviderInfo } from '@memberjunction/core';
 import { AngularAuthProviderConfig } from '../IAuthProvider';
 import {
   StandardUserInfo,
@@ -71,6 +71,39 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     MsalGuard,
     MsalBroadcastService
   ];
+
+  /**
+   * Maps a catalog row onto the unprefixed keys `angularProviderFactory` reads (`CLIENT_ID` /
+   * `CLIENT_AUTHORITY`), which predate the `<DRIVER>_*` convention the generic overlay emits —
+   * without this mapping a metadata-configured row would be silently ignored in favour of the
+   * compiled environment.
+   *
+   * The authority comes from `ClientConfiguration.authority` when the row supplies one; otherwise
+   * it is derived from the Issuer by stripping the trailing `/v2.0` — an Entra issuer is
+   * `https://login.microsoftonline.com/<tenantId>/v2.0`, and MSAL's authority is that same URL
+   * without the version suffix. That derivation only holds for standard Entra tenants: rows for
+   * Azure AD B2C or v1 `sts.windows.net` issuers must set `ClientConfiguration.authority`
+   * explicitly, because their issuer is not a usable authority (and B2C additionally needs
+   * `knownAuthorities`, which this driver does not yet plumb).
+   */
+  static EnvironmentFromCatalog(info: PublicAuthProviderInfo): Record<string, unknown> {
+    const overlay: Record<string, unknown> = {};
+
+    if (info.clientId) {
+      overlay['CLIENT_ID'] = info.clientId;
+    }
+
+    const configuredAuthority = info.clientConfiguration?.['authority'];
+    const authority =
+      typeof configuredAuthority === 'string' && configuredAuthority.length > 0
+        ? configuredAuthority
+        : info.issuer?.replace(/\/v2\.0\/?$/, '');
+    if (authority) {
+      overlay['CLIENT_AUTHORITY'] = authority;
+    }
+
+    return overlay;
+  }
 
   constructor(public auth: MsalService, private msalBroadcastService: MsalBroadcastService) {
     const config: AngularAuthProviderConfig = {
