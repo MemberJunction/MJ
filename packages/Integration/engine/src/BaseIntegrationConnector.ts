@@ -1078,6 +1078,37 @@ export abstract class BaseIntegrationConnector {
 
         await RunAdaptive(objects, introspectOne, controller);
 
+        // A PARTIAL enumeration is not an authoritative one.
+        //
+        // IsAuthoritative was decided up front, before a single describe ran, and it means exactly
+        // "every object the credentials expose is in this list". But an object whose DiscoverFields
+        // throws is SKIPPED — it never reaches result.Objects — and the causes are routinely
+        // transient: a throttle, a read timeout, a momentary permission blip.
+        //
+        // Downstream, `decideAbsentDeactivations` deactivates every ACTIVE object missing from an
+        // authoritative refresh, because absence is supposed to prove the source dropped it. Leaving
+        // the flag true after skips therefore turns a transient describe failure into a silent
+        // DEACTIVATION of a live entity map — the sync stops for that object and the run stays green.
+        //
+        // Skips are already reported per object; this is the safety consequence of them. Everything
+        // discovered is still returned and still upserted — only the authority to DELETE on absence
+        // is withdrawn, which is the one action that cannot be undone by the next healthy refresh.
+        if (skipped > 0 && result.IsAuthoritative) {
+            result.IsAuthoritative = false;
+            console.warn(
+                `WARNING: IntrospectSchema enumerated ${succeeded}/${total} objects (${skipped} skipped) — ` +
+                `treating this discovery as NON-authoritative so absent objects are not deactivated. ` +
+                `Everything discovered is still applied; re-run once the skipped objects describe cleanly ` +
+                `to restore deactivation.`
+            );
+            console.log(JSON.stringify({
+                ts: new Date().toISOString(),
+                event: 'introspect.authority.withdrawn',
+                reason: 'PARTIAL_ENUMERATION',
+                total, succeeded, skipped,
+            }));
+        }
+
         return result;
     }
 
