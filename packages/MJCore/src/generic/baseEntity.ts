@@ -10,6 +10,7 @@ import { LogDebug, LogError, LogStatus } from './logging';
 import { CompositeKey, FieldValueCollection } from './compositeKey';
 import { RelatedRecordCollection, RelatedRecordCollectionOptions } from './relatedRecordCollection';
 import { COMPANION_PAYLOAD_KEY, EntityCompanion, EntityCompanionDeserializeMode, EntityCompanionPayload } from './entityCompanion';
+import { EmbeddedRecord, type EmbeddedRecordOptions } from './embeddedRecord';
 import { EntitySavePlan, ExecuteEntitySavePlan } from './entitySavePlan';
 import { EntityTransactionScope } from './entityTransactionScope';
 import { BaseRemotableOperation } from './baseRemotableOperation';
@@ -1416,6 +1417,79 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Declares a 1:1 embedded peer on this entity, joined by an owner-held foreign key,
+     * and registers it as a companion.
+     *
+     * Call from a field initialiser on a **shared** (client + server) subclass — or let
+     * CodeGen emit it from `EntityField.EmbeddedRecord`. The public surface is the
+     * generated `{Field}_Object` getter, not this companion.
+     *
+     * @typeParam TEmbedded - The peer entity type.
+     * @param options - The declaration.
+     * @returns The registered companion.
+     */
+    protected DeclareEmbeddedRecord<TEmbedded extends BaseEntity = BaseEntity>(
+        options: EmbeddedRecordOptions,
+    ): EmbeddedRecord<TEmbedded> {
+        return this.RegisterCompanion(new EmbeddedRecord<TEmbedded>(this, options));
+    }
+
+    /**
+     * Constructs every declared embedded peer without `NewRecord` or `Load`.
+     * Called from `GetEntityObject` after {@link InitializeParentEntity}.
+     *
+     * @param visited - Entity names already being constructed (cycle guard).
+     */
+    public async InitializeEmbeddedRecords(visited: Set<string> = new Set<string>()): Promise<void> {
+        if (!this.HasCompanions) {
+            return;
+        }
+        const embeddeds = this.Companions.filter((c): c is EmbeddedRecord => c instanceof EmbeddedRecord);
+        if (embeddeds.length === 0) {
+            return;
+        }
+        await Promise.all(embeddeds.map(e => e.InitializeInstance(visited)));
+    }
+
+    /**
+     * Builds a related entity the way `GetEntityObject` does, minus `NewRecord` / `Load`.
+     * Used by {@link EmbeddedRecord} so construction can thread a cycle-detection set.
+     *
+     * @typeParam T - The entity type to construct.
+     * @param entityName - Metadata entity name.
+     * @param visited - Cycle guard, forwarded into the new instance's own embeddeds.
+     */
+    public async ConstructUninitializedEntity<T extends BaseEntity>(
+        entityName: string,
+        _visited: Set<string>,
+    ): Promise<T> {
+        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        if (!provider) {
+            throw new Error(`BaseEntity.ConstructUninitializedEntity: no provider; cannot construct '${entityName}'.`);
+        }
+        const entityInfo = provider.EntityByName(entityName);
+        if (!entityInfo) {
+            throw new Error(`BaseEntity.ConstructUninitializedEntity: entity '${entityName}' not found in metadata.`);
+        }
+        let instance = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entityInfo, provider);
+        if (!instance) {
+            instance = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, null, entityInfo, provider);
+        }
+        if (!instance) {
+            throw new Error(
+                `BaseEntity.ConstructUninitializedEntity: ClassFactory could not construct '${entityName}'. ` +
+                `Ensure the entity class is registered.`,
+            );
+        }
+        await instance.Config(this.ContextCurrentUser);
+        await instance.InitializeParentEntity();
+        // Do NOT recurse InitializeEmbeddedRecords here. A self-FK (Category.ParentID →
+        // Category) would otherwise construct forever, and Deal → Order does not need
+        // the Order's own embeddeds until the Order is loaded or explicitly initialised.
+        return instance;
+    }
+
+    /**
      * Serializes every registered companion that has something to send.
      *
      * Companions returning `null` are omitted entirely, so a header-only save on a composite entity
@@ -1654,9 +1728,7 @@ export abstract class BaseEntity<T = unknown> {
         if (!this.HasCompanions) {
             return;
         }
-        for (const companion of this.Companions) {
-            await companion.LoadEager();
-        }
+        await Promise.all(this.Companions.map(c => c.LoadEager()));
     }
 
     /**
@@ -1744,6 +1816,9 @@ export abstract class BaseEntity<T = unknown> {
             Label: this.EntityInfo?.Name ?? 'root',
             SelfOnly: true,
         });
+        for (const companion of this.Companions) {
+            companion.ContributePostDeleteWork(plan);
+        }
         return plan;
     }
 
@@ -2966,8 +3041,24 @@ export abstract class BaseEntity<T = unknown> {
             });
         }
 
+        this.notifyEmbeddedNewRecord();
         this.RaiseEvent('new_record', null);
         return true;
+    }
+
+    /**
+     * Required embeddeds are provisioned here so `{Field}_Object` is usable immediately
+     * after `GetEntityObject` / `NewRecord`. Nullable embeddeds stay unexposed.
+     */
+    private notifyEmbeddedNewRecord(): void {
+        if (!this.HasCompanions) {
+            return;
+        }
+        for (const companion of this.Companions) {
+            if (companion instanceof EmbeddedRecord) {
+                companion.OnOwnerNewRecord();
+            }
+        }
     }
 
 

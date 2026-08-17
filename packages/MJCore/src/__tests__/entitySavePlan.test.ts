@@ -55,6 +55,23 @@ describe('EntitySavePlan', () => {
         expect(plan.NodeCount).toBe(1);
     });
 
+    it('InsertBeforeRoot places the peer ahead of the owner so the FK can be stamped after the peer has a PK', async () => {
+        const calls: Call[] = [];
+        const root = makeEntity('Deal', calls);
+        const order = makeEntity('Order', calls);
+        const stamped: string[] = [];
+        const plan = new EntitySavePlan(root);
+        plan.AddSave(root, 'Deal', undefined, true);
+        plan.AddSaveBeforeRoot(order, 'OrderID_Object');
+        plan.AddRootPrepare(() => stamped.push('stamp'));
+
+        const result = await ExecuteEntitySavePlan(plan);
+
+        expect(result.Success).toBe(true);
+        expect(calls.map(c => c.label)).toEqual(['Order', 'Deal']);
+        expect(stamped).toEqual(['stamp']);
+    });
+
     it('executes nodes in the order they were added', async () => {
         const calls: Call[] = [];
         const root = makeEntity('Root', calls);

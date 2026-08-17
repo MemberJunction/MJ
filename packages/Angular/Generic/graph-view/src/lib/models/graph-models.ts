@@ -8,7 +8,7 @@
  */
 
 /**
- * Standard semantic category of a graph node.
+ * Standard semantic category of a graph node, or any custom category key defined by the consumer.
  */
 export type GraphNodeCategory =
     | 'person'
@@ -17,7 +17,25 @@ export type GraphNodeCategory =
     | 'account'
     | 'asset'
     | 'group'
-    | 'custom';
+    | 'custom'
+    | (string & {});
+
+/**
+ * Configuration for a graph node category defining its visual appearance in the canvas,
+ * dynamic legend, and inspector drawer.
+ */
+export interface GraphCategoryConfig {
+    /** Unique category key matching GraphNode.Category (e.g. 'person', 'organization', 'vendor', 'role') */
+    Category: string;
+    /** Human-readable display label shown in the legend and node inspector */
+    Label: string;
+    /** Hex code, HSL, or CSS color variable (e.g. '#10b981' or 'var(--mj-brand-primary)') */
+    Color: string;
+    /** Font Awesome icon class (e.g. 'fa-solid fa-user') */
+    IconClass?: string;
+    /** Optional secondary stroke / accent color */
+    StrokeColor?: string;
+}
 
 /**
  * Directional behavior of an edge in the network graph.
@@ -75,13 +93,21 @@ export interface GraphNode<TData = Record<string, unknown>> {
     /** Distance from root/selected focus node in hops (0 = focal center) */
     HopDistance?: number;
 
-    /** Current 2D simulation coordinates (managed by layout engine) */
+    /** Current 2D simulation coordinates (uppercase for MJ models, lowercase for D3 compatibility) */
     X?: number;
     Y?: number;
     VX?: number;
     VY?: number;
     FX?: number | null;
     FY?: number | null;
+
+    x?: number;
+    y?: number;
+    vx?: number;
+    vy?: number;
+    fx?: number | null;
+    fy?: number | null;
+    index?: number;
 
     /** Underlying business entity reference / data payload */
     Data?: TData;
@@ -99,6 +125,11 @@ export interface GraphEdge<TData = Record<string, unknown>> {
 
     /** Target node identifier */
     TargetID: string;
+
+    /** D3 simulation link object references */
+    source?: string | GraphNode;
+    target?: string | GraphNode;
+    index?: number;
 
     /** Relationship semantic label (e.g. 'Employed By', 'Board Member', 'Subsidiary Of') */
     Label: string;

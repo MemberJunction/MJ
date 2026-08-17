@@ -858,9 +858,20 @@ ${indentedFormHTML}
         // can only have 0 or 1 records (disjoint subtypes), so a grid panel is redundant
         const isaChildIDs = new Set(entity.ChildEntities.map(c => c.ID));
 
+        const excludedSchemas = new Set((configInfo.excludeSchemas || []).map(s => s.toLowerCase()));
+
         // Sort related entities deterministically using the shared sort with cascading tiebreakers
         const sortedRelatedEntities = sortRelatedEntities(
-            entity.RelatedEntities.filter(re => re.DisplayInForm && !isaChildIDs.has(re.RelatedEntityID))
+            entity.RelatedEntities.filter(re => {
+                if (!re.DisplayInForm || isaChildIDs.has(re.RelatedEntityID)) {
+                    return false;
+                }
+                const targetEntity = md.Entities.find(e => UUIDsEqual(e.ID, re.RelatedEntityID));
+                if (targetEntity && excludedSchemas.has(targetEntity.SchemaName.toLowerCase())) {
+                    return false;
+                }
+                return true;
+            })
         );
         let index = startIndex;
         for (const relatedEntity of sortedRelatedEntities) {
@@ -964,14 +975,18 @@ ${componentCodeWithIndent}
             return tabs;
         }
 
+        const excludedSchemas = new Set((configInfo.excludeSchemas || []).map(s => s.toLowerCase()));
         let index = startIndex;
         for (const organicKey of organicKeys) {
             for (const relatedEntity of organicKey.RelatedEntities) {
+                const re: EntityInfo | undefined = md.Entities.find(e => UUIDsEqual(e.ID, relatedEntity.RelatedEntityID));
+                if (re && excludedSchemas.has(re.SchemaName.toLowerCase())) {
+                    continue;
+                }
                 const tabName = relatedEntity.DisplayName || relatedEntity.RelatedEntity;
 
                 // Determine icon from the related entity
                 let iconClass = 'fa fa-link';
-                const re: EntityInfo | undefined = md.Entities.find(e => UUIDsEqual(e.ID, relatedEntity.RelatedEntityID));
                 if (re && re.Icon && re.Icon.length > 0) {
                     iconClass = re.Icon;
                 }

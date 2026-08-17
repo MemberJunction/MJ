@@ -2,7 +2,9 @@
 
 > **Deep dive on entity graphs specifically** — metadata declaration, flow diagrams for the local
 > save and the network round trip, cache-backed sources and load modes:
-> [Related-Record Collections](../packages/MJCore/docs/related-record-collections.md).
+> [Related-Record Collections](../packages/MJCore/docs/related-record-collections.md) (1:N, FK on
+> the related row) and [Embedded Records](../packages/MJCore/docs/embedded-records.md) (1:1, FK on
+> the owner).
 
 MemberJunction has **three** different mechanisms that all sound like "do several things at once,"
 and picking the wrong one produces bugs that do not announce themselves — torn writes, saves that
@@ -153,6 +155,21 @@ export class JournalEntryEntity extends mjBizAppsAccountingJournalEntryEntity {
         return result;
     }
 }
+```
+
+When the FK lives on **this** record (`Deal.OrderID`) the join inverts and so does the save
+order: the peer persists first, the owner stamps the FK, then the owner persists. That is an
+**embedded record**, not a collection. Declare it on the FK field
+(`EntityField.EmbeddedRecord`) and CodeGen emits `deal.OrderID_Object` /
+`deal.OrderID_EnsureObject()`. Same graph executor, same `MJ.SaveEntityGraph` wire path,
+recursive companion payload so the order's lines ride along. See
+[Embedded Records](../packages/MJCore/docs/embedded-records.md).
+
+```typescript
+const deal = await md.GetEntityObject<DealEntity>('Deals');
+deal.OrderID_Object.OrderDate = new Date('2002-01-01');
+await deal.Save(); // Order first, stamp Deal.OrderID, save Deal
+
 ```
 
 Then use it. The API is the same on both tiers:

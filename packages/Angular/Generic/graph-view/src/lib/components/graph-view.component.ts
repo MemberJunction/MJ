@@ -18,11 +18,13 @@ import { FormsModule } from '@angular/forms';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { CompositeKey } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import * as d3 from 'd3';
 import type {
     GraphNode,
     GraphEdge,
     GraphLayoutMode,
     GraphNodeCategory,
+    GraphCategoryConfig,
     GraphViewportTransform,
     GraphPhysicsConfig
 } from '../models/graph-models';
@@ -39,6 +41,21 @@ import {
     NodeNavigatedEventArgs,
     ViewportTransformEventArgs
 } from '../events/graph-events';
+
+export const DEFAULT_GRAPH_CATEGORIES: GraphCategoryConfig[] = [
+    { Category: 'person', Label: 'Person', Color: '#10b981', IconClass: 'fa-solid fa-user' },
+    { Category: 'organization', Label: 'Organization', Color: '#38bdf8', IconClass: 'fa-solid fa-building' },
+    { Category: 'committee', Label: 'Committee', Color: '#8b5cf6', IconClass: 'fa-solid fa-landmark' },
+    { Category: 'account', Label: 'Holding / Account', Color: '#f59e0b', IconClass: 'fa-solid fa-building-flag' },
+    { Category: 'asset', Label: 'Asset', Color: '#ec4899', IconClass: 'fa-solid fa-gem' },
+    { Category: 'group', Label: 'Group', Color: '#06b6d4', IconClass: 'fa-solid fa-users' },
+    { Category: 'custom', Label: 'Custom', Color: '#64748b', IconClass: 'fa-solid fa-circle-nodes' }
+];
+
+const DYNAMIC_CATEGORY_PALETTE = [
+    '#10b981', '#38bdf8', '#8b5cf6', '#f59e0b', '#ec4899',
+    '#06b6d4', '#84cc16', '#f43f5e', '#a855f7', '#14b8a6'
+];
 
 const GRAPH_VIEW_CSS = `
 :host {
@@ -372,21 +389,15 @@ const GRAPH_VIEW_CSS = `
                 </div>
             }
 
-            <!-- 2. Floating Category Legend -->
-            @if (ShowLegend) {
+            <!-- 2. Floating Dynamic Category Legend -->
+            @if (ShowLegend && ActiveCategories.length > 0) {
                 <div class="mj-graph-legend">
-                    <div class="mj-graph-legend-item">
-                        <div class="mj-graph-legend-dot" style="background: #10b981;"></div> Person
-                    </div>
-                    <div class="mj-graph-legend-item">
-                        <div class="mj-graph-legend-dot" style="background: #38bdf8;"></div> Organization
-                    </div>
-                    <div class="mj-graph-legend-item">
-                        <div class="mj-graph-legend-dot" style="background: #8b5cf6;"></div> Committee
-                    </div>
-                    <div class="mj-graph-legend-item">
-                        <div class="mj-graph-legend-dot" style="background: #f59e0b;"></div> Holding / Account
-                    </div>
+                    @for (cat of ActiveCategories; track cat.Category) {
+                        <div class="mj-graph-legend-item">
+                            <div class="mj-graph-legend-dot" [style.background]="cat.Color"></div>
+                            {{ cat.Label }}
+                        </div>
+                    }
                 </div>
             }
 
@@ -404,12 +415,17 @@ const GRAPH_VIEW_CSS = `
                         <div class="mj-graph-inspector-avatar" [style.background]="GetNodeColor(SelectedNode)">
                             <i [class]="GetNodeIcon(SelectedNode)"></i>
                         </div>
-                        <div style="overflow: hidden;">
+                        <div style="overflow: hidden; flex: 1;">
                             <div style="font-size: 13px; font-weight: 700; color: #fff; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
                                 {{ SelectedNode.Label }}
                             </div>
-                            <div style="font-size: 11px; color: var(--mj-text-secondary);">
-                                {{ SelectedNode.Sublabel || SelectedNode.Category }}
+                            <div style="display: flex; align-items: center; gap: 6px; margin-top: 3px;">
+                                <span style="font-size: 11px; color: var(--mj-text-secondary);">
+                                    {{ SelectedNode.Sublabel || SelectedNode.Category }}
+                                </span>
+                                @if (IsFocalNode(SelectedNode)) {
+                                    <span style="font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.3);">Current Record</span>
+                                }
                             </div>
                         </div>
                     </div>
@@ -419,13 +435,15 @@ const GRAPH_VIEW_CSS = `
                     </div>
 
                     <div class="mj-graph-inspector-actions">
-                        <button
-                            type="button"
-                            class="mj-graph-tool-btn active"
-                            style="justify-content: center; width: 100%;"
-                            (click)="NavigateToEntity(SelectedNode)">
-                            <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Entity Form
-                        </button>
+                        @if (!IsFocalNode(SelectedNode)) {
+                            <button
+                                type="button"
+                                class="mj-graph-tool-btn active"
+                                style="justify-content: center; width: 100%;"
+                                (click)="NavigateToEntity(SelectedNode)">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Entity Form
+                            </button>
+                        }
                         <button
                             type="button"
                             class="mj-graph-tool-btn"
@@ -476,11 +494,14 @@ const GRAPH_VIEW_CSS = `
                             class="mj-node-group"
                             [attr.transform]="'translate(' + (node.X || 0) + ',' + (node.Y || 0) + ')'"
                             (mousedown)="OnNodeMouseDown(node, $event)"
-                            (click)="OnNodeClick(node, $event)">
+                            (click)="OnNodeClick(node, $event)"
+                            (dblclick)="NavigateToEntity(node)">
 
-                            <!-- Outer Selection Glow -->
+                            <!-- Outer Selection / Focal Halo -->
                             @if (IsNodeSelected(node)) {
                                 <circle r="36" fill="rgba(56, 189, 248, 0.2)" stroke="#38bdf8" stroke-width="2"></circle>
+                            } @else if (IsFocalNode(node)) {
+                                <circle r="34" fill="none" stroke="rgba(56, 189, 248, 0.45)" stroke-width="2" stroke-dasharray="4 3"></circle>
                             }
 
                             <!-- Node Body Circle -->
@@ -522,9 +543,12 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     // ── Inputs ────────────────────────────────────────────────────────
     @Input() public Nodes: GraphNode[] = [];
     @Input() public Edges: GraphEdge[] = [];
+    @Input() public Categories: GraphCategoryConfig[] = DEFAULT_GRAPH_CATEGORIES;
     @Input() public LayoutMode: GraphLayoutMode = 'force';
     @Input() public MaxHopDistance = 2;
     @Input() public SelectedNodeId?: string;
+    @Input() public FocalNodeId?: string;
+    @Input() public AutoOpenInspector = false;
     @Input() public ShowToolbar = true;
     @Input() public ShowLegend = true;
     @Input() public ShowInspector = true;
@@ -570,7 +594,7 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     private panStartY = 0;
 
     private draggedNode: GraphNode | null = null;
-    private animationFrameId: number | null = null;
+    private simulation: d3.Simulation<GraphNode, d3.SimulationLinkDatum<GraphNode>> | null = null;
 
     public ngOnInit(): void {
         this.InitializePositions();
@@ -586,28 +610,40 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
         }
         if (changes['SelectedNodeId'] && this.SelectedNodeId) {
             const found = this.Nodes.find(n => UUIDsEqual(n.ID, this.SelectedNodeId));
-            if (found) this.SelectedNode = found;
+            if (found && this.AutoOpenInspector) {
+                this.SelectedNode = found;
+            }
         }
     }
 
     public ngOnDestroy(): void {
-        if (this.animationFrameId !== null) {
-            cancelAnimationFrame(this.animationFrameId);
+        if (this.simulation) {
+            this.simulation.stop();
+            this.simulation = null;
         }
     }
 
-    // ── Positioning & Physics Engine ──────────────────────────────────
+    // ── Positioning & D3 Physics Engine ──────────────────────────────────
     private InitializePositions(): void {
-        const cx = 500;
-        const cy = 300;
+        const cx = this.GetContainerWidth() / 2 || 400;
+        const cy = this.GetContainerHeight() / 2 || 250;
         const count = this.Nodes.length || 1;
 
         this.Nodes.forEach((node, idx) => {
-            if (node.X === undefined || node.Y === undefined) {
-                const angle = (idx / count) * 2 * Math.PI;
-                const r = 120 + Math.random() * 80;
-                node.X = cx + r * Math.cos(angle);
-                node.Y = cy + r * Math.sin(angle);
+            if (node.x === undefined || node.y === undefined) {
+                if (node.X !== undefined && node.Y !== undefined) {
+                    node.x = node.X;
+                    node.y = node.Y;
+                } else {
+                    const angle = (idx / count) * 2 * Math.PI;
+                    const r = 100 + Math.random() * 60;
+                    node.x = cx + r * Math.cos(angle);
+                    node.y = cy + r * Math.sin(angle);
+                    node.X = node.x;
+                    node.Y = node.y;
+                }
+                node.vx = 0;
+                node.vy = 0;
                 node.VX = 0;
                 node.VY = 0;
             }
@@ -617,88 +653,81 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     public SimulatePhysics(): void {
         if (this.LayoutMode === 'circular') {
             this.ApplyCircularLayout();
+            if (this.AutoFitOnLoad) {
+                this.AutoFitToView();
+            }
             this.cdr.markForCheck();
             return;
         }
 
-        let iteration = 0;
-        const step = () => {
-            if (iteration++ > this.Physics.MaxIterations) return;
+        if (this.simulation) {
+            this.simulation.stop();
+            this.simulation = null;
+        }
 
-            const cx = 500;
-            const cy = 300;
+        const cx = this.GetContainerWidth() / 2 || 400;
+        const cy = this.GetContainerHeight() / 2 || 250;
 
-            // 1. Repulsion between all node pairs
-            for (let i = 0; i < this.Nodes.length; i++) {
-                for (let j = i + 1; j < this.Nodes.length; j++) {
-                    const a = this.Nodes[i];
-                    const b = this.Nodes[j];
-                    const dx = (b.X || 0) - (a.X || 0);
-                    const dy = (b.Y || 0) - (a.Y || 0);
-                    const distSq = dx * dx + dy * dy || 1;
-                    const dist = Math.sqrt(distSq);
+        // Build links clone for D3 simulation
+        const links: d3.SimulationLinkDatum<GraphNode>[] = this.Edges.map(e => ({
+            ...e,
+            source: e.SourceID,
+            target: e.TargetID
+        }));
 
-                    const force = this.Physics.Repulsion / (distSq * 0.5);
-                    const fx = (dx / dist) * force;
-                    const fy = (dy / dist) * force;
+        this.simulation = d3.forceSimulation<GraphNode>(this.Nodes)
+            .force('link', d3.forceLink<GraphNode, d3.SimulationLinkDatum<GraphNode>>(links)
+                .id((d: GraphNode) => d.ID)
+                .distance(this.Physics.LinkDistance || 120))
+            .force('charge', d3.forceManyBody<GraphNode>()
+                .strength(this.Physics.Repulsion || -450)
+                .distanceMax(700))
+            .force('collide', d3.forceCollide<GraphNode>((d: GraphNode) => (d.Radius || 26) + 16).iterations(2))
+            .force('center', d3.forceCenter<GraphNode>(cx, cy));
 
-                    if (!a.FX) { a.VX = (a.VX || 0) - fx; a.VY = (a.VY || 0) - fy; }
-                    if (!b.FX) { b.VX = (b.VX || 0) + fx; b.VY = (b.VY || 0) + fy; }
-                }
-            }
+        // Headless Pre-Warming: run 80 ticks synchronously in memory so the SVG renders resting immediately
+        this.simulation.stop();
+        for (let i = 0; i < 90; ++i) {
+            this.simulation.tick();
+        }
 
-            // 2. Link Attraction
-            this.Edges.forEach(edge => {
-                const src = this.Nodes.find(n => UUIDsEqual(n.ID, edge.SourceID));
-                const tgt = this.Nodes.find(n => UUIDsEqual(n.ID, edge.TargetID));
-                if (src && tgt) {
-                    const dx = (tgt.X || 0) - (src.X || 0);
-                    const dy = (tgt.Y || 0) - (src.Y || 0);
-                    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                    const displacement = dist - this.Physics.LinkDistance;
+        this.SyncCoordinates();
 
-                    const force = displacement * 0.04;
-                    const fx = (dx / dist) * force;
-                    const fy = (dy / dist) * force;
+        // Auto-center & fit into view
+        if (this.AutoFitOnLoad) {
+            this.AutoFitToView();
+        }
 
-                    if (!src.FX) { src.VX = (src.VX || 0) + fx; src.VY = (src.VY || 0) + fy; }
-                    if (!tgt.FX) { tgt.VX = (tgt.VX || 0) - fx; tgt.VY = (tgt.VY || 0) - fy; }
-                }
-            });
-
-            // 3. Gravity & Position Update
-            this.Nodes.forEach(node => {
-                if (node.FX) return;
-                const gx = (cx - (node.X || cx)) * this.Physics.Gravity;
-                const gy = (cy - (node.Y || cy)) * this.Physics.Gravity;
-
-                node.VX = ((node.VX || 0) + gx) * this.Physics.Damping;
-                node.VY = ((node.VY || 0) + gy) * this.Physics.Damping;
-
-                node.X = (node.X || 0) + (node.VX || 0);
-                node.Y = (node.Y || 0) + (node.VY || 0);
-            });
-
+        // Attach live tick handler for interactive drag & drop
+        this.simulation.on('tick', () => {
+            this.SyncCoordinates();
             this.cdr.markForCheck();
-            if (iteration < this.Physics.MaxIterations) {
-                this.animationFrameId = requestAnimationFrame(step);
-            }
-        };
+        });
 
-        if (this.animationFrameId !== null) cancelAnimationFrame(this.animationFrameId);
-        this.animationFrameId = requestAnimationFrame(step);
+        this.cdr.markForCheck();
+    }
+
+    private SyncCoordinates(): void {
+        for (const n of this.Nodes) {
+            n.X = n.x;
+            n.Y = n.y;
+            n.VX = n.vx;
+            n.VY = n.vy;
+        }
     }
 
     private ApplyCircularLayout(): void {
-        const cx = 500;
-        const cy = 300;
-        const r = 180;
+        const cx = this.GetContainerWidth() / 2 || 400;
+        const cy = this.GetContainerHeight() / 2 || 250;
+        const r = Math.min(cx, cy) * 0.7 || 160;
         const count = this.Nodes.length || 1;
 
         this.Nodes.forEach((node, idx) => {
             const angle = (idx / count) * 2 * Math.PI;
-            node.X = cx + r * Math.cos(angle);
-            node.Y = cy + r * Math.sin(angle);
+            node.x = cx + r * Math.cos(angle);
+            node.y = cy + r * Math.sin(angle);
+            node.X = node.x;
+            node.Y = node.y;
         });
     }
 
@@ -714,10 +743,41 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     public FitToView(): void {
-        this.Scale = 1.0;
-        this.PanX = 120;
-        this.PanY = 80;
+        this.AutoFitToView(40);
+    }
+
+    public AutoFitToView(padding = 40): void {
+        if (!this.Nodes || this.Nodes.length === 0) return;
+
+        const width = this.GetContainerWidth() || 800;
+        const height = this.GetContainerHeight() || 420;
+
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for (const n of this.Nodes) {
+            const nx = n.x ?? n.X ?? 0;
+            const ny = n.y ?? n.Y ?? 0;
+            const r = (n.Radius || 26) + 20; // include badge & labels
+            if (nx - r < minX) minX = nx - r;
+            if (nx + r > maxX) maxX = nx + r;
+            if (ny - r < minY) minY = ny - r;
+            if (ny + r > maxY) maxY = ny + r;
+        }
+
+        if (!isFinite(minX) || !isFinite(maxX) || !isFinite(minY) || !isFinite(maxY)) return;
+
+        const bboxW = Math.max(maxX - minX, 100);
+        const bboxH = Math.max(maxY - minY, 100);
+
+        const scaleX = (width - padding * 2) / bboxW;
+        const scaleY = (height - padding * 2) / bboxH;
+        const targetScale = Math.min(Math.max(Math.min(scaleX, scaleY), 0.4), 1.25);
+
+        this.Scale = targetScale;
+        this.PanX = (width - (minX + maxX) * this.Scale) / 2;
+        this.PanY = (height - (minY + maxY) * this.Scale) / 2;
+
         this.EmitViewport();
+        this.cdr.markForCheck();
     }
 
     public Rearrange(): void {
@@ -793,16 +853,17 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     public NavigateToEntity(node: GraphNode): void {
+        const rawId = String(node.Data?.['ID'] || node.ID).replace(/^(person|org|account|committee|custom):/, '');
         const entityName = String(node.Data?.['EntityName'] || (node.Category === 'person' ? 'MJ_BizApps_Common: People' : 'MJ_BizApps_Common: Organizations'));
-        const beforeEvent = new BeforeNodeNavigateEventArgs(node, entityName, node.ID);
+        const beforeEvent = new BeforeNodeNavigateEventArgs(node, entityName, rawId);
         this.BeforeNodeNavigate.emit(beforeEvent);
         if (beforeEvent.Cancel) return;
 
         if (this.navService) {
-            const pk = CompositeKey.FromID(node.ID);
+            const pk = CompositeKey.FromID(rawId);
             this.navService.OpenEntityRecord(entityName, pk);
         }
-        this.NodeNavigated.emit(new NodeNavigatedEventArgs(node, entityName, node.ID));
+        this.NodeNavigated.emit(new NodeNavigatedEventArgs(node, entityName, rawId));
     }
 
     // ── Mouse Drag & Pan Handlers ─────────────────────────────────────
@@ -821,8 +882,13 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
             this.EmitViewport();
             this.cdr.markForCheck();
         } else if (this.draggedNode) {
-            this.draggedNode.X = (event.clientX - this.PanX) / this.Scale;
-            this.draggedNode.Y = (event.clientY - this.PanY) / this.Scale;
+            const coords = this.GetCanvasRelativeCoords(event);
+            this.draggedNode.fx = coords.x;
+            this.draggedNode.fy = coords.y;
+            this.draggedNode.x = coords.x;
+            this.draggedNode.y = coords.y;
+            this.draggedNode.X = coords.x;
+            this.draggedNode.Y = coords.y;
             this.cdr.markForCheck();
         }
     }
@@ -830,9 +896,12 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     public OnCanvasMouseUp(_event: MouseEvent): void {
         this.IsPanning = false;
         if (this.draggedNode) {
-            this.draggedNode.FX = null;
-            this.draggedNode.FY = null;
+            this.draggedNode.fx = null;
+            this.draggedNode.fy = null;
             this.draggedNode = null;
+            if (this.simulation) {
+                this.simulation.alphaTarget(0);
+            }
         }
     }
 
@@ -847,13 +916,41 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     public OnNodeMouseDown(node: GraphNode, event: MouseEvent): void {
         event.stopPropagation();
         this.draggedNode = node;
-        node.FX = node.X;
-        node.FY = node.Y;
+        node.fx = node.x ?? node.X;
+        node.fy = node.y ?? node.Y;
+        if (this.simulation) {
+            this.simulation.alphaTarget(0.3).restart();
+        }
     }
 
     private EmitViewport(): void {
         this.ViewportTransform.emit(new ViewportTransformEventArgs({ Scale: this.Scale, PanX: this.PanX, PanY: this.PanY }));
         this.cdr.markForCheck();
+    }
+
+    private GetCanvasRelativeCoords(event: MouseEvent): { x: number; y: number } {
+        const canvas = this.CanvasRef?.nativeElement;
+        if (!canvas) {
+            return {
+                x: (event.clientX - this.PanX) / this.Scale,
+                y: (event.clientY - this.PanY) / this.Scale
+            };
+        }
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = event.clientX - rect.left;
+        const mouseY = event.clientY - rect.top;
+        return {
+            x: (mouseX - this.PanX) / this.Scale,
+            y: (mouseY - this.PanY) / this.Scale
+        };
+    }
+
+    private GetContainerWidth(): number {
+        return this.CanvasRef?.nativeElement?.clientWidth || this.WrapperRef?.nativeElement?.clientWidth || 800;
+    }
+
+    private GetContainerHeight(): number {
+        return this.CanvasRef?.nativeElement?.clientHeight || this.WrapperRef?.nativeElement?.clientHeight || 420;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────
@@ -866,33 +963,57 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     public GetNodeX(id: string): number {
-        return this.Nodes.find(n => UUIDsEqual(n.ID, id))?.X || 0;
+        const node = this.Nodes.find(n => UUIDsEqual(n.ID, id));
+        return node ? (node.X ?? node.x ?? 0) : 0;
     }
 
     public GetNodeY(id: string): number {
-        return this.Nodes.find(n => UUIDsEqual(n.ID, id))?.Y || 0;
+        const node = this.Nodes.find(n => UUIDsEqual(n.ID, id));
+        return node ? (node.Y ?? node.y ?? 0) : 0;
+    }
+
+    public GetCategoryConfig(category?: string): GraphCategoryConfig {
+        const key = String(category || '').toLowerCase();
+        const found = this.Categories?.find(c => c.Category.toLowerCase() === key);
+        if (found) return found;
+
+        const builtin = DEFAULT_GRAPH_CATEGORIES.find(c => c.Category.toLowerCase() === key);
+        if (builtin) return builtin;
+
+        // Deterministic palette hash for arbitrary consumer-defined categories
+        const hash = Math.abs(key.split('').reduce((acc, ch) => ((acc << 5) - acc) + ch.charCodeAt(0), 0));
+        const fallbackColor = DYNAMIC_CATEGORY_PALETTE[hash % DYNAMIC_CATEGORY_PALETTE.length];
+        const formattedLabel = category ? category.charAt(0).toUpperCase() + category.slice(1) : 'Item';
+        return {
+            Category: category || 'custom',
+            Label: formattedLabel,
+            Color: fallbackColor,
+            IconClass: 'fa-solid fa-circle-dot'
+        };
+    }
+
+    public get ActiveCategories(): GraphCategoryConfig[] {
+        const present = new Set<string>();
+        for (const n of this.Nodes) {
+            if (n.Category) present.add(n.Category.toLowerCase());
+        }
+        const result: GraphCategoryConfig[] = [];
+        for (const catKey of present) {
+            result.push(this.GetCategoryConfig(catKey));
+        }
+        return result;
+    }
+
+    public GetCategoryLabel(category?: string): string {
+        return this.GetCategoryConfig(category).Label;
     }
 
     public GetNodeColor(node: GraphNode): string {
-        if (node.Color) return node.Color;
-        switch (node.Category) {
-            case 'person': return '#10b981';
-            case 'organization': return '#38bdf8';
-            case 'committee': return '#8b5cf6';
-            case 'account': return '#f59e0b';
-            default: return '#38bdf8';
-        }
+        return node.Color ?? this.GetCategoryConfig(node.Category).Color;
     }
 
     public GetNodeIcon(node: GraphNode): string {
-        if (node.IconClass) return node.IconClass;
-        switch (node.Category) {
-            case 'person': return 'fa-solid fa-user';
-            case 'organization': return 'fa-solid fa-building';
-            case 'committee': return 'fa-solid fa-landmark';
-            case 'account': return 'fa-solid fa-building-flag';
-            default: return 'fa-solid fa-circle-dot';
-        }
+        return node.IconClass ?? this.GetCategoryConfig(node.Category).IconClass ?? 'fa-solid fa-circle-dot';
     }
 
     public GetNodeEdgeCount(id: string): number {
@@ -916,5 +1037,13 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     public TruncateLabel(text: string, maxLen: number): string {
         if (!text) return '';
         return text.length > maxLen ? text.substring(0, maxLen - 1) + '…' : text;
+    }
+
+    public IsFocalNode(node: GraphNode): boolean {
+        if (!node || !this.FocalNodeId) return false;
+        const focalClean = this.FocalNodeId.replace(/^(person|org|account|committee|custom):/, '').toLowerCase();
+        const nodeClean = node.ID.replace(/^(person|org|account|committee|custom):/, '').toLowerCase();
+        const dataClean = node.Data?.['ID'] ? String(node.Data['ID']).toLowerCase() : '';
+        return UUIDsEqual(node.ID, this.FocalNodeId) || nodeClean === focalClean || dataClean === focalClean;
     }
 }
