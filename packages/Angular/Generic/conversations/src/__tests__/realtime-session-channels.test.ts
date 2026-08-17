@@ -331,3 +331,162 @@ describe('RealtimeSessionService — debounced channel saves + teardown flush/di
     expect(error).toHaveBeenCalledWith(expect.stringContaining("Channel 'Echo' Dispose failed"), expect.any(Error));
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// #3536 — a client tool that belongs to the SESSION, not to a channel.
+//
+// Client tools route by the declaring channel's ToolNamePrefix, so a cross-surface tool had to be
+// declared by whichever channel happened to be present and then shipped wearing that channel's
+// badge: `browser_WorkspaceStatus` reporting all surfaces, not just the browser. Every description
+// then opened by contradicting its own name, and availability depended on which surface won a
+// claim/ownership dance.
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** Reaches the private members these tests drive. */
+interface SessionToolInternals {
+  client: FakeRealtimeClient | null;
+  startChannels(): Promise<RealtimeToolDefinition[]>;
+  assertNoShadowedSessionTools(): void;
+  handleToolCall(call: { CallID: string; ToolName: string; ArgumentsJson: string }): Promise<void>;
+}
+
+describe('RealtimeSessionService — session-level client tools (#3536)', () => {
+  let service: RealtimeSessionService;
+  let client: FakeRealtimeClient;
+
+  beforeEach(() => {
+    service = new RealtimeSessionService();
+    client = new FakeRealtimeClient();
+    (service as unknown as SessionToolInternals).client = client;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const inner = (s: RealtimeSessionService) => s as unknown as SessionToolInternals;
+
+  const workspaceTool = (execute: (argsJson: string) => string | Promise<string>) => ({
+    Definition: { Name: 'WorkspaceStatus', Description: 'Report every open surface.', ParametersSchema: { type: 'object' } },
+    Execute: execute,
+  });
+
+  it('declares session tools under their own names, with no channel prefix', () => {
+    service.RegisterSessionClientTools([workspaceTool(() => '{}')]);
+
+    // The name is the fix: a model reasonably infers scope from it, and `browser_WorkspaceStatus`
+    // says the wrong thing about a tool that reports every surface.
+    expect(service.SessionClientToolDefinitions.map(d => d.Name)).toEqual(['WorkspaceStatus']);
+  });
+
+  it('routes a call by exact name, with no channel present at all', async () => {
+    // The old shape needed an owning channel to exist; here there is none.
+    let seen: string | null = null;
+    service.RegisterSessionClientTools([workspaceTool(argsJson => { seen = argsJson; return '{"success":true}'; })]);
+
+    await inner(service).handleToolCall({ CallID: 'c1', ToolName: 'WorkspaceStatus', ArgumentsJson: '{"verbose":true}' });
+
+    expect(seen).toBe('{"verbose":true}');
+    expect(client.ToolResults).toEqual([{ CallID: 'c1', ResultJson: '{"success":true}' }]);
+  });
+
+  it('awaits an async tool — the other half of the fix', async () => {
+    // A channel's ApplyAgentTool returns `string`, so a tool that must await could only be declared
+    // by a channel whose entry point happened to be async. Its existence depended on the claim.
+    service.RegisterSessionClientTools([workspaceTool(async () => {
+      await Promise.resolve();
+      return '{"success":true,"delegated":true}';
+    })]);
+
+    await inner(service).handleToolCall({ CallID: 'c2', ToolName: 'WorkspaceStatus', ArgumentsJson: '{}' });
+
+    expect(client.ToolResults[0].ResultJson).toContain('"delegated":true');
+  });
+
+  it('narrates a thrown session tool instead of going silent', async () => {
+    service.RegisterSessionClientTools([workspaceTool(() => { throw new Error('workspace boom'); })]);
+
+    await inner(service).handleToolCall({ CallID: 'c3', ToolName: 'WorkspaceStatus', ArgumentsJson: '{}' });
+
+    const parsed = JSON.parse(client.ToolResults[0].ResultJson) as { success: boolean; error: string };
+    expect(parsed.success).toBe(false);
+    expect(parsed.error).toContain('workspace boom');
+  });
+
+  it('matches the tool name case-insensitively, as the model may spell it', async () => {
+    service.RegisterSessionClientTools([workspaceTool(() => '{"ok":1}')]);
+
+    await inner(service).handleToolCall({ CallID: 'c4', ToolName: 'workspacestatus', ArgumentsJson: '{}' });
+
+    expect(client.ToolResults[0].ResultJson).toBe('{"ok":1}');
+  });
+
+  it('leaves channel-prefixed tools routing to their channel', async () => {
+    mockChannelRegistry([{ ID: '1', Name: 'Echo', ClientPluginClass: 'TestEchoChannel' }]);
+    await inner(service).startChannels();
+    service.RegisterSessionClientTools([workspaceTool(() => '{"session":true}')]);
+
+    await inner(service).handleToolCall({ CallID: 'c5', ToolName: 'Echo.Say', ArgumentsJson: '{}' });
+
+    const echo = service.ActiveChannels[0] as TestEchoChannel;
+    expect(echo.AppliedCalls.map(c => c.ToolName)).toEqual(['Echo.Say']);
+  });
+
+  it('refuses to start a session whose tool name would SHADOW a channel prefix', async () => {
+    mockChannelRegistry([{ ID: '1', Name: 'Echo', ClientPluginClass: 'TestEchoChannel' }]);
+    await inner(service).startChannels();
+    service.RegisterSessionClientTools([{
+      Definition: { Name: 'Echo.Status', Description: 'x', ParametersSchema: { type: 'object' } },
+      Execute: () => '{}',
+    }]);
+
+    // Exact match wins dispatch, so this name would quietly swallow every Echo.* call and the
+    // channel would stop responding to its own tools with nothing to say why.
+    expect(() => inner(service).assertNoShadowedSessionTools()).toThrow(/would shadow|shadow/i);
+  });
+
+  it('makes the shadow warning TRUE — a colliding name really does swallow the channel', async () => {
+    // Registration can happen after mint, which skips the guard, so the ordering has to be right on
+    // its own. This pins WHICH side loses: exact-name wins, so the session tool swallows Echo.* —
+    // which is precisely what the guard's error message claims. If prefix won instead, the message
+    // would be backwards (the session tool would be the silent casualty) and a host would chase the
+    // wrong name.
+    mockChannelRegistry([{ ID: '1', Name: 'Echo', ClientPluginClass: 'TestEchoChannel' }]);
+    await inner(service).startChannels();
+    service.RegisterSessionClientTools([{
+      Definition: { Name: 'Echo.Say', Description: 'x', ParametersSchema: { type: 'object' } },
+      Execute: () => '{"from":"session"}',
+    }]);
+
+    await inner(service).handleToolCall({ CallID: 'c6', ToolName: 'Echo.Say', ArgumentsJson: '{}' });
+
+    expect(client.ToolResults[0].ResultJson).toBe('{"from":"session"}');
+    expect((service.ActiveChannels[0] as TestEchoChannel).AppliedCalls).toHaveLength(0);
+  });
+
+  it('accepts a non-colliding name with the same channel live', async () => {
+    mockChannelRegistry([{ ID: '1', Name: 'Echo', ClientPluginClass: 'TestEchoChannel' }]);
+    await inner(service).startChannels();
+    service.RegisterSessionClientTools([workspaceTool(() => '{}')]);
+
+    expect(() => inner(service).assertNoShadowedSessionTools()).not.toThrow();
+  });
+
+  it('ignores a declaration nothing can run', () => {
+    service.RegisterSessionClientTools([
+      { Definition: { Name: '  ', Description: 'x', ParametersSchema: {} }, Execute: () => '{}' },
+      { Definition: { Name: 'Broken', Description: 'x', ParametersSchema: {} }, Execute: undefined as unknown as () => string },
+    ]);
+
+    // A declaration the model can see but nothing can run is worse than no tool: the call falls
+    // through to the SERVER relay and the model narrates an outcome nobody intended.
+    expect(service.SessionClientToolDefinitions).toHaveLength(0);
+  });
+
+  it('replaces the whole set, so [] clears it', () => {
+    service.RegisterSessionClientTools([workspaceTool(() => '{}')]);
+    service.RegisterSessionClientTools([]);
+
+    expect(service.SessionClientToolDefinitions).toHaveLength(0);
+  });
+});
