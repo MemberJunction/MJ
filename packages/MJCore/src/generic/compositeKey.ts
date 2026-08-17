@@ -349,6 +349,29 @@ export function IsNewEntityRecordUrlId(recordId: string | null | undefined): boo
 }
 
 /**
+ * True when a workspace tab is the record named by a `/record/:entity/:id` URL.
+ *
+ * New-record tabs store `recordId: ''` while the URL uses the `new` sentinel.
+ * Those must match. Comparing the raw strings (`'' === 'new'`) is false, so
+ * URL sync thinks the tab is missing and opens another one — an infinite
+ * tab storm that kills the browser tab.
+ */
+export function RecordUrlMatchesTab(
+    urlEntityName: string,
+    urlRecordId: string,
+    tabEntityName: string | null | undefined,
+    tabRecordId: string | null | undefined,
+): boolean {
+    if ((tabEntityName ?? '').trim().toLowerCase() !== urlEntityName.trim().toLowerCase()) {
+        return false;
+    }
+    if (IsNewEntityRecordUrlId(urlRecordId) && IsNewEntityRecordUrlId(tabRecordId)) {
+        return true;
+    }
+    return (tabRecordId ?? '') === urlRecordId;
+}
+
+/**
  * Encode new-record defaults for a deeplink. Objects become
  * `Field|value||Field2|value2`. Empty / null returns undefined.
  */
@@ -367,6 +390,53 @@ export function EncodeNewRecordValuesForURL(values: unknown): string | undefined
         obj[key] = record[key];
     }
     return FieldValueCollection.FromObject(obj).ToURLSegment();
+}
+
+/**
+ * Compare two Explorer resource URLs after decoding. Angular's serializer
+ * leaves `:` in `MJ_BizApps_Orders: Order Headers` while `encodeURIComponent`
+ * writes `%3A`. A raw `!==` on those strings is permanently true and, with
+ * `onSameUrlNavigation: 'reload'`, navigates until Chrome dies.
+ */
+export function ResourceUrlsEquivalent(left: string, right: string): boolean {
+    const a = splitResourceUrl(left);
+    const b = splitResourceUrl(right);
+    if (safeDecodePath(a.path) !== safeDecodePath(b.path)) {
+        return false;
+    }
+    return resourceQueryEqual(a.query, b.query);
+}
+
+function splitResourceUrl(raw: string): { path: string; query: Record<string, string> } {
+    const trimmed = (raw ?? '').trim();
+    const q = trimmed.indexOf('?');
+    const path = q === -1 ? trimmed : trimmed.slice(0, q);
+    const search = q === -1 ? '' : trimmed.slice(q + 1);
+    const query: Record<string, string> = {};
+    if (search.length > 0) {
+        new URLSearchParams(search).forEach((value, key) => {
+            query[key] = value;
+        });
+    }
+    return { path, query };
+}
+
+function safeDecodePath(path: string): string {
+    try {
+        return decodeURIComponent(path);
+    } catch {
+        return path;
+    }
+}
+
+function resourceQueryEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+    return keysA.every((key) =>
+        decodeURIComponent((a[key] ?? '').replace(/\+/g, ' ')) ===
+        decodeURIComponent((b[key] ?? '').replace(/\+/g, ' ')),
+    );
 }
 
 

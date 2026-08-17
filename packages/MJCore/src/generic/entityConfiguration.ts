@@ -103,6 +103,11 @@ export interface IEntityRelationshipUIConfiguration {
     FormRole?: FormRole;
     /** Same-table OR of FKs (Bill-To OR Ship-To). */
     join?: IEntityRelationshipJoin;
+    /**
+     * Higher = earlier among first-class related rail items (after Details,
+     * after lead contributions). Omit = 0. Same scale as form-panel `sortKey`.
+     */
+    sortKey?: number;
 }
 
 export type RelatedFormRoleReason =
@@ -132,6 +137,13 @@ export interface FormChromeRule {
     Inclusion: FormInclusion;
     JoinFields?: string[] | null;
     Sequence?: number | null;
+    /**
+     * Admin display title. Null / blank keeps the L1 DisplayName or
+     * humanized entity name. Keyed with the rule, not the previous label,
+     * so an OpenApp upgrade that renames the related entity does not
+     * overwrite a site-specific title.
+     */
+    Title?: string | null;
 }
 
 export interface RelatedFormRoleCandidate {
@@ -210,6 +222,13 @@ export function ReadRelationshipInclusion(raw: string | null | undefined): FormI
     if (ui?.FormRole === 'Primary') return 'Primary';
     if (ui?.FormRole === 'Detail') return 'More';
     return null;
+}
+
+/** Higher = earlier among first-class related rail items. Omit / invalid = null. */
+export function ReadRelationshipSortKey(raw: string | null | undefined): number | null {
+    const sort = ParseEntityRelationshipConfiguration(raw)?.UI?.sortKey;
+    if (typeof sort !== 'number' || !Number.isFinite(sort)) return null;
+    return sort;
 }
 
 export function ReadRelationshipJoinFields(raw: string | null | undefined): string[] | null {

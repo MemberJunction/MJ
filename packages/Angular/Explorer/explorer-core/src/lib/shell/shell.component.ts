@@ -13,7 +13,7 @@ import {
   AppAccessResult,
   NavItem
 } from '@memberjunction/ng-base-application';
-import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM } from '@memberjunction/core';
+import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM, RecordUrlMatchesTab, ResourceUrlsEquivalent } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
 import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
@@ -924,8 +924,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       const currentUrl = this.router.url;
       const newUrl = resourceUrl;
 
-      // Only update if URL is different (path or query params changed)
-      if (currentUrl !== newUrl) {
+      // Decode before compare. encodeURIComponent writes `%3A` for the
+      // colon in `MJ_BizApps_Orders: Order Headers`; Angular's serializer
+      // leaves `:`. A raw !== is permanently true and reloads the route
+      // until the tab dies (Person → Orders → New).
+      if (!ResourceUrlsEquivalent(currentUrl, newUrl)) {
         // Suppress ResourceResolver for this navigation - we're just syncing the URL
         // to reflect the current active tab, not requesting a new tab to be opened
         this.tabService.SuppressNextResolve();
@@ -1017,12 +1020,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (appRecordMatch) {
         const entityName = decodeURIComponent(appRecordMatch[2]);
         const recordId = decodeURIComponent(appRecordMatch[3]);
-        const compositeKey = new CompositeKey();
-        compositeKey.SimpleLoadFromURLSegment(recordId);
-        // Recreating a closed tab from browser history — the user's CURRENT
-        // page is not where this record came from, so don't stamp it as the
-        // origin (recordSource 'none' = no crumb rather than a false one).
-        this.navigationService.OpenEntityRecord(entityName, compositeKey, { recordSource: 'none' });
+        this.openRecordFromUrl(entityName, recordId, queryParams);
         return;
       }
 
@@ -1140,11 +1138,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (legacyRecordMatch) {
         const entityName = decodeURIComponent(legacyRecordMatch[1]);
         const recordId = decodeURIComponent(legacyRecordMatch[2]);
-        const compositeKey = new CompositeKey();
-        compositeKey.SimpleLoadFromURLSegment(recordId);
-        // Same as the app-scoped branch above: history recreation has no
-        // truthful origin — suppress the crumb instead of inventing one.
-        this.navigationService.OpenEntityRecord(entityName, compositeKey, { recordSource: 'none' });
+        this.openRecordFromUrl(entityName, recordId, queryParams);
         return;
       }
 
@@ -1166,6 +1160,32 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     } finally {
       this.urlBasedNavigation = false;
     }
+  }
+
+  /**
+   * Recreate a record tab from a URL. `/new` is OpenNewEntityRecord — feeding
+   * the sentinel through OpenEntityRecord produced an empty CompositeKey and
+   * another forced tab, which is the loop that killed the browser.
+   */
+  private openRecordFromUrl(entityName: string, recordId: string, queryParams: URLSearchParams): void {
+    if (IsNewEntityRecordUrlId(recordId)) {
+      const nrv = queryParams.get(NEW_RECORD_VALUES_QUERY_PARAM) ?? undefined;
+      this.navigationService.OpenNewEntityRecord(entityName, {
+        newRecordValues: nrv,
+        recordSource: 'none',
+      });
+      return;
+    }
+    const compositeKey = new CompositeKey();
+    compositeKey.SimpleLoadFromURLSegment(recordId);
+    this.navigationService.OpenEntityRecord(entityName, compositeKey, { recordSource: 'none' });
+  }
+
+  private recordTabMatchesUrl(tab: WorkspaceTab, entityName: string, recordId: string): boolean {
+    const tabConfig = tab.configuration || {};
+    const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
+    const tabRecordId = (tabConfig['recordId'] ?? tab.resourceRecordId) as string | undefined;
+    return RecordUrlMatchesTab(entityName, recordId, tabEntity, tabRecordId);
   }
 
   /**
@@ -1249,15 +1269,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     if (appRecordMatch) {
       const entityName = decodeURIComponent(appRecordMatch[2]);
       const recordId = decodeURIComponent(appRecordMatch[3]);
-
-      return tabs.find(tab => {
-        const tabConfig = tab.configuration || {};
-        const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
-        const tabRecordId = (tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
-
-        return tabEntity?.toLowerCase() === entityName.toLowerCase() &&
-               tabRecordId === recordId;
-      }) || null;
+      return tabs.find(tab => this.recordTabMatchesUrl(tab, entityName, recordId)) || null;
     }
 
     // Dynamic view: /app/:appName/view/dynamic/:entityName
@@ -1337,15 +1349,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     if (recordMatch) {
       const entityName = decodeURIComponent(recordMatch[1]);
       const recordId = decodeURIComponent(recordMatch[2]);
-
-      return tabs.find(tab => {
-        const tabConfig = tab.configuration || {};
-        const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
-        const tabRecordId = (tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
-
-        return tabEntity?.toLowerCase() === entityName.toLowerCase() &&
-               tabRecordId === recordId;
-      }) || null;
+      return tabs.find(tab => this.recordTabMatchesUrl(tab, entityName, recordId)) || null;
     }
 
     // Check for view URL: /resource/view/:viewId
