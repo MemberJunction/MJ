@@ -473,3 +473,115 @@ describe('RemoteBrowserEngine — agent-session-keyed lifecycle', () => {
         expect(await engine().EndSessionForAgentSession('agent-sess-end')).toBe(false);
     });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// #3531 — TWO browsers in ONE agent session, told apart by `instanceKey`.
+//
+// The whole agent-session-keyed surface above is keyed by agent session ALONE, which silently makes
+// "one browser per session" a framework invariant: the second surface's lazy-start finds the first
+// one's mapping, returns it, and both surfaces drive the same Chrome. `instanceKey` is what names
+// the second browser. Omitting it must keep every assertion above true, which is why these tests
+// live beside them rather than replacing them.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('RemoteBrowserEngine — multiple instances per agent session (#3531)', () => {
+    it('starts a SEPARATE browser per instanceKey within one agent session', async () => {
+        stubBase([makeProvider()]);
+        const left = await engine().StartSessionForAgentSession('sess-multi', undefined, undefined, 'left');
+        const right = await engine().StartSessionForAgentSession('sess-multi', undefined, undefined, 'right');
+
+        // Two distinct live sessions — the defect returned `right === left`.
+        expect(right).not.toBe(left);
+        expect(engine().ActiveSessions.length).toBe(2);
+
+        // Each key resolves back to its OWN browser, which is what makes the second surface drivable.
+        expect(engine().GetSessionForAgentSession('sess-multi', 'left')).toBe(left);
+        expect(engine().GetSessionForAgentSession('sess-multi', 'right')).toBe(right);
+
+        await engine().EndSessionForAgentSession('sess-multi', 'left');
+        await engine().EndSessionForAgentSession('sess-multi', 'right');
+    });
+
+    it('keeps the unkeyed instance distinct from a named one', async () => {
+        stubBase([makeProvider()]);
+        // The unkeyed instance is the one every existing caller gets. A named instance must not
+        // hijack it, or adding a second surface would silently move the first surface's browser.
+        const unkeyed = await engine().StartSessionForAgentSession('sess-mixed');
+        const named = await engine().StartSessionForAgentSession('sess-mixed', undefined, undefined, 'secondary');
+
+        expect(named).not.toBe(unkeyed);
+        expect(engine().GetSessionForAgentSession('sess-mixed')).toBe(unkeyed);
+        // An empty / whitespace key is NOT a third instance — it is the unkeyed one, so a caller
+        // threading an absent value through as '' lands where it did before the argument existed.
+        expect(engine().GetSessionForAgentSession('sess-mixed', '')).toBe(unkeyed);
+        expect(engine().GetSessionForAgentSession('sess-mixed', '   ')).toBe(unkeyed);
+        expect(engine().ActiveSessions.length).toBe(2);
+
+        await engine().EndSessionForAgentSession('sess-mixed');
+        await engine().EndSessionForAgentSession('sess-mixed', 'secondary');
+    });
+
+    it('treats an instanceKey case- and whitespace-insensitively', async () => {
+        stubBase([makeProvider()]);
+        // The key crosses the wire as a GraphQL argument typed by hand in a channel config, so
+        // 'Primary' and 'primary' being two browsers would be a spelling trap, not a feature.
+        const first = await engine().StartSessionForAgentSession('sess-case', undefined, undefined, 'Primary');
+        const again = await engine().StartSessionForAgentSession('sess-case', undefined, undefined, '  primary ');
+
+        expect(again).toBe(first);
+        expect(engine().ActiveSessions.length).toBe(1);
+        await engine().EndSessionForAgentSession('sess-case', 'PRIMARY');
+        expect(engine().GetSessionForAgentSession('sess-case', 'primary')).toBeUndefined();
+    });
+
+    it('does not let one agent session bleed into another that uses the same instanceKey', async () => {
+        stubBase([makeProvider()]);
+        // Both interviews name their second surface 'resume'. The composite key must stay scoped to
+        // the agent session — otherwise two concurrent candidates share a browser, which is the
+        // same-key-collides failure the naive `${id}:${key}` concatenation invites.
+        const a = await engine().StartSessionForAgentSession('sess-a', undefined, undefined, 'resume');
+        const b = await engine().StartSessionForAgentSession('sess-b', undefined, undefined, 'resume');
+
+        expect(b).not.toBe(a);
+        expect(engine().GetSessionForAgentSession('sess-a', 'resume')).toBe(a);
+        expect(engine().GetSessionForAgentSession('sess-b', 'resume')).toBe(b);
+
+        await engine().EndSessionForAgentSession('sess-a', 'resume');
+        await engine().EndSessionForAgentSession('sess-b', 'resume');
+    });
+
+    it('coalesces concurrent starts PER INSTANCE, not per agent session', async () => {
+        stubBase([makeProvider()]);
+        // The coalescing map is keyed the same way the session map is. Keyed by agent session alone
+        // it would collapse two DIFFERENT surfaces racing to start into one browser — the duplicate
+        // -browser fix turning into a missing-browser bug.
+        const results = await Promise.all([
+            engine().StartSessionForAgentSession('sess-race2', undefined, undefined, 'left'),
+            engine().StartSessionForAgentSession('sess-race2', undefined, undefined, 'left'),
+            engine().StartSessionForAgentSession('sess-race2', undefined, undefined, 'right'),
+            engine().StartSessionForAgentSession('sess-race2', undefined, undefined, 'right'),
+        ]);
+        expect(results[1]).toBe(results[0]);
+        expect(results[3]).toBe(results[2]);
+        expect(results[2]).not.toBe(results[0]);
+        expect(engine().ActiveSessions.length).toBe(2);
+
+        await engine().EndSessionForAgentSession('sess-race2', 'left');
+        await engine().EndSessionForAgentSession('sess-race2', 'right');
+    });
+
+    it('ends only the named instance and leaves its siblings live', async () => {
+        stubBase([makeProvider()]);
+        const left = await engine().StartSessionForAgentSession('sess-end-one', undefined, undefined, 'left');
+        await engine().StartSessionForAgentSession('sess-end-one', undefined, undefined, 'right');
+
+        expect(await engine().EndSessionForAgentSession('sess-end-one', 'right')).toBe(true);
+        expect(engine().GetSessionForAgentSession('sess-end-one', 'right')).toBeUndefined();
+        // The surviving surface is still driveable — a shared teardown would have killed both.
+        expect(engine().GetSessionForAgentSession('sess-end-one', 'left')).toBe(left);
+        expect(engine().ActiveSessions.length).toBe(1);
+
+        await engine().EndSessionForAgentSession('sess-end-one', 'left');
+        expect(engine().ActiveSessions.length).toBe(0);
+    });
+});

@@ -400,11 +400,12 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   async RemoteBrowserSnapshot(
     @Arg('agentSessionID', () => String) agentSessionID: string,
     @Ctx() { userPayload, providers }: AppContext,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<RemoteBrowserSnapshot> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     await this.loadOwnedSession(agentSessionID, contextUser, provider);
 
-    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID);
+    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (!liveSession) {
       return {};
     }
@@ -448,6 +449,8 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    *
    * @param agentSessionID The `AIAgentSession` id the browser is bound to.
    * @param query Optional request — empty/"describe" for a page description, else a visual target to localize.
+   * @param instanceKey Names WHICH browser, when the session holds more than one. Omitted resolves the
+   *   single unnamed instance, which is the previous behaviour and stays the default.
    * @returns The interpretation (description + localized elements + optional detail note).
    */
   @Mutation(() => RemoteBrowserInterpretation)
@@ -455,11 +458,12 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('agentSessionID', () => String) agentSessionID: string,
     @Ctx() { userPayload, providers }: AppContext,
     @Arg('query', () => String, { nullable: true }) query?: string,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<RemoteBrowserInterpretation> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     await this.loadOwnedSession(agentSessionID, contextUser, provider);
 
-    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID);
+    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (!liveSession) {
       return { Description: undefined, Elements: [], Detail: 'no live browser' };
     }
@@ -534,12 +538,13 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   async StopRemoteBrowserScreencast(
     @Arg('agentSessionID', () => String) agentSessionID: string,
     @Ctx() { userPayload, providers }: AppContext,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<boolean> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     await this.loadOwnedSession(agentSessionID, contextUser, provider);
 
     this.startedScreencasts.delete(agentSessionID);
-    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID);
+    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (liveSession) {
       try {
         await liveSession.StopScreencast();
@@ -608,12 +613,13 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   async StopRemoteBrowserAudioStream(
     @Arg('agentSessionID', () => String) agentSessionID: string,
     @Ctx() { userPayload, providers }: AppContext,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<boolean> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     await this.loadOwnedSession(agentSessionID, contextUser, provider);
 
     this.startedAudioStreams.delete(agentSessionID);
-    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID);
+    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (liveSession) {
       try {
         await liveSession.StopAudioStream();
@@ -663,11 +669,12 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('deltaX', () => Float, { nullable: true }) deltaX?: number,
     @Arg('deltaY', () => Float, { nullable: true }) deltaY?: number,
     @Arg('modifiers', () => String, { nullable: true }) modifiers?: string,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<boolean> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     await this.loadOwnedSession(agentSessionID, contextUser, provider);
 
-    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID);
+    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (!liveSession) {
       return false;
     }
@@ -709,11 +716,12 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   async GetRemoteBrowserSelection(
     @Arg('agentSessionID', () => String) agentSessionID: string,
     @Ctx() { userPayload, providers }: AppContext,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
   ): Promise<RemoteBrowserSelection> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     await this.loadOwnedSession(agentSessionID, contextUser, provider);
 
-    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID);
+    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (!liveSession) {
       return { Text: '' };
     }
