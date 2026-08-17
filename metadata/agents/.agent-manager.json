@@ -133,6 +133,16 @@
             "lastModified": "2026-02-13T21:09:22.026Z",
             "checksum": "eb374413b832106653fce686b208ca75da6d73946138457ddfe5dc2b1c255959"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Load Agent Spec",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "45112BA4-DAFF-4800-838B-E65E841F9E95"
+          }
         }
       ],
       "MJ: AI Agent Relationships": [
@@ -557,13 +567,14 @@
           }
         },
         {
+          "_comment": "DEPRECATED & DISABLED. A Flow agent cannot run as a sub-agent — the runtime refuses it (FlowAgentType.DetermineInitialStep rejects params.parentRun). Superseded by the 'Load Agent Spec' action, which Agent Manager now calls directly. Kept as a Disabled record (the runtime's Status==='Active' sub-agent filter excludes it) because MetadataSync is update-only and will not delete an omitted record.",
           "fields": {
             "ParentID": "@parent:ID",
             "Name": "Agent Spec Loader",
             "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Platform Management",
-            "Description": "Simple flow agent that loads complete agent specification from database by agent ID",
+            "Description": "DEPRECATED and DISABLED - superseded by the 'Load Agent Spec' action called directly by Agent Manager. A Flow agent cannot be invoked as a sub-agent.",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
-            "Status": "Active",
+            "Status": "Disabled",
             "ExecutionOrder": 5,
             "ExposeAsAction": false,
             "InvocationMode": "Sub-Agent",
@@ -575,92 +586,8 @@
               "*"
             ]
           },
-          "relatedEntities": {
-            "MJ: AI Agent Actions": [
-              {
-                "fields": {
-                  "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:MJ: Actions.Name=Load Agent Spec",
-                  "Status": "Active"
-                },
-                "primaryKey": {
-                  "ID": "90BB672E-1837-4CF3-8C75-6F1A454C6D3A"
-                },
-                "sync": {
-                  "lastModified": "2026-02-13T21:09:22.377Z",
-                  "checksum": "4bf81cacd7d90c73dd8931843d7ddf962b5be8bec19c2134586b70150980f7c9"
-                }
-              }
-            ],
-            "MJ: AI Agent Steps": [
-              {
-                "fields": {
-                  "AgentID": "@parent:ID",
-                  "Name": "Load Agent Spec",
-                  "StepType": "Action",
-                  "StartingStep": true,
-                  "ActionID": "@lookup:MJ: Actions.Name=Load Agent Spec",
-                  "ActionInputMapping": {
-                    "AgentID": "payload.ID"
-                  },
-                  "ActionOutputMapping": {
-                    "AgentSpec.ID": "ID",
-                    "AgentSpec.Name": "Name",
-                    "AgentSpec.Description": "Description",
-                    "AgentSpec.TypeID": "TypeID",
-                    "AgentSpec.Status": "Status",
-                    "AgentSpec.FunctionalRequirement": "FunctionalRequirement",
-                    "AgentSpec.TechnicalDesign": "TechnicalDesign",
-                    "AgentSpec.IconClass": "IconClass",
-                    "AgentSpec.LogoURL": "LogoURL",
-                    "AgentSpec.ParentID": "ParentID",
-                    "AgentSpec.DriverClass": "DriverClass",
-                    "AgentSpec.ModelSelectionMode": "ModelSelectionMode",
-                    "AgentSpec.PayloadDownstreamPaths": "PayloadDownstreamPaths",
-                    "AgentSpec.PayloadUpstreamPaths": "PayloadUpstreamPaths",
-                    "AgentSpec.PayloadSelfReadPaths": "PayloadSelfReadPaths",
-                    "AgentSpec.PayloadSelfWritePaths": "PayloadSelfWritePaths",
-                    "AgentSpec.PayloadScope": "PayloadScope",
-                    "AgentSpec.FinalPayloadValidation": "FinalPayloadValidation",
-                    "AgentSpec.FinalPayloadValidationMode": "FinalPayloadValidationMode",
-                    "AgentSpec.FinalPayloadValidationMaxRetries": "FinalPayloadValidationMaxRetries",
-                    "AgentSpec.MaxCostPerRun": "MaxCostPerRun",
-                    "AgentSpec.MaxTokensPerRun": "MaxTokensPerRun",
-                    "AgentSpec.MaxIterationsPerRun": "MaxIterationsPerRun",
-                    "AgentSpec.MaxTimePerRun": "MaxTimePerRun",
-                    "AgentSpec.MinExecutionsPerRun": "MinExecutionsPerRun",
-                    "AgentSpec.MaxExecutionsPerRun": "MaxExecutionsPerRun",
-                    "AgentSpec.StartingPayloadValidation": "StartingPayloadValidation",
-                    "AgentSpec.StartingPayloadValidationMode": "StartingPayloadValidationMode",
-                    "AgentSpec.DefaultPromptEffortLevel": "DefaultPromptEffortLevel",
-                    "AgentSpec.ChatHandlingOption": "ChatHandlingOption",
-                    "AgentSpec.DefaultArtifactTypeID": "DefaultArtifactTypeID",
-                    "AgentSpec.OwnerUserID": "OwnerUserID",
-                    "AgentSpec.InvocationMode": "InvocationMode",
-                    "AgentSpec.Actions": "Actions",
-                    "AgentSpec.SubAgents": "SubAgents",
-                    "AgentSpec.Prompts": "Prompts",
-                    "AgentSpec.Steps": "Steps",
-                    "AgentSpec.Paths": "Paths"
-                  },
-                  "Status": "Active"
-                },
-                "primaryKey": {
-                  "ID": "33533220-480D-4693-BAC0-980E98077CC7"
-                },
-                "sync": {
-                  "lastModified": "2026-02-13T21:09:22.378Z",
-                  "checksum": "d9ff376573cc6195d21211b58e6be764b69fb2663ba23a3f442c11274ed2a8d1"
-                }
-              }
-            ]
-          },
           "primaryKey": {
             "ID": "09D7E6EE-A3DC-4DBD-BA72-349FC68FE8C0"
-          },
-          "sync": {
-            "lastModified": "2026-03-13T19:10:48.246Z",
-            "checksum": "2947a4e22fb5ade95cc08170d448a3f93b73acc01b067e3cecfef04971bd718f"
           }
         }
       ]
