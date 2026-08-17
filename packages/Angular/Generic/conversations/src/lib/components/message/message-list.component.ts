@@ -91,6 +91,18 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public allowPinning: boolean = true;
   @Input() public allowMessageEdit: boolean = true;
   @Input() public allowMessageDelete: boolean = true;
+
+  // ── Windowed-transcript paging state ────────────────────────────────────────
+  // The list renders only the LOADED window, not the whole conversation. These two
+  // describe what lies above it. Unused until the Phase 5 sentinel lands; wired now so
+  // the host binding is in place and the component's contract is stable.
+
+  /** True when older pages remain above the loaded window. */
+  @Input() public HasMoreAbove: boolean = false;
+
+  /** True while an older page is in flight. */
+  @Input() public IsLoadingOlder: boolean = false;
+
   // ── Assistant identity overrides — static host config forwarded to every message
   //    item (null = engine identity). Setters (not ngOnChanges) so an imperative
   //    host — `@ViewChild(MessageListComponent).assistantDisplayName = …` — restamps

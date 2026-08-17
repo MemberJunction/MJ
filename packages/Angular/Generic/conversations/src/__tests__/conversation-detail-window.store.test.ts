@@ -151,6 +151,38 @@ describe('ConversationDetailWindowStore', () => {
         expect(load).toHaveBeenCalledTimes(1); // local path — no query
     });
 
+    it('slices an over-read page down to one page of timeline items', async () => {
+        // REGRESSION: the engine deliberately OVER-READS raw rows (RawOverread defaults to
+        // 3x the page size) because a page of rows can collapse to a single session card.
+        // The store must slice what comes back — without it the whole over-read landed on
+        // screen and a 22-message conversation rendered all 22.
+        const sequences = Array.from({ length: 22 }, (_, i) => i + 1);
+        load.mockResolvedValueOnce(pageOf(sequences, false));
+
+        await store.LoadLatest('conv-a', contextUser);
+
+        const snapshot = store.GetSnapshot();
+        expect(snapshot.Details).toHaveLength(10);
+        expect(sequencesOf(snapshot.Details)).toEqual([13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
+        expect(snapshot.Cursor.OldestSequence).toBe(13);
+        expect(snapshot.Cursor.NewestSequence).toBe(22);
+        // The engine said nothing is below what it fetched, but the SLICE discarded rows 1-12
+        // — those are older content the user can still page back to.
+        expect(snapshot.Cursor.HasMoreAbove).toBe(true);
+        expect(store.CanLoadOlder()).toBe(true);
+    });
+
+    it('keeps every row when the fetch is already within one page', async () => {
+        load.mockResolvedValueOnce(pageOf([1, 2, 3], false));
+
+        await store.LoadLatest('conv-a', contextUser);
+
+        const snapshot = store.GetSnapshot();
+        expect(sequencesOf(snapshot.Details)).toEqual([1, 2, 3]);
+        // Nothing was sliced off and the engine found nothing older — no sentinel.
+        expect(snapshot.Cursor.HasMoreAbove).toBe(false);
+    });
+
     it('treats Sequence 0 as a real cursor, not as "no cursor"', async () => {
         // Very old conversations can carry Sequence = 0 (the column's default). Zero is a
         // valid bound and must still page with `<`. Any falsy check — `if (!seq)`,

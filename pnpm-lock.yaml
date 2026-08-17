@@ -11682,6 +11682,9 @@ importers:
       '@workos-inc/authkit-js':
         specifier: ^0.20.1
         version: 0.20.1
+      acorn:
+        specifier: ^8.15.0
+        version: 8.15.0
       ag-grid-angular:
         specifier: ^35.0.1
         version: 35.0.1(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))

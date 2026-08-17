@@ -8,6 +8,7 @@ import type {
 import { BuildConversationTimeline, ConversationTimelineItem } from '../utils/realtime-session-timeline';
 import {
     ConversationDetailWindowCursor,
+    SelectLatestTimelinePage,
     DEFAULT_TRANSCRIPT_PAGE_SIZE
 } from '../utils/conversation-detail-window';
 
@@ -20,8 +21,19 @@ export interface DetailWindowLoader {
     LoadDetailWindow(params: LoadDetailWindowParams, contextUser: UserInfo): Promise<DetailWindowLoadResult>;
 }
 
+/**
+ * Peripheral data for the loaded window, keyed the way the chat area already consumes it.
+ *
+ * Accumulates across pages: an older page brings its own artifacts and ratings, which merge
+ * into these maps rather than replacing them.
+ */
+export type ConversationDetailWindowPeripherals = Pick<
+    DetailWindowLoadResult,
+    'AgentRunsByDetailId' | 'UserAvatars' | 'RatingsByDetailId' | 'ArtifactsByDetailId'
+>;
+
 /** What the chat area binds to after any store operation. */
-export interface ConversationDetailWindowSnapshot {
+export interface ConversationDetailWindowSnapshot extends ConversationDetailWindowPeripherals {
     ConversationID: string | null;
     /** Loaded rows, chronological by Sequence. A NEW array each call, so ngOnChanges fires. */
     Details: MJConversationDetailEntity[];
@@ -54,6 +66,7 @@ export class ConversationDetailWindowStore {
     private conversationId: string | null = null;
     private loadedDetails: MJConversationDetailEntity[] = [];
     private pinnedDetails: MJConversationDetailEntity[] = [];
+    private peripherals: ConversationDetailWindowPeripherals = emptyPeripherals();
     private cursor: ConversationDetailWindowCursor = emptyCursor();
     private generation = 0;
     private isLoadingLatest = false;
@@ -69,6 +82,7 @@ export class ConversationDetailWindowStore {
         this.conversationId = conversationId;
         this.loadedDetails = [];
         this.pinnedDetails = [];
+        this.peripherals = emptyPeripherals();
         this.cursor = emptyCursor();
         this.isLoadingLatest = false;
         this.isLoadingOlder = false;
@@ -95,8 +109,21 @@ export class ConversationDetailWindowStore {
             if (generation !== this.generation) {
                 return;   // user switched conversations mid-flight
             }
-            this.mergeDetails(result.Details);
-            this.cursor = cursorFrom(result);
+            // The engine OVER-READS raw rows (a page of N rows can collapse to one session
+            // card), so the fetch returns more than a page's worth. Slice to the newest
+            // `pageSize` TIMELINE ITEMS here — this is what actually bounds the transcript.
+            const page = SelectLatestTimelinePage(result.Details, DEFAULT_TRANSCRIPT_PAGE_SIZE);
+            const droppedOlderRows = page.Page.length < result.Details.length;
+
+            this.mergeDetails(page.Page);
+            this.peripherals = peripheralsFrom(result);
+            this.cursor = {
+                OldestSequence: page.OldestIncluded?.Sequence ?? result.OldestSequence,
+                NewestSequence: result.NewestSequence,
+                // Rows the slice discarded are older content that IS available — the engine's
+                // probe only knows about rows below what it fetched, not below what we kept.
+                HasMoreAbove: result.HasMoreAbove || droppedOlderRows
+            };
         } finally {
             // Guarded: a stale load must not clear a newer load's flag.
             if (generation === this.generation) {
@@ -130,16 +157,81 @@ export class ConversationDetailWindowStore {
             if (generation !== this.generation) {
                 return;
             }
-            this.mergeDetails(result.Details);
+            // Same over-read slice as LoadLatest: keep the newest page of timeline items
+            // from what came back, not every raw row.
+            const page = SelectLatestTimelinePage(result.Details, DEFAULT_TRANSCRIPT_PAGE_SIZE);
+            const droppedOlderRows = page.Page.length < result.Details.length;
+
+            this.mergeDetails(page.Page);
+            // Older pages bring their OWN artifacts/ratings/runs — merge, never replace,
+            // or paging up would strip the peripherals off the rows already on screen.
+            this.mergePeripherals(result);
             // Only the upward bound moves — the tail is whatever we already had.
             this.cursor = {
                 OldestSequence: this.loadedDetails[0]?.Sequence ?? this.cursor.OldestSequence,
                 NewestSequence: this.cursor.NewestSequence,
-                HasMoreAbove: result.HasMoreAbove
+                HasMoreAbove: result.HasMoreAbove || droppedOlderRows
             };
         } finally {
             if (generation === this.generation) {
                 this.isLoadingOlder = false;
+            }
+        }
+    }
+
+    /**
+     * Re-fetches the NEWEST page and folds it into the existing window.
+     *
+     * The refresh-in-place counterpart to {@link LoadLatest}: used when something changed at
+     * the tail (an agent finished, artifacts were written) and the transcript needs to pick
+     * it up. Unlike `LoadLatest` it does NOT `Reset`, so a user who has paged up five times
+     * keeps those pages instead of being yanked back to a 10-row tail.
+     *
+     * `HasMoreAbove` is preserved when older pages are already loaded — the refreshed newest
+     * page only knows what is above ITS oldest row, which says nothing about what is above
+     * the window's true top.
+     */
+    public async RefreshLatest(contextUser: UserInfo): Promise<void> {
+        const conversationId = this.conversationId;
+        if (!conversationId) {
+            return;
+        }
+        const generation = this.generation;
+        const previousOldest = this.cursor.OldestSequence;
+        this.isLoadingLatest = true;
+
+        try {
+            const result = await this.loader.LoadDetailWindow(
+                { ConversationID: conversationId, PageSize: DEFAULT_TRANSCRIPT_PAGE_SIZE },
+                contextUser
+            );
+
+            if (generation !== this.generation) {
+                return;
+            }
+            const page = SelectLatestTimelinePage(result.Details, DEFAULT_TRANSCRIPT_PAGE_SIZE);
+            const droppedOlderRows = page.Page.length < result.Details.length;
+
+            this.mergeDetails(page.Page);
+            this.mergePeripherals(result);
+
+            const hasOlderPagesLoaded = previousOldest !== null
+                && page.OldestIncluded !== null
+                && previousOldest < page.OldestIncluded.Sequence;
+
+            this.cursor = {
+                OldestSequence: this.loadedDetails[0]?.Sequence ?? result.OldestSequence,
+                NewestSequence: this.loadedDetails[this.loadedDetails.length - 1]?.Sequence
+                    ?? result.NewestSequence,
+                // Already-loaded older pages keep their answer; otherwise the refreshed page
+                // decides, including rows its own slice discarded.
+                HasMoreAbove: hasOlderPagesLoaded
+                    ? this.cursor.HasMoreAbove
+                    : (result.HasMoreAbove || droppedOlderRows)
+            };
+        } finally {
+            if (generation === this.generation) {
+                this.isLoadingLatest = false;
             }
         }
     }
@@ -175,6 +267,18 @@ export class ConversationDetailWindowStore {
         this.pinnedDetails = [...pins];
     }
 
+    /**
+     * Reflects a pin/unpin the user just performed, without re-querying.
+     *
+     * Newly pinned rows go to the FRONT to match the panel's newest-pin-first order, which
+     * the initial `Sequence DESC` fetch also produces.
+     */
+    public ApplyLocalPin(detail: MJConversationDetailEntity): void {
+        const key = NormalizeUUID(detail.ID);
+        const without = this.pinnedDetails.filter(d => NormalizeUUID(d.ID) !== key);
+        this.pinnedDetails = detail.IsPinned ? [detail, ...without] : without;
+    }
+
     /** Everything the chat area needs to render. Arrays are fresh so ngOnChanges fires. */
     public GetSnapshot(): ConversationDetailWindowSnapshot {
         const details = [...this.loadedDetails];
@@ -184,9 +288,36 @@ export class ConversationDetailWindowStore {
             Timeline: BuildConversationTimeline(details),
             Cursor: { ...this.cursor },
             PinnedDetails: [...this.pinnedDetails],
+            // Peripheral maps are handed out by reference — the chat area copies them into
+            // its own UI-shaped maps (LazyArtifactInfo etc.) rather than mutating these.
+            AgentRunsByDetailId: this.peripherals.AgentRunsByDetailId,
+            UserAvatars: this.peripherals.UserAvatars,
+            RatingsByDetailId: this.peripherals.RatingsByDetailId,
+            ArtifactsByDetailId: this.peripherals.ArtifactsByDetailId,
             IsLoadingLatest: this.isLoadingLatest,
             IsLoadingOlder: this.isLoadingOlder
         };
+    }
+
+    /**
+     * Folds a newly-loaded page's peripherals into the accumulated maps.
+     *
+     * Later entries win on a key collision, which matters for a window refresh: a re-fetched
+     * newest page should replace a row's stale agent run rather than keep the old one.
+     */
+    private mergePeripherals(incoming: ConversationDetailWindowPeripherals): void {
+        for (const [id, run] of incoming.AgentRunsByDetailId) {
+            this.peripherals.AgentRunsByDetailId.set(id, run);
+        }
+        for (const [id, avatar] of incoming.UserAvatars) {
+            this.peripherals.UserAvatars.set(id, avatar);
+        }
+        for (const [id, ratings] of incoming.RatingsByDetailId) {
+            this.peripherals.RatingsByDetailId.set(id, ratings);
+        }
+        for (const [id, artifacts] of incoming.ArtifactsByDetailId) {
+            this.peripherals.ArtifactsByDetailId.set(id, artifacts);
+        }
     }
 
     /**
@@ -205,16 +336,32 @@ export class ConversationDetailWindowStore {
     }
 }
 
+/** Empty peripheral maps — the reset / no-window state. */
+function emptyPeripherals(): ConversationDetailWindowPeripherals {
+    return {
+        AgentRunsByDetailId: new Map(),
+        UserAvatars: new Map(),
+        RatingsByDetailId: new Map(),
+        ArtifactsByDetailId: new Map()
+    };
+}
+
+/** Copies a load result's peripheral maps into fresh maps the store then owns and merges into. */
+function peripheralsFrom(result: DetailWindowLoadResult): ConversationDetailWindowPeripherals {
+    return {
+        AgentRunsByDetailId: new Map(result.AgentRunsByDetailId),
+        UserAvatars: new Map(result.UserAvatars),
+        RatingsByDetailId: new Map(result.RatingsByDetailId),
+        ArtifactsByDetailId: new Map(result.ArtifactsByDetailId)
+    };
+}
+
 /** The empty-window cursor. */
 function emptyCursor(): ConversationDetailWindowCursor {
     return { OldestSequence: null, NewestSequence: null, HasMoreAbove: false };
 }
 
-/** Cursor for a freshly-loaded latest window. */
-function cursorFrom(result: DetailWindowLoadResult): ConversationDetailWindowCursor {
-    return {
-        OldestSequence: result.OldestSequence,
-        NewestSequence: result.NewestSequence,
-        HasMoreAbove: result.HasMoreAbove
-    };
-}
+// NOTE: there is deliberately no `cursorFrom(result)` helper. A cursor can never be copied
+// straight off a load result, because the store slices the over-read page down to `pageSize`
+// timeline items — so both the oldest bound and `HasMoreAbove` depend on what survived the
+// slice, not on what the engine fetched.

@@ -8,6 +8,10 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
+import {
+  ConversationDetailWindowStore,
+  ConversationDetailWindowSnapshot
+} from '../../services/conversation-detail-window.store';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
@@ -867,9 +871,25 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   // Pinned messages panel state
   public showPinsPanel: boolean = false;
 
-  /** All currently pinned messages in the active conversation, newest pin first */
+  /**
+   * All currently pinned messages in the active conversation, newest pin first.
+   *
+   * Read from the window store's separate pin set, NOT filtered out of `messages` — a pin
+   * older than the loaded window would otherwise vanish from the panel. Loaded by its own
+   * `IsPinned=1` query in {@link loadMessages}, already ordered `Sequence DESC`.
+   */
   get pinnedMessages(): MJConversationDetailEntity[] {
-    return this.messages.filter(m => m.IsPinned).reverse();
+    return this.windowStore.GetSnapshot().PinnedDetails;
+  }
+
+  /** True when older transcript pages remain above the loaded window (drives the sentinel). */
+  get hasMoreMessagesAbove(): boolean {
+    return this.windowStore.GetSnapshot().Cursor.HasMoreAbove;
+  }
+
+  /** True while an older transcript page is being fetched. */
+  get isLoadingOlderMessages(): boolean {
+    return this.windowStore.GetSnapshot().IsLoadingOlder;
   }
 
   // Test feedback dialog state
@@ -895,6 +915,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private conversationManagerAgent: MJAIAgentEntityExtended | null = null;
 
   private engine = ConversationEngine.Instance;
+
+  private windowStore = new ConversationDetailWindowStore(ConversationEngine.Instance);
+
 
   /**
    * Voice session service — exposed to the template so the realtime "call mode"
@@ -1183,22 +1206,21 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         const conversationAgents = agents.filter(a => UUIDsEqual(a.run.ConversationID, conversationId));
         const hasActiveAgents = conversationAgents.length > 0;
         if (this.hadActiveAgents && !hasActiveAgents) {
-          // Agents just completed — surgical refresh picks up new messages,
-          // updated agent runs, and new artifacts in one query with minimal UI repaint
-          await this.engine.RefreshConversationDetails(conversationId, this.currentUser);
+          // Agents just completed — refresh the NEWEST window page to pick up new messages,
+          // updated agent runs, and new artifacts. Deliberately not the engine's full-history
+          // RefreshConversationDetails: that would re-query the whole conversation and, via
+          // GetCachedDetails, replace the loaded window with every row.
+          await this.windowStore.RefreshLatest(this.currentUser);
           if (!this.isActiveConversation(conversationId)) {
             return;
           }
 
-          // Re-read messages from the surgically updated engine cache
-          const freshDetails = this.engine.GetCachedDetails(conversationId);
-          if (freshDetails) {
-            this.messages = freshDetails;
-          }
+          const refreshed = this.windowStore.GetSnapshot();
+          this.messages = refreshed.Details;
 
-          // Reprocess peripheral data (artifacts, ratings) from updated cache
+          // Reprocess peripheral data (artifacts, ratings) from the refreshed window
           this.lastLoadedConversationId = null;
-          await this.loadPeripheralData(conversationId);
+          await this.loadPeripheralData(conversationId, refreshed);
           if (!this.isActiveConversation(conversationId)) {
             return;
           }
@@ -1503,22 +1525,29 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   private async loadMessages(conversationId: string, loadToken: number): Promise<void> {
     try {
-      // Single source of truth: ConversationEngine handles caching and DB queries.
-      // Cache hit = instant (no DB). Cache miss = one GetConversationComplete query.
-      // If peripheral data (artifacts/ratings) changed externally, force refresh to pick up joined fields.
-      const existingEntry = this.engine.GetCachedDetailEntry(conversationId);
-      const forceRefresh = existingEntry?.PeripheralDataStale === true;
-      const cacheEntry = await this.engine.LoadConversationDetails(conversationId, this.currentUser, forceRefresh);
+      // WINDOWED read: only the newest page of the transcript, not the whole conversation.
+      // The store owns the loaded window and its paging cursors; the engine's full-history
+      // LoadConversationDetails stays untouched for agent/server callers. There is no
+      // forceRefresh here — a window is always fetched fresh, so no cache can go stale.
+      await this.windowStore.LoadLatest(conversationId, this.currentUser);
       if (!this.isActiveConversationLoad(conversationId, loadToken)) {
         return;
       }
 
-      // Set messages from engine cache
-      this.messages = cacheEntry.Details;
+      // Pins are fetched separately: a pin can sit far below the window's oldest Sequence,
+      // and the pins panel must list ALL of them, not just the ones currently on screen.
+      await this.loadPinnedMessages(conversationId, loadToken);
+      if (!this.isActiveConversationLoad(conversationId, loadToken)) {
+        return;
+      }
 
-      // Copy user avatars from engine cache
+      // Read the loaded window back off the store
+      const snapshot = this.windowStore.GetSnapshot();
+      this.messages = snapshot.Details;
+
+      // Copy user avatars from the window result
       this.userAvatarMap.clear();
-      for (const [userId, avatar] of cacheEntry.UserAvatars) {
+      for (const [userId, avatar] of snapshot.UserAvatars) {
         this.userAvatarMap.set(userId, {
           imageUrl: avatar.ImageURL,
           iconClass: avatar.IconClass
@@ -1554,7 +1583,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.scrollToBottom = true;
 
       // Process peripheral data (agent runs, artifacts, ratings, attachments) from engine cache
-      await this.loadPeripheralData(conversationId, loadToken);
+      await this.loadPeripheralData(conversationId, snapshot, loadToken);
       if (!this.isActiveConversationLoad(conversationId, loadToken)) {
         return;
       }
@@ -1576,33 +1605,64 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
 
   /**
-   * Process peripheral data (agent runs and artifacts) from cached conversation data
-   * Parses JSON columns and builds maps for display
+   * Loads the conversation's pinned messages into the window store.
    *
-   * PERFORMANCE OPTIMIZATION: Uses cached data instead of querying
-   * - Data already loaded by loadMessages() - no additional queries needed
-   * - Processes cached JSON data to build display maps
-   * - Instant when switching between conversations
+   * Separate from the transcript window on purpose: pinning is not bounded by `Sequence`, so
+   * a pin can live far below the loaded window's oldest row. Filtering `messages` for
+   * `IsPinned` — as this used to do — would silently drop those from the panel.
+   *
+   * A failure here leaves the pin set empty rather than breaking the transcript.
    */
-  private async loadPeripheralData(conversationId: string, loadToken?: number): Promise<void> {
+  private async loadPinnedMessages(conversationId: string, loadToken: number): Promise<void> {
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const result = await rv.RunView<MJConversationDetailEntity>({
+      EntityName: 'MJ: Conversation Details',
+      ExtraFilter: `ConversationID='${conversationId}' AND IsPinned=1`,
+      OrderBy: 'Sequence DESC',   // newest pin first — the panel's order
+      ResultType: 'entity_object'
+    }, this.currentUser);
+
+    if (!this.isActiveConversationLoad(conversationId, loadToken)) {
+      return;
+    }
+    if (!result.Success) {
+      console.error('Failed to load pinned messages:', result.ErrorMessage);
+      this.windowStore.SetPinnedDetails([]);
+      return;
+    }
+    this.windowStore.SetPinnedDetails(result.Results ?? []);
+  }
+
+  /**
+   * Builds the display maps (agent runs, artifacts, ratings) for the LOADED WINDOW.
+   *
+   * The peripherals arrive with the window itself — `ConversationEngine.LoadDetailWindow`
+   * batches them in one `RunViews` scoped to the window's detail IDs — so this method only
+   * reshapes them for the UI and issues no queries of its own.
+   *
+   * @param snapshot - The loaded window, from `windowStore.GetSnapshot()`. Passed in rather
+   *   than read from the engine's `_detailCache`, which the windowed path never populates.
+   */
+  private async loadPeripheralData(
+    conversationId: string,
+    snapshot: ConversationDetailWindowSnapshot,
+    loadToken?: number
+  ): Promise<void> {
     if (!this.isCurrentConversationContext(conversationId, loadToken)) {
       return;
     }
 
-    // Skip if we've already processed peripheral data for this conversation
+    // Skip if we've already processed peripheral data for this conversation.
+    // NOTE (Phase 5): paging up loads OLDER rows with their own peripherals — this guard
+    // must not block that refresh once the sentinel lands.
     if (this.lastLoadedConversationId === conversationId) {
       return;
     }
 
     try {
-      // Read from engine cache — always present after loadMessages() calls LoadConversationDetails()
-      const cacheEntry = this.engine.GetCachedDetailEntry(conversationId);
-      if (!cacheEntry) {
-        console.warn(`No engine cache found for conversation ${conversationId}`);
-        return;
-      }
+      const cacheEntry = snapshot;
 
-      // Clear and rebuild component maps from engine cache
+      // Clear and rebuild component maps from the window's peripherals
       this.agentRunsByDetailId.clear();
       this.artifactsByDetailId.clear();
       this.systemArtifactsByDetailId.clear();
@@ -1781,6 +1841,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
       return;
     }
+
+    // Mirror the row into the loaded window so its NewestSequence tracks live appends.
+    // Local path only — the entity is already in hand, so this issues no query.
+    this.windowStore.ApplyLocalDetail(message);
 
     // Check if message already exists in the array (by ID) to prevent duplicates
     // Messages can be emitted multiple times as they're updated (e.g., status changes)
@@ -2017,19 +2081,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     try {
-      // Read from engine cache — already warm from entity event handler auto-sync
-      const engineDetails = this.engine.GetCachedDetails(conversationId);
-      if (!engineDetails || engineDetails.length === 0) {
+      // Refresh the newest window page rather than reading the engine's full-history cache,
+      // which the windowed path never populates — reading it here returned undefined and
+      // silently skipped everything below, so delegated-agent messages never appeared.
+      await this.windowStore.RefreshLatest(this.currentUser);
+      if (!this.isActiveConversation(conversationId)) {
         return;
       }
-      if (!this.isActiveConversation(conversationId)) {
+
+      const engineDetails = this.windowStore.GetSnapshot().Details;
+      if (engineDetails.length === 0) {
         return;
       }
 
       // Track existing message IDs before reload to identify new messages
       const existingMessageIds = new Set(this.messages.map(m => m.ID));
 
-      // Merge engine cache with existing client-side messages.
+      // Merge the refreshed window with existing client-side messages.
       // Preserves messages added client-side (e.g., by handleSubAgentInvocation)
       // that haven't been picked up by entity events yet due to timing.
       const merged = new Map<string, MJConversationDetailEntity>();
@@ -2038,7 +2106,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         merged.set(msg.ID, msg);
       }
 
-      // Preserve client-side messages not yet in engine cache
+      // Preserve client-side messages not yet in the window
       for (const msg of this.messages) {
         if (!merged.has(msg.ID)) {
           merged.set(msg.ID, msg);
@@ -2142,6 +2210,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         this.activeTasks.remove(task.id);
       }
 
+      // The completed message was mutated in place — refresh the window's copy too.
+      this.windowStore.ApplyLocalDetail(message);
+
       // Force re-render with updated agent run and artifacts
       this.messages = [...this.messages];
       this.cdr.detectChanges();
@@ -2164,6 +2235,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     // Add the agent's response message to the conversation
+    this.windowStore.ApplyLocalDetail(event.message);
     this.messages = [...this.messages, event.message];
 
     // Invalidate cache for this conversation since we have new messages
@@ -2278,15 +2350,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         return;
       }
 
-      // Surgical refresh — merges new artifacts into existing cache without replacing objects
-      await this.engine.RefreshConversationDetails(detailConversationId, this.currentUser);
+      // Refresh the newest window page — picks up artifacts written by the just-finished run
+      // without re-querying the whole conversation.
+      await this.windowStore.RefreshLatest(this.currentUser);
       if (!isCurrent()) {
         return;
       }
 
-      // Reprocess peripheral data from the updated engine cache
+      // Reprocess peripheral data from the refreshed window
       this.lastLoadedConversationId = null;
-      await this.loadPeripheralData(detailConversationId, loadToken);
+      await this.loadPeripheralData(detailConversationId, this.windowStore.GetSnapshot(), loadToken);
     } catch (error) {
       console.error('Failed to reload artifacts for message:', error);
     }
@@ -2661,18 +2734,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   onMessagePinToggled(message: MJConversationDetailEntity): void {
-    // The entity object is already mutated by .Save() and the engine cache holds the same
-    // object reference, so no explicit cache update is needed here.
-    // Update engine's raw data cache to stay in sync
-    if (this.conversationId) {
-      const cacheEntry = this.engine.GetCachedDetailEntry(this.conversationId);
-      if (cacheEntry) {
-        const row = cacheEntry.RawData.find((r: ConversationDetailComplete) => UUIDsEqual(r.ID, message.ID));
-        if (row) {
-          row.IsPinned = message.IsPinned;
-        }
-      }
-    }
+    // The entity object is already mutated by .Save(), and the window holds that same object
+    // reference, so the transcript reflects the change with no cache write.
+    //
+    // The engine's RawData row-sync that used to live here is gone: the windowed path never
+    // populates `_detailCache`, and a window carries no RawData (those JSON columns only
+    // exist on the GetConversationComplete stored query).
+    this.windowStore.ApplyLocalDetail(message);
+    // The pins panel reads a separate set (it must show pins older than the window), so it
+    // needs the toggle applied explicitly.
+    this.windowStore.ApplyLocalPin(message);
+
     // Auto-close the panel when the last pin is removed
     if (this.showPinsPanel && this.pinnedMessages.length === 0) {
       setTimeout(() => { this.showPinsPanel = false; this.cdr.detectChanges(); }, 600);
@@ -2785,6 +2857,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     const hideIds = new Set(toHide.map(m => m.ID));
+    // Drop them from the window too, or the next RefreshLatest merge reinstates them.
+    for (const id of hideIds) {
+      this.windowStore.RemoveDetail(id);
+    }
     this.messages = this.messages.filter(m => !hideIds.has(m.ID));
     this.resetComponentState(this.conversationId!);
     this.cdr.detectChanges();
@@ -3299,20 +3375,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     try {
-      await this.engine.RefreshConversationDetails(conversationId, this.currentUser);
+      await this.windowStore.RefreshLatest(this.currentUser);
       if (!this.isActiveConversation(conversationId)) {
         return;
       }
 
-      // Re-read messages from the surgically updated engine cache
-      const freshDetails = this.engine.GetCachedDetails(conversationId);
-      if (freshDetails) {
-        this.messages = freshDetails;
-      }
+      // Re-read the refreshed window
+      const refreshed = this.windowStore.GetSnapshot();
+      this.messages = refreshed.Details;
 
       // Reprocess peripheral data + realtime session meta (drives the timeline's session cards)
       this.lastLoadedConversationId = null;
-      await this.loadPeripheralData(conversationId);
+      await this.loadPeripheralData(conversationId, refreshed);
       if (!this.isActiveConversation(conversationId)) {
         return;
       }
