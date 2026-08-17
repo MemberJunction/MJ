@@ -5,7 +5,7 @@ import ts from 'typescript';
 import { makeDir, sortBySequenceAndCreatedAt } from '../Misc/util';
 import { logError, logStatus } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
-import { mj_core_schema } from '../Config/config';
+import { mj_core_schema, resolveEntityPackageName } from '../Config/config';
 import { SQLLogging } from './sql_logging';
 import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
 
@@ -75,6 +75,15 @@ export type RelatedRecordCollectionConfig = {
   Sequence?: { Field: string; From?: number };
   /** Whether the collection empties itself after a successful save. Defaults to `false`. */
   ClearAfterSave?: boolean;
+};
+
+/**
+ * Policy half of a `DeclareEmbeddedRecord(...)` declaration, stored in `EntityField.EmbeddedRecord`.
+ * `RelatedEntity` and the FK field name are columns on the same `EntityField` row.
+ */
+export type EmbeddedRecordConfig = {
+  OnClear?: 'delete' | 'orphan' | 'refuse';
+  LoadNested?: 'inherit' | 'related';
 };
 
 /**
@@ -181,10 +190,16 @@ export class EntitySubClassGeneratorBase {
       // Only consider entities that actually emit a class: generateEntitySubClass skips PK-less entities
       // (returns ''), so hoisting their import would leave a dangling/unused import (a build error under
       // a downstream consumer's noUnusedLocals). Match that skip condition here.
+      const localClassNames = new Set(
+        entities.filter((e) => e.PrimaryKeys.length > 0).map((e) => `${e.ClassName}Entity`),
+      );
       const subclassImports: string = [...new Set(
         entities
           .filter((e) => e.PrimaryKeys.length > 0)
-          .map((e) => this.resolveEntityBaseClass(e).importStatement)
+          .flatMap((e) => [
+            this.resolveEntityBaseClass(e).importStatement,
+            ...EntitySubClassGeneratorBase.CollectEmbeddedImports(e, localClassNames),
+          ])
           .filter((s) => s.length > 0)
       )].join('');
       const allContent = `${this.generateEntitySubClassFileHeader()} \n ${subclassImports}${zodContent} \n ${sContent}`;
@@ -503,6 +518,7 @@ export const loadModule = () => {
           : '';
 
       const relatedRecordCollections = EntitySubClassGeneratorBase.GenerateRelatedRecordCollections(entity);
+      const embeddedRecords = EntitySubClassGeneratorBase.GenerateEmbeddedRecords(entity);
 
       let sRet: string = `
 ${jsonTypeBlock}
@@ -517,7 +533,7 @@ ${jsonTypeBlock}
  * @public${deprecatedFlag}
  */
 ${includeFileHeader ? subClassImportStatement : ''}@RegisterClass(BaseEntity, '${entity.Name}')
-export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${relatedRecordCollections}${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}${validateFunction ? '\n\n' + validateFunction : ''}
+export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${relatedRecordCollections}${embeddedRecords}${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}${validateFunction ? '\n\n' + validateFunction : ''}
 
 ${fields}
 }
@@ -818,6 +834,179 @@ ${fields}
    */
   protected static EscapeSingleQuotes(value: string): string {
     return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  }
+
+  /**
+   * Emits `{Field}_Object` / `{Field}_EnsureObject()` for every FK field whose
+   * `EmbeddedRecord` column holds a config object.
+   *
+   * RelatedEntity and the FK field name come from the row (`RelatedEntityID`, `Name`),
+   * not the JSON. `AllowsNull` on the same row decides the getter's nullability.
+   *
+   * @param entity - The entity being generated.
+   * @returns The declarations block, or an empty string when none are declared.
+   */
+  public static GenerateEmbeddedRecords(entity: EntityInfo): string {
+    const declared = (entity.Fields ?? []).filter(
+      f => f.EmbeddedRecord && String(f.EmbeddedRecord).trim().length > 0,
+    );
+    if (declared.length === 0) {
+      return '';
+    }
+
+    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+    const blocks: string[] = [];
+    const seen = new Set<string>();
+
+    for (const field of declared) {
+      const config = EntitySubClassGeneratorBase.ParseEmbeddedRecordConfig(entity, field);
+      if (!config) {
+        continue;
+      }
+      const nameKey = `${field.Name}_Object`.toLowerCase();
+      if (seen.has(nameKey)) {
+        logError(
+          `[EmbeddedRecord] ${entity.Name}.${field.Name}: duplicate generated name '${field.Name}_Object'; skipping.`,
+        );
+        continue;
+      }
+      seen.add(nameKey);
+      const related = field.RelatedEntityID ? md.EntityByID(field.RelatedEntityID) : undefined;
+      if (!related) {
+        logError(
+          `[EmbeddedRecord] ${entity.Name}.${field.Name}: RelatedEntityID is missing or unknown; skipping.`,
+        );
+        continue;
+      }
+      blocks.push(EntitySubClassGeneratorBase.RenderEmbeddedRecord(entity, field, related, config));
+    }
+
+    return blocks.length > 0 ? '\n' + blocks.join('\n') : '';
+  }
+
+  /**
+   * Import statements for embedded peers that live in another generated file.
+   *
+   * @param entity - The owning entity.
+   * @param localClassNames - Class names already emitted in this file.
+   */
+  public static CollectEmbeddedImports(entity: EntityInfo, localClassNames: Set<string>): string[] {
+    const declared = (entity.Fields ?? []).filter(
+      f => f.EmbeddedRecord && String(f.EmbeddedRecord).trim().length > 0 && f.RelatedEntityID,
+    );
+    if (declared.length === 0) {
+      return [];
+    }
+    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+    const imports: string[] = [];
+    const seen = new Set<string>();
+    for (const field of declared) {
+      const related = md.EntityByID(field.RelatedEntityID);
+      if (!related) {
+        continue;
+      }
+      const className = `${related.ClassName}Entity`;
+      if (localClassNames.has(className) || seen.has(className)) {
+        continue;
+      }
+      seen.add(className);
+      const coreSchema = typeof mj_core_schema === 'function' ? mj_core_schema() : String(mj_core_schema);
+      const pkg =
+        related.SchemaName && related.SchemaName.toLowerCase() === String(coreSchema).toLowerCase()
+          ? '@memberjunction/core-entities'
+          : resolveEntityPackageName(related.SchemaName);
+      imports.push(`import { ${className} } from '${pkg}';\n`);
+    }
+    return imports;
+  }
+
+  /**
+   * Parses and validates one field's `EmbeddedRecord` JSON.
+   * Invalid metadata is skipped with a logged error rather than throwing.
+   */
+  public static ParseEmbeddedRecordConfig(
+    entity: EntityInfo,
+    field: EntityFieldInfo,
+  ): EmbeddedRecordConfig | null {
+    const label = `${entity.Name}.${field.Name}`;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(String(field.EmbeddedRecord));
+    } catch (e) {
+      logError(
+        `[EmbeddedRecord] ${label}: EmbeddedRecord is not valid JSON ` +
+        `(${e instanceof Error ? e.message : String(e)}); skipping.`,
+      );
+      return null;
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      logError(`[EmbeddedRecord] ${label}: expected a JSON object; skipping.`);
+      return null;
+    }
+    const config = parsed as EmbeddedRecordConfig;
+    const clearModes = ['delete', 'orphan', 'refuse'];
+    if (config.OnClear && !clearModes.includes(config.OnClear)) {
+      logError(`[EmbeddedRecord] ${label}: invalid OnClear '${config.OnClear}'; skipping.`);
+      return null;
+    }
+    const nestedModes = ['inherit', 'related'];
+    if (config.LoadNested && !nestedModes.includes(config.LoadNested)) {
+      logError(`[EmbeddedRecord] ${label}: invalid LoadNested '${config.LoadNested}'; skipping.`);
+      return null;
+    }
+    const emittedName = field.CodeName ? SafeCodeName(field) : field.Name;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(emittedName)) {
+      logError(`[EmbeddedRecord] ${label}: emitted name '${emittedName}' is not a valid TypeScript identifier; skipping.`);
+      return null;
+    }
+    return config;
+  }
+
+  /**
+   * Renders the private companion plus the public `{Field}_Object` / `{Field}_EnsureObject` API.
+   */
+  protected static RenderEmbeddedRecord(
+    entity: EntityInfo,
+    field: EntityFieldInfo,
+    related: EntityInfo,
+    config: EmbeddedRecordConfig,
+  ): string {
+    const relatedClass = `${related.ClassName}Entity`;
+    const getterType = field.AllowsNull ? `${relatedClass} | null` : relatedClass;
+    const code = field.CodeName ? SafeCodeName(field) : field.Name;
+    const lines: string[] = [
+      `ForeignKeyField: '${EntitySubClassGeneratorBase.EscapeSingleQuotes(field.Name)}'`,
+      `RelatedEntity: '${EntitySubClassGeneratorBase.EscapeSingleQuotes(related.Name)}'`,
+    ];
+    if (config.OnClear) {
+      lines.push(`OnClear: '${config.OnClear}'`);
+    }
+    if (config.LoadNested) {
+      lines.push(`LoadNested: '${config.LoadNested}'`);
+    }
+    const requiredNote = field.AllowsNull
+      ? ` Null until ${code}_EnsureObject() or Load() finds a value.`
+      : ` Always present after GetEntityObject / NewRecord.`;
+
+    return `
+  /**
+  * Embedded record: ${related.Name}
+  *
+  * 1:1 peer joined by this record's ${field.Name}. Loaded and saved with this
+  * ${entity.Name} record — see packages/MJCore/docs/embedded-records.md.
+  * Declared by EntityField.EmbeddedRecord on '${entity.Name}.${field.Name}'; edit that row, not this file.
+  *${requiredNote}
+  */
+  private readonly __emb_${code} = this.DeclareEmbeddedRecord<${relatedClass}>({
+      ${lines.join(',\n        ')},
+  });
+  public get ${code}_Object(): ${getterType} {
+      return this.__emb_${code}.Value${field.AllowsNull ? '' : '!'};
+  }
+  public ${code}_EnsureObject(): ${relatedClass} {
+      return this.__emb_${code}.Ensure();
+  }
+`;
   }
 
   /**

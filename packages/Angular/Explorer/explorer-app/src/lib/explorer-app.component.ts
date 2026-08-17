@@ -13,8 +13,15 @@ import { DOCUMENT } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
 import { filter, take, takeUntil } from 'rxjs/operators';
-import { CompositeKey, EntityInfo, LogError, Metadata, SetProductionStatus } from '@memberjunction/core';
-import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
+import { CompositeKey, EntityInfo, LogError, Metadata, SetProductionStatus, type PublicAuthProviderInfo } from '@memberjunction/core';
+import {
+  MJAuthBase,
+  StandardUserInfo,
+  AuthErrorType,
+  AuthProviderCatalog,
+  MJ_AUTH_PROVIDER_RESOLUTION,
+  type AuthProviderResolution
+} from '@memberjunction/ng-auth-services';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
 import { SystemValidationService, ServerConnectivityService } from '@memberjunction/ng-explorer-core';
@@ -49,7 +56,12 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   public initialPath = '/';
   public HasError = false;
   public ErrorMessage: string = '';
-  public subHeaderText: string = "Welcome back! Please log in to your account.";
+  /**
+   * The neutral greeting shown when there is no auth status to report. Kept as a constant so
+   * {@link ProviderPickerLede} can tell "nothing happened yet" apart from a real status message.
+   */
+  private static readonly DefaultSubHeaderText = 'Welcome back! Please log in to your account.';
+  public subHeaderText: string = MJExplorerAppComponent.DefaultSubHeaderText;
   public showValidationOnly = false;
   /** True when the current URL is the OAuth callback route - used for conditional rendering */
   public isOAuthCallback = false;
@@ -148,9 +160,94 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     @Optional() @Inject(MJ_PRE_SHELL_GUARD) private preShellGuard: PreShellGuard | null,
     private environmentInjector: EnvironmentInjector,
     private viewContainerRef: ViewContainerRef,
+    @Optional() @Inject(MJ_AUTH_PROVIDER_RESOLUTION) private authResolution: AuthProviderResolution | null,
   ) {
     super();
     this.registerClientTools();
+  }
+
+  // ── Multi-provider login ──────────────────────────────────────────────────
+  // The catalog is resolved once, before bootstrap, by AuthServicesModule.forRoot. This
+  // component only renders the outcome; it never fetches or decides.
+
+  /** True while a sign-in is being initiated, so the picker cannot start two at once. */
+  public SigningIn = false;
+
+  /** Providers offered by the server catalog. Empty for a single-provider deployment. */
+  public get AuthProviderChoices(): PublicAuthProviderInfo[] {
+    return this.authResolution?.choices ?? [];
+  }
+
+  /**
+   * Whether to render the picker instead of the single "Log in" button. Only ever true when
+   * the server published 2+ client-visible providers — one option is not a choice.
+   */
+  public get ShowProviderPicker(): boolean {
+    return this.authResolution?.showPicker === true;
+  }
+
+
+  /**
+   * Lede rendered above the provider picker.
+   *
+   * A real auth status message (expired session, provider error) always wins — a failure the user
+   * needs to see must never be displaced by static copy.
+   *
+   * Absent one, this is Login C's lede, which C marks `multi-only`: it explains that there is a
+   * choice to make, so it is suppressed when there is exactly one provider and nothing to choose.
+   */
+  public get ProviderPickerLede(): string | null {
+    if (this.subHeaderText !== MJExplorerAppComponent.DefaultSubHeaderText) {
+      return this.subHeaderText;
+    }
+    return this.ShowProviderPicker ? "Continue with one of your organization's sign-in options." : null;
+  }
+
+  /**
+   * Starts sign-in with the provider the user picked.
+   *
+   * Choosing the provider already wired into DI logs in immediately. Choosing a different one
+   * requires a reload: each browser SDK contributes its Angular providers (interceptors, guards,
+   * config tokens) at module-definition time, so the injector cannot be re-composed in place.
+   * The choice is persisted first, and the reloaded app both bootstraps that provider and starts
+   * its login flow automatically — so the user experiences one click, not two.
+   */
+  public OnAuthProviderSelected(provider: PublicAuthProviderInfo): void {
+    if (this.SigningIn) {
+      return;
+    }
+    this.SigningIn = true;
+
+    const { requiresReload } = AuthProviderCatalog.Select(provider, this.authResolution?.active?.name ?? null);
+    if (requiresReload) {
+      this.document.defaultView?.location.reload();
+      return;
+    }
+
+    this.authBase.login().subscribe({
+      error: (error: unknown) => {
+        this.SigningIn = false;
+        LogError(`[Auth] Sign-in with provider '${provider.name}' failed: ${error instanceof Error ? error.message : String(error)}`);
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  /**
+   * Resumes the login flow after a picker choice forced a reload, so switching providers reads
+   * as a single action. The flag is consumed during resolution, so this fires exactly once.
+   */
+  private startAutoLoginIfPending(): void {
+    if (this.authResolution?.autoLogin) {
+      this.SigningIn = true;
+      this.authBase.login().subscribe({
+        error: (error: unknown) => {
+          this.SigningIn = false;
+          LogError(`[Auth] Automatic sign-in after provider switch failed: ${error instanceof Error ? error.message : String(error)}`);
+          this.cdr.detectChanges();
+        }
+      });
+    }
   }
 
   /**
@@ -289,14 +386,14 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
           switch (authError.type) {
             case AuthErrorType.NO_ACTIVE_SESSION:
-              this.subHeaderText = "Welcome back! Please log in to your account.";
+              this.subHeaderText = MJExplorerAppComponent.DefaultSubHeaderText;
               break;
             case AuthErrorType.INTERACTION_REQUIRED:
             case AuthErrorType.TOKEN_EXPIRED:
               this.subHeaderText = "Your session has expired. Please log in to your account.";
               break;
             default:
-              this.subHeaderText = authError.userMessage || "Welcome back! Please log in to your account.";
+              this.subHeaderText = authError.userMessage || MJExplorerAppComponent.DefaultSubHeaderText;
           }
 
           // Auth state is managed by the provider itself via observables
@@ -323,6 +420,10 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     // Check if this is the OAuth callback route - used for conditional rendering in template
     // Note: We still run setupAuth() to restore the user's session
     this.isOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
+
+    // Resume sign-in when a picker choice required a provider switch (and therefore a reload),
+    // so switching providers stays a single user action.
+    this.startAutoLoginIfPending();
 
     // Track route changes to hide chat overlay on Conversations workspace
     this.router.events

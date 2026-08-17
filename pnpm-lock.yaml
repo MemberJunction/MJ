@@ -4181,6 +4181,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.1.0-edge.2
         version: link:../../../MJGlobal
+      '@memberjunction/ng-ui-components':
+        specifier: 6.1.0-edge.2
+        version: link:../../Generic/ui-components
       '@okta/okta-auth-js':
         specifier: ^7.14.1
         version: 7.14.1(encoding@0.1.13)
@@ -7472,21 +7475,18 @@ importers:
       '@angular/forms':
         specifier: ^21.1.3
         version: 21.1.3(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.1.3(@angular/animations@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
-      '@memberjunction/core':
-        specifier: 6.1.0-edge.2
-        version: link:../../../MJCore
-      '@memberjunction/core-entities':
-        specifier: 6.1.0-edge.2
-        version: link:../../../MJCoreEntities
       '@memberjunction/global':
         specifier: 6.1.0-edge.2
         version: link:../../../MJGlobal
-      '@memberjunction/ng-shared':
-        specifier: 6.1.0-edge.2
-        version: link:../../Explorer/shared
       '@memberjunction/ng-ui-components':
         specifier: 6.1.0-edge.2
         version: link:../ui-components
+      '@types/d3':
+        specifier: ^7.4.3
+        version: 7.4.3
+      d3:
+        specifier: ^7.9.0
+        version: 7.9.0
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2

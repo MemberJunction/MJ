@@ -17,6 +17,7 @@
     "audit-log-types",
     "credential-categories",
     "credential-types",
+    "authentication-providers",
     "resource-types",
     "search-providers",
     "search-scopes",
