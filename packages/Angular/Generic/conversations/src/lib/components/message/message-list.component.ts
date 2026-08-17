@@ -302,12 +302,12 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   private _measuredHeights = new Map<string, number>();
   /** Watches spacers so an item remounts as the user scrolls back toward it. */
   private _spacerObserver?: IntersectionObserver;
-  /**
-   * Timeline key of the topmost item the user has scrolled back to. Stored as a KEY, not
-   * an index, so prepending an older page (which shifts every index) doesn't move it.
-   * Null = follow the tail.
-   */
-  private _mountedTopKey: string | null = null;
+  /** Which spacers the live observer is watching, so it is only rebuilt when the set changes. */
+  private _observedSpacerKeys = '';
+  /** Scroller the window listener is attached to, and its coalescing frame handle. */
+  private _scrollListenerTarget: HTMLElement | null = null;
+  private _onScroll: (() => void) | null = null;
+  private _scrollFrame: number | null = null;
 
   /** Items kept mounted beyond the visible page, above and below. */
   private static readonly MOUNT_BUFFER = 5;
@@ -447,6 +447,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     // ever needs a spacer — the plan's "measure offsetHeight the first time an item is
     // mounted and remember it by key".
     this.measureMountedItems();
+    this.syncScrollListener();
     this.syncOlderObserver();
     this.syncSpacerObserver();
   }
@@ -788,19 +789,59 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   ): { start: number; end: number } {
     const lastIndex = timeline.length - 1;
     const span = DEFAULT_TRANSCRIPT_PAGE_SIZE + MessageListComponent.MOUNT_BUFFER * 2;
+    const tailRange = { start: Math.max(0, timeline.length - span), end: lastIndex };
 
-    if (this._mountedTopKey !== null) {
-      const pinned = timeline.findIndex(item => this.getTimelineKey(item) === this._mountedTopKey);
-      if (pinned >= 0) {
-        // A WINDOW of fixed size that moves with the user — not a span reaching back down
-        // to the newest message. Anchoring the top and letting the bottom stay at the tail
-        // would grow the mounted set every time the user scrolled up and never shrink it,
-        // which is the unbounded DOM this phase exists to prevent.
-        return { start: pinned, end: Math.min(lastIndex, pinned + span - 1) };
-      }
-      this._mountedTopKey = null;   // that item is gone — fall back to the tail
+    const root = this.resolveScrollParent();
+    if (!root || this._renderedMessages.size === 0) {
+      return tailRange;   // first paint — follow the tail
     }
-    return { start: Math.max(0, timeline.length - span), end: lastIndex };
+
+    // Derived from SCROLL POSITION, which nothing in the render loop feeds back into.
+    //
+    // Reacting to spacer intersections instead is circular: a spacer's height is an
+    // estimate, so where it sits decides what is visible, which decides which spacers fire,
+    // which changes what is mounted, which changes heights. That loop is what made the
+    // transcript replay the same region; constraining it to one direction only traded the
+    // ping-pong for dead zones that never remounted.
+    const rootTop = root.getBoundingClientRect().top;
+    const viewportHeight = root.clientHeight;
+    let firstVisible = -1;
+    let lastVisible = -1;
+
+    for (let i = 0; i < timeline.length; i++) {
+      const node = this.nodeForKey(this.getTimelineKey(timeline[i]));
+      if (!node) {
+        continue;
+      }
+      const rect = node.getBoundingClientRect();
+      const top = rect.top - rootTop;
+      const bottom = top + rect.height;
+      if (bottom > 0 && firstVisible < 0) {
+        firstVisible = i;
+      }
+      if (top < viewportHeight) {
+        lastVisible = i;
+      }
+    }
+    if (firstVisible < 0 || lastVisible < 0) {
+      return tailRange;
+    }
+
+    return {
+      start: Math.max(0, firstVisible - MessageListComponent.MOUNT_BUFFER),
+      end: Math.min(lastIndex, lastVisible + MessageListComponent.MOUNT_BUFFER)
+    };
+  }
+
+  /** The rendered DOM node for a timeline key, whatever kind of entry backs it. */
+  private nodeForKey(key: string): HTMLElement | undefined {
+    const entry = this._renderedMessages.get(key);
+    if (!entry) {
+      return undefined;
+    }
+    return entry.kind === 'embedded' || entry.kind === 'spacer'
+      ? (entry.ref.rootNodes[0] as HTMLElement | undefined)
+      : (entry.ref.location.nativeElement as HTMLElement | undefined);
   }
 
   /**
@@ -911,17 +952,57 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
+   * Re-evaluates the mounted window as the user scrolls.
+   *
+   * Attached once to the host's scroller. Coalesced onto an animation frame so a fast scroll
+   * costs one re-render per frame rather than one per event, and skipped entirely when the
+   * window has not actually moved.
+   */
+  private syncScrollListener(): void {
+    const root = this.resolveScrollParent();
+    if (!root || root === this._scrollListenerTarget) {
+      return;
+    }
+    this.detachScrollListener();
+    this._scrollListenerTarget = root;
+    this._onScroll = () => {
+      if (this._scrollFrame !== null) {
+        return;
+      }
+      this._scrollFrame = requestAnimationFrame(() => {
+        this._scrollFrame = null;
+        if (this.messages?.length) {
+          this.updateMessages(this.messages);
+        }
+      });
+    };
+    root.addEventListener('scroll', this._onScroll, { passive: true });
+  }
+
+  private detachScrollListener(): void {
+    if (this._scrollListenerTarget && this._onScroll) {
+      this._scrollListenerTarget.removeEventListener('scroll', this._onScroll);
+    }
+    this._scrollListenerTarget = null;
+    this._onScroll = null;
+    if (this._scrollFrame !== null) {
+      cancelAnimationFrame(this._scrollFrame);
+      this._scrollFrame = null;
+    }
+  }
+
+  /**
    * Watches the current spacers so scrolling back toward one remounts it.
    *
    * Rebuilt on every render because spacers come and go. Remounting reads from `messages`,
    * which is already in memory — this never triggers a fetch.
    */
   private syncSpacerObserver(): void {
-    this._spacerObserver?.disconnect();
-    this._spacerObserver = undefined;
-
     const root = this.resolveScrollParent();
     if (!root) {
+      this._spacerObserver?.disconnect();
+      this._spacerObserver = undefined;
+      this._observedSpacerKeys = '';
       return;
     }
     const spacers: Array<{ key: string; el: HTMLElement }> = [];
@@ -934,8 +1015,24 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       }
     });
     if (spacers.length === 0) {
+      this._spacerObserver?.disconnect();
+      this._spacerObserver = undefined;
+      this._observedSpacerKeys = '';
       return;
     }
+
+    // Rebuild ONLY when the spacer set actually changes.
+    //
+    // This runs every checked cycle, and a fresh IntersectionObserver delivers an initial
+    // callback for everything it observes. Rebuilding unconditionally therefore re-fired
+    // remountAround on every change-detection pass, which re-rendered, which triggered
+    // another pass — the transcript visibly stuck, replaying the same region.
+    const signature = spacers.map(s => s.key).sort().join('|');
+    if (this._spacerObserver && signature === this._observedSpacerKeys) {
+      return;
+    }
+    this._spacerObserver?.disconnect();
+    this._observedSpacerKeys = signature;
 
     this._spacerObserver = new IntersectionObserver(
       entries => {
@@ -943,9 +1040,10 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
         if (!hit) {
           return;
         }
-        const match = spacers.find(s => s.el === hit.target);
-        if (match) {
-          this.remountAround(match.key);
+        // The range is computed from scroll position; a spacer coming into view just means
+        // it is time to recompute. No key is threaded through, so there is no feedback loop.
+        if (this.messages?.length) {
+          this.updateMessages(this.messages);
         }
       },
       { root, threshold: 0.01 }
@@ -955,21 +1053,6 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     }
   }
 
-  /** Widens the mounted span to cover a spacer the user has scrolled back to. */
-  private remountAround(key: string): void {
-    const timeline = BuildConversationTimeline(this.messages);
-    const index = timeline.findIndex(item => this.getTimelineKey(item) === key);
-    if (index < 0) {
-      return;
-    }
-    const newTop = Math.max(0, index - MessageListComponent.MOUNT_BUFFER);
-    const newTopKey = timeline[newTop] ? this.getTimelineKey(timeline[newTop]) : null;
-    if (newTopKey === this._mountedTopKey) {
-      return;   // already covered
-    }
-    this._mountedTopKey = newTopKey;
-    this.updateMessages(this.messages);
-  }
 
   /** Stable render key for a timeline item — message ID, or a prefixed session key for session blocks. */
   private getTimelineKey(item: ConversationTimelineItem<MJConversationDetailEntity>): string {

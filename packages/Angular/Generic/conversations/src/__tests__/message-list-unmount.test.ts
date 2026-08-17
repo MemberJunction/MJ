@@ -81,7 +81,13 @@ function createHarness(messages: Array<Record<string, unknown>>): Harness {
   open['messageExtraTemplate'] = null;
   open['_renderedMessages'] = new Map();
   open['_measuredHeights'] = new Map();
-  open['_mountedTopKey'] = null;
+  // The real computeMountedRange reads scroll position off live DOM rects; tests that are
+  // about the mount/spacer RULES stub it, and the range logic gets its own test below.
+  open['computeMountedRange'] = (timeline: unknown[]) => ({
+    start: Math.max(0, timeline.length - 20),
+    end: timeline.length - 1
+  });
+  open['resolveScrollParent'] = () => null;
   open['_previousMessageCount'] = 0;
   open['_previousFirstKey'] = null;
   open['updateMessageItemInstance'] = vi.fn();
@@ -103,6 +109,88 @@ function kindsByKey(h: Harness): Record<string, string> {
   entries(h).forEach((v, k) => { out[k] = v.kind; });
   return out;
 }
+
+describe('MessageListComponent — mounted range follows scroll position', () => {
+  /**
+   * The range is derived from where things actually are on screen, NOT from which spacer
+   * happened to fire an IntersectionObserver.
+   *
+   * Reacting to spacers is circular — a spacer's height is an estimate, so where it sits
+   * decides what is visible, which decides which spacers fire, which changes what is
+   * mounted, which changes heights. That loop made the transcript replay the same region;
+   * constraining it to one direction traded the ping-pong for dead zones that never
+   * remounted. Scroll position is an input nothing in the render loop writes back to.
+   */
+  function harnessWithLayout(count: number, itemHeight: number, scrollTop: number, viewport: number) {
+    const messages = Array.from({ length: count }, (_, i) => detail(`d-${i}`, i + 1));
+    const h = createHarness(messages);
+
+    const rootTop = 0;
+    const root = {
+      clientHeight: viewport,
+      getBoundingClientRect: () => ({ top: rootTop })
+    };
+    h.open['resolveScrollParent'] = () => root;
+
+    // Every item is laid out contiguously; scrolling shifts them all up by scrollTop.
+    h.open['nodeForKey'] = (key: string) => {
+      const index = Number(key.replace('d-', ''));
+      if (Number.isNaN(index)) {
+        return undefined;
+      }
+      const top = index * itemHeight - scrollTop;
+      return { getBoundingClientRect: () => ({ top, height: itemHeight }) };
+    };
+    // Non-empty so computeMountedRange does not take the first-paint shortcut.
+    h.open['_renderedMessages'] = new Map([['seed', { kind: 'component', ref: {} }]]);
+    // These tests exercise the REAL range logic, so drop the harness's stub of it.
+    delete h.open['computeMountedRange'];
+    return { h, messages };
+  }
+
+  it('mounts what is on screen plus a buffer, at the top of a long transcript', () => {
+    // 100 items of 100px, viewport 500px, scrolled to the very top → items 0-4 visible.
+    const { h, messages } = harnessWithLayout(100, 100, 0, 500);
+    const timeline = messages.map(m => ({ Kind: 'message' as const, Detail: m }));
+
+    const range = invokePrivate(h.component, 'computeMountedRange', timeline) as { start: number; end: number };
+
+    expect(range.start).toBe(0);        // clamped — nothing above index 0
+    expect(range.end).toBe(9);          // last visible (4) + buffer (5)
+  });
+
+  it('moves the window down as the user scrolls down', () => {
+    // Scrolled 3000px → items 30-34 visible.
+    const { h, messages } = harnessWithLayout(100, 100, 3000, 500);
+    const timeline = messages.map(m => ({ Kind: 'message' as const, Detail: m }));
+
+    const range = invokePrivate(h.component, 'computeMountedRange', timeline) as { start: number; end: number };
+
+    expect(range.start).toBe(25);       // first visible (30) - buffer (5)
+    expect(range.end).toBe(39);         // last visible (34) + buffer (5)
+  });
+
+  it('moves the window back up as the user scrolls up — no dead zone', () => {
+    // The bug this replaces: after scrolling up, items below stayed spacered forever and
+    // rendered as blank space that never filled in.
+    const { h, messages } = harnessWithLayout(100, 100, 500, 500);
+    const timeline = messages.map(m => ({ Kind: 'message' as const, Detail: m }));
+
+    const range = invokePrivate(h.component, 'computeMountedRange', timeline) as { start: number; end: number };
+
+    expect(range.start).toBe(0);        // first visible (5) - buffer, clamped
+    expect(range.end).toBe(14);         // last visible (9) + buffer
+  });
+
+  it('stays bounded no matter how far down the transcript the user is', () => {
+    const { h, messages } = harnessWithLayout(500, 100, 20000, 500);
+    const timeline = messages.map(m => ({ Kind: 'message' as const, Detail: m }));
+
+    const range = invokePrivate(h.component, 'computeMountedRange', timeline) as { start: number; end: number };
+
+    expect(range.end - range.start + 1).toBeLessThanOrEqual(20);
+  });
+});
 
 describe('MessageListComponent — DOM unmount', () => {
   it('spacers out items beyond the mounted span and keeps the tail live', () => {
@@ -127,8 +215,8 @@ describe('MessageListComponent — DOM unmount', () => {
     // The tail carries streaming output, isLastMessage affordances and suggested responses.
     const messages = Array.from({ length: 40 }, (_, i) => detail(`d-${i}`, i + 1));
     const h = createHarness(messages);
-    // Pin the span to the very top so the tail falls outside it.
-    h.open['_mountedTopKey'] = 'd-0';
+    // Force the window to the very top so the tail falls outside it.
+    h.open['computeMountedRange'] = () => ({ start: 0, end: 19 });
 
     invokePrivate(h.component, 'updateMessages', messages);
 
@@ -153,13 +241,13 @@ describe('MessageListComponent — DOM unmount', () => {
     const messages = Array.from({ length: 40 }, (_, i) => detail(`d-${i}`, i + 1));
     const h = createHarness(messages);
 
-    // Mount everything first (span pinned to the top) so the rows have a rendered height…
-    h.open['_mountedTopKey'] = 'd-0';
+    // Mount the top of the list first so those rows have a rendered height…
+    h.open['computeMountedRange'] = () => ({ start: 0, end: 19 });
     invokePrivate(h.component, 'updateMessages', messages);
     expect(kindsByKey(h)['d-0']).toBe('component');
 
-    // …then let the span follow the tail again, unmounting the old ones.
-    h.open['_mountedTopKey'] = null;
+    // …then move the window to the tail, unmounting them.
+    h.open['computeMountedRange'] = (t: unknown[]) => ({ start: t.length - 20, end: t.length - 1 });
     invokePrivate(h.component, 'updateMessages', messages);
 
     // The stubbed component reported offsetHeight 140 before being destroyed. A spacer
@@ -188,63 +276,36 @@ describe('MessageListComponent — DOM unmount', () => {
     expect(spacerCtx[0].height).toBe(72);   // ESTIMATED_MESSAGE_HEIGHT
   });
 
-  it('remounts around a spacer WITHOUT asking the host for more data', () => {
-    const messages = Array.from({ length: 40 }, (_, i) => detail(`d-${i}`, i + 1));
-    const h = createHarness(messages);
-    const olderRequested = vi.fn();
-    h.open['OlderRequested'] = { emit: olderRequested };
 
-    invokePrivate(h.component, 'updateMessages', messages);
-    expect(kindsByKey(h)['d-10']).toBe('spacer');
 
-    // The user scrolls back and d-10's spacer enters the viewport.
-    invokePrivate(h.component, 'remountAround', 'd-10');
 
-    expect(kindsByKey(h)['d-10']).toBe('component');
-    // The rows were already in `messages` — remounting is a DOM operation, not a fetch.
-    expect(olderRequested).not.toHaveBeenCalled();
-  });
-
-  it('keeps the mounted set BOUNDED after scrolling back', () => {
-    // REGRESSION: pinning the top and leaving the bottom at the tail made the mounted set
-    // grow every time the user scrolled up, and never shrink — 60 components mounted with
-    // zero spacers, which is the exact unbounded DOM this phase exists to prevent.
+  it('does not rebuild the spacer observer when the spacer set is unchanged', () => {
+    // syncSpacerObserver runs every checked cycle, and a fresh IntersectionObserver delivers
+    // an initial callback for everything it observes — so rebuilding unconditionally re-fired
+    // remountAround on every change-detection pass.
     const messages = Array.from({ length: 60 }, (_, i) => detail(`d-${i}`, i + 1));
     const h = createHarness(messages);
-
     invokePrivate(h.component, 'updateMessages', messages);
-    const initialMounted = Object.values(kindsByKey(h)).filter(k => k === 'component').length;
 
-    // Scroll back toward the top a few times.
-    invokePrivate(h.component, 'remountAround', 'd-30');
-    invokePrivate(h.component, 'remountAround', 'd-15');
-    invokePrivate(h.component, 'remountAround', 'd-2');
+    let constructed = 0;
+    const Original = globalThis.IntersectionObserver;
+    class FakeIO {
+      constructor() { constructed++; }
+      observe(): void { /* no-op */ }
+      disconnect(): void { /* no-op */ }
+    }
+    (globalThis as unknown as { IntersectionObserver: unknown }).IntersectionObserver = FakeIO;
+    h.open['resolveScrollParent'] = () => ({ tag: 'scroller' });
 
-    const mounted = Object.values(kindsByKey(h)).filter(k => k === 'component').length;
-    // The window MOVES; it does not accumulate. (+1 for the always-mounted tail.)
-    expect(mounted).toBeLessThanOrEqual(initialMounted + 1);
-    expect(mounted).toBeLessThan(30);
-    // …and the far end is now spacered, because the user is up at the top.
-    expect(kindsByKey(h)['d-50']).toBe('spacer');
+    try {
+      invokePrivate(h.component, 'syncSpacerObserver');
+      invokePrivate(h.component, 'syncSpacerObserver');
+      invokePrivate(h.component, 'syncSpacerObserver');
+    } finally {
+      (globalThis as unknown as { IntersectionObserver: unknown }).IntersectionObserver = Original;
+    }
+
+    expect(constructed).toBe(1);
   });
 
-  it('pins the mounted span by KEY so a prepend does not collapse it', () => {
-    // Indices shift when an older page arrives; a stored index would silently point at a
-    // different message and yank the user back toward the tail.
-    const messages = Array.from({ length: 40 }, (_, i) => detail(`d-${i}`, i + 1));
-    const h = createHarness(messages);
-    invokePrivate(h.component, 'updateMessages', messages);
-    invokePrivate(h.component, 'remountAround', 'd-10');
-    const pinned = h.open['_mountedTopKey'];
-
-    // Ten OLDER messages arrive at the head.
-    const older = Array.from({ length: 10 }, (_, i) => detail(`older-${i}`, -10 + i));
-    const grown = [...older, ...messages];
-    h.open['messages'] = grown;
-    invokePrivate(h.component, 'updateMessages', grown);
-
-    expect(h.open['_mountedTopKey']).toBe(pinned);
-    expect(kindsByKey(h)['d-10']).toBe('component');   // still mounted after the shift
-    expect(kindsByKey(h)['older-0']).toBe('spacer');   // the new arrivals are spacered
-  });
 });

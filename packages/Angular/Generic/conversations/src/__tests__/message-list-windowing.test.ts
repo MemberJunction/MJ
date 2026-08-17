@@ -51,7 +51,11 @@ function createHarness(scrollHeight = 1000, scrollTop = 200): Harness {
   // assertions aren't entangled with observer setup.
   open['syncOlderObserver'] = vi.fn();
   open['syncSpacerObserver'] = vi.fn();
+  open['syncScrollListener'] = vi.fn();
   open['measureMountedItems'] = vi.fn();
+  // Phase 6 derives the mounted span from live DOM rects; these tests are about prepend and
+  // scroll restoration, so keep everything mounted and let the unmount suite cover the span.
+  open['computeMountedRange'] = (timeline: unknown[]) => ({ start: 0, end: timeline.length - 1 });
 
   return { component, open, scrollEl, olderRequestedEmit, scrollToBottom };
 }
