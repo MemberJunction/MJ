@@ -252,6 +252,25 @@ describe('LiveKitBridge — participants', () => {
         expect(bot).toMatchObject({ Role: 'Agent', IsAgent: true });
     });
 
+    // The multi-agent case, which is the ONLY kind of agent a bridge can actually see: an SFU never lists a
+    // participant in its own remote roster, so every co-agent arrives with IsLocal false. Deriving agent-ness
+    // from IsLocal recorded the whole rest of the panel as human — and, separately, as Role 'Participant'.
+    it('flags a REMOTE co-agent as an Agent in both IsAgent and Role', async () => {
+        const bridge = makeBridge(sdk);
+        await bridge.Connect(ctx());
+        sdk.DriveJoin({ Identity: 'agent-9F2C', DisplayName: 'Co-Agent', Role: 'Participant', IsLocal: false });
+        const coAgent = (await bridge.GetParticipants()).find((p) => p.ExternalId === 'agent-9F2C');
+        expect(coAgent).toMatchObject({ Role: 'Agent', IsAgent: true });
+    });
+
+    it('does not mistake a human whose name merely contains "agent" for a bot', async () => {
+        const bridge = makeBridge(sdk);
+        await bridge.Connect(ctx());
+        sdk.DriveJoin({ Identity: 'u-agentina', DisplayName: 'Agentina', Role: 'Participant', IsLocal: false });
+        const human = (await bridge.GetParticipants()).find((p) => p.ExternalId === 'u-agentina');
+        expect(human).toMatchObject({ Role: 'Participant', IsAgent: false });
+    });
+
     it('OnParticipantChange fires the full roster on a join and a leave', async () => {
         const bridge = makeBridge(sdk);
         await bridge.Connect(ctx());

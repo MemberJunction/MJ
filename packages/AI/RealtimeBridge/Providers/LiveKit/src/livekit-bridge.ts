@@ -45,6 +45,7 @@ import {
     LiveKitParticipantRole,
     LiveKitAudioFrame,
     LiveKitConnectArgs,
+    IsAgentParticipant,
 } from './livekit-sdk';
 import { LiveKitMeetingControlsEventSource } from './livekit-meeting-controls';
 
@@ -55,11 +56,12 @@ import { LiveKitMeetingControlsEventSource } from './livekit-meeting-controls';
 export const LIVEKIT_BRIDGE_DRIVER_CLASS = 'LiveKitBridge';
 
 /**
- * Maps a LiveKit participant role to the bridge's {@link BridgeParticipantRole}. The bot (`IsLocal`) is
- * surfaced as `'Agent'`.
+ * Maps a LiveKit participant role to the bridge's {@link BridgeParticipantRole}. An agent bot is surfaced as
+ * `'Agent'` — which outranks any room role it also holds, since a consumer asking "is this a person?" must
+ * not get `'Host'` for a bot.
  */
-function mapParticipantRole(role: LiveKitParticipantRole, isLocal: boolean | undefined): BridgeParticipantRole {
-    if (isLocal) {
+function mapParticipantRole(role: LiveKitParticipantRole, isAgent: boolean): BridgeParticipantRole {
+    if (isAgent) {
         return 'Agent';
     }
     switch (role) {
@@ -72,25 +74,16 @@ function mapParticipantRole(role: LiveKitParticipantRole, isLocal: boolean | und
     }
 }
 
-/**
- * The bot-identity convention the LiveKit room coordinator mints (`agent-<agentSessionId>`). A bridge only
- * knows its OWN bot via `IsLocal`; OTHER agents in a multi-agent room are REMOTE participants, so they must
- * be recognized by this identity prefix. Without it every other agent reads as a human — breaking
- * turn-taking's agent-exclusion (an agent treats another agent's speech as being addressed) AND the
- * "are any humans still present?" occupancy check the engine uses to auto-leave an empty room.
- */
-function isAgentParticipantIdentity(identity: string | undefined): boolean {
-    return typeof identity === 'string' && identity.toLowerCase().startsWith('agent-');
-}
-
 /** Maps a LiveKit participant onto the bridge's {@link BridgeParticipantInfo}. */
 function toBridgeParticipant(p: LiveKitParticipant): BridgeParticipantInfo {
+    // Decided ONCE and used for both fields: a row saying IsAgent=true / Role='Participant' about the same
+    // participant is what shipped before, and consumers disagree about which half to believe.
+    const isAgent = IsAgentParticipant(p);
     return {
         ExternalId: p.Identity,
         DisplayName: p.DisplayName,
-        Role: mapParticipantRole(p.Role, p.IsLocal),
-        // The local bot OR any remote agent bot (by identity convention) counts as an agent, not a human.
-        IsAgent: p.IsLocal === true || isAgentParticipantIdentity(p.Identity),
+        Role: mapParticipantRole(p.Role, isAgent),
+        IsAgent: isAgent,
     };
 }
 

@@ -61,6 +61,27 @@ export interface LiveKitParticipant {
 }
 
 /**
+ * The bot-identity convention the LiveKit room coordinator mints (`agent-<agentSessionId>`).
+ *
+ * `IsLocal` identifies only a bridge's OWN bot, and an SFU never lists a participant in its own remote
+ * roster — so in a multi-agent room `IsLocal` is false for every agent a bridge can actually see. Agent-ness
+ * is therefore a property of the IDENTITY, not of which bridge observed it, and this predicate is the single
+ * place that decision is made (both the bridge roster and the Meeting Controls roster read it).
+ */
+export function IsAgentParticipantIdentity(identity: string | undefined): boolean {
+    return typeof identity === 'string' && identity.toLowerCase().startsWith('agent-');
+}
+
+/**
+ * Whether a participant is an agent bot: this bridge's own bot, or any other agent in the room by
+ * {@link IsAgentParticipantIdentity}. Both roster mappers derive `IsAgent` AND `Role` from this one answer,
+ * so the two fields on a row can never disagree about the same participant.
+ */
+export function IsAgentParticipant(p: LiveKitParticipant): boolean {
+    return p.IsLocal === true || IsAgentParticipantIdentity(p.Identity);
+}
+
+/**
  * One frame of raw per-participant audio the seam surfaces for diarization + the agent's "hearing".
  * Because LiveKit subscribes tracks **per participant**, every inbound frame is already attributed to a
  * single speaker — diarization comes free from the SFU.
