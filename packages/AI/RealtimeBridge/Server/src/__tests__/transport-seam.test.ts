@@ -1337,6 +1337,18 @@ describe('AIBridgeEngine — turn moderator (LLM router)', () => {
         }
     });
 
+    // Backs the RealtimeRoomMode query: an operator must be able to ASK whether rooms are moderated,
+    // because the alternative — a deployment that mistyped MJ_REALTIME_MODERATOR_MODE — is otherwise
+    // only discoverable by listening to a panel talk over itself.
+    it('HasTurnModerator reports whether a moderator is actually bound', () => {
+        engine().SetTurnModerator(undefined);
+        expect(engine().HasTurnModerator).toBe(false);
+        engine().SetTurnModerator(async () => []);
+        expect(engine().HasTurnModerator).toBe(true);
+        engine().SetTurnModerator(undefined);
+        expect(engine().HasTurnModerator).toBe(false);
+    });
+
     it('falls back to per-agent matchers when no moderator is set', async () => {
         engine().SetTurnModerator(undefined);
         const addr = 'loopback://no-moderator-room';

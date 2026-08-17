@@ -865,6 +865,19 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         this.turnModerator = moderator;
     }
 
+    /**
+     * Whether a room turn moderator is bound — i.e. whether a multi-agent room will actually take turns
+     * rather than run free-for-all.
+     *
+     * Reports the EFFECTIVE state, not what an env var says. `MJ_REALTIME_MODERATOR_MODE=on` is only the
+     * usual way the moderator gets bound; a host can bind one directly, and a typo in the variable binds
+     * nothing while still looking set. Since the difference between a moderated panel and crosstalk is
+     * otherwise only AUDIBLE, an operator needs a way to ask the running server which one they have.
+     */
+    public get HasTurnModerator(): boolean {
+        return this.turnModerator != null;
+    }
+
     /** Returns the active identities for an agent. @see AIBridgeEngineBase.IdentitiesForAgent */
     public IdentitiesForAgent(agentId: string, providerId?: string): MJAIBridgeAgentIdentityEntity[] {
         return this.Base.IdentitiesForAgent(agentId, providerId);

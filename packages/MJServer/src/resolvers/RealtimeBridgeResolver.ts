@@ -243,6 +243,16 @@ export class RealtimeModelVoicesResult {
   Voices: RealtimeVoiceOptionResult[];
 }
 
+/**
+ * How a multi-agent room on THIS server will behave — the one thing about a panel that is otherwise
+ * only discoverable by listening to it.
+ */
+@ObjectType()
+export class RealtimeRoomModeResult {
+  @Field(() => Boolean)
+  ModeratorMode: boolean;
+}
+
 @Resolver()
 export class RealtimeBridgeResolver extends ResolverBase {
   /** Durable `AIAgentSession` record manager — creates the session row the bridge FK-references. */
@@ -495,6 +505,27 @@ export class RealtimeBridgeResolver extends ResolverBase {
       LogError(`EndLiveKitRoom failed: ${error instanceof Error ? error.message : String(error)}`);
       return false;
     }
+  }
+
+  /**
+   * Reports whether multi-agent rooms on this server are MODERATED (agents take turns through the LLM
+   * router) or FREE-FOR-ALL (every agent auto-responds to everything).
+   *
+   * Exists because the difference is otherwise only **audible**: `MJ_REALTIME_MODERATOR_MODE` is off by
+   * default, a deployment that forgets it gets crosstalk, and nothing at the API surface says so — the
+   * mutations all succeed either way. Reads the engine's effective state rather than the env var, so a
+   * typo in the variable reports honestly instead of reporting what was intended.
+   *
+   * Authenticated (it describes server configuration) but not otherwise gated: it is a single boolean
+   * about how rooms behave, which any client that can start one already needs to know.
+   */
+  @Query(() => RealtimeRoomModeResult)
+  RealtimeRoomMode(@Ctx() context: AppContext = {} as AppContext): RealtimeRoomModeResult {
+    const user = this.GetUserFromPayload(context.userPayload);
+    if (!user) {
+      throw new Error('RealtimeRoomMode requires an authenticated user.');
+    }
+    return { ModeratorMode: AIBridgeEngine.Instance.HasTurnModerator };
   }
 
   /**
