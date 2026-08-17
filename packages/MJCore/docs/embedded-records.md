@@ -144,6 +144,22 @@ flowchart TD
 A clean owner with a dirty peer still saves — `Dirty` rolls up. A header-only
 edit on a clean peer stays a single-node plan.
 
+`IsGraphNodeSave` is **not** a header-only switch. The graph executor sets it
+on the root so the node does not re-enter graph planning — it skips *every*
+companion, including embeds. If you need to write collections yourself after
+preparing them (pricing, expansion, sequence) but still persist the embeds
+with the header, pass `SkipRelatedCollections: true` instead:
+
+```ts
+await order.Save({ SkipRelatedCollections: true });
+// InitialPaymentDetail rode the graph. Lines did not — write them next.
+```
+
+The result graph always serializes an exposed peer, even when it is clean.
+Request serialize still omits it so a header-only edit stays cheap; result
+serialize is what lets the browser mark the peer saved. Without that, the
+next `Save()` re-sends `IsNew: true` and the server re-INSERTs the same UUID.
+
 `OnClear` (default `'orphan'`):
 
 | | On owner Save | On owner Delete |

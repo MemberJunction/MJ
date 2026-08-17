@@ -910,7 +910,11 @@ ${fields}
         continue;
       }
       seen.add(className);
-      const pkg = resolveEntityPackageName(related.SchemaName);
+      const coreSchema = typeof mj_core_schema === 'function' ? mj_core_schema() : String(mj_core_schema);
+      const pkg =
+        related.SchemaName && related.SchemaName.toLowerCase() === String(coreSchema).toLowerCase()
+          ? '@memberjunction/core-entities'
+          : resolveEntityPackageName(related.SchemaName);
       imports.push(`import { ${className} } from '${pkg}';\n`);
     }
     return imports;

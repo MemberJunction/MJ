@@ -107,12 +107,11 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
         if (this.instance || this.constructing) {
             return;
         }
-        if (visited.has(this.RelatedEntityName)) {
-            throw new Error(
-                `EmbeddedRecord '${this.Name}' on ${this.Owner.EntityInfo?.Name}: cycle detected ` +
-                `constructing '${this.RelatedEntityName}' (already constructing ${[...visited].join(' → ')}).`,
-            );
-        }
+        // Sibling embeds targeting the same entity (BillToAddress + ShipToAddress)
+        // are not a cycle. ConstructUninitializedEntity does not recurse into
+        // InitializeEmbeddedRecords, so a true construction cycle cannot form here.
+        // The per-companion `constructing` flag still collapses a re-entrant call
+        // on the same companion.
         this.constructing = true;
         visited.add(this.RelatedEntityName);
         try {
@@ -140,7 +139,10 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
         if (this.exposed) {
             return this.instance;
         }
-        if (this.instance.IsSaved) {
+        // After GetEntityObject the instance is constructed but not NewRecord()'d.
+        // NewRecord() is what assigns a client UUID PK, fires the new_record event,
+        // and runs subclass overrides — without it stampOwnerKey has nothing to write.
+        if (!this.instance.IsSaved) {
             this.instance.NewRecord();
         }
         this.stampOwnerKey();
@@ -174,9 +176,17 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
             return;
         }
         if (this.IsRequired) {
-            this.instance.NewRecord();
-            this.stampOwnerKey();
-            this.exposed = true;
+            const existingFk = this.Owner.Get(this.ForeignKeyField);
+            if (existingFk !== null && existingFk !== undefined && existingFk !== '') {
+                // Caller passed NewRecord({ [FK]: existingId }). Do not mint a
+                // new peer and overwrite that FK. The owner points at an existing
+                // row; Load() will hydrate it.
+                this.exposed = false;
+            } else {
+                this.instance.NewRecord();
+                this.stampOwnerKey();
+                this.exposed = true;
+            }
         } else {
             this.exposed = false;
         }
@@ -256,8 +266,19 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
         const fk = this.Owner.Get(this.ForeignKeyField);
         if (fk === null || fk === undefined || fk === '') {
             this.exposed = false;
+            this.cleared = false;
+            // A reused owner instance can still hold the previous record's
+            // saved peer. Reset it so Ensure() does not restamp that PK and
+            // OnClear:'delete' does not delete the previous peer.
+            if (this.instance.IsSaved) {
+                this.instance.NewRecord();
+            }
             return;
         }
+        // Nested embeds are not constructed with the owner (ConstructUninitializedEntity
+        // does not recurse). Initialise them now so InnerLoad's loadEagerCompanions
+        // walks the inherit tree instead of no-opping on a null instance.
+        await this.instance.InitializeEmbeddedRecords();
         const loaded = await this.instance.InnerLoad(this.keyFromForeignKey(fk));
         if (!loaded) {
             if (this.IsRequired) {
@@ -282,17 +303,21 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
     }
 
     /** @inheritdoc */
-    public override async Serialize(): Promise<EmbeddedRecordWire | null> {
+    public override async Serialize(mode: EntityCompanionDeserializeMode = 'request'): Promise<EmbeddedRecordWire | null> {
         if (this.cleared) {
             return { Fields: {}, IsNew: false, Cleared: true, Companions: null };
         }
         if (!this.exposed || !this.instance) {
             return null;
         }
-        if (this.instance.IsSaved && !this.instance.Dirty) {
+        // Request: omit a clean saved peer so a header-only edit does not ship it.
+        // Result: always ship an exposed peer so the client can mark it saved.
+        // Skipping result-serialize left the client IsSaved=false; the next Save
+        // re-sent IsNew:true and the server re-INSERTed the same UUID.
+        if (mode !== 'result' && this.instance.IsSaved && !this.instance.Dirty) {
             return null;
         }
-        const companions = await this.instance.SerializeCompanions();
+        const companions = await this.instance.SerializeCompanions(mode);
         return {
             Fields: this.instance.GetAll(),
             IsNew: !this.instance.IsSaved,

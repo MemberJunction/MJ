@@ -1009,6 +1009,11 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
 
     /** @inheritdoc */
     public override ContributeSaveWork(plan: EntitySavePlan, options?: EntitySaveOptions): void {
+        // Caller is writing the collection itself after preparing it (booking, pricing).
+        // Embeds still contribute — this flag is not IsGraphNodeSave.
+        if (options?.SkipRelatedCollections) {
+            return;
+        }
         // A read-only collection is a projection, not a unit of work. Contributing nothing is what
         // makes it safe to point one at an engine's shared cache.
         if (this.IsReadOnly) {

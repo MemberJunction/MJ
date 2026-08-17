@@ -382,8 +382,22 @@ export class EntitySaveOptions {
      * Set only by the graph executor, and only on the **root** node. Child nodes deliberately do
      * not receive it so that a child with companions of its own still builds and runs its own
      * sub-graph — which is how nesting (payment → line → allocation) works.
+     *
+     * **Not a "header-only" switch.** Passing this from application code skips *every* companion,
+     * including owner-held embeds. To persist embeds while leaving related-record collections
+     * for a later write (the booking path: prepare lines, then save the header), use
+     * {@link SkipRelatedCollections} instead.
      */
     IsGraphNodeSave?: boolean = false;
+    /**
+     * Persist owner-held embeds (and other non-collection companions) but skip
+     * {@link RelatedRecordCollection} nodes.
+     *
+     * Use this when the caller will write the collections itself after preparing them
+     * (pricing, expansion, sequence) — not {@link IsGraphNodeSave}, which skips *all*
+     * companions and drops the embeds.
+     */
+    SkipRelatedCollections?: boolean = false;
     /**
      * Cycle guard: keys of the records already being persisted higher up in this unit of work.
      *

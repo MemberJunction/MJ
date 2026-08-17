@@ -18,6 +18,9 @@ vi.mock('@memberjunction/core', () => ({
             if (id === 'rel-orders') {
                 return { ID: id, Name: 'MJ_BizApps_Orders: Order Headers', ClassName: 'mjBizAppsOrdersOrderHeader', SchemaName: '__mj_BizAppsOrders' };
             }
+            if (id === 'rel-users') {
+                return { ID: id, Name: 'Users', ClassName: 'User', SchemaName: '__mj' };
+            }
             return undefined;
         }
     },
@@ -150,5 +153,15 @@ describe('CollectEmbeddedImports', () => {
             new Set(['mjBizAppsOrdersOrderHeaderEntity']),
         );
         expect(imports).toEqual([]);
+    });
+
+    it('imports a core-schema peer from @memberjunction/core-entities', () => {
+        const imports = EntitySubClassGeneratorBase.CollectEmbeddedImports(
+            makeEntity([makeField({ Name: 'UserID', RelatedEntityID: 'rel-users' })]),
+            new Set(['DealEntity']),
+        );
+        expect(imports.some(s => s.includes("@memberjunction/core-entities"))).toBe(true);
+        expect(imports.some(s => s.includes('UserEntity'))).toBe(true);
+        expect(imports.some(s => s.includes('mj_generatedentities'))).toBe(false);
     });
 });

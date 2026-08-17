@@ -297,6 +297,13 @@ Deprecated since 6.2. It opens a second physical transaction blind to any alread
 **❌ Setting `Load: 'immediate'` on a collection whose parent is commonly listed in grids.**
 Use `'explicit'` plus `IncludeRelatedRecords` on the specific views that need children.
 
+**❌ Passing `IsGraphNodeSave` from application code to get a "header-only" save.**
+That flag is the graph executor's recursion guard. It skips *every* companion,
+including owner-held embeds, so a booking path that prepares lines itself then
+saves the header with `IsGraphNodeSave` drops the PaymentDetail (or any other
+embed) on the floor. Use `SkipRelatedCollections: true` — embeds still persist,
+collections do not.
+
 ---
 
 ## Related

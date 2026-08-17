@@ -1448,7 +1448,10 @@ export abstract class BaseEntity<T = unknown> {
         if (embeddeds.length === 0) {
             return;
         }
-        await Promise.all(embeddeds.map(e => e.InitializeInstance(visited)));
+        // Copy the visited set per sibling. Sharing one mutable set made two
+        // embeds targeting the same entity (BillTo + ShipTo Address) throw a
+        // false "cycle detected" while the first companion was still in flight.
+        await Promise.all(embeddeds.map(e => e.InitializeInstance(new Set(visited))));
     }
 
     /**
@@ -1495,15 +1498,17 @@ export abstract class BaseEntity<T = unknown> {
      * Companions returning `null` are omitted entirely, so a header-only save on a composite entity
      * ships no companion payload at all and costs nothing extra on the wire.
      *
+     * @param mode - `'request'` omits clean saved companions. `'result'` ships
+     *               authoritative post-save state so the other tier can mark peers saved.
      * @returns The companion payloads, in declaration order.
      */
-    public async SerializeCompanions(): Promise<EntityCompanionPayload[]> {
+    public async SerializeCompanions(mode: EntityCompanionDeserializeMode = 'request'): Promise<EntityCompanionPayload[]> {
         if (!this.HasCompanions) {
             return [];
         }
         const payloads: EntityCompanionPayload[] = [];
         for (const companion of this.Companions) {
-            const data = await companion.Serialize();
+            const data = await companion.Serialize(mode);
             if (data !== null && data !== undefined) {
                 payloads.push({ Name: companion.Name, Data: data });
             }

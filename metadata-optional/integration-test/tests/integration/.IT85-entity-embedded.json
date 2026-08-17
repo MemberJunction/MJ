@@ -13,7 +13,9 @@
       "checks": [
         {
           "type": "entity-embedded",
-          "runMutationTests": true
+          "config": {
+            "runMutationTests": true
+          }
         }
       ]
     },

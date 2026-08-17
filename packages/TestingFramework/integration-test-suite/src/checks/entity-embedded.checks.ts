@@ -158,8 +158,10 @@ export const EntityEmbeddedChecks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const child = await newCategory(ctx, 'ee5-child');
             const parent = child.ParentID_EnsureObject();
-            // Name is required — leave it empty so the peer fails validation/save
-            parent.Name = '';
+            // Name is nvarchar(255) and required. Empty string is a value and
+            // passes validation; a too-long name is what the generated
+            // MaxLength check rejects, so the graph save fails before insert.
+            parent.Name = 'x'.repeat(256);
             parent.Status = 'Active';
 
             const saved = await child.Save();
