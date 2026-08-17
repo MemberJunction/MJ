@@ -131,3 +131,37 @@ describe('GetAIAPIKeyGlobal', () => {
         expect(result).toBe('factory-key');
     });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// #3532 — one malformed AI model row must not take out prompt execution.
+//
+// `AIDriverName.toUpperCase()` threw `Cannot read properties of null (reading 'toUpperCase')` for a
+// model row with a null DriverClass, naming neither the row nor the operation. It surfaced as
+// ExecuteSimplePrompt being completely unusable.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('AIAPIKeys.GetAPIKey — a driver name that is missing (#3532)', () => {
+    it('returns undefined instead of throwing on null / undefined / empty', () => {
+        const keys = new AIAPIKeys();
+        // A row with no driver class has no key. That is an answer every caller already handles —
+        // they check for a falsy key — and none of them expected this to throw.
+        expect(() => keys.GetAPIKey(null as unknown as string)).not.toThrow();
+        expect(keys.GetAPIKey(null as unknown as string)).toBeUndefined();
+        expect(keys.GetAPIKey(undefined as unknown as string)).toBeUndefined();
+        expect(keys.GetAPIKey('')).toBeUndefined();
+    });
+
+    it('still resolves a real driver name', () => {
+        process.env['AI_VENDOR_API_KEY__TESTDRIVER3532'] = 'sk-test';
+        try {
+            expect(new AIAPIKeys().GetAPIKey('TestDriver3532')).toBe('sk-test');
+        } finally {
+            delete process.env['AI_VENDOR_API_KEY__TESTDRIVER3532'];
+        }
+    });
+
+    it('GetAIAPIKey survives a missing driver name too', () => {
+        expect(() => GetAIAPIKey(null as unknown as string)).not.toThrow();
+        expect(GetAIAPIKey(null as unknown as string)).toBeUndefined();
+    });
+});
