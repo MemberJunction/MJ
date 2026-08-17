@@ -2302,13 +2302,37 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     // retrying — so excluding the whole code would lose real resilience. Only the error
                     // WithTimeout itself minted is excluded.
                     (err) => !(err instanceof OperationTimeoutError) && IsRetryableError(ClassifyError(err).Code),
-                    (attempt, err, delayMs) => logger?.emit('sync.fetch.retry', {
-                        externalObjectName: entityMap.ExternalObjectName,
-                        batchIndex: batchCount,
-                        attempt,
-                        delayMs,
-                        error: err instanceof Error ? err.message : String(err),
-                    }),
+                    (attempt, err, delayMs) => {
+                        // Report a throttle NOW, not after the retries are spent. ReportThrottle
+                        // freezes the shared bucket for this CompanyIntegration, so every other
+                        // object fetching concurrently backs off too — reporting it only in the
+                        // catch below meant the rest of the connector kept hammering a source that
+                        // had already said stop.
+                        if (ClassifyError(err).Code === 'RATE_LIMIT_EXCEEDED') {
+                            this.reportRateOutcome(config, err);
+                        }
+                        logger?.emit('sync.fetch.retry', {
+                            externalObjectName: entityMap.ExternalObjectName,
+                            batchIndex: batchCount,
+                            attempt,
+                            delayMs,
+                            error: err instanceof Error ? err.message : String(err),
+                        });
+                    },
+                    {
+                        // Honour the source's own instruction. A 429 usually carries Retry-After;
+                        // blind exponential backoff ignored it and retried early, which is how a
+                        // soft throttle becomes a hard one. Falls back to backoff when the
+                        // connector cannot parse one.
+                        DelayForError: (err) =>
+                            ClassifyError(err).Code === 'RATE_LIMIT_EXCEEDED'
+                                ? config.connector.ExtractRetryAfterMs(err)
+                                : undefined,
+                        // A retry must pass through the same gate the first attempt did. The token
+                        // was acquired once before WithRetry, so retries previously bypassed the
+                        // limiter entirely — including the freeze the line above just applied.
+                        BeforeRetry: () => this.rateLimit(config),
+                    },
                 );
                 this.reportRateOutcome(config);   // clean fetch → ramp the adaptive rate back up
                 fetchGapCount = 0;                // clean fetch → reset the consecutive fetch-gap counter
