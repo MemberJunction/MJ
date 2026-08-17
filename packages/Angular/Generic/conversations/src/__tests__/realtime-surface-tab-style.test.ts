@@ -29,6 +29,43 @@ describe('ShouldRegisterChannelTabUpFront', () => {
     expect(ShouldRegisterChannelTabUpFront('Notes', false)).toBe(false);
     expect(ShouldRegisterChannelTabUpFront('Notes', true)).toBe(true);
   });
+
+  // #3599 — the deployment's answer, replacing MJ's default rather than adding to it.
+
+  it('treats null/undefined as MJ\'s default, so nothing changes for existing deployments', () => {
+    expect(ShouldRegisterChannelTabUpFront('Whiteboard', false, null)).toBe(true);
+    expect(ShouldRegisterChannelTabUpFront('Whiteboard', false, undefined)).toBe(true);
+    expect(ShouldRegisterChannelTabUpFront('Remote Browser', false, null)).toBe(false);
+  });
+
+  it('lets a voice-first deployment have NO surface until one is used', () => {
+    // An empty list is the whole point of making this configuration: a session that opens on the
+    // agent talking should not open on a blank whiteboard nobody is going to draw on first.
+    expect(ShouldRegisterChannelTabUpFront('Whiteboard', false, [])).toBe(false);
+    expect(ShouldRegisterChannelTabUpFront('Remote Browser', false, [])).toBe(false);
+  });
+
+  it('lets a deployment tab up a channel that is not the whiteboard', () => {
+    expect(ShouldRegisterChannelTabUpFront('Remote Browser', false, ['Remote Browser'])).toBe(true);
+    // The list REPLACES the default — naming the browser does not silently keep the board.
+    expect(ShouldRegisterChannelTabUpFront('Whiteboard', false, ['Remote Browser'])).toBe(false);
+  });
+
+  it('matches configured names the way channel names are compared everywhere else', () => {
+    expect(ShouldRegisterChannelTabUpFront('Remote Browser', false, ['  remote browser  '])).toBe(true);
+    expect(ShouldRegisterChannelTabUpFront('  WHITEBOARD ', false, ['whiteboard'])).toBe(true);
+  });
+
+  it('always registers a channel already in use, whatever the deployment configured', () => {
+    // A surface the agent is driving with no tab on screen is a hidden surface, not a tidy strip.
+    expect(ShouldRegisterChannelTabUpFront('Remote Browser', true, [])).toBe(true);
+    expect(ShouldRegisterChannelTabUpFront('Whiteboard', true, ['Notes'])).toBe(true);
+  });
+
+  it('never matches a blank channel name against a blank configured entry', () => {
+    expect(ShouldRegisterChannelTabUpFront('', false, [''])).toBe(false);
+    expect(ShouldRegisterChannelTabUpFront('   ', false, ['   '])).toBe(false);
+  });
 });
 
 describe('ShouldShowActivityTab', () => {
