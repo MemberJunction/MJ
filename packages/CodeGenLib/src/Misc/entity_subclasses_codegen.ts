@@ -854,7 +854,7 @@ ${fields}
       return '';
     }
 
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
     const blocks: string[] = [];
     const seen = new Set<string>();
 
@@ -897,7 +897,7 @@ ${fields}
     if (declared.length === 0) {
       return [];
     }
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
     const imports: string[] = [];
     const seen = new Set<string>();
     for (const field of declared) {

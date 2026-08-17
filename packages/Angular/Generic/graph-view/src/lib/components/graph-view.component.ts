@@ -15,8 +15,6 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { NavigationService } from '@memberjunction/ng-shared';
-import { CompositeKey } from '@memberjunction/core';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import * as d3 from 'd3';
 import type {
@@ -535,7 +533,6 @@ const GRAPH_VIEW_CSS = `
 })
 export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
-    private navService = inject(NavigationService, { optional: true });
 
     @ViewChild('wrapper', { static: true }) public WrapperRef!: ElementRef<HTMLDivElement>;
     @ViewChild('svgCanvas', { static: true }) public CanvasRef!: ElementRef<SVGSVGElement>;
@@ -877,10 +874,8 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
         this.BeforeNodeNavigate.emit(beforeEvent);
         if (beforeEvent.Cancel) return;
 
-        if (this.navService) {
-            const pk = CompositeKey.FromID(rawId);
-            this.navService.OpenEntityRecord(entityName, pk);
-        }
+        // Hosts navigate. This widget is L1 and must not import Explorer's
+        // NavigationService — emit the intent and let the surface open the record.
         this.NodeNavigated.emit(new NodeNavigatedEventArgs(node, entityName, rawId));
     }
 
