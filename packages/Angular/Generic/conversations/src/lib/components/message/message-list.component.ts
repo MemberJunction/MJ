@@ -36,6 +36,7 @@ import {
   RealtimeSessionTimelineMeta
 } from '../../utils/realtime-session-timeline';
 import { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { DEFAULT_TRANSCRIPT_PAGE_SIZE } from '../../utils/conversation-detail-window';
 
 /** Context handed to the `messageRenderer` slot template per message. */
 interface MessageRendererContext {
@@ -61,7 +62,18 @@ interface MessageRendererContext {
 type RenderedMessageEntry =
   | { kind: 'component'; ref: ComponentRef<MessageItemComponent> }
   | { kind: 'embedded'; ref: EmbeddedViewRef<MessageRendererContext> }
-  | { kind: 'realtime-session'; ref: ComponentRef<RealtimeSessionTimelineCardComponent> };
+  | { kind: 'realtime-session'; ref: ComponentRef<RealtimeSessionTimelineCardComponent> }
+  /**
+   * A timeline item that has been UNMOUNTED to keep the DOM bounded — replaced by a
+   * fixed-height div so the scroll range is unchanged. Stored under the item's own
+   * timeline key so it can be swapped back for the real view on scroll-back.
+   */
+  | { kind: 'spacer'; ref: EmbeddedViewRef<SpacerContext> };
+
+/** Context for the spacer template — the height the unmounted item occupied. */
+interface SpacerContext {
+  height: number;
+}
 
 /**
  * Container component for displaying a list of messages
@@ -249,6 +261,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @ViewChild('scrollContainer') scrollContainer!: ElementRef;
   /** Only present while `HasMoreAbove` is true — the `@if` creates and destroys it. */
   @ViewChild('olderSentinel') olderSentinel?: ElementRef<HTMLElement>;
+  /** Template rendered in place of an unmounted timeline item. */
+  @ViewChild('spacerTemplate') private spacerTemplate?: TemplateRef<SpacerContext>;
 
   /**
    * Per-message rendered entries — see `RenderedMessageEntry` for the 3-way
@@ -276,6 +290,33 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   private _observedRoot: HTMLElement | null = null;
   /** Guards the no-scroll-parent warning so it fires once, not every checked cycle. */
   private _warnedNoScrollParent = false;
+  /** Guards the missing-spacer-template warning the same way. */
+  private _warnedNoSpacerTemplate = false;
+
+  // ── DOM unmount (bounded transcript) ────────────────────────────────────────
+  // Paging up 20 times would otherwise leave 200 live MessageItemComponents mounted.
+  // Items far from the viewport are destroyed and replaced by a height-holding spacer,
+  // then remounted from `messages` (already in memory — no network) on scroll-back.
+
+  /** Rendered pixel height per timeline key, captured just before an item is unmounted. */
+  private _measuredHeights = new Map<string, number>();
+  /** Watches spacers so an item remounts as the user scrolls back toward it. */
+  private _spacerObserver?: IntersectionObserver;
+  /**
+   * Timeline key of the topmost item the user has scrolled back to. Stored as a KEY, not
+   * an index, so prepending an older page (which shifts every index) doesn't move it.
+   * Null = follow the tail.
+   */
+  private _mountedTopKey: string | null = null;
+
+  /** Items kept mounted beyond the visible page, above and below. */
+  private static readonly MOUNT_BUFFER = 5;
+  /**
+   * Height used for an item unmounted before it was ever measured. Only a first-render
+   * fallback — a real measurement replaces it and is preferred forever after.
+   */
+  private static readonly ESTIMATED_MESSAGE_HEIGHT = 72;
+  private static readonly ESTIMATED_SESSION_HEIGHT = 88;
   /** Frames spent waiting for a scroller to appear, and the pending rAF handle. */
   private _scrollParentRetries = 0;
   private _scrollParentRetryHandle: number | null = null;
@@ -403,6 +444,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       this._shouldScrollToBottom = false;
     }
     this.syncOlderObserver();
+    this.syncSpacerObserver();
   }
 
   /** The rendered sentinel, read from the DOM so it does not depend on view-query timing. */
@@ -617,6 +659,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   ngOnDestroy() {
     this._olderObserver?.disconnect();
     this._olderObserver = undefined;
+    this._spacerObserver?.disconnect();
+    this._spacerObserver = undefined;
     if (this._scrollParentRetryHandle !== null) {
       cancelAnimationFrame(this._scrollParentRetryHandle);
       this._scrollParentRetryHandle = null;
@@ -682,10 +726,19 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       // The timeline index is passed through so newly created views land at the RIGHT
       // position. `createComponent` appends by default, which would put prepended older
       // messages at the bottom of the DOM despite being the oldest content.
+      // Items far from the viewport are UNMOUNTED and replaced by a height-holding spacer,
+      // so paging a long way up leaves a bounded DOM rather than hundreds of live message
+      // components. The tail and any in-progress message are always kept.
+      const range = this.computeMountedRange(timeline);
       const lastMessageKey = this.findLastMessageKey(timeline);
       for (let i = 0; i < timeline.length; i++) {
         const item = timeline[i];
-        if (item.Kind === 'session') {
+        const mounted = (i >= range.start && i <= range.end)
+          || this.mustStayMounted(item, i, timeline.length);
+
+        if (!mounted) {
+          this.ensureSpacer(this.getTimelineKey(item), item, i);
+        } else if (item.Kind === 'session') {
           this.renderSessionBlock(item.Group, i);
         } else {
           this.renderMessageItem(item.Detail, messages, this.getMessageKey(item.Detail) === lastMessageKey, i);
@@ -717,6 +770,179 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       this.cdRef.reattach();
       this.cdRef.detectChanges();
     }
+  }
+
+  /**
+   * The span of timeline indices that stay mounted.
+   *
+   * Follows the tail by default. Once the user scrolls back to a spacer,
+   * {@link _mountedTopKey} pins the top of the span so their position doesn't collapse
+   * back to the newest messages on the next render.
+   */
+  private computeMountedRange(
+    timeline: ConversationTimelineItem<MJConversationDetailEntity>[]
+  ): { start: number; end: number } {
+    const lastIndex = timeline.length - 1;
+    const span = DEFAULT_TRANSCRIPT_PAGE_SIZE + MessageListComponent.MOUNT_BUFFER * 2;
+
+    if (this._mountedTopKey !== null) {
+      const pinned = timeline.findIndex(item => this.getTimelineKey(item) === this._mountedTopKey);
+      if (pinned >= 0) {
+        // A WINDOW of fixed size that moves with the user — not a span reaching back down
+        // to the newest message. Anchoring the top and letting the bottom stay at the tail
+        // would grow the mounted set every time the user scrolled up and never shrink it,
+        // which is the unbounded DOM this phase exists to prevent.
+        return { start: pinned, end: Math.min(lastIndex, pinned + span - 1) };
+      }
+      this._mountedTopKey = null;   // that item is gone — fall back to the tail
+    }
+    return { start: Math.max(0, timeline.length - span), end: lastIndex };
+  }
+
+  /**
+   * Items that must never be unmounted regardless of position.
+   *
+   * The tail carries streaming output, `isLastMessage` affordances and suggested
+   * responses; an in-progress message is mid-stream and would lose its live state.
+   */
+  private mustStayMounted(
+    item: ConversationTimelineItem<MJConversationDetailEntity>,
+    index: number,
+    timelineLength: number
+  ): boolean {
+    if (index === timelineLength - 1) {
+      return true;
+    }
+    return item.Kind === 'message' && item.Detail.Status === 'In-Progress';
+  }
+
+  /**
+   * Records what an entry occupied on screen, so its spacer holds exactly that much space.
+   *
+   * Called immediately BEFORE destroying — afterwards the node is gone. A wrong height here
+   * is the failure mode that makes scrolling jump, which is the whole thing spacers exist
+   * to prevent.
+   */
+  private rememberHeight(key: string, entry: RenderedMessageEntry): void {
+    const node = entry.kind === 'embedded' || entry.kind === 'spacer'
+      ? (entry.ref.rootNodes[0] as HTMLElement | undefined)
+      : (entry.ref.location.nativeElement as HTMLElement | undefined);
+    const height = node?.offsetHeight ?? 0;
+    if (height > 0) {
+      this._measuredHeights.set(key, height);
+    }
+  }
+
+  /** Measured height when we have one, else a kind-appropriate estimate. */
+  private heightFor(key: string, item: ConversationTimelineItem<MJConversationDetailEntity>): number {
+    const measured = this._measuredHeights.get(key);
+    if (measured !== undefined) {
+      return measured;
+    }
+    return item.Kind === 'session'
+      ? MessageListComponent.ESTIMATED_SESSION_HEIGHT
+      : MessageListComponent.ESTIMATED_MESSAGE_HEIGHT;
+  }
+
+  /**
+   * Replaces a mounted item with a height-holding spacer, or leaves an existing spacer
+   * alone. Stored under the item's own timeline key so {@link updateMessages}'s
+   * remove-stale pass and the remount path both find it.
+   */
+  private ensureSpacer(
+    key: string,
+    item: ConversationTimelineItem<MJConversationDetailEntity>,
+    timelineIndex: number
+  ): void {
+    const existing = this._renderedMessages.get(key);
+    if (existing?.kind === 'spacer') {
+      return;
+    }
+    if (!this.spacerTemplate) {
+      // Staying mounted is the safe choice, but silently doing so means the transcript
+      // grows without bound and nothing says why. Report it once.
+      if (!this._warnedNoSpacerTemplate) {
+        this._warnedNoSpacerTemplate = true;
+        console.warn(
+          '[MessageList] spacerTemplate did not resolve, so off-screen messages cannot be '
+          + 'unmounted and the DOM will grow with every page loaded.'
+        );
+      }
+      return;
+    }
+    if (existing) {
+      this.rememberHeight(key, existing);
+      existing.ref.destroy();
+      this._renderedMessages.delete(key);
+    }
+
+    const viewRef = this.messageContainerRef.createEmbeddedView<SpacerContext>(
+      this.spacerTemplate,
+      { height: this.heightFor(key, item) },
+      { index: timelineIndex }
+    );
+    this._renderedMessages.set(key, { kind: 'spacer', ref: viewRef });
+  }
+
+  /**
+   * Watches the current spacers so scrolling back toward one remounts it.
+   *
+   * Rebuilt on every render because spacers come and go. Remounting reads from `messages`,
+   * which is already in memory — this never triggers a fetch.
+   */
+  private syncSpacerObserver(): void {
+    this._spacerObserver?.disconnect();
+    this._spacerObserver = undefined;
+
+    const root = this.resolveScrollParent();
+    if (!root) {
+      return;
+    }
+    const spacers: Array<{ key: string; el: HTMLElement }> = [];
+    this._renderedMessages.forEach((entry, key) => {
+      if (entry.kind === 'spacer') {
+        const el = entry.ref.rootNodes[0] as HTMLElement | undefined;
+        if (el) {
+          spacers.push({ key, el });
+        }
+      }
+    });
+    if (spacers.length === 0) {
+      return;
+    }
+
+    this._spacerObserver = new IntersectionObserver(
+      entries => {
+        const hit = entries.find(e => e.isIntersecting);
+        if (!hit) {
+          return;
+        }
+        const match = spacers.find(s => s.el === hit.target);
+        if (match) {
+          this.remountAround(match.key);
+        }
+      },
+      { root, threshold: 0.01 }
+    );
+    for (const s of spacers) {
+      this._spacerObserver.observe(s.el);
+    }
+  }
+
+  /** Widens the mounted span to cover a spacer the user has scrolled back to. */
+  private remountAround(key: string): void {
+    const timeline = BuildConversationTimeline(this.messages);
+    const index = timeline.findIndex(item => this.getTimelineKey(item) === key);
+    if (index < 0) {
+      return;
+    }
+    const newTop = Math.max(0, index - MessageListComponent.MOUNT_BUFFER);
+    const newTopKey = timeline[newTop] ? this.getTimelineKey(timeline[newTop]) : null;
+    if (newTopKey === this._mountedTopKey) {
+      return;   // already covered
+    }
+    this._mountedTopKey = newTopKey;
+    this.updateMessages(this.messages);
   }
 
   /** Stable render key for a timeline item — message ID, or a prefixed session key for session blocks. */

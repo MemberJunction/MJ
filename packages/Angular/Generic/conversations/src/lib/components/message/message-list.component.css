@@ -114,3 +114,10 @@
   font-size: 0.8125rem;
   color: var(--mj-text-secondary);
 }
+
+/* Stands in for an unmounted timeline item so the scroll range never changes when the
+   DOM is trimmed. Height comes from the item's last measured size. */
+.transcript-spacer {
+  width: 100%;
+  flex-shrink: 0;
+}

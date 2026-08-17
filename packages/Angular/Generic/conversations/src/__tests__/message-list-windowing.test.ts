@@ -47,9 +47,10 @@ function createHarness(scrollHeight = 1000, scrollTop = 200): Harness {
   open['_restoreScrollAfterPrepend'] = false;
   open['_shouldScrollToBottom'] = false;
   open['_heightBeforePrepend'] = 0;
-  // syncOlderObserver runs at the end of every checked cycle; stub it out so the scroll
+  // Both observer syncs run at the end of every checked cycle; stub them out so the scroll
   // assertions aren't entangled with observer setup.
   open['syncOlderObserver'] = vi.fn();
+  open['syncSpacerObserver'] = vi.fn();
 
   return { component, open, scrollEl, olderRequestedEmit, scrollToBottom };
 }

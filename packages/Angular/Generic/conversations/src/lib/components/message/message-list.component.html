@@ -30,6 +30,13 @@
     </div>
   }
 
+  <!-- Height-holding stand-in for a timeline item that has been unmounted to keep the DOM
+       bounded. Declared here but rendered into #messageContainer at the item's own index,
+       so scroll geometry is unchanged. -->
+  <ng-template #spacerTemplate let-height="height">
+    <div class="transcript-spacer" [style.height.px]="height" aria-hidden="true"></div>
+  </ng-template>
+
   <ng-container #messageContainer></ng-container>
 
   @if (messages.length === 0 && showEmptyFill) {
