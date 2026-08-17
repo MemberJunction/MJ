@@ -1208,6 +1208,29 @@ describe('ConversationEngine', () => {
             expect(fetch.AfterKey).toBeUndefined();
         });
 
+        it('treats BeforeSequence 0 as a real bound, not as "latest window"', async () => {
+            // `Sequence` defaults to 0, so very old conversations can genuinely hold row 0.
+            // The bound check must be `== null`, never falsy — `if (!before)` would turn a
+            // request for "everything below row 0" into a request for the newest page.
+            enqueuePageAndProbe(createWindowRows([]), false);
+
+            await engine.LoadDetailWindow(
+                { ConversationID: 'conv-1', BeforeSequence: 0 },
+                contextUser
+            );
+
+            expect(String(runViewParamsLog[0].ExtraFilter)).toContain('Sequence < 0');
+        });
+
+        it('probes below Sequence 0 when the oldest loaded row is row 0', async () => {
+            enqueuePageAndProbe(createWindowRows([2, 1, 0]), false);
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            expect(result.OldestSequence).toBe(0);
+            expect(String(runViewParamsLog[1].ExtraFilter)).toContain('Sequence < 0');
+        });
+
         it('bounds an older page with Sequence < BeforeSequence', async () => {
             enqueuePageAndProbe(createWindowRows([15, 14, 13]), true);
 

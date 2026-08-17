@@ -1,8 +1,6 @@
 import { NormalizeUUID } from '@memberjunction/global';
-import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import {
     BuildConversationTimeline,
-    type ConversationTimelineItem,
     type RealtimeTimelineSourceDetail
 } from './realtime-session-timeline';
 
@@ -72,17 +70,9 @@ export interface ConversationDetailWindowCursor {
     HasMoreAbove: boolean;
 }
 
-export interface ConversationDetailWindow {
-    ConversationID: string;
-    /** All details loaded so far, chronological by Sequence. Grows as the user pages up. */
-    LoadedDetails: MJConversationDetailEntity[];
-    Cursor: ConversationDetailWindowCursor;
-    /** Timeline of LoadedDetails — derived, never stored separately as source of truth. */
-    Timeline: ConversationTimelineItem<MJConversationDetailEntity>[];
-}
-
-export interface DetailWindowFetchResult {
-    Details: MJConversationDetailEntity[];
-    HasMoreAbove: boolean;
-}
+// NOTE: the loaded-window and fetch-result shapes the plan sketched here live on the
+// consumer instead — `ConversationDetailWindowSnapshot` in
+// `../services/conversation-detail-window.store`, and `DetailWindowLoadResult` in
+// `@memberjunction/core-entities`. Declaring unused duplicates here would give a future
+// contributor two plausible contracts to pick between.
 

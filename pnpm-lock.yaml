@@ -7461,6 +7461,46 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/Angular/Generic/graph-view:
+    dependencies:
+      '@angular/common':
+        specifier: ^21.1.3
+        version: 21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.1.3
+        version: 21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@angular/forms':
+        specifier: ^21.1.3
+        version: 21.1.3(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.1.3(@angular/animations@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.1.3(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.1.3(@angular/compiler@21.1.3)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@memberjunction/core':
+        specifier: 6.1.0-edge.2
+        version: link:../../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.1.0-edge.2
+        version: link:../../../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.1.0-edge.2
+        version: link:../../../MJGlobal
+      '@memberjunction/ng-shared':
+        specifier: 6.1.0-edge.2
+        version: link:../../Explorer/shared
+      '@memberjunction/ng-ui-components':
+        specifier: 6.1.0-edge.2
+        version: link:../ui-components
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/compiler':
+        specifier: 21.1.3
+        version: 21.1.3
+      '@angular/compiler-cli':
+        specifier: 21.1.3
+        version: 21.1.3(@angular/compiler@21.1.3)(typescript@5.9.3)
+
   packages/Angular/Generic/join-grid:
     dependencies:
       '@angular/common':
