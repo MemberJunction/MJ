@@ -4181,6 +4181,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.1.0-edge.2
         version: link:../../../MJGlobal
+      '@memberjunction/ng-ui-components':
+        specifier: 6.1.0-edge.2
+        version: link:../../Generic/ui-components
       '@okta/okta-auth-js':
         specifier: ^7.14.1
         version: 7.14.1(encoding@0.1.13)
