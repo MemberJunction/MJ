@@ -972,6 +972,7 @@ ${fields}
   ): string {
     const relatedClass = `${related.ClassName}Entity`;
     const getterType = field.AllowsNull ? `${relatedClass} | null` : relatedClass;
+    const code = field.CodeName ? SafeCodeName(field) : field.Name;
     const lines: string[] = [
       `ForeignKeyField: '${EntitySubClassGeneratorBase.EscapeSingleQuotes(field.Name)}'`,
       `RelatedEntity: '${EntitySubClassGeneratorBase.EscapeSingleQuotes(related.Name)}'`,
@@ -983,7 +984,7 @@ ${fields}
       lines.push(`LoadNested: '${config.LoadNested}'`);
     }
     const requiredNote = field.AllowsNull
-      ? ` Null until ${field.Name}_EnsureObject() or Load() finds a value.`
+      ? ` Null until ${code}_EnsureObject() or Load() finds a value.`
       : ` Always present after GetEntityObject / NewRecord.`;
 
     return `
@@ -995,14 +996,14 @@ ${fields}
   * Declared by EntityField.EmbeddedRecord on '${entity.Name}.${field.Name}'; edit that row, not this file.
   *${requiredNote}
   */
-  private readonly __emb_${field.Name} = this.DeclareEmbeddedRecord<${relatedClass}>({
+  private readonly __emb_${code} = this.DeclareEmbeddedRecord<${relatedClass}>({
       ${lines.join(',\n        ')},
   });
-  public get ${field.Name}_Object(): ${getterType} {
-      return this.__emb_${field.Name}.Value${field.AllowsNull ? '' : '!'};
+  public get ${code}_Object(): ${getterType} {
+      return this.__emb_${code}.Value${field.AllowsNull ? '' : '!'};
   }
-  public ${field.Name}_EnsureObject(): ${relatedClass} {
-      return this.__emb_${field.Name}.Ensure();
+  public ${code}_EnsureObject(): ${relatedClass} {
+      return this.__emb_${code}.Ensure();
   }
 `;
   }

@@ -76,7 +76,8 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
         super(owner);
         this.ForeignKeyField = options.ForeignKeyField;
         this.RelatedEntityName = options.RelatedEntity;
-        this.Name = `${options.ForeignKeyField}_Object`;
+        const fieldInfo = owner.EntityInfo?.Fields.find(f => f.Name === options.ForeignKeyField);
+        this.Name = `${fieldInfo?.CodeName ?? options.ForeignKeyField}_Object`;
         this.ClearMode = options.OnClear ?? 'orphan';
         this.LoadNested = options.LoadNested ?? 'inherit';
     }

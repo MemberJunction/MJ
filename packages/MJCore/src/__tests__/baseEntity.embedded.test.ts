@@ -86,6 +86,7 @@ let loadedRows: Record<string, Record<string, unknown>> = {};
 let supportsTransactions = true;
 let routeOperationResult: unknown = null;
 let routedInput: unknown = null;
+let failNextDealSave = false;
 
 function makeProvider() {
     let depth = 0;
@@ -130,6 +131,10 @@ function makeProvider() {
                 id: entity.Get('ID'),
                 name: entity.Get('Name'),
             });
+            if (failNextDealSave && entity.EntityInfo.Name === 'Deals') {
+                failNextDealSave = false;
+                throw new Error('simulated header failure');
+            }
             return entity.GetAll();
         },
         async Delete(entity: BaseEntity): Promise<boolean> {
@@ -217,6 +222,7 @@ beforeEach(() => {
     supportsTransactions = true;
     routeOperationResult = null;
     routedInput = null;
+    failNextDealSave = false;
 });
 
 async function newDeal(cls: typeof TestDealEntity | typeof RequiredDealEntity = TestDealEntity, info = dealInfo) {
@@ -353,12 +359,52 @@ describe('EmbeddedRecord — wire', () => {
 
     it('prefixes peer validation errors with the companion name', async () => {
         const { deal } = await newDeal();
-        deal.OrderID_EnsureObject();
-        // Products.Name AllowsNull=false and we never set it after NewRecord — may already have a UUID-like default
+        const order = deal.OrderID_EnsureObject();
+        order.Set('Name', 'x'.repeat(256));
         const result = deal.Validate();
-        expect(result).toBeTruthy();
+        expect(result.Success).toBe(false);
         const prefixed = result.Errors.filter(e => (e.Source ?? '').startsWith('OrderID_Object'));
-        expect(Array.isArray(prefixed)).toBe(true);
+        expect(prefixed.length).toBeGreaterThan(0);
+    });
+
+    it('Deserialize request of a new peer applies fields without InnerLoad', async () => {
+        const { deal } = await newDeal();
+        await deal.OrderEmb.Deserialize({
+            Fields: { ID: 'wire-order', Name: 'From-wire' },
+            IsNew: true,
+            Cleared: false,
+            Companions: null,
+        }, 'request');
+        expect(deal.OrderID_Object).toBeTruthy();
+        expect(deal.OrderID_Object!.Get('Name')).toBe('From-wire');
+        expect(deal.OrderID_Object!.IsSaved).toBe(false);
+    });
+
+    it('Deserialize request of an existing peer InnerLoads first then applies', async () => {
+        loadedRows['existing-order'] = { ID: 'existing-order', Name: 'DB-name' };
+        const { deal } = await newDeal();
+        await deal.OrderEmb.Deserialize({
+            Fields: { ID: 'existing-order', Name: 'Client-edit' },
+            IsNew: false,
+            Cleared: false,
+            Companions: null,
+        }, 'request');
+        expect(deal.OrderID_Object!.Get('Name')).toBe('Client-edit');
+        expect(deal.OrderID_Object!.IsSaved).toBe(true);
+    });
+
+    it('Deserialize result adopts the peer as saved', async () => {
+        const { deal } = await newDeal();
+        deal.OrderID_EnsureObject();
+        await deal.OrderEmb.Deserialize({
+            Fields: { ID: 'saved-order', Name: 'Adopted' },
+            IsNew: false,
+            Cleared: false,
+            Companions: null,
+        }, 'result');
+        expect(deal.OrderID_Object!.Get('Name')).toBe('Adopted');
+        expect(deal.OrderID_Object!.IsSaved).toBe(true);
+        expect(await deal.OrderEmb.Serialize()).toBeNull();
     });
 });
 
@@ -481,5 +527,67 @@ describe('EmbeddedRecord — browser result adoption', () => {
         expect(await deal.Save()).toBe(true);
         expect(routedInput).toBeNull();
         expect(saveLog.map(s => s.entity)).toEqual(['Deals']);
+    });
+});
+
+describe('EmbeddedRecord — OnClear', () => {
+    it('refuse throws from Clear()', async () => {
+        class RefuseDeal extends BaseEntity {
+            public readonly OrderEmb = this.DeclareEmbeddedRecord<BaseEntity>({
+                ForeignKeyField: 'OrderID',
+                RelatedEntity: 'Products',
+                OnClear: 'refuse',
+            });
+            public override CheckPermissions(): boolean { return true; }
+        }
+        const provider = makeProvider();
+        const deal = new RefuseDeal(dealInfo, provider as unknown as IEntityDataProvider);
+        await deal.InitializeEmbeddedRecords();
+        deal.NewRecord();
+        deal.OrderEmb.Ensure();
+        expect(() => deal.OrderEmb.Clear()).toThrow(/refused/);
+    });
+
+    it("delete plans a peer delete after Clear on a saved embed", async () => {
+        class DeleteDeal extends BaseEntity {
+            public readonly OrderEmb = this.DeclareEmbeddedRecord<BaseEntity>({
+                ForeignKeyField: 'OrderID',
+                RelatedEntity: 'Products',
+                OnClear: 'delete',
+            });
+            public override CheckPermissions(): boolean { return true; }
+        }
+        const provider = makeProvider();
+        const deal = new DeleteDeal(dealInfo, provider as unknown as IEntityDataProvider);
+        await deal.InitializeEmbeddedRecords();
+        deal.NewRecord();
+        deal.Set('Name', 'Deal-1');
+        deal.OrderEmb.Ensure().Set('Name', 'Order-1');
+        expect(await deal.Save()).toBe(true);
+        deleteLog = [];
+        deal.OrderEmb.Clear();
+        expect(await deal.Save()).toBe(true);
+        expect(deleteLog).toContain('Products');
+        expect(deal.Get('OrderID')).toBeNull();
+    });
+});
+
+describe('EmbeddedRecord — mid-graph failure', () => {
+    it('reverts the peer so a retry re-saves it instead of hitting a missing FK', async () => {
+        const { deal } = await newDeal();
+        const order = deal.OrderID_EnsureObject();
+        order.Set('Name', 'Order-1');
+        failNextDealSave = true;
+
+        expect(await deal.Save()).toBe(false);
+        expect(txnLog).toContain('rollback');
+        expect(order.IsSaved).toBe(false);
+        expect(order.Dirty).toBe(true);
+        expect(deal.Get('OrderID')).toBe(order.Get('ID'));
+
+        saveLog = [];
+        expect(await deal.Save()).toBe(true);
+        expect(saveLog.map(s => s.entity)).toEqual(['Products', 'Deals']);
+        expect(order.IsSaved).toBe(true);
     });
 });

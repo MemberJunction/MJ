@@ -17,7 +17,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { CompositeKey } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import * as d3 from 'd3';
 import type {
     GraphNode,
@@ -668,16 +668,28 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
         const cx = this.GetContainerWidth() / 2 || 400;
         const cy = this.GetContainerHeight() / 2 || 250;
 
-        // Build links clone for D3 simulation
-        const links: d3.SimulationLinkDatum<GraphNode>[] = this.Edges.map(e => ({
-            ...e,
-            source: e.SourceID,
-            target: e.TargetID
-        }));
+        // Resolve endpoints to node objects so a case-skewed UUID or dangling
+        // edge cannot throw "node not found" out of ngOnInit. Raw-string
+        // .id(d => d.ID) compared with ===, which UUIDsEqual elsewhere
+        // deliberately does not.
+        const nodeById = new Map<string, GraphNode>();
+        for (const node of this.Nodes) {
+            const key = NormalizeUUID(node.ID);
+            if (key) {
+                nodeById.set(key, node);
+            }
+        }
+        const links: d3.SimulationLinkDatum<GraphNode>[] = [];
+        for (const edge of this.Edges) {
+            const source = nodeById.get(NormalizeUUID(edge.SourceID));
+            const target = nodeById.get(NormalizeUUID(edge.TargetID));
+            if (source && target) {
+                links.push({ source, target });
+            }
+        }
 
         this.simulation = d3.forceSimulation<GraphNode>(this.Nodes)
             .force('link', d3.forceLink<GraphNode, d3.SimulationLinkDatum<GraphNode>>(links)
-                .id((d: GraphNode) => d.ID)
                 .distance(this.Physics.LinkDistance || 120))
             .force('charge', d3.forceManyBody<GraphNode>()
                 .strength(this.Physics.Repulsion || -450)
@@ -853,6 +865,12 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     public NavigateToEntity(node: GraphNode): void {
+        // Focal-node dblclick must not navigate away from the record this
+        // graph is illustrating — the inspector already hides the navigate
+        // button for the same reason.
+        if (this.IsFocalNode(node)) {
+            return;
+        }
         const rawId = String(node.Data?.['ID'] || node.ID).replace(/^(person|org|account|committee|custom):/, '');
         const entityName = String(node.Data?.['EntityName'] || (node.Category === 'person' ? 'MJ_BizApps_Common: People' : 'MJ_BizApps_Common: Organizations'));
         const beforeEvent = new BeforeNodeNavigateEventArgs(node, entityName, rawId);

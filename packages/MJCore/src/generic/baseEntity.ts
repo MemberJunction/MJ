@@ -461,6 +461,14 @@ export class EntityField {
     }
 
     /**
+     * Restores the dirty-tracking baseline to a previously captured value.
+     * Used by graph rollback so a retried save still sees the pre-attempt dirty set.
+     */
+    public RestoreOldValue(value: unknown): void {
+        this._OldValue = value;
+    }
+
+    /**
      * @deprecated No-op as of the active-status relocation. Active-status (deprecated/disabled)
      * assertions are now enforced at BaseEntity.Get/Set/SetMany — the entry points genuine code uses —
      * rather than on this low-level EntityField.Value accessor. There is therefore nothing to toggle
@@ -762,6 +770,13 @@ export class BaseEntityEvent {
 /**
  * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
  */
+/** In-memory baseline captured before a graph runs so a rollback can be retried. */
+type GraphParticipantSnapshot = {
+    entity: BaseEntity;
+    wasSaved: boolean;
+    oldValues: { name: string; old: unknown }[];
+};
+
 export abstract class BaseEntity<T = unknown> {
     /**
      * Metadata describing this entity (name, fields, keys, relationships). Populated during
@@ -1910,6 +1925,11 @@ export abstract class BaseEntity<T = unknown> {
         const childDeleteOptions = Object.assign(new EntityDeleteOptions(), deleteOptions ?? {});
         childDeleteOptions.GraphVisited = visited;
 
+        // Snapshot dirty/saved bookkeeping so a rolled-back graph can be retried.
+        // Node Save() finalizes each participant as saved+clean; DB rollback does
+        // not undo that, and the next Save() would skip the peer and fail the FK.
+        const participants = this.captureGraphParticipants(plan);
+
         // Acquired INSIDE the try: a begin failure (pool exhausted, dead connection) is a failed
         // save, and Save()/Delete() report failure by returning false — an escaping throw here
         // would break that contract for exactly one path.
@@ -1921,13 +1941,14 @@ export abstract class BaseEntity<T = unknown> {
                     : null;
             const result = await ExecuteEntitySavePlan(plan, {
                 SaveOptions: childSaveOptions,
-                RootSaveOptions: this.buildRootSaveOptions(saveOptions),
                 DeleteOptions: childDeleteOptions,
-                RootDeleteOptions: this.buildRootDeleteOptions(deleteOptions),
                 Visited: visited,
+                SaveSelfOnly: (entity, opts) => entity.saveAsGraphNode(opts),
+                DeleteSelfOnly: (entity, opts) => entity.deleteAsGraphNode(opts),
             });
             if (!result.Success) {
                 await scope?.Rollback();
+                this.revertGraphParticipants(participants);
                 this.registerGraphFailure(result.ErrorMessage, operation);
                 this.RaiseEvent('graph_save', { Success: false, NodeCount: plan.NodeCount, Error: result.ErrorMessage });
                 return false;
@@ -1949,6 +1970,7 @@ export abstract class BaseEntity<T = unknown> {
                     `${this.EntityInfo?.Name}: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
                 );
             }
+            this.revertGraphParticipants(participants);
             const detail = e instanceof Error ? e.message : String(e);
             LogError(`BaseEntity.executeGraphLocal failed for ${this.EntityInfo?.Name}: ${detail}`);
             this.registerGraphFailure(detail, operation);
@@ -1958,32 +1980,58 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * Builds the save options for the graph's **root** node.
-     *
-     * Copies the caller's options onto a real `EntitySaveOptions` instance and stamps
-     * `IsGraphNodeSave`, which is what stops the root re-entering graph planning and lets it bypass
-     * its own in-flight save debounce.
-     *
-     * @param source - The caller's options, if any.
-     * @returns Options for the root node.
+     * Persist this record as one already-planned graph node. Private: the public
+     * `Save()` contract must not expose a "skip companions" switch. The executor
+     * binds this via {@link ExecuteEntitySavePlan}'s `SaveSelfOnly` callback.
      */
-    private buildRootSaveOptions(source?: EntitySaveOptions): EntitySaveOptions {
-        const options = Object.assign(new EntitySaveOptions(), source ?? {});
-        options.IsGraphNodeSave = true;
-        return options;
+    private saveAsGraphNode(options?: EntitySaveOptions): Promise<boolean> {
+        return this._InnerSave(options);
     }
 
     /**
-     * Builds the delete options for the graph's **root** node. Delete-path counterpart of
-     * {@link buildRootSaveOptions}.
-     *
-     * @param source - The caller's options, if any.
-     * @returns Options for the root node.
+     * Delete-path counterpart of {@link saveAsGraphNode}.
      */
-    private buildRootDeleteOptions(source?: EntityDeleteOptions): EntityDeleteOptions {
-        const options = Object.assign(new EntityDeleteOptions(), source ?? {});
-        options.IsGraphNodeDelete = true;
-        return options;
+    private deleteAsGraphNode(options?: EntityDeleteOptions): Promise<boolean> {
+        return this._InnerDelete(options);
+    }
+
+    /**
+     * Captures saved/dirty baselines for every plan participant so a rolled-back
+     * graph can be retried without re-INSERTing a "saved" peer or skipping it.
+     */
+    private captureGraphParticipants(plan: EntitySavePlan): GraphParticipantSnapshot[] {
+        return plan.Nodes.map(node => ({
+            entity: node.Entity,
+            wasSaved: node.Entity.IsSaved,
+            oldValues: node.Entity.Fields.map(f => ({ name: f.Name, old: f.OldValue })),
+        }));
+    }
+
+    /**
+     * Restores in-memory saved/dirty state after the database rolled the graph back.
+     */
+    private revertGraphParticipants(snapshots: GraphParticipantSnapshot[]): void {
+        for (const snap of snapshots) {
+            snap.entity.revertUncommittedGraphSave(snap);
+        }
+    }
+
+    /**
+     * After a graph node Save() the fields look clean and `_everSaved` is true.
+     * The DB rollback does not undo that. Restore the pre-attempt baseline so
+     * a retry still writes the peer and the owner FK still matches.
+     */
+    private revertUncommittedGraphSave(snap: GraphParticipantSnapshot): void {
+        if (!snap.wasSaved) {
+            this._everSaved = false;
+            this._recordLoaded = false;
+        }
+        for (const captured of snap.oldValues) {
+            const field = this.GetFieldByName(captured.name);
+            if (field) {
+                field.RestoreOldValue(captured.old);
+            }
+        }
     }
 
     /**
@@ -3189,12 +3237,6 @@ export abstract class BaseEntity<T = unknown> {
             return this._InnerSave(options);
         }
 
-        // Executing our own node inside a graph we already planned. Bypass both the debounce and
-        // graph routing — see EntitySaveOptions.IsGraphNodeSave for why each matters.
-        if (options?.IsGraphNodeSave) {
-            return this._InnerSave(options);
-        }
-
         // If a save is already in progress, return its promise. This check MUST run before graph
         // routing: a composite save is still a save, and two concurrent Save() calls on one record
         // (double-click, autosave racing a manual save) must share the in-flight unit of work.
@@ -3229,8 +3271,7 @@ export abstract class BaseEntity<T = unknown> {
                 }
                 // Run the graph through the same pending-save pipeline as a single-row save, so
                 // concurrent callers share one execution and one result. The graph's own root node
-                // re-enters Save() with IsGraphNodeSave, which bypasses this pipeline above — no
-                // self-deadlock.
+                // runs via the private saveAsGraphNode path — no re-entry into this pipeline.
                 this._pendingSave$ = of(options).pipe(
                     switchMap(opts => from(this.saveGraph(plan, opts))),
                     finalize(() => { this._pendingSave$ = null; }),
@@ -4148,12 +4189,6 @@ export abstract class BaseEntity<T = unknown> {
      * @returns Promise<boolean>
      */
     public async Delete(options?: EntityDeleteOptions) : Promise<boolean> {
-        // Executing our own node inside a delete graph we already planned. Bypass both the debounce
-        // and graph routing — see EntityDeleteOptions.IsGraphNodeDelete.
-        if (options?.IsGraphNodeDelete) {
-            return this._InnerDelete(options);
-        }
-
         // Composite routing: companions that own their children (OnRemove:'delete') contribute
         // child deletions that must run before this row disappears. A single-node plan falls
         // through to the ordinary path, so nothing changes for entities without companions.

@@ -102,6 +102,16 @@ describe('GenerateEmbeddedRecords — emission', () => {
         expect(out).not.toContain('get OrderID_Object(): mjBizAppsOrdersOrderHeaderEntity | null');
     });
 
+    it('emits getters from CodeName when it differs from Name', () => {
+        const out = EntitySubClassGeneratorBase.GenerateEmbeddedRecords(
+            makeEntity([makeField({ CodeName: 'OrderID_' })]),
+        );
+        expect(out).toContain('get OrderID__Object()');
+        expect(out).toContain('OrderID__EnsureObject()');
+        expect(out).toContain('__emb_OrderID_');
+        expect(out).toContain("ForeignKeyField: 'OrderID'");
+    });
+
     it('emits OnClear and LoadNested when set', () => {
         const out = EntitySubClassGeneratorBase.GenerateEmbeddedRecords(
             makeEntity([makeField({ EmbeddedRecord: JSON.stringify({ OnClear: 'delete', LoadNested: 'related' }) })]),

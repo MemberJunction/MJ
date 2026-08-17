@@ -1010,7 +1010,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
     /** @inheritdoc */
     public override ContributeSaveWork(plan: EntitySavePlan, options?: EntitySaveOptions): void {
         // Caller is writing the collection itself after preparing it (booking, pricing).
-        // Embeds still contribute — this flag is not IsGraphNodeSave.
+        // Embeds still contribute — this is not the private graph-node recursion guard.
         if (options?.SkipRelatedCollections) {
             return;
         }

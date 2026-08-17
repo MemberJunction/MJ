@@ -110,7 +110,7 @@ GO
 -- If the hand DDL above changes, re-run CodeGen scoped to the core schema
 -- (see includeSchemas in mj.config.cjs) and replace this entire generated section.
 -- =============================================================================
-/* SQL text to insert 12 new entity field(s) */
+/* SQL text to insert 1 new entity field */
 
       IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '96c625c0-daee-4117-b263-1a3d7bc03f00' OR (EntityID = 'DF238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'EmbeddedRecord')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]

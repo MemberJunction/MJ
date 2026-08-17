@@ -144,11 +144,10 @@ flowchart TD
 A clean owner with a dirty peer still saves — `Dirty` rolls up. A header-only
 edit on a clean peer stays a single-node plan.
 
-`IsGraphNodeSave` is **not** a header-only switch. The graph executor sets it
-on the root so the node does not re-enter graph planning — it skips *every*
-companion, including embeds. If you need to write collections yourself after
-preparing them (pricing, expansion, sequence) but still persist the embeds
-with the header, pass `SkipRelatedCollections: true` instead:
+The graph executor's recursion guard is **private** on `BaseEntity`. If you
+need to write collections yourself after preparing them (pricing, expansion,
+sequence) but still persist the embeds with the header, pass
+`SkipRelatedCollections: true` instead:
 
 ```ts
 await order.Save({ SkipRelatedCollections: true });
