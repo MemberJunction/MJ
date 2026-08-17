@@ -854,7 +854,7 @@ ${fields}
       return '';
     }
 
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
     const blocks: string[] = [];
     const seen = new Set<string>();
 
@@ -897,7 +897,7 @@ ${fields}
     if (declared.length === 0) {
       return [];
     }
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
     const imports: string[] = [];
     const seen = new Set<string>();
     for (const field of declared) {
@@ -910,7 +910,11 @@ ${fields}
         continue;
       }
       seen.add(className);
-      const pkg = resolveEntityPackageName(related.SchemaName);
+      const coreSchema = typeof mj_core_schema === 'function' ? mj_core_schema() : String(mj_core_schema);
+      const pkg =
+        related.SchemaName && related.SchemaName.toLowerCase() === String(coreSchema).toLowerCase()
+          ? '@memberjunction/core-entities'
+          : resolveEntityPackageName(related.SchemaName);
       imports.push(`import { ${className} } from '${pkg}';\n`);
     }
     return imports;
@@ -950,8 +954,9 @@ ${fields}
       logError(`[EmbeddedRecord] ${label}: invalid LoadNested '${config.LoadNested}'; skipping.`);
       return null;
     }
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(field.Name)) {
-      logError(`[EmbeddedRecord] ${label}: field name is not a valid TypeScript identifier; skipping.`);
+    const emittedName = field.CodeName ? SafeCodeName(field) : field.Name;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(emittedName)) {
+      logError(`[EmbeddedRecord] ${label}: emitted name '${emittedName}' is not a valid TypeScript identifier; skipping.`);
       return null;
     }
     return config;
@@ -968,6 +973,7 @@ ${fields}
   ): string {
     const relatedClass = `${related.ClassName}Entity`;
     const getterType = field.AllowsNull ? `${relatedClass} | null` : relatedClass;
+    const code = field.CodeName ? SafeCodeName(field) : field.Name;
     const lines: string[] = [
       `ForeignKeyField: '${EntitySubClassGeneratorBase.EscapeSingleQuotes(field.Name)}'`,
       `RelatedEntity: '${EntitySubClassGeneratorBase.EscapeSingleQuotes(related.Name)}'`,
@@ -979,7 +985,7 @@ ${fields}
       lines.push(`LoadNested: '${config.LoadNested}'`);
     }
     const requiredNote = field.AllowsNull
-      ? ` Null until ${field.Name}_EnsureObject() or Load() finds a value.`
+      ? ` Null until ${code}_EnsureObject() or Load() finds a value.`
       : ` Always present after GetEntityObject / NewRecord.`;
 
     return `
@@ -991,14 +997,14 @@ ${fields}
   * Declared by EntityField.EmbeddedRecord on '${entity.Name}.${field.Name}'; edit that row, not this file.
   *${requiredNote}
   */
-  private readonly __emb_${field.Name} = this.DeclareEmbeddedRecord<${relatedClass}>({
+  private readonly __emb_${code} = this.DeclareEmbeddedRecord<${relatedClass}>({
       ${lines.join(',\n        ')},
   });
-  public get ${field.Name}_Object(): ${getterType} {
-      return this.__emb_${field.Name}.Value${field.AllowsNull ? '' : '!'};
+  public get ${code}_Object(): ${getterType} {
+      return this.__emb_${code}.Value${field.AllowsNull ? '' : '!'};
   }
-  public ${field.Name}_EnsureObject(): ${relatedClass} {
-      return this.__emb_${field.Name}.Ensure();
+  public ${code}_EnsureObject(): ${relatedClass} {
+      return this.__emb_${code}.Ensure();
   }
 `;
   }

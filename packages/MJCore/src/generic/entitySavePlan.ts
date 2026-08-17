@@ -245,21 +245,26 @@ export class EntitySavePlan {
 /**
  * Per-node option sets used when executing a plan.
  *
- * The root node needs its own variants carrying the `IsGraphNodeSave` / `IsGraphNodeDelete` flag,
- * which prevents it from re-entering graph planning and bypasses its in-flight save debounce.
- * `BaseEntity` constructs all four, because it already holds the option classes as values —
- * building them here would force a runtime import of `interfaces.ts` and close an import cycle for
- * no benefit.
+ * The root (`SelfOnly`) node must not re-enter `Save()`/`Delete()` — that rebuilds the graph
+ * and deadlocks on the in-flight debounce. `BaseEntity` therefore supplies
+ * {@link SaveSelfOnly} / {@link DeleteSelfOnly}, which call the private graph-node
+ * entry points. Callers outside `BaseEntity` must not invent their own root flag.
  */
 export type EntitySavePlanExecuteOptions = {
-    /** Options for non-root save nodes. */
+    /** Options forwarded to every save node (and to {@link SaveSelfOnly}). */
     SaveOptions?: EntitySaveOptions;
-    /** Options for the root save node — must carry `IsGraphNodeSave: true`. */
-    RootSaveOptions?: EntitySaveOptions;
-    /** Options for non-root delete nodes. */
+    /** Options forwarded to every delete node (and to {@link DeleteSelfOnly}). */
     DeleteOptions?: EntityDeleteOptions;
-    /** Options for the root delete node — must carry `IsGraphNodeDelete: true`. */
-    RootDeleteOptions?: EntityDeleteOptions;
+    /**
+     * Runs the root (`SelfOnly`) save without re-entering graph planning.
+     * `BaseEntity` binds this to its private graph-node entry. When omitted,
+     * the executor falls back to `entity.Save()` (test fakes).
+     */
+    SaveSelfOnly?: (entity: BaseEntity, options?: EntitySaveOptions) => Promise<boolean>;
+    /**
+     * Delete-path counterpart of {@link SaveSelfOnly}.
+     */
+    DeleteSelfOnly?: (entity: BaseEntity, options?: EntityDeleteOptions) => Promise<boolean>;
     /**
      * Keys of the records already being persisted higher up in this unit of work — the cycle guard.
      *
@@ -384,8 +389,8 @@ async function executePlanNode(
         // get the ordinary options, so a child with companions of its own runs its own sub-graph.
         const ok =
             node.Operation === 'Save'
-                ? await node.Entity.Save(node.SelfOnly ? options.RootSaveOptions : options.SaveOptions)
-                : await node.Entity.Delete(node.SelfOnly ? options.RootDeleteOptions : options.DeleteOptions);
+                ? await executeSaveNode(node, options)
+                : await executeDeleteNode(node, options);
 
         if (ok) {
             return { Node: node, Success: true };
@@ -406,4 +411,24 @@ async function executePlanNode(
             ErrorMessage: `${node.Operation} threw for ${node.Label} (${node.Entity.EntityInfo?.Name}): ${detail}`,
         };
     }
+}
+
+async function executeSaveNode(
+    node: EntitySavePlanNode,
+    options: EntitySavePlanExecuteOptions,
+): Promise<boolean> {
+    if (node.SelfOnly && options.SaveSelfOnly) {
+        return options.SaveSelfOnly(node.Entity, options.SaveOptions);
+    }
+    return node.Entity.Save(options.SaveOptions);
+}
+
+async function executeDeleteNode(
+    node: EntitySavePlanNode,
+    options: EntitySavePlanExecuteOptions,
+): Promise<boolean> {
+    if (node.SelfOnly && options.DeleteSelfOnly) {
+        return options.DeleteSelfOnly(node.Entity, options.DeleteOptions);
+    }
+    return node.Entity.Delete(options.DeleteOptions);
 }

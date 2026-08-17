@@ -144,6 +144,21 @@ flowchart TD
 A clean owner with a dirty peer still saves — `Dirty` rolls up. A header-only
 edit on a clean peer stays a single-node plan.
 
+The graph executor's recursion guard is **private** on `BaseEntity`. If you
+need to write collections yourself after preparing them (pricing, expansion,
+sequence) but still persist the embeds with the header, pass
+`SkipRelatedCollections: true` instead:
+
+```ts
+await order.Save({ SkipRelatedCollections: true });
+// InitialPaymentDetail rode the graph. Lines did not — write them next.
+```
+
+The result graph always serializes an exposed peer, even when it is clean.
+Request serialize still omits it so a header-only edit stays cheap; result
+serialize is what lets the browser mark the peer saved. Without that, the
+next `Save()` re-sends `IsNew: true` and the server re-INSERTs the same UUID.
+
 `OnClear` (default `'orphan'`):
 
 | | On owner Save | On owner Delete |
@@ -172,9 +187,23 @@ null. That is the price of a sync getter and a sync `Ensure`. It is
 it on conversion-shaped, low-volume relationships (Deal → Order), not on
 every lookup (`CustomerID`, `CategoryID`).
 
-Self-FKs (Category.ParentID → Category) construct one level. The peer's own
-embeddeds are not initialised until that peer is loaded or you call
-`InitializeEmbeddedRecords` on it.
+Construction walks nested embeds of **different** entities, so a required
+nested FK on a brand-new peer is provisioned when the owner `NewRecord()`s
+(and `peer.Nested_EnsureObject()` does not throw). Self-FKs and A→B→A
+cycles still construct one extra level — the path set skips the entity
+already being built. `Load()` inherit uses a separate `entityName:PK` set
+and **throws** on a self-parented or mutually-referential row rather than
+walking until the stack dies.
+
+### Collection items
+
+An embed declared **on a collection item** (e.g. `Order.Lines[i].TaxDetailID`)
+does not ride `RelatedRecordCollectionWire`. Items carry `{Fields, IsNew}`
+only, in both directions. The peer persists on a **server-tier**
+`header.Save()` (in-process graph) but is silently dropped over GraphQL.
+Re-attach by setting the item's FK, or save the item as its own root. A
+runtime warning is logged when a dirty item embed would be omitted from
+the wire.
 
 ---
 

@@ -8,6 +8,23 @@ import { GenerationResult, RelatedEntityDisplayComponentGeneratorBase } from './
 import { sortBySequenceAndCreatedAt, sortRelatedEntities } from '../Misc/util';
 
 /**
+ * Schemas whose entities should not appear as related-entity form tabs.
+ *
+ * `excludeSchemas` defaults include `__mj` so CodeGen does not emit core
+ * entity *files* into a downstream package. Those entities still exist at
+ * runtime via `@memberjunction/core-entities`, so filtering them here
+ * silently dropped core-entity tabs for every default config.
+ */
+function schemasExcludedFromGeneratedForms(): Set<string> {
+    const core = String(mjCoreSchema ?? '__mj').toLowerCase();
+    return new Set(
+        (configInfo.excludeSchemas || [])
+            .map(s => s.toLowerCase())
+            .filter(s => s !== core && s !== '__mj'),
+    );
+}
+
+/**
  * Represents metadata about an Angular form section that is generated for an entity
  */
 export class AngularFormSectionInfo {
@@ -858,7 +875,7 @@ ${indentedFormHTML}
         // can only have 0 or 1 records (disjoint subtypes), so a grid panel is redundant
         const isaChildIDs = new Set(entity.ChildEntities.map(c => c.ID));
 
-        const excludedSchemas = new Set((configInfo.excludeSchemas || []).map(s => s.toLowerCase()));
+        const excludedSchemas = schemasExcludedFromGeneratedForms();
 
         // Sort related entities deterministically using the shared sort with cascading tiebreakers
         const sortedRelatedEntities = sortRelatedEntities(
@@ -975,7 +992,7 @@ ${componentCodeWithIndent}
             return tabs;
         }
 
-        const excludedSchemas = new Set((configInfo.excludeSchemas || []).map(s => s.toLowerCase()));
+        const excludedSchemas = schemasExcludedFromGeneratedForms();
         let index = startIndex;
         for (const organicKey of organicKeys) {
             for (const relatedEntity of organicKey.RelatedEntities) {

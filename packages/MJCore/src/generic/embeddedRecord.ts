@@ -76,7 +76,8 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
         super(owner);
         this.ForeignKeyField = options.ForeignKeyField;
         this.RelatedEntityName = options.RelatedEntity;
-        this.Name = `${options.ForeignKeyField}_Object`;
+        const fieldInfo = owner.EntityInfo?.Fields.find(f => f.Name === options.ForeignKeyField);
+        this.Name = `${fieldInfo?.CodeName ?? options.ForeignKeyField}_Object`;
         this.ClearMode = options.OnClear ?? 'orphan';
         this.LoadNested = options.LoadNested ?? 'inherit';
     }
@@ -107,11 +108,13 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
         if (this.instance || this.constructing) {
             return;
         }
+        // Path-set, not a global set: a sibling targeting the same entity
+        // (BillTo + ShipTo) is not a cycle — InitializeEmbeddedRecords copies
+        // `visited` per sibling so they never see each other in-flight. A
+        // self-FK or A→B→A ancestor is on this path and must stop here, or
+        // ConstructUninitializedEntity's recurse would construct forever.
         if (visited.has(this.RelatedEntityName)) {
-            throw new Error(
-                `EmbeddedRecord '${this.Name}' on ${this.Owner.EntityInfo?.Name}: cycle detected ` +
-                `constructing '${this.RelatedEntityName}' (already constructing ${[...visited].join(' → ')}).`,
-            );
+            return;
         }
         this.constructing = true;
         visited.add(this.RelatedEntityName);
@@ -140,9 +143,10 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
         if (this.exposed) {
             return this.instance;
         }
-        if (this.instance.IsSaved) {
-            this.instance.NewRecord();
-        }
+        // Always mint a new peer. After Clear()+Save() the leftover instance is
+        // the orphaned row (still IsSaved). Restamping its PK would silently
+        // re-attach it. Re-attachment is an explicit FK set, not Ensure's job.
+        this.instance.NewRecord();
         this.stampOwnerKey();
         this.exposed = true;
         this.cleared = false;
@@ -174,9 +178,17 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
             return;
         }
         if (this.IsRequired) {
-            this.instance.NewRecord();
-            this.stampOwnerKey();
-            this.exposed = true;
+            const existingFk = this.Owner.Get(this.ForeignKeyField);
+            if (existingFk !== null && existingFk !== undefined && existingFk !== '') {
+                // Caller passed NewRecord({ [FK]: existingId }). Do not mint a
+                // new peer and overwrite that FK. The owner points at an existing
+                // row; Load() will hydrate it.
+                this.exposed = false;
+            } else {
+                this.instance.NewRecord();
+                this.stampOwnerKey();
+                this.exposed = true;
+            }
         } else {
             this.exposed = false;
         }
@@ -249,30 +261,55 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
     }
 
     /** @inheritdoc */
-    public override async LoadEager(): Promise<void> {
+    public override async LoadEager(visited: Set<string> = new Set<string>()): Promise<void> {
         if (!this.instance) {
             return;
         }
         const fk = this.Owner.Get(this.ForeignKeyField);
         if (fk === null || fk === undefined || fk === '') {
             this.exposed = false;
-            return;
-        }
-        const loaded = await this.instance.InnerLoad(this.keyFromForeignKey(fk));
-        if (!loaded) {
-            if (this.IsRequired) {
-                throw new Error(
-                    `EmbeddedRecord '${this.Name}' on ${this.Owner.EntityInfo?.Name}: required ` +
-                    `FK ${this.ForeignKeyField}='${fk}' does not resolve to a ${this.RelatedEntityName} row.`,
-                );
+            this.cleared = false;
+            // A reused owner instance can still hold the previous record's
+            // saved peer. Reset it so Ensure() does not restamp that PK and
+            // OnClear:'delete' does not delete the previous peer.
+            if (this.instance.IsSaved) {
+                this.instance.NewRecord();
             }
-            this.exposed = false;
             return;
         }
-        this.exposed = true;
-        this.cleared = false;
-        if (this.LoadNested === 'related') {
-            await this.instance.LoadRelatedRecords();
+        const token = `${this.RelatedEntityName}:${String(fk)}`;
+        if (visited.has(token)) {
+            throw new Error(
+                `EmbeddedRecord '${this.Name}' on ${this.Owner.EntityInfo?.Name}: load cycle at ` +
+                `${token}. A self-parented or mutually-referential embed cannot inherit forever.`,
+            );
+        }
+        const next = new Set(visited);
+        next.add(token);
+        // Nested embeds of a different entity were constructed with the owner.
+        // Self-FK / cycle peers stay unconstructed until this load walk; init
+        // them now so InnerLoad's loadEagerCompanions can inherit.
+        await this.instance.InitializeEmbeddedRecords();
+        this.instance.SetEmbeddedLoadVisited(next);
+        try {
+            const loaded = await this.instance.InnerLoad(this.keyFromForeignKey(fk));
+            if (!loaded) {
+                if (this.IsRequired) {
+                    throw new Error(
+                        `EmbeddedRecord '${this.Name}' on ${this.Owner.EntityInfo?.Name}: required ` +
+                        `FK ${this.ForeignKeyField}='${fk}' does not resolve to a ${this.RelatedEntityName} row.`,
+                    );
+                }
+                this.exposed = false;
+                return;
+            }
+            this.exposed = true;
+            this.cleared = false;
+            if (this.LoadNested === 'related') {
+                await this.instance.LoadRelatedRecords();
+            }
+        } finally {
+            this.instance.SetEmbeddedLoadVisited(undefined);
         }
     }
 
@@ -282,17 +319,21 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
     }
 
     /** @inheritdoc */
-    public override async Serialize(): Promise<EmbeddedRecordWire | null> {
+    public override async Serialize(mode: EntityCompanionDeserializeMode = 'request'): Promise<EmbeddedRecordWire | null> {
         if (this.cleared) {
             return { Fields: {}, IsNew: false, Cleared: true, Companions: null };
         }
         if (!this.exposed || !this.instance) {
             return null;
         }
-        if (this.instance.IsSaved && !this.instance.Dirty) {
+        // Request: omit a clean saved peer so a header-only edit does not ship it.
+        // Result: always ship an exposed peer so the client can mark it saved.
+        // Skipping result-serialize left the client IsSaved=false; the next Save
+        // re-sent IsNew:true and the server re-INSERTed the same UUID.
+        if (mode !== 'result' && this.instance.IsSaved && !this.instance.Dirty) {
             return null;
         }
-        const companions = await this.instance.SerializeCompanions();
+        const companions = await this.instance.SerializeCompanions(mode);
         return {
             Fields: this.instance.GetAll(),
             IsNew: !this.instance.IsSaved,
