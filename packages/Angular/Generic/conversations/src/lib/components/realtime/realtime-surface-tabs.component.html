@@ -3,6 +3,7 @@
 <aside class="surface"
        [class.surface--collapsed]="Collapsed"
        [class.surface--fill]="Fill && !Collapsed"
+       [class.surface--split]="SplitEngaged"
        aria-label="Session surfaces">
 
   @if (Collapsed) {
@@ -25,15 +26,19 @@
           <!-- Flex spacer pushes the Activity tab to the far right -->
           <span class="tabs-spacer" aria-hidden="true"></span>
         }
+        <!-- A split shows several surfaces at once, so "active" means SHOWN (IsTabShown), and a
+             surface the split isn't showing is disabled rather than a click that does nothing. -->
         <button type="button"
                 class="s-tab"
                 role="tab"
                 [class.s-tab--activity]="tab.Kind === 'activity'"
                 [class.s-tab--channel]="tab.Kind === 'channel'"
-                [class.s-tab--active]="tab.Key === Model.ActiveKey"
+                [class.s-tab--active]="IsTabShown(tab.Key)"
                 [class.s-tab--flash]="tab.Key === Model.FlashKey"
+                [class.s-tab--outside-split]="IsTabOutsideSplit(tab.Key)"
+                [disabled]="IsTabOutsideSplit(tab.Key)"
                 [style.--tab-accent]="tab.Color || null"
-                [attr.aria-selected]="tab.Key === Model.ActiveKey"
+                [attr.aria-selected]="IsTabShown(tab.Key)"
                 [title]="tab.Title"
                 (click)="Model.Focus(tab.Key)">
           @if (tab.Kind === 'channel') {
@@ -57,9 +62,13 @@
       </div>
     </div>
 
-    <!-- Panes: ALL kept alive; only the active one is displayed -->
+    <!-- Panes: ALL kept alive; only the active one is displayed (in a SPLIT the arrangement
+         positions its members inline instead — same elements either way, so switching layout
+         never re-creates a surface). Each pane names its channel so a host — and the split —
+         can address one without counting positions. -->
     @for (tab of Model.Tabs; track TrackTab($index, tab)) {
-      <div class="s-pane" [class.s-pane--active]="tab.Key === Model.ActiveKey" role="tabpanel">
+      <div class="s-pane" #surfacePane [class.s-pane--active]="tab.Key === Model.ActiveKey"
+           [attr.data-channel]="tab.Key" role="tabpanel">
         @switch (tab.Kind) {
           @case ('activity') {
             <mj-realtime-activity-rail
@@ -98,6 +107,14 @@
           }
         }
       </div>
+    }
+
+    @if (SplitEngaged) {
+      <!-- The split arrangement's own container. It holds ONLY Golden Layout's splitters: the
+           panes above stay where they are and are positioned over this host, which is what keeps
+           them alive across a layout switch. Sized by flex so it has a measured height before
+           Golden Layout ever looks at it. -->
+      <div class="surface__split" #splitHost></div>
     }
 
     @if (Model.Tabs.length === 0) {

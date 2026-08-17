@@ -1,9 +1,10 @@
 import {
-  Component, EventEmitter, Input, Output, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, inject
+  AfterViewInit, Component, ElementRef, EventEmitter, Input, Output, OnInit, OnDestroy,
+  ChangeDetectorRef, QueryList, ViewChild, ViewChildren, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
-import { UserInfo } from '@memberjunction/core';
+import { LogError, UserInfo } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { RealtimeSessionState } from './realtime-session-state';
@@ -12,8 +13,10 @@ import { RealtimeChannelPaneComponent } from './channels/realtime-channel-pane.c
 import { ChannelOnboardingPanelComponent } from './channels/channel-onboarding-panel.component';
 import { ChannelOnboardingDetails } from './channels/base-realtime-channel-client';
 import {
-  RealtimeSurfaceTabsModel, RealtimeSurfaceTab, RealtimeChannelTabRegistration
+  RealtimeSurfaceTabsModel, RealtimeSurfaceTab, RealtimeChannelTabRegistration,
+  RealtimeSurfaceLayoutMode, ResolveSplitPaneKeys
 } from './realtime-surface-tabs.model';
+import { RealtimeSplitPane, RealtimeSurfaceSplitLayout } from './realtime-surface-split-layout';
 import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
 
 /**
@@ -23,6 +26,21 @@ import { ParsedDelegationArtifact } from '../../services/delegation-result-parse
  * follows them across devices.
  */
 const CHANNEL_ONBOARDING_SEEN_SETTING_KEY = 'mj.realtimeChannels.onboardingSeen.v1';
+
+/**
+ * How long a `split` layout waits for its Golden Layout host to report a real size before giving
+ * up and staying on tabs. The host is a flex child of an already-laid-out panel, so it normally
+ * measures on the very first check; the wait covers the panel being rendered inside something
+ * that has not sized ITSELF yet (a collapsed shell, a hidden route). Capped because "wait for a
+ * size" with no limit is how a surface silently never appears.
+ */
+const SPLIT_HOST_MEASURE_TIMEOUT_MS = 4000;
+
+/** Whether an element has a real, laid-out box — the precondition for arranging anything in it. */
+function IsMeasured(element: HTMLElement): boolean {
+  const rect = element.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
 
 /**
  * The call overlay's TABBED SURFACE PANEL (the right panel) — decluttered redesign:
@@ -44,6 +62,16 @@ const CHANNEL_ONBOARDING_SEEN_SETTING_KEY = 'mj.realtimeChannels.onboardingSeen.
  * Panes are kept ALIVE while hidden (CSS `display:none`) so switching tabs never reloads a
  * channel surface or resets the rail. The whole panel collapses to a slim strip via the chevron.
  *
+ * LAYOUT IS DECLARED, NOT IMPOSED: {@link Layout} picks between the tab strip (default, one
+ * surface at a time) and a `split` arrangement of the surfaces named by {@link SplitKeys}, shown
+ * side by side with draggable splitters. A host asking for two surfaces at once says so through
+ * this input rather than overriding the panel's stylesheet — an override that LOOKS applied and
+ * silently loses a specificity tie, because the panel's own `display: flex` on `.surface` carries
+ * the same specificity and wins on document order (issue #3535). Panes are shared between the two
+ * layouts and never re-created by a switch: split mode positions the same elements inline (see
+ * {@link RealtimeSurfaceSplitLayout}), so a whiteboard's drawing and a remote browser's page
+ * survive it.
+ *
  * SIZING IS EXTERNAL: the overlay shell hosts this panel in a fixed-width flex item and owns
  * the width. This panel just fills it and REPORTS the layout signals the shell sizes from:
  * {@link CollapsedChange} (slim-strip toggle) and {@link WideChanged} (a channel tab is focused
@@ -59,7 +87,7 @@ const CHANNEL_ONBOARDING_SEEN_SETTING_KEY = 'mj.realtimeChannels.onboardingSeen.
   templateUrl: './realtime-surface-tabs.component.html',
   styleUrl: './realtime-surface-tabs.component.css'
 })
-export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
+export class RealtimeSurfaceTabsComponent implements OnInit, AfterViewInit, OnDestroy {
   /** How long a just-revealed channel tab keeps its flash highlight. */
   private static readonly FlashDurationMs = 1400;
 
@@ -87,6 +115,49 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
    * activity card. Forwarded to the rail's "Session artifacts" group. Empty for a live session.
    */
   @Input() ExtraArtifacts: ParsedDelegationArtifact[] = [];
+
+  /**
+   * The panel's LAYOUT MODE — the host's declaration of how many surfaces are on screen:
+   *
+   *  - `tabs` (default) — unchanged behaviour: the tab strip picks one surface at a time.
+   *  - `split` — the surfaces {@link SplitKeys} names are arranged side by side, with draggable
+   *    splitters between them, and the strip reports them all as shown.
+   *
+   * `split` DEGRADES to the tabs presentation whenever it can't be honoured — fewer than two of
+   * the requested surfaces are open, the panel is collapsed, or the arrangement fails to lay out
+   * (which is reported via `LogError`, never silently). Existing callers pass nothing and get
+   * exactly today's panel.
+   */
+  private _layout: RealtimeSurfaceLayoutMode = 'tabs';
+  @Input()
+  set Layout(value: RealtimeSurfaceLayoutMode) {
+    if (value !== this._layout) {
+      this._layout = value;
+      this.scheduleSplitSync();
+    }
+  }
+  get Layout(): RealtimeSurfaceLayoutMode {
+    return this._layout;
+  }
+
+  /**
+   * Which surfaces a `split` {@link Layout} shows, by tab key (a channel's `ChannelName`, or
+   * `activity`). Keys that aren't open yet are simply not shown — a host may name surfaces the
+   * agent hasn't brought into play, and the split grows into them as they register. EMPTY (the
+   * default) means "every open surface". Ignored while {@link Layout} is `tabs`.
+   */
+  private _splitKeys: string[] = [];
+  @Input()
+  set SplitKeys(value: string[]) {
+    const next = value ?? [];
+    if (next.length !== this._splitKeys.length || next.some((key, i) => key !== this._splitKeys[i])) {
+      this._splitKeys = [...next];
+      this.scheduleSplitSync();
+    }
+  }
+  get SplitKeys(): string[] {
+    return this._splitKeys;
+  }
 
   /**
    * Whether the gated Activity tab should be shown — driven by the overlay shell once ≥1
@@ -128,13 +199,54 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   /** Whether the panel is collapsed to its slim strip. */
   public Collapsed = false;
 
+  /**
+   * Whether the panel is currently arranged as a SPLIT: renders the Golden Layout host and puts
+   * pane visibility under the arrangement's control (`.surface--split`). Distinct from
+   * `Layout === 'split'`, which is only the host's request — this is whether it is honoured.
+   */
+  public SplitEngaged = false;
+
   /** The embedded Activity rail (owns the inline artifact previews + the split-pane viewer). */
   @ViewChild(RealtimeActivityRailComponent) private activityRail?: RealtimeActivityRailComponent;
+
+  /**
+   * The Golden Layout host, as a SETTER: the element only exists once {@link SplitEngaged}
+   * renders it, and the arrangement can't be measured before that. Angular calling this back is
+   * the signal that the host is now in the DOM and the deferred sync can finish.
+   */
+  @ViewChild('splitHost')
+  private set splitHostRef(ref: ElementRef<HTMLElement> | undefined) {
+    const element = ref?.nativeElement ?? null;
+    if (element === this.splitHostElement) {
+      return;
+    }
+    this.splitHostElement = element;
+    if (element) {
+      this.scheduleSplitSync();
+    }
+  }
+
+  /**
+   * The live pane elements. The split resolves each pane by its own `data-channel` rather than
+   * by index into this list, and the list's `changes` is the signal that a surface registered
+   * mid-session has actually RENDERED — which is when a pending split can take it in.
+   */
+  @ViewChildren('surfacePane') private paneQuery!: QueryList<ElementRef<HTMLElement>>;
 
   private flashTimer: ReturnType<typeof setTimeout> | null = null;
   private subs: Subscription[] = [];
   private lastWide = false;
   private cdr = inject(ChangeDetectorRef);
+
+  /** The Golden Layout arrangement used by `Layout="split"` (idle until engaged). */
+  private readonly splitLayout = new RealtimeSurfaceSplitLayout();
+  /** The split's current members, in strip order. Empty while the panel is on tabs. */
+  private splitMemberKeys: string[] = [];
+  private splitHostElement: HTMLElement | null = null;
+  /** Bumped by every layout request so a superseded (awaiting) sync stands down. */
+  private splitSyncGeneration = 0;
+  /** Live while a sync is waiting for the host to be measured — cancelled on teardown. */
+  private splitMeasureWait: { Cancel: () => void } | null = null;
 
   /**
    * The channel whose first-run intro is currently being shown (its `ChannelName`), or `null`
@@ -161,6 +273,18 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
     );
   }
 
+  ngAfterViewInit(): void {
+    // A surface that comes into play mid-session renders its pane one change-detection pass after
+    // it joins the strip; this is how a pending split learns the element now exists.
+    this.subs.push(
+      this.paneQuery.changes.subscribe(() => {
+        if (this._layout === 'split') {
+          this.scheduleSplitSync();
+        }
+      })
+    );
+  }
+
   ngOnDestroy(): void {
     for (const s of this.subs) {
       s.unsubscribe();
@@ -170,6 +294,8 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
       clearTimeout(this.flashTimer);
       this.flashTimer = null;
     }
+    // Golden Layout holds DOM and listeners of its own — it goes with the panel, not with GC.
+    this.teardownSplit();
   }
 
   /** Toggle the panel between expanded and slim-collapsed. */
@@ -181,6 +307,14 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   private setCollapsed(value: boolean): void {
     if (this.Collapsed !== value) {
       this.Collapsed = value;
+      if (value) {
+        // Collapsing removes the panes (and the split host) from the DOM. Hand them back to the
+        // tabs layout NOW rather than leaving Golden Layout holding elements Angular is about to
+        // destroy — the panes come back on expand and re-split from scratch.
+        this.teardownSplit();
+      } else {
+        this.scheduleSplitSync();
+      }
       this.CollapsedChange.emit(value);
       this.syncWide();
     }
@@ -198,6 +332,29 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   /** track fn for the @for over tabs. */
   public TrackTab(index: number, tab: RealtimeSurfaceTab): string {
     return tab.Key;
+  }
+
+  /** The surfaces the split is currently showing, in strip order. Empty while on tabs. */
+  public get SplitMemberKeys(): ReadonlyArray<string> {
+    return this.splitMemberKeys;
+  }
+
+  /**
+   * Whether a tab's surface is ON SCREEN — the focused tab on tabs, every split member on a
+   * split. The strip's active treatment and `aria-selected` read from this so it stays honest
+   * about a layout showing more than one surface at a time.
+   */
+  public IsTabShown(key: string): boolean {
+    return this.SplitEngaged ? this.splitMemberKeys.includes(key) : key === this.Model.ActiveKey;
+  }
+
+  /**
+   * Whether a tab is unreachable in the current layout — a surface the split isn't showing.
+   * Its strip button is disabled rather than left as a click that would do nothing visible:
+   * which surfaces a split shows is the host's declaration ({@link SplitKeys}), not the user's.
+   */
+  public IsTabOutsideSplit(key: string): boolean {
+    return this.SplitEngaged && !this.splitMemberKeys.includes(key);
   }
 
   /**
@@ -287,6 +444,7 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
     this.scheduleFlashClear();
     this.syncWide();
     this.evaluateOnboarding();
+    this.resyncSplitOnTabChange();
     this.cdr.markForCheck();
   }
 
@@ -364,6 +522,175 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
       this.Model.Focus(first.Key);
       this.cdr.markForCheck();
     }
+  }
+
+  // ── split layout (Layout="split") ─────────────────────────────────────────────────────────
+
+  /**
+   * Re-syncs the split when the STRIP changed under it — a channel registering, or a tab being
+   * removed, changes which surfaces the split resolves to. Deliberately silent while the panel is
+   * on tabs, so the default layout does no work at all on a model change; whether the membership
+   * ACTUALLY changed is the sync's own call, made in one place.
+   */
+  private resyncSplitOnTabChange(): void {
+    if (this._layout === 'split') {
+      this.scheduleSplitSync();
+    }
+  }
+
+  /**
+   * Queues a layout sync for the next microtask, superseding any sync still in flight.
+   *
+   * Deferred for the same reason the channel-tab reveals are (NG0100): a layout request commonly
+   * arrives mid change-detection, and this one additionally needs the DOM it is about to measure
+   * to have been RENDERED — which the flag it sets is what triggers.
+   */
+  private scheduleSplitSync(): void {
+    const generation = ++this.splitSyncGeneration;
+    Promise.resolve().then(() => { void this.syncSplitLayout(generation); });
+  }
+
+  /**
+   * Brings the actual arrangement in line with {@link Layout} / {@link SplitKeys}.
+   *
+   * Runs in up to three passes, re-entered by the `splitHost` ViewChild setter: engage (render
+   * the host), measure (wait for it to have a size), attach. Anything that makes the split
+   * unhonourable at any point — too few surfaces, a collapsed panel, a host that never gains a
+   * size, a Golden Layout that lays out nothing — falls back to the tabs presentation, loudly.
+   */
+  private async syncSplitLayout(generation: number): Promise<void> {
+    if (generation !== this.splitSyncGeneration) {
+      return;
+    }
+    const keys = ResolveSplitPaneKeys(this.Model.Tabs, this._splitKeys);
+    if (this._layout !== 'split' || this.Collapsed || keys.length === 0) {
+      this.teardownSplit();
+      return;
+    }
+    const arranged = this.splitLayout.PaneKeys;
+    if (keys.length === arranged.length && keys.every((key, i) => key === arranged[i])) {
+      // Already arranged exactly this way. Re-attaching would rebuild the layout and throw away
+      // wherever the user has dragged the splitters, for no change at all.
+      return;
+    }
+    if (!this.SplitEngaged) {
+      // Pass 1: render the host (and hand pane visibility to the arrangement). The ViewChild
+      // setter re-enters once the element exists.
+      this.SplitEngaged = true;
+      this.splitMemberKeys = keys;
+      this.cdr.markForCheck();
+      return;
+    }
+    this.splitMemberKeys = keys;
+    const host = this.splitHostElement;
+    if (!host) {
+      // Engaged but not rendered yet — the ViewChild setter will re-enter with the element.
+      return;
+    }
+
+    // Pass 2: Golden Layout lays its whole tree into whatever the host measures AT INIT and
+    // reports nothing when that is nothing, so the size is established before it ever sees it.
+    const measured = await this.waitForMeasuredSplitHost(host, generation);
+    if (generation !== this.splitSyncGeneration) {
+      return;
+    }
+    if (!measured) {
+      LogError(`Realtime surface panel: the split layout host never gained a size within ${SPLIT_HOST_MEASURE_TIMEOUT_MS}ms (surfaces [${keys.join(', ')}]) — staying on the tabs layout.`);
+      this.teardownSplit();
+      return;
+    }
+
+    // Pass 3: attach. Every pane is looked up by its own data-channel, never by position.
+    const panes: RealtimeSplitPane[] = [];
+    for (const tab of this.Model.Tabs.filter(t => keys.includes(t.Key))) {
+      const element = this.paneElement(tab.Key);
+      if (element) {
+        panes.push({ Key: tab.Key, Title: tab.Title, Element: element });
+      }
+    }
+    if (panes.length !== keys.length) {
+      // A surface that JUST joined the strip renders its pane on the next change-detection pass.
+      // Not an error and not a reason to collapse the split — the pane list's `changes` re-enters
+      // here the moment the element exists.
+      return;
+    }
+    if (!this.splitLayout.Attach(host, panes)) {
+      // Attach already reported WHY, and left the panes as it found them.
+      this.teardownSplit();
+      return;
+    }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Resolves once the split host reports a non-zero size, `false` if it never does within
+   * {@link SPLIT_HOST_MEASURE_TIMEOUT_MS} or the sync is superseded. Never throws: the caller
+   * degrades to tabs, which is the useful answer for a live session.
+   */
+  private waitForMeasuredSplitHost(host: HTMLElement, generation: number): Promise<boolean> {
+    this.cancelSplitMeasureWait();
+    if (IsMeasured(host)) {
+      return Promise.resolve(true);
+    }
+    return new Promise<boolean>(resolve => {
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      let observer: ResizeObserver | null = null;
+      const settle = (measured: boolean): void => {
+        if (timer !== null) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        observer?.disconnect();
+        observer = null;
+        this.splitMeasureWait = null;
+        resolve(measured);
+      };
+      observer = new ResizeObserver(() => {
+        if (generation !== this.splitSyncGeneration) {
+          settle(false);
+        } else if (IsMeasured(host)) {
+          settle(true);
+        }
+      });
+      timer = setTimeout(() => settle(false), SPLIT_HOST_MEASURE_TIMEOUT_MS);
+      this.splitMeasureWait = { Cancel: () => settle(false) };
+      observer.observe(host);
+    });
+  }
+
+  /** Drops a pending measure wait (teardown / a superseding request) so nothing dangles. */
+  private cancelSplitMeasureWait(): void {
+    const wait = this.splitMeasureWait;
+    this.splitMeasureWait = null;
+    wait?.Cancel();
+  }
+
+  /**
+   * Returns the panel to the tabs layout: Golden Layout destroyed, every pane's inline geometry
+   * removed, the host un-rendered. Idempotent — the panel spends most of its life here.
+   */
+  private teardownSplit(): void {
+    this.cancelSplitMeasureWait();
+    this.splitLayout.Destroy();
+    this.splitMemberKeys = [];
+    if (this.SplitEngaged) {
+      this.SplitEngaged = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * The live pane element for a tab key. Matched on the pane's own `data-channel` rather than by
+   * index into the tab list: both lists render from the same array today, but that is an
+   * implementation detail and not something a layout should be built on.
+   */
+  private paneElement(key: string): HTMLElement | null {
+    for (const ref of this.paneQuery ?? []) {
+      if (ref.nativeElement.dataset['channel'] === key) {
+        return ref.nativeElement;
+      }
+    }
+    return null;
   }
 
   /** Clears the model's flash highlight after a beat (one timer; latest flash wins). */

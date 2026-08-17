@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { RealtimeSurfaceTabsModel, ShouldRemoveReviewWhiteboardTab } from '../lib/components/realtime/realtime-surface-tabs.model';
+import {
+  MIN_SPLIT_PANES, RealtimeSurfaceTabsModel, ResolveSplitPaneKeys, ShouldRemoveReviewWhiteboardTab
+} from '../lib/components/realtime/realtime-surface-tabs.model';
 
 describe('RealtimeSurfaceTabsModel', () => {
   let model: RealtimeSurfaceTabsModel;
@@ -238,6 +240,36 @@ describe('RealtimeSurfaceTabsModel', () => {
       expect(model.Tabs.some(t => t.Key === 'Whiteboard')).toBe(true);
       expect(model.ActiveKey).toBe('Whiteboard');
     });
+  });
+});
+
+describe('ResolveSplitPaneKeys (which surfaces a Layout="split" shows)', () => {
+  const model = new RealtimeSurfaceTabsModel();
+  model.RegisterChannelTab({ Key: 'Site A', Title: 'Site A', Icon: 'fa-solid fa-globe' });
+  model.RegisterChannelTab({ Key: 'Site B', Title: 'Site B', Icon: 'fa-solid fa-globe' });
+  model.SetShowActivityTab(true);
+
+  it('shows the surfaces the host named, in STRIP order (not the order it listed them)', () => {
+    expect(ResolveSplitPaneKeys(model.Tabs, ['Site B', 'Site A'])).toEqual(['Site A', 'Site B']);
+  });
+
+  it('shows every open surface when the host names none', () => {
+    expect(ResolveSplitPaneKeys(model.Tabs, [])).toEqual(['Site A', 'Site B', 'activity']);
+  });
+
+  it('drops a named surface that has not come into play yet, rather than holding space for it', () => {
+    expect(ResolveSplitPaneKeys(model.Tabs, ['Site A', 'Site B', 'Site C'])).toEqual(['Site A', 'Site B']);
+  });
+
+  it('resolves to nothing below two surfaces — that is the tabs layout, not a split', () => {
+    expect(ResolveSplitPaneKeys(model.Tabs, ['Site A'])).toEqual([]);
+    expect(ResolveSplitPaneKeys(model.Tabs, ['nope'])).toEqual([]);
+    expect(ResolveSplitPaneKeys([], [])).toEqual([]);
+    expect(MIN_SPLIT_PANES).toBe(2);
+  });
+
+  it('can split the Activity surface alongside a channel', () => {
+    expect(ResolveSplitPaneKeys(model.Tabs, ['Site A', 'activity'])).toEqual(['Site A', 'activity']);
   });
 });
 

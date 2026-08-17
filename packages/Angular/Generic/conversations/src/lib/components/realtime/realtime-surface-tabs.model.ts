@@ -274,6 +274,43 @@ export class RealtimeSurfaceTabsModel {
 }
 
 /**
+ * The panel's layout mode (see `RealtimeSurfaceTabsComponent.Layout`):
+ *  - `tabs`  — the default: one surface at a time, picked from the tab strip.
+ *  - `split` — the surfaces named by `SplitKeys` arranged side by side at once.
+ */
+export type RealtimeSurfaceLayoutMode = 'tabs' | 'split';
+
+/**
+ * The minimum number of panes a split arrangement needs. One surface side by side with nothing
+ * is the tabs layout, so the panel stays in tabs presentation below this — that's the "only one
+ * surface is open" degrade, not a failure.
+ */
+export const MIN_SPLIT_PANES = 2;
+
+/**
+ * Resolves which of the strip's tabs a `split` layout should show, in STRIP order.
+ *
+ * `requestedKeys` is the host's declared set (`SplitKeys`); an empty set means "whatever is
+ * open", which is what makes `Layout="split"` meaningful on its own. Unknown keys are dropped
+ * rather than reserving empty space — a host commonly declares the surfaces it expects before
+ * the agent has brought them into play, and the split should grow into them as they register.
+ * Strip order (not the order the host listed) decides left-to-right, so the split reads the same
+ * way as the tabs it replaces.
+ *
+ * Returns an empty array when fewer than {@link MIN_SPLIT_PANES} tabs qualify — the caller stays
+ * in the tabs presentation.
+ *
+ * Kept framework-free (like the model) so the rule is unit-testable in isolation.
+ */
+export function ResolveSplitPaneKeys(tabs: ReadonlyArray<RealtimeSurfaceTab>, requestedKeys: ReadonlyArray<string>): string[] {
+  const requested = new Set(requestedKeys);
+  const keys = tabs
+    .filter(t => requested.size === 0 || requested.has(t.Key))
+    .map(t => t.Key);
+  return keys.length >= MIN_SPLIT_PANES ? keys : [];
+}
+
+/**
  * Pure decision helper for the REVIEW→LIVE continuation edge: should the overlay REMOVE the
  * review-registered (template-based, read-only) Whiteboard tab?
  *
