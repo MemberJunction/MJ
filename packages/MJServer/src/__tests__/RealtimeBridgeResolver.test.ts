@@ -17,9 +17,9 @@ const h = vi.hoisted(() => ({
   stopRecording: vi.fn(async () => ({ EgressID: 'eg-1', RoomName: 'room-1', Status: 'EGRESS_COMPLETE' })),
 }));
 
-// These two are instantiated with `new` by the resolver, so they must be constructible. They were
-// `vi.fn(() => ({...}))`, which vitest 3 tolerated as a constructor but vitest 4 rejects with
-// "is not a constructor" — classes express the intent and work under both.
+// The resolver `new`s these, so the doubles must be CLASSES: an arrow-bodied `vi.fn()` is not a
+// constructor under vitest 4, and every mutation that constructed one was failing with
+// "... is not a constructor" (caught by the resolver's own try/catch, so it surfaced only as Success:false).
 vi.mock('@memberjunction/livekit-room-server', () => ({
   LiveKitTokenService: class {
     MintClientToken = h.mintClientToken;
@@ -47,6 +47,14 @@ vi.mock('@memberjunction/ai-agents', () => ({
   },
 }));
 
+// Mock the `Realtime: Advanced Session Controls` check so the GATE'S EFFECT is tested here without
+// standing up authorization metadata + role hierarchies. The check itself (and its fail-closed
+// direction) is one shared function, exercised on the client-direct path it was extracted from.
+const authz = vi.hoisted(() => ({ hasAdvancedControls: vi.fn(() => false) }));
+vi.mock('../resolvers/realtimeAdvancedSessionControls', () => ({
+  UserHasRealtimeAdvancedSessionControls: () => authz.hasAdvancedControls(),
+}));
+
 // Mock the meeting-recording registration so the thin resolver is tested in isolation (no MJStorage /
 // core-entities graph). Its own behavior is covered by meetingRecordingRegistration.test.ts.
 vi.mock('../resolvers/meetingRecordingRegistration', () => ({
@@ -54,7 +62,13 @@ vi.mock('../resolvers/meetingRecordingRegistration', () => ({
   correlateRecordingStart: vi.fn(async () => true),
 }));
 
-import { RealtimeBridgeResolver, MintLiveKitClientTokenInput, LiveKitRecordingInput } from '../resolvers/RealtimeBridgeResolver';
+import { LiveKitAgentRoomCoordinator } from '@memberjunction/livekit-room-server';
+import {
+  RealtimeBridgeResolver,
+  MintLiveKitClientTokenInput,
+  LiveKitRecordingInput,
+  StartLiveKitAgentRoomSessionInput,
+} from '../resolvers/RealtimeBridgeResolver';
 import type { AppContext } from '../types.js';
 
 /** A resolver subclass that supplies a fake authenticated user (GetUserFromPayload is protected). */
@@ -92,6 +106,69 @@ describe('RealtimeBridgeResolver', () => {
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toMatch(/current user/i);
       expect(result.RoomName).toBe('room-1');
+    });
+  });
+
+  describe('StartLiveKitAgentRoomSession — per-session Instructions', () => {
+    /** The coordinator seam the resolver drives (mocked at module scope above). */
+    const startSession = LiveKitAgentRoomCoordinator.Instance.StartAgentRoomSession as ReturnType<typeof vi.fn>;
+
+    function makeInput(overrides: Partial<StartLiveKitAgentRoomSessionInput> = {}): StartLiveKitAgentRoomSessionInput {
+      return Object.assign(new StartLiveKitAgentRoomSessionInput(), {
+        RoomName: 'room-1',
+        AgentID: 'agent-1',
+        AgentSessionID: 'session-1', // supplied, so the resolver never needs to create one
+        ...overrides,
+      });
+    }
+
+    beforeEach(() => {
+      startSession.mockReset();
+      startSession.mockResolvedValue({
+        SessionBridgeID: 'bridge-1',
+        RoomName: 'room-1',
+        ServerUrl: 'wss://x.livekit.cloud',
+        MeetingGated: false,
+        CanReconfigureTurnMode: true,
+      });
+      authz.hasAdvancedControls.mockReset(); // call history matters below: the gate must go UNCONSULTED
+      authz.hasAdvancedControls.mockReturnValue(false);
+    });
+
+    it('REFUSES caller-supplied Instructions without the advanced-session-controls authorization', async () => {
+      const result = await resolver.StartLiveKitAgentRoomSession(makeInput({ Instructions: 'You are Dr. Chen.' }), ctx);
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toMatch(/Realtime: Advanced Session Controls/);
+      expect(result.RoomName).toBe('room-1'); // the refusal still names the room it was for
+      // Refused OUTRIGHT, not downgraded to a generic-voice session the caller would think worked.
+      expect(startSession).not.toHaveBeenCalled();
+    });
+
+    it('passes Instructions to the coordinator for an authorized caller', async () => {
+      authz.hasAdvancedControls.mockReturnValue(true);
+
+      const result = await resolver.StartLiveKitAgentRoomSession(makeInput({ Instructions: '  You are Dr. Chen.  ' }), ctx);
+
+      expect(result.Success).toBe(true);
+      expect(startSession).toHaveBeenCalledOnce();
+      expect(startSession.mock.calls[0][0].Instructions).toBe('You are Dr. Chen.'); // trimmed
+    });
+
+    it('is UNGATED without Instructions — the everyday start never consults the authorization', async () => {
+      const result = await resolver.StartLiveKitAgentRoomSession(makeInput(), ctx);
+
+      expect(result.Success).toBe(true);
+      expect(authz.hasAdvancedControls).not.toHaveBeenCalled();
+      expect(startSession.mock.calls[0][0].Instructions).toBeUndefined();
+    });
+
+    it('treats a whitespace-only Instructions value as absent (no gate, no prompt change)', async () => {
+      const result = await resolver.StartLiveKitAgentRoomSession(makeInput({ Instructions: '   ' }), ctx);
+
+      expect(result.Success).toBe(true);
+      expect(authz.hasAdvancedControls).not.toHaveBeenCalled();
+      expect(startSession.mock.calls[0][0].Instructions).toBeUndefined();
     });
   });
 

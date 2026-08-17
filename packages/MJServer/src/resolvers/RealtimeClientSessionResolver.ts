@@ -26,7 +26,7 @@
  */
 import { Resolver, Mutation, Arg, Ctx, Int, Float, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { AuthorizationEvaluator, UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
 import { UUIDsEqual, IsValidUUID } from '@memberjunction/global';
 import {
     MJAIAgentEntity,
@@ -48,7 +48,6 @@ import {
     ParseRealtimeTypeConfiguration,
     ResolveEffectiveRealtimeConfig,
     RealtimeAllowedAgent,
-    REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION,
     resolveRecordingStorageAccountID,
     storeRealtimeRecording,
     writeRealtimeRecordingSegment,
@@ -61,6 +60,7 @@ import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager } from '../agentSessions/index.js';
 import { resolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
+import { UserHasRealtimeAdvancedSessionControls } from './realtimeAdvancedSessionControls.js';
 
 /**
  * Progress steps worth narrating to the realtime model — mirrors the normal agent-run path's filter
@@ -1391,32 +1391,12 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     }
 
     /**
-     * Hierarchy-aware check for the `Realtime: Advanced Session Controls` authorization against
-     * the request provider's cached Authorizations + the caller's roles. FAIL-CLOSED: an absent
-     * authorization row (un-synced seed) or an evaluation error denies — runtime overrides are a
-     * privileged path, and unauthorized callers still get a fully working session without them.
+     * Hierarchy-aware, FAIL-CLOSED check for the `Realtime: Advanced Session Controls` authorization.
+     * Delegates to the shared {@link UserHasRealtimeAdvancedSessionControls} so this gate and the
+     * bridged room-session gate can never drift apart on the direction they fail in.
      */
     private userHasAdvancedSessionControls(contextUser: UserInfo, provider: IMetadataProvider): boolean {
-        try {
-            const auths = provider.Authorizations ?? [];
-            const wanted = REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION.trim().toLowerCase();
-            const auth = auths.find((a) => a.Name?.trim().toLowerCase() === wanted);
-            if (!auth) {
-                LogError(
-                    `StartRealtimeClientSession: the '${REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION}' ` +
-                        'authorization is not present in metadata — runtime overrides are denied (fail closed). ' +
-                        'Sync the authorization seed metadata to enable them.',
-                );
-                return false;
-            }
-            return new AuthorizationEvaluator().UserCanExecuteWithAncestors(auth, contextUser, auths);
-        } catch (error) {
-            LogError(
-                `StartRealtimeClientSession: authorization evaluation failed (${(error as Error).message}) — ` +
-                    'runtime overrides are denied (fail closed).',
-            );
-            return false;
-        }
+        return UserHasRealtimeAdvancedSessionControls(contextUser, provider, 'StartRealtimeClientSession');
     }
 
     /**

@@ -174,6 +174,26 @@ export interface PrepareClientSessionInput {
      * deployments (a public web-widget guest's `VoiceMaxSessionMinutes`); omitted otherwise.
      */
     MaxSessionSeconds?: number;
+    /**
+     * Optional CALLER-SUPPLIED per-session instructions — the persona/scenario text that makes THIS
+     * session a specific character. It is **APPENDED to** the companion system prompt, never a
+     * replacement for it: {@link RealtimeClientSessionService.buildCompanionSystemPrompt} assembles the
+     * framework's own framing (first-person-as-the-target identity, the `invoke-target-agent`
+     * discipline, meeting rules, voice manner, memory) FIRST and joins this text onto the end — exactly
+     * what a subclass overriding that seam does when it composes `super(...)` + its own text (the
+     * established client-direct pattern). No host can strip the framing or safety text by supplying it.
+     *
+     * Why it exists: without it a bridged ROOM seat could only ever be the generic co-agent voice, so a
+     * multi-agent room was N copies of one character rather than a panel of distinct ones — while a solo
+     * client-direct session could already be a persona via the subclass seam. This closes that gap for
+     * hosts that cannot subclass (a GraphQL caller starting a room seat).
+     *
+     * **Pre-authorized by the transport layer**, exactly like {@link ConfigOverridesJson}: it is
+     * per-session prompt influence, so the MJServer resolvers gate it behind the
+     * `Realtime: Advanced Session Controls` authorization BEFORE threading it here; the service trusts
+     * the input. Absent/blank ⇒ the prompt is byte-for-byte what it is without this field.
+     */
+    Instructions?: string;
 }
 
 /**
@@ -1853,6 +1873,9 @@ export class RealtimeClientSessionService {
      * short "Voice & manner" section (tone / speaking style) is appended after the co-agent's
      * own prompt so the model speaks in the configured manner.
      *
+     * Caller-supplied {@link PrepareClientSessionInput.Instructions} land LAST — appended to everything
+     * the framework assembled, never replacing any of it (see that field for the why + the gate).
+     *
      * @param input The prepare-session input.
      * @param coAgent The resolved co-agent.
      * @param contextUser The calling user.
@@ -1885,8 +1908,16 @@ export class RealtimeClientSessionService {
         const priorTranscript = this.formatPriorTranscript(input.PriorTranscript);
         const history = this.formatConversationHistory(input.ConversationMessages);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
+        // The caller's per-session persona text goes LAST, appended — the ONE composition rule this field
+        // has (see PrepareClientSessionInput.Instructions). Doing it here, in the shared producer, is what
+        // makes it byte-identical to the `super(...) + own text` subclass override every client-direct
+        // consumer already uses, and keeps the framework's framing ahead of caller text on EVERY host.
+        const callerInstructions = input.Instructions ?? '';
 
-        return [framing, meetingFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, memoryContext]
+        return [
+            framing, meetingFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection,
+            priorTranscript, history, memoryContext, callerInstructions,
+        ]
             .filter(part => part && part.trim().length > 0)
             .join('\n\n');
     }

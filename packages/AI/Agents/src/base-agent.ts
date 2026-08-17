@@ -1968,7 +1968,8 @@ export class BaseAgent {
      * `ConfigOverridesJson` cascade slot via {@link BuildRealtimeOverridesJson}). Tools are left empty — a
      * bridge host injects its OWN UX tools (none for LiveKit audio today); identity/precedence/invoke-target
      * come from the core. `AgentSessionID` groups this session's observability runs (see
-     * {@link RealtimeClientSessionService.WireBridgeRealtimeSession}).
+     * {@link RealtimeClientSessionService.WireBridgeRealtimeSession}). `realtimeInstructions` is the host's
+     * optional per-session persona text, which the core APPENDS to the companion prompt.
      *
      * @param params The bridge execution parameters.
      * @returns The core prep input.
@@ -1985,6 +1986,11 @@ export class BaseAgent {
         const selfNames = Array.isArray(params.data?.realtimeSelfNames)
             ? (params.data?.realtimeSelfNames as unknown[]).filter((n): n is string => typeof n === 'string')
             : undefined;
+        // Caller-supplied per-session persona/scenario text (a bridge host asking THIS seat to be a
+        // specific character). The core producer APPENDS it to the companion prompt it assembles — it
+        // never replaces the framing — and the transport layer gated it before it got here, exactly as
+        // it gates the config overrides. Blank/absent ⇒ omitted, so the prompt is unchanged.
+        const instructions = (params.data?.realtimeInstructions as string | undefined)?.trim() || undefined;
         return {
             CoAgent: params.agent,
             TargetAgentID: targetID,
@@ -1995,6 +2001,7 @@ export class BaseAgent {
             UserID: params.contextUser?.ID,
             DisableAutoResponse: meetingMode || undefined,
             SelfNames: selfNames,
+            Instructions: instructions,
             // App awareness (Move 1/3/4): the app the session runs in (sources the app cascade layer +
             // RelevantAgents → allowed-agent union) and the live app-context snapshot injected at mint.
             // Both ride params.data, the same conduit async agents use for appContext.

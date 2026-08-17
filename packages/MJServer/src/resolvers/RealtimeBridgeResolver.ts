@@ -10,6 +10,7 @@ import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { SessionManager } from '../agentSessions/SessionManager.js';
 import { NotificationEngine } from '@memberjunction/notifications';
 import { registerMeetingRecordingFile, correlateRecordingStart } from './meetingRecordingRegistration.js';
+import { UserHasRealtimeAdvancedSessionControls } from './realtimeAdvancedSessionControls.js';
 
 /**
  * Binds the agent realtime-session factory onto the LiveKit room coordinator's model-session creation seam.
@@ -127,6 +128,28 @@ export class StartLiveKitAgentRoomSessionInput {
 
   @Field(() => String, { nullable: true })
   TurnMode?: string;
+
+  /**
+   * How eagerly this agent takes the floor: `'proactive'` (the default — an ordinary voice) or
+   * `'addressed-only'` (a deliberately quiet observer/specialist seat that speaks only when named).
+   */
+  @Field(() => String, { nullable: true })
+  ParticipationMode?: string;
+
+  /**
+   * Optional per-session INSTRUCTIONS for this seat — the persona/scenario text that makes it a
+   * specific character (a panel of distinct voices instead of N copies of one). The realtime core
+   * APPENDS it to the co-agent's companion system prompt; it never replaces the framework's framing
+   * or safety text.
+   *
+   * **AUTHORIZATION-GATED**: caller-supplied prompt content is per-session prompt influence, so it
+   * requires the `Realtime: Advanced Session Controls` authorization — the same gate the client-direct
+   * `configOverridesJson` sits behind, and this is the stronger knob of the two (that path cannot
+   * carry prompt text at all). Unauthorized callers get a structured refusal, never a silent drop;
+   * omitting the field is the unchanged, ungated everyday flow.
+   */
+  @Field(() => String, { nullable: true })
+  Instructions?: string;
 }
 
 @ObjectType()
@@ -151,6 +174,22 @@ export class LiveKitAgentRoomSessionResult {
 
   @Field(() => String)
   Identity: string;
+
+  /**
+   * Whether the started seat is **meeting-gated** — the agent's model auto-response is off and it speaks only
+   * when addressed. Surfaced because turn discipline was previously only *audible*: an agent that keeps
+   * auto-responding in a multi-agent room talks over the whole cast, and nothing in the API said so. `false`
+   * is correct for an ordinary solo 1:1 seat, and a failure for a seat that was meant to be gated.
+   */
+  @Field(() => Boolean, { nullable: true })
+  MeetingGated?: boolean;
+
+  /**
+   * Whether this seat's realtime provider can change turn mode on a LIVE socket. `false` (e.g. Gemini Live)
+   * means gating it costs a session reconnect — which the bridge engine performs automatically.
+   */
+  @Field(() => Boolean, { nullable: true })
+  CanReconfigureTurnMode?: boolean;
 }
 
 @InputType()
@@ -244,6 +283,10 @@ export class RealtimeBridgeResolver extends ResolverBase {
   /**
    * Starts (or reuses) an agent's presence in a LiveKit room and returns a client token so the calling
    * user can immediately join the same room.
+   *
+   * Everything but one field is the plain authenticated flow: supplying `Instructions` (caller-authored
+   * text appended to the seat's system prompt) additionally requires the `Realtime: Advanced Session
+   * Controls` authorization and is refused with a reason when the caller lacks it.
    */
   @Mutation(() => LiveKitAgentRoomSessionResult)
   async StartLiveKitAgentRoomSession(
@@ -266,6 +309,20 @@ export class RealtimeBridgeResolver extends ResolverBase {
       }
       const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
       const roomName = input.RoomName?.trim() || `mj-${randomUUID()}`;
+
+      // PROMPT-INFLUENCE GATE. Caller-supplied Instructions are appended to the seat's system prompt, so
+      // they are the same class of privilege as the client-direct `configOverridesJson` and sit behind the
+      // same `Realtime: Advanced Session Controls` authorization (one shared, fail-closed check). Refused
+      // OUT LOUD rather than dropped: a caller who asked for a persona and silently got the generic voice
+      // would have no way to tell — and everything else about the start still looks like it worked.
+      const instructions = input.Instructions?.trim() || undefined;
+      if (instructions && !UserHasRealtimeAdvancedSessionControls(user, provider, 'StartLiveKitAgentRoomSession')) {
+        return failure(
+          "Not authorized: per-session agent instructions require the 'Realtime: Advanced Session Controls' " +
+            'authorization. Omit Instructions to start the agent with its configured persona.',
+          roomName,
+        );
+      }
 
       // Resolve the AIAgentSession the bridge will reference. The bridge row FK-references
       // AIAgentSession(ID), so we must use an EXISTING session — either one the caller supplied, or a
@@ -293,6 +350,9 @@ export class RealtimeBridgeResolver extends ResolverBase {
         RealtimeModelID: input.RealtimeModelID,
         RealtimeVoice: input.RealtimeVoice,
         TurnMode: this.normalizeTurnMode(input.TurnMode),
+        ParticipationMode: this.normalizeParticipationMode(input.ParticipationMode),
+        // Gated above; the coordinator and the realtime core treat it as pre-authorized from here on.
+        Instructions: instructions,
         ContextUser: user,
         MetadataProvider: provider,
       });
@@ -307,6 +367,10 @@ export class RealtimeBridgeResolver extends ResolverBase {
         ServerUrl: session.ServerUrl,
         ClientToken: clientToken.Token,
         Identity: clientToken.Identity,
+        // The seat's effective turn discipline, straight from the engine — so a caller can assert the room is
+        // gated instead of listening for an agent talking over everyone.
+        MeetingGated: session.MeetingGated,
+        CanReconfigureTurnMode: session.CanReconfigureTurnMode,
       };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -336,6 +400,72 @@ export class RealtimeBridgeResolver extends ResolverBase {
       return await LiveKitAgentRoomCoordinator.Instance.StopAgentRoomSession(sessionBridgeID, 'Explicit', user, provider);
     } catch (error) {
       LogError(`StopLiveKitAgentRoomSession failed: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
+  }
+
+  /**
+   * **Suspends** one agent so a human can take its seat — the agent stops talking but stays in the room.
+   * The half of in-room agent management that {@link StopLiveKitAgentRoomSession} is too blunt for: stopping
+   * ends the session, finalizes its co-agent run and severs its recording legs, so handing the seat back
+   * would mean a brand-new agent with none of the meeting's history. Suspending keeps the provider socket,
+   * the agent session, the transcript persistence and the observability run alive — only the agent's voice
+   * is gated off. Pair with {@link ResumeBridgeAgent} to hand the seat back.
+   *
+   * Deliberately NOT named `*LiveKit*`: it goes straight to the transport-agnostic {@link AIBridgeEngine},
+   * so it works for any bridged agent (LiveKit, Zoom, Teams, telephony). Best-effort — an unknown bridge, a
+   * provider that cannot gate its model mid-session, or any error resolves `false`.
+   *
+   * @param sessionBridgeID The `MJ: AI Agent Session Bridges` row id of the agent to suspend.
+   */
+  @Mutation(() => Boolean)
+  async SuspendBridgeAgent(
+    @Arg('sessionBridgeID', () => String) sessionBridgeID: string,
+    @Ctx() context: AppContext = {} as AppContext,
+  ): Promise<boolean> {
+    try {
+      const user = this.GetUserFromPayload(context.userPayload);
+      if (!user) {
+        return false;
+      }
+      const suspended = AIBridgeEngine.Instance.SuspendBridgeAgent(sessionBridgeID);
+      // A seat takeover is worth an audit line — WHO stepped into the agent's place, not just that someone did.
+      LogStatusEx({
+        message: `[RealtimeBridge] SuspendBridgeAgent(${sessionBridgeID}) by ${user.Email ?? user.ID} → ${suspended}`,
+        verboseOnly: true,
+      });
+      return suspended;
+    } catch (error) {
+      LogError(`SuspendBridgeAgent failed: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
+  }
+
+  /**
+   * **Resumes** an agent suspended by {@link SuspendBridgeAgent} — the human hands the seat back and the
+   * agent responds again behind exactly the turn-taking gate it had before the takeover. It does not grab
+   * the floor on resume; it speaks when next addressed. Best-effort: any error resolves `false`.
+   *
+   * @param sessionBridgeID The `MJ: AI Agent Session Bridges` row id of the agent to resume.
+   */
+  @Mutation(() => Boolean)
+  async ResumeBridgeAgent(
+    @Arg('sessionBridgeID', () => String) sessionBridgeID: string,
+    @Ctx() context: AppContext = {} as AppContext,
+  ): Promise<boolean> {
+    try {
+      const user = this.GetUserFromPayload(context.userPayload);
+      if (!user) {
+        return false;
+      }
+      const resumed = AIBridgeEngine.Instance.ResumeBridgeAgent(sessionBridgeID);
+      LogStatusEx({
+        message: `[RealtimeBridge] ResumeBridgeAgent(${sessionBridgeID}) by ${user.Email ?? user.ID} → ${resumed}`,
+        verboseOnly: true,
+      });
+      return resumed;
+    } catch (error) {
+      LogError(`ResumeBridgeAgent failed: ${error instanceof Error ? error.message : String(error)}`);
       return false;
     }
   }
@@ -518,6 +648,22 @@ export class RealtimeBridgeResolver extends ResolverBase {
         return 'Hybrid';
       case 'passive':
         return 'Passive';
+      default:
+        return undefined;
+    }
+  }
+
+  /**
+   * Normalizes a participation-mode string to the bridge's accepted values. `undefined` (anything
+   * unrecognized included) leaves the coordinator on its `'proactive'` default rather than guessing a
+   * quiet seat the caller never asked for.
+   */
+  private normalizeParticipationMode(mode?: string): 'proactive' | 'addressed-only' | undefined {
+    switch ((mode ?? '').toLowerCase()) {
+      case 'proactive':
+        return 'proactive';
+      case 'addressed-only':
+        return 'addressed-only';
       default:
         return undefined;
     }

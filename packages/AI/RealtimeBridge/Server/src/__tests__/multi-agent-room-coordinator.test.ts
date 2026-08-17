@@ -1,11 +1,16 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { MultiAgentRoomCoordinator } from '../multi-agent-room-coordinator';
+import { MultiAgentRoomCoordinator, AgentParticipant, HumanParticipant, RoomParticipantKey } from '../multi-agent-room-coordinator';
 
 const ROOM = 'room-alpha';
 const ROOM_B = 'room-beta';
 const SAGE = 'sess-sage';
 const DEMO = 'sess-demo';
 const SCOUT = 'sess-scout';
+
+/** A human room member — the coach who takes an agent's seat. */
+const COACH = HumanParticipant('user-coach');
+/** A second human, for the "two people in the room" cases. */
+const HOST = HumanParticipant('user-host');
 
 let coord: MultiAgentRoomCoordinator;
 beforeEach(() => {
@@ -203,5 +208,145 @@ describe('MultiAgentRoomCoordinator — loop-safety (passive agents)', () => {
         expect(coord.TakeFloor(ROOM, SAGE).Granted).toBe(true);
         coord.ReleaseFloor(ROOM, SAGE);
         expect(coord.TakeFloor(ROOM, SAGE).Granted).toBe(true);
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Human participants — a person holds the floor, and agents yield to them.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('MultiAgentRoomCoordinator — human participants', () => {
+    it('a bare string is still an agent session id (the pre-human calling shape)', () => {
+        coord.RegisterRoomParticipant(ROOM, SAGE);
+        // The string form and the explicit agent ref name the SAME member.
+        expect(coord.CanTakeFloor(ROOM, AgentParticipant(SAGE))).toEqual({ Granted: true, Reason: 'FloorFree' });
+        coord.TakeFloor(ROOM, AgentParticipant(SAGE));
+        expect(coord.IsFloorHolder(ROOM, SAGE)).toBe(true);
+        expect(coord.GetRoomState(ROOM)!.Participants).toEqual([{ Kind: 'Agent', AgentSessionId: SAGE }]);
+    });
+
+    it('an agent session and a user sharing an id are distinct members', () => {
+        const shared = 'A1B2C3';
+        coord.RegisterRoomParticipant(ROOM, shared);
+        coord.RegisterRoomParticipant(ROOM, HumanParticipant(shared));
+        expect(RoomParticipantKey(AgentParticipant(shared))).not.toBe(RoomParticipantKey(HumanParticipant(shared)));
+        expect(coord.GetRoomState(ROOM)!.Participants.length).toBe(2);
+        // The agent takes the floor; the human is NOT treated as already holding it.
+        coord.TakeFloor(ROOM, shared);
+        expect(coord.IsFloorHolder(ROOM, HumanParticipant(shared))).toBe(false);
+    });
+
+    it('a human can hold the floor, and every agent is denied while they do', () => {
+        coord.RegisterRoomParticipant(ROOM, SAGE);
+        coord.RegisterRoomParticipant(ROOM, DEMO);
+        coord.RegisterRoomParticipant(ROOM, COACH);
+
+        // Nobody is speaking yet, so the coach simply takes a free floor.
+        expect(coord.TakeFloor(ROOM, COACH)).toEqual({ Granted: true, Reason: 'FloorFree' });
+        expect(coord.IsFloorHolder(ROOM, COACH)).toBe(true);
+        expect(coord.CanTakeFloor(ROOM, SAGE)).toEqual({ Granted: false, Reason: 'HeldByHuman' });
+        expect(coord.TakeFloor(ROOM, DEMO).Granted).toBe(false);
+        expect(coord.IsFloorHolder(ROOM, SAGE)).toBe(false);
+    });
+
+    it('a FACILITATOR agent still yields to a human — it overrides agents, not people', () => {
+        coord.RegisterRoomParticipant(ROOM, SAGE, /* isFacilitator */ true);
+        coord.RegisterRoomParticipant(ROOM, COACH);
+        coord.TakeFloor(ROOM, COACH);
+        expect(coord.CanTakeFloor(ROOM, SAGE)).toEqual({ Granted: false, Reason: 'HeldByHuman' });
+        expect(coord.IsFloorHolder(ROOM, COACH)).toBe(true);
+    });
+
+    it('a human overrides a speaking agent, and the bumped agent learns it must yield', () => {
+        coord.RegisterRoomParticipant(ROOM, SAGE);
+        coord.RegisterRoomParticipant(ROOM, COACH);
+        coord.TakeFloor(ROOM, SAGE);
+        expect(coord.CanTakeFloor(ROOM, COACH)).toEqual({ Granted: true, Reason: 'HumanOverride' });
+        coord.TakeFloor(ROOM, COACH);
+        expect(coord.IsFloorHolder(ROOM, COACH)).toBe(true);
+        expect(coord.IsFloorHolder(ROOM, SAGE)).toBe(false);
+    });
+
+    it('a human re-asserting is AlreadyHolder and keeps the original since-stamp', () => {
+        let t = 1000;
+        const c = new MultiAgentRoomCoordinator(() => t);
+        c.RegisterRoomParticipant(ROOM, COACH);
+        t = 4000;
+        c.TakeFloor(ROOM, COACH);
+        t = 9000;
+        expect(c.CanTakeFloor(ROOM, COACH)).toEqual({ Granted: true, Reason: 'AlreadyHolder' });
+        c.TakeFloor(ROOM, COACH);
+        expect(c.GetRoomState(ROOM)!.FloorHeldSinceMs).toBe(4000);
+    });
+
+    it('one human may take the floor from another (the coordinator cannot mute a person)', () => {
+        coord.RegisterRoomParticipant(ROOM, COACH);
+        coord.RegisterRoomParticipant(ROOM, HOST);
+        coord.TakeFloor(ROOM, COACH);
+        expect(coord.TakeFloor(ROOM, HOST)).toEqual({ Granted: true, Reason: 'HumanOverride' });
+        expect(coord.IsFloorHolder(ROOM, HOST)).toBe(true);
+    });
+
+    it('an unregistered human is not a room member', () => {
+        coord.RegisterRoomParticipant(ROOM, SAGE);
+        expect(coord.CanTakeFloor(ROOM, COACH)).toEqual({ Granted: false, Reason: 'NotInRoom' });
+    });
+
+    it('a human leaving frees the floor it held', () => {
+        coord.RegisterRoomParticipant(ROOM, SAGE);
+        coord.RegisterRoomParticipant(ROOM, COACH);
+        coord.TakeFloor(ROOM, COACH);
+        coord.UnregisterRoomParticipant(ROOM, COACH);
+        expect(coord.CanTakeFloor(ROOM, SAGE)).toEqual({ Granted: true, Reason: 'FloorFree' });
+        expect(coord.GetRoomState(ROOM)!.FloorHolder).toBeNull();
+    });
+
+    it('a human can be the facilitator, and the agent-only projection reads null', () => {
+        coord.RegisterRoomParticipant(ROOM, SAGE);
+        coord.RegisterRoomParticipant(ROOM, COACH);
+        expect(coord.SetFacilitator(ROOM, COACH)).toBe(true);
+        const state = coord.GetRoomState(ROOM)!;
+        expect(state.Facilitator).toEqual(COACH);
+        expect(state.FacilitatorAgentSessionId).toBeNull();
+    });
+
+    it('one agent + one human is NOT a multi-agent room (it is a 1:1 call)', () => {
+        coord.RegisterRoomParticipant(ROOM, SAGE);
+        coord.RegisterRoomParticipant(ROOM, COACH);
+        expect(coord.IsMultiAgentRoom(ROOM)).toBe(false);
+        coord.RegisterRoomParticipant(ROOM, DEMO);
+        expect(coord.IsMultiAgentRoom(ROOM)).toBe(true);
+    });
+
+    it('GetRoomState separates the full roster from the agent-only projections', () => {
+        coord.RegisterRoomParticipant(ROOM, SAGE);
+        coord.RegisterRoomParticipant(ROOM, COACH);
+        coord.TakeFloor(ROOM, COACH);
+        const state = coord.GetRoomState(ROOM)!;
+        expect(state.Participants).toEqual([{ Kind: 'Agent', AgentSessionId: SAGE }, COACH]);
+        expect(state.AgentSessionIds).toEqual([SAGE]); // humans excluded — back-compat shape
+        expect(state.FloorHolder).toEqual(COACH);
+        // The pre-human projection can only describe an AGENT holder, so it reads null here.
+        expect(state.FloorHolderAgentSessionId).toBeNull();
+    });
+
+    it('the takeover round-trip: agent speaks → human takes the seat → hands it back', () => {
+        coord.RegisterRoomParticipant(ROOM, SAGE);
+        coord.RegisterRoomParticipant(ROOM, DEMO);
+        coord.RegisterRoomParticipant(ROOM, COACH);
+
+        // Sage is mid-turn.
+        expect(coord.TakeFloor(ROOM, SAGE).Granted).toBe(true);
+
+        // The coach steps into Sage's seat: granted over the sitting agent, and now NO agent may speak.
+        expect(coord.TakeFloor(ROOM, COACH)).toEqual({ Granted: true, Reason: 'HumanOverride' });
+        expect([SAGE, DEMO].filter(a => coord.IsFloorHolder(ROOM, a))).toEqual([]);
+        expect(coord.CanTakeFloor(ROOM, SAGE).Reason).toBe('HeldByHuman');
+        expect(coord.CanTakeFloor(ROOM, DEMO).Reason).toBe('HeldByHuman');
+
+        // The coach hands the seat back — the agents can take turns again, still one at a time.
+        expect(coord.ReleaseFloor(ROOM, COACH)).toBe(true);
+        expect(coord.TakeFloor(ROOM, SAGE).Granted).toBe(true);
+        expect(coord.CanTakeFloor(ROOM, DEMO)).toEqual({ Granted: false, Reason: 'HeldByOtherAgent' });
     });
 });

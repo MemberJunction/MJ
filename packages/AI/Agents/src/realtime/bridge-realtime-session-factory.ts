@@ -72,6 +72,21 @@ export interface BridgeRealtimeSessionContext {
     MeetingMode?: boolean;
     /** The names the agent answers to (display name + aliases) — phrasing for the meeting prompt only. */
     SelfNames?: string[];
+    /**
+     * Optional per-session INSTRUCTIONS — the persona/scenario text that makes THIS seat a specific
+     * character. It is **APPENDED to** the co-agent's companion system prompt, never a replacement for
+     * it: the core producer builds the framework's framing (identity, `invoke-target-agent` discipline,
+     * meeting rules, voice manner, memory) first and joins this onto the end, so the framing and safety
+     * text always survive. This is the same composition the client-direct path gets by overriding
+     * `RealtimeClientSessionService.buildCompanionSystemPrompt` and appending to `super(...)` — exposed
+     * as a parameter for hosts that can't subclass. Without it a multi-agent room is N copies of one
+     * generic voice instead of a panel of distinct characters.
+     *
+     * **Pre-authorized by the transport layer** (the MJServer resolver gates it behind the
+     * `Realtime: Advanced Session Controls` authorization, as it does the config overrides). Flows to
+     * `params.data.realtimeInstructions`. Absent/blank ⇒ the prompt is exactly what it is today.
+     */
+    Instructions?: string;
 }
 
 /**
@@ -115,7 +130,8 @@ export async function CreateBridgeRealtimeSession(ctx: BridgeRealtimeSessionCont
         conversationMessages: [] as ChatMessage[],
         // Realtime extras ride params.data: the TARGET agent the co-agent voices via `invoke-target-agent`
         // (without it the co-agent stays idle), plus optional per-session dev overrides for the model/voice
-        // so two agents in the same room can sound distinct. Omitted keys are simply absent.
+        // so two agents in the same room can sound distinct, plus the caller's per-session instructions so
+        // they can also BE distinct characters. Omitted keys are simply absent.
         data: buildRealtimeData(ctx),
     });
 }
@@ -144,6 +160,10 @@ function buildRealtimeData(ctx: BridgeRealtimeSessionContext): Record<string, un
     }
     if (ctx.SelfNames && ctx.SelfNames.length > 0) {
         data.realtimeSelfNames = ctx.SelfNames;
+    }
+    if (ctx.Instructions && ctx.Instructions.trim().length > 0) {
+        // Appended to the companion prompt by the core producer — see BridgeRealtimeSessionContext.Instructions.
+        data.realtimeInstructions = ctx.Instructions.trim();
     }
     return Object.keys(data).length > 0 ? data : undefined;
 }
