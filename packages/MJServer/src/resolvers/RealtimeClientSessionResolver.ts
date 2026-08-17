@@ -744,7 +744,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 return { Success: false, ErrorMessage: 'The uploaded recording was empty.' };
             }
 
-            const fileID = await storeRealtimeRecording({
+            const stored = await storeRealtimeRecording({
                 Audio: buffer,
                 MimeType: mimeType,
                 Media: 'Audio',
@@ -758,14 +758,16 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             });
 
             // Canonical consolidated file written — drop the crash-recovery shards (best-effort).
-            if (fileID) {
+            if (stored.FileID) {
                 await deleteRealtimeRecordingSegments(agentSessionId, accountID, runUser);
             }
 
             return {
-                Success: !!fileID,
-                FileID: fileID ?? undefined,
-                ErrorMessage: fileID ? undefined : 'Storage upload failed.',
+                Success: !!stored.FileID,
+                FileID: stored.FileID ?? undefined,
+                // Report the reason the storage layer knew (e.g. Drive's "Service Accounts do not have
+                // storage quota"); the generic sentence is only for when no layer supplied one.
+                ErrorMessage: stored.FileID ? undefined : (stored.ErrorMessage ?? 'Storage upload failed.'),
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
