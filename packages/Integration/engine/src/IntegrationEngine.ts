@@ -2276,6 +2276,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             });
             let batch: FetchBatchResult;
             const fetchStart = Date.now();
+            // ONE multiplicative decrease per throttle EPISODE, not one per rejected attempt.
+            //
+            // A 429 that survives three retries is three rejections but one congestion event — the
+            // same distinction TCP draws when it halves the window once per loss event rather than
+            // once per lost segment. Decreasing on each attempt compounds: at a 0.5 backoff factor
+            // three attempts take the rate to an eighth, five take it to a thirtieth, so a single
+            // throttled fetch could drive a connector to its floor purely as a function of how
+            // generous its retry budget is. The freeze already covers the interval the source asked
+            // for; the decrease is about the rate AFTER that, and one signal deserves one step.
+            let throttleReported = false;
             try {
                 await this.rateLimit(config);
                 // Resilient fetch: bound each attempt with a timeout (a hung vendor API must not
@@ -2308,7 +2318,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                         // object fetching concurrently backs off too — reporting it only in the
                         // catch below meant the rest of the connector kept hammering a source that
                         // had already said stop.
-                        if (ClassifyError(err).Code === 'RATE_LIMIT_EXCEEDED') {
+                        //
+                        // Once per episode: see `throttleReported` above. Later attempts still get
+                        // their own Retry-After honoured via DelayForError, which is what actually
+                        // paces this loop; what they must not do is halve the rate again.
+                        if (!throttleReported && ClassifyError(err).Code === 'RATE_LIMIT_EXCEEDED') {
+                            throttleReported = true;
                             this.reportRateOutcome(config, err);
                         }
                         logger?.emit('sync.fetch.retry', {
@@ -2347,7 +2362,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // other errors don't touch the rate. §5 Gap 2: also flag the map result so the per-layer
                 // AIMD controller reduces in-flight concurrency, not just the per-request token bucket.
                 if (ClassifyError(fetchErr).Code === 'RATE_LIMIT_EXCEEDED') {
-                    this.reportRateOutcome(config, fetchErr);
+                    // Only if the retry hook did not already do it — a fetch that was retried has
+                    // already had its one decrease applied, at the first sign rather than here.
+                    if (!throttleReported) this.reportRateOutcome(config, fetchErr);
                     result.Throttled = true;
                 }
                 console.error(`[IntegrationEngine] FetchChanges error for ${entityMap.ExternalObjectName}: ${errMsg}`);
