@@ -10179,6 +10179,131 @@ export const MJAuditLogSchema = z.object({
 export type MJAuditLogEntityType = z.infer<typeof MJAuditLogSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Authentication Providers
+ */
+export const MJAuthenticationProviderSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique, human-readable name for this provider instance (e.g. "WorkOS Production", "Corporate Azure AD"). Also the key used to register the provider with AuthProviderFactory.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional administrator notes describing this provider configuration.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseAuthProvider, DriverClass). MUST match the @RegisterClass key on the concrete server provider (e.g. "workos", "auth0", "okta", "msal", "cognito", "google"). The browser resolves its matching MJAuthBase subclass from the same key, so a driver ships as a server/browser pair under one name.`),
+    Issuer: z.string().nullable().describe(`
+        * * Field Name: Issuer
+        * * Display Name: Issuer
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Expected JWT issuer (the "iss" claim). Used to route an incoming token to this provider and to validate the token. E.g. https://api.workos.com/user_management/<clientId>.`),
+    Audience: z.string().nullable().describe(`
+        * * Field Name: Audience
+        * * Display Name: Audience
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Expected JWT audience (the "aud" claim) enforced during validation.`),
+    JWKSUri: z.string().nullable().describe(`
+        * * Field Name: JWKSUri
+        * * Display Name: JWKS URI
+        * * SQL Data Type: nvarchar(500)
+        * * Description: JWKS endpoint URL used to fetch the signing keys that verify token signatures. E.g. https://api.workos.com/sso/jwks/<clientId>.`),
+    ClientID: z.string().nullable().describe(`
+        * * Field Name: ClientID
+        * * Display Name: Client ID
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Public OAuth client ID. Safe to expose to the browser and published in the pre-auth provider catalog.`),
+    Domain: z.string().nullable().describe(`
+        * * Field Name: Domain
+        * * Display Name: Domain
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Provider domain where applicable (e.g. Auth0/Okta tenant domain). Optional; published in the pre-auth provider catalog.`),
+    Scopes: z.string().nullable().describe(`
+        * * Field Name: Scopes
+        * * Display Name: Scopes
+        * * SQL Data Type: nvarchar(500)
+        * * Description: OAuth scopes to request, space-delimited (e.g. "openid profile email"). Published in the pre-auth provider catalog.`),
+    AdditionalConfiguration: z.string().nullable().describe(`
+        * * Field Name: AdditionalConfiguration
+        * * Display Name: Additional Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: SERVER-SIDE ONLY driver configuration as a JSON object, for fields not modeled as columns. NEVER published to the pre-auth catalog. Merged into the provider config when the server driver is instantiated. Put anything the browser must not read here.`),
+    ClientConfiguration: z.string().nullable().describe(`
+        * * Field Name: ClientConfiguration
+        * * Display Name: Client Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Browser driver configuration as a JSON object (e.g. WorkOS apiHostname, Cognito region/userPoolId, redirectUri). PUBLISHED VERBATIM in the unauthenticated pre-auth provider catalog, so every value here must be considered world-readable. Server-only settings belong in AdditionalConfiguration.`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Lifecycle status. Only Active providers are registered at startup and offered for login.`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this provider is the default selection -- pre-highlighted in the login picker, and used directly when it is the only Active, client-visible provider.`),
+    ClientVisible: z.boolean().describe(`
+        * * Field Name: ClientVisible
+        * * Display Name: Client Visible
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, this provider appears in the browser pre-auth login picker and is included in the public catalog endpoint. Set false for providers that only validate machine-to-machine tokens and should never be offered as an interactive login.`),
+    DisplayName: z.string().nullable().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Label shown on the login picker button (e.g. "Microsoft", rendered as "Continue with Microsoft"). Falls back to Name when null.`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Icon for the login picker button -- a Font Awesome class (e.g. "fa-brands fa-microsoft") or a known brand-logo key the picker maps to a brand chip.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Ordering of this provider within the login picker (ascending).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Credential: z.string().nullable().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJAuthenticationProviderEntityType = z.infer<typeof MJAuthenticationProviderSchema>;
+
+/**
  * zod schema definition for the entity MJ: Authorization Roles
  */
 export const MJAuthorizationRoleSchema = z.object({
@@ -61160,6 +61285,322 @@ export class MJAuditLogEntity extends BaseEntity<MJAuditLogEntityType> {
     */
     get Entity(): string | null {
         return this.Get('Entity');
+    }
+}
+
+
+/**
+ * MJ: Authentication Providers - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AuthenticationProvider
+ * * Base View: vwAuthenticationProviders
+ * * @description Metadata catalog of authentication providers. Each row defines one provider (Auth0, Okta, MSAL, Cognito, Google, WorkOS, or any third-party driver) whose implementation is resolved at runtime from DriverClass via MJGlobal.ClassFactory.CreateInstance(BaseAuthProvider, DriverClass). Supersedes the hard-wired mj.config.cjs authProviders array, which remains a back-compat fallback when this table is empty.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Authentication Providers')
+export class MJAuthenticationProviderEntity extends BaseEntity<MJAuthenticationProviderEntityType> {
+    /**
+    * Loads the MJ: Authentication Providers record from the database
+    * @param ID: string - primary key value to load the MJ: Authentication Providers record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAuthenticationProviderEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique, human-readable name for this provider instance (e.g. "WorkOS Production", "Corporate Azure AD"). Also the key used to register the provider with AuthProviderFactory.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional administrator notes describing this provider configuration.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseAuthProvider, DriverClass). MUST match the @RegisterClass key on the concrete server provider (e.g. "workos", "auth0", "okta", "msal", "cognito", "google"). The browser resolves its matching MJAuthBase subclass from the same key, so a driver ships as a server/browser pair under one name.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Issuer
+    * * Display Name: Issuer
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Expected JWT issuer (the "iss" claim). Used to route an incoming token to this provider and to validate the token. E.g. https://api.workos.com/user_management/<clientId>.
+    */
+    get Issuer(): string | null {
+        return this.Get('Issuer');
+    }
+    set Issuer(value: string | null) {
+        this.Set('Issuer', value);
+    }
+
+    /**
+    * * Field Name: Audience
+    * * Display Name: Audience
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Expected JWT audience (the "aud" claim) enforced during validation.
+    */
+    get Audience(): string | null {
+        return this.Get('Audience');
+    }
+    set Audience(value: string | null) {
+        this.Set('Audience', value);
+    }
+
+    /**
+    * * Field Name: JWKSUri
+    * * Display Name: JWKS URI
+    * * SQL Data Type: nvarchar(500)
+    * * Description: JWKS endpoint URL used to fetch the signing keys that verify token signatures. E.g. https://api.workos.com/sso/jwks/<clientId>.
+    */
+    get JWKSUri(): string | null {
+        return this.Get('JWKSUri');
+    }
+    set JWKSUri(value: string | null) {
+        this.Set('JWKSUri', value);
+    }
+
+    /**
+    * * Field Name: ClientID
+    * * Display Name: Client ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Public OAuth client ID. Safe to expose to the browser and published in the pre-auth provider catalog.
+    */
+    get ClientID(): string | null {
+        return this.Get('ClientID');
+    }
+    set ClientID(value: string | null) {
+        this.Set('ClientID', value);
+    }
+
+    /**
+    * * Field Name: Domain
+    * * Display Name: Domain
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Provider domain where applicable (e.g. Auth0/Okta tenant domain). Optional; published in the pre-auth provider catalog.
+    */
+    get Domain(): string | null {
+        return this.Get('Domain');
+    }
+    set Domain(value: string | null) {
+        this.Set('Domain', value);
+    }
+
+    /**
+    * * Field Name: Scopes
+    * * Display Name: Scopes
+    * * SQL Data Type: nvarchar(500)
+    * * Description: OAuth scopes to request, space-delimited (e.g. "openid profile email"). Published in the pre-auth provider catalog.
+    */
+    get Scopes(): string | null {
+        return this.Get('Scopes');
+    }
+    set Scopes(value: string | null) {
+        this.Set('Scopes', value);
+    }
+
+    /**
+    * * Field Name: AdditionalConfiguration
+    * * Display Name: Additional Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: SERVER-SIDE ONLY driver configuration as a JSON object, for fields not modeled as columns. NEVER published to the pre-auth catalog. Merged into the provider config when the server driver is instantiated. Put anything the browser must not read here.
+    */
+    get AdditionalConfiguration(): string | null {
+        return this.Get('AdditionalConfiguration');
+    }
+    set AdditionalConfiguration(value: string | null) {
+        this.Set('AdditionalConfiguration', value);
+    }
+
+    /**
+    * * Field Name: ClientConfiguration
+    * * Display Name: Client Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Browser driver configuration as a JSON object (e.g. WorkOS apiHostname, Cognito region/userPoolId, redirectUri). PUBLISHED VERBATIM in the unauthenticated pre-auth provider catalog, so every value here must be considered world-readable. Server-only settings belong in AdditionalConfiguration.
+    */
+    get ClientConfiguration(): string | null {
+        return this.Get('ClientConfiguration');
+    }
+    set ClientConfiguration(value: string | null) {
+        this.Set('ClientConfiguration', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Lifecycle status. Only Active providers are registered at startup and offered for login.
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this provider is the default selection -- pre-highlighted in the login picker, and used directly when it is the only Active, client-visible provider.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: ClientVisible
+    * * Display Name: Client Visible
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, this provider appears in the browser pre-auth login picker and is included in the public catalog endpoint. Set false for providers that only validate machine-to-machine tokens and should never be offered as an interactive login.
+    */
+    get ClientVisible(): boolean {
+        return this.Get('ClientVisible');
+    }
+    set ClientVisible(value: boolean) {
+        this.Set('ClientVisible', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Label shown on the login picker button (e.g. "Microsoft", rendered as "Continue with Microsoft"). Falls back to Name when null.
+    */
+    get DisplayName(): string | null {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string | null) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Icon for the login picker button -- a Font Awesome class (e.g. "fa-brands fa-microsoft") or a known brand-logo key the picker maps to a brand chip.
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Ordering of this provider within the login picker (ascending).
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string | null {
+        return this.Get('Credential');
     }
 }
 
