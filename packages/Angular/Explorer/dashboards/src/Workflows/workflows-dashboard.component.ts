@@ -1,19 +1,10 @@
 import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component } from '@angular/core';
 import { CompositeKey, RunView } from '@memberjunction/core';
-import { MJAIAgentEntity, ResourceData } from '@memberjunction/core-entities';
+import { MJAIAgentEntity, ResourceData, WorkflowSaveOperation } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import type { TaskGraphSpec } from '@memberjunction/ai-core-plus';
-import type { TaskGraphSpecChangedEventArgs } from '@memberjunction/ng-task-graph-editor';
 import type { WorkflowDraftRequest, WorkflowListItem } from './workflows.types';
-
-/** The name-only projection the canvas needs to offer an assignment. */
-type NamedRow = { Name: string | null };
-
-/** Usable names only — a nameless row cannot be assigned to, so it is dropped rather than shown blank. */
-function namesOf(rows: readonly NamedRow[]): string[] {
-    return rows.map((r) => r.Name ?? '').filter((n) => n.length > 0);
-}
 
 /**
  * Local alias for the client-tool shape `NavigationService.SetAgentClientTools` accepts. Declared
@@ -54,23 +45,11 @@ export class WorkflowsDashboardComponent extends BaseDashboard implements AfterV
     /** True while the front door is open over the list. */
     public IsCreating = false;
 
-    /**
-     * The draft being edited on the canvas, or null when the list is showing.
-     *
-     * Held here rather than persisted, because the front door's middle tile promises "Nothing is
-     * saved until you approve it" — approval happens on the canvas, so until then the workflow
-     * exists only as this value.
-     */
-    public DraftSpec: TaskGraphSpec | null = null;
+    /** True while the drafted workflow is being committed. */
+    public IsSaving = false;
 
-    /**
-     * What a step on the canvas can be assigned to.
-     *
-     * Resolved here rather than in the canvas because the canvas is a widgets-layer component that
-     * does not query — this app owns data access and hands the names down.
-     */
-    public AvailableAgentNames: string[] = [];
-    public AvailableActionNames: string[] = [];
+    /** Why the commit failed, or null. Kept on screen so a failed create is never silent. */
+    public SaveError: string | null = null;
 
     constructor(private cdr: ChangeDetectorRef) {
         super();
@@ -100,42 +79,19 @@ export class WorkflowsDashboardComponent extends BaseDashboard implements AfterV
         this.LoadError = null;
         this.cdr.markForCheck();
         try {
-            // Batched: the list, plus the two name sets the canvas needs to offer an assignment.
-            // Three RunView calls would be three round trips for one screen.
-            const [result, agents, actions] = await RunView.FromMetadataProvider(
-                this.ProviderToUse,
-            ).RunViews<MJAIAgentEntity | NamedRow>([
-                {
-                    EntityName: 'MJ: AI Agents',
-                    ExtraFilter: `TypeID IN (SELECT ID FROM __mj.vwAIAgentTypes WHERE Name='Flow')`,
-                    OrderBy: '__mj_UpdatedAt DESC',
-                    ResultType: 'entity_object',
-                },
-                {
-                    EntityName: 'MJ: AI Agents',
-                    Fields: ['Name'],
-                    ExtraFilter: `Status='Active'`,
-                    OrderBy: 'Name ASC',
-                    ResultType: 'simple',
-                },
-                {
-                    EntityName: 'MJ: Actions',
-                    Fields: ['Name'],
-                    ExtraFilter: `Status='Active'`,
-                    OrderBy: 'Name ASC',
-                    ResultType: 'simple',
-                },
-            ]);
-
-            this.AvailableAgentNames = namesOf(agents.Success ? (agents.Results as NamedRow[]) : []);
-            this.AvailableActionNames = namesOf(actions.Success ? (actions.Results as NamedRow[]) : []);
+            const result = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJAIAgentEntity>({
+                EntityName: 'MJ: AI Agents',
+                ExtraFilter: `TypeID IN (SELECT ID FROM __mj.vwAIAgentTypes WHERE Name='Flow')`,
+                OrderBy: '__mj_UpdatedAt DESC',
+                ResultType: 'entity_object',
+            });
 
             if (!result.Success) {
                 this.LoadError = result.ErrorMessage ?? 'Workflows could not be loaded.';
                 this.Workflows = [];
                 return;
             }
-            this.Workflows = ((result.Results ?? []) as MJAIAgentEntity[]).map((a) => ({
+            this.Workflows = (result.Results ?? []).map((a) => ({
                 ID: a.ID,
                 // Name is nullable on the entity. A row with no label is unfindable, so it says so
                 // rather than rendering blank — the ID is still there to open it by.
@@ -169,49 +125,71 @@ export class WorkflowsDashboardComponent extends BaseDashboard implements AfterV
     }
 
     /**
-     * Takes the author from the front door to the canvas.
+     * Commits the new workflow, then hands the author to the editor.
      *
-     * The canvas is EMBEDDED rather than routed to. It is a widgets-layer component that
-     * deliberately refuses to know about routing, and this app is what supplies the shell around it
-     * — which is exactly the arrangement the plan calls for. Routing would also need a resource that
-     * does not exist; inventing one to navigate to would be a link to nowhere.
+     * **There is exactly one workflow editor, and it is the AI Agents form.** The front door used to
+     * open a second canvas here, which is the duplication that got this app retired: that canvas had
+     * no Save path anywhere on it, so a drafted workflow could be admired and never kept. Rather than
+     * restore the dead end, the front door now finishes the job it started — `Workflow.Save` writes
+     * the agent and everything hanging off it, and the author lands on the real editor with a real
+     * record under them.
      *
-     * An empty graph for `blank`; for the other two doors the steps arrive later — drafted from the
-     * brief, or projected from the run being promoted — and the canvas is where the author reviews
-     * them either way.
+     * `Workflow.Save` rather than a bespoke mutation because it is the same typed call MCP and the
+     * Agent Manager use, so a workflow created by hand and one created conversationally are written
+     * by identical code.
      */
-    public OnCreated(request: WorkflowDraftRequest): void {
-        this.IsCreating = false;
-        // The drafted steps when an agent produced them; an empty canvas otherwise — which is the
-        // right outcome for "Blank canvas", and an honest one when drafting failed or was skipped.
-        this.DraftSpec = (request.Draft as TaskGraphSpec | undefined) ?? {
-            workflowName: request.Name,
-            reasoning: request.Description,
-            tasks: [],
-        };
-        this.publishAgentContext();
+    public async OnCreated(request: WorkflowDraftRequest): Promise<void> {
+        this.IsSaving = true;
+        this.SaveError = null;
         this.cdr.markForCheck();
-    }
+        try {
+            // The drafted steps when an agent produced them; an empty graph otherwise — which is the
+            // right outcome for "Blank canvas", and an honest one when drafting failed or was skipped.
+            const spec: TaskGraphSpec = (request.Draft as TaskGraphSpec | undefined) ?? {
+                workflowName: request.Name,
+                reasoning: request.Description,
+                tasks: [],
+            };
 
-    /**
-     * Keeps the draft in step with the canvas.
-     *
-     * The canvas treats a spec as immutable — every edit produces a NEW spec object — so without
-     * this the value held here would still be the graph as it was when the canvas opened, and
-     * anything later read off `DraftSpec` (the agent context below, and saving, when it lands) would
-     * describe a workflow the author no longer has on screen.
-     */
-    public OnDraftSpecChanged(args: TaskGraphSpecChangedEventArgs): void {
-        this.DraftSpec = args.Spec;
-        this.publishAgentContext();
-        this.cdr.markForCheck();
-    }
+            const op = new WorkflowSaveOperation();
+            const result = await op.Execute(
+                {
+                    spec: {
+                        name: request.Name,
+                        description: request.Description,
+                        // Draft, not Active. Saving is capture (④) — a workflow that started
+                        // running the moment it was named would be a trap, and the author has not
+                        // seen the steps in the editor yet.
+                        status: 'Draft',
+                        graph: { ...spec, workflowName: request.Name },
+                        // Explicitly none. A trigger is not asked for on this screen, and an empty
+                        // array says "on demand" where omitting it would leave the reconciler
+                        // guessing at intent it was never given.
+                        triggers: [],
+                    },
+                },
+                { provider: this.ProviderToUse, user: this.ProviderToUse.CurrentUser },
+            );
 
-    /** Leaves the canvas without saving. The draft is discarded — nothing was ever written. */
-    public OnCloseCanvas(): void {
-        this.DraftSpec = null;
-        this.publishAgentContext();
-        this.cdr.markForCheck();
+            const agentID = result.Success ? result.Output?.agentID : undefined;
+            if (!agentID) {
+                this.SaveError =
+                    result.Output?.errorMessage ??
+                    result.ErrorMessage ??
+                    'The workflow could not be saved.';
+                return;
+            }
+
+            this.IsCreating = false;
+            await this.loadData();
+            this.navigationService.OpenEntityRecord('MJ: AI Agents', CompositeKey.FromID(agentID));
+        } catch (e) {
+            this.SaveError = e instanceof Error ? e.message : String(e);
+        } finally {
+            this.IsSaving = false;
+            this.publishAgentContext();
+            this.cdr.markForCheck();
+        }
     }
 
     /**
@@ -230,8 +208,8 @@ export class WorkflowsDashboardComponent extends BaseDashboard implements AfterV
         this.navigationService.SetAgentContext(this, {
             Surface: 'Workflows',
             IsCreating: this.IsCreating,
-            IsEditingDraft: !!this.DraftSpec,
-            DraftName: this.DraftSpec?.workflowName ?? null,
+            IsSaving: this.IsSaving,
+            SaveError: this.SaveError,
             WorkflowCount: this.Workflows.length,
             WorkflowNames: this.Workflows.slice(0, 10).map((w) => w.Name),
         });

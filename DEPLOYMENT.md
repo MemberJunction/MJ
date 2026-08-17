@@ -121,6 +121,13 @@ docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}'
 
 Stop anything unrelated. On a < 8 GiB Docker VM, cap every turbo build with `--concurrency=2`.
 
+**5. If you are releasing from a FRESH CLONE, four things are missing that nothing tells you about.** Each is gitignored, so the repo looks complete and fails later, in a place that does not name the cause.
+
+- **The repo must be BUILT before Step 3.** `mj` is a workspace package; without `packages/MJCLI/dist` the CLI loads but registers no subcommands, so `npx mj migrate` fails with a bare `Error: command migrate not found` — which reads like a bad install, not a missing build. Run `pnpm install && pnpm run build` first. This effectively moves Step 7 to the front on a fresh clone; that is fine, and Step 7 re-runs cheaply from cache.
+- **`packages/MJAPI/.env` must exist**, as a symlink to the repo-root `.env` (`ln -s ../../.env .env`). Without it MJAPI dies at boot on `dbDatabase / dbUsername / dbPassword … Required`, which reads as a config-file problem rather than a missing file. Working clones have this symlink; a fresh one does not.
+- **`packages/MJExplorer/src/environments/environment.ts` must exist**, or any full build fails on `Could not resolve "../environments/environment"`. CI writes this file inline before building — copy that block out of `.github/workflows/test.yml` rather than inventing values.
+- **Step 8's converter needs Python + `sqlglot`.** `mj migrate convert` shells out to a Python interpreter and fails with `the interpreter 'python3' has no sqlglot module`. On macOS, PEP 668 blocks a system `pip install`, so make a venv and point the converter at it: `python3 -m venv <dir> && <dir>/bin/pip install 'sqlglot>=27'`, then `export MJ_SQLGLOT_PYTHON=<dir>/bin/python`.
+
 ### Step 1: Verify CI on `next`
 
 Before anything else, confirm the `next` branch is healthy:
@@ -199,7 +206,7 @@ Check if there are any pending metadata changes (new/updated records in `metadat
    > This push includes the inert **"Integration Test" TestType** (it lives in the normal
    > `metadata/test-types/` tree) — that's fine, it's just a type definition. But **do NOT push
    > `metadata-optional/integration-test/` here.** That optional sibling root holds the actual
-   > test-only records — the **IT01–IT66 Tests (67 records: 52 in the Deterministic suite, 15 in
+   > test-only records — the **IT Tests (78 records as of v6.1.0-edge.2: 63 Deterministic, 15 in
    > the Live Model suite)**, the three-suite hierarchy, the RLS principals (three synthetic
    > `it-*@integration.test` users + the "Integration Test: RLS Scoped Reader" role + its grants),
    > **and the synthetic AI stack the live tier drives** (14 `IT: *` AI Agents — 12 of them
@@ -269,10 +276,23 @@ There are **two runnable suites**, and one `mj test suite` invocation runs exact
 
 | Suite | Members | Gate |
 |---|---|---|
-| `Integration Tests — Deterministic` | 52 | **Required — must be 52/52.** Deterministic: any shortfall blocks the release |
+| `Integration Tests — Deterministic` | 63 | **Required — must be N/N.** Deterministic: any shortfall blocks the release |
 | `Integration Tests — Live Model` | 15 | **Required to run and be triaged — but *not* required to be 15/15.** Real LLM calls; see 4.4 |
 
-> **The two tiers have different pass criteria, and conflating them will either block a good release or wave through a bad one.** The deterministic tier is exactly that — 52/52 or stop. The live tier drives real models, and `agents-suite.md` documents run-to-run variance as a known characteristic "surfaced honestly rather than hidden": checks that need the model to take a specific action use a two-phase bounded retry (≤3 attempts) and then fail **loudly** with `model-noncompliance:`. So a live shortfall is not automatically a blocker — every failing live test must be **triaged individually** (see 4.6): `model-noncompliance:` is variance and may be accepted; anything else is a real defect and blocks.
+> ⚠️ **Read the member count out of the database, not out of this table.** The suites grow, and a stale
+> number here is worse than no number: it makes a healthy 63/63 look like an eleven-test shortfall and
+> sends you hunting for tests that were never missing. The counts above were 52 for most of the 6.1
+> cycle and are 63 as of v6.1.0-edge.2. Derive them after seeding (4.2):
+>
+> ```sql
+> SELECT ts.Name, COUNT(tst.ID) FROM __mj.TestSuite ts
+> LEFT JOIN __mj.TestSuiteTest tst ON tst.SuiteID = ts.ID
+> WHERE ts.Name LIKE 'Integration Tests%' GROUP BY ts.Name;
+> ```
+>
+> The gate is "every member passed", not "a particular number passed".
+
+> **The two tiers have different pass criteria, and conflating them will either block a good release or wave through a bad one.** The deterministic tier is exactly that — every member or stop. The live tier drives real models, and `agents-suite.md` documents run-to-run variance as a known characteristic "surfaced honestly rather than hidden": checks that need the model to take a specific action use a two-phase bounded retry (≤3 attempts) and then fail **loudly** with `model-noncompliance:`. So a live shortfall is not automatically a blocker — every failing live test must be **triaged individually** (see 4.6): `model-noncompliance:` is variance and may be accepted; anything else is a real defect and blocks.
 
 > ⚠️ Do **not** run `mj test suite "Integration Tests"`. That is the empty parent container (zero members); it exits **1** with `No tests found in suite: <id>`. A hyphen typed instead of the em dash also exits 1, with `Test suite not found: <arg>`.
 
@@ -282,7 +302,7 @@ There are **two runnable suites**, and one `mj test suite` invocation runs exact
 
 1. **Step 3 is done** — `mj migrate` + `mj sync push --dir ./metadata` applied to the scratch database, and your `.env` points at it.
 
-   > 🚨 **Repoint the database by editing `.env` (Step 3.3) — an inline `DB_DATABASE=… npx mj test …` silently does NOT work.** The testing CLI loads dotenv with `override: true` (`packages/TestingFramework/CLI/src/lib/mj-provider.ts`), so `.env` clobbers the shell variable and the suite runs against whatever `.env` says. `mj sync push` behaves the **opposite** way (its init hook does not override), so the shell-var shortcut *appears* to work while seeding and then silently targets the wrong database for the run — and this tier mutates. Confirm the target on every run: the CLI prints `config.dbDatabase: <name>` at startup.
+   > 🚨 **Confirm which database this tier is about to mutate, on every run** — the CLI prints `config.dbDatabase: <name>` at startup. Either repoint `.env` (Step 3.3) or set `DB_DATABASE=… npx mj test …` inline; **both work, and the inline form wins.** Until v6.1 it did not: the testing CLI loaded dotenv with `override: true`, so `.env` clobbered the shell variable and the suite ran against whatever `.env` said, while `mj sync push` (whose init hook does not override) honoured the shell variable — so the shortcut appeared to work while seeding and then silently targeted a different database for the run. That asymmetry is fixed; `mj test` now matches `migrate`, `codegen` and `sync push` in letting an explicitly-set variable win. If you are on an older build, check `packages/TestingFramework/CLI/src/utils/config-loader.ts` for `override: true` before relying on the inline form.
 2. **The repo is built — and the suite package's `dist/` is *current*.** `pnpm run build`. The suite loads compiled `dist/`, including the private, never-published `@memberjunction/integration-test-suite` package. A `dist/` that merely **exists is not enough**: if it predates the newest `src/checks/*.checks.ts`, every bundle added since compiles to nothing and the run fails with a wall of `Unknown integration check bundle '<name>'` — naming the *newest* bundles while older ones pass. Verify freshness rather than assuming:
    ```bash
    ls -t packages/TestingFramework/integration-test-suite/dist/index.js \
@@ -306,7 +326,7 @@ There are **two runnable suites**, and one `mj test suite` invocation runs exact
 npx mj sync push --dir ./metadata-optional/integration-test --ci
 ```
 
-This seeds **242 records**: the **67 IT Test records** (IT01–IT66), the 3 suite rows and their 52 + 15 memberships, the RLS principals (3 synthetic `it-*@integration.test` users + the `Integration Test: RLS Scoped Reader` role + 2 entity-permission grants), and the synthetic AI stack the live tier drives (14 `IT: *` AI Agents — 12 root-level — 14 IT AI Prompts with 42 multi-vendor model bindings + templates, `IT: Probe Skill`, `IT: Integration Test Scope`, and the IT categories). Expect `Created 242 / Errors 0` in the push summary.
+This seeds **269 records** (242 earlier in the 6.1 cycle — the suite grows, so trust `Errors 0` over the number): the **78 IT Test records**, the 3 suite rows and their 63 + 15 memberships, the RLS principals (3 synthetic `it-*@integration.test` users + the `Integration Test: RLS Scoped Reader` role + 2 entity-permission grants), and the synthetic AI stack the live tier drives (14 `IT: *` AI Agents — 12 root-level — 14 IT AI Prompts with 42 multi-vendor model bindings + templates, `IT: Probe Skill`, `IT: Integration Test Scope`, and the IT categories). Expect `Errors 0` in the push summary; the created count tracks whatever the suite currently holds.
 
 Verify it actually landed — the push can exit 0 without seeding, which silently degrades the RLS checks to skip-as-pass (this is the same assertion `integration.yml` makes in CI):
 
@@ -328,16 +348,24 @@ INSERT INTO __mj.UserSetting (ID, UserID, Setting, Value) VALUES
   (NEWID(), @u, 'mj.baselineFloor.c', '3');
 ```
 
-With those rows present all 7 cache-gauntlet checks pass and the tier reaches 52/52.
+With those rows present all 7 cache-gauntlet checks pass and the tier reaches its full count.
 
-#### 4.3 Start MJAPI (REQUIRED — 19 of the 52 deterministic tests need it)
+#### 4.3 Start MJAPI (REQUIRED — 19 deterministic tests need it)
 
-19 of the 52 deterministic members are **client-transport** and exercise the real GraphQL wire (IT03, IT15, IT23, IT25–IT28, IT31–IT34, IT37, IT40, IT43–IT45, IT47, IT50, IT52). Start MJAPI against the Step-3 database before running:
+19 of the deterministic members are **client-transport** and exercise the real GraphQL wire (IT03, IT15, IT23, IT25–IT28, IT31–IT34, IT37, IT40, IT43–IT45, IT47, IT50, IT52). Start MJAPI against the Step-3 database before running:
 
 ```bash
 # In a separate shell, pointed at the Step-3 database
-cd packages/MJAPI && pnpm start
+cd packages/MJAPI && MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 pnpm start
 ```
+
+> 🚨 **`MJ_DISABLE_TASK_GRAPH_DISPATCHER=1` is REQUIRED for the deterministic tier, and omitting it produces failures that look exactly like engine defects.** MJServer starts its own `TaskGraphDispatcher` at boot, and a dispatcher claims from the **whole** task table rather than from "its own" graphs. `IT74 - Task Graph Execution` drives its own dispatcher against a stub runner and asserts exactly-once execution, so the server races it for every claim and executes the bundle's tasks with the *real* agent runner. The stub never sees them.
+>
+> The symptoms are alarming and never mention MJAPI: `every node ran exactly once — expected 4, got 2`, `a graph with an unrecoverable failure rolls up Failed — expected "Failed", got "Complete"`, `no GraphSettled frame was emitted`, `the reclaimed task ran exactly once — expected 1, got 2`. They **reshuffle every run**, because which dispatcher wins each claim is a race — which reads as engine flakiness rather than as interference. Measured on one box: **0/4 runs green with the server dispatcher up, 4/4 with it down.**
+>
+> Stopping MJAPI is *not* the remedy — the 19 client-transport members need it, and without it they skip-as-PASS. Run the server with its dispatcher suppressed instead.
+>
+> **Leave the flag OFF for the live-model tier (4.4 #2)**, which drives shipped agents that rely on durable execution.
 
 > ⚠️ **Run it from `packages/MJAPI`, not `pnpm run start:api` from the repo root.** The root script is `turbo start --filter=mj_api`, and **turbo passes through only the environment variables declared in `turbo.json`** — anything else is stripped before the task sees it. Overriding the database with `DB_DATABASE=… pnpm run start:api` therefore fails with `Error parsing config file … "path": ["dbDatabase"] … "received": "undefined"`, which reads like a config-file problem rather than an env-passthrough one. Running from the package directory bypasses turbo entirely and the variables arrive intact.
 
@@ -358,7 +386,7 @@ The two failure modes are **asymmetric, and neither shows up in the exit code**:
 
 | Condition | Result |
 |---|---|
-| MJAPI not reachable | 19 tests **skip-as-PASS** (`SKIPPED (environment gap)`) — a green 52/52 that really ran 33 tests |
+| MJAPI not reachable | 19 tests **skip-as-PASS** (`SKIPPED (environment gap)`) — a green full-count summary that really ran 19 fewer |
 | `MJ_API_KEY` unset or rejected | 19 tests return status `Error` — which **also** exits 0 |
 
 #### 4.4 Run the two suites
@@ -544,6 +572,25 @@ MemberJunction ships migrations for **both** SQL Server and PostgreSQL. SS migra
 
 **After the skill finishes:** review the converted `.pg.sql` files and the report, then **commit them to `next`** so they ship with the release. Confirm no `.needs-hand` files were copied back (that would mean conversion is incomplete).
 
+#### 🚨 Four converter behaviours that produce a *plausible* wrong answer
+
+All four were hit producing v6.1.0-edge.2's counterparts. Each yields output that looks finished, and three of them pass the clean-apply gate.
+
+1. **`--bake-codegen` HALTS at a conversion gap, before baking.** It writes a `.needs-hand` file with **no** baked views or functions and stops. So any migration with a gap ships **DDL-only**, and nothing regenerates the CodeGen objects its schema change requires. This is not cosmetic: the DDL lands, base views keep their old column list, metadata and views then disagree, and the failure surfaces far away — `mj sync push` dies on the first entity it touches (`column "<NewColumn>" does not exist`) and the next CodeGen run dies with it. If gapped migrations remain after Phase 2, generate the objects separately with `mj codegen` and ship them as one `.pg-only.sql` stamped **before** the Metadata_Sync migration, which calls routine signatures those objects create.
+2. **The split converter emits `Metadata_Sync` as a two-line marker.** It classifies it "regen/reseed only — no DDL to translate" and writes a comment. That is the v5.45 defect (#3253) reproducing itself, and the size check below is what catches it. **`*_Metadata_Sync.sql` goes through the LEGACY converter** — `mj migrate convert --file <name> --source-dir migrations/vN --output-dir migrations-pg/vN`, no `--split`. Compare against the previous release's counterpart: these run to thousands of lines, not two. Note the converter **skips a file that already exists**, so remove the stub before re-converting.
+3. **SQL Server `BIT` literals are carried across as `0`/`1`.** PostgreSQL rejects them — `column "AllowsNull" is of type boolean but expression is of type integer`. The baked path emits `TRUE`/`FALSE` correctly; the non-baked path does not, and a gapped migration never reaches the baked path. Both `INSERT … VALUES` positions and `WHERE`/`SET` comparisons are affected. Drive the fix off the live catalogue (`information_schema.columns WHERE data_type='boolean'`) rather than guessing column names.
+4. **A drop-guard is dropped while its paired `ADD` survives.** `IF EXISTS (SELECT 1 FROM sys.check_constraints …) DROP CONSTRAINT` vanishes and the bare `ADD CONSTRAINT` remains. **This passes the fresh-database gate** — there is nothing to drop on a fresh database — and fails on every migrate-through deployment, which is the case the gate cannot see. PostgreSQL expresses the guard natively: `ALTER TABLE … DROP CONSTRAINT IF EXISTS …` before the ADD. Grep each new SS migration for `sys.check_constraints` and `sys.extended_properties` and confirm the counterpart accounts for every hit.
+
+#### App-owned base views do not update themselves on PostgreSQL
+
+An entity with `BaseViewGenerated = 0` owns its base view, and CodeGen never rewrites it. On SQL Server a migration keeps it current with `sp_refreshview`. **PostgreSQL has no equivalent** — it expands and freezes the column list at `CREATE` (see [`packages/CodeGenLib/CLAUDE.md`](packages/CodeGenLib/CLAUDE.md)) — so a column added to such an entity never reaches its view.
+
+The consequence is not one missing column: `spDeleteUnneededEntityFields` treats a metadata field with no matching view column as unneeded and **deletes the `EntityField` row**, after which the CRUD routines regenerate without it and `Metadata_Sync` fails on a signature that no longer exists. When a release adds a column to one of these entities, the counterpart must `DROP` and `CREATE` the view. Find them first:
+
+```sql
+SELECT "Name" FROM __mj."Entity" WHERE "BaseViewGenerated" = FALSE AND COALESCE("VirtualEntity", FALSE) = FALSE;
+```
+
 #### 🚨 Verify content, not just existence — the gate cannot do this for you
 
 **The "clean apply" gate is structurally blind to an emptied migration, because empty SQL applies cleanly.** So does the L1 parity script, which only checks that a counterpart file *exists*. A silently-emptied `.pg.sql` passes every automated check in this step and ships.
@@ -661,6 +708,8 @@ On the release PR:
 2. Wait for the generated PR message to appear
 3. Wait for **all CI checks** to pass:
    - `changes.yml` — validates migration filenames, version patterns, schema placeholder usage. **This is the only workflow that triggers on the release PR itself** (it's the one workflow listening on PRs into `main`).
+
+     > **Because it listens on PRs into `main` only, it has never seen any migration that merged to `next`** — and it diffs the release PR against `main`, so it inspects *every* migration in the release at once, not just the ones prep added. A migration authored weeks ago can therefore fail here for the first time. v6.1.0-edge.2 hit exactly this: `Retire_Workflows_Application` had hard-coded `[__mj]` in all eight statements since it merged to `next`. **Do not assume a failure here is yours.** A file not yet on `main` has not shipped, so its Flyway checksum is not load-bearing and correcting it in the release branch is safe; a file already on `main` is immutable and needs a forward fix instead.
    - Everything else you see on the PR is **surfaced from the run on the same head SHA** — `test.yml` (unit tests), `integration.yml` ("Integration Tier", deterministic suite), `build.yml`, and `migrations.yml` / `pg-migrations.yml` when migrations changed. If any of those are missing rather than green, that commit never got a clean run — go back to Step 1.
 
    > Two traps in this list: the hardcoded-UUID scan for migrations is now an **advisory, non-blocking** step *inside* `changes.yml` (the old `claude.yml` workflow was deleted) — it posts a sticky PR comment plus a `::warning` and **never fails the job**, so you must read it, not just wait for green. And `dependency-check.yml` only triggers on PRs into `next`, so it will not appear on this PR at all.
@@ -671,6 +720,23 @@ On the release PR:
    |---|---|
    | `build.yml` ("Build all packages for testing") | Path-filtered to `packages/**` (its filter also still lists the retired `package-lock.json` — dead since the pnpm cutover). A release whose only changes are `migrations/`, `migrations-pg/` and `metadata/` does not trigger it. Confirm it was green on the last commit that *did* touch `packages/**` |
    | `dependency-check.yml` | Triggers on PRs into `next` only |
+
+   > 🚨 **If the release carries CODE changes, none of those checks ran on them — and this table's advice will tell you they were legitimately absent.** `test.yml`, `integration.yml` and `pg-migrations.yml` all trigger on **`next` only** (PRs into `next`, pushes to `next`); `build.yml` on pushes to `next` under a `packages/**` filter. A `release/*` branch is none of those, so a commit that exists only on the prep branch gets **no CI at all**.
+   >
+   > The step's model is that prep produces migrations and metadata, where that is harmless. It stops being harmless the moment a fix lands on the prep branch — v6.1.0-edge.2 carried TypeScript changes to four packages, and not one of them was CI-validated before merging to `main`.
+   >
+   > **When the prep branch touches `packages/**`, run the gates locally against that exact tree and record the results on the PR:**
+   >
+   > ```bash
+   > npx turbo run test:types            # test.yml's spec type-check gate
+   > npm test -- --concurrency=4         # test.yml's unit suite
+   > RUN_MUTATION_TESTS=1 pnpm run test:integration   # supersets integration.yml (see below)
+   > pnpm run build                      # build.yml
+   > ```
+   >
+   > The local integration run is a **superset** of CI's: `integration.yml` omits `RUN_MUTATION_TESTS=1`, so every mutation-gated bundle is silently excluded there and has *never* run in CI. `IT74 - Task Graph Execution` is entirely mutation-gated — without the flag it reports `all 7 check(s) were gated out … verified NOTHING` and exits **0**.
+   >
+   > Everything does run on `next` after the back-merge, so a red check there is the release's problem arriving late rather than someone else's.
 
    To read the advisory UUID scan when no PR comment appears (a clean scan *clears* its comment rather than posting one), check the job log — the step is `Check migration ID determinism (hard-coded UUIDs, not NEWID())`, and the following step being `Clear stale non-deterministic ID comment` is the clean outcome.
 
@@ -728,8 +794,15 @@ This workflow:
 > **If it aborts, the release itself is fine** — packages are on npm and the tag is pushed; only the back-merge is outstanding. Resolve it by hand:
 > ```bash
 > git checkout next && git merge origin/main   # resolve conflicts, then:
-> pnpm install --lockfile-only && git add pnpm-lock.yaml && git commit && git push origin next
+> pnpm install --lockfile-only && git add pnpm-lock.yaml && git commit
+> # `next` is a protected branch: direct pushes are refused with
+> #   GH013: Changes must be made through a pull request.
+> #   Required status check "Check migrations" is expected.
+> # so land the merge commit through a PR rather than pushing it:
+> git checkout -b chore/back-merge-v<version> && git push -u origin chore/back-merge-v<version>
+> gh pr create --base next --title "chore: back-merge main into next after v<version>"
 > ```
+> **Expect the conflict to be a real one, and do not resolve it by rote.** `next` legitimately runs ahead of what shipped, so a file both sides touched has two *intentional* versions. In v6.1.0-edge.2 the conflict was in `TaskGraphDispatcher.ts`, where `next` and the release had independently fixed the same bug — `next`'s was the better implementation, so the release's was discarded and its now-orphaned field removed. Taking either side wholesale, or `-X ours`/`-X theirs`, would have shipped dead code or lost the better fix. Build and test the package after resolving.
 > A failed lockfile regeneration is tolerated when the merge was clean (an already-published release must not be failed by a registry hiccup) but is **fatal** when it was needed to resolve a conflict, since the committed lockfile is then a placeholder no side vouches for. Nothing is pushed in that case.
 
 ### 10b. `docker.yml` — Build & Publish Docker Images

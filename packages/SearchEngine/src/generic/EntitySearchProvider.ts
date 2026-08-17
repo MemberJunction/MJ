@@ -12,6 +12,7 @@ import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memb
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeEntityConstraint } from './search.types';
+import { envIntOverride } from './env-config';
 
 /**
  * Provides entity-level LIKE-based search using RunView + UserSearchString.
@@ -40,17 +41,30 @@ export class EntitySearchProvider extends BaseSearchProvider {
      * many candidates; the engine still trims the fused, relevance-sorted result set back to
      * `topK`, so the returned count is unchanged — we only widen the candidate pool per entity.
      * Public + static so a deployment can tune it at startup (larger entity counts may lower it
-     * to bound the row-materialization cost of the parallel fan-out).
+     * to bound the row-materialization cost of the parallel fan-out), or override the default at
+     * process start via the `MJ_SEARCH_PER_ENTITY_FETCH_DEPTH` environment variable.
      */
-    public static PerEntityFetchDepth = 15;
+    public static PerEntityFetchDepth = envIntOverride('MJ_SEARCH_PER_ENTITY_FETCH_DEPTH', 15);
 
     /**
-     * Per-entity hard timeout. If one entity's RunView is taking longer than this,
-     * we drop its results rather than hold the entire fan-out hostage. The query
-     * keeps running in SQL Server until completion (we can't cancel mssql Requests
-     * here), but other entities' results still land for the user.
+     * Per-entity hard timeout, in milliseconds. If one entity's RunView takes longer
+     * than this, we drop its results rather than hold the entire fan-out hostage. The
+     * query keeps running in SQL Server until completion (we can't cancel mssql
+     * Requests here), but the other entities' results still land for the user.
+     *
+     * Public + static so a deployment can tune it at startup — mirroring
+     * {@link PerEntityFetchDepth}. The 3s default keeps interactive/omnibar fan-outs
+     * responsive by dropping a pathological entity promptly instead of stalling the
+     * whole fan-out; deployments doing large unindexed LIKE scans can raise it, either
+     * by overriding the default at process start via the `MJ_SEARCH_PER_ENTITY_TIMEOUT_MS`
+     * environment variable or by assigning the static before serving:
+     *
+     * ```ts
+     * import { EntitySearchProvider } from '@memberjunction/search-engine';
+     * EntitySearchProvider.PerEntityTimeoutMS = 30_000;
+     * ```
      */
-    private static readonly PER_ENTITY_TIMEOUT_MS = 30_000;
+    public static PerEntityTimeoutMS = envIntOverride('MJ_SEARCH_PER_ENTITY_TIMEOUT_MS', 3000);
 
     /**
      * Execute an entity search across all entities with AllowUserSearchAPI=true.
@@ -123,9 +137,8 @@ export class EntitySearchProvider extends BaseSearchProvider {
             );
 
             // Search all entities in parallel, threading per-entity ExtraFilter + UserSearchString
-            // override; each call is gated by a hard PER_ENTITY_TIMEOUT_MS timeout (next PR #2532)
-            // so a slow entity cannot hold up the whole fan-out — partial results from the other
-            // entities still land.
+            // override; each call is gated by a hard PerEntityTimeoutMS timeout so a slow entity
+            // cannot hold up the whole fan-out — partial results from the other entities still land.
             const searchPromises = scoped.map(item =>
                 this.searchOneEntity(
                     item.EntityName,
@@ -198,7 +211,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
 
     /**
      * Search a single entity using RunView with UserSearchString. Wraps the
-     * underlying RunView in a hard PER_ENTITY_TIMEOUT_MS timeout so a slow
+     * underlying RunView in a hard PerEntityTimeoutMS timeout so a slow
      * entity cannot hold up the whole fan-out — partial results from the
      * other entities still land.
      *
@@ -217,9 +230,9 @@ export class EntitySearchProvider extends BaseSearchProvider {
         let timer: ReturnType<typeof setTimeout> | undefined;
         const timeout = new Promise<SearchResultItem[]>(resolve => {
             timer = setTimeout(() => {
-                LogError(`EntitySearchProvider: timeout (${EntitySearchProvider.PER_ENTITY_TIMEOUT_MS}ms) searching "${entityName}"`);
+                LogError(`EntitySearchProvider: timeout (${EntitySearchProvider.PerEntityTimeoutMS}ms) searching "${entityName}"`);
                 resolve([]);
-            }, EntitySearchProvider.PER_ENTITY_TIMEOUT_MS);
+            }, EntitySearchProvider.PerEntityTimeoutMS);
         });
         try {
             return await Promise.race([work, timeout]);

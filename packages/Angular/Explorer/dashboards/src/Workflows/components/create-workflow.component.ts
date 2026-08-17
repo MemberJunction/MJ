@@ -42,6 +42,14 @@ export class CreateWorkflowComponent {
     /** The user to run the drafting operation as. */
     @Input() CurrentUser: UserInfo | null = null;
 
+    /**
+     * True while the host is committing the workflow.
+     *
+     * Owned by the host rather than this component because the host is what saves. Without it the
+     * form stays live during the write and a second click would create a second workflow.
+     */
+    @Input() Busy = false;
+
     /** Emitted when the author commits. The host routes to the canvas. */
     @Output() Created = new EventEmitter<WorkflowDraftRequest>();
     /** Emitted when the author backs out. */
@@ -77,7 +85,7 @@ export class CreateWorkflowComponent {
      * name — there is nothing else to supply before the canvas opens.
      */
     public get CanCreate(): boolean {
-        if (!this.WorkflowName.trim()) {
+        if (this.Busy || !this.WorkflowName.trim()) {
             return false;
         }
         switch (this.SelectedMode) {

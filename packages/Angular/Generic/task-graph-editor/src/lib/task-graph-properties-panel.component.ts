@@ -14,8 +14,8 @@
  * @module @memberjunction/ng-task-graph-editor
  */
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import type { TaskGraphSpec, TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
-import { GetDependencies, GetTaskNodeType, type TaskGraphNodeType } from './task-graph-canvas-adapter';
+import { ConfigOf, TaskNode, type TaskGraphSpec, type TaskGraphSpecNode, type TaskNodeBase } from '@memberjunction/ai-core-plus';
+import { GetDependencies, GetTaskNodeType, IsAuthorableNodeType, type TaskGraphNodeType } from './task-graph-canvas-adapter';
 
 /** A requested change to one task. The parent applies it; this panel never writes. */
 export class TaskPropertyChangeRequestedEventArgs {
@@ -75,13 +75,42 @@ export class TaskGraphPropertiesPanelComponent {
     /**
      * Which of the three assignment shapes this step currently uses.
      *
-     * Derived from the draft rather than stored separately, because the spec's own rule is that a
-     * task has exactly one assignee. A separate field could disagree with `agentName` /
-     * `actionName` / `assignToUser`, and the validator would then reject a graph the form said was
-     * fine.
+     * Derived from the draft rather than stored separately: the node's own `kind` is the single
+     * source of truth, and a parallel field could disagree with it.
      */
     public get Assignment(): TaskGraphNodeType {
-        return this.Draft ? GetTaskNodeType(this.Draft) : 'AgentTask';
+        if (!this.Draft) return 'AgentTask';
+        const type = GetTaskNodeType(this.Draft);
+        // This panel edits the three authorable shapes. A display-only kind (a Prompt, a loop, an
+        // external step — kinds a run can contain but nobody draws here) has no editor, so it falls
+        // back rather than being mis-presented as an agent step with an agent picker.
+        return IsAuthorableNodeType(type) ? type : 'AgentTask';
+    }
+
+    /**
+     * The chosen agent, read and written through the node's configuration.
+     *
+     * A template cannot narrow a discriminated union, so the two-way binding goes through here
+     * rather than at `Draft.configuration.agentName` — which would also be wrong the moment the
+     * draft is a different kind.
+     */
+    public get AgentName(): string {
+        return ConfigOf(this.Draft!, 'Agent')?.agentName ?? '';
+    }
+    public set AgentName(value: string) {
+        if (this.Draft?.kind === 'Agent') {
+            this.Draft = { ...this.Draft, configuration: { ...ConfigOf(this.Draft, 'Agent')!, agentName: value } };
+        }
+    }
+
+    /** The chosen action. Same reasoning as {@link AgentName}. */
+    public get ActionName(): string {
+        return ConfigOf(this.Draft!, 'Action')?.actionName ?? '';
+    }
+    public set ActionName(value: string) {
+        if (this.Draft?.kind === 'Action') {
+            this.Draft = { ...this.Draft, configuration: { ...ConfigOf(this.Draft, 'Action')!, actionName: value } };
+        }
     }
 
     /** True when this step waits on a person. */
@@ -101,25 +130,40 @@ export class TaskGraphPropertiesPanelComponent {
     }
 
     /**
-     * Switches the step between an agent, an action and a person, keeping the spec's xor rule
-     * intact.
+     * Switches the step between an agent, an action and a person.
      *
-     * Every branch clears the other two fields rather than only setting its own — leaving a stale
-     * `agentName` behind while setting `actionName` is exactly the `AssignmentConflict` the
-     * validator rejects, and it would be produced by a UI gesture that looks like a simple choice.
+     * Replacing `kind` and `configuration` together is the whole operation now. Under the old flat
+     * shape this had to clear two sibling fields on every branch, and forgetting one produced an
+     * `AssignmentConflict` from a gesture that looked like a simple choice — a bug the union made
+     * unrepresentable rather than merely guarded.
+     *
+     * The previous name is carried over where it still applies, so toggling Agent → Person → Agent
+     * does not silently forget what the author had chosen.
      */
     public SetAssignment(kind: TaskGraphNodeType, name?: string): void {
         if (!this.Draft || this.ReadOnly) return;
-        const cleared = { ...this.Draft, agentName: undefined, actionName: undefined, assignToUser: undefined };
+        const base: TaskNodeBase = {
+            tempId: this.Draft.tempId,
+            name: this.Draft.name,
+            description: this.Draft.description,
+            dependsOn: this.Draft.dependsOn,
+            policy: this.Draft.policy,
+            layout: this.Draft.layout,
+            inputPayload: this.Draft.inputPayload,
+        };
         switch (kind) {
             case 'HumanTask':
-                this.Draft = { ...cleared, assignToUser: true };
+                this.Draft = TaskNode.Human(base, ConfigOf(this.Draft, 'Human') ?? {});
                 break;
             case 'ActionTask':
-                this.Draft = { ...cleared, actionName: name ?? this.Draft.actionName ?? this.AvailableActionNames[0] };
+                this.Draft = TaskNode.Action(base, {
+                    actionName: name ?? ConfigOf(this.Draft, 'Action')?.actionName ?? this.AvailableActionNames[0] ?? '',
+                });
                 break;
             default:
-                this.Draft = { ...cleared, agentName: name ?? this.Draft.agentName ?? this.AvailableAgentNames[0] };
+                this.Draft = TaskNode.Agent(base, {
+                    agentName: name ?? ConfigOf(this.Draft, 'Agent')?.agentName ?? this.AvailableAgentNames[0] ?? '',
+                });
                 break;
         }
         this.Commit();

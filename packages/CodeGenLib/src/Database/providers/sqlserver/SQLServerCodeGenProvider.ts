@@ -5,6 +5,7 @@ import {
     BaseViewGenerationContext,
     CascadeDeleteContext,
     FullTextSearchResult,
+    MaterializedColumnSpec,
     DataSourceResult,
 } from '../../codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
@@ -13,12 +14,8 @@ import { sortBySequenceAndCreatedAt } from '../../../Misc/util';
 import { configInfo, dbDatabase, mj_core_schema } from '../../../Config/config';
 import { MSSQLConnection, getSqlConfig } from '../../../Config/db-connection';
 import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
-import {
-    SQLServerDataProvider,
-    SQLServerProviderConfigData,
-    UserCache,
-    setupSQLServerClient,
-} from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { SQLServerCodeGenConnection } from './SQLServerCodeGenConnection';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -79,7 +76,7 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         if (cfg.options?.instanceName) connectionInfo += '\\' + cfg.options.instanceName;
         connectionInfo += '/' + cfg.database;
 
-        await UserCache.Instance.Refresh(pool);
+        await UserCache.Instance.Refresh(provider);
         const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
         const currentUser = userMatch ?? UserCache.Users[0];
 
@@ -145,6 +142,66 @@ SELECT
 FROM
     [${entity.SchemaName}].[${entity.BaseTable}] AS ${alias}${context.parentJoins ? '\n' + context.parentJoins : ''}${context.relatedFieldsJoins ? '\n' + context.relatedFieldsJoins : ''}${context.rootJoins}
 ${whereClause}GO`;
+    }
+
+    // ─── MATERIALIZATION ─────────────────────────────────────────────────
+
+    /**
+     * SQL Server materialized-table DDL. The create is **conditional** (only if the table
+     * is absent) so a migration-provided `materialized_<Name>` table with bespoke indexing
+     * is detected and reused rather than clobbered (plan §12). Emits the single-column
+     * surrogate PRIMARY KEY, which is itself the required unique index.
+     *
+     * Returns a single GO-free batch: it is executed directly via `LogSQLAndExecute`
+     * (`ds.query`, which doesn't split on `GO`), and the caller passes
+     * `includeBatchSeparator: true` so the migration *file* still gets a `GO` after it.
+     */
+    generateMaterializedTableSQL(schema: string, tableName: string, columns: MaterializedColumnSpec[]): string {
+        // Escape the closing bracket in every interpolated identifier (`]`→`]]`) so a column name from an
+        // untrusted source (e.g. an external entity's remote field names) can't break out of its quoting — the
+        // same hardening the refresh path applies via escId. SQLType is metadata-controlled (not an identifier).
+        const esc = (n: string) => n.replace(/\]/g, ']]');
+        const colLines = columns.map((c) => `        [${esc(c.Name)}] ${c.SQLType} ${c.Nullable ? 'NULL' : 'NOT NULL'}`);
+        const pkCols = columns.filter((c) => c.IsPrimaryKey).map((c) => c.Name);
+        const pkClause = pkCols.length
+            ? `,\n        CONSTRAINT [PK_${esc(tableName)}] PRIMARY KEY (${pkCols.map((n) => `[${esc(n)}]`).join(', ')})`
+            : '';
+        return `IF OBJECT_ID('[${esc(schema)}].[${esc(tableName)}]', 'U') IS NULL
+BEGIN
+    CREATE TABLE [${esc(schema)}].[${esc(tableName)}] (
+${colLines.join(',\n')}${pkClause}
+    );
+END`;
+    }
+
+    /**
+     * SQL Server wrapper-view DDL — the stable read contract over the materialized table.
+     * Uses `CREATE OR ALTER VIEW` (SQL Server 2016 SP1+) so the same statement both creates
+     * the view and atomically repoints it at a freshly-built table during refresh (plan §11.2).
+     *
+     * Returns a single GO-free batch (executed via `ds.query`); the caller adds the file
+     * batch separator. `CREATE OR ALTER VIEW` is valid as the sole statement in its batch.
+     */
+    generateMaterializedWrapperViewSQL(schema: string, viewName: string, tableName: string): string {
+        const esc = (n: string) => n.replace(/\]/g, ']]');
+        return `CREATE OR ALTER VIEW [${esc(schema)}].[${esc(viewName)}]
+AS
+SELECT * FROM [${esc(schema)}].[${esc(tableName)}];`;
+    }
+
+    /** SQL Server synthetic surrogate key: an auto-incrementing IDENTITY column. */
+    getMaterializedSurrogateColumnType(): string {
+        return 'int IDENTITY(1,1)';
+    }
+
+    /**
+     * SQL Server KEYED surrogate key type: the combined-key SHA2_256 hash the refresh writes is a
+     * fixed 64-char lowercase-hex string (`CONVERT(varchar(64), HASHBYTES('SHA2_256', …), 2)`), so
+     * the minted entity's PK column is typed to MATCH the post-refresh physical column exactly —
+     * avoiding the int-vs-hash divergence between CodeGen metadata and the rebuilt table.
+     */
+    getMaterializedHashSurrogateColumnType(): string {
+        return 'varchar(64)';
     }
 
     // ─── CRUD ROUTINES ───────────────────────────────────────────────────
@@ -1119,7 +1176,9 @@ GO
      * are provided, generates named parameter syntax (`@ParamName=value`); otherwise uses
      * positional parameter values. Returns just `EXEC [schema].[routine]` if no params.
      */
-    callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[]): string {
+    callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[], _discardResult?: boolean): string {
+        // `_discardResult` is a PostgreSQL concern only — `EXEC` neither returns a result set the
+        // caller must consume nor cares whether one is produced.
         const qualifiedName = `[${schema}].[${routineName}]`;
         if (!params || params.length === 0) {
             return `EXEC ${qualifiedName}`;

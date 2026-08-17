@@ -67,8 +67,7 @@ describe('wrapAdapterWithContext', () => {
             get CurrentUrl() {
                 return 'https://current.test/';
             },
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any as BaseBrowserAdapter;
+        } as unknown as BaseBrowserAdapter;
         return { adapter, received };
     }
 

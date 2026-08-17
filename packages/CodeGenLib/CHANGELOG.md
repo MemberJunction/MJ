@@ -1,5 +1,163 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- d430fa5: Auto-created schema "bucket" Applications are now hidden from new users. `createNewApplication`'s
+  INSERT omitted `DefaultForNewUser`, so the DB default of `1` won — every schema-named bucket app
+  (`__mj_MySchema`, "Generated for schema") landed visible in each new user's app switcher, while a
+  UI app's human-authored metadata Application often ships hidden. The bucket exists to carry entity
+  links, role grants, and `SchemaAutoAddNewEntities`; it is plumbing, not a product, and is now
+  emitted with `DefaultForNewUser = 0`. Affects newly emitted captures only — existing captured
+  baselines keep their old INSERT until recaptured.
+- c49a34a: Smart Field Identification could clear `IsNameField` and nominate nothing in its place, leaving an
+  entity with **zero** name fields — and it did that by overriding a correct deterministic answer,
+  not by failing to produce one. The pending-fields SQL emits `IIF(sf.FieldName = 'Name', 1, 0)`, so
+  the flag was already right before the AI pass ran; the AI pass then removed it.
+
+  The trigger is an IS-A (Table-Per-Type) child. Its `Name` is virtual by construction — the column
+  lives on the parent table and reaches the child through the view's IS-A join — and
+  `isFieldEligibleForNameField` blanket-rejected virtual fields. With nothing eligible,
+  `selectNameFieldWinner` returned `null` and `applyNameFieldUpdates`' clear-loop wiped the flag it
+  found. Downstream, everything that resolves a record's display value loses it: FK lookups to that
+  entity render the raw UUID, and `getIsNameFieldForSingleEntity` has no field to denormalize into
+  referencing base views. Silent, and it _removes_ correct metadata rather than merely failing to add
+  any.
+
+  Two independent guards, either of which would have prevented it:
+
+  **Virtual fields are no longer rejected wholesale.** An IS-A inherited field is eligible, identified
+  by `IsVirtual = 1 AND AllowUpdateAPI = 1` — the pair `syncISAParentFields` and
+  `buildParentChainContext` already use, and unambiguous here: every virtual column discovered from a
+  base view is inserted with `AllowUpdateAPI = 0`, and the IS-A sync is the only thing that sets it
+  back. A borrowed FK-name column therefore cannot qualify, so the reasons virtual fields were
+  rejected in the first place — the unbuildable self-FK view join, and a name that is itself a
+  borrowed FK-name resolving circularly — still hold everywhere they applied.
+
+  **Never clear without replacing.** Eligibility splits along the line that was being conflated:
+  `isNameFieldTypeSafe` (a primary key, a non-text type or unbounded MAX text is _wrong_, and
+  corrupts the SQL type of every FK-name virtual field that joins to this entity) versus virtuality (a
+  _worse_ choice than a base-table column, not an invalid one). Winner selection gains a fourth tier
+  that preserves an existing type-safe flag rather than clearing it with nothing to put in its place;
+  an actively-wrong flag is still cleared with no replacement, so the v5.40 uniqueidentifier-PK
+  guardrail behaves exactly as before.
+
+  The sibling writers were checked while in the area — `applyDefaultInViewUpdates`,
+  `applySearchableFieldUpdates` and the field-level full-text path are all SET-only and never clear,
+  so this failure mode was unique to `IsNameField`.
+
+- aa4fbe9: CodeGen can prune entity metadata on PostgreSQL again
+
+  `PostgreSQLCodeGenProvider.callRoutineSQL` invoked every routine as `SELECT * FROM routine(...)`.
+  PostgreSQL rejects that form outright for a function declared `RETURNS SETOF record` —
+  `spDeleteEntityWithCoreDependencies` is one — with "a column definition list is required for
+  functions returning record", and a routine that only performs work has no column list to supply.
+
+  The entity-pruning pass therefore threw once per entity, logged `Error removing metadata for entity
+undefined`, and carried on. CodeGen exited non-zero having pruned nothing, so orphaned `EntityField`
+  rows survived; the engine then built base-view SELECTs for columns the regenerated views no longer
+  had (`column "EntityAction" does not exist`), which broke `mj sync push` and the next CodeGen run.
+  Nothing in that chain pointed back at the call shape.
+
+  `callRoutineSQL` now takes `discardResult`, and emits `DO $$ BEGIN PERFORM routine(...); END $$` when
+  set — PERFORM runs the function and discards whatever it returns. Passed at the one call site whose
+  rows are never read. SQL Server's `EXEC` is unaffected and ignores the flag.
+
+- d8adda1: **BREAKING — `UserCache` moved packages. Update the import, not just the call.**
+
+  `UserCache` now lives in `@memberjunction/generic-database-provider`. It is no longer exported
+  from `@memberjunction/sqlserver-dataprovider`, and there is deliberately **no re-export shim**,
+  so every import of the symbol must be repointed or it will fail to resolve:
+
+  ```diff
+  - import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+  + import { UserCache } from '@memberjunction/generic-database-provider';
+  ```
+
+  `Refresh` is now dialect-neutral and takes the configured provider rather than an
+  `mssql.ConnectionPool`:
+
+  ```diff
+  - await UserCache.Instance.Refresh(pool, intervalMs);
+  + await UserCache.Instance.Refresh(provider, intervalMs);
+  ```
+
+  **These are two separate breaks, and the first is much wider than the second.** The import path
+  affects _every_ consumer of the symbol — reads included. The signature affects only the handful
+  of callers of `Refresh`. Anything that imports `UserCache` merely to call `Users`,
+  `GetSystemUser()` or `UserByName()` still has to change its import, so a consumer who reads only
+  "the signature changed" will treat this as a no-op and fail to build. In this repo the split was
+  56 files versus 9 call sites.
+
+  Packages that import `UserCache` must also declare `@memberjunction/generic-database-provider`
+  as a dependency — pnpm resolves strictly, so an undeclared import fails rather than falling
+  through to a hoisted copy.
+
+  **Check for dynamic imports too**, not just static ones. `await import('@memberjunction/sqlserver-dataprovider')`
+  destructuring `UserCache` breaks the same way, and a grep for `import { … } from` will not find it.
+
+  **Unchanged:** the read surface (`Users`, `GetSystemUser`, `UserByName`, `SYSTEM_USER_ID`), and
+  the class name. The name is load-bearing — `BaseSingleton` keys its global store on the
+  constructor name, so keeping it `UserCache` preserves singleton identity across the move.
+
+  **Also fixed:** `_users` now initializes to `[]`. It previously stayed `undefined` after a
+  `Refresh` that never ran or that failed (failures are swallowed into `LogError`), so
+  `GetSystemUser()` threw a `TypeError` off `.find()` instead of returning `undefined` as its
+  callers already assume.
+
+  **Why:** the cache was dialect-neutral except for that one `mssql` type, which left PostgreSQL
+  with no user cache at all and produced four separate hand-rolled "read `vwUsers` + `vwUserRoles`,
+  build `UserInfo[]`" implementations — one of which reached into the singleton's private field
+  through a cast from another package. Those are all removed, and a PostgreSQL process that never
+  goes through the server bootstrap now has a system user.
+
+- Updated dependencies [255d506]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [59def38]
+- Updated dependencies [11de1a3]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [9a29da4]
+- Updated dependencies [e26c866]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [d8adda1]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/ai@6.1.0-edge.2
+  - @memberjunction/actions-base@6.1.0-edge.2
+  - @memberjunction/actions@6.1.0-edge.2
+  - @memberjunction/generic-database-provider@6.1.0-edge.2
+  - @memberjunction/core-entities-server@6.1.0-edge.2
+  - @memberjunction/ai-core-plus@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/aiengine@6.1.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.2
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.2
+  - @memberjunction/ai-prompts@6.1.0-edge.2
+  - @memberjunction/external-data-sources@6.1.0-edge.2
+  - @memberjunction/external-data-source-databricks@6.1.0-edge.2
+  - @memberjunction/external-data-source-mongodb@6.1.0-edge.2
+  - @memberjunction/external-data-source-mysql@6.1.0-edge.2
+  - @memberjunction/external-data-source-oracle@6.1.0-edge.2
+  - @memberjunction/external-data-source-postgres@6.1.0-edge.2
+  - @memberjunction/external-data-source-sqlserver@6.1.0-edge.2
+  - @memberjunction/external-data-source-snowflake@6.1.0-edge.2
+  - @memberjunction/query-processor@6.1.0-edge.2
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.2
+  - @memberjunction/postgresql-dataprovider@6.1.0-edge.2
+  - @memberjunction/cli-core@6.1.0-edge.2
+  - @memberjunction/config@6.1.0-edge.2
+  - @memberjunction/sql-dialect@6.1.0-edge.2
+  - @memberjunction/sql-parser@6.1.0-edge.2
+
 ## 6.1.0-edge.1
 
 ### Patch Changes

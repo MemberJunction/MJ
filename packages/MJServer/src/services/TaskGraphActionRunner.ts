@@ -12,13 +12,14 @@
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam } from '@memberjunction/actions-base';
 import { LogError } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { TaskActionRunner, TaskActionRunParams, TaskActionRunResult } from '@memberjunction/task-graph';
 
 export class TaskGraphActionRunner implements TaskActionRunner {
     public async RunActionForTask(params: TaskActionRunParams): Promise<TaskActionRunResult> {
         try {
             await ActionEngineServer.Instance.Config(false, params.ContextUser);
-            const action = ActionEngineServer.Instance.Actions.find((a) => a.ID === params.ActionID);
+            const action = ActionEngineServer.Instance.Actions.find((a) => UUIDsEqual(a.ID, params.ActionID));
             if (!action) {
                 return { Success: false, ErrorMessage: `Action ${params.ActionID} is not in the engine's metadata.` };
             }
@@ -36,14 +37,41 @@ export class TaskGraphActionRunner implements TaskActionRunner {
 
             return {
                 Success: result.Success,
-                Output: result.Params,
+                Output: this.buildOutput(result.Params),
                 ErrorMessage: result.Success ? undefined : result.Message,
+                // The engine already wrote the log; this is the only place its id is in hand. Without
+                // carrying it out, a workflow's action step has no path back to its own execution
+                // record — the one thing anyone wants when an action misbehaves.
+                ActionLogID: result.LogEntry?.ID,
             };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             LogError(`[TaskGraphActionRunner] Task ${params.TaskID} failed: ${message}`);
             return { Success: false, ErrorMessage: message };
         }
+    }
+
+    /**
+     * Projects the action's parameters onto the flat result a workflow step is expected to produce.
+     *
+     * **Why not return `result.Params` as-is.** That is an `ActionParam[]`, and every consumer of a
+     * step's output addresses fields BY NAME: an output mapping says `{"CurrentPrice": "stockPrice"}`,
+     * and a branch condition then reads `payload.stockPrice`. Handed an array, the mapping finds no
+     * `CurrentPrice`, writes nothing, and the condition evaluates against `undefined` — which is
+     * falsy rather than erroneous, so the workflow takes the other branch and reports success. That
+     * is exactly what the Demo workflow did: step 1 completed with an output payload of `{}` and
+     * every downstream branch was skipped, with nothing anywhere reporting a problem.
+     *
+     * Only `Output` and `Both` params are included. Echoing the inputs back would let a step's own
+     * parameters masquerade as its results, so an output mapping could "succeed" by reading the
+     * value the step was given rather than the one it produced.
+     */
+    private buildOutput(actionParams: ActionParam[]): Record<string, unknown> {
+        const output: Record<string, unknown> = {};
+        for (const p of actionParams ?? []) {
+            if (p.Type === 'Output' || p.Type === 'Both') output[p.Name] = p.Value;
+        }
+        return output;
     }
 
     /**

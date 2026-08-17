@@ -7,7 +7,19 @@ const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
 const userHandlingInfoSchema = z.object({
   autoCreateNewUsers: z.boolean().optional().default(false),
+  /** When true, auto-provisioning is restricted to the domains in `newUserAuthorizedDomains`. */
   newUserLimitedToAuthorizedDomains: z.boolean().optional().default(false),
+  /**
+   * Authorized **email domains** for auto-provisioned users — e.g. `['example.com', '*.example.org']`.
+   *
+   * These are matched against the domain of the email address in the verified identity token, NOT
+   * against the browser `Origin` / frontend hostname. If you are upgrading from a build that
+   * compared these to the request origin, replace any frontend hostnames here (`app.example.com`,
+   * `localhost`) with the email domains your users actually sign in with.
+   *
+   * `*` wildcards are supported and match in full: `*.example.com` matches `mail.example.com` but
+   * NOT `example.com` — list both if you need both.
+   */
   newUserAuthorizedDomains: z.array(z.string()).optional().default([]),
   newUserRoles: z.array(z.string()).optional().default([]),
   updateCacheWhenNotFound: z.boolean().optional().default(false),
@@ -129,6 +141,23 @@ const scheduledJobsSchema = z.object({
   maxConcurrentJobs: z.number().optional().default(5),
   defaultLockTimeout: z.number().optional().default(600000), // 10 minutes in ms
   staleLockCleanupInterval: z.number().optional().default(300000), // 5 minutes in ms
+});
+
+/**
+ * Integration sync worker (PR 1 item 8). When enabled, this process polls
+ * `CompanyIntegrationRun` for `Status='Queued'` rows, atomically claims them, executes
+ * the sync, and releases. The claim sproc is the mutual exclusion, so any number of
+ * processes may run a worker against the same database.
+ */
+const integrationSyncWorkerSchema = z.object({
+  /** Master switch — off by default so existing deployments keep running syncs inline. */
+  enabled: z.boolean().optional().default(false),
+  /** Email of the user the worker executes syncs as. */
+  systemUserEmail: z.string().optional().default('system@memberjunction.org'),
+  /** How often to poll the queue, in ms. */
+  pollingIntervalMs: z.number().optional().default(15000),
+  /** Maximum runs this worker executes concurrently. */
+  maxConcurrentRuns: z.number().optional().default(3),
 });
 
 const queryDialectSchema = z.object({
@@ -501,6 +530,7 @@ const configInfoSchema = z.object({
   authProviders: z.array(authProviderSchema).optional(),
   componentRegistries: z.array(componentRegistrySchema).optional(),
   scheduledJobs: scheduledJobsSchema.optional().default({}),
+  integrationSyncWorker: integrationSyncWorkerSchema.optional().default({}),
   telemetry: telemetrySchema.optional().default({}),
   queryDialects: queryDialectSchema.optional().default({}),
   multiTenancy: multiTenancySchema.optional().default({}),
@@ -559,6 +589,7 @@ export type SqlLoggingInfo = z.infer<typeof sqlLoggingSchema>;
 export type AuthProviderConfig = z.infer<typeof authProviderSchema>;
 export type ComponentRegistryConfig = z.infer<typeof componentRegistrySchema>;
 export type ScheduledJobsConfig = z.infer<typeof scheduledJobsSchema>;
+export type IntegrationSyncWorkerConfig = z.infer<typeof integrationSyncWorkerSchema>;
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
 export type QueryDialectConfig = z.infer<typeof queryDialectSchema>;
 export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
@@ -671,6 +702,14 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     staleLockCleanupInterval: 300000
   },
 
+  // Integration sync worker defaults (off — syncs run inline unless a worker is enabled)
+  integrationSyncWorker: {
+    enabled: false,
+    systemUserEmail: 'not.set@nowhere.com',
+    pollingIntervalMs: 15000,
+    maxConcurrentRuns: 3
+  },
+
   // Telemetry defaults
   telemetry: {
     enabled: true,
@@ -696,42 +735,22 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     },
   },
 
-  // Auth providers (environment-driven)
-  authProviders: [
-    // Microsoft Azure AD / Entra ID
-    process.env.TENANT_ID && process.env.WEB_CLIENT_ID ? {
-      name: 'azure',
-      type: 'msal',
-      issuer: `https://login.microsoftonline.com/${process.env.TENANT_ID}/v2.0`,
-      audience: process.env.WEB_CLIENT_ID,
-      jwksUri: `https://login.microsoftonline.com/${process.env.TENANT_ID}/discovery/v2.0/keys`,
-      clientId: process.env.WEB_CLIENT_ID,
-      tenantId: process.env.TENANT_ID
-    } : null,
-
-    // Auth0
-    process.env.AUTH0_DOMAIN && process.env.AUTH0_CLIENT_ID ? {
-      name: 'auth0',
-      type: 'auth0',
-      issuer: `https://${process.env.AUTH0_DOMAIN}/`,
-      audience: process.env.AUTH0_CLIENT_ID,
-      jwksUri: `https://${process.env.AUTH0_DOMAIN}/.well-known/jwks.json`,
-      clientId: process.env.AUTH0_CLIENT_ID,
-      clientSecret: process.env.AUTH0_CLIENT_SECRET,
-      domain: process.env.AUTH0_DOMAIN
-    } : null,
-    // AWS Cognito
-    process.env.COGNITO_USER_POOL_ID && process.env.COGNITO_CLIENT_ID && process.env.AWS_REGION ? {
-      name: 'cognito',
-      type: 'cognito',
-      issuer: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}`,
-      audience: process.env.COGNITO_CLIENT_ID,
-      jwksUri: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}/.well-known/jwks.json`,
-      clientId: process.env.COGNITO_CLIENT_ID,
-      region: process.env.AWS_REGION,
-      userPoolId: process.env.COGNITO_USER_POOL_ID
-    } : null,
-  ].filter(Boolean),
+  // Auth providers.
+  //
+  // Empty by design. This used to be a hard-coded block that enumerated Entra / Auth0 / Cognito
+  // inline and built each config from its environment variables. That made env-var configuration
+  // a closed domain: a third-party provider could register a driver class and take a metadata row
+  // or an explicit entry here, but it could never offer the "set two variables and you're done"
+  // experience, because the enumeration lived in core.
+  //
+  // Each provider class now owns its own mapping via the optional static
+  // `ConfigFromEnvironment` (see IEnvironmentConfigurableProvider in @memberjunction/auth-providers),
+  // and `initializeAuthProviders()` collects them through the ClassFactory registry.
+  //
+  // Discovery cannot happen here: this literal is evaluated when config.ts is imported, which is
+  // BEFORE @memberjunction/auth-providers loads and the driver classes register. It is deferred to
+  // registration time, where the registry is populated.
+  authProviders: [],
 };
 
 /**

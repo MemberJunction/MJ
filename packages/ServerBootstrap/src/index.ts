@@ -16,6 +16,7 @@
 
 import { serve, MJServerOptions } from '@memberjunction/server';
 import { cosmiconfigSync } from 'cosmiconfig';
+import { importFromHost, isResolutionFailure } from './host-import.js';
 
 /**
  * Configuration options for creating an MJ Server
@@ -56,7 +57,7 @@ export interface MJServerConfig {
  *
  * @param config - The loaded MemberJunction configuration
  */
-async function discoverAndLoadGeneratedPackages(configResult: { config: Record<string, unknown> }): Promise<void> {
+async function discoverAndLoadGeneratedPackages(configResult: { config: Record<string, unknown>; configFilePath?: string }): Promise<void> {
   const codeGeneration = configResult.config?.codeGeneration as Record<string, Record<string, string>> | undefined;
   if (!codeGeneration?.packages) {
     // Common case for app deployments that import their generated package directly —
@@ -78,12 +79,19 @@ async function discoverAndLoadGeneratedPackages(configResult: { config: Record<s
       const pkgName = pkgConfig.name;
       try {
         // Dynamic import to trigger side effects (class registration)
-        await import(pkgName);
+        await importFromHost(pkgName, configResult.configFilePath);
         console.log(`  Loaded generated package: ${pkgName}`);
       } catch (error: unknown) {
-        // Not finding a package is expected in some cases (e.g., no forms generated yet)
-        const errObj = error as { code?: string };
-        if (errObj.code === 'ERR_MODULE_NOT_FOUND') {
+        // Not finding a package is expected in some cases (e.g., no forms generated yet).
+        // isResolutionFailure (not a bare code check) because ts-node's ESM shim throws
+        // resolution failures with no code at all. Only claim "not found" when THIS package
+        // is the error's QUOTED subject ("Cannot find package '<name>'") — a missing
+        // TRANSITIVE dependency of a package that WAS found quotes the transitive name
+        // instead (this package's name still appears UNQUOTED in the imported-from path,
+        // which is why a bare includes(pkgName) check is not enough); its message is the
+        // true cause and must reach the operator via the warn path.
+        const message = error instanceof Error ? error.message : String(error);
+        if (isResolutionFailure(error) && message.includes(`'${pkgName}'`)) {
           console.log(`  Generated package not found (may not exist yet): ${pkgName}`);
         } else {
           console.warn(`  Error loading generated package ${pkgName}:`, error);
@@ -136,7 +144,7 @@ interface DynamicServerPackage {
  * @returns absolute resolver-file paths to add to `serve()`'s resolver globs (empty when
  *          no Open App server packages are installed — the common case).
  */
-async function loadDynamicAppPackages(configResult: { config: Record<string, unknown> }): Promise<string[]> {
+async function loadDynamicAppPackages(configResult: { config: Record<string, unknown>; configFilePath?: string }): Promise<string[]> {
   const dynamicPackages = configResult.config?.dynamicPackages as { server?: DynamicServerPackage[] } | undefined;
   const serverPackages = dynamicPackages?.server;
   const resolverPaths: string[] = [];
@@ -154,7 +162,7 @@ async function loadDynamicAppPackages(configResult: { config: Record<string, unk
     }
     try {
       // Dynamic import to trigger side effects (class registration).
-      const mod = (await import(pkgName)) as Record<string, unknown>;
+      const mod = await importFromHost(pkgName, configResult.configFilePath);
       // Invoke the declared startup export, if any (e.g. a registration kicker).
       const startup = entry.StartupExport ? mod[entry.StartupExport] : undefined;
       if (typeof startup === 'function') {
@@ -173,8 +181,13 @@ async function loadDynamicAppPackages(configResult: { config: Record<string, unk
       }
       console.log(`  Loaded Open App server package: ${pkgName}${entry.StartupExport ? ` (ran ${entry.StartupExport})` : ''}${added > 0 ? ` (+${added} resolver path${added === 1 ? '' : 's'})` : ''}`);
     } catch (error: unknown) {
-      const errObj = error as { code?: string };
-      if (errObj.code === 'ERR_MODULE_NOT_FOUND') {
+      // isResolutionFailure (not a bare code check) because ts-node's ESM shim throws
+      // resolution failures with no code at all. The quoted-name guard keeps a missing
+      // TRANSITIVE dependency on the warn path with its true cause: resolution errors QUOTE
+      // the missing name, and a transitive failure quotes the transitive dep — this
+      // package's name only appears unquoted in the imported-from path.
+      const message = error instanceof Error ? error.message : String(error);
+      if (isResolutionFailure(error) && message.includes(`'${pkgName}'`)) {
         console.log(`  Open App server package not found (run 'npm install'?): ${pkgName}`);
       } else {
         console.warn(`  Error loading Open App server package ${pkgName}:`, error);

@@ -134,6 +134,7 @@ flowchart LR
 | `entityTransactionScope.ts` | `EntityTransactionScope` + `RunInEntityTransaction()` — the one provider-arbitrated transaction primitive, shared by IS-A, composites and application cascades |
 | `entityCompanion.ts` | `EntityCompanion` — named, serialisable state attached to a record (the "bag") |
 | `relatedRecordCollection.ts` | `RelatedRecordCollection<T>` — the typed parent/children companion |
+| `embeddedRecord.ts` | `EmbeddedRecord<T>` — owner-held 1:1 peer (`Deal.OrderID` → Order), inverted save order |
 | `relatedRecordBatchLoader.ts` | One batched child query per collection across a whole result set (`RunView.IncludeRelatedRecords`) |
 | `entitySavePlan.ts` | `EntitySavePlan` + executor — the ordered unit of work a composite save produces |
 | `saveEntityGraphOperation.ts` | `MJ.SaveEntityGraph` — routes a whole composite save to the server from a client provider |
@@ -564,6 +565,50 @@ if (typedResult.Success) {
     console.log(`Found ${users.length} users`);
 }
 ```
+
+#### `ResultType`: what `'simple'` rows contain, and what `T` does not check
+
+`ResultType` defaults to `'simple'`. Simple rows are plain objects, but their VALUES are
+normalized to the shapes the generated entity types declare — identically on every tier. A `Date`
+column holds a real `Date` and a numeric column holds a `number`, whether the call ran server-side
+against the database or in a browser over GraphQL, and whether it was a fresh query or a cache
+hit. (`NULL` stays `NULL`, unparseable values are left as-is rather than becoming `Invalid Date`,
+and integer strings beyond `Number.MAX_SAFE_INTEGER` stay strings to preserve BIGINT precision.)
+
+| | `'simple'` (default) | `'entity_object'` |
+|---|---|---|
+| What you get | plain objects, values normalized to the entity's field types | `BaseEntity`-derived instances |
+| A `DATETIME` column | a real `Date`, on every tier | a real `Date` (`BaseEntity` converts on `Get`/`Set`) |
+| Entity methods / validation | no | yes |
+| Save / delete the row | no | yes |
+| `IncludeRelatedRecords` | not available | yes |
+| `Fields` narrowing | yes — use it | ignored (entities need all fields) |
+| Cost | one plain object per row | field hydration per row |
+
+`RunView<T>` takes a **caller-supplied** `T` the compiler does not verify against `ResultType`,
+so know what a plain row can and cannot honor when you pass a generated entity type:
+
+```typescript
+// Date and numeric fields are truthful on simple rows:
+const rows = await rv.RunView<UserEntity>({ EntityName: 'Users', ResultType: 'simple' });
+rows.Results[0].CreatedAt.getFullYear();   // works — a real Date on every tier
+
+// But a plain row is still not an entity:
+rows.Results[0].Save();                    // compiles, crashes — no entity methods
+// ...and a closed-union column (e.g. Status) holds whatever string the database held.
+
+// When you need entity behavior, ask for entities:
+const users = await rv.RunView<UserEntity>({ EntityName: 'Users', ResultType: 'entity_object' });
+```
+
+Two caveats: with `Fields` narrowing, non-selected properties simply don't exist on the rows,
+whatever `T` claims; and a call passing only `ViewID`/`ViewName` (no `EntityName`, no loaded
+`ViewEntity`) skips normalization — pass `EntityName` alongside the view identifier to get
+normalized rows.
+
+**Rule of thumb: want entity behavior — methods, validation, save, related records — ask for
+entity objects.** Choose `'simple'` for cheap read-only rows; its dates and numbers are already
+the types your entity declares.
 
 #### Batch Multiple Views
 

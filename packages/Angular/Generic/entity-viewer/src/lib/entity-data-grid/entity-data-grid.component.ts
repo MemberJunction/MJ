@@ -649,6 +649,11 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return this._height;
   }
 
+  /** Hug-height related grids get a top-aligned inline empty, not a padded hero. */
+  get EmptyStateSize(): 'inline' | 'default' {
+    return typeof this._height === 'number' ? 'inline' : 'default';
+  }
+
   private _rowHeight: number = 40;
   @Input()
   set RowHeight(value: number) {

@@ -28,6 +28,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { GraphQLTransactionGroup } from "./graphQLTransactionGroup";
 import { GraphQLAIClient } from "./graphQLAIClient";
 import { BrowserIndexedDBStorageProvider } from "./storage-providers";
+import { SanitizeGraphQLError, ToSafeGraphQLError } from "./sanitizeGraphQLError";
 
 // define the shape for a RefreshToken function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
 export type RefreshTokenFunction = () => Promise<string>;
@@ -46,6 +47,48 @@ export type SocketConnectionState = 'connected' | 'disconnected' | 'unknown';
  * The client application should use this to notify the user and force re-authentication.
  */
 export type AuthenticationErrorCallback = (error: Error) => void;
+
+/**
+ * One dispatcher lifecycle frame for a durable workflow run (task graph), as delivered by the
+ * `taskGraphFrames` subscription. Mirrors the server's `TaskGraphFrameNotification` — the graph's
+ * owner is a server-side filter key and never appears here.
+ */
+export interface TaskGraphFrameEvent {
+    /** What happened — 'TaskStarted' | 'TaskCompleted' | 'TaskFailed' | 'TaskBlocked' | 'TaskSkipped'
+     *  | 'TaskAwaitingHuman' | 'GraphSettled' | 'GateDecision' | 'ClaimChanged' | 'PassCompleted'
+     *  | 'GraphPaused' | 'GraphResumed' | 'BreakpointHit' | 'NodeProgress'. Open string so a newer
+     *  server can add kinds without breaking an older client, which should ignore what it does not know. */
+    kind: string;
+    parentTaskId: string;
+    taskId?: string;
+    taskName?: string;
+    status?: string;
+    errorMessage?: string;
+    assignedUserId?: string;
+    completedCount?: number;
+    totalCount?: number;
+    /** GateDecision */
+    edgeId?: string;
+    dependsOnTaskId?: string;
+    verdict?: 'satisfied' | 'notTaken' | 'held';
+    conditionText?: string;
+    reason?: string;
+    /** ClaimChanged */
+    claimEvent?: 'claimed' | 'heartbeat-lost' | 'reclaimed';
+    claimedBy?: string;
+    claimExpiresAt?: string;
+    /** PassCompleted */
+    passNumber?: number;
+    eligibleCount?: number;
+    heldCount?: number;
+    claimedCount?: number;
+    /** The dispatcher instance's own load across every graph — not this graph's in-flight count. */
+    instanceInFlightCount?: number;
+    /** NodeProgress */
+    progressMessage?: string;
+    progressPercent?: number;
+    date?: string;
+}
 
 /**
  * Shared, stateless FieldMapper instance. FieldMapper holds no per-call state (only static
@@ -102,6 +145,27 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
      * WSURL is the URL to the GraphQL websocket endpoint. This is used for subscriptions, if you are not using subscriptions, you can pass in a blank string for this
      */
     get WSURL(): string { return this.Data.WSURL }
+
+    /**
+     * Opt in to logging the *values* of GraphQL variables when a request fails.
+     *
+     * Defaults to `false`, in which case a failed request logs the operation's
+     * diagnostics plus the variables' **shape** (key names and value types) — enough
+     * to answer "was the field sent?", "was it empty?", "is the nesting right?" —
+     * but never a value.
+     *
+     * Set to `true` while debugging to log values verbatim. Do this only in a
+     * development environment: the values of a mutation's input routinely include
+     * credentials, and console output on a server is typically captured to a
+     * persistent log file that outlives any later rotation of the secret.
+     *
+     * This mirrors the server-side `loggingSettings.graphql.logVariables` tier, which
+     * is likewise off by default.
+     *
+     * @default false
+     */
+    get LogVariableValues(): boolean { return this.Data.LogVariableValues === true }
+    set LogVariableValues(value: boolean) { this.Data.LogVariableValues = value }
 
     /**
      * RefreshTokenFunction is a function that can be called by the GraphQLDataProvider whenever it receives an exception that the JWT it has already is expired
@@ -475,10 +539,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return this.RunAdhocQuery(params.SQL, params.MaxRows, undefined, params.StartRow);
         }
         else if (params.QueryID) {
-            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment);
+            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment, params.DataSource);
         }
         else if (params.QueryName) {
-            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment);
+            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment, params.DataSource);
         }
         else {
             throw new Error("No SQL, QueryID, or QueryName provided to RunQuery");
@@ -547,7 +611,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             StartRow: p.StartRow,
             ForceAuditLog: p.ForceAuditLog,
             AuditLogDescription: p.AuditLogDescription,
-            Enrichment: p.Enrichment
+            Enrichment: p.Enrichment,
+            DataSource: p.DataSource // forward so a batched DataSource:'Materialized' isn't silently downgraded to live
         }));
 
         const result = await this.ExecuteGQL(query, { input });
@@ -558,17 +623,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return [];
     }
 
-    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment): Promise<RunQueryResult> {
+    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment, DataSource?: 'Live' | 'Materialized'): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
-                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment) {
+            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject, $DataSource: String) {
+                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment, DataSource: $DataSource) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
 
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryID: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment } = { QueryID };
+        const variables: { QueryID: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment; DataSource?: 'Live' | 'Materialized' } = { QueryID };
         if (CategoryID !== undefined) {
             variables.CategoryID = CategoryID;
         }
@@ -586,6 +651,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         if (Enrichment !== undefined) {
             variables.Enrichment = Enrichment;
+        }
+        if (DataSource !== undefined) {
+            variables.DataSource = DataSource;
         }
 
         const result = await this.ExecuteGQL(query, variables);
@@ -594,17 +662,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment): Promise<RunQueryResult> {
+    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment, DataSource?: 'Live' | 'Materialized'): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
-                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment) {
+            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject, $DataSource: String) {
+                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment, DataSource: $DataSource) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
 
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryName: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment } = { QueryName };
+        const variables: { QueryName: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment; DataSource?: 'Live' | 'Materialized' } = { QueryName };
         if (CategoryID !== undefined) {
             variables.CategoryID = CategoryID;
         }
@@ -622,6 +690,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         if (Enrichment !== undefined) {
             variables.Enrichment = Enrichment;
+        }
+        if (DataSource !== undefined) {
+            variables.DataSource = DataSource;
         }
 
         const result = await this.ExecuteGQL(query, variables);
@@ -690,6 +761,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     ForceAuditLog: item.params.ForceAuditLog || false,
                     AuditLogDescription: item.params.AuditLogDescription || null,
                     Enrichment: item.params.Enrichment || null,
+                    DataSource: item.params.DataSource || null,
                 },
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
@@ -852,6 +924,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // (server caching enabled) is unchanged.
                 if (params.BypassCache !== undefined)
                     innerParams.BypassCache = params.BypassCache;
+                // DataSource lets a caller opt into an entity's materialized snapshot ('Materialized')
+                // vs its live base view ('Live', default). Only forward when set so default is unchanged.
+                if (params.DataSource !== undefined)
+                    innerParams.DataSource = params.DataSource;
 
                 if (!dynamicView) {
                     innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
@@ -1024,6 +1100,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     if (param.BypassCache !== undefined) {
                         innerParam.BypassCache = param.BypassCache;
                     }
+                    if (param.DataSource !== undefined) {
+                        innerParam.DataSource = param.DataSource;
+                    }
 
                     if (!dynamicView) {
                         innerParam.ExcludeUserViewRunID = param.ExcludeUserViewRunID || "";
@@ -1145,6 +1224,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // response could carry them — but the request never asked. Every layer
                     // downstream looked correct while the caller got Success with no aggregates.
                     Aggregates: item.params.Aggregates ?? null,
+                    // DataSource MUST be forwarded here too (as on the InternalRunView/InternalRunViews maps):
+                    // a CacheLocal batch routes through this smart-cache-check path, so omitting it silently
+                    // downgrades a DataSource:'Materialized' request to a live read.
+                    DataSource: item.params.DataSource,
                 },
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
@@ -1327,7 +1410,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (params.Fields) {
             for (const kv of e.PrimaryKeys) {
                 if (params.Fields.find(f => f.trim().toLowerCase() === kv.Name.toLowerCase()) === undefined)
-                    fieldList.push(kv.Name); // always include the primary key fields in view run time field list
+                    fieldList.push(SharedFieldMapper.MapFieldName(kv.Name)); // always include the primary key fields; MapFieldName sanitizes a '__mj_'-prefixed PK (materialization surrogate) to '_mj__' to match the server GraphQL type field — a raw '__mj_' name makes the grid RunView query fail with "Cannot query field __mj_MaterializedRowID"
             }
 
             // now add any other fields that were passed in
@@ -1355,7 +1438,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // first make sure we have the primary key field in the view column list, always should, but make sure
                 for (const kv of e.PrimaryKeys) {
                     if (fieldList.find(f => f.trim().toLowerCase() === kv.Name.toLowerCase()) === undefined)
-                        fieldList.push(kv.Name); // always include the primary key fields in view run time field list
+                        fieldList.push(SharedFieldMapper.MapFieldName(kv.Name)); // always include the primary key fields; MapFieldName sanitizes a '__mj_'-prefixed PK (materialization surrogate) to '_mj__' to match the server GraphQL type field — a raw '__mj_' name makes the grid RunView query fail with "Cannot query field __mj_MaterializedRowID"
                 }
 
                 // Now: include the fields that are part of the view definition
@@ -1943,7 +2026,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // build up the param string for the inner query call
                 if (pkeyInnerParamString.length > 0)
                     pkeyInnerParamString += ', ';
-                pkeyInnerParamString += `${field.CodeName}: $${field.CodeName}`;
+                // The GraphQL ARGUMENT name must match the server resolver's @Arg, which sanitizes a '__mj'-prefixed
+                // PK (the materialization surrogate '__mj_MaterializedRowID') to '_mj__…' because GraphQL forbids
+                // names starting with '__'. Mirror that here (same rule as the field-selection mapping below); the
+                // client-side VARIABLE name ($__mj_…) can keep the raw CodeName. Without this, loading a materialized
+                // entity record fails with "Unknown argument __mj_MaterializedRowID … did you mean _mj__…".
+                const pkeyGraphQLArgName = field.CodeName.startsWith('__mj_') ? field.CodeName.replace('__mj_', '_mj__') : field.CodeName;
+                pkeyInnerParamString += `${pkeyGraphQLArgName}: $${field.CodeName}`;
 
                 // build up the variables we are passing along to the query
                 if (field.TSType === EntityFieldTSType.Number) {
@@ -2041,9 +2130,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 const pk = entity.Fields.find(f => f.Name.trim().toLowerCase() === kv.FieldName.trim().toLowerCase()); // get the field for the primary key field
                 vars[pk.CodeName] = pk.Value;
                 mutationInputTypes.push({varName: pk.CodeName, inputType: pk.EntityFieldInfo.GraphQLType + '!'}); // only used when doing a transaction group, but it is easier to do in this main loop
+                // GraphQL forbids '__'-prefixed arg/field names; sanitize a '__mj_'-prefixed PK to '_mj__' to match
+                // the server (same rule as the single-record Load). The client VARIABLE name keeps the raw CodeName.
+                // (Materialized entities are read-only virtual so no Delete resolver is generated — this is defense-in-depth.)
+                const pkGraphQLName = pk.CodeName.startsWith('__mj_') ? pk.CodeName.replace('__mj_', '_mj__') : pk.CodeName;
                 if (pkeyInnerParamString.length > 0)
                     pkeyInnerParamString += ', ';
-                pkeyInnerParamString += `${pk.CodeName}: $${pk.CodeName}`;
+                pkeyInnerParamString += `${pkGraphQLName}: $${pk.CodeName}`;
 
                 if (pkeyOuterParamString.length > 0)
                     pkeyOuterParamString += ', ';
@@ -2051,7 +2144,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                 if (returnValues.length > 0)
                     returnValues += '\n                    ';
-                returnValues += `${pk.CodeName}`;
+                returnValues += `${pkGraphQLName}`;
             }
 
             mutationInputTypes.push({varName: "options___", inputType: 'DeleteOptionsInput!'}); // only used when doing a transaction group, but it is easier to do in this main loop
@@ -2543,16 +2636,34 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return data;
         }
         catch (e) {
-            // Enhanced error logging to diagnose 500 errors
-            console.error('[GraphQL] ExecuteGQL error caught:', {
-                hasResponse: !!e?.response,
-                hasErrors: !!e?.response?.errors,
-                errorCount: e?.response?.errors?.length,
-                firstError: e?.response?.errors?.[0],
-                errorCode: e?.response?.errors?.[0]?.extensions?.code,
-                errorMessage: e?.response?.errors?.[0]?.message,
-                fullError: e
-            });
+            // Enhanced error logging to diagnose 500 errors.
+            //
+            // SECURITY: the error thrown by the underlying graphql-request client
+            // serialises the originating request — INCLUDING its `variables` — into its
+            // own `message` at construction time, and V8 then embeds that message in
+            // `stack`. Any mutation carrying a secret therefore has that secret sitting
+            // in three places on the error object at once. Logging the error directly,
+            // or stringifying it, writes the secret in plaintext to whatever this
+            // process's console output is captured to — on a server, typically a
+            // persistent log file.
+            //
+            // `SanitizeGraphQLError` builds a fresh diagnostic object from known-safe
+            // fields only, re-deriving the message from `response.errors[0]` rather than
+            // reusing the upstream one. It does not mutate `e`, so the control flow
+            // below — and every caller that catches the rethrown error — is unaffected.
+            // `LogVariableValues` is the developer opt-in — off by default, mirroring
+            // the server's `loggingSettings.graphql.logVariables` tier.
+            const safeError = SanitizeGraphQLError(e, this._configData?.LogVariableValues === true);
+            console.error('[GraphQL] ExecuteGQL error caught:', safeError);
+
+            // SECURITY: what propagates out of here must ALSO be free of the payload.
+            // Sanitising the log line above fixes one log statement; the raw error is
+            // caught and logged by ~178 call sites across the repo (19 `LogError(e)` in
+            // this file alone), each of which would stringify the serialised request.
+            // Rethrowing a SafeGraphQLError closes all of them at once, including
+            // callers not yet written. It preserves `response.status`,
+            // `response.errors` and `request.query` — everything known consumers read.
+            const safeToThrow = ToSafeGraphQLError(e);
 
             if (e && e.response && e.response.errors?.length > 0) {//e.code === 'JWT_EXPIRED') {
                 const error = e.response.errors[0];
@@ -2566,15 +2677,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     else {
                         // token expired but the caller doesn't want a refresh, so just return the error
                         LogError(`JWT_EXPIRED and refreshTokenIfNeeded is false`);
-                        throw e;
+                        throw safeToThrow;
                     }
                 }
                 else
-                    throw e;
+                    throw safeToThrow;
             }
             else {
-                LogError(e);
-                throw e; // force the caller to handle the error
+                // LogError() stringifies its argument (String(message) internally), which
+                // for the raw error class yields the full serialised request.
+                LogError(JSON.stringify(safeError));
+                throw safeToThrow; // force the caller to handle the error
             }
         }
     }
@@ -2954,6 +3067,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         });
         this._pushStatusSubjects.clear();
+
+        this._taskGraphFrameStreams.forEach((entry, parentTaskId) => {
+            try {
+                entry.subject.complete();
+                entry.subscription.unsubscribe();
+            } catch (e) {
+                console.error(`[GraphQLDataProvider] Error cleaning up frame stream for ${parentTaskId}:`, e);
+            }
+        });
+        this._taskGraphFrameStreams.clear();
     }
 
     /**
@@ -3234,6 +3357,122 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 sub.unsubscribe();
             };
         });
+    }
+
+    /**
+     * Shared, refcounted frame streams per watched graph — the client half of the
+     * `taskGraphFrames` subscription. Torn down when the last subscriber leaves; frames are
+     * graph-scoped and a settled graph stops emitting, so no idle reaper is needed.
+     */
+    private _taskGraphFrameStreams: Map<string, {
+        subject: Subject<TaskGraphFrameEvent>;
+        subscription: Subscription;
+        activeSubscribers: number;
+    }> = new Map();
+
+    /**
+     * Live dispatcher lifecycle frames for one workflow run (durable task graph), keyed by the
+     * graph's parent task ID.
+     *
+     * This is the push channel the run console rides: `TaskStarted` / `TaskCompleted` /
+     * `TaskFailed` / `TaskBlocked` / `TaskSkipped` / `TaskAwaitingHuman` / `GraphSettled`, plus the
+     * debugger frames (`GateDecision`, `ClaimChanged`, `PassCompleted`, `GraphPaused`,
+     * `GraphResumed`, `BreakpointHit`, `NodeProgress`). Addressed by graph rather than by session on
+     * purpose — a durable graph outlives the tab that submitted it, so "watch this workflow run"
+     * survives a refresh and works for whoever the server authorizes (the server filter is
+     * owner-scoped and fails closed).
+     *
+     * **Frames are advisory; rows are truth.** Delivery is best-effort and in-process on the server,
+     * so consumers should treat a frame as a trigger to render and reconcile from `MJ: Tasks` rows
+     * on attach, on reconnect, and on `GraphSettled` — never as a substitute for them.
+     *
+     * The stream is shared and refcounted per graph: ten components watching one run cost one
+     * WebSocket subscription. Errors and completions tear the shared entry down so the next call
+     * re-subscribes fresh (the same posture `PushStatusUpdates` takes).
+     */
+    public TaskGraphFrames(parentTaskId: string): Observable<TaskGraphFrameEvent> {
+        const attachTo = (entry: { subject: Subject<TaskGraphFrameEvent>; activeSubscribers: number }): Observable<TaskGraphFrameEvent> => {
+            return new Observable<TaskGraphFrameEvent>((observer) => {
+                entry.activeSubscribers++;
+                const sub = entry.subject.subscribe(observer);
+                return () => {
+                    sub.unsubscribe();
+                    const current = this._taskGraphFrameStreams.get(parentTaskId);
+                    if (!current) return;
+                    current.activeSubscribers--;
+                    if (current.activeSubscribers <= 0) {
+                        // Last watcher left — close the WebSocket subscription rather than letting
+                        // a settled run's stream linger until an idle reaper notices.
+                        current.subscription.unsubscribe();
+                        current.subject.complete();
+                        this._taskGraphFrameStreams.delete(parentTaskId);
+                    }
+                };
+            });
+        };
+
+        const existing = this._taskGraphFrameStreams.get(parentTaskId);
+        if (existing) {
+            return attachTo(existing);
+        }
+
+        const SUBSCRIBE_TO_FRAMES = gql`subscription TaskGraphFrames($parentTaskId: ID!) {
+            taskGraphFrames(parentTaskId: $parentTaskId) {
+                kind
+                parentTaskId
+                taskId
+                taskName
+                status
+                errorMessage
+                assignedUserId
+                completedCount
+                totalCount
+                edgeId
+                dependsOnTaskId
+                verdict
+                conditionText
+                reason
+                claimEvent
+                claimedBy
+                claimExpiresAt
+                passNumber
+                eligibleCount
+                heldCount
+                claimedCount
+                instanceInFlightCount
+                progressMessage
+                progressPercent
+                date
+            }
+        }`;
+
+        const subject = new Subject<TaskGraphFrameEvent>();
+        const subscription = new Subscription();
+        subscription.add(
+            // `subscribe()` already owns the WS client lifecycle, JWT refresh, and reconnect
+            // posture — riding it keeps one implementation of that machinery.
+            this.subscribe(SUBSCRIBE_TO_FRAMES, { parentTaskId }).subscribe({
+                next: (data: { taskGraphFrames?: TaskGraphFrameEvent }) => {
+                    if (data?.taskGraphFrames) {
+                        subject.next(data.taskGraphFrames);
+                    }
+                },
+                error: (error) => {
+                    subject.error(error);
+                    this._taskGraphFrameStreams.delete(parentTaskId);
+                },
+                complete: () => {
+                    // Token refresh completes the stream by design; consumers re-subscribe and land
+                    // on a fresh WebSocket. Completing the subject propagates that signal.
+                    subject.complete();
+                    this._taskGraphFrameStreams.delete(parentTaskId);
+                },
+            })
+        );
+
+        const entry = { subject, subscription, activeSubscribers: 0 };
+        this._taskGraphFrameStreams.set(parentTaskId, entry);
+        return attachTo(entry);
     }
 
     /**

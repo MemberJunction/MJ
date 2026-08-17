@@ -1290,6 +1290,19 @@
                   <mj-empty-state Variant="warning" Size="compact" Title="Full-text search is not enabled for this entity" />
                 }
               </div>
+              <div class="settings-panel">
+                <h3 class="panel-title">
+                  <i class="fa-solid fa-table-columns"></i>
+                  Form chrome
+                </h3>
+                <mj-entity-form-chrome-editor
+                  [FormConfig]="FormChromeConfig"
+                  [ParentSchemaName]="entity.SchemaName"
+                  [Candidates]="FormChromeCandidates"
+                  [EditMode]="EditMode"
+                  (FormConfigChange)="OnFormChromeConfigChange($event)">
+                </mj-entity-form-chrome-editor>
+              </div>
               <!-- Row Packaging -->
               <div class="settings-panel">
                 <h3 class="panel-title">

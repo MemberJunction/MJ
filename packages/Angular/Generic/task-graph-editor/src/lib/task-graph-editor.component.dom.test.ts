@@ -23,8 +23,8 @@ describe('TaskGraphEditorComponent (DOM)', () => {
     const spec = (over: Partial<TaskGraphSpec> = {}): TaskGraphSpec => ({
         workflowName: 'W',
         tasks: [
-            { tempId: 'a', name: 'Gather', description: 'g', agentName: 'Sage', dependsOn: [] },
-            { tempId: 'b', name: 'Summarize', description: 's', agentName: 'Sage', dependsOn: ['a'] },
+            { tempId: 'a', name: 'Gather', description: 'g', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: [] },
+            { tempId: 'b', name: 'Summarize', description: 's', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['a'] },
         ],
         ...over,
     });
@@ -84,14 +84,14 @@ describe('TaskGraphEditorComponent (DOM)', () => {
     });
 
     it('SURFACES engine validation errors — the one place author-time feedback becomes visible', () => {
-        const f = render({ Spec: spec({ tasks: [{ tempId: 'a', name: 'A', description: 'a', agentName: 'Sage', dependsOn: ['ghost'] }] }) });
+        const f = render({ Spec: spec({ tasks: [{ tempId: 'a', name: 'A', description: 'a', kind: 'Agent' as const, configuration: { agentName: 'Sage' }, dependsOn: ['ghost'] }] }) });
         const banner = host(f).querySelector('.mj-tge__validation');
         expect(banner).toBeTruthy();
         expect(banner!.textContent).toContain('1 problem to fix');
     });
 
     it('pluralizes the problem count', () => {
-        const f = render({ Spec: spec({ workflowName: '', tasks: [{ tempId: 'a', name: 'A', description: 'a', dependsOn: ['ghost'] }] }) });
+        const f = render({ Spec: spec({ workflowName: '', tasks: [{ tempId: 'a', name: 'A', description: 'a', kind: 'Agent' as const, configuration: {}, dependsOn: ['ghost'] }] }) });
         expect(host(f).querySelector('.mj-tge__validation')!.textContent).toMatch(/problems to fix/);
     });
 
@@ -123,7 +123,7 @@ describe('TaskGraphEditorComponent (DOM)', () => {
         clickPalette(f, 'Agent Step');
 
         expect(f.componentInstance.Spec!.tasks).toHaveLength(1);
-        expect(f.componentInstance.Spec!.tasks[0].agentName).toBe('Sage');
+        expect((f.componentInstance.Spec!.tasks[0].configuration as { agentName?: string }).agentName).toBe('Sage');
     });
 
     it('announces the new spec to the host, so the host does not keep the pre-click graph', () => {
@@ -134,7 +134,7 @@ describe('TaskGraphEditorComponent (DOM)', () => {
         clickPalette(f, 'Person Step');
 
         expect(seen).toHaveLength(1);
-        expect(seen[0].tasks[0].assignToUser).toBe(true);
+        expect(seen[0].tasks[0].kind).toBe('Human');
     });
 
     it('adds a DISTINCT step per click rather than replacing the last one', () => {

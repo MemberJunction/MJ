@@ -3,18 +3,20 @@
 > A parent record and the rows that point at it — loaded, validated and persisted as **one unit**,
 > from a single `entity.Save()`, on the server *and* in the browser.
 
-This is the horizontal counterpart to [IS-A relationships](./isa-relationships.md). IS-A is
+This is the horizontal 1:N counterpart to [IS-A relationships](./isa-relationships.md). IS-A is
 *vertical*: one logical record spread across parent and child tables sharing a primary key. A
-related-record collection is *horizontal*: a header plus N rows that carry a foreign key back to it —
-order lines, journal entry lines, payment allocations, an action's parameters.
+related-record collection is *horizontal*: a header plus N rows that carry a foreign key **back to
+it** — order lines, journal entry lines, payment allocations, an action's parameters. For the
+inverted 1:1 — an owner-held FK such as `Deal.OrderID` — see
+[Embedded Records](./embedded-records.md).
 
-| | IS-A subtype | Related-record collection |
-|---|---|---|
-| MJ vocabulary | `ChildEntities`, `IsChildType`, `_childEntity` | `RelatedEntities`, `EntityRelationshipInfo` |
-| Primary key | **Shared** with the parent | **Its own** |
-| Cardinality | At most one per parent | Many per parent |
-| Join | Same PK | `RelatedEntityJoinField` (a real FK) |
-| Declared by | Schema (`Entity.ParentID`) | `EntityRelationship.RelatedRecordCollection` |
+| | IS-A subtype | Related-record collection | Embedded record |
+|---|---|---|---|
+| MJ vocabulary | `ChildEntities`, `IsChildType`, `_childEntity` | `RelatedEntities`, `EntityRelationshipInfo` | `DeclareEmbeddedRecord`, `{Field}_Object` |
+| Primary key | **Shared** with the parent | **Its own** | **Its own** |
+| Cardinality | At most one per parent | Many per parent | At most one |
+| Join | Same PK | FK **on the related row** | FK **on the owner** |
+| Declared by | Schema (`Entity.ParentID`) | `EntityRelationship.RelatedRecordCollection` | `EntityField.EmbeddedRecord` |
 
 **The word "child" means IS-A subtype in MJCore and nothing else.** That is why this feature says
 *related records* throughout — `DeclareRelatedRecords`, `RelatedRecordCollection`, `RelatedEntity`,
@@ -491,6 +493,25 @@ const result = await rv.RunView<OrderEntity>({
 }, user);
 ```
 
+**Loading over unsaved work throws.** `Add()` and `Create()` deliberately do not mark a collection
+loaded — an appended child says nothing about what is on disk — so the "already loaded" early return
+does not cover a collection you have only appended to. Without a guard, a later `Load()` from
+anywhere (a lazy read, a refresh, a sibling component) would replace the items wholesale and take
+your unsaved children with it, silently:
+
+```typescript
+await order.Load(id);
+await order.Lines.Create();     // one unsaved line, collection still IsLoaded === false
+await order.Lines.Load();       // ❌ throws: "cannot load over unsaved changes — 1 unsaved child
+                                //    record(s) and 0 pending removal(s) would be discarded."
+
+await order.Lines.Load(true);   // ✅ discards them, because you said so
+```
+
+Merging was rejected: it invents an ordering and can duplicate. Refusing is the same choice this
+collection makes everywhere else — a load that would produce quietly wrong data throws rather than
+returning something plausible.
+
 ### Read-only collections
 
 Cache-sourced collections default to read-only, and say so clearly when you try:
@@ -627,6 +648,7 @@ Entities without collections are unaffected in every respect.
 ## See also
 
 - [IS-A Relationships](./isa-relationships.md) — the vertical counterpart
+- [Embedded Records](./embedded-records.md) — the owner-held 1:1 counterpart
 - [Transactions & Batching Guide](../../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md) — provider
   transactions vs TransactionGroups vs entity graphs, and which you want
 - [Remote Operations Showcase](./REMOTE_OPERATIONS_SHOWCASE.md) — the primitive the network path rides on

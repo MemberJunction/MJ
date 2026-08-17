@@ -73,8 +73,9 @@ import {
     GeminiRealtime,
 } from '@memberjunction/ai-gemini';
 
-// @memberjunction/ai-groq (1 classes)
+// @memberjunction/ai-groq (2 classes)
 import {
+    GroqAudioGenerator,
     GroqLLM,
 } from '@memberjunction/ai-groq';
 
@@ -187,7 +188,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (400 classes)
+// @memberjunction/core-entities (404 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -302,6 +303,7 @@ import {
     MJArtifactVersionEntity,
     MJAuditLogEntity,
     MJAuditLogTypeEntity,
+    MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJClusterAnalysisClusterEntity,
@@ -462,6 +464,8 @@ import {
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
+    MJMaterializedResultEntity,
+    MJMaterializedResultQueryEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -488,6 +492,7 @@ import {
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
+    MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -946,19 +951,27 @@ import {
     PredictiveStudioTrainModelServerOperation,
 } from '@memberjunction/predictive-studio';
 
-// @memberjunction/task-graph (8 classes)
+// @memberjunction/task-graph (16 classes)
 import {
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
+    TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
+    TaskGraphOverrideEdgeServerOperation,
+    TaskGraphPauseServerOperation,
+    TaskGraphResumeServerOperation,
     TaskGraphRetryTaskServerOperation,
+    TaskGraphSetBreakpointsServerOperation,
+    TaskGraphSkipTaskServerOperation,
+    TaskGraphStepServerOperation,
     TaskGraphSubmitServerOperation,
+    TaskGraphUpdateTaskInputServerOperation,
     WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
 } from '@memberjunction/task-graph';
 
-// @memberjunction/scheduling-engine (8 classes)
+// @memberjunction/scheduling-engine (9 classes)
 import {
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
@@ -966,11 +979,12 @@ import {
     AgentScheduledJobDriver,
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
+    MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (41 classes)
+// @memberjunction/core-entities-server (42 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1000,6 +1014,7 @@ import {
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
+    MJMaterializedResultEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
     MJRecordProcessEntityServer,
@@ -1015,7 +1030,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (144 classes)
+// @memberjunction/core-actions (145 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1087,6 +1102,7 @@ import {
     GetObjectAction,
     GetRecordAction,
     GetRecordListMembershipAction,
+    GetRecordsAction,
     GetSignatureStatusAction,
     GetStockPriceAction,
     GetUploadUrlAction,
@@ -1202,6 +1218,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     GeminiImageGenerator,
     GeminiLLM,
     GeminiRealtime,
+    GroqAudioGenerator,
     GroqLLM,
     HeyGenVideoGenerator,
     InworldRealtime,
@@ -1345,6 +1362,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJArtifactVersionEntity,
     MJAuditLogEntity,
     MJAuditLogTypeEntity,
+    MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJClusterAnalysisClusterEntity,
@@ -1505,6 +1523,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
+    MJMaterializedResultEntity,
+    MJMaterializedResultQueryEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -1531,6 +1551,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
+    MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -1873,9 +1894,17 @@ export const CLASS_REGISTRATIONS: any[] = [
     PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
+    TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
+    TaskGraphOverrideEdgeServerOperation,
+    TaskGraphPauseServerOperation,
+    TaskGraphResumeServerOperation,
     TaskGraphRetryTaskServerOperation,
+    TaskGraphSetBreakpointsServerOperation,
+    TaskGraphSkipTaskServerOperation,
+    TaskGraphStepServerOperation,
     TaskGraphSubmitServerOperation,
+    TaskGraphUpdateTaskInputServerOperation,
     WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
@@ -1885,6 +1914,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     AgentScheduledJobDriver,
     IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
+    MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
     UserRoutineDispatcherDriver,
     MJAIAgentCoAgentEntityServer,
@@ -1915,6 +1945,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
+    MJMaterializedResultEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
     MJRecordProcessEntityServer,
@@ -1998,6 +2029,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     GetObjectAction,
     GetRecordAction,
     GetRecordListMembershipAction,
+    GetRecordsAction,
     GetSignatureStatusAction,
     GetStockPriceAction,
     GetUploadUrlAction,
@@ -2085,7 +2117,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 895;
+export const CLASS_REGISTRATIONS_COUNT = 911;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

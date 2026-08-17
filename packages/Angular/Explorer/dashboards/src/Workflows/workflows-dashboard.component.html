@@ -11,11 +11,7 @@
     </div>
 
     <div actions>
-      @if (DraftSpec) {
-        <button mjButton variant="secondary" size="sm" (click)="OnCloseCanvas()">
-          <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to workflows
-        </button>
-      } @else if (IsCreating) {
+      @if (IsCreating) {
         <button mjButton variant="secondary" size="sm" (click)="OnCancelCreate()">
           <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to workflows
         </button>
@@ -29,23 +25,12 @@
   </mj-page-header>
 
   <mj-page-body>
-    @if (DraftSpec) {
-      <!-- The canvas is EMBEDDED, not routed to: it is a widgets-layer component that refuses to
-           know about routing, and this app supplies the shell around it. -->
-      <mj-task-graph-editor
-        class="wf-canvas"
-        [Provider]="ProviderToUse"
-        [Spec]="DraftSpec"
-        [ShowToolbar]="true"
-        [ShowPalette]="true"
-        [ShowMinimap]="true"
-        [AvailableAgentNames]="AvailableAgentNames"
-        [AvailableActionNames]="AvailableActionNames"
-        (SpecChanged)="OnDraftSpecChanged($event)"
-        EmptyStateMessage="No steps yet. Click a step in the palette to start building this workflow.">
-      </mj-task-graph-editor>
-    } @else if (IsCreating) {
+    @if (IsCreating) {
+      @if (SaveError) {
+        <mj-alert Variant="error" [Message]="SaveError"></mj-alert>
+      }
       <mj-create-workflow
+        [Busy]="IsSaving"
         [Provider]="ProviderToUse"
         [CurrentUser]="ProviderToUse.CurrentUser"
         (Created)="OnCreated($event)"

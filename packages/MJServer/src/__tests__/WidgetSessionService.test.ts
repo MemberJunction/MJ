@@ -8,7 +8,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('../config.js', () => ({
   configInfo: {},
 }));
-vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
+vi.mock('@memberjunction/generic-database-provider', () => ({
   UserCache: {
     Instance: { Users: [], UserByName: () => undefined, GetSystemUser: () => undefined },
     Users: [],

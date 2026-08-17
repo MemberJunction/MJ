@@ -107,7 +107,7 @@ const loadNgDashboardsTestingDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/testing-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./workflows-dashboards.module (2 entries) ---
+// --- @memberjunction/ng-dashboards → ./workflows-dashboards.module (3 entries) ---
 const loadNgDashboardsWorkflowsDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/workflows-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/workflows-dashboards.module').then(() => {})
@@ -275,6 +275,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
   // @memberjunction/ng-dashboards → ./workflows-dashboards.module
   'BaseDashboard::WorkflowsDashboard': loadNgDashboardsWorkflowsDashboardsModule,
+  'BaseResourceComponent::WorkflowRunsResource': loadNgDashboardsWorkflowsDashboardsModule,
   'BaseResourceComponent::WorkflowsResource': loadNgDashboardsWorkflowsDashboardsModule,
 
   // @memberjunction/ng-explorer-settings → ./settings.module
@@ -293,4 +294,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 117;
+export const LAZY_FEATURE_CONFIG_COUNT = 118;
