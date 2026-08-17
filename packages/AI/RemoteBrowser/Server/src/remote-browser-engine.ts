@@ -43,6 +43,24 @@ import {
 export type RemoteBrowserFloorHolder = 'Agent' | 'Human';
 
 /**
+ * Canonicalises an `instanceKey` — the name of ONE browser within an agent session (#3531) — or
+ * returns `null` for "the single unnamed instance", which is what every pre-#3531 caller means.
+ *
+ * Exported because the key is compared in more than one place: the engine's session map, the
+ * resolver's per-stream idempotency sets, and the screencast/audio envelopes a client routes on. If
+ * each normalised for itself, a surface could start a stream under `Left` and then fail to find it
+ * under `left` — the key would be case-insensitive in one layer and case-sensitive in the next, which
+ * is the kind of disagreement that only shows up in production with two surfaces open.
+ *
+ * Empty and whitespace collapse to `null` rather than to a distinct `''` instance, so a caller that
+ * threads an absent value through as `''` lands exactly where it did before the argument existed.
+ */
+export function NormalizeInstanceKey(instanceKey?: string | null): string | null {
+  const name = (instanceKey ?? '').trim().toLowerCase();
+  return name.length === 0 ? null : name;
+}
+
+/**
  * Parameters for {@link RemoteBrowserEngine.StartSession}.
  *
  * The provider is identified by EITHER its display name OR its `DriverClass` (exactly one is required);
@@ -971,8 +989,8 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
    */
   private agentSessionKey(agentSessionID: string, instanceKey?: string): string {
     const base = agentSessionID.trim().toLowerCase();
-    const name = (instanceKey ?? '').trim().toLowerCase();
-    return name.length === 0 ? base : `${base}::${name}`;
+    const name = NormalizeInstanceKey(instanceKey);
+    return name === null ? base : `${base}::${name}`;
   }
 
   /** Builds the standard capability-not-supported error stamped with the backend name. */

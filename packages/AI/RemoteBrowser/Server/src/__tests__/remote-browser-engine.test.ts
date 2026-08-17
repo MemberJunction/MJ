@@ -12,7 +12,7 @@ import {
     RemoteBrowserScreencastFrame,
     RemoteBrowserEngineBase,
 } from '@memberjunction/remote-browser-base';
-import { RemoteBrowserEngine } from '../remote-browser-engine';
+import { NormalizeInstanceKey, RemoteBrowserEngine } from '../remote-browser-engine';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Test doubles — a fake session + a fake driver registered under known DriverClasses.
@@ -583,5 +583,33 @@ describe('RemoteBrowserEngine — multiple instances per agent session (#3531)',
 
         await engine().EndSessionForAgentSession('sess-end-one', 'left');
         expect(engine().ActiveSessions.length).toBe(0);
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// The instance-key grammar itself (#3531) — exported because THREE layers compare it: the engine's
+// session map, the resolver's per-surface stream sets, and the screencast/audio envelopes a client
+// routes on. These pin the contract those layers share.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('NormalizeInstanceKey', () => {
+    it('collapses every "no instance named" spelling to null', () => {
+        // null is the unnamed instance — the one every pre-#3531 caller means. A distinct '' instance
+        // would silently strand a caller that threads an absent value through as an empty string.
+        expect(NormalizeInstanceKey(undefined)).toBeNull();
+        expect(NormalizeInstanceKey(null)).toBeNull();
+        expect(NormalizeInstanceKey('')).toBeNull();
+        expect(NormalizeInstanceKey('   ')).toBeNull();
+        expect(NormalizeInstanceKey('\t\n')).toBeNull();
+    });
+
+    it('lowercases and trims a named instance', () => {
+        expect(NormalizeInstanceKey('Primary')).toBe('primary');
+        expect(NormalizeInstanceKey('  Left  ')).toBe('left');
+        expect(NormalizeInstanceKey('RESUME')).toBe('resume');
+    });
+
+    it('keeps distinct names distinct', () => {
+        expect(NormalizeInstanceKey('left')).not.toBe(NormalizeInstanceKey('right'));
     });
 });
