@@ -954,8 +954,9 @@ ${fields}
       logError(`[EmbeddedRecord] ${label}: invalid LoadNested '${config.LoadNested}'; skipping.`);
       return null;
     }
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(field.Name)) {
-      logError(`[EmbeddedRecord] ${label}: field name is not a valid TypeScript identifier; skipping.`);
+    const emittedName = field.CodeName ? SafeCodeName(field) : field.Name;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(emittedName)) {
+      logError(`[EmbeddedRecord] ${label}: emitted name '${emittedName}' is not a valid TypeScript identifier; skipping.`);
       return null;
     }
     return config;

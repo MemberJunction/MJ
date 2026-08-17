@@ -315,6 +315,23 @@ describe('EmbeddedRecord — clear and load', () => {
         expect(deleteLog).toEqual([]);
     });
 
+    it('Ensure after Clear+Save mints a new peer instead of restamping the orphan', async () => {
+        const { deal } = await newDeal();
+        const orphan = deal.OrderID_EnsureObject();
+        orphan.Set('Name', 'Orphan');
+        expect(await deal.Save()).toBe(true);
+        const orphanId = orphan.Get('ID');
+
+        deal.OrderEmb.Clear();
+        expect(await deal.Save()).toBe(true);
+        expect(deal.Get('OrderID')).toBeNull();
+
+        const next = deal.OrderID_EnsureObject();
+        expect(next.Get('ID')).not.toBe(orphanId);
+        expect(next.IsSaved).toBe(false);
+        expect(deal.Get('OrderID')).toBe(next.Get('ID'));
+    });
+
     it('Load hydrates the peer when the FK is set, and the promise waits for it', async () => {
         const { deal } = await newDeal();
         const order = deal.OrderID_EnsureObject();
@@ -422,6 +439,62 @@ describe('EmbeddedRecord — cycles', () => {
         await expect(deal.InitializeEmbeddedRecords()).resolves.toBeUndefined();
         expect(deal.Self.Value).toBeNull();
         expect(deal.Self.Ensure()).toBeTruthy();
+    });
+
+    it('Load of a self-parented row fails cleanly instead of hanging', async () => {
+        class CyclicDeal extends BaseEntity {
+            public readonly Self = this.DeclareEmbeddedRecord<BaseEntity>({
+                ForeignKeyField: 'OrderID',
+                RelatedEntity: 'Deals',
+            });
+            public override CheckPermissions(): boolean { return true; }
+        }
+        loadedRows['self-1'] = { ID: 'self-1', Name: 'Loop', OrderID: 'self-1' };
+        const provider = makeProvider();
+        const deal = new CyclicDeal(dealInfo, provider as unknown as IEntityDataProvider);
+        await deal.InitializeEmbeddedRecords();
+        const { CompositeKey } = await import('../generic/compositeKey');
+        await expect(deal.InnerLoad(CompositeKey.FromID('self-1'))).rejects.toThrow(/load cycle/);
+    });
+
+    it('constructs nested embeds on a new peer so nested Ensure does not throw', async () => {
+        @RegisterClass(BaseEntity, 'NestedMids')
+        class NestedMidEntity extends BaseEntity {
+            public readonly OrderEmb = this.DeclareEmbeddedRecord<BaseEntity>({
+                ForeignKeyField: 'OrderID',
+                RelatedEntity: 'Products',
+            });
+            public override CheckPermissions(): boolean { return true; }
+        }
+        const nestedMidInfo = new EntityInfo({
+            ...DEAL_ENTITY_DATA,
+            ID: 'entity-nested-mid-001',
+            Name: 'NestedMids',
+        });
+        class NestedOwner extends BaseEntity {
+            public readonly MidEmb = this.DeclareEmbeddedRecord<NestedMidEntity>({
+                ForeignKeyField: 'OrderID',
+                RelatedEntity: 'NestedMids',
+            });
+            public override CheckPermissions(): boolean { return true; }
+        }
+        const provider = {
+            ...makeProvider(),
+            Entities: [productInfo, dealInfo, nestedMidInfo],
+            EntityByName(name: string) {
+                if (name === 'Products') return productInfo;
+                if (name === 'Deals') return dealInfo;
+                if (name === 'NestedMids') return nestedMidInfo;
+                return undefined;
+            },
+        };
+        const owner = new NestedOwner(dealInfo, provider as unknown as IEntityDataProvider);
+        await expect(owner.InitializeEmbeddedRecords()).resolves.toBeUndefined();
+        owner.NewRecord();
+        const mid = owner.MidEmb.Ensure();
+        expect(mid).toBeInstanceOf(NestedMidEntity);
+        expect(() => (mid as NestedMidEntity).OrderEmb.Ensure()).not.toThrow();
+        expect((mid as NestedMidEntity).OrderEmb.IsProvisioned).toBe(true);
     });
 
     it('constructs two embeds targeting the same entity without a false cycle', async () => {

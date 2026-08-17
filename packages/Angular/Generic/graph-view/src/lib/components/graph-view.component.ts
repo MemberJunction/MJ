@@ -868,7 +868,7 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
         if (this.IsFocalNode(node)) {
             return;
         }
-        const rawId = String(node.Data?.['ID'] || node.ID).replace(/^(person|org|account|committee|custom):/, '');
+        const rawId = this.stripCategoryPrefix(String(node.Data?.['ID'] || node.ID));
         const entityName = String(node.Data?.['EntityName'] || (node.Category === 'person' ? 'MJ_BizApps_Common: People' : 'MJ_BizApps_Common: Organizations'));
         const beforeEvent = new BeforeNodeNavigateEventArgs(node, entityName, rawId);
         this.BeforeNodeNavigate.emit(beforeEvent);
@@ -1054,9 +1054,26 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
 
     public IsFocalNode(node: GraphNode): boolean {
         if (!node || !this.FocalNodeId) return false;
-        const focalClean = this.FocalNodeId.replace(/^(person|org|account|committee|custom):/, '').toLowerCase();
-        const nodeClean = node.ID.replace(/^(person|org|account|committee|custom):/, '').toLowerCase();
+        const focalClean = this.stripCategoryPrefix(this.FocalNodeId).toLowerCase();
+        const nodeClean = this.stripCategoryPrefix(node.ID).toLowerCase();
         const dataClean = node.Data?.['ID'] ? String(node.Data['ID']).toLowerCase() : '';
         return UUIDsEqual(node.ID, this.FocalNodeId) || nodeClean === focalClean || dataClean === focalClean;
+    }
+
+    /**
+     * Hosts prefix node IDs with `{category}:`. Categories are dynamic
+     * (`organization`, `asset`, `group`, plus caller keys), so strip any
+     * known-category prefix rather than a hardcoded subset.
+     */
+    private stripCategoryPrefix(id: string): string {
+        const idx = id.indexOf(':');
+        if (idx <= 0) {
+            return id;
+        }
+        const prefix = id.slice(0, idx).toLowerCase();
+        const known =
+            this.Categories?.some(c => c.Category.toLowerCase() === prefix) ||
+            DEFAULT_GRAPH_CATEGORIES.some(c => c.Category.toLowerCase() === prefix);
+        return known ? id.slice(idx + 1) : id;
     }
 }

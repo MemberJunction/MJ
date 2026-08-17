@@ -251,8 +251,12 @@ export abstract class EntityCompanion<TWire = unknown> {
      * from `LoadFromData()` — that is the row-materialization path for
      * `RunView(ResultType:'entity_object')`, so loading children there turns one view into an N+1
      * storm. Set-oriented eager loading is handled by `RunView`'s batched child loading instead.
+     *
+     * @param _visited - EntityName:PK tokens already on this load walk. Embedded
+     *                   records use it to fail a self-parented / cyclic inherit
+     *                   instead of recursing until the stack dies.
      */
-    public async LoadEager(): Promise<void> {
+    public async LoadEager(_visited?: Set<string>): Promise<void> {
         /* no-op by default */
     }
 

@@ -1479,7 +1479,7 @@ export abstract class BaseEntity<T = unknown> {
      */
     public async ConstructUninitializedEntity<T extends BaseEntity>(
         entityName: string,
-        _visited: Set<string>,
+        visited: Set<string>,
     ): Promise<T> {
         const provider = this.ProviderToUse as unknown as IMetadataProvider;
         if (!provider) {
@@ -1501,9 +1501,11 @@ export abstract class BaseEntity<T = unknown> {
         }
         await instance.Config(this.ContextCurrentUser);
         await instance.InitializeParentEntity();
-        // Do NOT recurse InitializeEmbeddedRecords here. A self-FK (Category.ParentID →
-        // Category) would otherwise construct forever, and Deal → Order does not need
-        // the Order's own embeddeds until the Order is loaded or explicitly initialised.
+        // Recurse so a *new* peer's own embeds are constructed (required nested
+        // FKs provision on NewRecord; Ensure on the nested peer does not throw).
+        // InitializeInstance skips when RelatedEntity is already on this path,
+        // so a self-FK / A→B→A cycle still constructs only one extra level.
+        await instance.InitializeEmbeddedRecords(visited);
         return instance;
     }
 
@@ -1744,11 +1746,33 @@ export abstract class BaseEntity<T = unknown> {
         });
     }
 
+    private _embedLoadVisited: Set<string> | undefined;
+
+    /**
+     * Seeds the embed-load cycle set for a nested `InnerLoad`. Called by
+     * {@link EmbeddedRecord.LoadEager} so inherit walks share one `entityName:PK`
+     * path and a self-parented row fails cleanly instead of recursing forever.
+     */
+    public SetEmbeddedLoadVisited(visited: Set<string> | undefined): void {
+        this._embedLoadVisited = visited;
+    }
+
+    private seedEmbedLoadVisited(): Set<string> {
+        const seeded = new Set<string>();
+        const name = this.EntityInfo?.Name;
+        const pk = this.FirstPrimaryKey?.Value;
+        if (name && pk !== null && pk !== undefined && pk !== '') {
+            seeded.add(`${name}:${String(pk)}`);
+        }
+        return seeded;
+    }
+
     private async loadEagerCompanions(): Promise<void> {
         if (!this.HasCompanions) {
             return;
         }
-        await Promise.all(this.Companions.map(c => c.LoadEager()));
+        const visited = this._embedLoadVisited ?? this.seedEmbedLoadVisited();
+        await Promise.all(this.Companions.map(c => c.LoadEager(visited)));
     }
 
     /**

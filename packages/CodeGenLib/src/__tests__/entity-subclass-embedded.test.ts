@@ -112,6 +112,15 @@ describe('GenerateEmbeddedRecords — emission', () => {
         expect(out).toContain("ForeignKeyField: 'OrderID'");
     });
 
+    it('accepts a space-named field when CodeName is a valid identifier', () => {
+        const out = EntitySubClassGeneratorBase.GenerateEmbeddedRecords(
+            makeEntity([makeField({ Name: 'Order ID', CodeName: 'OrderID' })]),
+        );
+        expect(out).toContain('get OrderID_Object()');
+        expect(out).toContain("ForeignKeyField: 'Order ID'");
+        expect(logError).not.toHaveBeenCalled();
+    });
+
     it('emits OnClear and LoadNested when set', () => {
         const out = EntitySubClassGeneratorBase.GenerateEmbeddedRecords(
             makeEntity([makeField({ EmbeddedRecord: JSON.stringify({ OnClear: 'delete', LoadNested: 'related' }) })]),
