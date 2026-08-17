@@ -1372,13 +1372,23 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         }
         row.DisplayName = p.DisplayName ?? null;
         row.Role = p.Role;
-        // Persist IsAgent ONLY for THIS bridge's own bot — the row-level invariant is "one bot per bridge".
-        // In a multi-agent room the live roster (driver-side `p.IsAgent`) flags OTHER agents too (turn-taking
-        // + occupancy need that), but on THIS bridge's persisted roster they are remote participants, not its
-        // bot. Diarization still resolves them: each agent's OWN bridge marks itself, and the transcript
-        // viewer OR-reduces IsAgent per identity across all of the room's bridges.
+        // Trust the DRIVER's answer, which already means "is this identity an agent" — the local bot
+        // (`IsLocal`) or any bot by identity convention.
+        //
+        // This used to recompute it as "is this MY bot", on the reasoning that a remote agent is not
+        // this bridge's bot and that diarization could OR-reduce across the room because "each
+        // agent's OWN bridge marks itself". That last premise is false: a roster comes from
+        // `room.remoteParticipants`, and a participant is never in its own remote list, so a
+        // bridge's own bot NEVER appears in its roster. The OR-reduce therefore reduced over
+        // nothing — measured on a live two-agent room, ZERO rows had IsAgent set, so per-turn
+        // diarization could not tell an agent from a human anywhere in a panel.
+        //
+        // Flagging remote agents is also what a consumer actually asks: "is this speaker an agent?"
+        // is a property of the identity, not of which bridge happened to observe it.
         row.IsAgent =
-            active.BotParticipantID != null && p.ExternalId.toLowerCase() === active.BotParticipantID.toLowerCase();
+            p.IsAgent === true
+            || (active.BotParticipantID != null
+                && p.ExternalId.toLowerCase() === active.BotParticipantID.toLowerCase());
         const saved = await row.Save();
         if (!saved) {
             LogError(

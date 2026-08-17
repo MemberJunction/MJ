@@ -31,5 +31,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
+  },
+  "optionalDependencies": {
+    "@memberjunction/ai-bridge-livekit-native": "workspace:*"
   }
 }

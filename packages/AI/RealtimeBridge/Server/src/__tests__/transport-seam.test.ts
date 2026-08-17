@@ -945,7 +945,7 @@ describe('AIBridgeEngine — participant tracking', () => {
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });
 
-    it('persists IsAgent ONLY for this bridge’s own bot — other agents in the room are remote participants (one-bot-per-bridge invariant)', async () => {
+    it('flags EVERY agent identity, not just this bridge’s own bot — a room’s own bot never appears in its roster', async () => {
         const session = new MockRealtimeSession();
         const bridgeRow = makeBridgeRow();
         const participantRows: FakeEntity[] = [];
@@ -962,8 +962,16 @@ describe('AIBridgeEngine — participant tracking', () => {
         const loopback = active.Bridge as LoopbackBridge;
         await new Promise((r) => setTimeout(r, 0));
 
-        // A multi-agent room as THIS bridge sees it: its OWN bot, ANOTHER agent, and a human — both agents
-        // arrive IsAgent=true in the live roster, but only the bot may persist IsAgent=true.
+        // A multi-agent room as THIS bridge sees it. NOTE the shape: a real roster comes from
+        // `room.remoteParticipants`, and a participant is never in its own remote list — so in
+        // production the bridge's own bot is NOT here. It is included below only to prove the
+        // self-match branch still works; the row that matters is `agent-other`.
+        //
+        // This test previously asserted the opposite (`other` must be false), on the reasoning that
+        // diarization would OR-reduce IsAgent across the room because every agent's own bridge marks
+        // itself. Measured against a live two-agent LiveKit room, ZERO participant rows had IsAgent
+        // set at all — because no bridge ever sees its own bot — so the OR-reduce reduced over
+        // nothing and a panel's agents were indistinguishable from its humans.
         loopback.EmitParticipants([
             { ExternalId: active.BotParticipantID as string, DisplayName: 'Me', Role: 'Agent', IsAgent: true },
             { ExternalId: 'agent-other', DisplayName: 'Other Bot', Role: 'Participant', IsAgent: true },
@@ -974,9 +982,9 @@ describe('AIBridgeEngine — participant tracking', () => {
         const bot = participantRows.find((p) => p.ExternalParticipantID === active.BotParticipantID);
         const other = participantRows.find((p) => p.ExternalParticipantID === 'agent-other');
         const human = participantRows.find((p) => p.ExternalParticipantID === 'human-1');
-        expect(bot?.IsAgent).toBe(true); // its own bot
-        expect(other?.IsAgent).toBe(false); // another agent → not THIS bridge's bot
-        expect(human?.IsAgent).toBe(false);
+        expect(bot?.IsAgent).toBe(true);    // its own bot, when the driver does report it
+        expect(other?.IsAgent).toBe(true);  // a REMOTE agent is still an agent — this is the fix
+        expect(human?.IsAgent).toBe(false); // and a human is still a human
 
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });
