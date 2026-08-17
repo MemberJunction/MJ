@@ -8,6 +8,7 @@ import {
     ParseEntityRelationshipConfiguration,
     ReadRelationshipInclusion,
     ReadRelationshipJoinFields,
+    ReadRelationshipSortKey,
     RELATED_ROLE_SCORE,
     ResolveFormLayout,
     ResolveRelatedFormRoles,
@@ -72,6 +73,12 @@ describe('ReadRelationshipInclusion / ReadRelationshipJoinFields', () => {
     it('maps FormRole Detail to More', () => {
         expect(ReadRelationshipInclusion(JSON.stringify({ UI: { FormRole: 'Detail' } }))).toBe('More');
         expect(ReadRelationshipInclusion(JSON.stringify({ UI: { FormRole: 'Primary' } }))).toBe('Primary');
+    });
+
+    it('reads sortKey from the UI bag', () => {
+        expect(ReadRelationshipSortKey(JSON.stringify({ UI: { sortKey: 90 } }))).toBe(90);
+        expect(ReadRelationshipSortKey(JSON.stringify({ UI: { inclusion: 'Primary' } }))).toBeNull();
+        expect(ReadRelationshipSortKey(null)).toBeNull();
     });
 
     it('returns null when the bag is Auto', () => {
