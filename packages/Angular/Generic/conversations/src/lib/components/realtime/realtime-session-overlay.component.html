@@ -139,6 +139,7 @@
           [ExtraArtifacts]="ReviewArtifacts"
           [Fill]="ChannelFocusMode"
           (OpenRunRequested)="OnOpenRunRequested($event)"
+          (CloseTabRequested)="OnCloseTabRequested($event)"
           (CollapsedChange)="OnPanelCollapsedChange($event)"
           (WideChanged)="OnPanelWideChanged($event)">
         </mj-realtime-surface-tabs>

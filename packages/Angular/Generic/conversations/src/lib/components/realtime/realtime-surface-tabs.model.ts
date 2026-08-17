@@ -60,6 +60,14 @@ export interface RealtimeSurfaceTab {
   Color?: string;
   /** Kind-specific payload. */
   Data?: RealtimeSurfaceTabData;
+  /**
+   * Whether the user may dismiss this surface (#3498). Channel tabs default to `true`; the Activity
+   * tab is never closable, because it is the panel's fallback focus and has nothing to release.
+   *
+   * A host sets `Closable: false` on a registration for a channel the session depends on — closing a
+   * surface withdraws its tools for the rest of the session, so it is deliberately not undoable.
+   */
+  Closable?: boolean;
 }
 
 /**
@@ -85,6 +93,11 @@ export interface RealtimeChannelTabRegistration {
   Content?: TemplateRef<unknown>;
   /** Focus the tab immediately after registration (default `false`). */
   Focus?: boolean;
+  /**
+   * May the user close this surface (default `true`)? Set `false` for a channel the session depends
+   * on — closing withdraws the channel's tools for the rest of the session and is not undoable.
+   */
+  Closable?: boolean;
 }
 
 /**
@@ -196,7 +209,8 @@ export class RealtimeSurfaceTabsModel {
       Icon: registration.Icon,
       Kind: 'channel',
       Color: registration.Color ?? ChannelTabColor(registration.Key),
-      Data: { Plugin: registration.Plugin, Content: registration.Content }
+      Data: { Plugin: registration.Plugin, Content: registration.Content },
+      Closable: registration.Closable !== false
     };
     const idx = this.channelTabs.findIndex(t => t.Key === registration.Key);
     if (idx >= 0) {

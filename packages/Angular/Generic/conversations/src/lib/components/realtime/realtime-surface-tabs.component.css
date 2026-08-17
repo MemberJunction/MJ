@@ -82,6 +82,54 @@
   min-width: 12px;
 }
 
+/* Each tab shares a slot with its close control — the control cannot nest inside the tab's own
+   <button>, so the slot is what the strip lays out and the tab fills it. */
+.s-tab-slot {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.s-tab-slot--active {
+  flex-shrink: 0;
+}
+
+/* The close control sits over the tab's trailing padding rather than beside it, so revealing it
+   never reflows the strip — a tab that widened on hover would shuffle every tab after it. */
+.s-tab__close {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Hidden until the tab is hovered, focused or active — but never `display: none`, so the control
+     stays in the a11y tree and is reachable by keyboard without a pointer. */
+  opacity: 0;
+  transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+}
+.s-tab-slot:hover .s-tab__close,
+.s-tab-slot--active .s-tab__close,
+.s-tab__close:focus-visible {
+  opacity: 1;
+}
+.s-tab__close:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
 /* Tabs keep their natural width while there's room; when space gets tight they shrink
    (ellipsizing their titles) down to a readable floor. The ACTIVE tab never shrinks. */
 .s-tab {
@@ -106,6 +154,10 @@
 .s-tab i {
   font-size: 11px;
   flex-shrink: 0;
+}
+/* Room for the close control, reserved always — so the title never reflows when it appears. */
+.s-tab--closable {
+  padding-right: 26px;
 }
 .s-tab__title {
   max-width: 22ch;

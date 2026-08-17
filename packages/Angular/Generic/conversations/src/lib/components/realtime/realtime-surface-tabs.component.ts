@@ -122,6 +122,14 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
    */
   @Output() WideChanged = new EventEmitter<boolean>();
 
+  /**
+   * The user asked to close a surface, by tab key (#3498). The HOST closes the channel — this
+   * component does not remove the tab itself, because hiding a tab is not closing a channel: the
+   * plugin would stay initialized, its tools would keep answering, and its server-side resources
+   * would stay held. The tab goes away when the host's close completes.
+   */
+  @Output() CloseTabRequested = new EventEmitter<string>();
+
   /** The panel's tab state (add / focus / dedupe / flash) — see the model for the rules. */
   public readonly Model = new RealtimeSurfaceTabsModel();
 
@@ -260,6 +268,18 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
    *
    * @returns `true` when a tab was removed.
    */
+  /**
+   * Handles the tab strip's close control: asks the host to close that surface.
+   *
+   * No `stopPropagation` here, deliberately. The control is a SIBLING of the tab button rather than
+   * nested inside it — a button cannot contain a button — so a dismissal never reaches the tab's own
+   * click handler and never focuses the surface the user is getting rid of. That structure is the
+   * guarantee; a defensive `stopPropagation` would only make it look like the guarantee lives here.
+   */
+  public RequestCloseTab(key: string): void {
+    this.CloseTabRequested.emit(key);
+  }
+
   public RemoveTab(key: string): boolean {
     const removed = this.Model.RemoveTab(key);
     if (removed) {
