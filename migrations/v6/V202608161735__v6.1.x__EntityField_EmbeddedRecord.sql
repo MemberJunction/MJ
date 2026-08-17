@@ -107,8 +107,8 @@ GO
 --
 -- FormChromeRule / other-entity residue from this CodeGen run was DISCARDED —
 -- that belongs to a sibling agent's migration on this omnibus branch.
--- If the hand DDL above changes, re-run CodeGen (includeSchemas: ['__mj'])
--- and replace this entire generated section.
+-- If the hand DDL above changes, re-run CodeGen scoped to the core schema
+-- (see includeSchemas in mj.config.cjs) and replace this entire generated section.
 -- =============================================================================
 /* SQL text to insert 12 new entity field(s) */
 
