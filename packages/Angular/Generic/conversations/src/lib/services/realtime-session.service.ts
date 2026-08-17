@@ -185,6 +185,12 @@ interface RemoteBrowserScreencastPayload {
   width: number;
   height: number;
   seq: number;
+  /**
+   * The browser's URL when the frame was captured (#3496). Optional: a server older than that change
+   * omits it, and the channel then behaves exactly as it did before rather than reading `undefined`
+   * as "the page has no URL".
+   */
+  currentUrl?: string | null;
 }
 
 /**
@@ -2125,7 +2131,9 @@ export class RealtimeSessionService {
   private routeScreencastFrame(frame: RemoteBrowserScreencastPayload): void {
     for (const channel of this._activeChannels$.value) {
       if (channel.ChannelName === 'Remote Browser' && this.hasOnScreencastFrame(channel)) {
-        channel.OnScreencastFrame(frame.dataBase64);
+        // The URL rides along so the channel can notice a page change nobody on this side caused —
+        // under streaming the snapshot poll is stopped, and frames were pure pixels (#3496).
+        channel.OnScreencastFrame(frame.dataBase64, frame.currentUrl ?? null);
         return;
       }
     }
@@ -2134,7 +2142,7 @@ export class RealtimeSessionService {
   /** Structural guard: true when the channel exposes an `OnScreencastFrame(dataBase64)` method. */
   private hasOnScreencastFrame(
     channel: BaseRealtimeChannelClient,
-  ): channel is BaseRealtimeChannelClient & { OnScreencastFrame(dataBase64: string): void } {
+  ): channel is BaseRealtimeChannelClient & { OnScreencastFrame(dataBase64: string, currentUrl?: string | null): void } {
     return typeof (channel as { OnScreencastFrame?: unknown }).OnScreencastFrame === 'function';
   }
 
