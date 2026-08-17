@@ -1,8 +1,14 @@
 <!-- SIZING IS EXTERNAL: the overlay hosts this panel inside a fixed-width flex item and
      owns its width (drag, persistence, default tiers) — the panel just fills it. -->
+<!-- `data-layout` and `data-channel` are the HOST-facing contract (#3535): stable hooks for reading
+     or styling around the arrangement without reaching for internal class names, and for pairing a
+     pane with its channel instead of matching by index. `data-layout` is bound from the same
+     expression as `surface--split`, so the attribute and the class cannot disagree. -->
 <aside class="surface"
        [class.surface--collapsed]="Collapsed"
        [class.surface--fill]="Fill && !Collapsed"
+       [class.surface--split]="Layout === 'split'"
+       [attr.data-layout]="Layout"
        aria-label="Session surfaces">
 
   @if (Collapsed) {
@@ -57,9 +63,19 @@
       </div>
     </div>
 
-    <!-- Panes: ALL kept alive; only the active one is displayed -->
+    <!-- Panes: ALL kept alive; the active one is displayed — or several, side by side, when the
+         host named them in [SplitKeys]. The wrapper is what becomes the split grid: the panel
+         itself is a flex COLUMN holding the tab strip, so laying panes out in a row has to happen
+         one level in. -->
+    <div class="s-panes" [style.--surface-split-count]="SplitTabKeys.length">
     @for (tab of Model.Tabs; track TrackTab($index, tab)) {
-      <div class="s-pane" [class.s-pane--active]="tab.Key === Model.ActiveKey" role="tabpanel">
+      <div class="s-pane"
+           [class.s-pane--active]="tab.Key === Model.ActiveKey"
+           [class.s-pane--split]="IsSplitPane(tab.Key)"
+           [style.order]="SplitOrder(tab.Key)"
+           [attr.data-channel]="tab.Key"
+           [attr.data-tab-kind]="tab.Kind"
+           role="tabpanel">
         @switch (tab.Kind) {
           @case ('activity') {
             <mj-realtime-activity-rail
@@ -99,6 +115,7 @@
         }
       </div>
     }
+    </div>
 
     @if (Model.Tabs.length === 0) {
       <!-- Nothing in play yet (idle voice-first session): a gentle hint, not an empty grid -->

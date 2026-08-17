@@ -12,7 +12,7 @@ import { RealtimeChannelPaneComponent } from './channels/realtime-channel-pane.c
 import { ChannelOnboardingPanelComponent } from './channels/channel-onboarding-panel.component';
 import { ChannelOnboardingDetails } from './channels/base-realtime-channel-client';
 import {
-  RealtimeSurfaceTabsModel, RealtimeSurfaceTab, RealtimeChannelTabRegistration
+  RealtimeSurfaceTabsModel, RealtimeSurfaceTab, RealtimeChannelTabRegistration, RealtimeSurfacePanelLayout
 } from './realtime-surface-tabs.model';
 import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
 
@@ -105,6 +105,32 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
   get ShowActivityTab(): boolean {
     return this._showActivityTab;
   }
+
+  /**
+   * Show these surfaces SIDE BY SIDE instead of one at a time (#3535).
+   *
+   * Names tab keys, in the order the panes should read left-to-right; unknown keys are ignored, so a
+   * host can name a channel before it exists. `null` or an empty list is the ordinary tabbed panel,
+   * which is the default and what every existing host gets.
+   *
+   * **Why one input rather than a `Layout: 'tabs' | 'split'` flag plus a key list.** Two inputs make
+   * "split with no keys" expressible, and that state has no good answer — a split of nothing is
+   * either an empty panel or a silent downgrade to tabs, and both are surprises. "Split these" is
+   * the entire instruction, so the invalid combination simply does not exist. {@link Layout} reads
+   * the resulting mode for a host that wants it.
+   *
+   * This exists because arranging surfaces from OUTSIDE the component could not be done honestly.
+   * MJ emits `.surface { display: flex }` at specificity (0,2,0) with Angular's attribute scoping,
+   * a host's `.surface.my-split { display: grid }` is also (0,2,0), and ties break on document
+   * order — component styles are injected when the component first renders, AFTER a host stylesheet
+   * added at startup. So MJ wins and the failure is invisible: `grid-template-columns` computes
+   * correctly and is silently ignored on a flex container. Nobody should have to know that, or
+   * discover the `.surface.my-split.my-split` double-class workaround.
+   *
+   * Bind a NEW array to change the arrangement — this component is OnPush, so mutating the bound
+   * array in place is not seen.
+   */
+  @Input() SplitKeys: string[] | null = null;
 
   /** Re-emitted from the Activity rail's dev "Open run" links. */
   @Output() OpenRunRequested = new EventEmitter<string>();
@@ -260,6 +286,47 @@ export class RealtimeSurfaceTabsComponent implements OnInit, OnDestroy {
    *
    * @returns `true` when a tab was removed.
    */
+  /**
+   * The keys actually shown side by side: {@link SplitKeys} narrowed to tabs that exist, in the
+   * order the host asked for. Empty when the panel is in ordinary tabbed mode.
+   *
+   * Recomputed per change-detection pass rather than cached — the tab set changes as channels come
+   * into play, and a cache would show yesterday's panes.
+   */
+  public get SplitTabKeys(): string[] {
+    if (!this.SplitKeys?.length) {
+      return [];
+    }
+    const present = new Set(this.Model.Tabs.map(t => t.Key));
+    return this.SplitKeys.filter(key => present.has(key));
+  }
+
+  /** `'split'` when at least two named surfaces are actually present, else `'tabs'`. */
+  public get Layout(): RealtimeSurfacePanelLayout {
+    return this.SplitTabKeys.length >= 2 ? 'split' : 'tabs';
+  }
+
+  /** Whether this tab's pane is one of the side-by-side panes right now. */
+  public IsSplitPane(key: string): boolean {
+    return this.Layout === 'split' && this.SplitTabKeys.includes(key);
+  }
+
+  /**
+   * The pane's visual position in the split, so the host's ORDER is honoured without reordering the
+   * DOM. Panes render in tab-registration order; a host asking for `['Right', 'Left']` gets them
+   * that way via CSS `order`, and the pane elements stay put — moving them would tear down and
+   * recreate the dynamically-created channel surfaces inside, losing a live browser's canvas.
+   *
+   * `null` outside a split, so the property is not written at all in ordinary tabbed mode.
+   */
+  public SplitOrder(key: string): number | null {
+    if (this.Layout !== 'split') {
+      return null;
+    }
+    const index = this.SplitTabKeys.indexOf(key);
+    return index >= 0 ? index : null;
+  }
+
   public RemoveTab(key: string): boolean {
     const removed = this.Model.RemoveTab(key);
     if (removed) {

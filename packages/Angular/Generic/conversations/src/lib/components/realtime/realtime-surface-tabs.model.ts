@@ -22,6 +22,16 @@ import { ChannelTabColor } from './realtime-surface-tab-style';
 export type RealtimeSurfaceTabKind = 'activity' | 'channel';
 
 /**
+ * How the surface panel arranges its panes (#3535).
+ *
+ * `'tabs'` shows one at a time — the default and the only mode before a host could ask for more.
+ * `'split'` shows several side by side, which is what a comparison wants (two browsers, a board
+ * beside a browser). DERIVED from `RealtimeSurfaceTabsComponent.SplitKeys` rather than set: a mode
+ * and a key list as separate inputs would let a host express "split with nothing in it".
+ */
+export type RealtimeSurfacePanelLayout = 'tabs' | 'split';
+
+/**
  * Per-kind payload carried on a {@link RealtimeSurfaceTab}.
  */
 export interface RealtimeSurfaceTabData {
