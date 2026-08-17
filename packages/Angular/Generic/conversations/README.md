@@ -451,6 +451,37 @@ This package never navigates (no Router): developer links emit a `RealtimeNaviga
 
 Message components use dynamic component creation (`ViewContainerRef.createComponent`) instead of Angular template binding to minimize render cycles and improve performance with large message lists.
 
+### Windowed transcript
+
+Opening a conversation loads only the **most recent page** of the transcript — roughly ten
+display items — rather than every `MJ: Conversation Details` row. Everything older is
+represented by an "Earlier messages" sentinel at the top; scrolling it into view prepends the
+previous page and holds the reader's scroll position. Items far from the viewport are
+unmounted and replaced by height-holding spacers, so the DOM stays bounded no matter how far
+back someone pages.
+
+**Hosts do not opt in.** It is on by default and requires no configuration. The one thing a
+host should provide is its scrolling element:
+
+```html
+<mj-conversation-message-list [ScrollRoot]="myScrollContainer"> </mj-conversation-message-list>
+```
+
+The list's own container does not scroll — consumers typically wrap it in their own scroller,
+and that element is what the sentinel's `IntersectionObserver` needs as its root. When
+`ScrollRoot` is omitted the component walks its ancestors to find one, which works but depends
+on layout having settled.
+
+**`ConversationEngine.LoadConversationDetails` is no longer what this widget calls on open.**
+It now calls the additive `LoadDetailWindow`, which pages on the `Sequence` column and loads
+peripherals (agent runs, ratings, artifacts, avatars) scoped to the returned rows.
+`LoadConversationDetails` remains the full-history API and is unchanged — agents and
+server-side callers depend on it returning a complete set, so the windowed path deliberately
+never writes into the engine's detail cache.
+
+Paging is measured in **display items**, not database rows: a realtime session collapses many
+rows into one timeline card, and a session is never split across pages.
+
 ### MJ Entity Integration
 
 All data operations use the MemberJunction entity system:

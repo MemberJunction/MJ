@@ -2766,8 +2766,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   onMessageEdited(message: MJConversationDetailEntity): void {
     // Message was edited and saved, trigger change detection
     LogStatusEx({message: 'Message edited', verboseOnly: true, additionalArgs: [message.ID]});
-    // The message entity is already updated in place, so no need to reload
-    // Just ensure the UI reflects the changes
+    // The entity was mutated in place, so the transcript already shows the new text. Replace
+    // it in the window explicitly anyway: the store dedupes by ID on merge, and without this
+    // a later RefreshLatest could fold a server copy over the edited one.
+    this.windowStore.ApplyLocalDetail(message);
   }
 
   onMessagePinToggled(message: MJConversationDetailEntity): void {
