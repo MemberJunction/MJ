@@ -424,10 +424,35 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     // exactly as this query's contract above promises ("null rather than an error"). The live
     // navigate/click path (ExecuteRemoteBrowserAction) is where a genuine browser failure is
     // reported to the agent; the read-only view poll never should be.
+    //
+    // Degrading is not the same as HEALING, and this poll is where the difference shows (#3598). It
+    // fires every ~700ms, so it is almost always the first caller to meet a dead handle — an external
+    // Chrome closed, a container recycled. Returning an empty snapshot forever leaves the surface
+    // frozen on its last good frame while the mapping stays dead for the rest of the session. So the
+    // fault is reported to the engine, which decides whether it means "gone" and, if so, replaces the
+    // browser and re-attaches this surface's screencast. The degradation below still stands for every
+    // other failure, and for a recovery that could not complete.
     try {
       const screenshot = await liveSession.CaptureScreenshot();
       return { ScreenshotBase64: screenshot, CurrentUrl: liveSession.GetCurrentUrl() };
     } catch (err) {
+      const recovered = await RemoteBrowserEngine.Instance.RecoverDeadAgentSession(agentSessionID, err, {
+        InstanceKey: instanceKey,
+        ContextUser: contextUser,
+      });
+      if (recovered) {
+        try {
+          return { ScreenshotBase64: await recovered.CaptureScreenshot(), CurrentUrl: recovered.GetCurrentUrl() };
+        } catch (postRecoveryError) {
+          // The replacement is live but not yet painting. The next poll is 700ms away and will get a
+          // frame; an empty snapshot here costs one tick, not the session.
+          LogError(
+            `[RemoteBrowserActionResolver] Recovered the browser for agent session ${agentSessionID} but its first ` +
+              `snapshot failed: ${postRecoveryError instanceof Error ? postRecoveryError.message : String(postRecoveryError)}`,
+          );
+          return {};
+        }
+      }
       LogError(
         `[RemoteBrowserActionResolver] Snapshot capture failed for agent session ${agentSessionID} ` +
           `(returning empty snapshot): ${err instanceof Error ? err.message : String(err)}`,
