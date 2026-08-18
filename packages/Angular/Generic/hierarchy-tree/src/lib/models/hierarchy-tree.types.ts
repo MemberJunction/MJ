@@ -184,6 +184,12 @@ export interface HierarchyTreeConfig {
     OrderBy?: string;
 
     /**
+     * Optional active / selected record ID. When provided, the node is highlighted and all ancestors
+     * are expanded so it is visible in full tree context.
+     */
+    ActiveRecordID?: string;
+
+    /**
      * Optional subtree focus record ID. When provided, the tree renders only the specified record and its descendants.
      */
     FocusRecordID?: string;

@@ -87,6 +87,12 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
     @Input() Data?: Record<string, unknown>[];
 
     /**
+     * Optional active / selected record ID. When provided, the node is highlighted and all ancestors
+     * are expanded so it is visible in full tree context.
+     */
+    @Input() ActiveRecordID?: string;
+
+    /**
      * Primary key ID to focus as the subtree root.
      */
     @Input() FocusRecordID?: string;
@@ -267,7 +273,10 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         } finally {
             this.Loading = false;
             this.cdr?.detectChanges();
-            setTimeout(() => this.renderTree(), 50);
+            setTimeout(() => {
+                this.renderTree();
+                this.fitToScreen();
+            }, 80);
         }
     }
 
@@ -346,8 +355,26 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
 
         this.RootNodes = roots;
 
-        // 5. Apply initial expand depth if configured
-        if (this.Config.InitialExpandDepth && this.Config.InitialExpandDepth > 0) {
+        // 5. Apply active record selection & auto-expand ancestors
+        const activeId = this.ActiveRecordID || this.Config?.ActiveRecordID;
+        if (activeId) {
+            const activeNode = this.nodeMap.get(NormalizeUUID(activeId));
+            if (activeNode) {
+                activeNode.IsSelected = true;
+                activeNode.IsHighlighted = true;
+                this.SelectedNode = activeNode;
+                // Expand all ancestors so the active node is visible in full context
+                let curr = activeNode.ParentID ? this.nodeMap.get(NormalizeUUID(activeNode.ParentID)) : undefined;
+                while (curr) {
+                    curr.IsExpanded = true;
+                    curr.Children = [...(curr._allChildren || [])];
+                    curr = curr.ParentID ? this.nodeMap.get(NormalizeUUID(curr.ParentID)) : undefined;
+                }
+            }
+        }
+
+        // 6. Apply initial expand depth if configured (and not explicitly expanded by active node)
+        if (this.Config.InitialExpandDepth && this.Config.InitialExpandDepth > 0 && !activeId) {
             for (const node of this.AllNodes) {
                 if (node.Depth >= this.Config.InitialExpandDepth) {
                     node.IsExpanded = false;
@@ -356,8 +383,8 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
             }
         }
 
-        if (this.FocusRecordID) {
-            this.setFocusRoot(this.FocusRecordID);
+        if (this.FocusRecordID || this.Config?.FocusRecordID) {
+            this.setFocusRoot(this.FocusRecordID || this.Config?.FocusRecordID);
         }
     }
 
@@ -455,6 +482,12 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
     public renderTree(): void {
         if (!this.svgRef?.nativeElement || !this.gSelection) return;
 
+        // Reset positions across all nodes
+        for (const n of this.AllNodes) {
+            n.x = undefined;
+            n.y = undefined;
+        }
+
         const isVertical = this.Config.Orientation !== 'left-to-right';
         const nodeWidth = this.Config.NodeWidth || 230;
         const nodeHeight = this.Config.NodeHeight || 90;
@@ -501,18 +534,18 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         const nodes = treeData.descendants().filter((d) => d.data.ID !== '__virtual_root__');
         const links = treeData.links().filter((d) => d.source.data.ID !== '__virtual_root__');
 
-        // Update positions on node data
+        // Update positions on node data (centered on D3 node point)
         for (const n of nodes) {
-            n.data.x = isVertical ? n.x : n.y;
-            n.data.y = isVertical ? n.y : n.x;
+            n.data.x = isVertical ? n.x - nodeWidth / 2 : n.y;
+            n.data.y = isVertical ? n.y : n.x - nodeHeight / 2;
         }
 
         // 3. Render Links
         const linkPathGen = (d: d3.HierarchyLink<HierarchyNodeData>): string => {
-            const sx = isVertical ? d.source.x! : d.source.y! + nodeWidth;
-            const sy = isVertical ? d.source.y! + nodeHeight : d.source.x! + nodeHeight / 2;
-            const tx = isVertical ? d.target.x! : d.target.y!;
-            const ty = isVertical ? d.target.y! : d.target.x! + nodeHeight / 2;
+            const sx = isVertical ? d.source.data.x! + nodeWidth / 2 : d.source.data.x! + nodeWidth;
+            const sy = isVertical ? d.source.data.y! + nodeHeight : d.source.data.y! + nodeHeight / 2;
+            const tx = isVertical ? d.target.data.x! + nodeWidth / 2 : d.target.data.x!;
+            const ty = isVertical ? d.target.data.y! : d.target.data.y! + nodeHeight / 2;
 
             if (isVertical) {
                 const midY = (sy + ty) / 2;

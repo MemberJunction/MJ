@@ -66,7 +66,7 @@ export class AIAgentCategoryHierarchyPanel extends BaseFormPanel<MJAIAgentCatego
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-robot',
             DefaultColor: '#8b5cf6',
-            FocusRecordID: this.Record?.ID || undefined,
+            ActiveRecordID: this.Record?.ID || undefined,
             Height: '440px',
             ShowSearch: true,
             ShowToolbar: true
@@ -119,7 +119,7 @@ export class AIPromptCategoryHierarchyPanel extends BaseFormPanel<MJAIPromptCate
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-wand-magic-sparkles',
             DefaultColor: '#ec4899',
-            FocusRecordID: this.Record?.ID || undefined,
+            ActiveRecordID: this.Record?.ID || undefined,
             Height: '440px',
             ShowSearch: true,
             ShowToolbar: true
@@ -172,7 +172,7 @@ export class ActionCategoryHierarchyPanel extends BaseFormPanel<MJActionCategory
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-bolt',
             DefaultColor: '#f59e0b',
-            FocusRecordID: this.Record?.ID || undefined,
+            ActiveRecordID: this.Record?.ID || undefined,
             Height: '440px',
             ShowSearch: true,
             ShowToolbar: true
@@ -225,7 +225,7 @@ export class DashboardCategoryHierarchyPanel extends BaseFormPanel<MJDashboardCa
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-chart-pie',
             DefaultColor: '#3b82f6',
-            FocusRecordID: this.Record?.ID || undefined,
+            ActiveRecordID: this.Record?.ID || undefined,
             Height: '440px',
             ShowSearch: true,
             ShowToolbar: true
@@ -278,7 +278,7 @@ export class QueryCategoryHierarchyPanel extends BaseFormPanel<MJQueryCategoryEn
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-database',
             DefaultColor: '#06b6d4',
-            FocusRecordID: this.Record?.ID || undefined,
+            ActiveRecordID: this.Record?.ID || undefined,
             Height: '440px',
             ShowSearch: true,
             ShowToolbar: true
@@ -331,7 +331,7 @@ export class TagHierarchyPanel extends BaseFormPanel<MJTagEntity> {
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-tag',
             DefaultColor: '#14b8a6',
-            FocusRecordID: this.Record?.ID || undefined,
+            ActiveRecordID: this.Record?.ID || undefined,
             Height: '440px',
             ShowSearch: true,
             ShowToolbar: true
@@ -384,7 +384,7 @@ export class ProjectHierarchyPanel extends BaseFormPanel<MJProjectEntity> {
             SubtitleField: 'Status',
             DefaultIcon: 'fa-solid fa-diagram-project',
             DefaultColor: '#6366f1',
-            FocusRecordID: this.Record?.ID || undefined,
+            ActiveRecordID: this.Record?.ID || undefined,
             Height: '440px',
             ShowSearch: true,
             ShowToolbar: true
@@ -437,7 +437,7 @@ export class ContentItemHierarchyPanel extends BaseFormPanel<MJContentItemEntity
             SubtitleField: 'ContentType',
             DefaultIcon: 'fa-solid fa-file-lines',
             DefaultColor: '#0ea5e9',
-            FocusRecordID: this.Record?.ID || undefined,
+            ActiveRecordID: this.Record?.ID || undefined,
             Height: '440px',
             ShowSearch: true,
             ShowToolbar: true
@@ -490,7 +490,7 @@ export class FileCategoryHierarchyPanel extends BaseFormPanel<MJFileCategoryEnti
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-folder-open',
             DefaultColor: '#eab308',
-            FocusRecordID: this.Record?.ID || undefined,
+            ActiveRecordID: this.Record?.ID || undefined,
             Height: '440px',
             ShowSearch: true,
             ShowToolbar: true
@@ -543,7 +543,7 @@ export class ListCategoryHierarchyPanel extends BaseFormPanel<MJListCategoryEnti
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-table-list',
             DefaultColor: '#0284c7',
-            FocusRecordID: this.Record?.ID || undefined,
+            ActiveRecordID: this.Record?.ID || undefined,
             Height: '440px',
             ShowSearch: true,
             ShowToolbar: true
@@ -596,7 +596,7 @@ export class RecordProcessCategoryHierarchyPanel extends BaseFormPanel<MJRecordP
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-diagram-next',
             DefaultColor: '#a855f7',
-            FocusRecordID: this.Record?.ID || undefined,
+            ActiveRecordID: this.Record?.ID || undefined,
             Height: '440px',
             ShowSearch: true,
             ShowToolbar: true
@@ -649,7 +649,7 @@ export class SkillHierarchyPanel extends BaseFormPanel<MJSkillEntity> {
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-wand-magic',
             DefaultColor: '#f43f5e',
-            FocusRecordID: this.Record?.ID || undefined,
+            ActiveRecordID: this.Record?.ID || undefined,
             Height: '440px',
             ShowSearch: true,
             ShowToolbar: true
@@ -702,7 +702,7 @@ export class TemplateCategoryHierarchyPanel extends BaseFormPanel<MJTemplateCate
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-folder-open',
             DefaultColor: '#64748b',
-            FocusRecordID: this.Record?.ID || undefined,
+            ActiveRecordID: this.Record?.ID || undefined,
             Height: '440px',
             ShowSearch: true,
             ShowToolbar: true
@@ -755,7 +755,7 @@ export class TestSuiteHierarchyPanel extends BaseFormPanel<MJTestSuiteEntity> {
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-vial',
             DefaultColor: '#22c55e',
-            FocusRecordID: this.Record?.ID || undefined,
+            ActiveRecordID: this.Record?.ID || undefined,
             Height: '440px',
             ShowSearch: true,
             ShowToolbar: true
@@ -808,7 +808,7 @@ export class UserViewCategoryHierarchyPanel extends BaseFormPanel<MJUserViewCate
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-folder-tree',
             DefaultColor: '#38bdf8',
-            FocusRecordID: this.Record?.ID || undefined,
+            ActiveRecordID: this.Record?.ID || undefined,
             Height: '440px',
             ShowSearch: true,
             ShowToolbar: true
