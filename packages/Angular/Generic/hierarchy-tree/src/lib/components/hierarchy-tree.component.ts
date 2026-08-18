@@ -194,6 +194,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
 
     public ngOnInit(): void {
         this.initializeConfig();
+        this.log('[HierarchyTree:ngOnInit] Initializing with Config:', this.Config);
         if (this.Config) {
             this.previousConfigState = {
                 EntityName: this.Config.EntityName,
@@ -207,20 +208,25 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
     }
 
     public ngAfterViewInit(): void {
+        this.log('[HierarchyTree:ngAfterViewInit] Initializing D3 Zoom & ResizeObserver. svgRef:', !!this.svgRef?.nativeElement, 'containerRect:', this.svgContainerRef?.nativeElement?.getBoundingClientRect());
         this.initD3Zoom();
         this.setupResizeObserver();
         if (this.AllNodes.length > 0) {
+            this.log('[HierarchyTree:ngAfterViewInit] AllNodes already loaded (' + this.AllNodes.length + '), triggering renderTree');
             this.renderTree();
         }
     }
 
     public ngOnChanges(changes: SimpleChanges): void {
+        this.log('[HierarchyTree:ngOnChanges] Changes detected:', Object.keys(changes));
         if (changes['Config'] && !changes['Config'].isFirstChange()) {
             this.initializeConfig();
             if (this.hasDataConfigChanged(this.Config)) {
+                this.log('[HierarchyTree:ngOnChanges] Data config changed, triggering loadData');
                 this.loadData();
             } else {
                 const activeId = this.ActiveRecordID || this.Config?.ActiveRecordID;
+                this.log('[HierarchyTree:ngOnChanges] Config changed but data identical, updating active node:', activeId);
                 this.updateActiveNodeSelection(activeId);
             }
         } else if (changes['ActiveRecordID'] && !changes['ActiveRecordID'].isFirstChange()) {
@@ -291,16 +297,16 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
             NodeHeight: 90,
             SiblingSpacing: 40,
             LevelSpacing: 75,
-            Height: '560px',
-            Verbose: false,
+            Height: '100%',
+            MinHeight: '500px',
+            NavigateOnNodeClick: true,
+            Verbose: true,
             ...this.Config
         };
     }
 
     private log(message: string, ...args: unknown[]): void {
-        if (this.Config?.Verbose) {
-            console.log(message, ...args);
-        }
+        console.log(message, ...args);
     }
 
     // --- Data Loading & Tree Construction ---
