@@ -302,13 +302,15 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
             MinHeight: '500px',
             NavigateOnNodeClick: true,
             AutoRootFocus: true,
-            Verbose: true,
+            Verbose: false,
             ...this.Config
         };
     }
 
     private log(message: string, ...args: unknown[]): void {
-        console.log(message, ...args);
+        if (this.Config?.Verbose) {
+            console.log(message, ...args);
+        }
     }
 
     // --- Data Loading & Tree Construction ---
