@@ -4936,4 +4936,113 @@ export abstract class BaseEntity<T = unknown> {
     public ResetVectors(): void {
         this._vectors.clear();
     }
+
+    /**
+     * Resolves the recursive foreign key field for this entity. If `parentFieldName` is provided,
+     * finds that specific field. Otherwise defaults to 'ParentID' if present, or the first
+     * self-referencing foreign key field found on the entity.
+     */
+    protected getRecursiveForeignKeyField(parentFieldName?: string): EntityFieldInfo | null {
+        const fields = this.EntityInfo?.Fields ?? [];
+        if (parentFieldName) {
+            const match = fields.find(f => f.Name.toLowerCase() === parentFieldName.toLowerCase() || f.CodeName.toLowerCase() === parentFieldName.toLowerCase());
+            return match ?? null;
+        }
+        // Check for 'ParentID' first as the standard hierarchy convention
+        const parentIdField = fields.find(f => f.Name.toLowerCase() === 'parentid' && (UUIDsEqual(f.RelatedEntityID, this.EntityInfo?.ID) || f.RelatedEntity === this.EntityInfo?.Name));
+        if (parentIdField) return parentIdField;
+
+        // Fall back to first recursive foreign key field
+        return fields.find(f => f.RelatedEntityID && (UUIDsEqual(f.RelatedEntityID, this.EntityInfo?.ID) || f.RelatedEntity === this.EntityInfo?.Name)) ?? null;
+    }
+
+    /**
+     * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+     * @param optionsOrMaxDepth Optional maximum relative depth to retrieve, or an options object.
+     * @returns Array of descendant entity instances ordered by hierarchy depth.
+     */
+    public async GetDescendants<T extends BaseEntity = BaseEntity>(options?: { parentFieldName?: string; maxDepth?: number } | number): Promise<T[]> {
+        const maxDepth = typeof options === 'number' ? options : options?.maxDepth;
+        const parentFieldName = typeof options === 'object' ? options?.parentFieldName : undefined;
+        const fkField = this.getRecursiveForeignKeyField(parentFieldName);
+        if (!fkField) {
+            LogError(`BaseEntity.GetDescendants(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
+            return [];
+        }
+        const pkName = this.FirstPrimaryKey?.Name ?? 'ID';
+        const rootId = this.Get(pkName);
+        if (!rootId) return [];
+
+        const rootFieldName = `Root${fkField.Name}`;
+        const depthFieldName = `${fkField.Name}Depth`;
+        const filter = maxDepth != null
+            ? `${rootFieldName} = '${rootId}' AND ${depthFieldName} <= ${maxDepth}`
+            : `${rootFieldName} = '${rootId}'`;
+
+        const rv = new RunView();
+        const result = await rv.RunView<T>({
+            EntityName: this.EntityInfo.Name,
+            ExtraFilter: filter,
+            OrderBy: `${depthFieldName} ASC`,
+        }, this._contextCurrentUser);
+
+        return result.Success ? (result.Results ?? []) : [];
+    }
+
+    /**
+     * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+     * @param parentFieldName Optional recursive foreign key field name (defaults to 'ParentID' or the first recursive FK found).
+     * @returns Array of ancestor entity instances ordered from root down to parent.
+     */
+    public async GetAncestors<T extends BaseEntity = BaseEntity>(parentFieldName?: string): Promise<T[]> {
+        const fkField = this.getRecursiveForeignKeyField(parentFieldName);
+        if (!fkField) {
+            LogError(`BaseEntity.GetAncestors(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
+            return [];
+        }
+        const pkName = this.FirstPrimaryKey?.Name ?? 'ID';
+        const currentId = this.Get(pkName);
+        const pathFieldName = `${fkField.Name}Path`;
+        const depthFieldName = `${fkField.Name}Depth`;
+        const path = this.Get(pathFieldName) as string | null | undefined;
+        if (!path) return [];
+
+        const rawIds = path.split('/').filter(id => id.length > 0 && id !== currentId);
+        if (rawIds.length === 0) return [];
+
+        const rv = new RunView();
+        const idList = rawIds.map(id => `'${id}'`).join(',');
+        const result = await rv.RunView<T>({
+            EntityName: this.EntityInfo.Name,
+            ExtraFilter: `${pkName} IN (${idList})`,
+            OrderBy: `${depthFieldName} ASC`,
+        }, this._contextCurrentUser);
+
+        return result.Success ? (result.Results ?? []) : [];
+    }
+
+    /**
+     * Retrieves all direct child records of this record using a single RunView query.
+     * @param parentFieldName Optional recursive foreign key field name (defaults to 'ParentID' or the first recursive FK found).
+     * @returns Array of direct child entity instances.
+     */
+    public async GetChildren<T extends BaseEntity = BaseEntity>(parentFieldName?: string): Promise<T[]> {
+        const fkField = this.getRecursiveForeignKeyField(parentFieldName);
+        if (!fkField) {
+            LogError(`BaseEntity.GetChildren(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
+            return [];
+        }
+        const pkName = this.FirstPrimaryKey?.Name ?? 'ID';
+        const currentId = this.Get(pkName);
+        if (!currentId) return [];
+
+        const rv = new RunView();
+        const result = await rv.RunView<T>({
+            EntityName: this.EntityInfo.Name,
+            ExtraFilter: `${fkField.Name} = '${currentId}'`,
+        }, this._contextCurrentUser);
+
+        return result.Success ? (result.Results ?? []) : [];
+    }
 }
+

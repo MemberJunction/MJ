@@ -1,4 +1,4 @@
-import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase, RunView } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { z } from "zod";
 
@@ -186,12 +186,12 @@ export const MJActionCategorySchema = z.object({
         * * Description: Status of the action category (Pending, Active, Disabled).`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     Parent: z.string().nullable().describe(`
@@ -202,6 +202,22 @@ export const MJActionCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJActionCategoryEntityType = z.infer<typeof MJActionCategorySchema>;
@@ -707,7 +723,7 @@ export const MJActionSchema = z.object({
         * * Description: Optional comments when an individual (or an AI) reviews and approves the code.`),
     CodeApprovedByUserID: z.string().nullable().describe(`
         * * Field Name: CodeApprovedByUserID
-        * * Display Name: Approved By User
+        * * Display Name: Approved By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     CodeApprovedAt: z.date().nullable().describe(`
@@ -788,12 +804,12 @@ export const MJActionSchema = z.object({
         * * Description: JSON blob holding configuration specific to Type='Runtime' actions: declarative permission scopes (allowedEntities, allowedActions, allowedAgents with id+name pairs), resource limits (maxMemoryMB, maxBridgeCalls), and sandbox options (additionalLibraries, debugMode). Evolvable — new keys can be introduced without schema changes. NULL for non-Runtime actions.`),
     MaxExecutionTimeMS: z.number().nullable().describe(`
         * * Field Name: MaxExecutionTimeMS
-        * * Display Name: Max Execution Time (ms)
+        * * Display Name: Max Execution Time (MS)
         * * SQL Data Type: int
         * * Description: Universal maximum execution time in milliseconds for a single action invocation. Enforced by ActionEngine across ALL action types (Custom, Generated, Runtime) via AbortSignal passed through RunActionParams. NULL means use the engine default.`),
     CreatedByAgentID: z.string().nullable().describe(`
         * * Field Name: CreatedByAgentID
-        * * Display Name: Created By Agent
+        * * Display Name: Created By Agent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
         * * Description: Optional reference to the AI Agent that authored this action — populated when an agent (e.g. ActionSmith) dynamically generates a Runtime action. NULL for human-authored Custom/Generated actions. Provides an audit trail linking agent-generated capabilities back to their creator.`),
@@ -803,11 +819,11 @@ export const MJActionSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     CodeApprovedByUser: z.string().nullable().describe(`
         * * Field Name: CodeApprovedByUser
-        * * Display Name: Approved By User Name
+        * * Display Name: Approved By User
         * * SQL Data Type: nvarchar(100)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Action Name
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(425)`),
     DefaultCompactPrompt: z.string().nullable().describe(`
         * * Field Name: DefaultCompactPrompt
@@ -815,12 +831,28 @@ export const MJActionSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     CreatedByAgent: z.string().nullable().describe(`
         * * Field Name: CreatedByAgent
-        * * Display Name: Created By Agent Name
+        * * Display Name: Created By Agent
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Hierarchy Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Hierarchy Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf Node
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJActionEntityType = z.infer<typeof MJActionSchema>;
@@ -1050,7 +1082,7 @@ export const MJAIAgentCategorySchema = z.object({
         * * Description: Optional description explaining the purpose and scope of this category.`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent
+        * * Display Name: Parent Category
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Categories (vwAIAgentCategories.ID)
         * * Description: Self-referencing foreign key to the parent category, forming a tree hierarchy. NULL for root categories.`),
@@ -1088,16 +1120,32 @@ export const MJAIAgentCategorySchema = z.object({
         * * Description: Default file storage account for agents in this category. Inherited by child categories that do not define their own value — resolution walks up the ParentID tree until a non-null value is found. Overrides the Type-level default. FK to FileStorageAccount.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(200)`),
     DefaultStorageAccount: z.string().nullable().describe(`
         * * Field Name: DefaultStorageAccount
-        * * Display Name: Default Storage Account Name
+        * * Display Name: Storage Account Name
         * * SQL Data Type: nvarchar(200)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Hierarchy Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Hierarchy Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf Node
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJAIAgentCategoryEntityType = z.infer<typeof MJAIAgentCategorySchema>;
@@ -2167,7 +2215,7 @@ export const MJAIAgentNoteSchema = z.object({
         * * Description: Foreign key referencing the ID column in the User table, indicating the user associated with the note. Used when Type=User`),
     Type: z.union([z.literal('Constraint'), z.literal('Context'), z.literal('Example'), z.literal('Issue'), z.literal('Preference')]).describe(`
         * * Field Name: Type
-        * * Display Name: Note Type
+        * * Display Name: Note Category
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Preference
     * * Value List Type: List
@@ -2186,7 +2234,7 @@ export const MJAIAgentNoteSchema = z.object({
         * * Description: Indicates whether this note was automatically generated by an AI agent (1) or manually created (0).`),
     Comments: z.string().nullable().describe(`
         * * Field Name: Comments
-        * * Display Name: Comments
+        * * Display Name: Internal Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Internal comments about this note, not included in agent context injection.`),
     Status: z.union([z.literal('Active'), z.literal('Archived'), z.literal('Pending'), z.literal('Provisional'), z.literal('Revoked')]).describe(`
@@ -2216,7 +2264,7 @@ export const MJAIAgentNoteSchema = z.object({
         * * Description: Optional reference to the specific conversation message that inspired this note.`),
     SourceAIAgentRunID: z.string().nullable().describe(`
         * * Field Name: SourceAIAgentRunID
-        * * Display Name: Source AI Agent Run
+        * * Display Name: Source Agent Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
         * * Description: Optional reference to the AI agent run that generated this note.`),
@@ -2245,7 +2293,7 @@ export const MJAIAgentNoteSchema = z.object({
         * * Description: Foreign key to Entity table identifying which entity type is used for primary scoping. NULL means this is a global note.`),
     PrimaryScopeRecordID: z.string().nullable().describe(`
         * * Field Name: PrimaryScopeRecordID
-        * * Display Name: Primary Scope Record ID
+        * * Display Name: Primary Scope Record
         * * SQL Data Type: nvarchar(100)
         * * Description: The record ID within the primary scope entity. NULL means global note. When set with empty SecondaryScopes, indicates primary-scope-only note.`),
     SecondaryScopes: z.any().nullable().describe(`
@@ -2337,7 +2385,7 @@ export const MJAIAgentNoteSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     SourceAIAgentRun: z.string().nullable().describe(`
         * * Field Name: SourceAIAgentRun
-        * * Display Name: Source AI Agent Run Name
+        * * Display Name: Source Agent Run Name
         * * SQL Data Type: nvarchar(255)`),
     Company: z.string().nullable().describe(`
         * * Field Name: Company
@@ -2359,6 +2407,22 @@ export const MJAIAgentNoteSchema = z.object({
         * * Field Name: RootConsolidatedIntoNoteID
         * * Display Name: Root Consolidated Note
         * * SQL Data Type: uniqueidentifier`),
+    ConsolidatedIntoNoteIDDepth: z.number().nullable().describe(`
+        * * Field Name: ConsolidatedIntoNoteIDDepth
+        * * Display Name: Consolidation Depth
+        * * SQL Data Type: int`),
+    ConsolidatedIntoNoteIDPath: z.string().nullable().describe(`
+        * * Field Name: ConsolidatedIntoNoteIDPath
+        * * Display Name: Consolidation Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ConsolidatedIntoNoteIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ConsolidatedIntoNoteIDIsLeaf
+        * * Display Name: Is Leaf Node
+        * * SQL Data Type: bit`),
+    ConsolidatedIntoNoteIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ConsolidatedIntoNoteIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJAIAgentNoteEntityType = z.infer<typeof MJAIAgentNoteSchema>;
@@ -3129,16 +3193,32 @@ detailed information about what validation rules failed.`),
         * * Description: JSON array of skill-invocation records (AgentSkillInvocation[]) associating this step with the skills involved in it, or NULL when no skills are in play. Each record carries SkillID, SkillName, ActivationType (requested = user /skill mention; auto = agent self-activation), Provenance of authority (the gate values that admitted the skill: AcceptsSkills, both ActivationMode dials, and who requested it), and an optional agent-stated Reason when self-activated. Population: Skill steps record the activation(s) they performed; Prompt steps record the full set of skills in effect for that turn; Actions and Sub-Agent steps record the skill(s) through which the executed tool became available (NULL means the tool was a native grant).`),
     AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
-        * * Display Name: Agent Run Context
+        * * Display Name: Agent Run Details
         * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Step Context
+        * * Display Name: Parent Step Details
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Hierarchy Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Hierarchy Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf Node
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJAIAgentRunStepEntityType = z.infer<typeof MJAIAgentRunStepSchema>;
@@ -3149,7 +3229,7 @@ export type MJAIAgentRunStepEntityType = z.infer<typeof MJAIAgentRunStepSchema>;
 export const MJAIAgentRunSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
-        * * Display Name: Run ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()
         * * Description: Unique identifier for this agent run`),
@@ -3246,32 +3326,32 @@ export const MJAIAgentRunSchema = z.object({
         * * Default Value: getutcdate()`),
     TotalPromptTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalPromptTokensUsed
-        * * Display Name: Prompt Tokens
+        * * Display Name: Total Prompt Tokens Used
         * * SQL Data Type: int
         * * Description: Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`),
     TotalCompletionTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalCompletionTokensUsed
-        * * Display Name: Completion Tokens
+        * * Display Name: Total Completion Tokens Used
         * * SQL Data Type: int
         * * Description: Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.`),
     TotalTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalTokensUsedRollup
-        * * Display Name: Total Tokens (Rollup)
+        * * Display Name: Total Tokens Used Rollup
         * * SQL Data Type: int
         * * Description: Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.`),
     TotalPromptTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalPromptTokensUsedRollup
-        * * Display Name: Prompt Tokens (Rollup)
+        * * Display Name: Total Prompt Tokens Used Rollup
         * * SQL Data Type: int
         * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.`),
     TotalCompletionTokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TotalCompletionTokensUsedRollup
-        * * Display Name: Completion Tokens (Rollup)
+        * * Display Name: Total Completion Tokens Used Rollup
         * * SQL Data Type: int
         * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.`),
     TotalCostRollup: z.number().nullable().describe(`
         * * Field Name: TotalCostRollup
-        * * Display Name: Total Cost (Rollup)
+        * * Display Name: Total Cost Rollup
         * * SQL Data Type: decimal(19, 8)
         * * Description: Total cost including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCost. For parent agents, this includes the sum of all descendant agent costs. Note: This assumes all costs are in the same currency for accurate rollup.`),
     ConversationDetailID: z.string().nullable().describe(`
@@ -3282,7 +3362,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: Optional tracking of a specific conversation detail (e.g. a specific message) that spawned this agent run`),
     ConversationDetailSequence: z.number().nullable().describe(`
         * * Field Name: ConversationDetailSequence
-        * * Display Name: Detail Sequence
+        * * Display Name: Conversation Detail Sequence
         * * SQL Data Type: int
         * * Description: If a conversation detail spawned multiple agent runs, tracks the order of their spawn/execution`),
     CancellationReason: z.union([z.literal('System'), z.literal('Timeout'), z.literal('User Request')]).nullable().describe(`
@@ -3317,7 +3397,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: JSON serialization of the final Payload state at the end of the agent run`),
     Message: z.string().nullable().describe(`
         * * Field Name: Message
-        * * Display Name: Final Message
+        * * Display Name: Message
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Final message from the agent to the end user at the end of a run`),
     LastRunID: z.string().nullable().describe(`
@@ -3333,7 +3413,7 @@ export const MJAIAgentRunSchema = z.object({
         * * Description: The initial payload provided at the start of this run. Can be populated from the FinalPayload of the LastRun.`),
     TotalPromptIterations: z.number().describe(`
         * * Field Name: TotalPromptIterations
-        * * Display Name: Prompt Iterations
+        * * Display Name: Total Prompt Iterations
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Total number of prompt iterations executed during this agent run. Incremented
@@ -3358,12 +3438,12 @@ each time the agent processes a prompt step.`),
         * * Description: Runtime vendor override that was used for this execution. When set along with OverrideModelID, this vendor was used to provide the model.`),
     Data: z.string().nullable().describe(`
         * * Field Name: Data
-        * * Display Name: Execution Data
+        * * Display Name: Data
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.`),
     Verbose: z.boolean().nullable().describe(`
         * * Field Name: Verbose
-        * * Display Name: Verbose Logging
+        * * Display Name: Verbose
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.`),
@@ -3423,12 +3503,12 @@ each time the agent processes a prompt step.`),
         * * Description: Optional company scope for multi-tenant memory. When populated, Memory Manager uses this to scope extracted notes to the company. Flows from ExecuteAgentParams.companyId at agent invocation time.`),
     TotalCacheReadTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalCacheReadTokensUsed
-        * * Display Name: Cache Read Tokens
+        * * Display Name: Total Cache Read Tokens
         * * SQL Data Type: int
         * * Description: Total input tokens served from the AI provider's prompt cache (cache reads / hits) across this agent run, summed from child prompt runs' TokensCacheReadRollup and sub-agent runs' TotalCacheReadTokensUsed. Counts only; the cost impact (cache reads are billed at a steep discount) is reflected in TotalCost. The cache counterpart of TotalPromptTokensUsed.`),
     TotalCacheWriteTokensUsed: z.number().nullable().describe(`
         * * Field Name: TotalCacheWriteTokensUsed
-        * * Display Name: Cache Write Tokens
+        * * Display Name: Total Cache Write Tokens
         * * SQL Data Type: int
         * * Description: Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.`),
     LastHeartbeatAt: z.date().nullable().describe(`
@@ -3465,56 +3545,88 @@ each time the agent processes a prompt step.`),
         * * SQL Data Type: nvarchar(255)`),
     ParentRun: z.string().nullable().describe(`
         * * Field Name: ParentRun
-        * * Display Name: Parent Run Info
+        * * Display Name: Parent Run Name
         * * SQL Data Type: nvarchar(255)`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
-        * * Display Name: Conversation Info
+        * * Display Name: Conversation Name
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User Info
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail Info
+        * * Display Name: Conversation Detail Name
         * * SQL Data Type: nvarchar(100)`),
     LastRun: z.string().nullable().describe(`
         * * Field Name: LastRun
-        * * Display Name: Last Run Info
+        * * Display Name: Last Run Name
         * * SQL Data Type: nvarchar(255)`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
-        * * Display Name: Configuration Info
+        * * Display Name: Configuration Name
         * * SQL Data Type: nvarchar(100)`),
     OverrideModel: z.string().nullable().describe(`
         * * Field Name: OverrideModel
-        * * Display Name: Override Model Info
+        * * Display Name: Override Model Name
         * * SQL Data Type: nvarchar(50)`),
     OverrideVendor: z.string().nullable().describe(`
         * * Field Name: OverrideVendor
-        * * Display Name: Override Vendor Info
+        * * Display Name: Override Vendor Name
         * * SQL Data Type: nvarchar(50)`),
     ScheduledJobRun: z.string().nullable().describe(`
         * * Field Name: ScheduledJobRun
-        * * Display Name: Scheduled Job Run Info
+        * * Display Name: Scheduled Job Run Name
         * * SQL Data Type: nvarchar(200)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run Info
+        * * Display Name: Test Run Name
         * * SQL Data Type: nvarchar(255)`),
     PrimaryScopeEntity: z.string().nullable().describe(`
         * * Field Name: PrimaryScopeEntity
-        * * Display Name: Primary Scope Entity Info
+        * * Display Name: Primary Scope Entity Name
         * * SQL Data Type: nvarchar(255)`),
     RootParentRunID: z.string().nullable().describe(`
         * * Field Name: RootParentRunID
         * * Display Name: Root Parent Run
         * * SQL Data Type: uniqueidentifier`),
+    ParentRunIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentRunIDDepth
+        * * Display Name: Parent Run Depth
+        * * SQL Data Type: int`),
+    ParentRunIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentRunIDPath
+        * * Display Name: Parent Run Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentRunIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentRunIDIsLeaf
+        * * Display Name: Is Leaf Run
+        * * SQL Data Type: bit`),
+    ParentRunIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentRunIDChildCount
+        * * Display Name: Child Run Count
+        * * SQL Data Type: int`),
     RootLastRunID: z.string().nullable().describe(`
         * * Field Name: RootLastRunID
         * * Display Name: Root Last Run
         * * SQL Data Type: uniqueidentifier`),
+    LastRunIDDepth: z.number().nullable().describe(`
+        * * Field Name: LastRunIDDepth
+        * * Display Name: Last Run Depth
+        * * SQL Data Type: int`),
+    LastRunIDPath: z.string().nullable().describe(`
+        * * Field Name: LastRunIDPath
+        * * Display Name: Last Run Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    LastRunIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: LastRunIDIsLeaf
+        * * Display Name: Is Last Run Leaf
+        * * SQL Data Type: bit`),
+    LastRunIDChildCount: z.number().nullable().describe(`
+        * * Field Name: LastRunIDChildCount
+        * * Display Name: Last Run Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJAIAgentRunEntityType = z.infer<typeof MJAIAgentRunSchema>;
@@ -3928,12 +4040,12 @@ export const MJAIAgentSessionSchema = z.object({
         * * Default Value: newsequentialid()`),
     AgentID: z.string().describe(`
         * * Field Name: AgentID
-        * * Display Name: Agent ID
+        * * Display Name: Agent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     Status: z.union([z.literal('Active'), z.literal('Closed'), z.literal('Idle')]).describe(`
@@ -3949,17 +4061,17 @@ export const MJAIAgentSessionSchema = z.object({
         * * Description: Lifecycle status of the session. Active = traffic flowing; Idle = connected but quiet beyond the idle threshold; Closed = terminal (ClosedAt set, channels disconnected).`),
     ConversationID: z.string().nullable().describe(`
         * * Field Name: ConversationID
-        * * Display Name: Conversation ID
+        * * Display Name: Conversation
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)`),
     LastSessionID: z.string().nullable().describe(`
         * * Field Name: LastSessionID
-        * * Display Name: Last Session ID
+        * * Display Name: Last Session
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Sessions (vwAIAgentSessions.ID)`),
     HostInstanceID: z.string().nullable().describe(`
         * * Field Name: HostInstanceID
-        * * Display Name: Host Instance ID
+        * * Display Name: Host Instance
         * * SQL Data Type: nvarchar(200)
         * * Description: Identifier of the server node currently hosting this sessions in-memory sockets (e.g. hostname:pid:bootId). Used for affinity and janitor orphan reconciliation.`),
     Config_: z.string().nullable().describe(`
@@ -4016,44 +4128,60 @@ export const MJAIAgentSessionSchema = z.object({
         * * Description: Recording alignment origin (t0): the wall-clock moment audio capture began for this session. Per-turn ConversationDetail timestamps are converted to audio seek offsets relative to this value.`),
     RecordingFileID: z.string().nullable().describe(`
         * * Field Name: RecordingFileID
-        * * Display Name: Recording File ID
+        * * Display Name: Recording File
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)`),
     LinkedEntityID: z.string().nullable().describe(`
         * * Field Name: LinkedEntityID
-        * * Display Name: Linked Entity ID
+        * * Display Name: Linked Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
         * * Description: Polymorphic counterparty-identity entity. Foreign key to Entity — identifies WHICH entity this realtime session's counterparty resolved to (e.g. User, a member/contact record, BizAppsCommon Person). Paired with LinkedRecordID via the CK_AIAgentSession_LinkBinding both-or-neither check, mirroring Conversation's linked pair. NULL while the session's counterparty is anonymous/unresolved.`),
     LinkedRecordID: z.string().nullable().describe(`
         * * Field Name: LinkedRecordID
-        * * Display Name: Linked Record ID
+        * * Display Name: Linked Record
         * * SQL Data Type: nvarchar(500)
         * * Description: Polymorphic counterparty-identity record key. The primary-key value of the record (within LinkedEntityID's entity) this session resolved to, serialized as a string so any entity type can be referenced regardless of PK shape (UUID, int, composite). NVARCHAR(500), intentionally NOT FK-constrained. Used together with LinkedEntityID — see CK_AIAgentSession_LinkBinding. NULL while the session's counterparty is anonymous/unresolved.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent
+        * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
-        * * Display Name: Conversation
+        * * Display Name: Conversation Name
         * * SQL Data Type: nvarchar(255)`),
     RecordingFile: z.string().nullable().describe(`
         * * Field Name: RecordingFile
-        * * Display Name: Recording File
+        * * Display Name: Recording File Name
         * * SQL Data Type: nvarchar(500)`),
     LinkedEntity: z.string().nullable().describe(`
         * * Field Name: LinkedEntity
-        * * Display Name: Linked Entity
+        * * Display Name: Linked Entity Name
         * * SQL Data Type: nvarchar(255)`),
     RootLastSessionID: z.string().nullable().describe(`
         * * Field Name: RootLastSessionID
-        * * Display Name: Root Last Session ID
+        * * Display Name: Root Session
         * * SQL Data Type: uniqueidentifier`),
+    LastSessionIDDepth: z.number().nullable().describe(`
+        * * Field Name: LastSessionIDDepth
+        * * Display Name: Session Depth
+        * * SQL Data Type: int`),
+    LastSessionIDPath: z.string().nullable().describe(`
+        * * Field Name: LastSessionIDPath
+        * * Display Name: Session Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    LastSessionIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: LastSessionIDIsLeaf
+        * * Display Name: Is Leaf Session
+        * * SQL Data Type: bit`),
+    LastSessionIDChildCount: z.number().nullable().describe(`
+        * * Field Name: LastSessionIDChildCount
+        * * Display Name: Child Session Count
+        * * SQL Data Type: int`),
 });
 
 export type MJAIAgentSessionEntityType = z.infer<typeof MJAIAgentSessionSchema>;
@@ -4524,7 +4652,7 @@ export const MJAIAgentSchema = z.object({
         * * Default Value: getutcdate()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent
+        * * Display Name: Parent Agent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
         * * Description: References the parent agent in the hierarchical structure. If NULL, this is a root (top-level) agent.`),
@@ -4558,22 +4686,22 @@ export const MJAIAgentSchema = z.object({
         * * Description: When true, enables automatic compression of conversation context when the message threshold is reached.`),
     ContextCompressionMessageThreshold: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageThreshold
-        * * Display Name: Context Compression Message Threshold
+        * * Display Name: Compression Message Threshold
         * * SQL Data Type: int
         * * Description: Number of messages that triggers context compression when EnableContextCompression is true.`),
     ContextCompressionPromptID: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPromptID
-        * * Display Name: Context Compression Prompt ID
+        * * Display Name: Compression Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)`),
     ContextCompressionMessageRetentionCount: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageRetentionCount
-        * * Display Name: Context Compression Message Retention Count
+        * * Display Name: Compression Retention Count
         * * SQL Data Type: int
         * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
     TypeID: z.string().nullable().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type
+        * * Display Name: Agent Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
         * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.`),
@@ -4644,7 +4772,7 @@ data flow when the agent executes its own prompt step.`),
         * * Description: Optional JSON schema or requirements that define the expected structure and content of the agent's final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.`),
     FinalPayloadValidationMode: z.union([z.literal('Fail'), z.literal('Retry'), z.literal('Warn')]).describe(`
         * * Field Name: FinalPayloadValidationMode
-        * * Display Name: Final Payload Validation Mode
+        * * Display Name: Final Validation Mode
         * * SQL Data Type: nvarchar(25)
         * * Default Value: Retry
     * * Value List Type: List
@@ -4655,7 +4783,7 @@ data flow when the agent executes its own prompt step.`),
         * * Description: Determines how to handle validation failures when FinalPayloadValidation is specified. Options: Retry (default) - retry the agent with validation feedback, Fail - fail the agent run immediately, Warn - log a warning but allow success.`),
     FinalPayloadValidationMaxRetries: z.number().describe(`
         * * Field Name: FinalPayloadValidationMaxRetries
-        * * Display Name: Final Payload Validation Max Retries
+        * * Display Name: Final Validation Max Retries
         * * SQL Data Type: int
         * * Default Value: 3
         * * Description: Maximum number of retry attempts allowed when FinalPayloadValidation fails with
@@ -4701,7 +4829,7 @@ if this limit is exceeded.`),
         * * Description: Optional JSON schema validation to apply to the input payload before agent execution begins. Uses the same JSONValidator format as FinalPayloadValidation.`),
     StartingPayloadValidationMode: z.union([z.literal('Fail'), z.literal('Warn')]).describe(`
         * * Field Name: StartingPayloadValidationMode
-        * * Display Name: Starting Payload Validation Mode
+        * * Display Name: Starting Validation Mode
         * * SQL Data Type: nvarchar(25)
         * * Default Value: Fail
     * * Value List Type: List
@@ -4711,7 +4839,7 @@ if this limit is exceeded.`),
         * * Description: Determines how to handle StartingPayloadValidation failures. Fail = reject invalid input, Warn = log warning but proceed.`),
     DefaultPromptEffortLevel: z.number().nullable().describe(`
         * * Field Name: DefaultPromptEffortLevel
-        * * Display Name: Default Effort Level
+        * * Display Name: Default Prompt Effort Level
         * * SQL Data Type: int
         * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.`),
     ChatHandlingOption: z.union([z.literal('Failed'), z.literal('Retry'), z.literal('Success')]).nullable().describe(`
@@ -4732,7 +4860,7 @@ if this limit is exceeded.`),
         * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.`),
     OwnerUserID: z.string().describe(`
         * * Field Name: OwnerUserID
-        * * Display Name: Owner User
+        * * Display Name: Owner
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -4851,7 +4979,7 @@ if this limit is exceeded.`),
         * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder`),
     InlineStorageThresholdBytes: z.number().nullable().describe(`
         * * Field Name: InlineStorageThresholdBytes
-        * * Display Name: Inline Storage Threshold (Bytes)
+        * * Display Name: Inline Storage Threshold Bytes
         * * SQL Data Type: int
         * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.`),
     AgentTypePromptParams: z.string().nullable().describe(`
@@ -5011,17 +5139,17 @@ if this limit is exceeded.`),
         * * Description: Per-agent override for the cross-turn compaction target percentage. Null inherits the agent type's value.`),
     ConversationSummaryPromptID: z.string().nullable().describe(`
         * * Field Name: ConversationSummaryPromptID
-        * * Display Name: Conversation Summary Prompt ID
+        * * Display Name: Conversation Summary Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: Per-agent override for the cross-turn conversation compaction prompt. Null inherits the agent type's value.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Agent Name
         * * SQL Data Type: nvarchar(255)`),
     ContextCompressionPrompt: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPrompt
-        * * Display Name: Context Compression Prompt
+        * * Display Name: Compression Prompt Name
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().nullable().describe(`
         * * Field Name: Type
@@ -5029,11 +5157,11 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(100)`),
     DefaultArtifactType: z.string().nullable().describe(`
         * * Field Name: DefaultArtifactType
-        * * Display Name: Default Artifact Type
+        * * Display Name: Default Artifact Type Name
         * * SQL Data Type: nvarchar(100)`),
     OwnerUser: z.string().describe(`
         * * Field Name: OwnerUser
-        * * Display Name: Owner User
+        * * Display Name: Owner User Name
         * * SQL Data Type: nvarchar(100)`),
     AttachmentStorageProvider: z.string().nullable().describe(`
         * * Field Name: AttachmentStorageProvider
@@ -5041,7 +5169,7 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(50)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category
+        * * Display Name: Category Name
         * * SQL Data Type: nvarchar(200)`),
     DefaultStorageAccount: z.string().nullable().describe(`
         * * Field Name: DefaultStorageAccount
@@ -5061,16 +5189,48 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(255)`),
     ConversationSummaryPrompt: z.string().nullable().describe(`
         * * Field Name: ConversationSummaryPrompt
-        * * Display Name: Conversation Summary Prompt
+        * * Display Name: Conversation Summary Prompt Name
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent Agent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Parent Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Parent Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf Parent
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Parent Child Count
+        * * SQL Data Type: int`),
     RootDefaultCoAgentID: z.string().nullable().describe(`
         * * Field Name: RootDefaultCoAgentID
-        * * Display Name: Root Default Co-Agent ID
+        * * Display Name: Root Default Co-Agent
         * * SQL Data Type: uniqueidentifier`),
+    DefaultCoAgentIDDepth: z.number().nullable().describe(`
+        * * Field Name: DefaultCoAgentIDDepth
+        * * Display Name: Co-Agent Depth
+        * * SQL Data Type: int`),
+    DefaultCoAgentIDPath: z.string().nullable().describe(`
+        * * Field Name: DefaultCoAgentIDPath
+        * * Display Name: Co-Agent Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    DefaultCoAgentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: DefaultCoAgentIDIsLeaf
+        * * Display Name: Is Leaf Co-Agent
+        * * SQL Data Type: bit`),
+    DefaultCoAgentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: DefaultCoAgentIDChildCount
+        * * Display Name: Co-Agent Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJAIAgentEntityType = z.infer<typeof MJAIAgentSchema>;
@@ -5086,7 +5246,7 @@ export const MJAIArchitectureSchema = z.object({
         * * Default Value: newsequentialid()`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: Architecture Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
@@ -5104,7 +5264,7 @@ export const MJAIArchitectureSchema = z.object({
     *   * Specialized`),
     ParentArchitectureID: z.string().nullable().describe(`
         * * Field Name: ParentArchitectureID
-        * * Display Name: Parent Architecture ID
+        * * Display Name: Parent Architecture
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Architectures (vwAIArchitectures.ID)
         * * Description: Hierarchical relationship to parent architecture. Used for variants like Sparse Transformer being a child of Transformer.`),
@@ -5132,12 +5292,28 @@ export const MJAIArchitectureSchema = z.object({
         * * Default Value: getutcdate()`),
     ParentArchitecture: z.string().nullable().describe(`
         * * Field Name: ParentArchitecture
-        * * Display Name: Parent Architecture
+        * * Display Name: Parent Architecture Name
         * * SQL Data Type: nvarchar(100)`),
     RootParentArchitectureID: z.string().nullable().describe(`
         * * Field Name: RootParentArchitectureID
-        * * Display Name: Root Parent Architecture ID
+        * * Display Name: Root Parent Architecture
         * * SQL Data Type: uniqueidentifier`),
+    ParentArchitectureIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentArchitectureIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentArchitectureIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentArchitectureIDPath
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentArchitectureIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentArchitectureIDIsLeaf
+        * * Display Name: Is Leaf
+        * * SQL Data Type: bit`),
+    ParentArchitectureIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentArchitectureIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJAIArchitectureEntityType = z.infer<typeof MJAIArchitectureSchema>;
@@ -5537,30 +5713,46 @@ export const MJAIConfigurationSchema = z.object({
         * * Description: Default root path within the storage provider for agent attachments. Used when an agent does not specify its own AttachmentRootPath.`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent Configuration
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
         * * Description: Optional reference to a parent configuration. When set, this configuration inherits prompt-model mappings and parameters from its parent. Child configurations can override specific settings while inheriting defaults from the parent chain. Supports N-level deep inheritance.`),
     DefaultPromptForContextCompression: z.string().nullable().describe(`
         * * Field Name: DefaultPromptForContextCompression
-        * * Display Name: Default Prompt For Context Compression
+        * * Display Name: Default Prompt For Context Compression Name
         * * SQL Data Type: nvarchar(255)`),
     DefaultPromptForContextSummarization: z.string().nullable().describe(`
         * * Field Name: DefaultPromptForContextSummarization
-        * * Display Name: Default Prompt For Context Summarization
+        * * Display Name: Default Prompt For Context Summarization Name
         * * SQL Data Type: nvarchar(255)`),
     DefaultStorageProvider: z.string().nullable().describe(`
         * * Field Name: DefaultStorageProvider
-        * * Display Name: Default Storage Provider
+        * * Display Name: Default Storage Provider Name
         * * SQL Data Type: nvarchar(50)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Parent Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Parent Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf Node
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJAIConfigurationEntityType = z.infer<typeof MJAIConfigurationSchema>;
@@ -6471,6 +6663,22 @@ export const MJAIPromptCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJAIPromptCategoryEntityType = z.infer<typeof MJAIPromptCategorySchema>;
@@ -6731,7 +6939,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Optional configuration used for this execution.`),
     RunAt: z.date().describe(`
         * * Field Name: RunAt
-        * * Display Name: Started At
+        * * Display Name: Run Started At
         * * SQL Data Type: datetimeoffset
         * * Default Value: sysdatetimeoffset()
         * * Description: When the prompt run started, with timezone offset information.`),
@@ -6762,12 +6970,12 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Total number of tokens used (prompt + completion).`),
     TokensPrompt: z.number().nullable().describe(`
         * * Field Name: TokensPrompt
-        * * Display Name: Prompt Tokens
+        * * Display Name: Tokens Prompt
         * * SQL Data Type: int
         * * Description: Number of tokens in the prompt.`),
     TokensCompletion: z.number().nullable().describe(`
         * * Field Name: TokensCompletion
-        * * Display Name: Completion Tokens
+        * * Display Name: Tokens Completion
         * * SQL Data Type: int
         * * Description: Number of tokens in the completion/result.`),
     TotalCost: z.number().nullable().describe(`
@@ -6831,17 +7039,17 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: ISO 4217 currency code for the Cost field (e.g., USD, EUR, GBP). Different AI providers may use different currencies.`),
     TokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TokensUsedRollup
-        * * Display Name: Tokens Used (Rollup)
+        * * Display Name: Tokens Used Rollup
         * * SQL Data Type: int
         * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.`),
     TokensPromptRollup: z.number().nullable().describe(`
         * * Field Name: TokensPromptRollup
-        * * Display Name: Prompt Tokens (Rollup)
+        * * Display Name: Tokens Prompt Rollup
         * * SQL Data Type: int
         * * Description: Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.`),
     TokensCompletionRollup: z.number().nullable().describe(`
         * * Field Name: TokensCompletionRollup
-        * * Display Name: Completion Tokens (Rollup)
+        * * Display Name: Tokens Completion Rollup
         * * SQL Data Type: int
         * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.`),
     Temperature: z.number().nullable().describe(`
@@ -6906,17 +7114,17 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.`),
     ValidationAttemptCount: z.number().nullable().describe(`
         * * Field Name: ValidationAttemptCount
-        * * Display Name: Validation Attempts
+        * * Display Name: Validation Attempt Count
         * * SQL Data Type: int
         * * Description: Total number of validation attempts made (including the initial attempt)`),
     SuccessfulValidationCount: z.number().nullable().describe(`
         * * Field Name: SuccessfulValidationCount
-        * * Display Name: Successful Validations
+        * * Display Name: Successful Validation Count
         * * SQL Data Type: int
         * * Description: Number of validation attempts that passed validation`),
     FinalValidationPassed: z.boolean().nullable().describe(`
         * * Field Name: FinalValidationPassed
-        * * Display Name: Validation Passed
+        * * Display Name: Final Validation Passed
         * * SQL Data Type: bit
         * * Description: Whether validation ultimately passed (1) or failed (0)`),
     ValidationBehavior: z.string().nullable().describe(`
@@ -6966,7 +7174,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Total time spent on retries in milliseconds (excluding first attempt)`),
     ValidationAttempts: z.string().nullable().describe(`
         * * Field Name: ValidationAttempts
-        * * Display Name: Validation Attempt Logs
+        * * Display Name: Validation Attempts
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array containing detailed information about each validation attempt`),
     ValidationSummary: z.string().nullable().describe(`
@@ -7123,7 +7331,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.`),
     ModelSpecificResponseDetails: z.string().nullable().describe(`
         * * Field Name: ModelSpecificResponseDetails
-        * * Display Name: Provider Response Details
+        * * Display Name: Model Specific Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.`),
     EffortLevel: z.number().nullable().describe(`
@@ -7164,12 +7372,12 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Number of input tokens written to the AI provider's prompt cache (a cache WRITE / creation) for this run, as reported by the provider. Populated for providers that report cache writes (e.g. Anthropic cache_creation_input_tokens); NULL or 0 for providers that do not bill/report writes (OpenAI, Gemini, Groq, Cerebras). Counts only; no cost is derived here.`),
     TokensCacheReadRollup: z.number().nullable().describe(`
         * * Field Name: TokensCacheReadRollup
-        * * Display Name: Tokens Cache Read (Rollup)
+        * * Display Name: Tokens Cache Read Rollup
         * * SQL Data Type: int
         * * Description: Rollup of TokensCacheRead across this prompt run and all of its descendant prompt runs (e.g. the individual attempts behind a parallel / multi-attempt / failover consolidation). For a leaf run this equals TokensCacheRead. Use this (not TokensCacheRead) when aggregating cache reads up a prompt-run or agent-run hierarchy so fan-out provider calls are not under-counted.`),
     TokensCacheWriteRollup: z.number().nullable().describe(`
         * * Field Name: TokensCacheWriteRollup
-        * * Display Name: Tokens Cache Write (Rollup)
+        * * Display Name: Tokens Cache Write Rollup
         * * SQL Data Type: int
         * * Description: Rollup of TokensCacheWrite across this prompt run and all of its descendant prompt runs. For a leaf run this equals TokensCacheWrite. Mirrors TokensUsedRollup/TokensPromptRollup; populated for providers that report cache writes (e.g. Anthropic), otherwise 0 or NULL.`),
     Prompt: z.string().describe(`
@@ -7178,19 +7386,19 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     Model: z.string().describe(`
         * * Field Name: Model
-        * * Display Name: Model
+        * * Display Name: Model Description
         * * SQL Data Type: nvarchar(50)`),
     Vendor: z.string().describe(`
         * * Field Name: Vendor
-        * * Display Name: Vendor
+        * * Display Name: Vendor Description
         * * SQL Data Type: nvarchar(50)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent
+        * * Display Name: Agent Description
         * * SQL Data Type: nvarchar(255)`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
-        * * Display Name: Configuration
+        * * Display Name: Configuration Description
         * * SQL Data Type: nvarchar(100)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
@@ -7206,24 +7414,56 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     Judge: z.string().nullable().describe(`
         * * Field Name: Judge
-        * * Display Name: Judge
+        * * Display Name: Judge Description
         * * SQL Data Type: nvarchar(255)`),
     ChildPrompt: z.string().nullable().describe(`
         * * Field Name: ChildPrompt
-        * * Display Name: Child Prompt
+        * * Display Name: Child Prompt Description
         * * SQL Data Type: nvarchar(255)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run
+        * * Display Name: Test Run Description
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent
+        * * Display Name: Root Parent Run
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Parent Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Parent Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf Node
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
     RootRerunFromPromptRunID: z.string().nullable().describe(`
         * * Field Name: RootRerunFromPromptRunID
-        * * Display Name: Root Rerun Source
+        * * Display Name: Root Rerun Run
         * * SQL Data Type: uniqueidentifier`),
+    RerunFromPromptRunIDDepth: z.number().nullable().describe(`
+        * * Field Name: RerunFromPromptRunIDDepth
+        * * Display Name: Rerun Depth
+        * * SQL Data Type: int`),
+    RerunFromPromptRunIDPath: z.string().nullable().describe(`
+        * * Field Name: RerunFromPromptRunIDPath
+        * * Display Name: Rerun Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    RerunFromPromptRunIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: RerunFromPromptRunIDIsLeaf
+        * * Display Name: Is Rerun Leaf
+        * * SQL Data Type: bit`),
+    RerunFromPromptRunIDChildCount: z.number().nullable().describe(`
+        * * Field Name: RerunFromPromptRunIDChildCount
+        * * Display Name: Rerun Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJAIPromptRunEntityType = z.infer<typeof MJAIPromptRunSchema>;
@@ -7339,7 +7579,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: References the type of AI model this prompt is designed for (LLM, Image, Audio, etc.).`),
     MinPowerRank: z.number().nullable().describe(`
         * * Field Name: MinPowerRank
-        * * Display Name: Minimum Power Rank
+        * * Display Name: Min Power Rank
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: The minimum power rank required for models to be considered for this prompt.`),
@@ -7424,7 +7664,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: Maximum number of retry attempts for API failures.`),
     RetryDelayMS: z.number().describe(`
         * * Field Name: RetryDelayMS
-        * * Display Name: Retry Delay (ms)
+        * * Display Name: Retry Delay (MS)
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Delay between retry attempts in milliseconds.`),
@@ -7453,7 +7693,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: When true, results from this prompt will be cached for potential reuse.`),
     CacheTTLSeconds: z.number().nullable().describe(`
         * * Field Name: CacheTTLSeconds
-        * * Display Name: Cache TTL (Seconds)
+        * * Display Name: Cache TTL (Sec)
         * * SQL Data Type: int
         * * Description: Time-to-live in seconds for cached results. NULL means results never expire.`),
     CacheMatchType: z.union([z.literal('Exact'), z.literal('Vector')]).describe(`
@@ -7559,13 +7799,13 @@ export const MJAIPromptSchema = z.object({
         * * Description: Default stop sequences for this prompt. Comma-delimited list of sequences that will stop generation when encountered. Can be overridden at runtime.`),
     IncludeLogProbs: z.boolean().nullable().describe(`
         * * Field Name: IncludeLogProbs
-        * * Display Name: Include Log Probabilities
+        * * Display Name: Include Log Probs
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Default setting for including log probabilities in the response. Can be overridden at runtime.`),
     TopLogProbs: z.number().nullable().describe(`
         * * Field Name: TopLogProbs
-        * * Display Name: Top Log Probabilities
+        * * Display Name: Top Log Probs
         * * SQL Data Type: int
         * * Description: Default number of top log probabilities to include when IncludeLogProbs is true. Can be overridden at runtime.`),
     FailoverStrategy: z.union([z.literal('NextBestModel'), z.literal('NextBestModel'), z.literal('None'), z.literal('None'), z.literal('PowerRank'), z.literal('PowerRank'), z.literal('SameModelDifferentVendor'), z.literal('SameModelDifferentVendor')]).describe(`
@@ -7592,7 +7832,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: Maximum number of failover attempts before giving up`),
     FailoverDelaySeconds: z.number().nullable().describe(`
         * * Field Name: FailoverDelaySeconds
-        * * Display Name: Failover Delay (Seconds)
+        * * Display Name: Failover Delay (Sec)
         * * SQL Data Type: int
         * * Default Value: 5
         * * Description: Initial delay in seconds between failover attempts`),
@@ -7655,7 +7895,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: Only applies when SelectionStrategy is Specific. When 0 (default), if none of the explicitly configured AIPromptModel entries have valid API credentials the system automatically falls back to Default/ByPower model selection across all active models matching the prompt AIModelTypeID. When 1, the system will hard-fail with an error instead of falling back, ensuring only the explicitly configured models are ever used.`),
     Template: z.string().describe(`
         * * Field Name: Template
-        * * Display Name: Template Text
+        * * Display Name: Template Content
         * * SQL Data Type: nvarchar(255)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
@@ -7677,6 +7917,22 @@ export const MJAIPromptSchema = z.object({
         * * Field Name: RootResultSelectorPromptID
         * * Display Name: Root Result Selector Prompt
         * * SQL Data Type: uniqueidentifier`),
+    ResultSelectorPromptIDDepth: z.number().nullable().describe(`
+        * * Field Name: ResultSelectorPromptIDDepth
+        * * Display Name: Selector Depth
+        * * SQL Data Type: int`),
+    ResultSelectorPromptIDPath: z.string().nullable().describe(`
+        * * Field Name: ResultSelectorPromptIDPath
+        * * Display Name: Selector Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ResultSelectorPromptIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ResultSelectorPromptIDIsLeaf
+        * * Display Name: Is Leaf Selector
+        * * SQL Data Type: bit`),
+    ResultSelectorPromptIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ResultSelectorPromptIDChildCount
+        * * Display Name: Selector Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJAIPromptEntityType = z.infer<typeof MJAIPromptSchema>;
@@ -8813,7 +9069,7 @@ export const MJAPIScopeSchema = z.object({
         * * Default Value: getutcdate()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: API Scopes (vwAPIScopes.ID)
         * * Description: Reference to parent scope for hierarchical organization. NULL indicates a root-level scope.`),
@@ -8835,17 +9091,33 @@ export const MJAPIScopeSchema = z.object({
         * * Description: Whether this scope is currently active. Inactive scopes are ignored during authorization.`),
     UIConfig: z.string().nullable().describe(`
         * * Field Name: UIConfig
-        * * Display Name: UI Config
+        * * Display Name: UI Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration for UI presentation. Schema: { "icon": "fa-solid fa-xxx", "color": "#hexcolor" }. Icon should be a Font Awesome class. Color should be a hex color code.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Hierarchy Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJAPIScopeEntityType = z.infer<typeof MJAPIScopeSchema>;
@@ -9663,7 +9935,7 @@ export const MJArtifactTypeSchema = z.object({
         * * Default Value: getutcdate()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
         * * Description: Parent artifact type ID for hierarchical artifact type organization. Child types inherit ExtractRules from parent but can override.`),
@@ -9721,12 +9993,28 @@ export const MJArtifactTypeSchema = z.object({
         * * Description: True for Artifact Types shipped as part of the MemberJunction default registry (JSON, PDF, Office variants, Image/Audio/Video, Generic Text, Generic Binary). False for user/org-supplied customizations. Used as a tiebreaker in MIME pattern resolution: user customizations win over shipped defaults at equal Priority.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Hierarchy Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Hierarchy Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf Node
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJArtifactTypeEntityType = z.infer<typeof MJArtifactTypeSchema>;
@@ -10072,12 +10360,12 @@ export const MJAuditLogTypeSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Authorizations (vwAuthorizations.ID)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     Parent: z.string().nullable().describe(`
@@ -10092,6 +10380,22 @@ export const MJAuditLogTypeSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJAuditLogTypeEntityType = z.infer<typeof MJAuditLogTypeSchema>;
@@ -10365,7 +10669,7 @@ export const MJAuthorizationSchema = z.object({
         * * Default Value: newsequentialid()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Authorizations (vwAuthorizations.ID)`),
     Name: z.string().describe(`
@@ -10374,13 +10678,13 @@ export const MJAuthorizationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Is Active
+        * * Display Name: Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates whether this authorization is currently active and can be granted to users or roles.`),
     UseAuditLog: z.boolean().describe(`
         * * Field Name: UseAuditLog
-        * * Display Name: Use Audit Log
+        * * Display Name: Enable Audit Log
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When set to 1, Audit Log records are created whenever this authorization is invoked for a user`),
@@ -10390,22 +10694,38 @@ export const MJAuthorizationSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Hierarchy Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Hierarchy Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf Node
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJAuthorizationEntityType = z.infer<typeof MJAuthorizationSchema>;
@@ -10710,13 +11030,13 @@ export const MJCollectionSchema = z.object({
         * * Default Value: newsequentialid()`),
     EnvironmentID: z.string().describe(`
         * * Field Name: EnvironmentID
-        * * Display Name: Environment ID
+        * * Display Name: Environment
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
         * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)`),
     Name: z.string().describe(`
@@ -10756,26 +11076,42 @@ export const MJCollectionSchema = z.object({
         * * Default Value: getutcdate()`),
     OwnerID: z.string().nullable().describe(`
         * * Field Name: OwnerID
-        * * Display Name: Owner ID
+        * * Display Name: Owner
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: The user who owns this collection and has full permissions`),
     Environment: z.string().describe(`
         * * Field Name: Environment
-        * * Display Name: Environment
+        * * Display Name: Environment Name
         * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(255)`),
     Owner: z.string().nullable().describe(`
         * * Field Name: Owner
-        * * Display Name: Owner
+        * * Display Name: Owner Name
         * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJCollectionEntityType = z.infer<typeof MJCollectionSchema>;
@@ -12502,7 +12838,7 @@ export const MJContentItemChunkSchema = z.object({
         * * Description: Zero-based ordinal position of this chunk within the parent Content Item, preserving the original order in which the text was split.`),
     Text: z.string().nullable().describe(`
         * * Field Name: Text
-        * * Display Name: Text
+        * * Display Name: Text Content
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector. NULL for media-only segments (for example an image, or a video window with no transcript), where the embedded payload is the media itself and any readable representation lives in Description/Transcript.`),
     VectorRecordID: z.string().nullable().describe(`
@@ -12599,12 +12935,12 @@ export const MJContentItemChunkSchema = z.object({
         * * Description: Exclusive character offset where this chunk ends within the parent Content Item's extracted text. See StartOffset. NULL for media segments.`),
     StartMs: z.number().nullable().describe(`
         * * Field Name: StartMs
-        * * Display Name: Start Milliseconds
+        * * Display Name: Start Time (ms)
         * * SQL Data Type: int
         * * Description: Start of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. Set by transcript- or window-based segmentation; enables time-windowed playback deep-links from a search result (for example 14:22-15:05 of a session recording). NULL for text segments.`),
     EndMs: z.number().nullable().describe(`
         * * Field Name: EndMs
-        * * Display Name: End Milliseconds
+        * * Display Name: End Time (ms)
         * * SQL Data Type: int
         * * Description: End of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. See StartMs. NULL for text segments.`),
     PageNumber: z.number().nullable().describe(`
@@ -12650,6 +12986,22 @@ export const MJContentItemChunkSchema = z.object({
         * * Field Name: RootParentChunkID
         * * Display Name: Root Parent Chunk
         * * SQL Data Type: uniqueidentifier`),
+    ParentChunkIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentChunkIDDepth
+        * * Display Name: Hierarchy Depth
+        * * SQL Data Type: int`),
+    ParentChunkIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentChunkIDPath
+        * * Display Name: Hierarchy Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentChunkIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentChunkIDIsLeaf
+        * * Display Name: Is Leaf Node
+        * * SQL Data Type: bit`),
+    ParentChunkIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentChunkIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJContentItemChunkEntityType = z.infer<typeof MJContentItemChunkSchema>;
@@ -12933,7 +13285,7 @@ export const MJContentItemSchema = z.object({
         * * Description: The identifier of this Content Item's vector record in the vector database (e.g. Pinecone) — the deterministic key MemberJunction assigns and upserts the embedding under when the item is embedded as a single vector. Provides traceability from the Content Item back to its stored vector. For chunked items, per-chunk identifiers are tracked on the ContentItemChunk entity instead.`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent Content
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
         * * Description: Optional self-reference to another Content Item that is the parent of this one, enabling a content-item hierarchy (e.g. a document and its sub-pages, or a site and its crawled pages). NULL for top-level items.`),
@@ -12968,12 +13320,28 @@ export const MJContentItemSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Content Name
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(250)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent Content
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJContentItemEntityType = z.infer<typeof MJContentItemSchema>;
@@ -14125,7 +14493,7 @@ export const MJConversationDetailSchema = z.object({
         * * Description: This column stores human or AI-generated reflections on how to improve future responses based on the user feedback and the AI output generated for prior messages in the conversation.`),
     SummaryOfEarlierConversation: z.string().nullable().describe(`
         * * Field Name: SummaryOfEarlierConversation
-        * * Display Name: Summary Of Earlier Conversation
+        * * Display Name: Conversation Summary
         * * SQL Data Type: nvarchar(MAX)
         * * Description: This column optionally stores a summary of the entire conversation leading up to this particular conversation detail record. It is used in long-running conversations to optimize performance by summarizing earlier parts.`),
     UserID: z.string().nullable().describe(`
@@ -14148,7 +14516,7 @@ export const MJConversationDetailSchema = z.object({
         * * Description: Optional reference to a specific version of a conversation artifact associated with this conversation detail`),
     CompletionTime: z.number().nullable().describe(`
         * * Field Name: CompletionTime
-        * * Display Name: Completion Time
+        * * Display Name: Completion Time (ms)
         * * SQL Data Type: bigint
         * * Description: Duration in milliseconds representing how long the AI response processing took to complete for this conversation detail.`),
     IsPinned: z.boolean().describe(`
@@ -14159,7 +14527,7 @@ export const MJConversationDetailSchema = z.object({
         * * Description: Indicates if this message is pinned within the conversation for easy reference`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent
+        * * Display Name: Parent Message
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
         * * Description: Optional reference to parent message for threaded conversations. NULL for top-level messages.`),
@@ -14225,12 +14593,12 @@ export const MJConversationDetailSchema = z.object({
         * * Description: Immutable timestamp marking when this turn ended/finalized. Set once on turn completion (do NOT read __mj_UpdatedAt for this — it moves on later edits). Paired with __mj_CreatedAt (turn start) and AIAgentSession.RecordingStartedAt (t0) to derive audio seek offsets.`),
     UtteranceStartMs: z.number().nullable().describe(`
         * * Field Name: UtteranceStartMs
-        * * Display Name: Utterance Start Ms
+        * * Display Name: Utterance Start (ms)
         * * SQL Data Type: int
         * * Description: Precise media-relative start of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise (fall back to __mj_CreatedAt - t0). Used by the evidence player for click-to-seek.`),
     UtteranceEndMs: z.number().nullable().describe(`
         * * Field Name: UtteranceEndMs
-        * * Display Name: Utterance End Ms
+        * * Display Name: Utterance End (ms)
         * * SQL Data Type: int
         * * Description: Precise media-relative end of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise. Used by the evidence player for click-to-seek.`),
     MediaType: z.union([z.literal('Audio'), z.literal('Text'), z.literal('Video')]).nullable().describe(`
@@ -14251,36 +14619,52 @@ export const MJConversationDetailSchema = z.object({
         * * Description: Monotonic, per-conversation ordinal assigned on insert (1-based). Provides a stable symbolic handle used by conversation-history retrieval tools and by the sequence markers embedded in compaction summaries. A summary stored in SummaryOfEarlierConversation on a given row covers all rows with a lower Sequence in the same conversation.`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
-        * * Display Name: Conversation
+        * * Display Name: Conversation Reference
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Reference
         * * SQL Data Type: nvarchar(100)`),
     Artifact: z.string().nullable().describe(`
         * * Field Name: Artifact
-        * * Display Name: Artifact
+        * * Display Name: Artifact Reference
         * * SQL Data Type: nvarchar(255)`),
     ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
-        * * Display Name: Artifact Version
+        * * Display Name: Artifact Version Reference
         * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Reference
         * * SQL Data Type: nvarchar(100)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent
+        * * Display Name: Agent Reference
         * * SQL Data Type: nvarchar(255)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run
+        * * Display Name: Test Run Reference
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent
+        * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Parent Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Parent Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf Node
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJConversationDetailEntityType = z.infer<typeof MJConversationDetailSchema>;
@@ -14434,7 +14818,7 @@ export const MJConversationSchema = z.object({
         * * Default Value: newsequentialid()`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     ExternalID: z.string().nullable().describe(`
@@ -14464,7 +14848,7 @@ export const MJConversationSchema = z.object({
         * * Description: Indicates if this conversation has been archived and should not appear in active lists.`),
     LinkedEntityID: z.string().nullable().describe(`
         * * Field Name: LinkedEntityID
-        * * Display Name: Linked Entity ID
+        * * Display Name: Linked Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
         * * Description: Generic 'what is this conversation about?' pointer. Names the Entity whose record this conversation references (e.g. MJ: Components when the conversation was started in the Form Builder cockpit about a specific form). Paired with LinkedRecordID via the CK_Conversation_LinkBinding cross-column CHECK — both NULL or both populated. Surfaces use this to filter their conversation list to entries about the currently-loaded record (e.g. 'show prior conversations about THIS form'). Reusable beyond Form Builder by any future dashboard / record-context surface that wants the same UX without further schema work.`),
@@ -14475,7 +14859,7 @@ export const MJConversationSchema = z.object({
         * * Description: The primary key of the record this conversation is about, serialized as a string so any entity type can be referenced regardless of its PK shape (UUID, int, composite). Used together with LinkedEntityID — see CK_Conversation_LinkBinding. Wide enough (NVARCHAR(500) in the baseline schema) to handle chunky composite keys. Surfaces query by (LinkedEntityID, LinkedRecordID) — or by LinkedRecordID IN (...) when a lineage of records shares conversation context (e.g. multiple Component versions of the same form lineage).`),
     DataContextID: z.string().nullable().describe(`
         * * Field Name: DataContextID
-        * * Display Name: Data Context ID
+        * * Display Name: Data Context
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Data Contexts (vwDataContexts.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -14500,13 +14884,13 @@ export const MJConversationSchema = z.object({
         * * Description: Tracks the processing status of the conversation: Available, Processing`),
     EnvironmentID: z.string().describe(`
         * * Field Name: EnvironmentID
-        * * Display Name: Environment ID
+        * * Display Name: Environment
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
         * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
     ProjectID: z.string().nullable().describe(`
         * * Field Name: ProjectID
-        * * Display Name: Project ID
+        * * Display Name: Project
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
     IsPinned: z.boolean().describe(`
@@ -14517,7 +14901,7 @@ export const MJConversationSchema = z.object({
         * * Description: Indicates if this conversation is pinned to the top of lists`),
     TestRunID: z.string().nullable().describe(`
         * * Field Name: TestRunID
-        * * Display Name: Test Run ID
+        * * Display Name: Test Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: Optional Foreign Key - Links this conversation to a test run if this conversation was generated as part of a test. Enables tracking test conversations separately from production conversations.`),
@@ -14534,13 +14918,13 @@ export const MJConversationSchema = z.object({
         * * Description: Controls where this conversation surfaces in the UI. Global = appears in the main Chat app (no application binding). Application = scoped to a specific Application's embedded chat surface (e.g. the Form Builder cockpit); hidden from the main chat list by default. Both = explicitly promoted to appear in BOTH the main chat list and the bound Application's embedded surface. Defaults to Global so pre-existing conversations stay visible in main chat. Paired with ApplicationID via a cross-column CHECK constraint: Global => ApplicationID IS NULL; Application or Both => ApplicationID IS NOT NULL.`),
     ApplicationID: z.string().nullable().describe(`
         * * Field Name: ApplicationID
-        * * Display Name: Application ID
+        * * Display Name: Application
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
         * * Description: Optional Application this conversation is bound to. Required when ApplicationScope is 'Application' or 'Both'; must be NULL when ApplicationScope is 'Global'. Enforced by the CK_Conversation_ScopeAppBinding cross-column CHECK. Used by embedded chat surfaces (e.g. the Form Builder cockpit) to filter their conversation list to just their own application's conversations.`),
     DefaultAgentID: z.string().nullable().describe(`
         * * Field Name: DefaultAgentID
-        * * Display Name: Default Agent ID
+        * * Display Name: Default Agent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
         * * Description: Optional per-conversation default AI agent. When set, the message router targets this agent for non-mention, non-continuity messages instead of falling through to the embedder-supplied default (e.g. Form Builder) or to Sage. Lets a user pin a conversation to a specific specialist agent (e.g. Research Agent) so Sage is never invoked for that thread. Routing precedence: @mention > continuity (last responder) > Conversation.DefaultAgentID > embedder's defaultAgentId input > Sage fallback.`),
@@ -14551,7 +14935,7 @@ export const MJConversationSchema = z.object({
         * * Description: Free-form JSON extensibility column. Apps that want to attach conversation-scoped metadata (UI state, draft notes, custom analytics tags, etc.) can stuff it here without a schema change. **Namespace your keys** to avoid collisions across apps — store e.g. {"form-builder.lastPreviewRecordId":"...","my-app.fooFlag":true} rather than top-level lastPreviewRecordId. Core MJ code paths do NOT read this column; it's purely for downstream apps. NVARCHAR(MAX) so callers can store arbitrarily large blobs, but treat that as a smell — heavy data belongs in a real entity, not a JSON dump.`),
     RecordingFileID: z.string().nullable().describe(`
         * * Field Name: RecordingFileID
-        * * Display Name: Recording File ID
+        * * Display Name: Recording File
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
         * * Description: For a Meeting-Room conversation, the MJ: Files row holding the room-level composite recording (the LiveKit egress MP4, copied into MJStorage). NULL when the meeting was not recorded.`),
@@ -14567,54 +14951,70 @@ export const MJConversationSchema = z.object({
         * * Description: Durable, opaque returning-visitor anchor (R3). Holds the value of a long-lived first-party cookie minted by the widget on first visit, used to find this visitor's prior conversations while they are still anonymous. Distinct from ExternalID (which stays per-session for RLS isolation). NULL for conversations that are not widget returning-visitor sessions.`),
     LastConversationID: z.string().nullable().describe(`
         * * Field Name: LastConversationID
-        * * Display Name: Last Conversation ID
+        * * Display Name: Last Conversation
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
         * * Description: Conversation-altitude returning-visitor chain (R2). Self-foreign-key to the visitor's immediately prior Conversation (found by VisitorKey or the resolved LinkedEntityID/LinkedRecordID pair at mint time). History and memory are conversation-scoped, so the chain lives here — NOT on AIAgentSession.LastSessionID, which owns reconnect/resume semantics and is walked by the replay viewer. Named to mirror AIAgentSession.LastSessionID. NULL for a brand-new visitor's first conversation.`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     LinkedEntity: z.string().nullable().describe(`
         * * Field Name: LinkedEntity
-        * * Display Name: Linked Entity
+        * * Display Name: Linked Entity Name
         * * SQL Data Type: nvarchar(255)`),
     DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
-        * * Display Name: Data Context
+        * * Display Name: Data Context Name
         * * SQL Data Type: nvarchar(255)`),
     Environment: z.string().describe(`
         * * Field Name: Environment
-        * * Display Name: Environment
+        * * Display Name: Environment Name
         * * SQL Data Type: nvarchar(255)`),
     Project: z.string().nullable().describe(`
         * * Field Name: Project
-        * * Display Name: Project
+        * * Display Name: Project Name
         * * SQL Data Type: nvarchar(255)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run
+        * * Display Name: Test Run Name
         * * SQL Data Type: nvarchar(255)`),
     Application: z.string().nullable().describe(`
         * * Field Name: Application
-        * * Display Name: Application
+        * * Display Name: Application Name
         * * SQL Data Type: nvarchar(100)`),
     DefaultAgent: z.string().nullable().describe(`
         * * Field Name: DefaultAgent
-        * * Display Name: Default Agent
+        * * Display Name: Default Agent Name
         * * SQL Data Type: nvarchar(255)`),
     RecordingFile: z.string().nullable().describe(`
         * * Field Name: RecordingFile
-        * * Display Name: Recording File
+        * * Display Name: Recording File Name
         * * SQL Data Type: nvarchar(500)`),
     LastConversation: z.string().nullable().describe(`
         * * Field Name: LastConversation
-        * * Display Name: Last Conversation
+        * * Display Name: Last Conversation Name
         * * SQL Data Type: nvarchar(255)`),
     RootLastConversationID: z.string().nullable().describe(`
         * * Field Name: RootLastConversationID
         * * Display Name: Root Last Conversation ID
         * * SQL Data Type: uniqueidentifier`),
+    LastConversationIDDepth: z.number().nullable().describe(`
+        * * Field Name: LastConversationIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    LastConversationIDPath: z.string().nullable().describe(`
+        * * Field Name: LastConversationIDPath
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    LastConversationIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: LastConversationIDIsLeaf
+        * * Display Name: Is Leaf
+        * * SQL Data Type: bit`),
+    LastConversationIDChildCount: z.number().nullable().describe(`
+        * * Field Name: LastConversationIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJConversationEntityType = z.infer<typeof MJConversationSchema>;
@@ -14730,6 +15130,22 @@ export const MJCredentialCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJCredentialCategoryEntityType = z.infer<typeof MJCredentialCategorySchema>;
@@ -14934,6 +15350,22 @@ export const MJDashboardCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJDashboardCategoryEntityType = z.infer<typeof MJDashboardCategorySchema>;
@@ -17858,7 +18290,7 @@ export const MJEntityFieldSchema = z.object({
         * * Description: Descriptive text explaining the purpose of the field`),
     AutoUpdateDescription: z.boolean().describe(`
         * * Field Name: AutoUpdateDescription
-        * * Display Name: Auto Update Description
+        * * Display Name: Auto-Update Description
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.`),
@@ -17876,12 +18308,12 @@ export const MJEntityFieldSchema = z.object({
         * * Description: Indicates if the field must have unique values within the entity.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category
+        * * Display Name: Form Category
         * * SQL Data Type: nvarchar(255)
         * * Description: Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: SQL Type
+        * * Display Name: Data Type
         * * SQL Data Type: nvarchar(100)
         * * Description: SQL Data type (auto maintained by CodeGen)`),
     Length: z.number().nullable().describe(`
@@ -17988,13 +18420,13 @@ export const MJEntityFieldSchema = z.object({
         * * Description: Determines the default width for this field when included in a view`),
     AllowUpdateAPI: z.boolean().describe(`
         * * Field Name: AllowUpdateAPI
-        * * Display Name: Allow Update API
+        * * Display Name: Allow API Update
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: If set to 1, this field will be considered updateable by the API and object model. For this field to have effect, the column type must be updateable (e.g. not part of the primary key and not auto-increment)`),
     AllowUpdateInView: z.boolean().describe(`
         * * Field Name: AllowUpdateInView
-        * * Display Name: Allow Update In View
+        * * Display Name: Allow View Update
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: If set to 1, and if AllowUpdateAPI=1, the field can be edited within a view when the view is in edit mode.`),
@@ -18006,7 +18438,7 @@ export const MJEntityFieldSchema = z.object({
         * * Description: If set to 1, this column will be included in user search queries for both traditional and full text search`),
     FullTextSearchEnabled: z.boolean().describe(`
         * * Field Name: FullTextSearchEnabled
-        * * Display Name: Full Text Search Enabled
+        * * Display Name: Full Text Search
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: If set to 1, CodeGen will automatically generate a Full Text Catalog/Index in the database and include this field in the search index.`),
@@ -18056,24 +18488,24 @@ export const MJEntityFieldSchema = z.object({
         * * Description: Name of the field in the Related Entity that this field links to (auto maintained by CodeGen)`),
     IncludeRelatedEntityNameFieldInBaseView: z.boolean().describe(`
         * * Field Name: IncludeRelatedEntityNameFieldInBaseView
-        * * Display Name: Include Related Name In View
+        * * Display Name: Include Related Name
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field`),
     RelatedEntityNameFieldMap: z.string().nullable().describe(`
         * * Field Name: RelatedEntityNameFieldMap
-        * * Display Name: Related Entity Name Map
+        * * Display Name: Name Field Map
         * * SQL Data Type: nvarchar(255)
         * * Description: For foreign key fields, maps which field in the related entity contains the display name. This is used by CodeGen to automatically add in virtual fields for the "Name Field" of the related entity.`),
     RelatedEntityDisplayType: z.string().describe(`
         * * Field Name: RelatedEntityDisplayType
-        * * Display Name: Related Entity Display Type
+        * * Display Name: Display Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Search
         * * Description: Controls the generated form in the MJ Explorer UI - defaults to a search box, other option is a drop down. Possible values are Search and Dropdown`),
     EntityIDFieldName: z.string().nullable().describe(`
         * * Field Name: EntityIDFieldName
-        * * Display Name: Entity ID Field Name
+        * * Display Name: Entity ID Field
         * * SQL Data Type: nvarchar(100)
         * * Description: Optional, used for "Soft Keys" to link records to different entity/record combinations on a per-record basis (for example the FileEntityRecordLink table has an EntityID/RecordID field pair. For that entity, the RecordID specifies "EntityID" for this field. This information allows MJ to detect soft keys/links for dependency detection, merging and for preventing orphaned soft-linked records during delete operations.`),
     __mj_CreatedAt: z.date().describe(`
@@ -18093,7 +18525,7 @@ export const MJEntityFieldSchema = z.object({
         * * Description: A comma-delimited string indicating the default scope for field visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for a simple method of filtering field defaults for visibility, not security enforcement.`),
     AutoUpdateRelatedEntityInfo: z.boolean().describe(`
         * * Field Name: AutoUpdateRelatedEntityInfo
-        * * Display Name: Auto Update Related Info
+        * * Display Name: Auto-Update Related Info
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates whether the related entity information should be automatically updated from the database schema. When set to 0, relationships not part of the database schema can be manually defined at the application and AI agent level. Defaults to 1.`),
@@ -18163,7 +18595,7 @@ export const MJEntityFieldSchema = z.object({
         * * Description: References the encryption key to use when Encrypt is true. Required if Encrypt is true.`),
     AllowDecryptInAPI: z.boolean().describe(`
         * * Field Name: AllowDecryptInAPI
-        * * Display Name: Allow Decrypt In API
+        * * Display Name: Allow Decrypt
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, encrypted fields will be decrypted before returning via API. When false, behavior depends on SendEncryptedValue. Default is false (secure).`),
@@ -18187,7 +18619,7 @@ export const MJEntityFieldSchema = z.object({
         * * Description: When 1, indicates RelatedEntityID/RelatedEntityFieldName were set via metadata (not a database constraint). Protects these fields from being cleared by schema sync.`),
     RelatedEntityJoinFields: z.string().nullable().describe(`
         * * Field Name: RelatedEntityJoinFields
-        * * Display Name: Related Join Fields
+        * * Display Name: Join Fields
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration for additional fields to join from the related entity into this entity's base view. Supports modes: extend (add to NameField), override (replace NameField), disable (no joins). Schema: { mode?: string, fields?: [{ field: string, alias?: string }] }`),
     JSONType: z.string().nullable().describe(`
@@ -18197,13 +18629,13 @@ export const MJEntityFieldSchema = z.object({
         * * Description: The name of the TypeScript interface/type for this JSON field. When set, CodeGen emits a strongly-typed Object-suffixed accessor using this type instead of only the default string getter/setter.`),
     JSONTypeIsArray: z.boolean().describe(`
         * * Field Name: JSONTypeIsArray
-        * * Display Name: JSON Is Array
+        * * Display Name: Is JSON Array
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: If true, the field holds a JSON array of JSONType items. The Object accessor returns Array<JSONType> | null and the setter accepts Array<JSONType> | null.`),
     JSONTypeDefinition: z.string().nullable().describe(`
         * * Field Name: JSONTypeDefinition
-        * * Display Name: JSON Type Definition
+        * * Display Name: Type Definition
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.`),
     UserSearchPredicateAPI: z.union([z.literal('BeginsWith'), z.literal('Contains'), z.literal('EndsWith'), z.literal('Exact')]).describe(`
@@ -18250,7 +18682,7 @@ export const MJEntityFieldSchema = z.object({
         * * Description: Optional JSON policy object that declares this foreign-key field as a first-class embedded record, so CodeGen can emit {FieldName}_Object / {FieldName}_EnsureObject() on the entity subclass. Shape is IEmbeddedRecordConfig: OnClear ('delete' | 'orphan' | 'refuse', default orphan) and LoadNested ('inherit' | 'related', default inherit). RelatedEntity and the FK field name are NOT repeated here — they are this row's RelatedEntityID and Name. AllowsNull on this same row decides whether the object is provisioned with GetEntityObject (required FK) or via Ensure (nullable FK). NULL means the field is an ordinary FK, which is the default and reproduces pre-feature behaviour exactly.`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
-        * * Display Name: Field Code Name
+        * * Display Name: Code Name
         * * SQL Data Type: nvarchar(MAX)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
@@ -18282,23 +18714,23 @@ export const MJEntityFieldSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     RelatedEntitySchemaName: z.string().nullable().describe(`
         * * Field Name: RelatedEntitySchemaName
-        * * Display Name: Related Entity Schema
+        * * Display Name: Related Schema
         * * SQL Data Type: nvarchar(255)`),
     RelatedEntityBaseTable: z.string().nullable().describe(`
         * * Field Name: RelatedEntityBaseTable
-        * * Display Name: Related Entity Base Table
+        * * Display Name: Related Base Table
         * * SQL Data Type: nvarchar(255)`),
     RelatedEntityBaseView: z.string().nullable().describe(`
         * * Field Name: RelatedEntityBaseView
-        * * Display Name: Related Entity Base View
+        * * Display Name: Related Base View
         * * SQL Data Type: nvarchar(255)`),
     RelatedEntityCodeName: z.string().nullable().describe(`
         * * Field Name: RelatedEntityCodeName
-        * * Display Name: Related Entity Code Name
+        * * Display Name: Related Code Name
         * * SQL Data Type: nvarchar(MAX)`),
     RelatedEntityClassName: z.string().nullable().describe(`
         * * Field Name: RelatedEntityClassName
-        * * Display Name: Related Entity Class Name
+        * * Display Name: Related Class Name
         * * SQL Data Type: nvarchar(MAX)`),
 });
 
@@ -19716,7 +20148,7 @@ export const MJFileCategorySchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: File Categories (vwFileCategories.ID)`),
     Description: z.string().nullable().describe(`
@@ -19735,12 +20167,28 @@ export const MJFileCategorySchema = z.object({
         * * Default Value: getutcdate()`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJFileCategoryEntityType = z.infer<typeof MJFileCategorySchema>;
@@ -20063,6 +20511,89 @@ export const MJFileSchema = z.object({
 export type MJFileEntityType = z.infer<typeof MJFileSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Form Chrome Rules
+ */
+export const MJFormChromeRuleSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Parent Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Parent form entity this rule applies to.`),
+    TargetKind: z.union([z.literal('Contribution'), z.literal('Relationship')]).describe(`
+        * * Field Name: TargetKind
+        * * Display Name: Target Kind
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Contribution
+    *   * Relationship
+        * * Description: 'Relationship' targets a related entity on the parent form. 'Contribution' targets a form contribution by key.`),
+    RelatedEntityID: z.string().nullable().describe(`
+        * * Field Name: RelatedEntityID
+        * * Display Name: Related Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Related entity to pin when TargetKind is Relationship. Null for Contribution rows.`),
+    ContributionKey: z.string().nullable().describe(`
+        * * Field Name: ContributionKey
+        * * Display Name: Contribution Key
+        * * SQL Data Type: nvarchar(256)
+        * * Description: Contribution key to pin when TargetKind is Contribution. Null for Relationship rows.`),
+    Inclusion: z.union([z.literal('More'), z.literal('None'), z.literal('Primary')]).describe(`
+        * * Field Name: Inclusion
+        * * Display Name: Inclusion
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * More
+    *   * None
+    *   * Primary
+        * * Description: How the target appears on the parent form: Primary (first-class rail), More (parked), or None (not a candidate).`),
+    JoinFields: z.string().nullable().describe(`
+        * * Field Name: JoinFields
+        * * Display Name: Join Fields
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON string array of join field names for a same-table OR filter (Bill-To OR Ship-To). Null keeps the L1 join, if any.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Tie-break when more than one rule matches the same target. Higher Sequence wins.`),
+    Title: z.string().nullable().describe(`
+        * * Field Name: Title
+        * * Display Name: Title
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional admin display title for this section. Null keeps the relationship DisplayName or contribution name. Survives OpenApp upgrades because the row is keyed by RelatedEntityID / ContributionKey, not by the previous label.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+    RelatedEntity: z.string().nullable().describe(`
+        * * Field Name: RelatedEntity
+        * * Display Name: Related Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJFormChromeRuleEntityType = z.infer<typeof MJFormChromeRuleSchema>;
+
+/**
  * zod schema definition for the entity MJ: Generated Code Categories
  */
 export const MJGeneratedCodeCategorySchema = z.object({
@@ -20081,7 +20612,7 @@ export const MJGeneratedCodeCategorySchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent Category
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Generated Code Categories (vwGeneratedCodeCategories.ID)
         * * Description: Parent category ID, allowing for hierarchical categorization.`),
@@ -20101,8 +20632,24 @@ export const MJGeneratedCodeCategorySchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJGeneratedCodeCategoryEntityType = z.infer<typeof MJGeneratedCodeCategorySchema>;
@@ -21097,12 +21644,12 @@ export const MJListCategorySchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: List Categories (vwListCategories.ID)`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -21117,16 +21664,32 @@ export const MJListCategorySchema = z.object({
         * * Default Value: getutcdate()`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(100)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJListCategoryEntityType = z.infer<typeof MJListCategorySchema>;
@@ -24410,12 +24973,12 @@ export const MJProjectSchema = z.object({
         * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent Project
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: Name
+        * * Display Name: Project Name
         * * SQL Data Type: nvarchar(255)
         * * Description: Display name for the project`),
     Description: z.string().nullable().describe(`
@@ -24455,12 +25018,28 @@ export const MJProjectSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJProjectEntityType = z.infer<typeof MJProjectSchema>;
@@ -24725,7 +25304,7 @@ export const MJQueryCategorySchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent Category
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Query Categories (vwQueryCategories.ID)`),
     Description: z.string().nullable().describe(`
@@ -24734,53 +25313,69 @@ export const MJQueryCategorySchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
-        * * Display Name: __mj _Created At
+        * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
-        * * Display Name: __mj _Updated At
+        * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
     DefaultCacheEnabled: z.boolean().describe(`
         * * Field Name: DefaultCacheEnabled
-        * * Display Name: Default Cache Enabled
+        * * Display Name: Enable Default Cache
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Default cache setting for queries in this category`),
     DefaultCacheTTLMinutes: z.number().nullable().describe(`
         * * Field Name: DefaultCacheTTLMinutes
-        * * Display Name: Default Cache TTL Minutes
+        * * Display Name: Default TTL (Minutes)
         * * SQL Data Type: int
         * * Description: Default TTL in minutes for cached results of queries in this category`),
     DefaultCacheMaxSize: z.number().nullable().describe(`
         * * Field Name: DefaultCacheMaxSize
-        * * Display Name: Default Cache Max Size
+        * * Display Name: Default Max Cache Size
         * * SQL Data Type: int
         * * Description: Default maximum cache size for queries in this category`),
     CacheInheritanceEnabled: z.boolean().describe(`
         * * Field Name: CacheInheritanceEnabled
-        * * Display Name: Cache Inheritance Enabled
+        * * Display Name: Enable Cache Inheritance
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true, queries without cache config will inherit from this category`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(50)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJQueryCategoryEntityType = z.infer<typeof MJQueryCategorySchema>;
@@ -25699,7 +26294,7 @@ export const MJRecordChangeSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     Type: z.union([z.literal('Create'), z.literal('Delete'), z.literal('Snapshot'), z.literal('Update')]).describe(`
         * * Field Name: Type
-        * * Display Name: Change Type
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Create
     * * Value List Type: List
@@ -25796,7 +26391,7 @@ export const MJRecordChangeSchema = z.object({
         * * Description: Optional user-entered explanation captured at restore time. Persisted for audit purposes (regulated industries often require a reason for every reversal). NULL when the user did not enter one or when the change was not a restore.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity Name
+        * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
@@ -25818,6 +26413,22 @@ export const MJRecordChangeSchema = z.object({
         * * Field Name: RootRestoredFromID
         * * Display Name: Root Restored From ID
         * * SQL Data Type: uniqueidentifier`),
+    RestoredFromIDDepth: z.number().nullable().describe(`
+        * * Field Name: RestoredFromIDDepth
+        * * Display Name: Restored From ID Depth
+        * * SQL Data Type: int`),
+    RestoredFromIDPath: z.string().nullable().describe(`
+        * * Field Name: RestoredFromIDPath
+        * * Display Name: Restored From ID Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    RestoredFromIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: RestoredFromIDIsLeaf
+        * * Display Name: Restored From ID Is Leaf
+        * * SQL Data Type: bit`),
+    RestoredFromIDChildCount: z.number().nullable().describe(`
+        * * Field Name: RestoredFromIDChildCount
+        * * Display Name: Restored From ID Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJRecordChangeEntityType = z.infer<typeof MJRecordChangeSchema>;
@@ -26214,6 +26825,22 @@ export const MJRecordProcessCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Hierarchy Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Hierarchy Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf Node
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJRecordProcessCategoryEntityType = z.infer<typeof MJRecordProcessCategorySchema>;
@@ -26549,6 +27176,22 @@ export const MJRemoteOperationCategorySchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Hierarchy Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf Node
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJRemoteOperationCategoryEntityType = z.infer<typeof MJRemoteOperationCategorySchema>;
@@ -28929,10 +29572,12 @@ export type MJSignatureRequestEntityType = z.infer<typeof MJSignatureRequestSche
 export const MJSkillSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     Name: z.string().describe(`
         * * Field Name: Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(50)`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
@@ -28951,12 +29596,28 @@ export const MJSkillSchema = z.object({
         * * Default Value: getutcdate()`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(50)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJSkillEntityType = z.infer<typeof MJSkillSchema>;
@@ -29585,12 +30246,12 @@ export const MJTagSchema = z.object({
         * * Description: Optional cap on the number of direct children allowed under this tag. NULL = unlimited. Auto-grow is blocked once this cap is reached and routed to the TagSuggestion queue.`),
     MaxDescendantDepth: z.number().nullable().describe(`
         * * Field Name: MaxDescendantDepth
-        * * Display Name: Max Descendant Depth
+        * * Display Name: Max Depth
         * * SQL Data Type: int
         * * Description: Optional cap on the depth of the subtree rooted at this tag. NULL = unlimited. 0 = leaf-only (no children at all). Enforced via ancestor walk during auto-grow.`),
     MinWeight: z.number().nullable().describe(`
         * * Field Name: MinWeight
-        * * Display Name: Min Weight
+        * * Display Name: Minimum Weight
         * * SQL Data Type: decimal(3, 2)
         * * Description: Optional minimum classifier confidence (0.00-1.00) required for this tag to be applied. Items below this floor are routed to the TagSuggestion queue instead of being tagged.`),
     RequiresReview: z.boolean().describe(`
@@ -29626,10 +30287,42 @@ export const MJTagSchema = z.object({
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Hierarchy Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf Node
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
     RootMergedIntoTagID: z.string().nullable().describe(`
         * * Field Name: RootMergedIntoTagID
         * * Display Name: Root Merged Into
         * * SQL Data Type: uniqueidentifier`),
+    MergedIntoTagIDDepth: z.number().nullable().describe(`
+        * * Field Name: MergedIntoTagIDDepth
+        * * Display Name: Merged Depth
+        * * SQL Data Type: int`),
+    MergedIntoTagIDPath: z.string().nullable().describe(`
+        * * Field Name: MergedIntoTagIDPath
+        * * Display Name: Merged Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    MergedIntoTagIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: MergedIntoTagIDIsLeaf
+        * * Display Name: Merged Is Leaf
+        * * SQL Data Type: bit`),
+    MergedIntoTagIDChildCount: z.number().nullable().describe(`
+        * * Field Name: MergedIntoTagIDChildCount
+        * * Display Name: Merged Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJTagEntityType = z.infer<typeof MJTagSchema>;
@@ -29860,7 +30553,7 @@ export const MJTaskSchema = z.object({
         * * Description: Failure detail when Status is Failed. Null for tasks that have not failed.`),
     AgentRunID: z.string().nullable().describe(`
         * * Field Name: AgentRunID
-        * * Display Name: Agent Run ID
+        * * Display Name: Agent Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
         * * Description: The specific AI Agent Run that executed this task. Distinct from the conversation-level link: sibling tasks in one graph each get their own run, so this is what run-history and Gantt views should follow.`),
@@ -29876,7 +30569,7 @@ export const MJTaskSchema = z.object({
         * * Description: When the current dispatcher claim lapses. Long-running tasks extend it by heartbeat; reconciliation treats an expired claim as an orphaned task and returns it to Pending.`),
     ActionID: z.string().nullable().describe(`
         * * Field Name: ActionID
-        * * Display Name: Action ID
+        * * Display Name: Action
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
         * * Description: The Action this task executes, when the node is action-assigned rather than agent-assigned or awaiting a person. Mutually exclusive with UserID and AgentID (CK_Task_Assignment). Set by durable entity-action dispatch, where a single-node graph carries one action to run with restart recovery.`),
@@ -29896,7 +30589,7 @@ export const MJTaskSchema = z.object({
         * * Description: Which kind of workflow step this task represents. NULL for a task that is not part of a workflow, such as a hand-authored to-do. Determines which of AgentID/ActionID/PromptID/UserID is meaningful and how Configuration is read. This is the executable vocabulary and is deliberately not the same value list as AIAgentStep.StepType, which describes a step at design time.`),
     PromptID: z.string().nullable().describe(`
         * * Field Name: PromptID
-        * * Display Name: Prompt ID
+        * * Display Name: Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)`),
     Configuration: z.any().nullable().describe(`
@@ -29907,48 +30600,64 @@ export const MJTaskSchema = z.object({
         * * Description: Everything about this step that has no column of its own, as JSON: the loop definition for a ForEach or While step, an agent step's message and template parameters, the mappings that move data between this step and the workflow payload, and the execution policy (timeout, retries, what to do on failure). Typed by ITaskStepConfiguration.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Task Type Name
         * * SQL Data Type: nvarchar(255)`),
     Environment: z.string().describe(`
         * * Field Name: Environment
-        * * Display Name: Environment
+        * * Display Name: Environment Name
         * * SQL Data Type: nvarchar(255)`),
     Project: z.string().nullable().describe(`
         * * Field Name: Project
-        * * Display Name: Project
+        * * Display Name: Project Name
         * * SQL Data Type: nvarchar(255)`),
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail
+        * * Display Name: Conversation Name
         * * SQL Data Type: nvarchar(100)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent
+        * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
     AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
-        * * Display Name: Agent Run
+        * * Display Name: Agent Run Name
         * * SQL Data Type: nvarchar(255)`),
     Action: z.string().nullable().describe(`
         * * Field Name: Action
-        * * Display Name: Action
+        * * Display Name: Action Name
         * * SQL Data Type: nvarchar(425)`),
     Prompt: z.string().nullable().describe(`
         * * Field Name: Prompt
-        * * Display Name: Prompt
+        * * Display Name: Prompt Name
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Task
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Hierarchy Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Hierarchy Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf Node
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJTaskEntityType = z.infer<typeof MJTaskSchema>;
@@ -29974,7 +30683,7 @@ export const MJTemplateCategorySchema = z.object({
         * * Description: Description of the template category`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Template Categories (vwTemplateCategories.ID)`),
     UserID: z.string().describe(`
@@ -29994,7 +30703,7 @@ export const MJTemplateCategorySchema = z.object({
         * * Default Value: getutcdate()`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
@@ -30002,8 +30711,24 @@ export const MJTemplateCategorySchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJTemplateCategoryEntityType = z.infer<typeof MJTemplateCategorySchema>;
@@ -31011,7 +31736,7 @@ export const MJTestSuiteSchema = z.object({
         * * Default Value: newsequentialid()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent Suite
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Suites (vwTestSuites.ID)
         * * Description: Optional parent suite ID for hierarchical organization. NULL for root-level suites.`),
@@ -31068,12 +31793,28 @@ export const MJTestSuiteSchema = z.object({
         * * Description: JSON object containing variable values to apply to all tests in this suite. These values override test-level defaults but can be overridden by run-level values.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Hierarchy Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Hierarchy Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf Node
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJTestSuiteEntityType = z.infer<typeof MJTestSuiteSchema>;
@@ -32253,7 +32994,7 @@ export const MJUserViewCategorySchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: User View Categories (vwUserViewCategories.ID)`),
     EntityID: z.string().describe(`
@@ -32278,7 +33019,7 @@ export const MJUserViewCategorySchema = z.object({
         * * Default Value: getutcdate()`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(100)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
@@ -32290,8 +33031,24 @@ export const MJUserViewCategorySchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJUserViewCategoryEntityType = z.infer<typeof MJUserViewCategorySchema>;
@@ -33061,7 +33818,7 @@ export const MJVersionLabelSchema = z.object({
         * * Description: When Scope is Entity or Record, identifies the target entity. NULL for System scope.`),
     RecordID: z.string().nullable().describe(`
         * * Field Name: RecordID
-        * * Display Name: Record ID
+        * * Display Name: Record
         * * SQL Data Type: nvarchar(750)
         * * Description: When Scope is Record, identifies the specific record. NULL for System and Entity scopes.`),
     ParentID: z.string().nullable().describe(`
@@ -33116,7 +33873,7 @@ export const MJVersionLabelSchema = z.object({
         * * Default Value: getutcdate()`),
     Entity: z.string().nullable().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
@@ -33124,12 +33881,28 @@ export const MJVersionLabelSchema = z.object({
         * * SQL Data Type: nvarchar(200)`),
     CreatedByUser: z.string().describe(`
         * * Field Name: CreatedByUser
-        * * Display Name: Created By User Name
+        * * Display Name: Created By
         * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
+    ParentIDDepth: z.number().nullable().describe(`
+        * * Field Name: ParentIDDepth
+        * * Display Name: Hierarchy Depth
+        * * SQL Data Type: int`),
+    ParentIDPath: z.string().nullable().describe(`
+        * * Field Name: ParentIDPath
+        * * Display Name: Hierarchy Path
+        * * SQL Data Type: nvarchar(MAX)`),
+    ParentIDIsLeaf: z.boolean().nullable().describe(`
+        * * Field Name: ParentIDIsLeaf
+        * * Display Name: Is Leaf Node
+        * * SQL Data Type: bit`),
+    ParentIDChildCount: z.number().nullable().describe(`
+        * * Field Name: ParentIDChildCount
+        * * Display Name: Child Count
+        * * SQL Data Type: int`),
 });
 
 export type MJVersionLabelEntityType = z.infer<typeof MJVersionLabelSchema>;
@@ -33686,6 +34459,61 @@ export class MJActionAuthorizationEntity extends BaseEntity<MJActionAuthorizatio
  */
 @RegisterClass(BaseEntity, 'MJ: Action Categories')
 export class MJActionCategoryEntity extends BaseEntity<MJActionCategoryEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJActionCategoryEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJActionCategoryEntity>({
+      EntityName: 'MJ: Action Categories',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJActionCategoryEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJActionCategoryEntity>({
+      EntityName: 'MJ: Action Categories',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJActionCategoryEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJActionCategoryEntity>({
+      EntityName: 'MJ: Action Categories',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Action Categories record from the database
     * @param ID: string - primary key value to load the MJ: Action Categories record.
@@ -33776,7 +34604,7 @@ export class MJActionCategoryEntity extends BaseEntity<MJActionCategoryEntityTyp
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -33786,7 +34614,7 @@ export class MJActionCategoryEntity extends BaseEntity<MJActionCategoryEntityTyp
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -33810,6 +34638,42 @@ export class MJActionCategoryEntity extends BaseEntity<MJActionCategoryEntityTyp
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -35141,6 +36005,61 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
         Source: 'cache',
   });
 
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJActionEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJActionEntity>({
+      EntityName: 'MJ: Actions',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJActionEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJActionEntity>({
+      EntityName: 'MJ: Actions',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJActionEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJActionEntity>({
+      EntityName: 'MJ: Actions',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Actions record from the database
     * @param ID: string - primary key value to load the MJ: Actions record.
@@ -35349,7 +36268,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
 
     /**
     * * Field Name: CodeApprovedByUserID
-    * * Display Name: Approved By User
+    * * Display Name: Approved By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -35558,7 +36477,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
 
     /**
     * * Field Name: MaxExecutionTimeMS
-    * * Display Name: Max Execution Time (ms)
+    * * Display Name: Max Execution Time (MS)
     * * SQL Data Type: int
     * * Description: Universal maximum execution time in milliseconds for a single action invocation. Enforced by ActionEngine across ALL action types (Custom, Generated, Runtime) via AbortSignal passed through RunActionParams. NULL means use the engine default.
     */
@@ -35571,7 +36490,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
 
     /**
     * * Field Name: CreatedByAgentID
-    * * Display Name: Created By Agent
+    * * Display Name: Created By Agent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
     * * Description: Optional reference to the AI Agent that authored this action — populated when an agent (e.g. ActionSmith) dynamically generates a Runtime action. NULL for human-authored Custom/Generated actions. Provides an audit trail linking agent-generated capabilities back to their creator.
@@ -35594,7 +36513,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
 
     /**
     * * Field Name: CodeApprovedByUser
-    * * Display Name: Approved By User Name
+    * * Display Name: Approved By User
     * * SQL Data Type: nvarchar(100)
     */
     get CodeApprovedByUser(): string | null {
@@ -35603,7 +36522,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent Action Name
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(425)
     */
     get Parent(): string | null {
@@ -35621,7 +36540,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
 
     /**
     * * Field Name: CreatedByAgent
-    * * Display Name: Created By Agent Name
+    * * Display Name: Created By Agent
     * * SQL Data Type: nvarchar(255)
     */
     get CreatedByAgent(): string | null {
@@ -35635,6 +36554,42 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Hierarchy Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Hierarchy Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf Node
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -36303,6 +37258,61 @@ export class MJAIAgentArtifactTypeEntity extends BaseEntity<MJAIAgentArtifactTyp
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Categories')
 export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJAIAgentCategoryEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJAIAgentCategoryEntity>({
+      EntityName: 'MJ: AI Agent Categories',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJAIAgentCategoryEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJAIAgentCategoryEntity>({
+      EntityName: 'MJ: AI Agent Categories',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJAIAgentCategoryEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJAIAgentCategoryEntity>({
+      EntityName: 'MJ: AI Agent Categories',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: AI Agent Categories record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Categories record.
@@ -36362,7 +37372,7 @@ export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityT
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent
+    * * Display Name: Parent Category
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Categories (vwAIAgentCategories.ID)
     * * Description: Self-referencing foreign key to the parent category, forming a tree hierarchy. NULL for root categories.
@@ -36442,7 +37452,7 @@ export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityT
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(200)
     */
     get Parent(): string | null {
@@ -36451,7 +37461,7 @@ export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityT
 
     /**
     * * Field Name: DefaultStorageAccount
-    * * Display Name: Default Storage Account Name
+    * * Display Name: Storage Account Name
     * * SQL Data Type: nvarchar(200)
     */
     get DefaultStorageAccount(): string | null {
@@ -36465,6 +37475,42 @@ export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityT
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Hierarchy Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Hierarchy Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf Node
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -39301,6 +40347,61 @@ export interface MJAIAgentNoteEntity_IAISecondaryScopes {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Notes')
 export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJAIAgentNoteEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootConsolidatedIntoNoteID = '${rootId}' AND ConsolidatedIntoNoteIDDepth <= ${maxDepth}`
+      : `RootConsolidatedIntoNoteID = '${rootId}'`;
+    const result = await rv.RunView<MJAIAgentNoteEntity>({
+      EntityName: 'MJ: AI Agent Notes',
+      ExtraFilter: filter,
+      OrderBy: 'ConsolidatedIntoNoteIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJAIAgentNoteEntity[]> {
+    const path = this.Get('ConsolidatedIntoNoteIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJAIAgentNoteEntity>({
+      EntityName: 'MJ: AI Agent Notes',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ConsolidatedIntoNoteIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJAIAgentNoteEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJAIAgentNoteEntity>({
+      EntityName: 'MJ: AI Agent Notes',
+      ExtraFilter: `ConsolidatedIntoNoteID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: AI Agent Notes record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Notes record.
@@ -39406,7 +40507,7 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Note Type
+    * * Display Name: Note Category
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Preference
     * * Value List Type: List
@@ -39441,7 +40542,7 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
 
     /**
     * * Field Name: Comments
-    * * Display Name: Comments
+    * * Display Name: Internal Comments
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Internal comments about this note, not included in agent context injection.
     */
@@ -39503,7 +40604,7 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
 
     /**
     * * Field Name: SourceAIAgentRunID
-    * * Display Name: Source AI Agent Run
+    * * Display Name: Source Agent Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
     * * Description: Optional reference to the AI agent run that generated this note.
@@ -39572,7 +40673,7 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
 
     /**
     * * Field Name: PrimaryScopeRecordID
-    * * Display Name: Primary Scope Record ID
+    * * Display Name: Primary Scope Record
     * * SQL Data Type: nvarchar(100)
     * * Description: The record ID within the primary scope entity. NULL means global note. When set with empty SecondaryScopes, indicates primary-scope-only note.
     */
@@ -39798,7 +40899,7 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
 
     /**
     * * Field Name: SourceAIAgentRun
-    * * Display Name: Source AI Agent Run Name
+    * * Display Name: Source Agent Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get SourceAIAgentRun(): string | null {
@@ -39848,6 +40949,42 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     */
     get RootConsolidatedIntoNoteID(): string | null {
         return this.Get('RootConsolidatedIntoNoteID');
+    }
+
+    /**
+    * * Field Name: ConsolidatedIntoNoteIDDepth
+    * * Display Name: Consolidation Depth
+    * * SQL Data Type: int
+    */
+    get ConsolidatedIntoNoteIDDepth(): number | null {
+        return this.Get('ConsolidatedIntoNoteIDDepth');
+    }
+
+    /**
+    * * Field Name: ConsolidatedIntoNoteIDPath
+    * * Display Name: Consolidation Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ConsolidatedIntoNoteIDPath(): string | null {
+        return this.Get('ConsolidatedIntoNoteIDPath');
+    }
+
+    /**
+    * * Field Name: ConsolidatedIntoNoteIDIsLeaf
+    * * Display Name: Is Leaf Node
+    * * SQL Data Type: bit
+    */
+    get ConsolidatedIntoNoteIDIsLeaf(): boolean | null {
+        return this.Get('ConsolidatedIntoNoteIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ConsolidatedIntoNoteIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ConsolidatedIntoNoteIDChildCount(): number | null {
+        return this.Get('ConsolidatedIntoNoteIDChildCount');
     }
 }
 
@@ -41511,6 +42648,61 @@ export interface MJAIAgentRunStepEntity_AgentSkillInvocationProvenance {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Run Steps')
 export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJAIAgentRunStepEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJAIAgentRunStepEntity>({
+      EntityName: 'MJ: AI Agent Run Steps',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJAIAgentRunStepEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJAIAgentRunStepEntity>({
+      EntityName: 'MJ: AI Agent Run Steps',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJAIAgentRunStepEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJAIAgentRunStepEntity>({
+      EntityName: 'MJ: AI Agent Run Steps',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: AI Agent Run Steps record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Run Steps record.
@@ -41969,7 +43161,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: AgentRun
-    * * Display Name: Agent Run Context
+    * * Display Name: Agent Run Details
     * * SQL Data Type: nvarchar(255)
     */
     get AgentRun(): string | null {
@@ -41978,7 +43170,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent Step Context
+    * * Display Name: Parent Step Details
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -41992,6 +43184,42 @@ detailed information about what validation rules failed.
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Hierarchy Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Hierarchy Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf Node
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -42046,6 +43274,116 @@ export interface MJAIAgentRunEntity_IAISecondaryScopes {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Runs')
 export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetParentRunIDDescendants(maxDepth?: number): Promise<MJAIAgentRunEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentRunID = '${rootId}' AND ParentRunIDDepth <= ${maxDepth}`
+      : `RootParentRunID = '${rootId}'`;
+    const result = await rv.RunView<MJAIAgentRunEntity>({
+      EntityName: 'MJ: AI Agent Runs',
+      ExtraFilter: filter,
+      OrderBy: 'ParentRunIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetParentRunIDAncestors(): Promise<MJAIAgentRunEntity[]> {
+    const path = this.Get('ParentRunIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJAIAgentRunEntity>({
+      EntityName: 'MJ: AI Agent Runs',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentRunIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetParentRunIDChildren(): Promise<MJAIAgentRunEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJAIAgentRunEntity>({
+      EntityName: 'MJ: AI Agent Runs',
+      ExtraFilter: `ParentRunID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetLastRunIDDescendants(maxDepth?: number): Promise<MJAIAgentRunEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootLastRunID = '${rootId}' AND LastRunIDDepth <= ${maxDepth}`
+      : `RootLastRunID = '${rootId}'`;
+    const result = await rv.RunView<MJAIAgentRunEntity>({
+      EntityName: 'MJ: AI Agent Runs',
+      ExtraFilter: filter,
+      OrderBy: 'LastRunIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetLastRunIDAncestors(): Promise<MJAIAgentRunEntity[]> {
+    const path = this.Get('LastRunIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJAIAgentRunEntity>({
+      EntityName: 'MJ: AI Agent Runs',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'LastRunIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetLastRunIDChildren(): Promise<MJAIAgentRunEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJAIAgentRunEntity>({
+      EntityName: 'MJ: AI Agent Runs',
+      ExtraFilter: `LastRunID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: AI Agent Runs record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Runs record.
@@ -42170,7 +43508,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: ID
-    * * Display Name: Run ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     * * Description: Unique identifier for this agent run
@@ -42390,7 +43728,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalPromptTokensUsed
-    * * Display Name: Prompt Tokens
+    * * Display Name: Total Prompt Tokens Used
     * * SQL Data Type: int
     * * Description: Total number of prompt/input tokens used across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.
     */
@@ -42403,7 +43741,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalCompletionTokensUsed
-    * * Display Name: Completion Tokens
+    * * Display Name: Total Completion Tokens Used
     * * SQL Data Type: int
     * * Description: Total number of completion/output tokens generated across all AIPromptRun executions during this agent run. This provides a breakdown of the TotalTokensUsed field to help analyze the ratio of input vs output tokens consumed by the agent.
     */
@@ -42416,7 +43754,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalTokensUsedRollup
-    * * Display Name: Total Tokens (Rollup)
+    * * Display Name: Total Tokens Used Rollup
     * * SQL Data Type: int
     * * Description: Total tokens used including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalTokensUsed. For parent agents, this includes the sum of all descendant agent tokens. Calculated as TotalPromptTokensUsedRollup + TotalCompletionTokensUsedRollup.
     */
@@ -42429,7 +43767,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalPromptTokensUsedRollup
-    * * Display Name: Prompt Tokens (Rollup)
+    * * Display Name: Total Prompt Tokens Used Rollup
     * * SQL Data Type: int
     * * Description: Total prompt/input tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalPromptTokensUsed. For parent agents, this includes the sum of all descendant agent prompt tokens.
     */
@@ -42442,7 +43780,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalCompletionTokensUsedRollup
-    * * Display Name: Completion Tokens (Rollup)
+    * * Display Name: Total Completion Tokens Used Rollup
     * * SQL Data Type: int
     * * Description: Total completion/output tokens including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCompletionTokensUsed. For parent agents, this includes the sum of all descendant agent completion tokens.
     */
@@ -42455,7 +43793,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalCostRollup
-    * * Display Name: Total Cost (Rollup)
+    * * Display Name: Total Cost Rollup
     * * SQL Data Type: decimal(19, 8)
     * * Description: Total cost including this agent run and all sub-agent runs. For leaf agents (no sub-agents), this equals TotalCost. For parent agents, this includes the sum of all descendant agent costs. Note: This assumes all costs are in the same currency for accurate rollup.
     */
@@ -42482,7 +43820,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: ConversationDetailSequence
-    * * Display Name: Detail Sequence
+    * * Display Name: Conversation Detail Sequence
     * * SQL Data Type: int
     * * Description: If a conversation detail spawned multiple agent runs, tracks the order of their spawn/execution
     */
@@ -42549,7 +43887,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: Message
-    * * Display Name: Final Message
+    * * Display Name: Message
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Final message from the agent to the end user at the end of a run
     */
@@ -42589,7 +43927,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
 
     /**
     * * Field Name: TotalPromptIterations
-    * * Display Name: Prompt Iterations
+    * * Display Name: Total Prompt Iterations
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: Total number of prompt iterations executed during this agent run. Incremented
@@ -42646,7 +43984,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Data
-    * * Display Name: Execution Data
+    * * Display Name: Data
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON serialized data that was passed for template rendering and prompt execution. This data was passed to the agent's prompt as well as all sub-agents.
     */
@@ -42659,7 +43997,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Verbose
-    * * Display Name: Verbose Logging
+    * * Display Name: Verbose
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates whether verbose logging was enabled during this agent execution. When true, detailed decision-making and execution flow was logged.
@@ -42828,7 +44166,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: TotalCacheReadTokensUsed
-    * * Display Name: Cache Read Tokens
+    * * Display Name: Total Cache Read Tokens
     * * SQL Data Type: int
     * * Description: Total input tokens served from the AI provider's prompt cache (cache reads / hits) across this agent run, summed from child prompt runs' TokensCacheReadRollup and sub-agent runs' TotalCacheReadTokensUsed. Counts only; the cost impact (cache reads are billed at a steep discount) is reflected in TotalCost. The cache counterpart of TotalPromptTokensUsed.
     */
@@ -42841,7 +44179,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: TotalCacheWriteTokensUsed
-    * * Display Name: Cache Write Tokens
+    * * Display Name: Total Cache Write Tokens
     * * SQL Data Type: int
     * * Description: Total input tokens written to the AI provider's prompt cache (cache writes / creation) across this agent run, summed from child prompt runs' TokensCacheWriteRollup and sub-agent runs' TotalCacheWriteTokensUsed. Populated for providers that bill cache creation (e.g. Anthropic); 0 or NULL otherwise. The cache counterpart of TotalCompletionTokensUsed.
     */
@@ -42931,7 +44269,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ParentRun
-    * * Display Name: Parent Run Info
+    * * Display Name: Parent Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get ParentRun(): string | null {
@@ -42940,7 +44278,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Conversation
-    * * Display Name: Conversation Info
+    * * Display Name: Conversation Name
     * * SQL Data Type: nvarchar(255)
     */
     get Conversation(): string | null {
@@ -42949,7 +44287,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: User
-    * * Display Name: User Info
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -42958,7 +44296,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail Info
+    * * Display Name: Conversation Detail Name
     * * SQL Data Type: nvarchar(100)
     */
     get ConversationDetail(): string | null {
@@ -42967,7 +44305,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: LastRun
-    * * Display Name: Last Run Info
+    * * Display Name: Last Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get LastRun(): string | null {
@@ -42976,7 +44314,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: Configuration
-    * * Display Name: Configuration Info
+    * * Display Name: Configuration Name
     * * SQL Data Type: nvarchar(100)
     */
     get Configuration(): string | null {
@@ -42985,7 +44323,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideModel
-    * * Display Name: Override Model Info
+    * * Display Name: Override Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get OverrideModel(): string | null {
@@ -42994,7 +44332,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: OverrideVendor
-    * * Display Name: Override Vendor Info
+    * * Display Name: Override Vendor Name
     * * SQL Data Type: nvarchar(50)
     */
     get OverrideVendor(): string | null {
@@ -43003,7 +44341,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: ScheduledJobRun
-    * * Display Name: Scheduled Job Run Info
+    * * Display Name: Scheduled Job Run Name
     * * SQL Data Type: nvarchar(200)
     */
     get ScheduledJobRun(): string | null {
@@ -43012,7 +44350,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run Info
+    * * Display Name: Test Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -43021,7 +44359,7 @@ each time the agent processes a prompt step.
 
     /**
     * * Field Name: PrimaryScopeEntity
-    * * Display Name: Primary Scope Entity Info
+    * * Display Name: Primary Scope Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get PrimaryScopeEntity(): string | null {
@@ -43038,12 +44376,84 @@ each time the agent processes a prompt step.
     }
 
     /**
+    * * Field Name: ParentRunIDDepth
+    * * Display Name: Parent Run Depth
+    * * SQL Data Type: int
+    */
+    get ParentRunIDDepth(): number | null {
+        return this.Get('ParentRunIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentRunIDPath
+    * * Display Name: Parent Run Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentRunIDPath(): string | null {
+        return this.Get('ParentRunIDPath');
+    }
+
+    /**
+    * * Field Name: ParentRunIDIsLeaf
+    * * Display Name: Is Leaf Run
+    * * SQL Data Type: bit
+    */
+    get ParentRunIDIsLeaf(): boolean | null {
+        return this.Get('ParentRunIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentRunIDChildCount
+    * * Display Name: Child Run Count
+    * * SQL Data Type: int
+    */
+    get ParentRunIDChildCount(): number | null {
+        return this.Get('ParentRunIDChildCount');
+    }
+
+    /**
     * * Field Name: RootLastRunID
     * * Display Name: Root Last Run
     * * SQL Data Type: uniqueidentifier
     */
     get RootLastRunID(): string | null {
         return this.Get('RootLastRunID');
+    }
+
+    /**
+    * * Field Name: LastRunIDDepth
+    * * Display Name: Last Run Depth
+    * * SQL Data Type: int
+    */
+    get LastRunIDDepth(): number | null {
+        return this.Get('LastRunIDDepth');
+    }
+
+    /**
+    * * Field Name: LastRunIDPath
+    * * Display Name: Last Run Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get LastRunIDPath(): string | null {
+        return this.Get('LastRunIDPath');
+    }
+
+    /**
+    * * Field Name: LastRunIDIsLeaf
+    * * Display Name: Is Last Run Leaf
+    * * SQL Data Type: bit
+    */
+    get LastRunIDIsLeaf(): boolean | null {
+        return this.Get('LastRunIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: LastRunIDChildCount
+    * * Display Name: Last Run Child Count
+    * * SQL Data Type: int
+    */
+    get LastRunIDChildCount(): number | null {
+        return this.Get('LastRunIDChildCount');
     }
 }
 
@@ -43996,6 +45406,61 @@ export class MJAIAgentSessionChannelEntity extends BaseEntity<MJAIAgentSessionCh
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Sessions')
 export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJAIAgentSessionEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootLastSessionID = '${rootId}' AND LastSessionIDDepth <= ${maxDepth}`
+      : `RootLastSessionID = '${rootId}'`;
+    const result = await rv.RunView<MJAIAgentSessionEntity>({
+      EntityName: 'MJ: AI Agent Sessions',
+      ExtraFilter: filter,
+      OrderBy: 'LastSessionIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJAIAgentSessionEntity[]> {
+    const path = this.Get('LastSessionIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJAIAgentSessionEntity>({
+      EntityName: 'MJ: AI Agent Sessions',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'LastSessionIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJAIAgentSessionEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJAIAgentSessionEntity>({
+      EntityName: 'MJ: AI Agent Sessions',
+      ExtraFilter: `LastSessionID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: AI Agent Sessions record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Sessions record.
@@ -44063,7 +45528,7 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
 
     /**
     * * Field Name: AgentID
-    * * Display Name: Agent ID
+    * * Display Name: Agent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
     */
@@ -44076,7 +45541,7 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -44108,7 +45573,7 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
 
     /**
     * * Field Name: ConversationID
-    * * Display Name: Conversation ID
+    * * Display Name: Conversation
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
     */
@@ -44121,7 +45586,7 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
 
     /**
     * * Field Name: LastSessionID
-    * * Display Name: Last Session ID
+    * * Display Name: Last Session
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Sessions (vwAIAgentSessions.ID)
     */
@@ -44134,7 +45599,7 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
 
     /**
     * * Field Name: HostInstanceID
-    * * Display Name: Host Instance ID
+    * * Display Name: Host Instance
     * * SQL Data Type: nvarchar(200)
     * * Description: Identifier of the server node currently hosting this sessions in-memory sockets (e.g. hostname:pid:bootId). Used for affinity and janitor orphan reconciliation.
     */
@@ -44258,7 +45723,7 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
 
     /**
     * * Field Name: RecordingFileID
-    * * Display Name: Recording File ID
+    * * Display Name: Recording File
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
     */
@@ -44271,7 +45736,7 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
 
     /**
     * * Field Name: LinkedEntityID
-    * * Display Name: Linked Entity ID
+    * * Display Name: Linked Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     * * Description: Polymorphic counterparty-identity entity. Foreign key to Entity — identifies WHICH entity this realtime session's counterparty resolved to (e.g. User, a member/contact record, BizAppsCommon Person). Paired with LinkedRecordID via the CK_AIAgentSession_LinkBinding both-or-neither check, mirroring Conversation's linked pair. NULL while the session's counterparty is anonymous/unresolved.
@@ -44285,7 +45750,7 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
 
     /**
     * * Field Name: LinkedRecordID
-    * * Display Name: Linked Record ID
+    * * Display Name: Linked Record
     * * SQL Data Type: nvarchar(500)
     * * Description: Polymorphic counterparty-identity record key. The primary-key value of the record (within LinkedEntityID's entity) this session resolved to, serialized as a string so any entity type can be referenced regardless of PK shape (UUID, int, composite). NVARCHAR(500), intentionally NOT FK-constrained. Used together with LinkedEntityID — see CK_AIAgentSession_LinkBinding. NULL while the session's counterparty is anonymous/unresolved.
     */
@@ -44298,7 +45763,7 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent
+    * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -44307,7 +45772,7 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -44316,7 +45781,7 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
 
     /**
     * * Field Name: Conversation
-    * * Display Name: Conversation
+    * * Display Name: Conversation Name
     * * SQL Data Type: nvarchar(255)
     */
     get Conversation(): string | null {
@@ -44325,7 +45790,7 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
 
     /**
     * * Field Name: RecordingFile
-    * * Display Name: Recording File
+    * * Display Name: Recording File Name
     * * SQL Data Type: nvarchar(500)
     */
     get RecordingFile(): string | null {
@@ -44334,7 +45799,7 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
 
     /**
     * * Field Name: LinkedEntity
-    * * Display Name: Linked Entity
+    * * Display Name: Linked Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get LinkedEntity(): string | null {
@@ -44343,11 +45808,47 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
 
     /**
     * * Field Name: RootLastSessionID
-    * * Display Name: Root Last Session ID
+    * * Display Name: Root Session
     * * SQL Data Type: uniqueidentifier
     */
     get RootLastSessionID(): string | null {
         return this.Get('RootLastSessionID');
+    }
+
+    /**
+    * * Field Name: LastSessionIDDepth
+    * * Display Name: Session Depth
+    * * SQL Data Type: int
+    */
+    get LastSessionIDDepth(): number | null {
+        return this.Get('LastSessionIDDepth');
+    }
+
+    /**
+    * * Field Name: LastSessionIDPath
+    * * Display Name: Session Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get LastSessionIDPath(): string | null {
+        return this.Get('LastSessionIDPath');
+    }
+
+    /**
+    * * Field Name: LastSessionIDIsLeaf
+    * * Display Name: Is Leaf Session
+    * * SQL Data Type: bit
+    */
+    get LastSessionIDIsLeaf(): boolean | null {
+        return this.Get('LastSessionIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: LastSessionIDChildCount
+    * * Display Name: Child Session Count
+    * * SQL Data Type: int
+    */
+    get LastSessionIDChildCount(): number | null {
+        return this.Get('LastSessionIDChildCount');
     }
 }
 
@@ -45689,6 +47190,116 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
         Source: 'cache',
   });
 
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJAIAgentEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJAIAgentEntity>({
+      EntityName: 'MJ: AI Agents',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJAIAgentEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJAIAgentEntity>({
+      EntityName: 'MJ: AI Agents',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJAIAgentEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJAIAgentEntity>({
+      EntityName: 'MJ: AI Agents',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDefaultCoAgentIDDescendants(maxDepth?: number): Promise<MJAIAgentEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootDefaultCoAgentID = '${rootId}' AND DefaultCoAgentIDDepth <= ${maxDepth}`
+      : `RootDefaultCoAgentID = '${rootId}'`;
+    const result = await rv.RunView<MJAIAgentEntity>({
+      EntityName: 'MJ: AI Agents',
+      ExtraFilter: filter,
+      OrderBy: 'DefaultCoAgentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetDefaultCoAgentIDAncestors(): Promise<MJAIAgentEntity[]> {
+    const path = this.Get('DefaultCoAgentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJAIAgentEntity>({
+      EntityName: 'MJ: AI Agents',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'DefaultCoAgentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetDefaultCoAgentIDChildren(): Promise<MJAIAgentEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJAIAgentEntity>({
+      EntityName: 'MJ: AI Agents',
+      ExtraFilter: `DefaultCoAgentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: AI Agents record from the database
     * @param ID: string - primary key value to load the MJ: AI Agents record.
@@ -45995,7 +47606,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent
+    * * Display Name: Parent Agent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
     * * Description: References the parent agent in the hierarchical structure. If NULL, this is a root (top-level) agent.
@@ -46069,7 +47680,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageThreshold
-    * * Display Name: Context Compression Message Threshold
+    * * Display Name: Compression Message Threshold
     * * SQL Data Type: int
     * * Description: Number of messages that triggers context compression when EnableContextCompression is true.
     */
@@ -46082,7 +47693,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionPromptID
-    * * Display Name: Context Compression Prompt ID
+    * * Display Name: Compression Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     */
@@ -46095,7 +47706,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageRetentionCount
-    * * Display Name: Context Compression Message Retention Count
+    * * Display Name: Compression Retention Count
     * * SQL Data Type: int
     * * Description: Number of recent messages to keep uncompressed when context compression is applied.
     */
@@ -46108,7 +47719,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type
+    * * Display Name: Agent Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
     * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.
@@ -46267,7 +47878,7 @@ data flow when the agent executes its own prompt step.
 
     /**
     * * Field Name: FinalPayloadValidationMode
-    * * Display Name: Final Payload Validation Mode
+    * * Display Name: Final Validation Mode
     * * SQL Data Type: nvarchar(25)
     * * Default Value: Retry
     * * Value List Type: List
@@ -46286,7 +47897,7 @@ data flow when the agent executes its own prompt step.
 
     /**
     * * Field Name: FinalPayloadValidationMaxRetries
-    * * Display Name: Final Payload Validation Max Retries
+    * * Display Name: Final Validation Max Retries
     * * SQL Data Type: int
     * * Default Value: 3
     * * Description: Maximum number of retry attempts allowed when FinalPayloadValidation fails with
@@ -46396,7 +48007,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: StartingPayloadValidationMode
-    * * Display Name: Starting Payload Validation Mode
+    * * Display Name: Starting Validation Mode
     * * SQL Data Type: nvarchar(25)
     * * Default Value: Fail
     * * Value List Type: List
@@ -46414,7 +48025,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultPromptEffortLevel
-    * * Display Name: Default Effort Level
+    * * Display Name: Default Prompt Effort Level
     * * SQL Data Type: int
     * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.
     */
@@ -46459,7 +48070,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUserID
-    * * Display Name: Owner User
+    * * Display Name: Owner
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -46706,7 +48317,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: InlineStorageThresholdBytes
-    * * Display Name: Inline Storage Threshold (Bytes)
+    * * Display Name: Inline Storage Threshold Bytes
     * * SQL Data Type: int
     * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.
     */
@@ -47066,7 +48677,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ConversationSummaryPromptID
-    * * Display Name: Conversation Summary Prompt ID
+    * * Display Name: Conversation Summary Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     * * Description: Per-agent override for the cross-turn conversation compaction prompt. Null inherits the agent type's value.
@@ -47080,7 +48691,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Agent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -47089,7 +48700,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ContextCompressionPrompt
-    * * Display Name: Context Compression Prompt
+    * * Display Name: Compression Prompt Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContextCompressionPrompt(): string | null {
@@ -47107,7 +48718,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultArtifactType
-    * * Display Name: Default Artifact Type
+    * * Display Name: Default Artifact Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get DefaultArtifactType(): string | null {
@@ -47116,7 +48727,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUser
-    * * Display Name: Owner User
+    * * Display Name: Owner User Name
     * * SQL Data Type: nvarchar(100)
     */
     get OwnerUser(): string {
@@ -47134,7 +48745,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: Category
-    * * Display Name: Category
+    * * Display Name: Category Name
     * * SQL Data Type: nvarchar(200)
     */
     get Category(): string | null {
@@ -47179,7 +48790,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ConversationSummaryPrompt
-    * * Display Name: Conversation Summary Prompt
+    * * Display Name: Conversation Summary Prompt Name
     * * SQL Data Type: nvarchar(255)
     */
     get ConversationSummaryPrompt(): string | null {
@@ -47188,7 +48799,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent Agent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -47196,12 +48807,84 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Parent Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Parent Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf Parent
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Parent Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
+    }
+
+    /**
     * * Field Name: RootDefaultCoAgentID
-    * * Display Name: Root Default Co-Agent ID
+    * * Display Name: Root Default Co-Agent
     * * SQL Data Type: uniqueidentifier
     */
     get RootDefaultCoAgentID(): string | null {
         return this.Get('RootDefaultCoAgentID');
+    }
+
+    /**
+    * * Field Name: DefaultCoAgentIDDepth
+    * * Display Name: Co-Agent Depth
+    * * SQL Data Type: int
+    */
+    get DefaultCoAgentIDDepth(): number | null {
+        return this.Get('DefaultCoAgentIDDepth');
+    }
+
+    /**
+    * * Field Name: DefaultCoAgentIDPath
+    * * Display Name: Co-Agent Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get DefaultCoAgentIDPath(): string | null {
+        return this.Get('DefaultCoAgentIDPath');
+    }
+
+    /**
+    * * Field Name: DefaultCoAgentIDIsLeaf
+    * * Display Name: Is Leaf Co-Agent
+    * * SQL Data Type: bit
+    */
+    get DefaultCoAgentIDIsLeaf(): boolean | null {
+        return this.Get('DefaultCoAgentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: DefaultCoAgentIDChildCount
+    * * Display Name: Co-Agent Child Count
+    * * SQL Data Type: int
+    */
+    get DefaultCoAgentIDChildCount(): number | null {
+        return this.Get('DefaultCoAgentIDChildCount');
     }
 }
 
@@ -47219,6 +48902,61 @@ if this limit is exceeded.
  */
 @RegisterClass(BaseEntity, 'MJ: AI Architectures')
 export class MJAIArchitectureEntity extends BaseEntity<MJAIArchitectureEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJAIArchitectureEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentArchitectureID = '${rootId}' AND ParentArchitectureIDDepth <= ${maxDepth}`
+      : `RootParentArchitectureID = '${rootId}'`;
+    const result = await rv.RunView<MJAIArchitectureEntity>({
+      EntityName: 'MJ: AI Architectures',
+      ExtraFilter: filter,
+      OrderBy: 'ParentArchitectureIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJAIArchitectureEntity[]> {
+    const path = this.Get('ParentArchitectureIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJAIArchitectureEntity>({
+      EntityName: 'MJ: AI Architectures',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentArchitectureIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJAIArchitectureEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJAIArchitectureEntity>({
+      EntityName: 'MJ: AI Architectures',
+      ExtraFilter: `ParentArchitectureID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: AI Architectures record from the database
     * @param ID: string - primary key value to load the MJ: AI Architectures record.
@@ -47251,7 +48989,7 @@ export class MJAIArchitectureEntity extends BaseEntity<MJAIArchitectureEntityTyp
 
     /**
     * * Field Name: Name
-    * * Display Name: Architecture Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {
@@ -47293,7 +49031,7 @@ export class MJAIArchitectureEntity extends BaseEntity<MJAIArchitectureEntityTyp
 
     /**
     * * Field Name: ParentArchitectureID
-    * * Display Name: Parent Architecture ID
+    * * Display Name: Parent Architecture
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Architectures (vwAIArchitectures.ID)
     * * Description: Hierarchical relationship to parent architecture. Used for variants like Sparse Transformer being a child of Transformer.
@@ -47363,7 +49101,7 @@ export class MJAIArchitectureEntity extends BaseEntity<MJAIArchitectureEntityTyp
 
     /**
     * * Field Name: ParentArchitecture
-    * * Display Name: Parent Architecture
+    * * Display Name: Parent Architecture Name
     * * SQL Data Type: nvarchar(100)
     */
     get ParentArchitecture(): string | null {
@@ -47372,11 +49110,47 @@ export class MJAIArchitectureEntity extends BaseEntity<MJAIArchitectureEntityTyp
 
     /**
     * * Field Name: RootParentArchitectureID
-    * * Display Name: Root Parent Architecture ID
+    * * Display Name: Root Parent Architecture
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentArchitectureID(): string | null {
         return this.Get('RootParentArchitectureID');
+    }
+
+    /**
+    * * Field Name: ParentArchitectureIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentArchitectureIDDepth(): number | null {
+        return this.Get('ParentArchitectureIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentArchitectureIDPath
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentArchitectureIDPath(): string | null {
+        return this.Get('ParentArchitectureIDPath');
+    }
+
+    /**
+    * * Field Name: ParentArchitectureIDIsLeaf
+    * * Display Name: Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentArchitectureIDIsLeaf(): boolean | null {
+        return this.Get('ParentArchitectureIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentArchitectureIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentArchitectureIDChildCount(): number | null {
+        return this.Get('ParentArchitectureIDChildCount');
     }
 }
 
@@ -48287,6 +50061,61 @@ export class MJAIConfigurationParamEntity extends BaseEntity<MJAIConfigurationPa
  */
 @RegisterClass(BaseEntity, 'MJ: AI Configurations')
 export class MJAIConfigurationEntity extends BaseEntity<MJAIConfigurationEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJAIConfigurationEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJAIConfigurationEntity>({
+      EntityName: 'MJ: AI Configurations',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJAIConfigurationEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJAIConfigurationEntity>({
+      EntityName: 'MJ: AI Configurations',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJAIConfigurationEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJAIConfigurationEntity>({
+      EntityName: 'MJ: AI Configurations',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: AI Configurations record from the database
     * @param ID: string - primary key value to load the MJ: AI Configurations record.
@@ -48489,7 +50318,7 @@ export class MJAIConfigurationEntity extends BaseEntity<MJAIConfigurationEntityT
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent Configuration
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
     * * Description: Optional reference to a parent configuration. When set, this configuration inherits prompt-model mappings and parameters from its parent. Child configurations can override specific settings while inheriting defaults from the parent chain. Supports N-level deep inheritance.
@@ -48503,7 +50332,7 @@ export class MJAIConfigurationEntity extends BaseEntity<MJAIConfigurationEntityT
 
     /**
     * * Field Name: DefaultPromptForContextCompression
-    * * Display Name: Default Prompt For Context Compression
+    * * Display Name: Default Prompt For Context Compression Name
     * * SQL Data Type: nvarchar(255)
     */
     get DefaultPromptForContextCompression(): string | null {
@@ -48512,7 +50341,7 @@ export class MJAIConfigurationEntity extends BaseEntity<MJAIConfigurationEntityT
 
     /**
     * * Field Name: DefaultPromptForContextSummarization
-    * * Display Name: Default Prompt For Context Summarization
+    * * Display Name: Default Prompt For Context Summarization Name
     * * SQL Data Type: nvarchar(255)
     */
     get DefaultPromptForContextSummarization(): string | null {
@@ -48521,7 +50350,7 @@ export class MJAIConfigurationEntity extends BaseEntity<MJAIConfigurationEntityT
 
     /**
     * * Field Name: DefaultStorageProvider
-    * * Display Name: Default Storage Provider
+    * * Display Name: Default Storage Provider Name
     * * SQL Data Type: nvarchar(50)
     */
     get DefaultStorageProvider(): string | null {
@@ -48530,7 +50359,7 @@ export class MJAIConfigurationEntity extends BaseEntity<MJAIConfigurationEntityT
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(100)
     */
     get Parent(): string | null {
@@ -48539,11 +50368,47 @@ export class MJAIConfigurationEntity extends BaseEntity<MJAIConfigurationEntityT
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Parent Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Parent Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf Node
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -51030,6 +52895,61 @@ export interface MJAIModelEntity_IAIModelConfiguration {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Models')
 export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJAIModelEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootPriorVersionID = '${rootId}' AND PriorVersionIDDepth <= ${maxDepth}`
+      : `RootPriorVersionID = '${rootId}'`;
+    const result = await rv.RunView<MJAIModelEntity>({
+      EntityName: 'MJ: AI Models',
+      ExtraFilter: filter,
+      OrderBy: 'PriorVersionIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJAIModelEntity[]> {
+    const path = this.Get('PriorVersionIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJAIModelEntity>({
+      EntityName: 'MJ: AI Models',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'PriorVersionIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJAIModelEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJAIModelEntity>({
+      EntityName: 'MJ: AI Models',
+      ExtraFilter: `PriorVersionID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: AI Models record from the database
     * @param ID: string - primary key value to load the MJ: AI Models record.
@@ -51438,6 +53358,61 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Prompt Categories')
 export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJAIPromptCategoryEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJAIPromptCategoryEntity>({
+      EntityName: 'MJ: AI Prompt Categories',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJAIPromptCategoryEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJAIPromptCategoryEntity>({
+      EntityName: 'MJ: AI Prompt Categories',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJAIPromptCategoryEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJAIPromptCategoryEntity>({
+      EntityName: 'MJ: AI Prompt Categories',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: AI Prompt Categories record from the database
     * @param ID: string - primary key value to load the MJ: AI Prompt Categories record.
@@ -51542,6 +53517,42 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -52195,6 +54206,116 @@ export class MJAIPromptRunMediaEntity extends BaseEntity<MJAIPromptRunMediaEntit
  */
 @RegisterClass(BaseEntity, 'MJ: AI Prompt Runs')
 export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJAIPromptRunEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJAIPromptRunEntity>({
+      EntityName: 'MJ: AI Prompt Runs',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJAIPromptRunEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJAIPromptRunEntity>({
+      EntityName: 'MJ: AI Prompt Runs',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJAIPromptRunEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJAIPromptRunEntity>({
+      EntityName: 'MJ: AI Prompt Runs',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetRerunFromPromptRunIDDescendants(maxDepth?: number): Promise<MJAIPromptRunEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootRerunFromPromptRunID = '${rootId}' AND RerunFromPromptRunIDDepth <= ${maxDepth}`
+      : `RootRerunFromPromptRunID = '${rootId}'`;
+    const result = await rv.RunView<MJAIPromptRunEntity>({
+      EntityName: 'MJ: AI Prompt Runs',
+      ExtraFilter: filter,
+      OrderBy: 'RerunFromPromptRunIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetRerunFromPromptRunIDAncestors(): Promise<MJAIPromptRunEntity[]> {
+    const path = this.Get('RerunFromPromptRunIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJAIPromptRunEntity>({
+      EntityName: 'MJ: AI Prompt Runs',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'RerunFromPromptRunIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetRerunFromPromptRunIDChildren(): Promise<MJAIPromptRunEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJAIPromptRunEntity>({
+      EntityName: 'MJ: AI Prompt Runs',
+      ExtraFilter: `RerunFromPromptRunID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: AI Prompt Runs record from the database
     * @param ID: string - primary key value to load the MJ: AI Prompt Runs record.
@@ -52391,7 +54512,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RunAt
-    * * Display Name: Started At
+    * * Display Name: Run Started At
     * * SQL Data Type: datetimeoffset
     * * Default Value: sysdatetimeoffset()
     * * Description: When the prompt run started, with timezone offset information.
@@ -52470,7 +54591,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensPrompt
-    * * Display Name: Prompt Tokens
+    * * Display Name: Tokens Prompt
     * * SQL Data Type: int
     * * Description: Number of tokens in the prompt.
     */
@@ -52483,7 +54604,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensCompletion
-    * * Display Name: Completion Tokens
+    * * Display Name: Tokens Completion
     * * SQL Data Type: int
     * * Description: Number of tokens in the completion/result.
     */
@@ -52629,7 +54750,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensUsedRollup
-    * * Display Name: Tokens Used (Rollup)
+    * * Display Name: Tokens Used Rollup
     * * SQL Data Type: int
     * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.
     */
@@ -52642,7 +54763,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensPromptRollup
-    * * Display Name: Prompt Tokens (Rollup)
+    * * Display Name: Tokens Prompt Rollup
     * * SQL Data Type: int
     * * Description: Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.
     */
@@ -52655,7 +54776,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensCompletionRollup
-    * * Display Name: Completion Tokens (Rollup)
+    * * Display Name: Tokens Completion Rollup
     * * SQL Data Type: int
     * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.
     */
@@ -52824,7 +54945,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ValidationAttemptCount
-    * * Display Name: Validation Attempts
+    * * Display Name: Validation Attempt Count
     * * SQL Data Type: int
     * * Description: Total number of validation attempts made (including the initial attempt)
     */
@@ -52837,7 +54958,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: SuccessfulValidationCount
-    * * Display Name: Successful Validations
+    * * Display Name: Successful Validation Count
     * * SQL Data Type: int
     * * Description: Number of validation attempts that passed validation
     */
@@ -52850,7 +54971,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: FinalValidationPassed
-    * * Display Name: Validation Passed
+    * * Display Name: Final Validation Passed
     * * SQL Data Type: bit
     * * Description: Whether validation ultimately passed (1) or failed (0)
     */
@@ -52980,7 +55101,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ValidationAttempts
-    * * Display Name: Validation Attempt Logs
+    * * Display Name: Validation Attempts
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array containing detailed information about each validation attempt
     */
@@ -53353,7 +55474,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ModelSpecificResponseDetails
-    * * Display Name: Provider Response Details
+    * * Display Name: Model Specific Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON field containing provider-specific response metadata and details not captured in standard fields. Structure varies by AI provider.
     */
@@ -53458,7 +55579,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensCacheReadRollup
-    * * Display Name: Tokens Cache Read (Rollup)
+    * * Display Name: Tokens Cache Read Rollup
     * * SQL Data Type: int
     * * Description: Rollup of TokensCacheRead across this prompt run and all of its descendant prompt runs (e.g. the individual attempts behind a parallel / multi-attempt / failover consolidation). For a leaf run this equals TokensCacheRead. Use this (not TokensCacheRead) when aggregating cache reads up a prompt-run or agent-run hierarchy so fan-out provider calls are not under-counted.
     */
@@ -53471,7 +55592,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensCacheWriteRollup
-    * * Display Name: Tokens Cache Write (Rollup)
+    * * Display Name: Tokens Cache Write Rollup
     * * SQL Data Type: int
     * * Description: Rollup of TokensCacheWrite across this prompt run and all of its descendant prompt runs. For a leaf run this equals TokensCacheWrite. Mirrors TokensUsedRollup/TokensPromptRollup; populated for providers that report cache writes (e.g. Anthropic), otherwise 0 or NULL.
     */
@@ -53493,7 +55614,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: Model
-    * * Display Name: Model
+    * * Display Name: Model Description
     * * SQL Data Type: nvarchar(50)
     */
     get Model(): string {
@@ -53502,7 +55623,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: Vendor
-    * * Display Name: Vendor
+    * * Display Name: Vendor Description
     * * SQL Data Type: nvarchar(50)
     */
     get Vendor(): string {
@@ -53511,7 +55632,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent
+    * * Display Name: Agent Description
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -53520,7 +55641,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: Configuration
-    * * Display Name: Configuration
+    * * Display Name: Configuration Description
     * * SQL Data Type: nvarchar(100)
     */
     get Configuration(): string | null {
@@ -53556,7 +55677,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: Judge
-    * * Display Name: Judge
+    * * Display Name: Judge Description
     * * SQL Data Type: nvarchar(255)
     */
     get Judge(): string | null {
@@ -53565,7 +55686,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ChildPrompt
-    * * Display Name: Child Prompt
+    * * Display Name: Child Prompt Description
     * * SQL Data Type: nvarchar(255)
     */
     get ChildPrompt(): string | null {
@@ -53574,7 +55695,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run
+    * * Display Name: Test Run Description
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -53583,7 +55704,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent
+    * * Display Name: Root Parent Run
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -53591,12 +55712,84 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Parent Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Parent Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf Node
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
+    }
+
+    /**
     * * Field Name: RootRerunFromPromptRunID
-    * * Display Name: Root Rerun Source
+    * * Display Name: Root Rerun Run
     * * SQL Data Type: uniqueidentifier
     */
     get RootRerunFromPromptRunID(): string | null {
         return this.Get('RootRerunFromPromptRunID');
+    }
+
+    /**
+    * * Field Name: RerunFromPromptRunIDDepth
+    * * Display Name: Rerun Depth
+    * * SQL Data Type: int
+    */
+    get RerunFromPromptRunIDDepth(): number | null {
+        return this.Get('RerunFromPromptRunIDDepth');
+    }
+
+    /**
+    * * Field Name: RerunFromPromptRunIDPath
+    * * Display Name: Rerun Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get RerunFromPromptRunIDPath(): string | null {
+        return this.Get('RerunFromPromptRunIDPath');
+    }
+
+    /**
+    * * Field Name: RerunFromPromptRunIDIsLeaf
+    * * Display Name: Is Rerun Leaf
+    * * SQL Data Type: bit
+    */
+    get RerunFromPromptRunIDIsLeaf(): boolean | null {
+        return this.Get('RerunFromPromptRunIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: RerunFromPromptRunIDChildCount
+    * * Display Name: Rerun Child Count
+    * * SQL Data Type: int
+    */
+    get RerunFromPromptRunIDChildCount(): number | null {
+        return this.Get('RerunFromPromptRunIDChildCount');
     }
 }
 
@@ -53730,6 +55923,61 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
         Source: 'cache',
   });
 
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJAIPromptEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootResultSelectorPromptID = '${rootId}' AND ResultSelectorPromptIDDepth <= ${maxDepth}`
+      : `RootResultSelectorPromptID = '${rootId}'`;
+    const result = await rv.RunView<MJAIPromptEntity>({
+      EntityName: 'MJ: AI Prompts',
+      ExtraFilter: filter,
+      OrderBy: 'ResultSelectorPromptIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJAIPromptEntity[]> {
+    const path = this.Get('ResultSelectorPromptIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJAIPromptEntity>({
+      EntityName: 'MJ: AI Prompts',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ResultSelectorPromptIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJAIPromptEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJAIPromptEntity>({
+      EntityName: 'MJ: AI Prompts',
+      ExtraFilter: `ResultSelectorPromptID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: AI Prompts record from the database
     * @param ID: string - primary key value to load the MJ: AI Prompts record.
@@ -54073,7 +56321,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: MinPowerRank
-    * * Display Name: Minimum Power Rank
+    * * Display Name: Min Power Rank
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: The minimum power rank required for models to be considered for this prompt.
@@ -54238,7 +56486,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: RetryDelayMS
-    * * Display Name: Retry Delay (ms)
+    * * Display Name: Retry Delay (MS)
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: Delay between retry attempts in milliseconds.
@@ -54299,7 +56547,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: CacheTTLSeconds
-    * * Display Name: Cache TTL (Seconds)
+    * * Display Name: Cache TTL (Sec)
     * * SQL Data Type: int
     * * Description: Time-to-live in seconds for cached results. NULL means results never expire.
     */
@@ -54541,7 +56789,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: IncludeLogProbs
-    * * Display Name: Include Log Probabilities
+    * * Display Name: Include Log Probs
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Default setting for including log probabilities in the response. Can be overridden at runtime.
@@ -54555,7 +56803,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: TopLogProbs
-    * * Display Name: Top Log Probabilities
+    * * Display Name: Top Log Probs
     * * SQL Data Type: int
     * * Description: Default number of top log probabilities to include when IncludeLogProbs is true. Can be overridden at runtime.
     */
@@ -54606,7 +56854,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: FailoverDelaySeconds
-    * * Display Name: Failover Delay (Seconds)
+    * * Display Name: Failover Delay (Sec)
     * * SQL Data Type: int
     * * Default Value: 5
     * * Description: Initial delay in seconds between failover attempts
@@ -54725,7 +56973,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: Template
-    * * Display Name: Template Text
+    * * Display Name: Template Content
     * * SQL Data Type: nvarchar(255)
     */
     get Template(): string {
@@ -54775,6 +57023,42 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     */
     get RootResultSelectorPromptID(): string | null {
         return this.Get('RootResultSelectorPromptID');
+    }
+
+    /**
+    * * Field Name: ResultSelectorPromptIDDepth
+    * * Display Name: Selector Depth
+    * * SQL Data Type: int
+    */
+    get ResultSelectorPromptIDDepth(): number | null {
+        return this.Get('ResultSelectorPromptIDDepth');
+    }
+
+    /**
+    * * Field Name: ResultSelectorPromptIDPath
+    * * Display Name: Selector Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ResultSelectorPromptIDPath(): string | null {
+        return this.Get('ResultSelectorPromptIDPath');
+    }
+
+    /**
+    * * Field Name: ResultSelectorPromptIDIsLeaf
+    * * Display Name: Is Leaf Selector
+    * * SQL Data Type: bit
+    */
+    get ResultSelectorPromptIDIsLeaf(): boolean | null {
+        return this.Get('ResultSelectorPromptIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ResultSelectorPromptIDChildCount
+    * * Display Name: Selector Child Count
+    * * SQL Data Type: int
+    */
+    get ResultSelectorPromptIDChildCount(): number | null {
+        return this.Get('ResultSelectorPromptIDChildCount');
     }
 }
 
@@ -57665,6 +59949,61 @@ export class MJAPIKeyEntity extends BaseEntity<MJAPIKeyEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: API Scopes')
 export class MJAPIScopeEntity extends BaseEntity<MJAPIScopeEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJAPIScopeEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJAPIScopeEntity>({
+      EntityName: 'MJ: API Scopes',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJAPIScopeEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJAPIScopeEntity>({
+      EntityName: 'MJ: API Scopes',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJAPIScopeEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJAPIScopeEntity>({
+      EntityName: 'MJ: API Scopes',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: API Scopes record from the database
     * @param ID: string - primary key value to load the MJ: API Scopes record.
@@ -57756,7 +60095,7 @@ export class MJAPIScopeEntity extends BaseEntity<MJAPIScopeEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: API Scopes (vwAPIScopes.ID)
     * * Description: Reference to parent scope for hierarchical organization. NULL indicates a root-level scope.
@@ -57810,7 +60149,7 @@ export class MJAPIScopeEntity extends BaseEntity<MJAPIScopeEntityType> {
 
     /**
     * * Field Name: UIConfig
-    * * Display Name: UI Config
+    * * Display Name: UI Configuration
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON configuration for UI presentation. Schema: { "icon": "fa-solid fa-xxx", "color": "#hexcolor" }. Icon should be a Font Awesome class. Color should be a hex color code.
     */
@@ -57823,7 +60162,7 @@ export class MJAPIScopeEntity extends BaseEntity<MJAPIScopeEntityType> {
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(100)
     */
     get Parent(): string | null {
@@ -57832,11 +60171,47 @@ export class MJAPIScopeEntity extends BaseEntity<MJAPIScopeEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Hierarchy Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -59914,6 +62289,61 @@ export class MJArtifactPermissionEntity extends BaseEntity<MJArtifactPermissionE
  */
 @RegisterClass(BaseEntity, 'MJ: Artifact Types')
 export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJArtifactTypeEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJArtifactTypeEntity>({
+      EntityName: 'MJ: Artifact Types',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJArtifactTypeEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJArtifactTypeEntity>({
+      EntityName: 'MJ: Artifact Types',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJArtifactTypeEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJArtifactTypeEntity>({
+      EntityName: 'MJ: Artifact Types',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Artifact Types record from the database
     * @param ID: string - primary key value to load the MJ: Artifact Types record.
@@ -60018,7 +62448,7 @@ export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
     * * Description: Parent artifact type ID for hierarchical artifact type organization. Child types inherit ExtractRules from parent but can override.
@@ -60148,7 +62578,7 @@ export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(100)
     */
     get Parent(): string | null {
@@ -60157,11 +62587,47 @@ export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Hierarchy Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Hierarchy Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf Node
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -60952,6 +63418,61 @@ export class MJArtifactEntity extends BaseEntity<MJArtifactEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: Audit Log Types')
 export class MJAuditLogTypeEntity extends BaseEntity<MJAuditLogTypeEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJAuditLogTypeEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJAuditLogTypeEntity>({
+      EntityName: 'MJ: Audit Log Types',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJAuditLogTypeEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJAuditLogTypeEntity>({
+      EntityName: 'MJ: Audit Log Types',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJAuditLogTypeEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJAuditLogTypeEntity>({
+      EntityName: 'MJ: Audit Log Types',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Audit Log Types record from the database
     * @param ID: string - primary key value to load the MJ: Audit Log Types record.
@@ -61034,7 +63555,7 @@ export class MJAuditLogTypeEntity extends BaseEntity<MJAuditLogTypeEntityType> {
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -61044,7 +63565,7 @@ export class MJAuditLogTypeEntity extends BaseEntity<MJAuditLogTypeEntityType> {
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -61077,6 +63598,42 @@ export class MJAuditLogTypeEntity extends BaseEntity<MJAuditLogTypeEntityType> {
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -61745,6 +64302,61 @@ export class MJAuthorizationRoleEntity extends BaseEntity<MJAuthorizationRoleEnt
  */
 @RegisterClass(BaseEntity, 'MJ: Authorizations')
 export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJAuthorizationEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJAuthorizationEntity>({
+      EntityName: 'MJ: Authorizations',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJAuthorizationEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJAuthorizationEntity>({
+      EntityName: 'MJ: Authorizations',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJAuthorizationEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJAuthorizationEntity>({
+      EntityName: 'MJ: Authorizations',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Authorizations record from the database
     * @param ID: string - primary key value to load the MJ: Authorizations record.
@@ -61777,7 +64389,7 @@ export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType>
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Authorizations (vwAuthorizations.ID)
     */
@@ -61802,7 +64414,7 @@ export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType>
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Is Active
+    * * Display Name: Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates whether this authorization is currently active and can be granted to users or roles.
@@ -61816,7 +64428,7 @@ export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType>
 
     /**
     * * Field Name: UseAuditLog
-    * * Display Name: Use Audit Log
+    * * Display Name: Enable Audit Log
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When set to 1, Audit Log records are created whenever this authorization is invoked for a user
@@ -61842,7 +64454,7 @@ export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType>
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -61852,7 +64464,7 @@ export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType>
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -61862,7 +64474,7 @@ export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType>
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(100)
     */
     get Parent(): string | null {
@@ -61871,11 +64483,47 @@ export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType>
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Hierarchy Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Hierarchy Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf Node
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -62614,6 +65262,61 @@ export class MJCollectionPermissionEntity extends BaseEntity<MJCollectionPermiss
  */
 @RegisterClass(BaseEntity, 'MJ: Collections')
 export class MJCollectionEntity extends BaseEntity<MJCollectionEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJCollectionEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJCollectionEntity>({
+      EntityName: 'MJ: Collections',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJCollectionEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJCollectionEntity>({
+      EntityName: 'MJ: Collections',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJCollectionEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJCollectionEntity>({
+      EntityName: 'MJ: Collections',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Collections record from the database
     * @param ID: string - primary key value to load the MJ: Collections record.
@@ -62646,7 +65349,7 @@ export class MJCollectionEntity extends BaseEntity<MJCollectionEntityType> {
 
     /**
     * * Field Name: EnvironmentID
-    * * Display Name: Environment ID
+    * * Display Name: Environment
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
     * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
@@ -62660,7 +65363,7 @@ export class MJCollectionEntity extends BaseEntity<MJCollectionEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)
     */
@@ -62758,7 +65461,7 @@ export class MJCollectionEntity extends BaseEntity<MJCollectionEntityType> {
 
     /**
     * * Field Name: OwnerID
-    * * Display Name: Owner ID
+    * * Display Name: Owner
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: The user who owns this collection and has full permissions
@@ -62772,7 +65475,7 @@ export class MJCollectionEntity extends BaseEntity<MJCollectionEntityType> {
 
     /**
     * * Field Name: Environment
-    * * Display Name: Environment
+    * * Display Name: Environment Name
     * * SQL Data Type: nvarchar(255)
     */
     get Environment(): string {
@@ -62781,7 +65484,7 @@ export class MJCollectionEntity extends BaseEntity<MJCollectionEntityType> {
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -62790,7 +65493,7 @@ export class MJCollectionEntity extends BaseEntity<MJCollectionEntityType> {
 
     /**
     * * Field Name: Owner
-    * * Display Name: Owner
+    * * Display Name: Owner Name
     * * SQL Data Type: nvarchar(100)
     */
     get Owner(): string | null {
@@ -62799,11 +65502,47 @@ export class MJCollectionEntity extends BaseEntity<MJCollectionEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -67055,6 +69794,61 @@ export class MJContentItemAttributeEntity extends BaseEntity<MJContentItemAttrib
  */
 @RegisterClass(BaseEntity, 'MJ: Content Item Chunks')
 export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJContentItemChunkEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentChunkID = '${rootId}' AND ParentChunkIDDepth <= ${maxDepth}`
+      : `RootParentChunkID = '${rootId}'`;
+    const result = await rv.RunView<MJContentItemChunkEntity>({
+      EntityName: 'MJ: Content Item Chunks',
+      ExtraFilter: filter,
+      OrderBy: 'ParentChunkIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJContentItemChunkEntity[]> {
+    const path = this.Get('ParentChunkIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJContentItemChunkEntity>({
+      EntityName: 'MJ: Content Item Chunks',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentChunkIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJContentItemChunkEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJContentItemChunkEntity>({
+      EntityName: 'MJ: Content Item Chunks',
+      ExtraFilter: `ParentChunkID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Content Item Chunks record from the database
     * @param ID: string - primary key value to load the MJ: Content Item Chunks record.
@@ -67113,7 +69907,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: Text
-    * * Display Name: Text
+    * * Display Name: Text Content
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The chunk of extracted text (from the parent Content Item) that was embedded to produce this chunk's vector. NULL for media-only segments (for example an image, or a video window with no transcript), where the embedded payload is the media itself and any readable representation lives in Description/Transcript.
     */
@@ -67308,7 +70102,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: StartMs
-    * * Display Name: Start Milliseconds
+    * * Display Name: Start Time (ms)
     * * SQL Data Type: int
     * * Description: Start of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. Set by transcript- or window-based segmentation; enables time-windowed playback deep-links from a search result (for example 14:22-15:05 of a session recording). NULL for text segments.
     */
@@ -67321,7 +70115,7 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
 
     /**
     * * Field Name: EndMs
-    * * Display Name: End Milliseconds
+    * * Display Name: End Time (ms)
     * * SQL Data Type: int
     * * Description: End of this chunk's time window, in milliseconds from the beginning of the parent audio or video asset. See StartMs. NULL for text segments.
     */
@@ -67436,6 +70230,42 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
     */
     get RootParentChunkID(): string | null {
         return this.Get('RootParentChunkID');
+    }
+
+    /**
+    * * Field Name: ParentChunkIDDepth
+    * * Display Name: Hierarchy Depth
+    * * SQL Data Type: int
+    */
+    get ParentChunkIDDepth(): number | null {
+        return this.Get('ParentChunkIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentChunkIDPath
+    * * Display Name: Hierarchy Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentChunkIDPath(): string | null {
+        return this.Get('ParentChunkIDPath');
+    }
+
+    /**
+    * * Field Name: ParentChunkIDIsLeaf
+    * * Display Name: Is Leaf Node
+    * * SQL Data Type: bit
+    */
+    get ParentChunkIDIsLeaf(): boolean | null {
+        return this.Get('ParentChunkIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentChunkIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentChunkIDChildCount(): number | null {
+        return this.Get('ParentChunkIDChildCount');
     }
 }
 
@@ -67841,6 +70671,61 @@ export class MJContentItemTagEntity extends BaseEntity<MJContentItemTagEntityTyp
  */
 @RegisterClass(BaseEntity, 'MJ: Content Items')
 export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJContentItemEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJContentItemEntity>({
+      EntityName: 'MJ: Content Items',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJContentItemEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJContentItemEntity>({
+      EntityName: 'MJ: Content Items',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJContentItemEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJContentItemEntity>({
+      EntityName: 'MJ: Content Items',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Content Items record from the database
     * @param ID: string - primary key value to load the MJ: Content Items record.
@@ -68117,7 +71002,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent Content
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
     * * Description: Optional self-reference to another Content Item that is the parent of this one, enabling a content-item hierarchy (e.g. a document and its sub-pages, or a site and its crawled pages). NULL for top-level items.
@@ -68198,7 +71083,7 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent Content Name
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(250)
     */
     get Parent(): string | null {
@@ -68207,11 +71092,47 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent Content
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -71789,6 +74710,61 @@ export class MJConversationDetailRatingEntity extends BaseEntity<MJConversationD
  */
 @RegisterClass(BaseEntity, 'MJ: Conversation Details')
 export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJConversationDetailEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJConversationDetailEntity>({
+      EntityName: 'MJ: Conversation Details',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJConversationDetailEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJConversationDetailEntity>({
+      EntityName: 'MJ: Conversation Details',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJConversationDetailEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJConversationDetailEntity>({
+      EntityName: 'MJ: Conversation Details',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Conversation Details record from the database
     * @param ID: string - primary key value to load the MJ: Conversation Details record.
@@ -72027,7 +75003,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: SummaryOfEarlierConversation
-    * * Display Name: Summary Of Earlier Conversation
+    * * Display Name: Conversation Summary
     * * SQL Data Type: nvarchar(MAX)
     * * Description: This column optionally stores a summary of the entire conversation leading up to this particular conversation detail record. It is used in long-running conversations to optimize performance by summarizing earlier parts.
     */
@@ -72084,7 +75060,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: CompletionTime
-    * * Display Name: Completion Time
+    * * Display Name: Completion Time (ms)
     * * SQL Data Type: bigint
     * * Description: Duration in milliseconds representing how long the AI response processing took to complete for this conversation detail.
     */
@@ -72111,7 +75087,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent
+    * * Display Name: Parent Message
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
     * * Description: Optional reference to parent message for threaded conversations. NULL for top-level messages.
@@ -72266,7 +75242,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: UtteranceStartMs
-    * * Display Name: Utterance Start Ms
+    * * Display Name: Utterance Start (ms)
     * * SQL Data Type: int
     * * Description: Precise media-relative start of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise (fall back to __mj_CreatedAt - t0). Used by the evidence player for click-to-seek.
     */
@@ -72279,7 +75255,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: UtteranceEndMs
-    * * Display Name: Utterance End Ms
+    * * Display Name: Utterance End (ms)
     * * SQL Data Type: int
     * * Description: Precise media-relative end of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise. Used by the evidence player for click-to-seek.
     */
@@ -72321,7 +75297,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: Conversation
-    * * Display Name: Conversation
+    * * Display Name: Conversation Reference
     * * SQL Data Type: nvarchar(255)
     */
     get Conversation(): string | null {
@@ -72330,7 +75306,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Reference
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -72339,7 +75315,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: Artifact
-    * * Display Name: Artifact
+    * * Display Name: Artifact Reference
     * * SQL Data Type: nvarchar(255)
     */
     get Artifact(): string | null {
@@ -72348,7 +75324,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: ArtifactVersion
-    * * Display Name: Artifact Version
+    * * Display Name: Artifact Version Reference
     * * SQL Data Type: nvarchar(255)
     */
     get ArtifactVersion(): string | null {
@@ -72357,7 +75333,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Reference
     * * SQL Data Type: nvarchar(100)
     */
     get Parent(): string | null {
@@ -72366,7 +75342,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent
+    * * Display Name: Agent Reference
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -72375,7 +75351,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run
+    * * Display Name: Test Run Reference
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -72384,11 +75360,47 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent
+    * * Display Name: Root Parent ID
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Parent Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Parent Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf Node
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -72799,6 +75811,61 @@ export class MJConversationWidgetInstanceEntity extends BaseEntity<MJConversatio
  */
 @RegisterClass(BaseEntity, 'MJ: Conversations')
 export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJConversationEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootLastConversationID = '${rootId}' AND LastConversationIDDepth <= ${maxDepth}`
+      : `RootLastConversationID = '${rootId}'`;
+    const result = await rv.RunView<MJConversationEntity>({
+      EntityName: 'MJ: Conversations',
+      ExtraFilter: filter,
+      OrderBy: 'LastConversationIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJConversationEntity[]> {
+    const path = this.Get('LastConversationIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJConversationEntity>({
+      EntityName: 'MJ: Conversations',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'LastConversationIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJConversationEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJConversationEntity>({
+      EntityName: 'MJ: Conversations',
+      ExtraFilter: `LastConversationID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Conversations record from the database
     * @param ID: string - primary key value to load the MJ: Conversations record.
@@ -72929,7 +75996,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -73007,7 +76074,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: LinkedEntityID
-    * * Display Name: Linked Entity ID
+    * * Display Name: Linked Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     * * Description: Generic 'what is this conversation about?' pointer. Names the Entity whose record this conversation references (e.g. MJ: Components when the conversation was started in the Form Builder cockpit about a specific form). Paired with LinkedRecordID via the CK_Conversation_LinkBinding cross-column CHECK — both NULL or both populated. Surfaces use this to filter their conversation list to entries about the currently-loaded record (e.g. 'show prior conversations about THIS form'). Reusable beyond Form Builder by any future dashboard / record-context surface that wants the same UX without further schema work.
@@ -73034,7 +76101,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: DataContextID
-    * * Display Name: Data Context ID
+    * * Display Name: Data Context
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Data Contexts (vwDataContexts.ID)
     */
@@ -73085,7 +76152,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: EnvironmentID
-    * * Display Name: Environment ID
+    * * Display Name: Environment
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
     * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
@@ -73099,7 +76166,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: ProjectID
-    * * Display Name: Project ID
+    * * Display Name: Project
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)
     */
@@ -73126,7 +76193,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: TestRunID
-    * * Display Name: Test Run ID
+    * * Display Name: Test Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
     * * Description: Optional Foreign Key - Links this conversation to a test run if this conversation was generated as part of a test. Enables tracking test conversations separately from production conversations.
@@ -73159,7 +76226,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: ApplicationID
-    * * Display Name: Application ID
+    * * Display Name: Application
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
     * * Description: Optional Application this conversation is bound to. Required when ApplicationScope is 'Application' or 'Both'; must be NULL when ApplicationScope is 'Global'. Enforced by the CK_Conversation_ScopeAppBinding cross-column CHECK. Used by embedded chat surfaces (e.g. the Form Builder cockpit) to filter their conversation list to just their own application's conversations.
@@ -73173,7 +76240,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: DefaultAgentID
-    * * Display Name: Default Agent ID
+    * * Display Name: Default Agent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
     * * Description: Optional per-conversation default AI agent. When set, the message router targets this agent for non-mention, non-continuity messages instead of falling through to the embedder-supplied default (e.g. Form Builder) or to Sage. Lets a user pin a conversation to a specific specialist agent (e.g. Research Agent) so Sage is never invoked for that thread. Routing precedence: @mention > continuity (last responder) > Conversation.DefaultAgentID > embedder's defaultAgentId input > Sage fallback.
@@ -73200,7 +76267,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: RecordingFileID
-    * * Display Name: Recording File ID
+    * * Display Name: Recording File
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
     * * Description: For a Meeting-Room conversation, the MJ: Files row holding the room-level composite recording (the LiveKit egress MP4, copied into MJStorage). NULL when the meeting was not recorded.
@@ -73240,7 +76307,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: LastConversationID
-    * * Display Name: Last Conversation ID
+    * * Display Name: Last Conversation
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
     * * Description: Conversation-altitude returning-visitor chain (R2). Self-foreign-key to the visitor's immediately prior Conversation (found by VisitorKey or the resolved LinkedEntityID/LinkedRecordID pair at mint time). History and memory are conversation-scoped, so the chain lives here — NOT on AIAgentSession.LastSessionID, which owns reconnect/resume semantics and is walked by the replay viewer. Named to mirror AIAgentSession.LastSessionID. NULL for a brand-new visitor's first conversation.
@@ -73254,7 +76321,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -73263,7 +76330,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: LinkedEntity
-    * * Display Name: Linked Entity
+    * * Display Name: Linked Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get LinkedEntity(): string | null {
@@ -73272,7 +76339,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: DataContext
-    * * Display Name: Data Context
+    * * Display Name: Data Context Name
     * * SQL Data Type: nvarchar(255)
     */
     get DataContext(): string | null {
@@ -73281,7 +76348,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: Environment
-    * * Display Name: Environment
+    * * Display Name: Environment Name
     * * SQL Data Type: nvarchar(255)
     */
     get Environment(): string {
@@ -73290,7 +76357,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: Project
-    * * Display Name: Project
+    * * Display Name: Project Name
     * * SQL Data Type: nvarchar(255)
     */
     get Project(): string | null {
@@ -73299,7 +76366,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run
+    * * Display Name: Test Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -73308,7 +76375,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: Application
-    * * Display Name: Application
+    * * Display Name: Application Name
     * * SQL Data Type: nvarchar(100)
     */
     get Application(): string | null {
@@ -73317,7 +76384,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: DefaultAgent
-    * * Display Name: Default Agent
+    * * Display Name: Default Agent Name
     * * SQL Data Type: nvarchar(255)
     */
     get DefaultAgent(): string | null {
@@ -73326,7 +76393,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: RecordingFile
-    * * Display Name: Recording File
+    * * Display Name: Recording File Name
     * * SQL Data Type: nvarchar(500)
     */
     get RecordingFile(): string | null {
@@ -73335,7 +76402,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: LastConversation
-    * * Display Name: Last Conversation
+    * * Display Name: Last Conversation Name
     * * SQL Data Type: nvarchar(255)
     */
     get LastConversation(): string | null {
@@ -73349,6 +76416,42 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     */
     get RootLastConversationID(): string | null {
         return this.Get('RootLastConversationID');
+    }
+
+    /**
+    * * Field Name: LastConversationIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get LastConversationIDDepth(): number | null {
+        return this.Get('LastConversationIDDepth');
+    }
+
+    /**
+    * * Field Name: LastConversationIDPath
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get LastConversationIDPath(): string | null {
+        return this.Get('LastConversationIDPath');
+    }
+
+    /**
+    * * Field Name: LastConversationIDIsLeaf
+    * * Display Name: Is Leaf
+    * * SQL Data Type: bit
+    */
+    get LastConversationIDIsLeaf(): boolean | null {
+        return this.Get('LastConversationIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: LastConversationIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get LastConversationIDChildCount(): number | null {
+        return this.Get('LastConversationIDChildCount');
     }
 }
 
@@ -73535,6 +76638,61 @@ export class MJCountryEntity extends BaseEntity<MJCountryEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: Credential Categories')
 export class MJCredentialCategoryEntity extends BaseEntity<MJCredentialCategoryEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJCredentialCategoryEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJCredentialCategoryEntity>({
+      EntityName: 'MJ: Credential Categories',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJCredentialCategoryEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJCredentialCategoryEntity>({
+      EntityName: 'MJ: Credential Categories',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJCredentialCategoryEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJCredentialCategoryEntity>({
+      EntityName: 'MJ: Credential Categories',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Credential Categories record from the database
     * @param ID: string - primary key value to load the MJ: Credential Categories record.
@@ -73654,6 +76812,42 @@ export class MJCredentialCategoryEntity extends BaseEntity<MJCredentialCategoryE
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -74052,6 +77246,61 @@ export class MJCredentialEntity extends BaseEntity<MJCredentialEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: Dashboard Categories')
 export class MJDashboardCategoryEntity extends BaseEntity<MJDashboardCategoryEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJDashboardCategoryEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJDashboardCategoryEntity>({
+      EntityName: 'MJ: Dashboard Categories',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJDashboardCategoryEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJDashboardCategoryEntity>({
+      EntityName: 'MJ: Dashboard Categories',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJDashboardCategoryEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJDashboardCategoryEntity>({
+      EntityName: 'MJ: Dashboard Categories',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Dashboard Categories record from the database
     * @param ID: string - primary key value to load the MJ: Dashboard Categories record.
@@ -74177,6 +77426,42 @@ export class MJDashboardCategoryEntity extends BaseEntity<MJDashboardCategoryEnt
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -77417,6 +80702,61 @@ export class MJEmployeeSkillEntity extends BaseEntity<MJEmployeeSkillEntityType>
  */
 @RegisterClass(BaseEntity, 'MJ: Employees')
 export class MJEmployeeEntity extends BaseEntity<MJEmployeeEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJEmployeeEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootSupervisorID = '${rootId}' AND SupervisorIDDepth <= ${maxDepth}`
+      : `RootSupervisorID = '${rootId}'`;
+    const result = await rv.RunView<MJEmployeeEntity>({
+      EntityName: 'MJ: Employees',
+      ExtraFilter: filter,
+      OrderBy: 'SupervisorIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJEmployeeEntity[]> {
+    const path = this.Get('SupervisorIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJEmployeeEntity>({
+      EntityName: 'MJ: Employees',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'SupervisorIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJEmployeeEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJEmployeeEntity>({
+      EntityName: 'MJ: Employees',
+      ExtraFilter: `SupervisorID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Employees record from the database
     * @param ID: string - primary key value to load the MJ: Employees record.
@@ -78194,16 +81534,16 @@ export class MJEncryptionKeyEntity extends BaseEntity<MJEncryptionKeyEntityType>
  * `ConfigurationObject` accessor on `MJEntityEntity` that returns
  * `MJEntityEntity_IEntityConfiguration | null`.
  *
- * **NULL / `{}` / omitted keys = today's behavior.** Nothing is required of any
- * application. Apps that want last-wins chrome or cancelable section events
- * still register an optional `BaseFormPolicy`; this bag is only the
- * tenant-editable default the container reads when no policy overrides it.
+ * **NULL / `{}` / omitted keys** use the defaults on
+ * {@link MJEntityEntity_IEntityFormConfiguration} (`Layout: auto`, `RelatedRolePolicy: smart`).
+ * Membership itself is L1 inclusion + L2 ranker + L3 `MJ: Form Chrome Rules`
+ * + L4 user order. `BaseFormPolicy.DecorateChrome` is cosmetics only.
  *
  * Expand by adding a property here — no schema migration. Anything the engine
  * filters, sorts, or joins on stays a **column** on `Entity`. Anything the UI
- * or a policy consumes at render time belongs in this bag.
+ * consumes at render time belongs in this bag.
  *
- * @see plans/form-chrome-policy.md
+ * @see guides/FORMS_ARCHITECTURE_GUIDE.md §7d
  */
 export interface MJEntityEntity_IEntityConfiguration {
     /**
@@ -78229,16 +81569,17 @@ export interface MJEntityEntity_IEntityUIConfiguration {
 }
 
 /**
- * Generated-form chrome for this entity.
+ * Generated-form chrome for this entity (L2 defaults).
  *
- * Consumed by `<mj-record-form-container>` (and by a winning
- * `BaseFormPolicy.ResolveChrome`, which may ignore these defaults).
+ * Consumed by `<mj-record-form-container>`. L1 `inclusion` and L3
+ * `MJ: Form Chrome Rules` decide membership; this bag only ranks Auto
+ * leftovers and chooses accordion vs left-nav.
  */
 export interface MJEntityEntity_IEntityFormConfiguration {
     /**
      * Layout chrome for the generated form.
      *
-     * - `'accordion'` — every first-class section is a collapsible panel (today).
+     * - `'accordion'` — every first-class section is a collapsible panel.
      * - `'left-nav'` — a left rail of section groups; the body shows one group.
      * - `'auto'` — accordion until the first-class section count reaches
      *   {@link AutoLeftNavAt}, then left-nav.
@@ -78254,22 +81595,22 @@ export interface MJEntityEntity_IEntityFormConfiguration {
     AutoLeftNavAt?: number;
 
     /**
-     * How omitted `FormRole` on a relationship is resolved.
+     * How Auto (omitted inclusion) relationships are resolved.
      *
-     * - `'keep-all-primary'` — every `DisplayInForm` related grid stays first-class (today).
+     * - `'keep-all-primary'` — every remaining Auto related stays first-class.
      * - `'smart'` — budgeted ranker: same-schema 1:N / collections / custom
      *   display components stay top-level; cross-schema hang-ons and platform
-     *   plumbing fold into More once the untagged pool exceeds
-     *   {@link PrimaryRelatedBudget}. **Not** "everything in More".
+     *   plumbing fold into More once the Auto pool exceeds
+     *   {@link PrimaryRelatedBudget}.
      *
      * Omit to treat as `'smart'`.
      */
     RelatedRolePolicy?: 'keep-all-primary' | 'smart';
 
     /**
-     * Max untagged related grids that stay first-class when
+     * Max Auto related grids that stay first-class when
      * {@link RelatedRolePolicy} is `'smart'`. Default 6. Explicit
-     * `FormRole: 'Primary'` punches are never capped by this number.
+     * `inclusion: 'Primary'` is never capped by this number.
      */
     PrimaryRelatedBudget?: number;
 }
@@ -78287,6 +81628,61 @@ export interface MJEntityEntity_IEntityFormConfiguration {
  */
 @RegisterClass(BaseEntity, 'MJ: Entities')
 export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJEntityEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJEntityEntity>({
+      EntityName: 'MJ: Entities',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJEntityEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJEntityEntity>({
+      EntityName: 'MJ: Entities',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJEntityEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJEntityEntity>({
+      EntityName: 'MJ: Entities',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Entities record from the database
     * @param ID: string - primary key value to load the MJ: Entities record.
@@ -81725,10 +85121,47 @@ export class MJEntityFieldValueEntity extends BaseEntity<MJEntityFieldValueEntit
  * CodeGen emits `{FieldName}_Object` / `{FieldName}_EnsureObject()` on the
  * generated entity subclass.
  *
+ * **`RelatedEntity` and the FK field name are deliberately absent.** They already
+ * exist as `EntityField.RelatedEntityID` and `EntityField.Name`. Duplicating them
+ * here would create two sources of truth that can disagree — with the JSON copy
+ * winning silently. CodeGen reads them from the row.
+ *
+ * **Mandatory vs optional is `EntityField.AllowsNull`**, not a flag here. A
+ * non-nullable FK is provisioned with `GetEntityObject` / `NewRecord`. A nullable
+ * FK stays `null` until `{FieldName}_EnsureObject()` or until `Load()` finds a
+ * value.
+ *
+ * NULL means the field is an ordinary FK. That is the default and reproduces
+ * pre-feature behaviour exactly: nothing is generated and nothing is constructed
+ * at `GetEntityObject` time.
+ *
  * @see packages/MJCore/docs/embedded-records.md
+ * @see plans/embedded-records.md
  */
 export interface MJEntityFieldEntity_IEmbeddedRecordConfig {
+    /**
+     * What happens to the embedded row when the owner clears the relationship
+     * or is deleted. Defaults to `'orphan'`.
+     *
+     * - `'orphan'` — null the FK, leave the embedded row. Correct when the
+     *   target is a first-class document in another bounded context (a Deal's
+     *   Order).
+     * - `'delete'` — delete the embedded row after the owner (the FK lives on
+     *   the owner, so the owner must go first).
+     * - `'refuse'` — `Clear()` throws. For relationships where detaching is
+     *   always a bug.
+     */
     OnClear?: 'delete' | 'orphan' | 'refuse';
+
+    /**
+     * How far `owner.Load()` walks into the embedded record. Defaults to `'inherit'`.
+     *
+     * - `'inherit'` — the embedded is loaded as `embedded.Load()` would: fields,
+     *   IS-A chain, immediate companions, nested embeddeds. Explicit
+     *   related-record collections stay explicit.
+     * - `'related'` — also `LoadRelatedRecords()` on the embedded, so e.g.
+     *   `deal.Load()` brings `Order.Lines` too.
+     */
     LoadNested?: 'inherit' | 'related';
 }
 
@@ -81834,7 +85267,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: AutoUpdateDescription
-    * * Display Name: Auto Update Description
+    * * Display Name: Auto-Update Description
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When set to 1 (default), whenever a description is modified in the column within the underlying view (first choice) or table (second choice), the Description column in the entity field definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity field definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.
@@ -81876,7 +85309,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: Category
-    * * Display Name: Category
+    * * Display Name: Form Category
     * * SQL Data Type: nvarchar(255)
     * * Description: Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category
     */
@@ -81889,7 +85322,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: SQL Type
+    * * Display Name: Data Type
     * * SQL Data Type: nvarchar(100)
     * * Description: SQL Data type (auto maintained by CodeGen)
     */
@@ -82079,7 +85512,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: AllowUpdateAPI
-    * * Display Name: Allow Update API
+    * * Display Name: Allow API Update
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: If set to 1, this field will be considered updateable by the API and object model. For this field to have effect, the column type must be updateable (e.g. not part of the primary key and not auto-increment)
@@ -82093,7 +85526,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: AllowUpdateInView
-    * * Display Name: Allow Update In View
+    * * Display Name: Allow View Update
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: If set to 1, and if AllowUpdateAPI=1, the field can be edited within a view when the view is in edit mode.
@@ -82121,7 +85554,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: FullTextSearchEnabled
-    * * Display Name: Full Text Search Enabled
+    * * Display Name: Full Text Search
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: If set to 1, CodeGen will automatically generate a Full Text Catalog/Index in the database and include this field in the search index.
@@ -82232,7 +85665,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: IncludeRelatedEntityNameFieldInBaseView
-    * * Display Name: Include Related Name In View
+    * * Display Name: Include Related Name
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: If set to 1, the "Name" field of the Related Entity will be included in this entity as a virtual field
@@ -82246,7 +85679,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntityNameFieldMap
-    * * Display Name: Related Entity Name Map
+    * * Display Name: Name Field Map
     * * SQL Data Type: nvarchar(255)
     * * Description: For foreign key fields, maps which field in the related entity contains the display name. This is used by CodeGen to automatically add in virtual fields for the "Name Field" of the related entity.
     */
@@ -82259,7 +85692,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntityDisplayType
-    * * Display Name: Related Entity Display Type
+    * * Display Name: Display Type
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Search
     * * Description: Controls the generated form in the MJ Explorer UI - defaults to a search box, other option is a drop down. Possible values are Search and Dropdown
@@ -82273,7 +85706,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: EntityIDFieldName
-    * * Display Name: Entity ID Field Name
+    * * Display Name: Entity ID Field
     * * SQL Data Type: nvarchar(100)
     * * Description: Optional, used for "Soft Keys" to link records to different entity/record combinations on a per-record basis (for example the FileEntityRecordLink table has an EntityID/RecordID field pair. For that entity, the RecordID specifies "EntityID" for this field. This information allows MJ to detect soft keys/links for dependency detection, merging and for preventing orphaned soft-linked records during delete operations.
     */
@@ -82319,7 +85752,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: AutoUpdateRelatedEntityInfo
-    * * Display Name: Auto Update Related Info
+    * * Display Name: Auto-Update Related Info
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates whether the related entity information should be automatically updated from the database schema. When set to 0, relationships not part of the database schema can be manually defined at the application and AI agent level. Defaults to 1.
@@ -82469,7 +85902,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: AllowDecryptInAPI
-    * * Display Name: Allow Decrypt In API
+    * * Display Name: Allow Decrypt
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When true, encrypted fields will be decrypted before returning via API. When false, behavior depends on SendEncryptedValue. Default is false (secure).
@@ -82525,7 +85958,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntityJoinFields
-    * * Display Name: Related Join Fields
+    * * Display Name: Join Fields
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON configuration for additional fields to join from the related entity into this entity's base view. Supports modes: extend (add to NameField), override (replace NameField), disable (no joins). Schema: { mode?: string, fields?: [{ field: string, alias?: string }] }
     */
@@ -82551,7 +85984,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: JSONTypeIsArray
-    * * Display Name: JSON Is Array
+    * * Display Name: Is JSON Array
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: If true, the field holds a JSON array of JSONType items. The Object accessor returns Array<JSONType> | null and the setter accepts Array<JSONType> | null.
@@ -82565,7 +85998,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: JSONTypeDefinition
-    * * Display Name: JSON Type Definition
+    * * Display Name: Type Definition
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.
     */
@@ -82574,41 +86007,6 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     }
     set JSONTypeDefinition(value: string | null) {
         this.Set('JSONTypeDefinition', value);
-    }
-
-    /**
-    * * Field Name: EmbeddedRecord
-    * * Display Name: Embedded Record
-    * * SQL Data Type: nvarchar(MAX)
-    * * JSON Type: MJEntityFieldEntity_IEmbeddedRecordConfig
-    * * Description: Optional JSON policy object that declares this foreign-key field as a first-class embedded record, so CodeGen can emit {FieldName}_Object / {FieldName}_EnsureObject() on the entity subclass. Shape is IEmbeddedRecordConfig: OnClear ('delete' | 'orphan' | 'refuse', default orphan) and LoadNested ('inherit' | 'related', default inherit). RelatedEntity and the FK field name are NOT repeated here — they are this row's RelatedEntityID and Name. AllowsNull on this same row decides whether the object is provisioned with GetEntityObject (required FK) or via Ensure (nullable FK). NULL means the field is an ordinary FK, which is the default and reproduces pre-feature behaviour exactly.
-    */
-    get EmbeddedRecord(): string | null {
-        return this.Get('EmbeddedRecord');
-    }
-    set EmbeddedRecord(value: string | null) {
-        this.Set('EmbeddedRecord', value);
-    }
-
-    private _EmbeddedRecordObject_cached: MJEntityFieldEntity_IEmbeddedRecordConfig | null | undefined = undefined;
-    private _EmbeddedRecordObject_lastRaw: string | null = null;
-    /**
-    * Typed accessor for EmbeddedRecord — returns parsed JSON as MJEntityFieldEntity_IEmbeddedRecordConfig.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
-    */
-    get EmbeddedRecordObject(): MJEntityFieldEntity_IEmbeddedRecordConfig | null {
-        const raw = this.EmbeddedRecord;
-        if (raw !== this._EmbeddedRecordObject_lastRaw) {
-            this._EmbeddedRecordObject_cached = raw ? JSON.parse(raw) : null;
-            this._EmbeddedRecordObject_lastRaw = raw;
-        }
-        return this._EmbeddedRecordObject_cached!;
-    }
-    set EmbeddedRecordObject(value: MJEntityFieldEntity_IEmbeddedRecordConfig | null) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.EmbeddedRecord = raw;
-        this._EmbeddedRecordObject_cached = value;
-        this._EmbeddedRecordObject_lastRaw = raw;
     }
 
     /**
@@ -82688,8 +86086,43 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     }
 
     /**
+    * * Field Name: EmbeddedRecord
+    * * Display Name: Embedded Record
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJEntityFieldEntity_IEmbeddedRecordConfig
+    * * Description: Optional JSON policy object that declares this foreign-key field as a first-class embedded record, so CodeGen can emit {FieldName}_Object / {FieldName}_EnsureObject() on the entity subclass. Shape is IEmbeddedRecordConfig: OnClear ('delete' | 'orphan' | 'refuse', default orphan) and LoadNested ('inherit' | 'related', default inherit). RelatedEntity and the FK field name are NOT repeated here — they are this row's RelatedEntityID and Name. AllowsNull on this same row decides whether the object is provisioned with GetEntityObject (required FK) or via Ensure (nullable FK). NULL means the field is an ordinary FK, which is the default and reproduces pre-feature behaviour exactly.
+    */
+    get EmbeddedRecord(): string | null {
+        return this.Get('EmbeddedRecord');
+    }
+    set EmbeddedRecord(value: string | null) {
+        this.Set('EmbeddedRecord', value);
+    }
+
+    private _EmbeddedRecordObject_cached: MJEntityFieldEntity_IEmbeddedRecordConfig | null | undefined = undefined;
+    private _EmbeddedRecordObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for EmbeddedRecord — returns parsed JSON as MJEntityFieldEntity_IEmbeddedRecordConfig.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get EmbeddedRecordObject(): MJEntityFieldEntity_IEmbeddedRecordConfig | null {
+        const raw = this.EmbeddedRecord;
+        if (raw !== this._EmbeddedRecordObject_lastRaw) {
+            this._EmbeddedRecordObject_cached = raw ? JSON.parse(raw) : null;
+            this._EmbeddedRecordObject_lastRaw = raw;
+        }
+        return this._EmbeddedRecordObject_cached!;
+    }
+    set EmbeddedRecordObject(value: MJEntityFieldEntity_IEmbeddedRecordConfig | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.EmbeddedRecord = raw;
+        this._EmbeddedRecordObject_cached = value;
+        this._EmbeddedRecordObject_lastRaw = raw;
+    }
+
+    /**
     * * Field Name: FieldCodeName
-    * * Display Name: Field Code Name
+    * * Display Name: Code Name
     * * SQL Data Type: nvarchar(MAX)
     */
     get FieldCodeName(): string | null {
@@ -82761,7 +86194,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntitySchemaName
-    * * Display Name: Related Entity Schema
+    * * Display Name: Related Schema
     * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntitySchemaName(): string | null {
@@ -82770,7 +86203,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntityBaseTable
-    * * Display Name: Related Entity Base Table
+    * * Display Name: Related Base Table
     * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntityBaseTable(): string | null {
@@ -82779,7 +86212,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntityBaseView
-    * * Display Name: Related Entity Base View
+    * * Display Name: Related Base View
     * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntityBaseView(): string | null {
@@ -82788,7 +86221,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntityCodeName
-    * * Display Name: Related Entity Code Name
+    * * Display Name: Related Code Name
     * * SQL Data Type: nvarchar(MAX)
     */
     get RelatedEntityCodeName(): string | null {
@@ -82797,7 +86230,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntityClassName
-    * * Display Name: Related Entity Class Name
+    * * Display Name: Related Class Name
     * * SQL Data Type: nvarchar(MAX)
     */
     get RelatedEntityClassName(): string | null {
@@ -84335,12 +87768,14 @@ export interface MJEntityRelationshipEntity_IRelatedRecordCollectionConfig {
  * - `AdditionalFieldsToInclude` — join-field name list
  *
  * **NULL / `{}` / omitted keys = Auto.** The parent entity's
- * `RelatedRolePolicy` ranker decides Primary vs Detail. Explicit
- * `FormRole` always wins.
+ * `RelatedRolePolicy` ranker decides Primary vs More. Explicit
+ * `inclusion` (or the `FormRole` alias) always wins.
+ * `inclusion: 'None'` removes the relationship from the parent form
+ * entirely — it is not a More item and the ranker never sees it.
  *
  * Expand by adding a property here — no schema migration.
  *
- * @see plans/form-chrome-policy.md
+ * @see guides/FORMS_ARCHITECTURE_GUIDE.md §7d
  */
 export interface MJEntityRelationshipEntity_IEntityRelationshipConfiguration {
     /**
@@ -84354,25 +87789,43 @@ export interface MJEntityRelationshipEntity_IEntityRelationshipConfiguration {
  * How this relationship appears on the parent entity's generated form.
  *
  * Nested under {@link MJEntityRelationshipEntity_IEntityRelationshipConfiguration.UI} so later UI
- * concerns (group, default-expanded, badge) can sit beside `FormRole`
+ * concerns (group, default-expanded, badge) can sit beside `inclusion`
  * without a migration.
  */
 export interface MJEntityRelationshipEntity_IEntityRelationshipUIConfiguration {
     /**
-     * Weight of this relationship in the parent form's chrome.
+     * L1 inclusion on the parent form. Keyed conceptually by
+     * (parent, related entity), not by a single FK.
      *
-     * - `'Primary'` — always first-class (own accordion / rail item). Punches
-     *   through the parent entity's {@link IEntityFormConfiguration.PrimaryRelatedBudget}.
-     * - `'Detail'` — always parked in More.
+     * - `'Primary'` — first-class rail.
+     * - `'More'` — candidate, parked in More.
+     * - `'None'` — not a candidate. Not in More. Ranker never sees it.
      *
-     * Omit to let the parent entity's `RelatedRolePolicy` ranker decide.
-     * Default policy is `'smart'` — same-schema children stay top-level;
-     * cross-schema hang-ons fold once the budget is exceeded. Not "all More".
-     *
-     * Field panels already have this idea via `EntityField.GeneratedFormSection`.
-     * Do not add a parallel column on `EntityField`.
+     * Omit = Auto (L2 ranker). See [Forms Architecture §7d](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md).
+     */
+    inclusion?: 'Primary' | 'More' | 'None';
+
+    /**
+     * Alias of {@link inclusion}. `'Primary'` maps to Primary,
+     * `'Detail'` maps to More.
      */
     FormRole?: 'Primary' | 'Detail';
+
+    /**
+     * Same-table OR of FKs for one parent-form section
+     * (Bill-To OR Ship-To Orders). Sibling ERs to the same related entity
+     * should be `inclusion: 'None'` so they do not sprout extra rail items.
+     */
+    join?: {
+        mode: 'any';
+        fields: string[];
+    };
+
+    /**
+     * Higher = earlier among first-class related rail items (after Details,
+     * after lead contributions such as Overview). Omit = 0.
+     */
+    sortKey?: number;
 }
 
 /**
@@ -86610,6 +90063,61 @@ export class MJExternalDataSourceEntity extends BaseEntity<MJExternalDataSourceE
  */
 @RegisterClass(BaseEntity, 'MJ: File Categories')
 export class MJFileCategoryEntity extends BaseEntity<MJFileCategoryEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJFileCategoryEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJFileCategoryEntity>({
+      EntityName: 'MJ: File Categories',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJFileCategoryEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJFileCategoryEntity>({
+      EntityName: 'MJ: File Categories',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJFileCategoryEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJFileCategoryEntity>({
+      EntityName: 'MJ: File Categories',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: File Categories record from the database
     * @param ID: string - primary key value to load the MJ: File Categories record.
@@ -86654,7 +90162,7 @@ export class MJFileCategoryEntity extends BaseEntity<MJFileCategoryEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: File Categories (vwFileCategories.ID)
     */
@@ -86699,7 +90207,7 @@ export class MJFileCategoryEntity extends BaseEntity<MJFileCategoryEntityType> {
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -86708,11 +90216,47 @@ export class MJFileCategoryEntity extends BaseEntity<MJFileCategoryEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -87567,6 +91111,255 @@ export class MJFileEntity extends BaseEntity<MJFileEntityType> {
 
 
 /**
+ * MJ: Form Chrome Rules - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: FormChromeRule
+ * * Base View: vwFormChromeRules
+ * * @description Install-overlay (L3) pins for generated-form chrome. One row sets Primary / More / None for a parent form's related entity or contribution. Not app-synced — site admin only.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Form Chrome Rules')
+export class MJFormChromeRuleEntity extends BaseEntity<MJFormChromeRuleEntityType> {
+    /**
+    * Loads the MJ: Form Chrome Rules record from the database
+    * @param ID: string - primary key value to load the MJ: Form Chrome Rules record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJFormChromeRuleEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Form Chrome Rules entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Ensures that if the Target Kind is 'Relationship', a Related Entity must be specified and the Contribution Key must be empty. Conversely, if the Target Kind is 'Contribution', a Contribution Key must be specified and the Related Entity must be empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateTargetKindDependencies(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Ensures that if the Target Kind is 'Relationship', a Related Entity must be specified and the Contribution Key must be empty. Conversely, if the Target Kind is 'Contribution', a Contribution Key must be specified and the Related Entity must be empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTargetKindDependencies(result: ValidationResult) {
+    	if (this.TargetKind === 'Relationship') {
+    		if (this.RelatedEntityID == null || this.ContributionKey != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"TargetKind",
+    				"When Target Kind is 'Relationship', Related Entity must be specified and Contribution Key must be empty.",
+    				this.TargetKind,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.TargetKind === 'Contribution') {
+    		if (this.ContributionKey == null || this.RelatedEntityID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"TargetKind",
+    				"When Target Kind is 'Contribution', Contribution Key must be specified and Related Entity must be empty.",
+    				this.TargetKind,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"TargetKind",
+    			"Target Kind must be either 'Relationship' or 'Contribution'.",
+    			this.TargetKind,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Parent Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Parent form entity this rule applies to.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: TargetKind
+    * * Display Name: Target Kind
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Contribution
+    *   * Relationship
+    * * Description: 'Relationship' targets a related entity on the parent form. 'Contribution' targets a form contribution by key.
+    */
+    get TargetKind(): 'Contribution' | 'Relationship' {
+        return this.Get('TargetKind');
+    }
+    set TargetKind(value: 'Contribution' | 'Relationship') {
+        this.Set('TargetKind', value);
+    }
+
+    /**
+    * * Field Name: RelatedEntityID
+    * * Display Name: Related Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Related entity to pin when TargetKind is Relationship. Null for Contribution rows.
+    */
+    get RelatedEntityID(): string | null {
+        return this.Get('RelatedEntityID');
+    }
+    set RelatedEntityID(value: string | null) {
+        this.Set('RelatedEntityID', value);
+    }
+
+    /**
+    * * Field Name: ContributionKey
+    * * Display Name: Contribution Key
+    * * SQL Data Type: nvarchar(256)
+    * * Description: Contribution key to pin when TargetKind is Contribution. Null for Relationship rows.
+    */
+    get ContributionKey(): string | null {
+        return this.Get('ContributionKey');
+    }
+    set ContributionKey(value: string | null) {
+        this.Set('ContributionKey', value);
+    }
+
+    /**
+    * * Field Name: Inclusion
+    * * Display Name: Inclusion
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * More
+    *   * None
+    *   * Primary
+    * * Description: How the target appears on the parent form: Primary (first-class rail), More (parked), or None (not a candidate).
+    */
+    get Inclusion(): 'More' | 'None' | 'Primary' {
+        return this.Get('Inclusion');
+    }
+    set Inclusion(value: 'More' | 'None' | 'Primary') {
+        this.Set('Inclusion', value);
+    }
+
+    /**
+    * * Field Name: JoinFields
+    * * Display Name: Join Fields
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON string array of join field names for a same-table OR filter (Bill-To OR Ship-To). Null keeps the L1 join, if any.
+    */
+    get JoinFields(): string | null {
+        return this.Get('JoinFields');
+    }
+    set JoinFields(value: string | null) {
+        this.Set('JoinFields', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Tie-break when more than one rule matches the same target. Higher Sequence wins.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Title
+    * * Display Name: Title
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional admin display title for this section. Null keeps the relationship DisplayName or contribution name. Survives OpenApp upgrades because the row is keyed by RelatedEntityID / ContributionKey, not by the previous label.
+    */
+    get Title(): string | null {
+        return this.Get('Title');
+    }
+    set Title(value: string | null) {
+        this.Set('Title', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: RelatedEntity
+    * * Display Name: Related Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RelatedEntity(): string | null {
+        return this.Get('RelatedEntity');
+    }
+}
+
+
+/**
  * MJ: Generated Code Categories - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: GeneratedCodeCategory
@@ -87579,6 +91372,61 @@ export class MJFileEntity extends BaseEntity<MJFileEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: Generated Code Categories')
 export class MJGeneratedCodeCategoryEntity extends BaseEntity<MJGeneratedCodeCategoryEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJGeneratedCodeCategoryEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJGeneratedCodeCategoryEntity>({
+      EntityName: 'MJ: Generated Code Categories',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJGeneratedCodeCategoryEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJGeneratedCodeCategoryEntity>({
+      EntityName: 'MJ: Generated Code Categories',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJGeneratedCodeCategoryEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJGeneratedCodeCategoryEntity>({
+      EntityName: 'MJ: Generated Code Categories',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Generated Code Categories record from the database
     * @param ID: string - primary key value to load the MJ: Generated Code Categories record.
@@ -87635,7 +91483,7 @@ export class MJGeneratedCodeCategoryEntity extends BaseEntity<MJGeneratedCodeCat
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent Category
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Generated Code Categories (vwGeneratedCodeCategories.ID)
     * * Description: Parent category ID, allowing for hierarchical categorization.
@@ -87678,11 +91526,47 @@ export class MJGeneratedCodeCategoryEntity extends BaseEntity<MJGeneratedCodeCat
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -90063,6 +93947,61 @@ export class MJLibraryItemEntity extends BaseEntity<MJLibraryItemEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: List Categories')
 export class MJListCategoryEntity extends BaseEntity<MJListCategoryEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJListCategoryEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJListCategoryEntity>({
+      EntityName: 'MJ: List Categories',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJListCategoryEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJListCategoryEntity>({
+      EntityName: 'MJ: List Categories',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJListCategoryEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJListCategoryEntity>({
+      EntityName: 'MJ: List Categories',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: List Categories record from the database
     * @param ID: string - primary key value to load the MJ: List Categories record.
@@ -90119,7 +94058,7 @@ export class MJListCategoryEntity extends BaseEntity<MJListCategoryEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: List Categories (vwListCategories.ID)
     */
@@ -90132,7 +94071,7 @@ export class MJListCategoryEntity extends BaseEntity<MJListCategoryEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -90165,7 +94104,7 @@ export class MJListCategoryEntity extends BaseEntity<MJListCategoryEntityType> {
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(100)
     */
     get Parent(): string | null {
@@ -90174,7 +94113,7 @@ export class MJListCategoryEntity extends BaseEntity<MJListCategoryEntityType> {
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -90183,11 +94122,47 @@ export class MJListCategoryEntity extends BaseEntity<MJListCategoryEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -98493,6 +102468,61 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: Projects')
 export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJProjectEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJProjectEntity>({
+      EntityName: 'MJ: Projects',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJProjectEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJProjectEntity>({
+      EntityName: 'MJ: Projects',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJProjectEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJProjectEntity>({
+      EntityName: 'MJ: Projects',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Projects record from the database
     * @param ID: string - primary key value to load the MJ: Projects record.
@@ -98539,7 +102569,7 @@ export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent Project
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)
     */
@@ -98552,7 +102582,7 @@ export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
 
     /**
     * * Field Name: Name
-    * * Display Name: Name
+    * * Display Name: Project Name
     * * SQL Data Type: nvarchar(255)
     * * Description: Display name for the project
     */
@@ -98647,7 +102677,7 @@ export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -98656,11 +102686,47 @@ export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -99323,6 +103389,61 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: Query Categories')
 export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJQueryCategoryEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJQueryCategoryEntity>({
+      EntityName: 'MJ: Query Categories',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJQueryCategoryEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJQueryCategoryEntity>({
+      EntityName: 'MJ: Query Categories',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJQueryCategoryEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJQueryCategoryEntity>({
+      EntityName: 'MJ: Query Categories',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Query Categories record from the database
     * @param ID: string - primary key value to load the MJ: Query Categories record.
@@ -99367,7 +103488,7 @@ export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType>
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent Category
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Query Categories (vwQueryCategories.ID)
     */
@@ -99392,7 +103513,7 @@ export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType>
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -99405,7 +103526,7 @@ export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType>
 
     /**
     * * Field Name: __mj_CreatedAt
-    * * Display Name: __mj _Created At
+    * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -99415,7 +103536,7 @@ export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType>
 
     /**
     * * Field Name: __mj_UpdatedAt
-    * * Display Name: __mj _Updated At
+    * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
     * * Default Value: getutcdate()
     */
@@ -99425,7 +103546,7 @@ export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType>
 
     /**
     * * Field Name: DefaultCacheEnabled
-    * * Display Name: Default Cache Enabled
+    * * Display Name: Enable Default Cache
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Default cache setting for queries in this category
@@ -99439,7 +103560,7 @@ export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType>
 
     /**
     * * Field Name: DefaultCacheTTLMinutes
-    * * Display Name: Default Cache TTL Minutes
+    * * Display Name: Default TTL (Minutes)
     * * SQL Data Type: int
     * * Description: Default TTL in minutes for cached results of queries in this category
     */
@@ -99452,7 +103573,7 @@ export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType>
 
     /**
     * * Field Name: DefaultCacheMaxSize
-    * * Display Name: Default Cache Max Size
+    * * Display Name: Default Max Cache Size
     * * SQL Data Type: int
     * * Description: Default maximum cache size for queries in this category
     */
@@ -99465,7 +103586,7 @@ export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType>
 
     /**
     * * Field Name: CacheInheritanceEnabled
-    * * Display Name: Cache Inheritance Enabled
+    * * Display Name: Enable Cache Inheritance
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When true, queries without cache config will inherit from this category
@@ -99479,7 +103600,7 @@ export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType>
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(50)
     */
     get Parent(): string | null {
@@ -99488,7 +103609,7 @@ export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType>
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -99497,11 +103618,47 @@ export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType>
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -101825,6 +105982,61 @@ export class MJRecordChangeReplayRunEntity extends BaseEntity<MJRecordChangeRepl
  */
 @RegisterClass(BaseEntity, 'MJ: Record Changes')
 export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJRecordChangeEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootRestoredFromID = '${rootId}' AND RestoredFromIDDepth <= ${maxDepth}`
+      : `RootRestoredFromID = '${rootId}'`;
+    const result = await rv.RunView<MJRecordChangeEntity>({
+      EntityName: 'MJ: Record Changes',
+      ExtraFilter: filter,
+      OrderBy: 'RestoredFromIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJRecordChangeEntity[]> {
+    const path = this.Get('RestoredFromIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJRecordChangeEntity>({
+      EntityName: 'MJ: Record Changes',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'RestoredFromIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJRecordChangeEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJRecordChangeEntity>({
+      EntityName: 'MJ: Record Changes',
+      ExtraFilter: `RestoredFromID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Record Changes record from the database
     * @param ID: string - primary key value to load the MJ: Record Changes record.
@@ -101896,7 +106108,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Change Type
+    * * Display Name: Type
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Create
     * * Value List Type: List
@@ -102107,7 +106319,7 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity Name
+    * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -102157,6 +106369,42 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     */
     get RootRestoredFromID(): string | null {
         return this.Get('RootRestoredFromID');
+    }
+
+    /**
+    * * Field Name: RestoredFromIDDepth
+    * * Display Name: Restored From ID Depth
+    * * SQL Data Type: int
+    */
+    get RestoredFromIDDepth(): number | null {
+        return this.Get('RestoredFromIDDepth');
+    }
+
+    /**
+    * * Field Name: RestoredFromIDPath
+    * * Display Name: Restored From ID Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get RestoredFromIDPath(): string | null {
+        return this.Get('RestoredFromIDPath');
+    }
+
+    /**
+    * * Field Name: RestoredFromIDIsLeaf
+    * * Display Name: Restored From ID Is Leaf
+    * * SQL Data Type: bit
+    */
+    get RestoredFromIDIsLeaf(): boolean | null {
+        return this.Get('RestoredFromIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: RestoredFromIDChildCount
+    * * Display Name: Restored From ID Child Count
+    * * SQL Data Type: int
+    */
+    get RestoredFromIDChildCount(): number | null {
+        return this.Get('RestoredFromIDChildCount');
     }
 }
 
@@ -103016,6 +107264,61 @@ export class MJRecordMergeLogEntity extends BaseEntity<MJRecordMergeLogEntityTyp
  */
 @RegisterClass(BaseEntity, 'MJ: Record Process Categories')
 export class MJRecordProcessCategoryEntity extends BaseEntity<MJRecordProcessCategoryEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJRecordProcessCategoryEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJRecordProcessCategoryEntity>({
+      EntityName: 'MJ: Record Process Categories',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJRecordProcessCategoryEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJRecordProcessCategoryEntity>({
+      EntityName: 'MJ: Record Process Categories',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJRecordProcessCategoryEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJRecordProcessCategoryEntity>({
+      EntityName: 'MJ: Record Process Categories',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Record Process Categories record from the database
     * @param ID: string - primary key value to load the MJ: Record Process Categories record.
@@ -103122,6 +107425,42 @@ export class MJRecordProcessCategoryEntity extends BaseEntity<MJRecordProcessCat
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Hierarchy Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Hierarchy Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf Node
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -103812,6 +108151,61 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
  */
 @RegisterClass(BaseEntity, 'MJ: Remote Operation Categories')
 export class MJRemoteOperationCategoryEntity extends BaseEntity<MJRemoteOperationCategoryEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJRemoteOperationCategoryEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJRemoteOperationCategoryEntity>({
+      EntityName: 'MJ: Remote Operation Categories',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJRemoteOperationCategoryEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJRemoteOperationCategoryEntity>({
+      EntityName: 'MJ: Remote Operation Categories',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJRemoteOperationCategoryEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJRemoteOperationCategoryEntity>({
+      EntityName: 'MJ: Remote Operation Categories',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Remote Operation Categories record from the database
     * @param ID: string - primary key value to load the MJ: Remote Operation Categories record.
@@ -103918,6 +108312,42 @@ export class MJRemoteOperationCategoryEntity extends BaseEntity<MJRemoteOperatio
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Hierarchy Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf Node
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -110176,6 +114606,61 @@ export class MJSignatureRequestEntity extends BaseEntity<MJSignatureRequestEntit
  */
 @RegisterClass(BaseEntity, 'MJ: Skills')
 export class MJSkillEntity extends BaseEntity<MJSkillEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJSkillEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJSkillEntity>({
+      EntityName: 'MJ: Skills',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJSkillEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJSkillEntity>({
+      EntityName: 'MJ: Skills',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJSkillEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJSkillEntity>({
+      EntityName: 'MJ: Skills',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Skills record from the database
     * @param ID: string - primary key value to load the MJ: Skills record.
@@ -110195,6 +114680,7 @@ export class MJSkillEntity extends BaseEntity<MJSkillEntityType> {
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -110207,6 +114693,7 @@ export class MJSkillEntity extends BaseEntity<MJSkillEntityType> {
 
     /**
     * * Field Name: Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(50)
     */
     get Name(): string {
@@ -110251,7 +114738,7 @@ export class MJSkillEntity extends BaseEntity<MJSkillEntityType> {
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(50)
     */
     get Parent(): string | null {
@@ -110260,11 +114747,47 @@ export class MJSkillEntity extends BaseEntity<MJSkillEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -111638,6 +116161,116 @@ export class MJTaggedItemEntity extends BaseEntity<MJTaggedItemEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: Tags')
 export class MJTagEntity extends BaseEntity<MJTagEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJTagEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJTagEntity>({
+      EntityName: 'MJ: Tags',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJTagEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJTagEntity>({
+      EntityName: 'MJ: Tags',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJTagEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJTagEntity>({
+      EntityName: 'MJ: Tags',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetMergedIntoTagIDDescendants(maxDepth?: number): Promise<MJTagEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootMergedIntoTagID = '${rootId}' AND MergedIntoTagIDDepth <= ${maxDepth}`
+      : `RootMergedIntoTagID = '${rootId}'`;
+    const result = await rv.RunView<MJTagEntity>({
+      EntityName: 'MJ: Tags',
+      ExtraFilter: filter,
+      OrderBy: 'MergedIntoTagIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetMergedIntoTagIDAncestors(): Promise<MJTagEntity[]> {
+    const path = this.Get('MergedIntoTagIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJTagEntity>({
+      EntityName: 'MJ: Tags',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'MergedIntoTagIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetMergedIntoTagIDChildren(): Promise<MJTagEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJTagEntity>({
+      EntityName: 'MJ: Tags',
+      ExtraFilter: `MergedIntoTagID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Tags record from the database
     * @param ID: string - primary key value to load the MJ: Tags record.
@@ -111829,7 +116462,7 @@ export class MJTagEntity extends BaseEntity<MJTagEntityType> {
 
     /**
     * * Field Name: MaxDescendantDepth
-    * * Display Name: Max Descendant Depth
+    * * Display Name: Max Depth
     * * SQL Data Type: int
     * * Description: Optional cap on the depth of the subtree rooted at this tag. NULL = unlimited. 0 = leaf-only (no children at all). Enforced via ancestor walk during auto-grow.
     */
@@ -111842,7 +116475,7 @@ export class MJTagEntity extends BaseEntity<MJTagEntityType> {
 
     /**
     * * Field Name: MinWeight
-    * * Display Name: Min Weight
+    * * Display Name: Minimum Weight
     * * SQL Data Type: decimal(3, 2)
     * * Description: Optional minimum classifier confidence (0.00-1.00) required for this tag to be applied. Items below this floor are routed to the TagSuggestion queue instead of being tagged.
     */
@@ -111931,12 +116564,84 @@ export class MJTagEntity extends BaseEntity<MJTagEntityType> {
     }
 
     /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Hierarchy Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf Node
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
+    }
+
+    /**
     * * Field Name: RootMergedIntoTagID
     * * Display Name: Root Merged Into
     * * SQL Data Type: uniqueidentifier
     */
     get RootMergedIntoTagID(): string | null {
         return this.Get('RootMergedIntoTagID');
+    }
+
+    /**
+    * * Field Name: MergedIntoTagIDDepth
+    * * Display Name: Merged Depth
+    * * SQL Data Type: int
+    */
+    get MergedIntoTagIDDepth(): number | null {
+        return this.Get('MergedIntoTagIDDepth');
+    }
+
+    /**
+    * * Field Name: MergedIntoTagIDPath
+    * * Display Name: Merged Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get MergedIntoTagIDPath(): string | null {
+        return this.Get('MergedIntoTagIDPath');
+    }
+
+    /**
+    * * Field Name: MergedIntoTagIDIsLeaf
+    * * Display Name: Merged Is Leaf
+    * * SQL Data Type: bit
+    */
+    get MergedIntoTagIDIsLeaf(): boolean | null {
+        return this.Get('MergedIntoTagIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: MergedIntoTagIDChildCount
+    * * Display Name: Merged Child Count
+    * * SQL Data Type: int
+    */
+    get MergedIntoTagIDChildCount(): number | null {
+        return this.Get('MergedIntoTagIDChildCount');
     }
 }
 
@@ -112650,6 +117355,61 @@ export interface MJTaskEntity_ITaskExecutionPolicy {
  */
 @RegisterClass(BaseEntity, 'MJ: Tasks')
 export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJTaskEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJTaskEntity>({
+      EntityName: 'MJ: Tasks',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJTaskEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJTaskEntity>({
+      EntityName: 'MJ: Tasks',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJTaskEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJTaskEntity>({
+      EntityName: 'MJ: Tasks',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Tasks record from the database
     * @param ID: string - primary key value to load the MJ: Tasks record.
@@ -112996,7 +117756,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: AgentRunID
-    * * Display Name: Agent Run ID
+    * * Display Name: Agent Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
     * * Description: The specific AI Agent Run that executed this task. Distinct from the conversation-level link: sibling tasks in one graph each get their own run, so this is what run-history and Gantt views should follow.
@@ -113036,7 +117796,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: ActionID
-    * * Display Name: Action ID
+    * * Display Name: Action
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
     * * Description: The Action this task executes, when the node is action-assigned rather than agent-assigned or awaiting a person. Mutually exclusive with UserID and AgentID (CK_Task_Assignment). Set by durable entity-action dispatch, where a single-node graph carries one action to run with restart recovery.
@@ -113072,7 +117832,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: PromptID
-    * * Display Name: Prompt ID
+    * * Display Name: Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     */
@@ -113120,7 +117880,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -113129,7 +117889,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Task Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get Type(): string {
@@ -113138,7 +117898,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Environment
-    * * Display Name: Environment
+    * * Display Name: Environment Name
     * * SQL Data Type: nvarchar(255)
     */
     get Environment(): string {
@@ -113147,7 +117907,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Project
-    * * Display Name: Project
+    * * Display Name: Project Name
     * * SQL Data Type: nvarchar(255)
     */
     get Project(): string | null {
@@ -113156,7 +117916,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail
+    * * Display Name: Conversation Name
     * * SQL Data Type: nvarchar(100)
     */
     get ConversationDetail(): string | null {
@@ -113165,7 +117925,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -113174,7 +117934,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent
+    * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -113183,7 +117943,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: AgentRun
-    * * Display Name: Agent Run
+    * * Display Name: Agent Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get AgentRun(): string | null {
@@ -113192,7 +117952,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Action
-    * * Display Name: Action
+    * * Display Name: Action Name
     * * SQL Data Type: nvarchar(425)
     */
     get Action(): string | null {
@@ -113201,7 +117961,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: Prompt
-    * * Display Name: Prompt
+    * * Display Name: Prompt Name
     * * SQL Data Type: nvarchar(255)
     */
     get Prompt(): string | null {
@@ -113210,11 +117970,47 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Task
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Hierarchy Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Hierarchy Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf Node
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -113232,6 +118028,61 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: Template Categories')
 export class MJTemplateCategoryEntity extends BaseEntity<MJTemplateCategoryEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJTemplateCategoryEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJTemplateCategoryEntity>({
+      EntityName: 'MJ: Template Categories',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJTemplateCategoryEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJTemplateCategoryEntity>({
+      EntityName: 'MJ: Template Categories',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJTemplateCategoryEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJTemplateCategoryEntity>({
+      EntityName: 'MJ: Template Categories',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Template Categories record from the database
     * @param ID: string - primary key value to load the MJ: Template Categories record.
@@ -113290,7 +118141,7 @@ export class MJTemplateCategoryEntity extends BaseEntity<MJTemplateCategoryEntit
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Template Categories (vwTemplateCategories.ID)
     */
@@ -113336,7 +118187,7 @@ export class MJTemplateCategoryEntity extends BaseEntity<MJTemplateCategoryEntit
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -113354,11 +118205,47 @@ export class MJTemplateCategoryEntity extends BaseEntity<MJTemplateCategoryEntit
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -115904,6 +120791,61 @@ export class MJTestSuiteTestEntity extends BaseEntity<MJTestSuiteTestEntityType>
  */
 @RegisterClass(BaseEntity, 'MJ: Test Suites')
 export class MJTestSuiteEntity extends BaseEntity<MJTestSuiteEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJTestSuiteEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJTestSuiteEntity>({
+      EntityName: 'MJ: Test Suites',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJTestSuiteEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJTestSuiteEntity>({
+      EntityName: 'MJ: Test Suites',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJTestSuiteEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJTestSuiteEntity>({
+      EntityName: 'MJ: Test Suites',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Test Suites record from the database
     * @param ID: string - primary key value to load the MJ: Test Suites record.
@@ -115936,7 +120878,7 @@ export class MJTestSuiteEntity extends BaseEntity<MJTestSuiteEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent Suite
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Suites (vwTestSuites.ID)
     * * Description: Optional parent suite ID for hierarchical organization. NULL for root-level suites.
@@ -116067,7 +121009,7 @@ export class MJTestSuiteEntity extends BaseEntity<MJTestSuiteEntityType> {
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -116076,11 +121018,47 @@ export class MJTestSuiteEntity extends BaseEntity<MJTestSuiteEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Hierarchy Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Hierarchy Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf Node
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -119068,6 +124046,61 @@ export class MJUserSettingEntity extends BaseEntity<MJUserSettingEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: User View Categories')
 export class MJUserViewCategoryEntity extends BaseEntity<MJUserViewCategoryEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJUserViewCategoryEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJUserViewCategoryEntity>({
+      EntityName: 'MJ: User View Categories',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJUserViewCategoryEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJUserViewCategoryEntity>({
+      EntityName: 'MJ: User View Categories',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJUserViewCategoryEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJUserViewCategoryEntity>({
+      EntityName: 'MJ: User View Categories',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: User View Categories record from the database
     * @param ID: string - primary key value to load the MJ: User View Categories record.
@@ -119124,7 +124157,7 @@ export class MJUserViewCategoryEntity extends BaseEntity<MJUserViewCategoryEntit
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: User View Categories (vwUserViewCategories.ID)
     */
@@ -119183,7 +124216,7 @@ export class MJUserViewCategoryEntity extends BaseEntity<MJUserViewCategoryEntit
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(100)
     */
     get Parent(): string | null {
@@ -119210,11 +124243,47 @@ export class MJUserViewCategoryEntity extends BaseEntity<MJUserViewCategoryEntit
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 
@@ -121632,6 +126701,61 @@ export class MJVersionLabelRestoreEntity extends BaseEntity<MJVersionLabelRestor
  */
 @RegisterClass(BaseEntity, 'MJ: Version Labels')
 export class MJVersionLabelEntity extends BaseEntity<MJVersionLabelEntityType> {
+
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async GetDescendants(maxDepth?: number): Promise<MJVersionLabelEntity[]> {
+    const rv = new RunView();
+    const rootId = this.Get('ID') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
+      : `RootParentID = '${rootId}'`;
+    const result = await rv.RunView<MJVersionLabelEntity>({
+      EntityName: 'MJ: Version Labels',
+      ExtraFilter: filter,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async GetAncestors(): Promise<MJVersionLabelEntity[]> {
+    const path = this.Get('ParentIDPath') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('ID') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
+    const result = await rv.RunView<MJVersionLabelEntity>({
+      EntityName: 'MJ: Version Labels',
+      ExtraFilter: `ID IN (${idList})`,
+      OrderBy: 'ParentIDDepth ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async GetChildren(): Promise<MJVersionLabelEntity[]> {
+    const currentId = this.Get('ID') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<MJVersionLabelEntity>({
+      EntityName: 'MJ: Version Labels',
+      ExtraFilter: `ParentID = '${currentId}'`,
+    });
+    return result.Success ? result.Results : [];
+  }
     /**
     * Loads the MJ: Version Labels record from the database
     * @param ID: string - primary key value to load the MJ: Version Labels record.
@@ -121723,7 +126847,7 @@ export class MJVersionLabelEntity extends BaseEntity<MJVersionLabelEntityType> {
 
     /**
     * * Field Name: RecordID
-    * * Display Name: Record ID
+    * * Display Name: Record
     * * SQL Data Type: nvarchar(750)
     * * Description: When Scope is Record, identifies the specific record. NULL for System and Entity scopes.
     */
@@ -121844,7 +126968,7 @@ export class MJVersionLabelEntity extends BaseEntity<MJVersionLabelEntityType> {
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string | null {
@@ -121862,7 +126986,7 @@ export class MJVersionLabelEntity extends BaseEntity<MJVersionLabelEntityType> {
 
     /**
     * * Field Name: CreatedByUser
-    * * Display Name: Created By User Name
+    * * Display Name: Created By
     * * SQL Data Type: nvarchar(100)
     */
     get CreatedByUser(): string {
@@ -121876,6 +127000,42 @@ export class MJVersionLabelEntity extends BaseEntity<MJVersionLabelEntityType> {
     */
     get RootParentID(): string | null {
         return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: ParentIDDepth
+    * * Display Name: Hierarchy Depth
+    * * SQL Data Type: int
+    */
+    get ParentIDDepth(): number | null {
+        return this.Get('ParentIDDepth');
+    }
+
+    /**
+    * * Field Name: ParentIDPath
+    * * Display Name: Hierarchy Path
+    * * SQL Data Type: nvarchar(MAX)
+    */
+    get ParentIDPath(): string | null {
+        return this.Get('ParentIDPath');
+    }
+
+    /**
+    * * Field Name: ParentIDIsLeaf
+    * * Display Name: Is Leaf Node
+    * * SQL Data Type: bit
+    */
+    get ParentIDIsLeaf(): boolean | null {
+        return this.Get('ParentIDIsLeaf');
+    }
+
+    /**
+    * * Field Name: ParentIDChildCount
+    * * Display Name: Child Count
+    * * SQL Data Type: int
+    */
+    get ParentIDChildCount(): number | null {
+        return this.Get('ParentIDChildCount');
     }
 }
 

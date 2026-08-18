@@ -1,4 +1,5 @@
 import { BaseEntity, EntityFieldExtendedType, EntityFieldInfo, EntityFieldValueListType, EntityInfo, EntityRelationshipInfo, Metadata, TypeScriptTypeFromSQLType } from '@memberjunction/core';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import fs from 'fs';
 import path from 'path';
 import ts from 'typescript';
@@ -215,7 +216,7 @@ export class EntitySubClassGeneratorBase {
   }
 
   public generateEntitySubClassFileHeader(): string {
-    return `import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase } from "@memberjunction/core";
+    return `import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase, RunView } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { z } from "zod";
 
@@ -249,12 +250,12 @@ export const loadModule = () => {
     if (entity.PrimaryKeys.length === 0) {
       console.warn(`SKIPPING TYPESCRIPT GENERATION: Entity ${entity.Name} has no primary keys in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
       return '';
-    } else {
-      // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
-      const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
-      const sClassName: string = `${entity.ClassName}Entity`;
+    }
 
-      const fields: string = sortedFields.map((e) => {
+    const sClassName: string = `${entity.ClassName}Entity`;
+    // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
+    const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+    const fields: string = sortedFields.map((e) => {
         let values: string = '';
         let valueList: string = '';
         if (e.ValueListType && e.ValueListType.length > 0 && e.ValueListType.trim().toLowerCase() !== 'none') {
@@ -519,6 +520,7 @@ export const loadModule = () => {
 
       const relatedRecordCollections = EntitySubClassGeneratorBase.GenerateRelatedRecordCollections(entity);
       const embeddedRecords = EntitySubClassGeneratorBase.GenerateEmbeddedRecords(entity);
+      const hierarchyMethods = EntitySubClassGeneratorBase.GenerateHierarchyMethods(entity, sClassName);
 
       let sRet: string = `
 ${jsonTypeBlock}
@@ -533,7 +535,7 @@ ${jsonTypeBlock}
  * @public${deprecatedFlag}
  */
 ${includeFileHeader ? subClassImportStatement : ''}@RegisterClass(BaseEntity, '${entity.Name}')
-export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${relatedRecordCollections}${embeddedRecords}${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}${validateFunction ? '\n\n' + validateFunction : ''}
+export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${relatedRecordCollections}${embeddedRecords}${hierarchyMethods}${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}${validateFunction ? '\n\n' + validateFunction : ''}
 
 ${fields}
 }
@@ -541,7 +543,6 @@ ${fields}
       if (includeFileHeader) sRet = this.generateEntitySubClassFileHeader() + sRet;
 
       return sRet;
-    }
   }
 
   /**
@@ -882,6 +883,97 @@ ${fields}
     }
 
     return blocks.length > 0 ? '\n' + blocks.join('\n') : '';
+  }
+
+  /**
+   * Emits strongly-typed hierarchy traversal helper methods (`GetDescendants`, `GetAncestors`, `GetChildren`)
+   * for entities with recursive self-referencing foreign keys.
+   *
+   * @param entity - The entity being generated.
+   * @param sClassName - The generated subclass name.
+   * @returns The generated methods block, or an empty string when the entity has no recursive FKs.
+   */
+  public static GenerateHierarchyMethods(entity: EntityInfo, sClassName: string): string {
+    const recursiveFKs = (entity.Fields ?? []).filter(
+      f => f.RelatedEntityID != null && (UUIDsEqual(f.RelatedEntityID, entity.ID) || f.RelatedEntity === entity.Name) && !f.IsVirtual
+    );
+    if (recursiveFKs.length === 0) {
+      return '';
+    }
+
+    const methods: string[] = [];
+    const pkName = entity.FirstPrimaryKey?.Name ?? 'ID';
+
+    for (const field of recursiveFKs) {
+      const fieldName = field.Name;
+      const rootField = `Root${fieldName}`;
+      const depthField = `${fieldName}Depth`;
+      const pathField = `${fieldName}Path`;
+
+      const isPrimaryHierarchy = recursiveFKs.length === 1 || fieldName === 'ParentID';
+
+      const descMethodName = isPrimaryHierarchy ? 'GetDescendants' : `Get${fieldName}Descendants`;
+      const ancMethodName = isPrimaryHierarchy ? 'GetAncestors' : `Get${fieldName}Ancestors`;
+      const childMethodName = isPrimaryHierarchy ? 'GetChildren' : `Get${fieldName}Children`;
+
+      methods.push(`
+  /**
+   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async ${descMethodName}(maxDepth?: number): Promise<${sClassName}[]> {
+    const rv = new RunView();
+    const rootId = this.Get('${pkName}') as string | null | undefined;
+    if (!rootId) return [];
+    const filter = maxDepth != null
+      ? \`${rootField} = '\${rootId}' AND ${depthField} <= \${maxDepth}\`
+      : \`${rootField} = '\${rootId}'\`;
+    const result = await rv.RunView<${sClassName}>({
+      EntityName: '${entity.Name}',
+      ExtraFilter: filter,
+      OrderBy: '${depthField} ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async ${ancMethodName}(): Promise<${sClassName}[]> {
+    const path = this.Get('${pathField}') as string | null | undefined;
+    if (!path) return [];
+    const currentId = this.Get('${pkName}') as string | null | undefined;
+    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
+    if (rawIds.length === 0) return [];
+    const rv = new RunView();
+    const idList = rawIds.map((id: string) => \`'\${id}'\`).join(',');
+    const result = await rv.RunView<${sClassName}>({
+      EntityName: '${entity.Name}',
+      ExtraFilter: \`${pkName} IN (\${idList})\`,
+      OrderBy: '${depthField} ASC',
+    });
+    return result.Success ? result.Results : [];
+  }
+
+  /**
+   * Retrieves all direct child records of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async ${childMethodName}(): Promise<${sClassName}[]> {
+    const currentId = this.Get('${pkName}') as string | null | undefined;
+    if (!currentId) return [];
+    const rv = new RunView();
+    const result = await rv.RunView<${sClassName}>({
+      EntityName: '${entity.Name}',
+      ExtraFilter: \`${fieldName} = '\${currentId}'\`,
+    });
+    return result.Success ? result.Results : [];
+  }`);
+    }
+
+    return '\n' + methods.join('\n');
   }
 
   /**

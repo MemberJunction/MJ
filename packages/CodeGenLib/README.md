@@ -70,7 +70,7 @@ flowchart TD
 - **AI-Powered Intelligence**: Uses AI prompts to translate CHECK constraints into Zod schemas, generate semantic form layouts, identify name fields, and create entity descriptions
 - **Extensible Architecture**: Every generator (`SQLCodeGenBase`, `EntitySubClassGeneratorBase`, `AngularClientGeneratorBase`, etc.) can be subclassed and overridden via MJ's class factory
 - **Zod Validation Schemas**: Generates Zod schemas from SQL CHECK constraints with proper union types and refinements
-- **Recursive Hierarchy Support**: Automatically detects self-referential foreign keys and generates CTE-based `Root{FieldName}` columns in views
+- **Recursive Foreign Key & Hierarchy Traversal Engine**: Automatically detects self-referential foreign keys and generates a 4-routine TVF suite (`GetHierarchyMeta`, `GetDescendants`, `GetAncestors`, `GetRootID`), 5 computed base-view columns (`Root<Field>`, `<Field>Depth`, `<Field>Path`, `<Field>IsLeaf`, `<Field>ChildCount`), and strongly typed TypeScript entity traversal methods (`GetDescendants()`, `GetAncestors()`, `GetChildren()`). See the [Recursive Foreign Keys & Hierarchy Traversal Guide](../../guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md).
 - **Cascade Delete Generation**: Produces cursor-based cascade delete procedures that call child entity stored procedures, respecting business logic at every level
 - **Force Regeneration**: Surgically regenerate specific SQL objects for specific entities without requiring schema changes
 - **Class Registration Manifests**: Prevents tree-shaking of `@RegisterClass`-decorated classes by generating static import manifests
@@ -436,31 +436,48 @@ export const AIPromptSchema = z.object({
 });
 ```
 
-### SQL Views with Recursive Hierarchy Support
+### SQL Views & Hierarchy Traversal Engine
 
-For tables with self-referential foreign keys, CodeGen automatically generates recursive CTEs:
+For tables with self-referential foreign keys (e.g. `ParentID`), CodeGen automatically generates a 4-routine Table-Valued Function (TVF) suite and projects enriched hierarchy columns into base views via `OUTER APPLY` (T-SQL) or `LEFT JOIN LATERAL` (PostgreSQL):
 
 ```sql
--- Auto-detected: Task.ParentTaskID references Task.ID
-CREATE VIEW [vwTasks] AS
-WITH CTE_RootParentTaskID AS (
-    SELECT [ID], [ID] AS [RootParentTaskID]
-    FROM [__mj].[Task]
-    WHERE [ParentTaskID] IS NULL
-
-    UNION ALL
-
-    SELECT child.[ID], parent.[RootParentTaskID]
-    FROM [__mj].[Task] child
-    INNER JOIN CTE_RootParentTaskID parent
-        ON child.[ParentTaskID] = parent.[ID]
-)
-SELECT t.*, cte.[RootParentTaskID]
-FROM [__mj].[Task] AS t
-LEFT OUTER JOIN CTE_RootParentTaskID cte ON t.[ID] = cte.[ID]
+-- Generated Base View with Hierarchy Columns (T-SQL)
+SELECT 
+    c.*,
+    hier_ParentID.RootID AS [RootParentID],
+    hier_ParentID.Depth AS [ParentIDDepth],
+    hier_ParentID.Path AS [ParentIDPath],
+    hier_ParentID.IsLeaf AS [ParentIDIsLeaf],
+    hier_ParentID.ChildCount AS [ParentIDChildCount]
+FROM [sales].[Category] AS c
+OUTER APPLY [sales].[fnCategoryParentID_GetHierarchyMeta]([c].[ID], [c].[ParentID]) AS hier_ParentID
 ```
 
-The CTE is zero-overhead: the SQL optimizer eliminates it entirely when the root column is not selected.
+```sql
+-- Generated Base View with Hierarchy Columns (PostgreSQL)
+SELECT 
+    c.*,
+    hier_ParentID."RootID" AS "RootParentID",
+    hier_ParentID."Depth" AS "ParentIDDepth",
+    hier_ParentID."Path" AS "ParentIDPath",
+    hier_ParentID."IsLeaf" AS "ParentIDIsLeaf",
+    hier_ParentID."ChildCount" AS "ParentIDChildCount"
+FROM "sales"."Category" AS c
+LEFT JOIN LATERAL "sales"."fn_category_parent_id_get_hierarchy_meta"(c."ID", c."ParentID") AS hier_ParentID ON true
+```
+
+The inline TVF join is **zero-overhead**: relational query optimizers prune it completely when hierarchy columns are not selected.
+
+Additionally, generated entity subclasses in TypeScript automatically receive strongly-typed hierarchy traversal helper methods:
+
+```typescript
+// Auto-generated on entity subclasses with recursive FKs
+const descendants = await category.GetDescendants(maxDepth);
+const ancestors = await category.GetAncestors();
+const children = await category.GetChildren();
+```
+
+See the [Recursive Foreign Keys & Hierarchy Traversal Guide](../../guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md) for complete details.
 
 ### Angular Form Components
 
@@ -880,7 +897,7 @@ The `CodeGenDatabaseProvider` is the abstract base class that encapsulates **all
 | Triggers | `generateTimestampTrigger` | Timestamp auto-update triggers |
 | Indexes | `generateForeignKeyIndexes` | Foreign key index generation |
 | Full-Text Search | `generateFullTextSearch` | Platform-specific FTS infrastructure |
-| Root ID Functions | `generateRootIDFunction`, `generateRootFieldSelect`, `generateRootFieldJoin` | Recursive hierarchy root ID calculation |
+| Hierarchy TVFs & Views | `generateHierarchyMetaFunction`, `generateDescendantsFunction`, `generateAncestorsFunction`, `generateRootIDFunction`, `generateHierarchyFieldSelect`, `generateHierarchyFieldJoin` | Recursive hierarchy TVF suite & view join generation |
 | Permissions | `generateViewPermissions`, `generateCRUDPermissions`, `generateFullTextSearchPermissions` | GRANT statements per entity role |
 | Cascade Deletes | `generateSingleCascadeOperation` | Cascade delete/update-to-NULL operations |
 | Timestamp Columns | `generateTimestampColumns` | Adding __mj_CreatedAt/__mj_UpdatedAt columns |
