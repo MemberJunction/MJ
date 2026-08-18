@@ -9,7 +9,10 @@ import { BuildConversationTimeline, ConversationTimelineItem } from '../utils/re
 import {
     ConversationDetailWindowCursor,
     SelectLatestTimelinePage,
-    DEFAULT_TRANSCRIPT_PAGE_SIZE
+    DEFAULT_TRANSCRIPT_PAGE_SIZE,
+    DEFAULT_RAW_OVERREAD,
+    MAX_OVERREAD_ATTEMPTS,
+    OVERREAD_GROWTH_FACTOR
 } from '../utils/conversation-detail-window';
 
 /**
@@ -97,6 +100,52 @@ export class ConversationDetailWindowStore {
     }
 
     /**
+     * Fetches a page, WIDENING the raw over-read until it yields a full page of timeline
+     * items (or the conversation runs out).
+     *
+     * Raw rows are not display items: a realtime session folds many stamped rows into ONE
+     * timeline card, so the default `3 × pageSize` over-read can come back holding two or
+     * three items instead of ten. Taking that at face value gives the reader a stubby page
+     * and makes the sentinel fire again immediately — which is worse than one wider read.
+     *
+     * Bounded by {@link MAX_OVERREAD_ATTEMPTS}: a conversation that is almost entirely one
+     * long session would otherwise grow the read until it pulled the whole table.
+     */
+    private async fetchPageFillingTimeline(
+        params: LoadDetailWindowParams,
+        contextUser: UserInfo
+    ): Promise<DetailWindowLoadResult> {
+        let overread = DEFAULT_RAW_OVERREAD;
+        let result = await this.loader.LoadDetailWindow({ ...params, RawOverread: overread }, contextUser);
+
+        for (let attempt = 1; attempt < MAX_OVERREAD_ATTEMPTS; attempt++) {
+            const itemCount = BuildConversationTimeline(result.Details).length;
+            if (itemCount >= DEFAULT_TRANSCRIPT_PAGE_SIZE) {
+                break;                      // already a full page of display items
+            }
+            if (!result.HasMoreAbove) {
+                break;                      // start of the conversation — short IS complete
+            }
+            // The decisive test: did the read actually HIT its row limit? A fetch that came
+            // back under its own `MaxRows` has already returned everything available in that
+            // range, so a wider read would return the identical rows. Only a fetch that filled
+            // its limit can have been truncated by collapse, and only that is worth re-reading.
+            if (result.Details.length < overread) {
+                break;
+            }
+
+            overread *= OVERREAD_GROWTH_FACTOR;
+            const wider = await this.loader.LoadDetailWindow({ ...params, RawOverread: overread }, contextUser);
+            // A failed or non-productive retry must not discard the page we already have.
+            if (!wider || wider.Details.length <= result.Details.length) {
+                break;
+            }
+            result = wider;
+        }
+        return result;
+    }
+
+    /**
      * First paint: the newest page of a conversation.
      *
      * The loader is not expected to throw — `LoadDetailWindow` logs and returns an empty
@@ -109,7 +158,7 @@ export class ConversationDetailWindowStore {
         this.isLoadingLatest = true;
 
         try {
-            const result = await this.loader.LoadDetailWindow(
+            const result = await this.fetchPageFillingTimeline(
                 { ConversationID: conversationId, PageSize: DEFAULT_TRANSCRIPT_PAGE_SIZE },
                 contextUser
             );
@@ -157,7 +206,7 @@ export class ConversationDetailWindowStore {
         this.isLoadingOlder = true;
 
         try {
-            const result = await this.loader.LoadDetailWindow(
+            const result = await this.fetchPageFillingTimeline(
                 { ConversationID: conversationId, BeforeSequence: before, PageSize: DEFAULT_TRANSCRIPT_PAGE_SIZE },
                 contextUser
             );

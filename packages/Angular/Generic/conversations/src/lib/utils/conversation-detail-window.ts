@@ -61,6 +61,23 @@ export const DEFAULT_TRANSCRIPT_PAGE_SIZE = 10;
 /** Raw-row over-read so session collapse still fills a page of timeline items. */
 export const DEFAULT_RAW_OVERREAD = DEFAULT_TRANSCRIPT_PAGE_SIZE * 3;
 
+/**
+ * How many times a short page may re-fetch with a wider over-read before settling.
+ *
+ * The over-read exists because raw rows are not display items — a realtime session folds
+ * many rows into ONE timeline card, so `3 × pageSize` rows can yield two or three items
+ * instead of ten. Growing the read is what keeps a page a page.
+ *
+ * Bounded, because the pathological case is a conversation that is almost entirely one long
+ * session: growing without limit there would walk the whole table, which is the exact cost
+ * windowing exists to avoid. Three attempts reaches 12 × pageSize, past which a short page is
+ * the honest answer and the sentinel simply fires again.
+ */
+export const MAX_OVERREAD_ATTEMPTS = 3;
+
+/** Multiplier applied to the over-read on each retry. */
+export const OVERREAD_GROWTH_FACTOR = 2;
+
 export interface ConversationDetailWindowCursor {
     /** Exclusive upper bound for the next older fetch. Null only when the window is empty. */
     OldestSequence: number | null;

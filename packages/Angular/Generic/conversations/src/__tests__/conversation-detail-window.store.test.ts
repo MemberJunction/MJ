@@ -5,6 +5,7 @@ import {
     ConversationDetailWindowStore,
     DetailWindowLoader
 } from '../lib/services/conversation-detail-window.store';
+import { MAX_OVERREAD_ATTEMPTS, DEFAULT_RAW_OVERREAD } from '../lib/utils/conversation-detail-window';
 
 /**
  * The store that holds ONE conversation's loaded transcript window.
@@ -375,5 +376,82 @@ describe('ConversationDetailWindowStore — pin count vs pin set', () => {
         const snapshot = store.GetSnapshot();
         expect(snapshot.PinnedTotalCount).toBe(0);
         expect(snapshot.PinnedDetails).toEqual([]);
+    });
+});
+
+/**
+ * Growing raw over-read.
+ *
+ * The plan's rule: raw rows are not display items, so a fetch "may over-read raw rows (start
+ * at 3 × pageSize, grow if needed) until the timeline of that fetch contains pageSize items".
+ * A realtime session folds many stamped rows into ONE card, so the default over-read can come
+ * back holding two or three items instead of ten.
+ */
+describe('ConversationDetailWindowStore — over-read growth', () => {
+    const user = {} as UserInfo;
+
+    /**
+     * A page whose rows all belong to ONE session — collapses to a single timeline item.
+     * Sized to FILL the requested over-read, which is what marks a page as truncated by
+     * collapse rather than simply short.
+     */
+    function sessionPage(rowCount: number, hasMoreAbove: boolean): DetailWindowLoadResult {
+        const sequences = Array.from({ length: rowCount }, (_, i) => i + 1);
+        const details = sequences.map(seq => detail(seq, { AgentSessionID: 'sess-1' }));
+        return windowResult({
+            Details: details, HasMoreAbove: hasMoreAbove,
+            OldestSequence: sequences[0] ?? null,
+            NewestSequence: sequences[sequences.length - 1] ?? null
+        });
+    }
+
+    it('re-reads wider when the page collapses to too few timeline items', async () => {
+        const load: Mock = vi.fn()
+            .mockResolvedValueOnce(sessionPage(DEFAULT_RAW_OVERREAD, true))   // 1 item — too short
+            .mockResolvedValueOnce(pageOf([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], true));
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+
+        await store.LoadLatest('conv-a', user);
+
+        expect(load).toHaveBeenCalledTimes(2);
+        // Second attempt must ask for MORE raw rows than the first, or it is just a retry.
+        const first = load.mock.calls[0][0].RawOverread;
+        const second = load.mock.calls[1][0].RawOverread;
+        expect(second).toBeGreaterThan(first);
+    });
+
+    it('does NOT re-read when the short page is the start of the conversation', async () => {
+        // HasMoreAbove false: short IS the complete answer, and re-reading would be pure waste.
+        const load: Mock = vi.fn().mockResolvedValue(sessionPage(DEFAULT_RAW_OVERREAD, false));
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+
+        await store.LoadLatest('conv-a', user);
+
+        expect(load).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT re-read when the first fetch already fills a page', async () => {
+        const load: Mock = vi.fn().mockResolvedValue(pageOf([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], true));
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+
+        await store.LoadLatest('conv-a', user);
+
+        expect(load).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops at the attempt cap rather than growing without bound', async () => {
+        // A conversation that is almost entirely one long session: every widening still
+        // collapses to one card. Growing forever here would walk the whole table.
+        let rows = DEFAULT_RAW_OVERREAD;
+        const load: Mock = vi.fn().mockImplementation(() => {
+            const page = sessionPage(rows, true);
+            rows *= 2;                       // each widening returns more rows, still one card
+            return Promise.resolve(page);
+        });
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+
+        await store.LoadLatest('conv-a', user);
+
+        expect(load.mock.calls.length).toBeLessThanOrEqual(MAX_OVERREAD_ATTEMPTS);
     });
 });

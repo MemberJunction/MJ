@@ -443,14 +443,50 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * as it enters the viewport.
    */
   private scrollToDetail(detail: MJConversationDetailEntity): boolean {
-    // A session-stamped row folds into its session CARD, which is the thing on screen — so
-    // match through the stamp rather than looking for the row itself, which has no node.
-    const stampedSessionId = detail.AgentSessionID?.trim() || null;
+    return this.scrollToTimelineEntry(detail.ID, detail.AgentSessionID, 'start');
+  }
+
+  /**
+   * Scrolls a LOADED message into view by id, mounted or not, and returns whether it landed.
+   *
+   * Public because the pins panel's "Jump to message" lives on the host: a pin can be far
+   * above the viewport, which is exactly the region this component unmounts into spacers, so
+   * the host's own `[data-message-id]` query found nothing and the button silently did
+   * nothing. Resolution goes through the timeline key instead — see
+   * {@link scrollToTimelineEntry}.
+   *
+   * Returns false when the message is not in the loaded window at all; the host decides
+   * whether to page back for it or tell the user.
+   */
+  public ScrollToMessage(messageId: string): boolean {
+    const detail = this.messages?.find(m => UUIDsEqual(m.ID, messageId));
+    if (!detail) {
+      return false;
+    }
+    return this.scrollToTimelineEntry(detail.ID, detail.AgentSessionID, 'center');
+  }
+
+  /**
+   * Shared resolution for both jump paths: timeline key -> rendered node.
+   *
+   * Two things a `[data-message-id]` query cannot do, and both matter here:
+   *   - A session-stamped row folds into its session CARD, so the row itself never has a
+   *     node of its own; the card is what is on screen.
+   *   - An item far from the viewport is unmounted and replaced by a height-holding spacer,
+   *     which carries the SAME timeline key — so scrolling to the key lands in the right
+   *     place either way, and the spacer observer remounts the real item on arrival.
+   */
+  private scrollToTimelineEntry(
+    detailId: string,
+    agentSessionId: string | null,
+    block: ScrollLogicalPosition
+  ): boolean {
+    const stampedSessionId = agentSessionId?.trim() || null;
     const timeline = BuildConversationTimeline(this.messages);
     const item = timeline.find(entry =>
       entry.Kind === 'session'
         ? stampedSessionId !== null && UUIDsEqual(entry.Group.SessionID, stampedSessionId)
-        : UUIDsEqual(entry.Detail.ID, detail.ID)
+        : UUIDsEqual(entry.Detail.ID, detailId)
     );
     if (!item) {
       return false;
@@ -460,7 +496,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     if (!node) {
       return false;
     }
-    node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    node.scrollIntoView({ behavior: 'smooth', block });
     return true;
   }
 

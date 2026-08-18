@@ -967,14 +967,25 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (!this.isActiveConversation(conversationId)) {
       return;
     }
+    await this.refreshAfterPaging(conversationId!);
+  }
 
+  /**
+   * Re-renders the transcript after one or more older pages have been merged.
+   *
+   * Split out of {@link onOlderMessagesRequested} so the JUMP paths can page repeatedly and
+   * pay this ONCE. It rebuilds every peripheral map over the whole accumulated window and
+   * queries attachments for every loaded id, so calling it per iteration made a 50-page jump
+   * O(n^2) — enough to spend back the savings this windowing work exists to produce.
+   */
+  private async refreshAfterPaging(conversationId: string): Promise<void> {
     const snapshot = this.windowStore.GetSnapshot();
     this.messages = [...snapshot.Details];
 
     // Older rows carry their own artifacts/ratings/runs — clear the once-per-conversation
     // guard so loadPeripheralData reprocesses the now-larger window.
     this.lastLoadedConversationId = null;
-    await this.loadPeripheralData(conversationId!, snapshot);
+    await this.loadPeripheralData(conversationId, snapshot);
     this.cdr.detectChanges();
   }
 
@@ -999,14 +1010,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         break;                              // answerable, or no more history to load
       }
 
-      await this.onOlderMessagesRequested();
+      // Store-level paging: the per-page peripheral rebuild is deferred to a single
+      // refresh below, so a deep jump costs one rebuild instead of one per page.
+      await this.windowStore.LoadOlder(this.currentUser);
       if (!this.isActiveConversation(conversationId)) {
         return;                             // user switched away mid-jump
       }
       pagesLoaded++;
     }
 
-    // Let the prepended pages render before measuring element positions.
+    // One rebuild for however many pages arrived, then let it render before measuring.
+    if (pagesLoaded > 0) {
+      await this.refreshAfterPaging(conversationId!);
+    }
     this.cdr.detectChanges();
     const scrollOutcome = this.messageListComponent?.ScrollToDateTarget(period) ?? 'empty';
     const finalOutcome = CombineDateJumpOutcome(scrollOutcome, pagesLoaded >= DATE_JUMP_MAX_PAGES);
@@ -2917,18 +2933,84 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Scrolls the message list to the target message and plays the beacon animation.
    * Called when the user clicks "Jump to message" in the pins panel.
    */
-  onJumpToMessage(messageId: string): void {
-    const el = this.scrollContainer?.nativeElement?.querySelector(`[data-message-id="${messageId}"]`);
-    if (!el) return;
+  async onJumpToMessage(messageId: string): Promise<void> {
+    // Delegated to the list rather than queried here. A `[data-message-id]` lookup only finds
+    // MOUNTED messages, and a pin is by definition often far above the viewport — exactly the
+    // region the list unmounts into spacers — so this button silently did nothing for any pin
+    // that wasn't already on screen. The list resolves through the timeline key, which a
+    // spacer shares with the item it stands in for.
+    if (this.messageListComponent?.ScrollToMessage(messageId)) {
+      this.beaconMessage(messageId);
+      return;
+    }
 
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Not in the loaded window. Pins are fetched by their own query precisely so the panel can
+    // list pins older than the transcript, so this is the EXPECTED case for an old pin, not an
+    // error — page back until it is loaded, the same way a date jump does.
+    const reached = await this.loadUntilMessageIsWindowed(messageId);
+    if (!reached) {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Could not reach that message — it is further back than this jump loads.', 'info', 3000
+      );
+      return;
+    }
 
-    // Add beacon animation after scroll settles
+    // The paging loop deliberately skipped the per-page peripheral rebuild — pay it once,
+    // here, before asking the list for element positions.
+    await this.refreshAfterPaging(this.conversationId!);
+    if (this.messageListComponent?.ScrollToMessage(messageId)) {
+      this.beaconMessage(messageId);
+    }
+  }
+
+  /**
+   * Pages older history until `messageId` falls inside the loaded window.
+   *
+   * Deterministic rather than heuristic: a pin carries its own `Sequence`, so the stop
+   * condition is simply "the window now reaches at least that far back" — no equivalent of
+   * the date jump's `NeedsOlder` probing is needed. Bounded by the same page cap, for the same
+   * reason: an unbounded walk back is the thing windowing exists to avoid.
+   */
+  private async loadUntilMessageIsWindowed(messageId: string): Promise<boolean> {
+    const target = this.pinnedMessages.find(p => UUIDsEqual(p.ID, messageId));
+    if (!target) {
+      return false;   // not a loaded pin — nothing tells us how far back to page
+    }
+
+    const conversationId = this.conversationId;
+    for (let page = 0; page < DATE_JUMP_MAX_PAGES; page++) {
+      const snapshot = this.windowStore.GetSnapshot();
+      const oldest = snapshot.Cursor.OldestSequence;
+      if (oldest !== null && oldest <= target.Sequence) {
+        return true;                        // the window now covers it
+      }
+      if (!snapshot.Cursor.HasMoreAbove) {
+        return false;                       // ran out of conversation
+      }
+
+      // Store-level paging for the same reason as the date jump — the caller refreshes once.
+      await this.windowStore.LoadOlder(this.currentUser);
+      if (!this.isActiveConversation(conversationId)) {
+        return false;                       // user switched away mid-jump
+      }
+    }
+    return false;                           // hit the page cap
+  }
+
+  /** Flashes the beacon on a message once its scroll has settled. */
+  private beaconMessage(messageId: string): void {
+    // Re-queried rather than captured: the target may have been a spacer when the scroll
+    // started and been remounted as a real bubble by the time it lands.
     setTimeout(() => {
+      const el = this.scrollContainer?.nativeElement?.querySelector(`[data-message-id="${messageId}"]`);
+      if (!el) {
+        return;
+      }
       el.classList.add('pin-beacon');
       setTimeout(() => el.classList.remove('pin-beacon'), 1500);
     }, 350);
   }
+
 
   /**
    * Unpins a message from the pins panel — saves to DB and patches the cache.
