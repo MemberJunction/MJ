@@ -153,6 +153,16 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
     @Output() NodeAction = new EventEmitter<NodeActionEvent>();
 
     /**
+     * Optional persisted zoom scale factor to restore.
+     */
+    @Input() ZoomLevel?: number;
+
+    /**
+     * Emitted when the user zooms in or out on the hierarchy canvas.
+     */
+    @Output() ZoomChange = new EventEmitter<number>();
+
+    /**
      * Emitted when the user requests navigation to a full entity record.
      */
     @Output() Navigate = new EventEmitter<FormNavigationEvent>();
@@ -189,6 +199,9 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
     public ngAfterViewInit(): void {
         this.initD3Zoom();
         this.setupResizeObserver();
+        if (this.AllNodes.length > 0) {
+            this.renderTree();
+        }
     }
 
     public ngOnChanges(changes: SimpleChanges): void {
@@ -199,6 +212,8 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
             this.buildTreeFromData(this.Data || []);
         } else if (changes['FocusRecordID'] && !changes['FocusRecordID'].isFirstChange()) {
             this.setFocusRoot(this.FocusRecordID);
+        } else if (changes['ZoomLevel'] && !changes['ZoomLevel'].isFirstChange() && this.ZoomLevel !== undefined) {
+            this.setZoomLevel(this.ZoomLevel, true);
         }
     }
 
@@ -508,15 +523,21 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         this.gSelection = this.svgSelection.select<SVGGElement>('g.mj-hierarchy-canvas');
 
         this.zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
-            .scaleExtent([0.15, 3.0])
-            .on('zoom', (event) => {
+            .scaleExtent([0.1, 4.0])
+            .on('zoom', (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
                 this.currentZoomTransform = event.transform;
                 if (this.gSelection) {
                     this.gSelection.attr('transform', event.transform.toString());
                 }
+                this.ZoomLevel = event.transform.k;
+                this.ZoomChange.emit(event.transform.k);
             });
 
         this.svgSelection.call(this.zoomBehavior);
+
+        if (this.ZoomLevel && this.ZoomLevel > 0) {
+            this.setZoomLevel(this.ZoomLevel, false);
+        }
     }
 
     private setupResizeObserver(): void {
@@ -532,7 +553,15 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
      * Computes the D3 hierarchy tree layout and updates the SVG rendering.
      */
     public renderTree(): void {
-        if (!this.svgRef?.nativeElement || !this.gSelection) return;
+        if (!this.svgRef?.nativeElement || !this.gSelection) {
+            if (this.svgRef?.nativeElement) {
+                this.initD3Zoom();
+            }
+            if (!this.gSelection) {
+                setTimeout(() => this.renderTree(), 30);
+                return;
+            }
+        }
 
         // Reset positions across all nodes
         for (const n of this.AllNodes) {
@@ -666,6 +695,10 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         }
         this.NodeClick.emit({ Node: node, OriginalEvent: event });
         this.NodeSelect.emit({ Node: node, OriginalEvent: event });
+
+        if (this.Config?.NavigateOnNodeClick !== false) {
+            this.navigateToRecord(node, event);
+        }
     }
 
     public onNodeDoubleClick(node: HierarchyNodeData, event: MouseEvent): void {
@@ -694,9 +727,10 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
     }
 
     public navigateToRecord(node: HierarchyNodeData, event?: MouseEvent): void {
+        const entityName = this.entityInfo ? this.entityInfo.Name : this.Config.EntityName;
         const navEvent: RecordNavigationEvent = {
             Kind: 'record',
-            EntityName: this.Config.EntityName,
+            EntityName: entityName,
             PrimaryKey: node.PrimaryKey,
             OpenInNewTab: event ? event.ctrlKey || event.metaKey : false
         };
@@ -736,36 +770,30 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
     }
 
     private expandAncestors(node: HierarchyNodeData): void {
-        let parentId = node.ParentID;
-        while (parentId) {
-            const parent = this.nodeMap.get(NormalizeUUID(parentId));
-            if (parent) {
-                if (!parent.IsExpanded) {
-                    parent.IsExpanded = true;
-                    parent.Children = [...(parent._allChildren || [])];
-                }
-                parentId = parent.ParentID;
-            } else {
-                break;
-            }
+        let curr = node.ParentID ? this.nodeMap.get(NormalizeUUID(node.ParentID)) : undefined;
+        while (curr) {
+            curr.IsExpanded = true;
+            curr.Children = [...(curr._allChildren || [])];
+            curr = curr.ParentID ? this.nodeMap.get(NormalizeUUID(curr.ParentID)) : undefined;
         }
     }
 
     // --- Subtree Focus ---
 
-    public setFocusRoot(recordId?: string | null): void {
+    public setFocusRoot(recordId?: string): void {
         if (!recordId) {
             this.resetFocus();
             return;
         }
+
         const target = this.nodeMap.get(NormalizeUUID(recordId));
-        if (target) {
-            for (const n of this.AllNodes) n.IsFocusRoot = false;
-            target.IsFocusRoot = true;
-            this.FocusedNode = target;
-            this.renderTree();
-            this.fitToScreen();
-        }
+        if (!target) return;
+
+        for (const n of this.AllNodes) n.IsFocusRoot = false;
+        target.IsFocusRoot = true;
+        this.FocusedNode = target;
+        this.renderTree();
+        this.fitToScreen();
     }
 
     public resetFocus(): void {
@@ -803,6 +831,17 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
     public zoomOut(): void {
         if (!this.svgSelection || !this.zoomBehavior) return;
         this.svgSelection.transition().duration(250).call(this.zoomBehavior.scaleBy, 0.8);
+    }
+
+    public setZoomLevel(scale: number, animated = true): void {
+        if (!this.svgSelection || !this.zoomBehavior || !scale) return;
+        const current = this.currentZoomTransform || d3.zoomIdentity;
+        const target = d3.zoomIdentity.translate(current.x, current.y).scale(scale);
+        if (animated) {
+            this.svgSelection.transition().duration(250).call(this.zoomBehavior.transform, target);
+        } else {
+            this.svgSelection.call(this.zoomBehavior.transform, target);
+        }
     }
 
     public resetZoom(): void {

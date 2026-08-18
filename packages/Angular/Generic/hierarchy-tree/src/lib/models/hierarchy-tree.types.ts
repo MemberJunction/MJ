@@ -267,10 +267,22 @@ export interface HierarchyTreeConfig {
     LevelSpacing?: number;
 
     /**
-     * Total height of the tree container (e.g. `'500px'`, `'100%'`).
-     * @default `'560px'`
+     * Total height of the tree container (e.g. `'100%'`, `'560px'`).
+     * @default `'100%'`
      */
     Height?: string;
+
+    /**
+     * Minimum height of the tree container.
+     * @default `'500px'`
+     */
+    MinHeight?: string;
+
+    /**
+     * Whether single-clicking a node card triggers navigation to that record.
+     * @default true
+     */
+    NavigateOnNodeClick?: boolean;
 
     /**
      * Whether to enable verbose diagnostic console logging.
