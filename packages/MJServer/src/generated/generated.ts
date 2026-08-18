@@ -3982,6 +3982,9 @@ export class CreateMJAIAgentCoAgentInput {
     @Field({ nullable: true })
     Configuration: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    IsTotalSpecialization?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -4018,6 +4021,9 @@ export class UpdateMJAIAgentCoAgentInput {
 
     @Field({ nullable: true })
     Configuration?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsTotalSpecialization?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -47567,6 +47573,9 @@ export class MJEntity_ {
         
     @Field({nullable: true, description: `Optional JSON configuration bag for this entity (shape = IEntityConfiguration). Nested UI.Form holds generated-form chrome: Layout (accordion | left-nav | auto) and AutoLeftNavAt. NULL / omitted keys = today's behavior (accordion; every DisplayInForm relationship is first-class). Expand by adding a property on the interface — no schema change. Anything the engine filters or joins on stays a column; anything the UI or a BaseFormPolicy consumes at render time belongs here.`}) 
     Configuration?: string;
+        
+    @Field(() => Boolean, {description: `Completeness constraint for ISA (table-per-type) specialization on this parent/superclass entity — the EER pair to AllowMultipleSubtypes (disjointness). 0 = partial specialization: a superclass record may exist without belonging to any subclass (the default, and the pre-feature behaviour). 1 = total specialization: every superclass record must belong to a subclass, so the entity-layer save refuses to persist a standalone superclass record (a direct parent save with no subclass row for its primary key); the record must be created through a subclass, which persists the superclass and subclass rows together. Well-defined for disjoint specialization (a single required subtype); has no effect on entities that are not parent types or that permit overlapping subtypes.`}) 
+    IsTotalSpecialization: boolean;
         
     @Field({nullable: true, description: `Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.`}) 
     CodeName?: string;

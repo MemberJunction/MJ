@@ -3362,6 +3362,35 @@ export abstract class BaseEntity<T = unknown> {
                 return this.LeafEntity.Save(_options);
             }
 
+            // IS-A COMPLETENESS CONSTRAINT (total specialization). When a parent entity is marked
+            // IsTotalSpecialization, a superclass record may not be persisted on its own: it must be
+            // created through a subclass, whose save persists the superclass and subclass rows
+            // together (the leaf-chain path above, which reaches the parent with IsParentEntitySave).
+            // We are here on a DIRECT parent save (not a leaf chain) and any existing subclass row
+            // would have delegated to the leaf above — so reaching this point with no _childEntity
+            // means a standalone superclass record, which total specialization forbids. Applies only
+            // to disjoint parents (a single required subtype); an overlapping parent has no single
+            // "the" subtype to require. The default (IsTotalSpecialization = false, partial
+            // specialization) skips this entirely, preserving pre-feature behaviour.
+            if (
+                !_options.IsParentEntitySave &&
+                !this._childEntity &&
+                this.EntityInfo?.IsTotalSpecialization &&
+                this.EntityInfo?.IsParentType &&
+                !this.EntityInfo?.AllowMultipleSubtypes
+            ) {
+                const subtypes = this.EntityInfo.ChildEntities.map(c => c.Name).join(', ');
+                newResult.Success = false;
+                newResult.Type = this.IsSaved ? 'update' : 'create';
+                newResult.Message =
+                    `Entity '${this.EntityInfo.Name}' requires total specialization: a record cannot be ` +
+                    `saved on its own and must be created through one of its subclass entities` +
+                    (subtypes ? ` (${subtypes}).` : `.`);
+                newResult.EndedAt = new Date();
+                this.RegisterResultHistoryEntry(newResult);
+                return false;
+            }
+
             // IS-A orchestration: determine if this is the initiating save in a parent chain
             const isISAInitiator = (!!this._parentEntity) && !_options.IsParentEntitySave;
 

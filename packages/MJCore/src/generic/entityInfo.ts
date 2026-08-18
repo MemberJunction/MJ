@@ -1615,6 +1615,18 @@ export class EntityInfo extends BaseInfo {
      */
     AllowMultipleSubtypes: boolean = false
     /**
+     * EER **completeness** constraint for ISA specialization — the pair to {@link AllowMultipleSubtypes}
+     * (disjointness). Set on the **parent** (superclass) entity.
+     * When false (default), specialization is **partial**: a superclass record may exist without
+     * belonging to any subclass (the pre-feature behaviour).
+     * When true, specialization is **total**: every superclass record must belong to a subclass, so
+     * the entity-layer save refuses to persist a standalone superclass record (a direct parent save
+     * with no subclass row) — the record must be created through a subclass, which persists the
+     * superclass and subclass rows together. Well-defined for disjoint specialization
+     * (`AllowMultipleSubtypes = false`); has no effect on overlapping parents or non-parent entities.
+     */
+    IsTotalSpecialization: boolean = false
+    /**
      * Whether to audit when users access records from this entity
      */
     AuditRecordAccess: boolean = null
