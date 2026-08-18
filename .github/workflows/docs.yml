@@ -19,14 +19,23 @@ on:
   # side effect of merging. Between releases both `main` and the npm registry
   # lag `next`, so a merge-triggered deploy publishes authoritative-looking
   # documentation — canonical links into `main` included — for bits nobody can
-  # install yet. Both publish paths are covered: the Edge line publishes from
-  # main, and a line release is dispatched from its own lts/* branch. The
-  # resolve job below hard-fails a trigger that did not conclude `success`.
+  # install yet. The resolve job below hard-fails a trigger that did not
+  # conclude `success`.
+  #
+  # Both publish paths now live in publish.yml (npm's OIDC trust is bound to
+  # that filename), so the branch list is what distinguishes them:
+  #   main    the Edge line publishes on a push to main
+  #   next    an LTS line release is DISPATCHED from next with a line_branch
+  #           input — the line is a parameter, so the run reports branch `next`
+  #   lts/*   belt and braces for a publish dispatched from a line branch
+  #           itself (the retired publish-lts.yml's shape, and lts/5 still
+  #           carries an older publish.yml that could be dispatched by hand)
+  # A publish.yml run on `next` cannot arise any other way: its only non-dispatch
+  # trigger is a push to main.
   workflow_run:
     workflows:
-      - Build and publish new package versions  # publish.yml     — Edge line, runs on main
-      - Publish LTS line release                # publish-lts.yml — one line, runs on lts/*
-    branches: [main, 'lts/*']
+      - Build and publish new package versions  # publish.yml — Edge line AND LTS lines
+    branches: [main, next, 'lts/*']
     types:
       - completed
 

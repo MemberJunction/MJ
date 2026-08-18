@@ -10,9 +10,11 @@ name: Build and publish docker images
 # `channel` job below therefore skips any prerelease version.
 #
 # Consequence, stated plainly: during the Edge era this workflow auto-publishes
-# nothing. Certified and line builds ship from `lts/*` via publish-lts.yml,
-# which does not trigger this workflow — so a certified image is produced by
-# dispatching this workflow manually against the certified tag. Wiring line
+# nothing. Line builds ship through publish.yml's publish-lts job, dispatched
+# from `next` — so its run reports branch `next` and the `branches: [main]`
+# filter below keeps it from triggering this workflow, exactly as the retired
+# publish-lts.yml did. A certified image is therefore produced by dispatching
+# this workflow manually against the certified tag. Wiring line
 # publishes to Docker, and deciding whether an `:edge` tag is wanted at all,
 # are open items (process doc §15 item 4). Until then: no Docker image for
 # Edge builds, by decision, not by omission.
