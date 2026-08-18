@@ -225,8 +225,15 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
             SiblingSpacing: 40,
             LevelSpacing: 75,
             Height: '560px',
+            Verbose: false,
             ...this.Config
         };
+    }
+
+    private log(message: string, ...args: unknown[]): void {
+        if (this.Config?.Verbose) {
+            console.log(message, ...args);
+        }
     }
 
     // --- Data Loading & Tree Construction ---
@@ -252,7 +259,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
             }) || null;
 
             const targetEntityName = this.entityInfo ? this.entityInfo.Name : this.Config.EntityName;
-            console.log('[HierarchyTree:loadData] Starting load for:', targetEntityName, {
+            this.log('[HierarchyTree:loadData] Starting load for:', targetEntityName, {
                 configuredEntity: this.Config.EntityName,
                 resolvedEntity: this.entityInfo?.Name,
                 activeRecordId: this.ActiveRecordID || this.Config?.ActiveRecordID,
@@ -261,7 +268,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
             });
 
             if (this.Data) {
-                console.log('[HierarchyTree:loadData] Using provided Data prop:', this.Data.length, 'items');
+                this.log('[HierarchyTree:loadData] Using provided Data prop:', this.Data.length, 'items');
                 this.buildTreeFromData(this.Data);
                 return;
             }
@@ -274,10 +281,10 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
                 ResultType: 'simple' as const,
                 MaxRows: this.Config.MaxRows ?? 0
             };
-            console.log('[HierarchyTree:loadData] Calling RunView with params:', rvParams);
+            this.log('[HierarchyTree:loadData] Calling RunView with params:', rvParams);
             const result = await rv.RunView(rvParams);
 
-            console.log('[HierarchyTree:loadData] RunView response:', {
+            this.log('[HierarchyTree:loadData] RunView response:', {
                 success: result.Success,
                 rowCount: result.RowCount,
                 resultsLength: result.Results?.length,
@@ -331,7 +338,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         const iconFieldName = this.Config?.IconField;
         const colorFieldName = this.Config?.ColorField;
 
-        console.log(`[HierarchyTree:buildTreeFromData] Input items: ${items.length}, parentField="${parentFieldName}", nameField="${nameFieldName}"`);
+        this.log(`[HierarchyTree:buildTreeFromData] Input items: ${items.length}, parentField="${parentFieldName}", nameField="${nameFieldName}"`);
 
         // 1. Create flat nodes
         for (const item of items) {
@@ -398,7 +405,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         }
 
         this.RootNodes = roots;
-        console.log(`[HierarchyTree:buildTreeFromData] Built ${this.AllNodes.length} nodes, ${roots.length} root(s):`, roots.map(r => ({ Name: r.Name, ID: r.ID, Children: r.Children.length, TotalDescendants: r.TotalDescendantCount })));
+        this.log(`[HierarchyTree:buildTreeFromData] Built ${this.AllNodes.length} nodes, ${roots.length} root(s):`, roots.map(r => ({ Name: r.Name, ID: r.ID, Children: r.Children.length, TotalDescendants: r.TotalDescendantCount })));
 
         // 5. Apply active record selection & auto-expand ancestors
         const activeId = this.ActiveRecordID || this.Config?.ActiveRecordID;
@@ -540,7 +547,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         const levelGap = this.Config.LevelSpacing || 75;
 
         const activeRoots = this.FocusedNode ? [this.FocusedNode] : this.RootNodes;
-        console.log(`[HierarchyTree:renderTree] Starting render for ${activeRoots.length} active root(s):`, activeRoots.map(r => r.Name));
+        this.log(`[HierarchyTree:renderTree] Starting render for ${activeRoots.length} active root(s):`, activeRoots.map(r => r.Name));
 
         if (activeRoots.length === 0) {
             this.gSelection.selectAll('*').remove();
@@ -586,7 +593,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
             n.data.y = isVertical ? n.y : n.x - nodeHeight / 2;
         }
 
-        console.log(`[HierarchyTree:renderTree] Tree layout computed: ${nodes.length} nodes, ${links.length} links. Node positions:`, nodes.map(n => ({ Name: n.data.Name, x: n.data.x, y: n.data.y })));
+        this.log(`[HierarchyTree:renderTree] Tree layout computed: ${nodes.length} nodes, ${links.length} links. Node positions:`, nodes.map(n => ({ Name: n.data.Name, x: n.data.x, y: n.data.y })));
 
         // 3. Render Links
         const linkPathGen = (d: d3.HierarchyLink<HierarchyNodeData>): string => {
@@ -841,7 +848,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
 
         const targetTransform = d3.zoomIdentity.translate(tx, ty).scale(scale);
 
-        console.log(`[HierarchyTree:fitToScreen] Container=${width}x${height}, visibleNodes=${visibleNodes.length}, bounds=[${minX.toFixed(1)}, ${minY.toFixed(1)}] to [${maxX.toFixed(1)}, ${maxY.toFixed(1)}] (${treeWidth.toFixed(1)}x${treeHeight.toFixed(1)}), scale=${scale.toFixed(3)}, translate=(${tx.toFixed(1)}, ${ty.toFixed(1)})`);
+        this.log(`[HierarchyTree:fitToScreen] Container=${width}x${height}, visibleNodes=${visibleNodes.length}, bounds=[${minX.toFixed(1)}, ${minY.toFixed(1)}] to [${maxX.toFixed(1)}, ${maxY.toFixed(1)}] (${treeWidth.toFixed(1)}x${treeHeight.toFixed(1)}), scale=${scale.toFixed(3)}, translate=(${tx.toFixed(1)}, ${ty.toFixed(1)})`);
 
         if (immediate) {
             this.svgSelection.call(this.zoomBehavior.transform, targetTransform);

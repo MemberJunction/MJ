@@ -271,4 +271,10 @@ export interface HierarchyTreeConfig {
      * @default `'560px'`
      */
     Height?: string;
+
+    /**
+     * Whether to enable verbose diagnostic console logging.
+     * @default false
+     */
+    Verbose?: boolean;
 }
