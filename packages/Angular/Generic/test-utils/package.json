@@ -28,7 +28,7 @@
     "testbed"
   ],
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "peerDependencies": {
     "@angular/core": "^21.1.3",
     "@angular/forms": "^21.1.3",

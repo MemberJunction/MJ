@@ -8,9 +8,18 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { CLIConfig } from '../types';
 
-// Load environment variables BEFORE loading config
-// This ensures process.env is populated when mj.config.cjs is evaluated
-dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true, quiet: true });
+// Load environment variables BEFORE loading config, so process.env is populated
+// when mj.config.cjs is evaluated.
+//
+// `override` is deliberately FALSE (dotenv's default): a variable already set in
+// the environment must win over `.env`. With `override: true`, an explicit
+// `DB_DATABASE=MJ_scratch mj test ...` was silently discarded and the suite ran —
+// including mutation tests — against whatever `.env` pointed at. That makes the
+// "one database per agent" rule (migrations/CLAUDE.md) unenforceable, and it
+// diverged from every other `mj` command (`migrate`, `codegen`, `sync push` all
+// honour the environment). Filling in only what is unset preserves the original
+// intent without hijacking a deliberate override.
+dotenv.config({ path: path.resolve(process.cwd(), '.env'), quiet: true });
 
 export interface MJConfig {
     // Database settings

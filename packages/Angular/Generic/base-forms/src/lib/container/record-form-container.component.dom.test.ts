@@ -24,6 +24,7 @@ class ToolbarStub {
   @Input() IsSaving = false; @Input() VisibleSectionCount = 0; @Input() TotalSectionCount = 0; @Input() ExpandedSectionCount = 0;
   @Input() SearchFilter = ''; @Input() ShowEmptyFields = false; @Input() WidthMode = ''; @Input() HasCustomSectionOrder = false;
   @Input() Variants: unknown; @Input() CurrentVariantID: unknown;
+  @Input() ChromeLayout = 'accordion';
   @Output() Navigate = new EventEmitter<unknown>();
   @Output() EditModeChange = new EventEmitter<boolean>();
   @Output() BeforeSave = new EventEmitter<unknown>();

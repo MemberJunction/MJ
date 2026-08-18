@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/communication-twilio",
+  "license": "BUSL-1.1",
   "type": "module",
   "version": "6.1.0-edge.2",
   "description": "Twilio provider for MemberJunction Communication framework",

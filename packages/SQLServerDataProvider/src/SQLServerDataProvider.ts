@@ -64,6 +64,7 @@ import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 
 import sql from 'mssql';
 import { BehaviorSubject, Observable, Subject, concatMap, from, tap, catchError, of } from 'rxjs';
+
 import { SQLServerTransactionGroup } from './SQLServerTransactionGroup';
 import {
   ExecuteSQLOptions,
@@ -79,6 +80,16 @@ import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 import { v4 as uuidv4 } from 'uuid';
 import { UUIDsEqual } from '@memberjunction/global';
 import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
+
+/**
+ * Escape every regex metacharacter in `literal` so it can be interpolated into a
+ * `RegExp` and match itself. Exported for tests: the only callers sit inside
+ * batch-execution methods that need a live mssql connection, so this is the
+ * seam where the behaviour can actually be asserted. See issue #3171.
+ */
+export function escapeRegExpLiteral(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 /**
  * Checks whether an error indicates a stale/dead database connection that
  * could be resolved by retrying with a fresh connection from the pool.
@@ -1947,7 +1958,19 @@ export class SQLServerDataProvider
               const paramName = `q${queryIndex}_${key}`;
               batchParameters[paramName] = value;
               // Replace parameter references in query
-              processedQuery = processedQuery.replace(new RegExp(`@${key}\\b`, 'g'), `@${paramName}`);
+              // `key` is a caller-supplied parameter name, so it is DATA on both
+              // sides. Escaped before interpolation because a `$` in it acts as an
+              // end-anchor — the pattern then matches nothing, the placeholder is
+              // never rewritten, and mssql fails with "Must declare the scalar
+              // variable" while batchParameters holds the prefixed name. Carried
+              // through a replacement function for the same reason on the other
+              // side. Sibling of the escapeRegExp fix in PostgreSQLDataProvider.
+              // See issue #3171.
+              const prefixed = `@${paramName}`;
+              processedQuery = processedQuery.replace(
+                new RegExp(`@${escapeRegExpLiteral(key)}\\b`, 'g'),
+                () => prefixed,
+              );
             }
           }
         }
@@ -2057,7 +2080,19 @@ export class SQLServerDataProvider
               const paramName = `q${queryIndex}_${key}`;
               batchParameters[paramName] = value;
               // Replace parameter references in query
-              processedQuery = processedQuery.replace(new RegExp(`@${key}\\b`, 'g'), `@${paramName}`);
+              // `key` is a caller-supplied parameter name, so it is DATA on both
+              // sides. Escaped before interpolation because a `$` in it acts as an
+              // end-anchor — the pattern then matches nothing, the placeholder is
+              // never rewritten, and mssql fails with "Must declare the scalar
+              // variable" while batchParameters holds the prefixed name. Carried
+              // through a replacement function for the same reason on the other
+              // side. Sibling of the escapeRegExp fix in PostgreSQLDataProvider.
+              // See issue #3171.
+              const prefixed = `@${paramName}`;
+              processedQuery = processedQuery.replace(
+                new RegExp(`@${escapeRegExpLiteral(key)}\\b`, 'g'),
+                () => prefixed,
+              );
             }
           }
         }

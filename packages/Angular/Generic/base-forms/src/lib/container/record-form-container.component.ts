@@ -4,7 +4,7 @@ import {
   ContentChildren, QueryList, AfterContentInit, OnDestroy,
   ViewChild, ViewEncapsulation, ElementRef
 } from '@angular/core';
-import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -34,10 +34,24 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListManagementResult } from '@memberjunction/ng-list-management';
 import { FormSlotCoordinator } from '../panel-slot/form-slot-coordinator.service';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
-import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder } from '../chrome/resolve-form-chrome';
+import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder, OverlayChromeSectionOrder } from '../chrome/resolve-form-chrome';
+import { LoadFormChromeRules } from '../chrome/load-form-chrome-rules';
 import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection } from '../chrome/form-chrome';
 import type { FormChromeGroup, FormChromePanelSnapshot } from '../chrome/form-chrome';
+import {
+  ClampRailWidth,
+  FORM_CHROME_RAIL_PINNED_DEFAULT,
+  FORM_CHROME_RAIL_WIDTH_DEFAULT,
+  FORM_CHROME_RAIL_WIDTH_MAX,
+  FORM_CHROME_RAIL_WIDTH_MIN,
+  ParseRailPinnedSetting,
+  ParseRailWidthSetting,
+  SerializeRailPinnedSetting,
+  SerializeRailWidthSetting,
+} from '../chrome/form-chrome-rail-pref';
+import { ApplyClippedTitle } from '../chrome/clipped-title';
 import { CollectFormPanelRegistrations } from '../panel-slot/collect-form-panel-registrations';
+import type { FormPanelRegistrationMetadata } from '../panel-slot/base-form-panel';
 import { ContributionHiddenSectionKeys, ResolveFormContributions } from '../panel-slot/form-contribution';
 import { IsFormSectionHidden } from '../types/entity-form-config';
 
@@ -103,6 +117,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private destroy$ = new Subject<void>();
   private panelNavReset$ = new Subject<void>();
   private chromeResolveTimer: ReturnType<typeof setTimeout> | null = null;
+  private chromeRules: FormChromeRule[] = [];
+  private chromeRulesForEntityId: string | null = null;
 
   // ---- Internal State ----
 
@@ -130,6 +146,23 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Controls visibility of section manager drawer */
   ShowSectionManager = false;
+
+  /**
+   * Persisted per entity. Pinned (default) keeps the left rail open.
+   * Unpinned auto-collapses after the user picks another section.
+   */
+  ChromeRailPinned = FORM_CHROME_RAIL_PINNED_DEFAULT;
+
+  /** Session-only: the rail is showing its items. Follows pin on load. */
+  private chromeRailExpanded = FORM_CHROME_RAIL_PINNED_DEFAULT;
+
+  /** Expanded rail width in px. Persisted per entity. */
+  ChromeRailWidthPx = FORM_CHROME_RAIL_WIDTH_DEFAULT;
+  readonly RailWidthMin = FORM_CHROME_RAIL_WIDTH_MIN;
+  readonly RailWidthMax = FORM_CHROME_RAIL_WIDTH_MAX;
+  RailResizing = false;
+  private railResizeStartX = 0;
+  private railResizeStartWidth = FORM_CHROME_RAIL_WIDTH_DEFAULT;
 
   // ---- Primary Inputs ----
 
@@ -354,11 +387,33 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   get VisibleSectionCount(): number {
+    const filter = this.EffectiveSearchFilter.toLowerCase().trim();
+    if (filter) {
+      const fromPanels = this.allChromePanels().filter((p) => p.MatchesSearch(filter)).length;
+      const fromRail = this.ChromeFirstClassGroups.length + this.ChromeMoreItems.length;
+      return Math.max(fromPanels, fromRail);
+    }
     if (this.fc?.getVisibleSectionCount) {
       return this.fc.getVisibleSectionCount();
     }
-    if (!this.Panels) return 0;
-    return this.Panels.filter(p => p.IsVisible).length;
+    return this.Panels?.filter((p) => p.IsVisible).length ?? 0;
+  }
+
+  /** True when the current section search matches nothing in this layout. */
+  get SearchHasNoMatches(): boolean {
+    const filter = this.EffectiveSearchFilter.toLowerCase().trim();
+    if (!filter) return false;
+    return this.ChromeFirstClassGroups.length === 0 && this.ChromeMoreItems.length === 0
+      && this.allChromePanels().every((p) => !p.MatchesSearch(filter));
+  }
+
+  /** Left-nav rail stays up while searching even if only one group matches. */
+  get ShowChromeRail(): boolean {
+    if (this.ChromeLayout !== 'left-nav') return false;
+    if (this.EffectiveSearchFilter.trim()) {
+      return this.ChromeFirstClassGroups.length > 0 || this.ChromeMoreItems.length > 0;
+    }
+    return this.chrome.Spec.Groups.length > 1;
   }
 
   /**
@@ -382,7 +437,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   get ChromeGroups(): FormChromeGroup[] {
-    const ordered = OrderChromeGroups(this.chrome.Spec.Groups, this.SectionManagerOrder);
+    const ordered = OrderChromeGroups(this.chrome.Spec.Groups, this.chromeRailOrder);
     const filter = this.EffectiveSearchFilter.toLowerCase().trim();
     if (!filter) return ordered;
     return ordered.filter((group) => this.groupMatchesSearch(group, filter));
@@ -402,7 +457,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const folder = this.ChromeMoreFolder;
     if (!folder) return [];
     const filter = this.EffectiveSearchFilter.toLowerCase().trim();
-    const orderedKeys = OrderMoreSectionKeys(folder.SectionKeys, this.SectionManagerOrder);
+    const orderedKeys = OrderMoreSectionKeys(folder.SectionKeys, this.chromeRailOrder);
     const items = orderedKeys.map((key) => this.moreItemFromKey(key));
     if (!filter) return items;
     return items.filter((item) => this.groupMatchesSearch(item, filter));
@@ -410,6 +465,38 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   get ChromeActiveGroupKey(): string | null {
     return this.chrome.ActiveGroupKey;
+  }
+
+  get ChromeActiveGroup(): FormChromeGroup | null {
+    const key = this.ChromeActiveGroupKey;
+    if (!key) {
+      return null;
+    }
+    return this.ChromeFirstClassGroups.find((group) => group.Key === key)
+      ?? this.ChromeMoreItems.find((item) => item.Key === key)
+      ?? null;
+  }
+
+  get ChromeActiveTitle(): string {
+    return this.ChromeActiveGroup?.Title || 'Sections';
+  }
+
+  get ChromeActiveIcon(): string {
+    return this.ChromeActiveGroup?.Icon || 'fa-solid fa-list';
+  }
+
+  /**
+   * True when the rail is the thin rotated strip. Search keeps the full
+   * list visible so matches stay clickable.
+   */
+  get ChromeRailCollapsed(): boolean {
+    if (!this.ShowChromeRail) {
+      return false;
+    }
+    if (this.EffectiveSearchFilter.trim()) {
+      return false;
+    }
+    return !this.chromeRailExpanded;
   }
 
   get IsChromeMoreActive(): boolean {
@@ -494,6 +581,16 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     return [];
   }
 
+  /**
+   * Rail display order. `getSectionOrder()` falls back to generated
+   * `form.sections` — those keys match Details + baked related grids, not
+   * slot-mounted leads — so using that fallback parked Overview after
+   * Payments. Only a user-persisted custom order may override the resolver.
+   */
+  private get chromeRailOrder(): string[] {
+    return this.EffectiveHasCustomSectionOrder ? this.SectionManagerOrder : [];
+  }
+
   // ---- Lifecycle ----
 
   ngAfterContentInit(): void {
@@ -559,12 +656,64 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const before = new BeforeSectionActivateEventArgs(groupKey);
     this.BeforeSectionActivate.emit(before);
     if (before.Cancel) return;
+    const previous = this.chrome.ActiveGroupKey;
     this.chrome.SetActiveGroup(groupKey);
     this.expandActiveGroupSections(groupKey);
     this.applyChromeVisibility();
+    if (!this.ChromeRailPinned && previous !== groupKey) {
+      this.chromeRailExpanded = false;
+    }
     this.PersistChromePrefs();
     this.AfterSectionActivated.emit(new AfterSectionActivatedEventArgs(groupKey));
     this.cdr.detectChanges();
+  }
+
+  public OnChromeRailExpand(): void {
+    this.chromeRailExpanded = true;
+    this.cdr.detectChanges();
+  }
+
+  public OnChromeRailCollapse(): void {
+    this.chromeRailExpanded = false;
+    this.cdr.detectChanges();
+  }
+
+  public OnChromeRailPinToggle(): void {
+    this.ChromeRailPinned = !this.ChromeRailPinned;
+    if (this.ChromeRailPinned) {
+      this.chromeRailExpanded = true;
+    }
+    this.PersistChromePrefs();
+    this.cdr.detectChanges();
+  }
+
+  public OnRailResizeStart(event: PointerEvent): void {
+    if (this.ChromeRailCollapsed) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.RailResizing = true;
+    this.railResizeStartX = event.clientX;
+    this.railResizeStartWidth = this.ChromeRailWidthPx;
+    (event.target as HTMLElement).setPointerCapture(event.pointerId);
+  }
+
+  public OnRailResizeMove(event: PointerEvent): void {
+    if (!this.RailResizing) return;
+    const delta = event.clientX - this.railResizeStartX;
+    const signed = this.ChromeLayout === 'left-nav' ? delta : -delta;
+    this.ChromeRailWidthPx = ClampRailWidth(this.railResizeStartWidth + signed);
+    this.cdr.markForCheck();
+  }
+
+  public OnRailResizeEnd(): void {
+    if (!this.RailResizing) return;
+    this.RailResizing = false;
+    this.PersistChromePrefs();
+    this.cdr.detectChanges();
+  }
+
+  public OnRailLabelHover(event: MouseEvent, text: string): void {
+    ApplyClippedTitle(event.currentTarget as HTMLElement, text);
   }
 
   public RailDragOverKey: string | null = null;
@@ -613,12 +762,15 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (!dragged || !target) return;
     if (!draggedMore && (dragged.IsMore || target.IsMore)) return;
     if (!!draggedMore !== !!targetMore) return;
-    const current = this.SectionManagerOrder;
-    const next = MoveChromeGroupInSectionOrder(
-      current.length > 0 ? current : groups.flatMap((g) => g.SectionKeys),
-      dragged,
-      target,
+    const defaultKeys = [
+      ...groups.filter((g) => !g.IsMore).flatMap((g) => g.SectionKeys),
+      ...moreItems.flatMap((g) => g.SectionKeys),
+    ];
+    const current = OverlayChromeSectionOrder(
+      defaultKeys,
+      this.EffectiveHasCustomSectionOrder ? this.SectionManagerOrder : [],
     );
+    const next = MoveChromeGroupInSectionOrder(current, dragged, target);
     if (this.fc?.setSectionOrder) {
       this.fc.setSectionOrder(next);
       this.cdr.detectChanges();
@@ -649,9 +801,24 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     }, 0);
   }
 
+  private loadChromeRulesIfNeeded(): void {
+    const entityId = this.EffectiveEntityInfo?.ID ?? null;
+    if (!entityId || this.chromeRulesForEntityId === entityId) return;
+    this.chromeRulesForEntityId = entityId;
+    void this.loadChromeRules(entityId);
+  }
+
+  private async loadChromeRules(entityId: string): Promise<void> {
+    const rules = await LoadFormChromeRules(entityId, this.ProviderToUse);
+    if (this.chromeRulesForEntityId !== entityId) return;
+    this.chromeRules = rules;
+    this.scheduleChromeResolve();
+  }
+
   private ResolveChrome(): void {
     const entity = this.EffectiveEntityInfo;
     if (!entity) return;
+    this.loadChromeRulesIfNeeded();
 
     const result = ResolveFormChrome({
       Entity: entity,
@@ -661,6 +828,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       HiddenSectionKeys: [...this.contributionHiddenSectionKeys()],
       ContributionSectionKeys: this.contributionSectionKeys(),
       ContributionChromeGroupByKey: this.contributionChromeGroupByKey(),
+      ContributionInclusionByKey: this.contributionInclusionByKey(),
+      ContributionSortKeyByKey: this.contributionSortKeyByKey(),
+      ChromeRules: this.chromeRules,
+      IncludeUnbakedRelated: this.EffectiveShowRelatedEntities,
       Membership: {
         moreSectionKeys: this.fc?.getMoreSectionKeys?.() ?? [],
         firstClassSectionKeys: this.fc?.getFirstClassSectionKeys?.() ?? [],
@@ -704,6 +875,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   private groupMatchesSearch(group: FormChromeGroup, filter: string): boolean {
+    if (!filter) return true;
     if (group.Title.toLowerCase().includes(filter)) return true;
     if (group.IsMore) {
       return group.SectionKeys.some((key) => {
@@ -713,16 +885,18 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     }
     return group.SectionKeys.some((key) => {
       const panel = this.allChromePanels().find((p) => p.SectionKey === key);
-      if (panel) return panel.IsVisible;
-      return key.toLowerCase().includes(filter);
+      if (panel) return panel.MatchesSearch(filter);
+      const human = HumanizeEntityTitle(key).toLowerCase();
+      return human.includes(filter) || key.toLowerCase().includes(filter);
     });
   }
 
   private moreItemFromKey(key: string): FormChromeGroup {
     const panel = this.allChromePanels().find((p) => p.SectionKey === key);
+    const override = this.chrome.Spec.TitleBySectionKey?.get(key);
     return {
       Key: key,
-      Title: HumanizeEntityTitle(panel?.SectionName || key),
+      Title: override || HumanizeEntityTitle(panel?.SectionName || key),
       Icon: panel?.Icon || 'fa-solid fa-table',
       SectionKeys: [key],
       IsMore: true,
@@ -757,7 +931,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       const titled = this.chrome.Spec.Groups.find(
         (g) => !g.IsMore && g.SectionKeys.length === 1 && g.SectionKeys[0] === panel.SectionKey,
       );
-      if (titled?.Title) {
+      const override = this.chrome.Spec.TitleBySectionKey?.get(panel.SectionKey);
+      if (override) {
+        panel.SectionName = override;
+      } else if (titled?.Title) {
         panel.SectionName = titled.Title;
       }
       if (claimed.has(panel.SectionKey)) {
@@ -810,45 +987,62 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   private contributionSectionKeys(): string[] {
-    const entityName = this.EffectiveEntityInfo?.Name;
-    if (!entityName) return [];
-    const keys: string[] = [];
-    for (const reg of CollectFormPanelRegistrations()) {
-      const meta = reg.Metadata;
-      if (!meta || meta.entity !== entityName) continue;
-      if (meta.contributionKey === 'header') continue;
-      if (meta.contributionKey) keys.push(meta.contributionKey);
-      if (meta.relatedEntity && meta.contributionKey) continue;
-      // Related claims use the widget SectionKey, which is usually the contributionKey
-      // or a short camel name matching the template (contactMethods, addresses).
-      if (meta.relatedEntity && !meta.contributionKey) {
-        const derived = meta.relatedEntity.split(':').pop()?.trim();
-        if (derived) {
-          keys.push(derived.charAt(0).toLowerCase() + derived.slice(1).replace(/\s+/g, ''));
-        }
-      }
-    }
-    return keys;
+    return this.contributionRegistrations().map((row) => row.Key);
   }
 
   private contributionChromeGroupByKey(): Map<string, 'details' | 'more'> {
-    const entityName = this.EffectiveEntityInfo?.Name;
     const map = new Map<string, 'details' | 'more'>();
-    if (!entityName) return map;
-    for (const reg of CollectFormPanelRegistrations()) {
-      const meta = reg.Metadata;
-      if (!meta || meta.entity !== entityName) continue;
-      if (meta.chromeGroup !== 'details' && meta.chromeGroup !== 'more') continue;
-      const key = meta.contributionKey
-        || (meta.relatedEntity
-          ? (meta.relatedEntity.split(':').pop()?.trim() ?? '')
-          : '');
-      if (!key) continue;
-      const sectionKey = meta.contributionKey
-        || (key.charAt(0).toLowerCase() + key.slice(1).replace(/\s+/g, ''));
-      map.set(sectionKey, meta.chromeGroup);
+    for (const row of this.contributionRegistrations()) {
+      if (row.ChromeGroup) map.set(row.Key, row.ChromeGroup);
     }
     return map;
+  }
+
+  private contributionInclusionByKey(): Map<string, FormInclusion> {
+    const map = new Map<string, FormInclusion>();
+    for (const row of this.contributionRegistrations()) {
+      if (row.Inclusion) map.set(row.Key, row.Inclusion);
+    }
+    return map;
+  }
+
+  private contributionSortKeyByKey(): Map<string, number> {
+    const map = new Map<string, number>();
+    for (const row of this.contributionRegistrations()) {
+      if (row.SortKey != null) map.set(row.Key, row.SortKey);
+    }
+    return map;
+  }
+
+  /**
+   * Winning registration per contribution key (highest ClassFactory Priority).
+   * Headers are not rail sections.
+   */
+  private contributionRegistrations(): Array<{
+    Key: string;
+    Inclusion: FormInclusion | null;
+    SortKey: number | null;
+    ChromeGroup: 'details' | 'more' | null;
+  }> {
+    const entityName = this.EffectiveEntityInfo?.Name;
+    if (!entityName) return [];
+    const byKey = new Map<string, { Key: string; Inclusion: FormInclusion | null; SortKey: number | null; ChromeGroup: 'details' | 'more' | null; Priority: number }>();
+    const regs = [...CollectFormPanelRegistrations()].sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0));
+    for (const reg of regs) {
+      const meta = reg.Metadata;
+      if (!meta || meta.entity !== entityName) continue;
+      if (meta.contributionKey === 'header') continue;
+      const key = contributionRailKey(meta);
+      if (!key) continue;
+      byKey.set(key, {
+        Key: key,
+        Inclusion: ReadRegisteredInclusion(meta.inclusion),
+        SortKey: typeof meta.sortKey === 'number' && Number.isFinite(meta.sortKey) ? meta.sortKey : null,
+        ChromeGroup: meta.chromeGroup === 'details' || meta.chromeGroup === 'more' ? meta.chromeGroup : null,
+        Priority: reg.Priority ?? 0,
+      });
+    }
+    return [...byKey.values()];
   }
 
   private contributionHiddenSectionKeys(): Set<string> {
@@ -960,6 +1154,13 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const more = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('moreExpanded'));
     if (more === '1') this.chrome.MoreExpanded = true;
     if (more === '0') this.chrome.MoreExpanded = false;
+    this.ChromeRailPinned = ParseRailPinnedSetting(
+      UserInfoEngine.Instance.GetSetting(this.chromePrefKey('railPinned')),
+    );
+    this.ChromeRailWidthPx = ParseRailWidthSetting(
+      UserInfoEngine.Instance.GetSetting(this.chromePrefKey('railWidth')),
+    );
+    this.chromeRailExpanded = this.ChromeRailPinned;
   }
 
   private PersistChromePrefs(): void {
@@ -972,6 +1173,14 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     UserInfoEngine.Instance.SetSettingDebounced(
       this.chromePrefKey('moreExpanded'),
       this.chrome.MoreExpanded ? '1' : '0',
+    );
+    UserInfoEngine.Instance.SetSettingDebounced(
+      this.chromePrefKey('railPinned'),
+      SerializeRailPinnedSetting(this.ChromeRailPinned),
+    );
+    UserInfoEngine.Instance.SetSettingDebounced(
+      this.chromePrefKey('railWidth'),
+      SerializeRailWidthSetting(this.ChromeRailWidthPx),
     );
   }
 
@@ -1481,4 +1690,25 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.ShowSectionManager = false;
     this.cdr.markForCheck();
   }
+}
+
+function contributionRailKey(meta: FormPanelRegistrationMetadata): string | null {
+  if (meta.contributionKey?.trim()) {
+    return meta.contributionKey.trim();
+  }
+  if (!meta.relatedEntity) {
+    return null;
+  }
+  const derived = meta.relatedEntity.split(':').pop()?.trim();
+  if (!derived) {
+    return null;
+  }
+  return derived.charAt(0).toLowerCase() + derived.slice(1).replace(/\s+/g, '');
+}
+
+function ReadRegisteredInclusion(raw: FormInclusion | undefined): FormInclusion | null {
+  if (raw === 'Primary' || raw === 'More' || raw === 'None') {
+    return raw;
+  }
+  return null;
 }

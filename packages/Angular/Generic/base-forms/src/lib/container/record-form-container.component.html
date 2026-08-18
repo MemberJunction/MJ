@@ -30,6 +30,7 @@
   [ShowEmptyFields]="EffectiveShowEmptyFields"
   [WidthMode]="EffectiveWidthMode"
   [HasCustomSectionOrder]="EffectiveHasCustomSectionOrder"
+  [ChromeLayout]="ChromeLayout"
   [Variants]="EffectiveVariants"
   [CurrentVariantID]="EffectiveCurrentVariantID"
   (Navigate)="OnNavigate($event)"
@@ -75,13 +76,58 @@
          [class.mj-forms-layout--left-nav]="ChromeLayout === 'left-nav'"
          [class.mj-forms-layout--accordion]="ChromeLayout === 'accordion'"
          [class.mj-forms-layout--more]="IsChromeMoreActive">
-      @if (ChromeLayout === 'left-nav' && ChromeGroups.length > 1) {
-        <nav class="mj-forms-chrome-rail" aria-label="Form sections">
+      @if (ShowChromeRail) {
+        <nav class="mj-forms-chrome-rail"
+             [class.is-collapsed]="ChromeRailCollapsed"
+             [class.is-resizing]="RailResizing"
+             [style.width.px]="ChromeRailCollapsed ? null : ChromeRailWidthPx"
+             [attr.aria-expanded]="!ChromeRailCollapsed"
+             aria-label="Form sections">
+          @if (ChromeRailCollapsed) {
+            <button type="button"
+                    class="mj-forms-chrome-rail-spine"
+                    (click)="OnChromeRailExpand()"
+                    [attr.aria-label]="'Show form sections — ' + ChromeActiveTitle"
+                    [title]="'Show sections — ' + ChromeActiveTitle">
+              <i [class]="ChromeActiveIcon"></i>
+              <span class="mj-forms-chrome-rail-spine-label"
+                    (mouseenter)="OnRailLabelHover($event, ChromeActiveTitle)">{{ ChromeActiveTitle }}</span>
+            </button>
+          } @else {
+            <div class="mj-forms-chrome-rail-resizer"
+                 role="separator"
+                 aria-orientation="vertical"
+                 [attr.aria-valuenow]="ChromeRailWidthPx"
+                 [attr.aria-valuemin]="RailWidthMin"
+                 [attr.aria-valuemax]="RailWidthMax"
+                 title="Drag to resize sections"
+                 (pointerdown)="OnRailResizeStart($event)"
+                 (pointermove)="OnRailResizeMove($event)"
+                 (pointerup)="OnRailResizeEnd()"
+                 (pointercancel)="OnRailResizeEnd()"></div>
+            <div class="mj-forms-chrome-rail-toolbar">
+              <button type="button"
+                      class="mj-forms-chrome-rail-pin"
+                      [class.is-pinned]="ChromeRailPinned"
+                      [attr.aria-pressed]="ChromeRailPinned"
+                      [title]="ChromeRailPinned ? 'Unpin sections — they hide after you switch' : 'Pin sections open'"
+                      (click)="OnChromeRailPinToggle()">
+                <i class="fa-solid fa-thumbtack"></i>
+              </button>
+              <button type="button"
+                      class="mj-forms-chrome-rail-collapse"
+                      title="Hide sections"
+                      aria-label="Hide form sections"
+                      (click)="OnChromeRailCollapse()">
+                <i class="fa-solid fa-angles-left"></i>
+              </button>
+            </div>
           @for (group of ChromeFirstClassGroups; track group.Key) {
             <div class="mj-forms-chrome-rail-item"
                  role="button"
                  tabindex="0"
                  [class.is-active]="ChromeActiveGroupKey === group.Key"
+                 [attr.aria-current]="ChromeActiveGroupKey === group.Key ? 'page' : null"
                  [class.is-drag-over]="RailDragOverKey === group.Key"
                  (click)="OnChromeGroupActivate(group.Key)"
                  (keydown.enter)="OnChromeGroupActivate(group.Key)"
@@ -100,7 +146,8 @@
                 </span>
               }
               <i [class]="group.Icon"></i>
-              <span class="mj-forms-chrome-rail-label">{{ group.Title }}</span>
+              <span class="mj-forms-chrome-rail-label"
+                    (mouseenter)="OnRailLabelHover($event, group.Title)">{{ group.Title }}</span>
               @let rowCount = ChromeGroupRowCount(group);
               @if (rowCount != null) {
                 <span class="mj-forms-chrome-rail-count"
@@ -118,7 +165,8 @@
                  (keydown.space)="$event.preventDefault(); OnMoreFolderToggle()">
               <span class="mj-forms-chrome-rail-handle is-spacer" aria-hidden="true"></span>
               <i [class]="MoreExpanded ? 'fa-solid fa-folder-open' : 'fa-solid fa-folder'"></i>
-              <span class="mj-forms-chrome-rail-label">{{ more.Title }}</span>
+              <span class="mj-forms-chrome-rail-label"
+                    (mouseenter)="OnRailLabelHover($event, more.Title)">{{ more.Title }}</span>
               <i class="fa-solid mj-forms-chrome-rail-more-toggle"
                  [class.fa-minus]="MoreExpanded"
                  [class.fa-plus]="!MoreExpanded"
@@ -131,6 +179,7 @@
                      role="button"
                      tabindex="0"
                      [class.is-active]="ChromeActiveGroupKey === child.Key"
+                     [attr.aria-current]="ChromeActiveGroupKey === child.Key ? 'page' : null"
                      [class.is-drag-over]="RailDragOverKey === child.Key"
                      (click)="OnChromeGroupActivate(child.Key)"
                      (keydown.enter)="OnChromeGroupActivate(child.Key)"
@@ -149,7 +198,8 @@
                     </span>
                   }
                   <i [class]="child.Icon"></i>
-                  <span class="mj-forms-chrome-rail-label">{{ child.Title }}</span>
+                  <span class="mj-forms-chrome-rail-label"
+                        (mouseenter)="OnRailLabelHover($event, child.Title)">{{ child.Title }}</span>
                   @let childCount = ChromeGroupRowCount(child);
                   @if (childCount != null) {
                     <span class="mj-forms-chrome-rail-count"
@@ -159,6 +209,7 @@
               }
               </div>
             }
+          }
           }
         </nav>
       }
@@ -216,7 +267,7 @@
         }
 
         <!-- Empty state when no sections match search -->
-        @if (EffectiveSearchFilter && VisibleSectionCount === 0) {
+        @if (EffectiveSearchFilter && SearchHasNoMatches) {
           <mj-empty-state class="mj-forms-empty-search-state"
             Variant="no-results"
             Title="No sections found"

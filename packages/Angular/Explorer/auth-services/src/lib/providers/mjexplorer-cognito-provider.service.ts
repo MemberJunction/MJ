@@ -74,7 +74,10 @@ export class MJCognitoProvider extends MJAuthBase {
         provide: 'cognitoConfig',
         useValue: {
           userPoolId: environment['COGNITO_USER_POOL_ID'],
-          userPoolClientId: environment['COGNITO_CLIENT_ID'] || environment['COGNITO_CLIENTID'],
+          // COGNITO_CLIENTID first: it is the key the catalog overlay emits for a metadata-configured
+          // row, and it must beat the compiled environment's canonical COGNITO_CLIENT_ID spelling —
+          // otherwise a catalog row's ClientID is silently ignored in favour of the compiled value.
+          userPoolClientId: environment['COGNITO_CLIENTID'] || environment['COGNITO_CLIENT_ID'],
           region: environment['COGNITO_REGION'] || environment['AWS_REGION'],
           domain: environment['COGNITO_DOMAIN'],
           redirectUri: environment['COGNITO_REDIRECT_URI'] || window.location.origin,

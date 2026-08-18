@@ -63,6 +63,17 @@ git branch --set-upstream-to=origin/my-feature-branch my-feature-branch
 ### 4. START WORK ON A FEATURE BRANCH
 Before starting a new line of work, check the current branch. It must be (a) separate from the remote default branch and (b) named for the work being requested. If not, **ask first**, then cut and switch to one.
 
+### 5. NO HAND-LINKING IN THE M5 JOINED WORKSPACE
+This clone sits under `/Users/amith/Dropbox/develop/M5/`, a pnpm mega-workspace that already
+live-links every `@memberjunction/*` and `@mj-biz-apps/*` package. **Never** add per-package
+`node_modules` symlinks, `pnpm link`, or `rsync` another worktree's `dist/` to unstick a resolve.
+That duplicates `type-graphql`. Then `Int`/`Float`/`ID` imported from `@memberjunction/server`
+are `undefined` and MJAPI fails schema build (`CannotDetermineGraphQLTypeError` on `MaxRows` /
+`RowCount`). Explorer shows `GraphQL Error (Code: unknown)`. **Do not patch `generated.js` or
+`MJServer/dist` to work around it.** Undo the extra link, `pnpm install` **only at `M5/`**,
+rebuild the package you changed, restart with `pnpm start` from `packages/MJAPI`. Full do/don't:
+[`../CLAUDE.md`](../CLAUDE.md) (the M5 workspace file).
+
 ---
 
 ## ✅ Definition of Done
@@ -178,6 +189,7 @@ npm run check:standards   # every adopted MJ standard (see .mj-standards.json)
 npm run check:esm         # native-ESM import guard for "type": "module" packages
 npm run check:claude-md   # instruction-file budget, link validity, and routing-table coverage
 npm run check:changeset   # changeset bump levels (local only — no CI gate enforces this one)
+npm run check:codegen-tail # new-table migrations ship their generated entity (same command CI runs)
 ```
 
 ---

@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/integration-test-suite",
+  "license": "BUSL-1.1",
   "version": "6.1.0-edge.2",
   "private": true,
   "description": "MemberJunction's OWN integration-test content — every check bundle, the special rigs, and their heavy dependencies. Deliberately private/non-published: the shippable framework (registry, contracts, driver, bootstraps) lives in @memberjunction/testing-integration; this package is the repo-local test content loaded into `mj test` at runtime.",

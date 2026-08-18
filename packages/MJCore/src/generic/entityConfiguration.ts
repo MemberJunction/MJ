@@ -11,10 +11,11 @@
  * `EntityInfo` / the form-chrome ranker consume — `@memberjunction/core` cannot
  * import the generated entity package.
  *
- * NULL / `{}` / omitted keys = today's accordion. Related-role policy defaults
- * to `'smart'`: a budgeted ranker, not "everything in More".
+ * NULL / `{}` / omitted keys = accordion until AutoLeftNavAt, then left-nav.
+ * Related-role policy defaults to `'smart'`: a budgeted ranker over Auto
+ * leftovers. L1 `inclusion: 'None'` never enters the ranker.
  *
- * @see plans/form-chrome-policy.md
+ * @see guides/FORMS_ARCHITECTURE_GUIDE.md §7d
  */
 import { SafeJSONParse } from '@memberjunction/global';
 
@@ -42,7 +43,10 @@ export const PLATFORM_SCHEMA_NAME = '__mj';
 
 export type FormLayout = 'accordion' | 'left-nav' | 'auto';
 export type RelatedRolePolicy = 'keep-all-primary' | 'smart';
+/** @deprecated Use {@link FormInclusion}. Detail means More. */
 export type FormRole = 'Primary' | 'Detail';
+/** L1 membership on a parent form. None never reaches the ranker. */
+export type FormInclusion = 'Primary' | 'More' | 'None';
 
 export interface IEntityConfiguration {
     UI?: IEntityUIConfiguration;
@@ -65,15 +69,15 @@ export interface IEntityFormConfiguration {
     /** Threshold used when {@link Layout} is `'auto'` (or omitted). Default 8. */
     AutoLeftNavAt?: number;
     /**
-     * How omitted `FormRole` on a relationship is resolved.
-     * `'keep-all-primary'` — today's form (every DisplayInForm related is first-class).
+     * How Auto (omitted inclusion) relationships are resolved.
+     * `'keep-all-primary'` — every remaining Auto related stays first-class.
      * `'smart'` — budgeted ranker (default).
      */
     RelatedRolePolicy?: RelatedRolePolicy;
     /**
-     * Max untagged related grids that stay first-class when
+     * Max Auto related grids that stay first-class when
      * {@link RelatedRolePolicy} is `'smart'`. Default 6. Does not cap
-     * explicit `FormRole: 'Primary'` punches.
+     * explicit `inclusion: 'Primary'`.
      */
     PrimaryRelatedBudget?: number;
 }
@@ -82,22 +86,65 @@ export interface IEntityRelationshipConfiguration {
     UI?: IEntityRelationshipUIConfiguration;
 }
 
+export interface IEntityRelationshipJoin {
+    mode: 'any';
+    fields: string[];
+}
+
 export interface IEntityRelationshipUIConfiguration {
     /**
-     * `'Primary'` — always first-class (can exceed the budget).
-     * `'Detail'` — always parked in More.
-     * Omit — the ranker decides (`RelatedRolePolicy`).
+     * L1 inclusion. `'None'` drops the relationship from the parent form.
+     * Omit = Auto (L2 ranker).
+     */
+    inclusion?: FormInclusion;
+    /**
+     * @deprecated Use {@link inclusion}. `'Detail'` maps to More.
      */
     FormRole?: FormRole;
+    /** Same-table OR of FKs (Bill-To OR Ship-To). */
+    join?: IEntityRelationshipJoin;
+    /**
+     * Higher = earlier among first-class related rail items (after Details,
+     * after lead contributions). Omit = 0. Same scale as form-panel `sortKey`.
+     */
+    sortKey?: number;
 }
 
 export type RelatedFormRoleReason =
     | 'explicit-primary'
     | 'explicit-detail'
+    | 'explicit-none'
+    | 'join-sibling-none'
     | 'ranked-primary'
     | 'ranked-detail'
     | 'keep-all-primary'
-    | 'under-budget';
+    | 'under-budget'
+    | 'install-primary'
+    | 'install-more'
+    | 'install-none';
+
+export type FormChromeRuleTargetKind = 'Relationship' | 'Contribution';
+
+/**
+ * One install-overlay (L3) pin. Loaded from `MJ: Form Chrome Rules`.
+ * Keyed by (parent entity, related entity) or (parent entity, contributionKey).
+ */
+export interface FormChromeRule {
+    EntityID: string;
+    TargetKind: FormChromeRuleTargetKind;
+    RelatedEntityID?: string | null;
+    ContributionKey?: string | null;
+    Inclusion: FormInclusion;
+    JoinFields?: string[] | null;
+    Sequence?: number | null;
+    /**
+     * Admin display title. Null / blank keeps the L1 DisplayName or
+     * humanized entity name. Keyed with the rule, not the previous label,
+     * so an OpenApp upgrade that renames the related entity does not
+     * overwrite a site-specific title.
+     */
+    Title?: string | null;
+}
 
 export interface RelatedFormRoleCandidate {
     ID: string;
@@ -123,11 +170,15 @@ export interface RelatedFormRoleCandidate {
 export interface RelatedFormRoleAssignment {
     RelationshipID: string;
     RelatedEntity: string;
+    RelatedEntityID: string;
     RelatedEntityJoinField: string;
     Role: FormRole;
+    Inclusion: FormInclusion;
     Score: number;
     Reason: RelatedFormRoleReason;
     ExplicitFormRole: FormRole | null;
+    ExplicitInclusion: FormInclusion | null;
+    JoinFields: string[] | null;
 }
 
 export interface RelatedFormRoleResolution {
@@ -159,8 +210,37 @@ export function ResolveFormLayout(
 }
 
 /**
- * Score a DisplayInForm relationship for the smart ranker. Explicit FormRole
- * is not applied here — callers separate the punch-through pool first.
+ * Read L1 inclusion from a relationship Configuration bag.
+ * `inclusion` wins. `FormRole: 'Detail'` maps to More. `FormRole: 'Primary'` maps to Primary.
+ */
+export function ReadRelationshipInclusion(raw: string | null | undefined): FormInclusion | null {
+    const parsed = ParseEntityRelationshipConfiguration(raw);
+    const ui = parsed?.UI;
+    if (ui?.inclusion === 'Primary' || ui?.inclusion === 'More' || ui?.inclusion === 'None') {
+        return ui.inclusion;
+    }
+    if (ui?.FormRole === 'Primary') return 'Primary';
+    if (ui?.FormRole === 'Detail') return 'More';
+    return null;
+}
+
+/** Higher = earlier among first-class related rail items. Omit / invalid = null. */
+export function ReadRelationshipSortKey(raw: string | null | undefined): number | null {
+    const sort = ParseEntityRelationshipConfiguration(raw)?.UI?.sortKey;
+    if (typeof sort !== 'number' || !Number.isFinite(sort)) return null;
+    return sort;
+}
+
+export function ReadRelationshipJoinFields(raw: string | null | undefined): string[] | null {
+    const fields = ParseEntityRelationshipConfiguration(raw)?.UI?.join?.fields;
+    if (!fields || fields.length === 0) return null;
+    const cleaned = fields.map((f) => f.trim()).filter((f) => f.length > 0);
+    return cleaned.length > 0 ? cleaned : null;
+}
+
+/**
+ * Score a DisplayInForm relationship for the smart ranker. Explicit inclusion
+ * is not applied here — callers separate the L1 pool first.
  */
 export function ScoreRelatedFormRole(
     candidate: RelatedFormRoleCandidate,
@@ -202,16 +282,23 @@ export function ResolveRelatedFormRoles(
 
     const assignments: RelatedFormRoleAssignment[] = [];
     const untagged: { candidate: RelatedFormRoleCandidate; score: number }[] = [];
+    const joinSiblingNone = impliedJoinSiblingNoneIds(visible);
 
     for (const candidate of visible) {
-        const explicit = readExplicitFormRole(candidate.Configuration);
+        const explicit = ReadRelationshipInclusion(candidate.Configuration);
+        const inclusion = explicit ?? (joinSiblingNone.has(candidate.ID) ? 'None' : null);
         const score = ScoreRelatedFormRole(candidate, parentSchemaName);
-        if (explicit === 'Primary') {
-            assignments.push(toAssignment(candidate, 'Primary', score, 'explicit-primary', explicit));
+        if (inclusion === 'None') {
+            const reason: RelatedFormRoleReason = explicit === 'None' ? 'explicit-none' : 'join-sibling-none';
+            assignments.push(toAssignment(candidate, 'Detail', 'None', score, reason, explicit));
             continue;
         }
-        if (explicit === 'Detail') {
-            assignments.push(toAssignment(candidate, 'Detail', score, 'explicit-detail', explicit));
+        if (inclusion === 'Primary') {
+            assignments.push(toAssignment(candidate, 'Primary', 'Primary', score, 'explicit-primary', inclusion));
+            continue;
+        }
+        if (inclusion === 'More') {
+            assignments.push(toAssignment(candidate, 'Detail', 'More', score, 'explicit-detail', inclusion));
             continue;
         }
         untagged.push({ candidate, score });
@@ -219,14 +306,14 @@ export function ResolveRelatedFormRoles(
 
     if (policy === 'keep-all-primary') {
         for (const item of untagged) {
-            assignments.push(toAssignment(item.candidate, 'Primary', item.score, 'keep-all-primary', null));
+            assignments.push(toAssignment(item.candidate, 'Primary', 'Primary', item.score, 'keep-all-primary', null));
         }
         return { Policy: policy, Budget: budget, Assignments: sortAssignments(assignments) };
     }
 
     if (untagged.length <= budget) {
         for (const item of untagged) {
-            assignments.push(toAssignment(item.candidate, 'Primary', item.score, 'under-budget', null));
+            assignments.push(toAssignment(item.candidate, 'Primary', 'Primary', item.score, 'under-budget', null));
         }
         return { Policy: policy, Budget: budget, Assignments: sortAssignments(assignments) };
     }
@@ -237,6 +324,7 @@ export function ResolveRelatedFormRoles(
         assignments.push(toAssignment(
             item.candidate,
             isPrimary ? 'Primary' : 'Detail',
+            isPrimary ? 'Primary' : 'More',
             item.score,
             isPrimary ? 'ranked-primary' : 'ranked-detail',
             null,
@@ -251,28 +339,131 @@ function resolveBudget(raw: number | undefined): number {
     return Math.max(0, Math.floor(raw));
 }
 
-function readExplicitFormRole(raw: string | null | undefined): FormRole | null {
-    const parsed = ParseEntityRelationshipConfiguration(raw);
-    const role = parsed?.UI?.FormRole;
-    return role === 'Primary' || role === 'Detail' ? role : null;
-}
-
 function toAssignment(
     candidate: RelatedFormRoleCandidate,
     role: FormRole,
+    inclusion: FormInclusion,
     score: number,
     reason: RelatedFormRoleReason,
-    explicit: FormRole | null,
+    explicitInclusion: FormInclusion | null,
 ): RelatedFormRoleAssignment {
+    const explicitRole: FormRole | null =
+        explicitInclusion === 'Primary' ? 'Primary'
+        : explicitInclusion === 'More' ? 'Detail'
+        : null;
     return {
         RelationshipID: candidate.ID,
         RelatedEntity: candidate.RelatedEntity,
+        RelatedEntityID: candidate.RelatedEntityID,
         RelatedEntityJoinField: candidate.RelatedEntityJoinField,
         Role: role,
+        Inclusion: inclusion,
         Score: score,
         Reason: reason,
-        ExplicitFormRole: explicit,
+        ExplicitFormRole: explicitRole,
+        ExplicitInclusion: explicitInclusion,
+        JoinFields: ReadRelationshipJoinFields(candidate.Configuration),
     };
+}
+
+/**
+ * When one relationship to a related entity carries `join.fields`, sibling
+ * FKs to that same entity with no explicit inclusion are not candidates.
+ */
+function impliedJoinSiblingNoneIds(candidates: readonly RelatedFormRoleCandidate[]): Set<string> {
+    const ownerKeys = new Set<string>();
+    for (const candidate of candidates) {
+        if (ReadRelationshipJoinFields(candidate.Configuration)) {
+            ownerKeys.add(relatedEntityKey(candidate));
+        }
+    }
+    const noneIds = new Set<string>();
+    if (ownerKeys.size === 0) return noneIds;
+    for (const candidate of candidates) {
+        if (!ownerKeys.has(relatedEntityKey(candidate))) continue;
+        if (ReadRelationshipInclusion(candidate.Configuration) != null) continue;
+        if (ReadRelationshipJoinFields(candidate.Configuration)) continue;
+        noneIds.add(candidate.ID);
+    }
+    return noneIds;
+}
+
+function relatedEntityKey(candidate: RelatedFormRoleCandidate): string {
+    const id = (candidate.RelatedEntityID ?? '').trim().toLowerCase();
+    if (id.length > 0) return id;
+    return (candidate.RelatedEntity ?? '').trim().toLowerCase();
+}
+
+/**
+ * L3 install overlay. Pins Inclusion / JoinFields on matching relationship
+ * assignments. Later Sequence wins. Contribution rules are applied by the
+ * chrome resolver (they are not ranker assignments).
+ */
+export function ApplyFormChromeRules(
+    parentEntityId: string,
+    assignments: readonly RelatedFormRoleAssignment[],
+    rules: readonly FormChromeRule[],
+): RelatedFormRoleAssignment[] {
+    const parent = parentEntityId.trim().toLowerCase();
+    if (parent.length === 0 || rules.length === 0) return [...assignments];
+    const applicable = rules
+        .filter((rule) => rule.TargetKind === 'Relationship' && idsEqual(rule.EntityID, parent))
+        .sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0));
+    if (applicable.length === 0) return [...assignments];
+
+    return assignments.map((assignment) => {
+        const rule = lastMatchingRelationshipRule(applicable, assignment);
+        return rule ? applyRelationshipRule(assignment, rule) : assignment;
+    });
+}
+
+export function ContributionInclusionFromRules(
+    parentEntityId: string,
+    contributionKey: string,
+    rules: readonly FormChromeRule[],
+): FormInclusion | null {
+    const parent = parentEntityId.trim().toLowerCase();
+    const key = contributionKey.trim().toLowerCase();
+    if (parent.length === 0 || key.length === 0) return null;
+    const matches = rules
+        .filter((rule) =>
+            rule.TargetKind === 'Contribution'
+            && idsEqual(rule.EntityID, parent)
+            && (rule.ContributionKey ?? '').trim().toLowerCase() === key,
+        )
+        .sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0));
+    return matches.at(-1)?.Inclusion ?? null;
+}
+
+function lastMatchingRelationshipRule(
+    rules: readonly FormChromeRule[],
+    assignment: RelatedFormRoleAssignment,
+): FormChromeRule | undefined {
+    const matches = rules.filter((rule) =>
+        idsEqual(rule.RelatedEntityID, assignment.RelatedEntityID),
+    );
+    return matches.at(-1);
+}
+
+function applyRelationshipRule(
+    assignment: RelatedFormRoleAssignment,
+    rule: FormChromeRule,
+): RelatedFormRoleAssignment {
+    const inclusion = rule.Inclusion;
+    const role: FormRole = inclusion === 'Primary' ? 'Primary' : 'Detail';
+    const reason: RelatedFormRoleReason =
+        inclusion === 'Primary' ? 'install-primary'
+        : inclusion === 'More' ? 'install-more'
+        : 'install-none';
+    const join = rule.JoinFields && rule.JoinFields.length > 0
+        ? rule.JoinFields
+        : assignment.JoinFields;
+    return { ...assignment, Role: role, Inclusion: inclusion, Reason: reason, JoinFields: join };
+}
+
+function idsEqual(a: string | null | undefined, b: string | null | undefined): boolean {
+    return (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase()
+        && (a ?? '').trim().length > 0;
 }
 
 function sortAssignments(assignments: RelatedFormRoleAssignment[]): RelatedFormRoleAssignment[] {

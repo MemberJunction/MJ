@@ -65,6 +65,26 @@
   },
   {
     "_comments": [
+      "Company Integration Record Maps - one row per external record ever mapped, re-touched on",
+      "every sync. The highest-volume table the integration sync path writes, so change tracking",
+      "doubled the write volume of every sync. Nothing reads that history: the mapping row IS the",
+      "current state, a prior ExternalSystemRecordID has no diagnostic value, and operators audit a",
+      "sync through the per-run artifact stream (IntegrationTailRunEvents) instead.",
+      "Unlike its Company Integration Run* siblings below this record sets ONLY TrackRecordChanges.",
+      "This is live mapping state rather than a log, so its caching and user-search attributes are",
+      "deliberately left at whatever they are today."
+    ],
+    "fields": {
+      "Name": "MJ: Company Integration Record Maps",
+      "BaseView": "vwCompanyIntegrationRecordMaps",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Company Integration Record Maps"
+    }
+  },
+  {
+    "_comments": [
       "Company Integration Run API Logs - integration API call logs"
     ],
     "fields": {

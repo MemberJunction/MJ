@@ -101,7 +101,7 @@ shows a loading state until the record is ready (and an error state on failure).
   [EntityName]="'Users'"
   [PrimaryKey]="pk"          <!-- omit/empty → new record -->
   [Record]="preloaded"        <!-- OR bind an already-loaded BaseEntity -->
-  [NewRecordValues]="defaults"
+  [NewRecordValues]="defaults"   <!-- object or Field|value||Field2|value2 URL segment -->
   [EditMode]="null"           <!-- null = new→edit, existing→read -->
   [Config]="myConfig"
   [Provider]="Provider"
@@ -124,6 +124,24 @@ handle.
 host: it maps `Navigate` → `NavigationService`, `Notification` → `SharedService`,
 and record loads → `RecentAccessService`. That's the only Explorer-specific glue;
 all mechanics are Generic.
+
+Related-entity grids pass `NewRecordValues` from the join fields that filter the
+grid so **New** opens a child already linked to the parent.
+
+- `BaseFormComponent.NewRecordValues(relatedEntity, joinField?)` — one
+  relationship, or every join field when several `EntityRelationship` rows
+  share the related entity (Bill-To + Ship-To on the same Orders grid).
+- `NewRecordValuesForJoinFields(relatedEntity, fields)` — explicit list when
+  the grid already knows the FKs (Person Orders, Organization Orders).
+- `EntityInfo.BuildRelationshipNewRecordValues` / `…ForJoinFields` — typed
+  core helpers. When `EntityRelationship.Configuration.UI.join.fields` is set,
+  every named FK is copied, not only `RelatedEntityJoinField`.
+
+Explorer persists those defaults on the new-record URL
+(`/record/:entity/new?NewRecordValues=Field|value||Field2|value2`, using
+`NEW_ENTITY_RECORD_URL_ID` and `NEW_RECORD_VALUES_QUERY_PARAM` from
+`@memberjunction/core`). Refresh and share keep the child linked. Overlay
+hosts accept the same object or URL-segment string on `[NewRecordValues]`.
 
 ---
 
@@ -392,44 +410,127 @@ Orders' full custom form already wraps `<mj-record-form-container>` and emits `b
 
 ### 7d. Form chrome — accordion, left-nav, and More
 
-Contributions decide *what* is on the form. Chrome decides *how the container
-arranges it*. Metadata is the floor; an optional `BaseFormPolicy` is the last-wins
-override. Plan: [`/plans/form-chrome-policy.md`](../plans/form-chrome-policy.md).
+Contributions decide *what* is on the form. Chrome decides *which of those
+items appear* and *how the container arranges them*. Membership is data.
+`BaseFormPolicy.DecorateChrome` may rename groups, swap icons, or wrap
+labels. It cannot add, remove, or re-bucket sections.
+
+Five layers, later wins on the same target:
+
+| Layer | What it is | Who writes it |
+|---|---|---|
+| **L0** | CodeGen: field panels, `DisplayInForm`, `Sequence` | Schema / CodeGen |
+| **L1** | Inclusions: `Primary` \| `More` \| `None` | The OpenApp that owns the related entity or contribution |
+| **L2** | Ranker over remaining **Auto** leftovers | `Entity.Configuration.UI.Form` |
+| **L3** | Install overlay: `MJ: Form Chrome Rules` | Site admin (never app-synced) |
+| **L4** | User rail order and More membership | `UserInfoEngine` |
+
+#### L1 — inclusion, keyed by (parent, related entity)
+
+An **inclusion** is one parent-form section, not one FK. Bill-To and Ship-To
+are two `EntityRelationship` rows and **one** Orders section.
+
+`EntityRelationship.Configuration.UI`:
+
+- `inclusion`: `'Primary'` — first-class rail
+- `inclusion`: `'More'` — candidate, parked in More
+- `inclusion`: `'None'` — not a candidate. Not in More. Ranker never sees it
+- omit — **Auto** (L2 ranker)
+- `join`: `{ mode: 'any', fields: string[] }` — same-table OR of FKs (Bill-To OR Ship-To)
+- `FormRole`: `'Primary'` \| `'Detail'` — accepted alias (`Detail` = More)
+
+`None` is how an app keeps satellite records off a hub form (Task Comments
+on Person, Sold-To when Orders is already joined on Bill-To/Ship-To).
+
+When one relationship to a related entity carries `join.fields`, sibling
+FKs to that same entity with no explicit inclusion are `None`. Through-filters
+(junction tables) are not same-table OR — use a contribution widget for those.
+
+The app that **owns the related entity** (or the contribution) ships the L1
+row. Downstream may override upstream; the admin pathway shows that.
+
+#### L2 — ranker
 
 `Entity.Configuration.UI.Form`:
 
-- `Layout`: `'accordion'` | `'left-nav'` | `'auto'` (omit = auto)
+- `Layout`: `'accordion'` \| `'left-nav'` \| `'auto'` (omit = auto)
 - `AutoLeftNavAt`: first-class section count that flips auto to left-nav (omit = 8)
 - `RelatedRolePolicy`: `'smart'` (default) or `'keep-all-primary'`
-- `PrimaryRelatedBudget`: max untagged related grids that stay first-class under smart (omit = 6)
+- `PrimaryRelatedBudget`: max **Auto** related grids that stay first-class under smart (omit = 6). Does not cap explicit `inclusion: 'Primary'`
 
-`EntityRelationship.Configuration.UI.FormRole`:
+The ranker only sees Auto leftovers. Same-schema 1:N children, declared
+collections, and custom display components score above cross-schema hang-ons
+and `__mj` plumbing. If the Auto pool is at or under the budget, every Auto
+related stays Primary.
 
-- `'Primary'` — always top-level (punches through the budget)
-- `'Detail'` — always parked in one More group
-- omit — the parent entity's ranker decides
+#### L3 — install overlay
 
-**Smart is not "everything in More."** Same-schema 1:N children, declared
-collections, and custom display components stay first-class. Cross-schema
-hang-ons and `__mj` plumbing fold only after the untagged pool exceeds the
-budget. A form with 4 related grids is unchanged.
+`MJ: Form Chrome Rules` is the admin's global default. It is **not** in
+OpenApp `metadata/` push filters. A row pins a (parent entity, related entity)
+or (parent entity, contribution key) to Primary, More, or None, and may set
+`JoinFields` and an optional `Title`. `Title` is the site-specific rail /
+accordion label — keyed by RelatedEntityID or contribution key, so an
+OpenApp upgrade that renames "Payments" does not overwrite a local "Pmts".
+Blank / omitted `Title` keeps the L1 DisplayName. L3 can suppress a
+contribution for the site. L4 cannot.
 
-`BaseFormPolicy` registers with `{ metadata: { entity } }` and may return a
-full chrome spec. Cancelable `BeforeLayoutResolve` / `BeforeSectionActivate`
-live on the container.
+#### L4 — user overlay
 
-**Left-nav is not accordion-on-the-side.** The rail picks one group; the body
-shows only that group. Selected content has **no accordion chrome** (the rail
-is the header) and related grids fill the remaining height. **More** is a
-folder on the rail — click to expand sub-nodes, then pick one item like any
-other rail entry. Field panels collapse into one **Details** item. Related
-Primary grids stay first-class (same-title grids merge). `System Metadata`
-and Detail related always sit in More. Rail items use the same icon as the
-accordion header (entity `Icon` when present) and show related-grid row
-counts after they load. Users reorder first-class items by dragging the
-rail grip (or Manage Sections / reset in the toolbar). Section search
-filters the rail the same way it filters accordion panels. The centered /
-full-width toolbar toggle still applies.
+Users reorder first-class rail items and move visible items in or out of
+More (`UserInfoEngine`). They cannot suppress a contribution.
+
+#### Contributions
+
+No L0 (CodeGen did not emit them). No L2 (they are not the related-grid
+pool). Installed package → the contribution exists by `contributionKey`.
+L3 can turn it off. L4 rearranges what remains.
+
+#### Policy
+
+Register with `@RegisterClassEx(BaseFormPolicy, { metadata: { entity } })`.
+Downstream subclasses upstream (`OrdersPersonFormPolicy extends
+CommonPersonFormPolicy`). `DecorateChrome(spec, ctx)` returns cosmetics.
+A decorate that changes section membership is ignored.
+
+Cancelable `BeforeLayoutResolve` / `BeforeSectionActivate` live on the
+container.
+
+#### Left-nav
+
+The rail picks one group; the body shows only that group. Selected content
+has **no accordion chrome** (the rail is the header). Related grids fill the
+**leftover column height** — the selected panel is `flex: 1 1 auto` in the
+column, not a pinned pixel height. Accordion-persisted heights are not
+applied while the rail is showing the panel.
+
+Slot-mounted contributions (`<mj-form-panel-slot>` / `BaseFormPanel` hosts)
+use `display: contents` so they do not sit as an extra wrapper in that flex
+column. `SetSectionRowCount` **upserts** the key: contribution sections are
+not seeded by generated `initSections()`, so the rail badge still appears
+(Orders on Person, Payments, etc.).
+
+**More** is a folder on the rail — click to expand sub-nodes, then pick one
+item like any other rail entry. Field panels collapse into one **Details**
+item. Related Primary grids stay first-class (same related entity and
+same-title grids merge). `System Metadata` and More related always sit in
+More. Rail items use the same icon as the accordion header (entity `Icon`
+when present). Users reorder first-class items by dragging the rail grip
+(or Manage Sections / reset in the toolbar). The centered / full-width
+toolbar toggle still applies.
+
+#### Section search
+
+Search matches a group's **title** and each panel's `MatchesSearch` (title
+plus registered keywords). It does **not** use `IsVisible` — chrome hides
+inactive left-nav groups, so visibility would make search miss everything
+except the selected item. Contribution titles (Orders, Payments) match in
+both accordion and left-nav. The rail stays visible whenever more than one
+chrome group exists **or** search is active, even if only one group hits.
+The empty state is **SearchHasNoMatches** (live match), not a baked
+ContentChildren snapshot that would miss slot-mounted panels.
+
+Authoring: `Entity.Configuration` / `EntityRelationship.Configuration`
+JSONType interfaces, [`PANELS.md`](../packages/Angular/Generic/base-forms/PANELS.md).
 
 ### 7b. Render a single section standalone (`SectionName`)
 
