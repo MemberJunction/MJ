@@ -34459,9 +34459,6 @@ export class MJActionAuthorizationEntity extends BaseEntity<MJActionAuthorizatio
  */
 @RegisterClass(BaseEntity, 'MJ: Action Categories')
 export class MJActionCategoryEntity extends BaseEntity<MJActionCategoryEntityType> {
-
-
-
     /**
     * Loads the MJ: Action Categories record from the database
     * @param ID: string - primary key value to load the MJ: Action Categories record.
@@ -35953,9 +35950,6 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
         Source: 'cache',
   });
 
-
-
-
     /**
     * Loads the MJ: Actions record from the database
     * @param ID: string - primary key value to load the MJ: Actions record.
@@ -37154,9 +37148,6 @@ export class MJAIAgentArtifactTypeEntity extends BaseEntity<MJAIAgentArtifactTyp
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Categories')
 export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityType> {
-
-
-
     /**
     * Loads the MJ: AI Agent Categories record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Categories record.
@@ -40191,9 +40182,6 @@ export interface MJAIAgentNoteEntity_IAISecondaryScopes {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Notes')
 export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
-
-
-
     /**
     * Loads the MJ: AI Agent Notes record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Notes record.
@@ -42440,9 +42428,6 @@ export interface MJAIAgentRunStepEntity_AgentSkillInvocationProvenance {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Run Steps')
 export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityType> {
-
-
-
     /**
     * Loads the MJ: AI Agent Run Steps record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Run Steps record.
@@ -43014,116 +42999,6 @@ export interface MJAIAgentRunEntity_IAISecondaryScopes {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Runs')
 export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
-
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetParentRunIDDescendants(maxDepth?: number): Promise<MJAIAgentRunEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentRunID = '${rootId}' AND ParentRunIDDepth <= ${maxDepth}`
-      : `RootParentRunID = '${rootId}'`;
-    const result = await rv.RunView<MJAIAgentRunEntity>({
-      EntityName: 'MJ: AI Agent Runs',
-      ExtraFilter: filter,
-      OrderBy: 'ParentRunIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
-
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetParentRunIDAncestors(): Promise<MJAIAgentRunEntity[]> {
-    const path = this.Get('ParentRunIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJAIAgentRunEntity>({
-      EntityName: 'MJ: AI Agent Runs',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentRunIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
-
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetParentRunIDChildren(): Promise<MJAIAgentRunEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJAIAgentRunEntity>({
-      EntityName: 'MJ: AI Agent Runs',
-      ExtraFilter: `ParentRunID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
-
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetLastRunIDDescendants(maxDepth?: number): Promise<MJAIAgentRunEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootLastRunID = '${rootId}' AND LastRunIDDepth <= ${maxDepth}`
-      : `RootLastRunID = '${rootId}'`;
-    const result = await rv.RunView<MJAIAgentRunEntity>({
-      EntityName: 'MJ: AI Agent Runs',
-      ExtraFilter: filter,
-      OrderBy: 'LastRunIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
-
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetLastRunIDAncestors(): Promise<MJAIAgentRunEntity[]> {
-    const path = this.Get('LastRunIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJAIAgentRunEntity>({
-      EntityName: 'MJ: AI Agent Runs',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'LastRunIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
-
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetLastRunIDChildren(): Promise<MJAIAgentRunEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJAIAgentRunEntity>({
-      EntityName: 'MJ: AI Agent Runs',
-      ExtraFilter: `LastRunID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: AI Agent Runs record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Runs record.
@@ -45146,9 +45021,6 @@ export class MJAIAgentSessionChannelEntity extends BaseEntity<MJAIAgentSessionCh
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Sessions')
 export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityType> {
-
-
-
     /**
     * Loads the MJ: AI Agent Sessions record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Sessions record.
@@ -46878,64 +46750,6 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
         Source: 'cache',
   });
 
-
-
-
-
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDefaultCoAgentIDDescendants(maxDepth?: number): Promise<MJAIAgentEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootDefaultCoAgentID = '${rootId}' AND DefaultCoAgentIDDepth <= ${maxDepth}`
-      : `RootDefaultCoAgentID = '${rootId}'`;
-    const result = await rv.RunView<MJAIAgentEntity>({
-      EntityName: 'MJ: AI Agents',
-      ExtraFilter: filter,
-      OrderBy: 'DefaultCoAgentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
-
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetDefaultCoAgentIDAncestors(): Promise<MJAIAgentEntity[]> {
-    const path = this.Get('DefaultCoAgentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJAIAgentEntity>({
-      EntityName: 'MJ: AI Agents',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'DefaultCoAgentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
-
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetDefaultCoAgentIDChildren(): Promise<MJAIAgentEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJAIAgentEntity>({
-      EntityName: 'MJ: AI Agents',
-      ExtraFilter: `DefaultCoAgentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: AI Agents record from the database
     * @param ID: string - primary key value to load the MJ: AI Agents record.
@@ -48538,9 +48352,6 @@ if this limit is exceeded.
  */
 @RegisterClass(BaseEntity, 'MJ: AI Architectures')
 export class MJAIArchitectureEntity extends BaseEntity<MJAIArchitectureEntityType> {
-
-
-
     /**
     * Loads the MJ: AI Architectures record from the database
     * @param ID: string - primary key value to load the MJ: AI Architectures record.
@@ -49645,9 +49456,6 @@ export class MJAIConfigurationParamEntity extends BaseEntity<MJAIConfigurationPa
  */
 @RegisterClass(BaseEntity, 'MJ: AI Configurations')
 export class MJAIConfigurationEntity extends BaseEntity<MJAIConfigurationEntityType> {
-
-
-
     /**
     * Loads the MJ: AI Configurations record from the database
     * @param ID: string - primary key value to load the MJ: AI Configurations record.
@@ -52427,9 +52235,6 @@ export interface MJAIModelEntity_IAIModelConfiguration {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Models')
 export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
-
-
-
     /**
     * Loads the MJ: AI Models record from the database
     * @param ID: string - primary key value to load the MJ: AI Models record.
@@ -52838,9 +52643,6 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Prompt Categories')
 export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntityType> {
-
-
-
     /**
     * Loads the MJ: AI Prompt Categories record from the database
     * @param ID: string - primary key value to load the MJ: AI Prompt Categories record.
@@ -53634,64 +53436,6 @@ export class MJAIPromptRunMediaEntity extends BaseEntity<MJAIPromptRunMediaEntit
  */
 @RegisterClass(BaseEntity, 'MJ: AI Prompt Runs')
 export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
-
-
-
-
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetRerunFromPromptRunIDDescendants(maxDepth?: number): Promise<MJAIPromptRunEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootRerunFromPromptRunID = '${rootId}' AND RerunFromPromptRunIDDepth <= ${maxDepth}`
-      : `RootRerunFromPromptRunID = '${rootId}'`;
-    const result = await rv.RunView<MJAIPromptRunEntity>({
-      EntityName: 'MJ: AI Prompt Runs',
-      ExtraFilter: filter,
-      OrderBy: 'RerunFromPromptRunIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
-
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetRerunFromPromptRunIDAncestors(): Promise<MJAIPromptRunEntity[]> {
-    const path = this.Get('RerunFromPromptRunIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJAIPromptRunEntity>({
-      EntityName: 'MJ: AI Prompt Runs',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'RerunFromPromptRunIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
-
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetRerunFromPromptRunIDChildren(): Promise<MJAIPromptRunEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJAIPromptRunEntity>({
-      EntityName: 'MJ: AI Prompt Runs',
-      ExtraFilter: `RerunFromPromptRunID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: AI Prompt Runs record from the database
     * @param ID: string - primary key value to load the MJ: AI Prompt Runs record.
@@ -55298,9 +55042,6 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
         Load: 'lazy',
         Source: 'cache',
   });
-
-
-
 
     /**
     * Loads the MJ: AI Prompts record from the database
@@ -59273,9 +59014,6 @@ export class MJAPIKeyEntity extends BaseEntity<MJAPIKeyEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: API Scopes')
 export class MJAPIScopeEntity extends BaseEntity<MJAPIScopeEntityType> {
-
-
-
     /**
     * Loads the MJ: API Scopes record from the database
     * @param ID: string - primary key value to load the MJ: API Scopes record.
@@ -61561,9 +61299,6 @@ export class MJArtifactPermissionEntity extends BaseEntity<MJArtifactPermissionE
  */
 @RegisterClass(BaseEntity, 'MJ: Artifact Types')
 export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
-
-
-
     /**
     * Loads the MJ: Artifact Types record from the database
     * @param ID: string - primary key value to load the MJ: Artifact Types record.
@@ -62638,9 +62373,6 @@ export class MJArtifactEntity extends BaseEntity<MJArtifactEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: Audit Log Types')
 export class MJAuditLogTypeEntity extends BaseEntity<MJAuditLogTypeEntityType> {
-
-
-
     /**
     * Loads the MJ: Audit Log Types record from the database
     * @param ID: string - primary key value to load the MJ: Audit Log Types record.
@@ -63470,9 +63202,6 @@ export class MJAuthorizationRoleEntity extends BaseEntity<MJAuthorizationRoleEnt
  */
 @RegisterClass(BaseEntity, 'MJ: Authorizations')
 export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType> {
-
-
-
     /**
     * Loads the MJ: Authorizations record from the database
     * @param ID: string - primary key value to load the MJ: Authorizations record.
@@ -64378,9 +64107,6 @@ export class MJCollectionPermissionEntity extends BaseEntity<MJCollectionPermiss
  */
 @RegisterClass(BaseEntity, 'MJ: Collections')
 export class MJCollectionEntity extends BaseEntity<MJCollectionEntityType> {
-
-
-
     /**
     * Loads the MJ: Collections record from the database
     * @param ID: string - primary key value to load the MJ: Collections record.
@@ -68858,9 +68584,6 @@ export class MJContentItemAttributeEntity extends BaseEntity<MJContentItemAttrib
  */
 @RegisterClass(BaseEntity, 'MJ: Content Item Chunks')
 export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntityType> {
-
-
-
     /**
     * Loads the MJ: Content Item Chunks record from the database
     * @param ID: string - primary key value to load the MJ: Content Item Chunks record.
@@ -69683,9 +69406,6 @@ export class MJContentItemTagEntity extends BaseEntity<MJContentItemTagEntityTyp
  */
 @RegisterClass(BaseEntity, 'MJ: Content Items')
 export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
-
-
-
     /**
     * Loads the MJ: Content Items record from the database
     * @param ID: string - primary key value to load the MJ: Content Items record.
@@ -73670,9 +73390,6 @@ export class MJConversationDetailRatingEntity extends BaseEntity<MJConversationD
  */
 @RegisterClass(BaseEntity, 'MJ: Conversation Details')
 export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailEntityType> {
-
-
-
     /**
     * Loads the MJ: Conversation Details record from the database
     * @param ID: string - primary key value to load the MJ: Conversation Details record.
@@ -74719,9 +74436,6 @@ export class MJConversationWidgetInstanceEntity extends BaseEntity<MJConversatio
  */
 @RegisterClass(BaseEntity, 'MJ: Conversations')
 export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
-
-
-
     /**
     * Loads the MJ: Conversations record from the database
     * @param ID: string - primary key value to load the MJ: Conversations record.
@@ -75494,9 +75208,6 @@ export class MJCountryEntity extends BaseEntity<MJCountryEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: Credential Categories')
 export class MJCredentialCategoryEntity extends BaseEntity<MJCredentialCategoryEntityType> {
-
-
-
     /**
     * Loads the MJ: Credential Categories record from the database
     * @param ID: string - primary key value to load the MJ: Credential Categories record.
@@ -76050,9 +75761,6 @@ export class MJCredentialEntity extends BaseEntity<MJCredentialEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: Dashboard Categories')
 export class MJDashboardCategoryEntity extends BaseEntity<MJDashboardCategoryEntityType> {
-
-
-
     /**
     * Loads the MJ: Dashboard Categories record from the database
     * @param ID: string - primary key value to load the MJ: Dashboard Categories record.
@@ -79454,9 +79162,6 @@ export class MJEmployeeSkillEntity extends BaseEntity<MJEmployeeSkillEntityType>
  */
 @RegisterClass(BaseEntity, 'MJ: Employees')
 export class MJEmployeeEntity extends BaseEntity<MJEmployeeEntityType> {
-
-
-
     /**
     * Loads the MJ: Employees record from the database
     * @param ID: string - primary key value to load the MJ: Employees record.
@@ -80328,9 +80033,6 @@ export interface MJEntityEntity_IEntityFormConfiguration {
  */
 @RegisterClass(BaseEntity, 'MJ: Entities')
 export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
-
-
-
     /**
     * Loads the MJ: Entities record from the database
     * @param ID: string - primary key value to load the MJ: Entities record.
@@ -88711,9 +88413,6 @@ export class MJExternalDataSourceEntity extends BaseEntity<MJExternalDataSourceE
  */
 @RegisterClass(BaseEntity, 'MJ: File Categories')
 export class MJFileCategoryEntity extends BaseEntity<MJFileCategoryEntityType> {
-
-
-
     /**
     * Loads the MJ: File Categories record from the database
     * @param ID: string - primary key value to load the MJ: File Categories record.
@@ -89968,9 +89667,6 @@ export class MJFormChromeRuleEntity extends BaseEntity<MJFormChromeRuleEntityTyp
  */
 @RegisterClass(BaseEntity, 'MJ: Generated Code Categories')
 export class MJGeneratedCodeCategoryEntity extends BaseEntity<MJGeneratedCodeCategoryEntityType> {
-
-
-
     /**
     * Loads the MJ: Generated Code Categories record from the database
     * @param ID: string - primary key value to load the MJ: Generated Code Categories record.
@@ -92491,9 +92187,6 @@ export class MJLibraryItemEntity extends BaseEntity<MJLibraryItemEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: List Categories')
 export class MJListCategoryEntity extends BaseEntity<MJListCategoryEntityType> {
-
-
-
     /**
     * Loads the MJ: List Categories record from the database
     * @param ID: string - primary key value to load the MJ: List Categories record.
@@ -100960,9 +100653,6 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: Projects')
 export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
-
-
-
     /**
     * Loads the MJ: Projects record from the database
     * @param ID: string - primary key value to load the MJ: Projects record.
@@ -101829,9 +101519,6 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: Query Categories')
 export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType> {
-
-
-
     /**
     * Loads the MJ: Query Categories record from the database
     * @param ID: string - primary key value to load the MJ: Query Categories record.
@@ -104370,9 +104057,6 @@ export class MJRecordChangeReplayRunEntity extends BaseEntity<MJRecordChangeRepl
  */
 @RegisterClass(BaseEntity, 'MJ: Record Changes')
 export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
-
-
-
     /**
     * Loads the MJ: Record Changes record from the database
     * @param ID: string - primary key value to load the MJ: Record Changes record.
@@ -105600,9 +105284,6 @@ export class MJRecordMergeLogEntity extends BaseEntity<MJRecordMergeLogEntityTyp
  */
 @RegisterClass(BaseEntity, 'MJ: Record Process Categories')
 export class MJRecordProcessCategoryEntity extends BaseEntity<MJRecordProcessCategoryEntityType> {
-
-
-
     /**
     * Loads the MJ: Record Process Categories record from the database
     * @param ID: string - primary key value to load the MJ: Record Process Categories record.
@@ -106435,9 +106116,6 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
  */
 @RegisterClass(BaseEntity, 'MJ: Remote Operation Categories')
 export class MJRemoteOperationCategoryEntity extends BaseEntity<MJRemoteOperationCategoryEntityType> {
-
-
-
     /**
     * Loads the MJ: Remote Operation Categories record from the database
     * @param ID: string - primary key value to load the MJ: Remote Operation Categories record.
@@ -112838,9 +112516,6 @@ export class MJSignatureRequestEntity extends BaseEntity<MJSignatureRequestEntit
  */
 @RegisterClass(BaseEntity, 'MJ: Skills')
 export class MJSkillEntity extends BaseEntity<MJSkillEntityType> {
-
-
-
     /**
     * Loads the MJ: Skills record from the database
     * @param ID: string - primary key value to load the MJ: Skills record.
@@ -114341,64 +114016,6 @@ export class MJTaggedItemEntity extends BaseEntity<MJTaggedItemEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: Tags')
 export class MJTagEntity extends BaseEntity<MJTagEntityType> {
-
-
-
-
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetMergedIntoTagIDDescendants(maxDepth?: number): Promise<MJTagEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootMergedIntoTagID = '${rootId}' AND MergedIntoTagIDDepth <= ${maxDepth}`
-      : `RootMergedIntoTagID = '${rootId}'`;
-    const result = await rv.RunView<MJTagEntity>({
-      EntityName: 'MJ: Tags',
-      ExtraFilter: filter,
-      OrderBy: 'MergedIntoTagIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
-
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetMergedIntoTagIDAncestors(): Promise<MJTagEntity[]> {
-    const path = this.Get('MergedIntoTagIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJTagEntity>({
-      EntityName: 'MJ: Tags',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'MergedIntoTagIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
-
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetMergedIntoTagIDChildren(): Promise<MJTagEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJTagEntity>({
-      EntityName: 'MJ: Tags',
-      ExtraFilter: `MergedIntoTagID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Tags record from the database
     * @param ID: string - primary key value to load the MJ: Tags record.
@@ -115483,9 +115100,6 @@ export interface MJTaskEntity_ITaskExecutionPolicy {
  */
 @RegisterClass(BaseEntity, 'MJ: Tasks')
 export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
-
-
-
     /**
     * Loads the MJ: Tasks record from the database
     * @param ID: string - primary key value to load the MJ: Tasks record.
@@ -116104,9 +115718,6 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: Template Categories')
 export class MJTemplateCategoryEntity extends BaseEntity<MJTemplateCategoryEntityType> {
-
-
-
     /**
     * Loads the MJ: Template Categories record from the database
     * @param ID: string - primary key value to load the MJ: Template Categories record.
@@ -118815,9 +118426,6 @@ export class MJTestSuiteTestEntity extends BaseEntity<MJTestSuiteTestEntityType>
  */
 @RegisterClass(BaseEntity, 'MJ: Test Suites')
 export class MJTestSuiteEntity extends BaseEntity<MJTestSuiteEntityType> {
-
-
-
     /**
     * Loads the MJ: Test Suites record from the database
     * @param ID: string - primary key value to load the MJ: Test Suites record.
@@ -122018,9 +121626,6 @@ export class MJUserSettingEntity extends BaseEntity<MJUserSettingEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: User View Categories')
 export class MJUserViewCategoryEntity extends BaseEntity<MJUserViewCategoryEntityType> {
-
-
-
     /**
     * Loads the MJ: User View Categories record from the database
     * @param ID: string - primary key value to load the MJ: User View Categories record.
@@ -124621,9 +124226,6 @@ export class MJVersionLabelRestoreEntity extends BaseEntity<MJVersionLabelRestor
  */
 @RegisterClass(BaseEntity, 'MJ: Version Labels')
 export class MJVersionLabelEntity extends BaseEntity<MJVersionLabelEntityType> {
-
-
-
     /**
     * Loads the MJ: Version Labels record from the database
     * @param ID: string - primary key value to load the MJ: Version Labels record.
