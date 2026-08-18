@@ -117,6 +117,16 @@ export class EntityRelationshipInfo extends BaseInfo  {
     AutoUpdateFromSchema: boolean = true
 
     /**
+     * Comma-delimited list of extra related-entity fields to project in base views.
+     */
+    AdditionalFieldsToInclude: string = null
+
+    /**
+     * Whether CodeGen automatically updates AdditionalFieldsToInclude from schema metadata.
+     */
+    AutoUpdateAdditionalFieldsToInclude: boolean = true
+
+    /**
     * * Field Name: RelatedRecordCollection
     * * SQL Data Type: nvarchar(MAX), nullable
     *
@@ -555,6 +565,18 @@ export class EntityFieldInfo extends BaseInfo {
      */
     DisplayName: string = null 
     Description: string = null 
+    /**
+     * Whether CodeGen automatically updates Description from the underlying schema object.
+     */
+    AutoUpdateDescription: boolean = true
+    /**
+     * Whether CodeGen automatically updates UserSearchPredicateAPI from schema heuristics.
+     */
+    AutoUpdateUserSearchPredicate: boolean = true
+    /**
+     * Whether CodeGen automatically updates FullTextSearchEnabled from schema indexes.
+     */
+    AutoUpdateFullTextSearch: boolean = true 
     /**
      * If true, the field is the primary key for the entity. There must be one primary key field per entity.
      */
@@ -1742,9 +1764,21 @@ export class EntityInfo extends BaseInfo {
      */
     AllowUserSearchAPI: boolean = false
     /**
-     * Whether full-text search is enabled for this entity
+     * Whether full text search is enabled for this entity
      */
-    FullTextSearchEnabled: boolean = false
+    public FullTextSearchEnabled: boolean = null
+    /**
+     * Whether CodeGen automatically updates FullTextSearchEnabled from database catalog/index availability.
+     */
+    public AutoUpdateFullTextSearch: boolean = true
+    /**
+     * Whether CodeGen automatically updates AllowUserSearchAPI from schema rules.
+     */
+    public AutoUpdateAllowUserSearchAPI: boolean = true
+    /**
+     * Whether external changes to records are detected.
+     */
+    public DetectExternalChanges: boolean = false
     /**
      * Name of the SQL Server full-text catalog used for searching
      */

@@ -718,7 +718,7 @@ GO
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Configuration & Metadata',
-   GeneratedFormSection = 'Advanced',
+   GeneratedFormSection = 'Details',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
