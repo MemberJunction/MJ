@@ -287,7 +287,10 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         if (!this.Config) return;
         this.Config = {
             DefaultIcon: 'fa-solid fa-sitemap',
-            DefaultColor: '#38bdf8',
+            // Design token, not a literal — the accent is bound to [style.background]/[style.color],
+            // so a var() resolves at paint time and follows the active theme. The fallback keeps the
+            // original rendering wherever the token stylesheet isn't loaded.
+            DefaultColor: 'var(--mj-brand-primary, #38bdf8)',
             Orientation: 'top-to-bottom',
             NodeStyle: 'card',
             AllowDragDropReparent: false,
