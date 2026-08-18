@@ -1004,10 +1004,10 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
 
     public resetZoom(): void {
         if (!this.svgSelection || !this.zoomBehavior) return;
-        this.fitToScreen(true);
+        this.fitToScreen(false, true);
     }
 
-    public fitToScreen(immediate = false): void {
+    public fitToScreen(immediate = false, forceAutoScale = false): void {
         if (!this.svgSelection || !this.zoomBehavior || !this.svgContainerRef?.nativeElement) return;
 
         const visibleNodes = this.AllNodes.filter((n) => n.x != null && n.y != null);
@@ -1032,7 +1032,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         const container = this.svgContainerRef.nativeElement;
         const width = Math.max(container.clientWidth || 800, 300);
         const height = Math.max(container.clientHeight || 500, 300);
-        const padding = 40;
+        const padding = 50;
 
         const availWidth = Math.max(width - padding * 2, 100);
         const availHeight = Math.max(height - padding * 2, 100);
@@ -1040,18 +1040,24 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
             Math.min(
                 availWidth / Math.max(treeWidth, 1),
                 availHeight / Math.max(treeHeight, 1),
-                1.15
+                1.05
             ),
             0.15
         );
 
-        const scale = (this.ZoomLevel && this.ZoomLevel > 0) ? this.ZoomLevel : autoScale;
+        const scale = (forceAutoScale || !this.ZoomLevel) ? autoScale : this.ZoomLevel;
+
+        if (forceAutoScale) {
+            this.ZoomLevel = autoScale;
+            this.ZoomChange.emit(autoScale);
+        }
+
         const tx = width / 2 - treeCenterX * scale;
         const ty = height / 2 - treeCenterY * scale;
 
         const targetTransform = d3.zoomIdentity.translate(tx, ty).scale(scale);
 
-        this.log(`[HierarchyTree:fitToScreen] Container=${width}x${height}, visibleNodes=${visibleNodes.length}, bounds=[${minX.toFixed(1)}, ${minY.toFixed(1)}] to [${maxX.toFixed(1)}, ${maxY.toFixed(1)}] (${treeWidth.toFixed(1)}x${treeHeight.toFixed(1)}), scale=${scale.toFixed(3)}, translate=(${tx.toFixed(1)}, ${ty.toFixed(1)})`);
+        this.log(`[HierarchyTree:fitToScreen] Container=${width}x${height}, visibleNodes=${visibleNodes.length}, bounds=[${minX.toFixed(1)}, ${minY.toFixed(1)}] to [${maxX.toFixed(1)}, ${maxY.toFixed(1)}] (${treeWidth.toFixed(1)}x${treeHeight.toFixed(1)}), autoScale=${autoScale.toFixed(3)}, usingScale=${scale.toFixed(3)}, translate=(${tx.toFixed(1)}, ${ty.toFixed(1)})`);
 
         if (immediate) {
             this.svgSelection.call(this.zoomBehavior.transform, targetTransform);
