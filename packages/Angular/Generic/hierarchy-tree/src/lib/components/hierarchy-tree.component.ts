@@ -243,9 +243,13 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
 
         try {
             const md = new Metadata();
-            this.entityInfo = md.Entities.find(
-                (e) => e.Name.toLowerCase() === this.Config.EntityName.toLowerCase()
-            ) || null;
+            const configEntityLower = this.Config.EntityName.toLowerCase();
+            const configEntityStripped = this.Config.EntityName.replace(/^mj[:_\s]+/i, '').trim().toLowerCase();
+            this.entityInfo = md.Entities.find((e) => {
+                const eNameLower = e.Name.toLowerCase();
+                const eNameStripped = e.Name.replace(/^mj[:_\s]+/i, '').trim().toLowerCase();
+                return eNameLower === configEntityLower || eNameStripped === configEntityStripped;
+            }) || null;
 
             if (this.Data) {
                 this.buildTreeFromData(this.Data);

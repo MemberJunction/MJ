@@ -27,10 +27,10 @@ import {
 @RegisterClassEx(BaseFormPanel, {
     key: 'form-panel:AI Agent Categories:hierarchy',
     metadata: {
-        entity: 'AI Agent Categories',
+        entity: 'MJ: AI Agent Categories',
         slot: 'after-related',
         sortKey: 50,
-        relatedEntity: 'AI Agent Categories',
+        relatedEntity: 'MJ: AI Agent Categories',
         relatedJoinField: 'ParentID'
     }
 })
@@ -61,7 +61,7 @@ import {
 export class AIAgentCategoryHierarchyPanel extends BaseFormPanel<MJAIAgentCategoryEntity> {
     public get treeConfig(): HierarchyTreeConfig {
         return {
-            EntityName: 'AI Agent Categories',
+            EntityName: 'MJ: AI Agent Categories',
             ParentField: 'ParentID',
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-robot',
@@ -80,10 +80,10 @@ export class AIAgentCategoryHierarchyPanel extends BaseFormPanel<MJAIAgentCatego
 @RegisterClassEx(BaseFormPanel, {
     key: 'form-panel:AI Prompt Categories:hierarchy',
     metadata: {
-        entity: 'AI Prompt Categories',
+        entity: 'MJ: AI Prompt Categories',
         slot: 'after-related',
         sortKey: 50,
-        relatedEntity: 'AI Prompt Categories',
+        relatedEntity: 'MJ: AI Prompt Categories',
         relatedJoinField: 'ParentID'
     }
 })
@@ -114,7 +114,7 @@ export class AIAgentCategoryHierarchyPanel extends BaseFormPanel<MJAIAgentCatego
 export class AIPromptCategoryHierarchyPanel extends BaseFormPanel<MJAIPromptCategoryEntity> {
     public get treeConfig(): HierarchyTreeConfig {
         return {
-            EntityName: 'AI Prompt Categories',
+            EntityName: 'MJ: AI Prompt Categories',
             ParentField: 'ParentID',
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-wand-magic-sparkles',
@@ -133,10 +133,10 @@ export class AIPromptCategoryHierarchyPanel extends BaseFormPanel<MJAIPromptCate
 @RegisterClassEx(BaseFormPanel, {
     key: 'form-panel:Action Categories:hierarchy',
     metadata: {
-        entity: 'Action Categories',
+        entity: 'MJ: Action Categories',
         slot: 'after-related',
         sortKey: 50,
-        relatedEntity: 'Action Categories',
+        relatedEntity: 'MJ: Action Categories',
         relatedJoinField: 'ParentID'
     }
 })
@@ -167,7 +167,7 @@ export class AIPromptCategoryHierarchyPanel extends BaseFormPanel<MJAIPromptCate
 export class ActionCategoryHierarchyPanel extends BaseFormPanel<MJActionCategoryEntity> {
     public get treeConfig(): HierarchyTreeConfig {
         return {
-            EntityName: 'Action Categories',
+            EntityName: 'MJ: Action Categories',
             ParentField: 'ParentID',
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-bolt',
@@ -186,10 +186,10 @@ export class ActionCategoryHierarchyPanel extends BaseFormPanel<MJActionCategory
 @RegisterClassEx(BaseFormPanel, {
     key: 'form-panel:Dashboard Categories:hierarchy',
     metadata: {
-        entity: 'Dashboard Categories',
+        entity: 'MJ: Dashboard Categories',
         slot: 'after-related',
         sortKey: 50,
-        relatedEntity: 'Dashboard Categories',
+        relatedEntity: 'MJ: Dashboard Categories',
         relatedJoinField: 'ParentID'
     }
 })
@@ -220,7 +220,7 @@ export class ActionCategoryHierarchyPanel extends BaseFormPanel<MJActionCategory
 export class DashboardCategoryHierarchyPanel extends BaseFormPanel<MJDashboardCategoryEntity> {
     public get treeConfig(): HierarchyTreeConfig {
         return {
-            EntityName: 'Dashboard Categories',
+            EntityName: 'MJ: Dashboard Categories',
             ParentField: 'ParentID',
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-chart-pie',
@@ -239,10 +239,10 @@ export class DashboardCategoryHierarchyPanel extends BaseFormPanel<MJDashboardCa
 @RegisterClassEx(BaseFormPanel, {
     key: 'form-panel:Query Categories:hierarchy',
     metadata: {
-        entity: 'Query Categories',
+        entity: 'MJ: Query Categories',
         slot: 'after-related',
         sortKey: 50,
-        relatedEntity: 'Query Categories',
+        relatedEntity: 'MJ: Query Categories',
         relatedJoinField: 'ParentID'
     }
 })
@@ -273,7 +273,7 @@ export class DashboardCategoryHierarchyPanel extends BaseFormPanel<MJDashboardCa
 export class QueryCategoryHierarchyPanel extends BaseFormPanel<MJQueryCategoryEntity> {
     public get treeConfig(): HierarchyTreeConfig {
         return {
-            EntityName: 'Query Categories',
+            EntityName: 'MJ: Query Categories',
             ParentField: 'ParentID',
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-database',
@@ -292,10 +292,10 @@ export class QueryCategoryHierarchyPanel extends BaseFormPanel<MJQueryCategoryEn
 @RegisterClassEx(BaseFormPanel, {
     key: 'form-panel:Tags:hierarchy',
     metadata: {
-        entity: 'Tags',
+        entity: 'MJ: Tags',
         slot: 'after-related',
         sortKey: 50,
-        relatedEntity: 'Tags',
+        relatedEntity: 'MJ: Tags',
         relatedJoinField: 'ParentID'
     }
 })
@@ -326,7 +326,7 @@ export class QueryCategoryHierarchyPanel extends BaseFormPanel<MJQueryCategoryEn
 export class TagHierarchyPanel extends BaseFormPanel<MJTagEntity> {
     public get treeConfig(): HierarchyTreeConfig {
         return {
-            EntityName: 'Tags',
+            EntityName: 'MJ: Tags',
             ParentField: 'ParentID',
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-tag',
@@ -345,10 +345,10 @@ export class TagHierarchyPanel extends BaseFormPanel<MJTagEntity> {
 @RegisterClassEx(BaseFormPanel, {
     key: 'form-panel:Projects:hierarchy',
     metadata: {
-        entity: 'Projects',
+        entity: 'MJ: Projects',
         slot: 'after-related',
         sortKey: 50,
-        relatedEntity: 'Projects',
+        relatedEntity: 'MJ: Projects',
         relatedJoinField: 'ParentID'
     }
 })
@@ -379,7 +379,7 @@ export class TagHierarchyPanel extends BaseFormPanel<MJTagEntity> {
 export class ProjectHierarchyPanel extends BaseFormPanel<MJProjectEntity> {
     public get treeConfig(): HierarchyTreeConfig {
         return {
-            EntityName: 'Projects',
+            EntityName: 'MJ: Projects',
             ParentField: 'ParentID',
             SubtitleField: 'Status',
             DefaultIcon: 'fa-solid fa-diagram-project',
@@ -398,10 +398,10 @@ export class ProjectHierarchyPanel extends BaseFormPanel<MJProjectEntity> {
 @RegisterClassEx(BaseFormPanel, {
     key: 'form-panel:Content Items:hierarchy',
     metadata: {
-        entity: 'Content Items',
+        entity: 'MJ: Content Items',
         slot: 'after-related',
         sortKey: 50,
-        relatedEntity: 'Content Items',
+        relatedEntity: 'MJ: Content Items',
         relatedJoinField: 'ParentID'
     }
 })
@@ -432,7 +432,7 @@ export class ProjectHierarchyPanel extends BaseFormPanel<MJProjectEntity> {
 export class ContentItemHierarchyPanel extends BaseFormPanel<MJContentItemEntity> {
     public get treeConfig(): HierarchyTreeConfig {
         return {
-            EntityName: 'Content Items',
+            EntityName: 'MJ: Content Items',
             ParentField: 'ParentID',
             SubtitleField: 'ContentType',
             DefaultIcon: 'fa-solid fa-file-lines',
@@ -451,10 +451,10 @@ export class ContentItemHierarchyPanel extends BaseFormPanel<MJContentItemEntity
 @RegisterClassEx(BaseFormPanel, {
     key: 'form-panel:File Categories:hierarchy',
     metadata: {
-        entity: 'File Categories',
+        entity: 'MJ: File Categories',
         slot: 'after-related',
         sortKey: 50,
-        relatedEntity: 'File Categories',
+        relatedEntity: 'MJ: File Categories',
         relatedJoinField: 'ParentID'
     }
 })
@@ -485,7 +485,7 @@ export class ContentItemHierarchyPanel extends BaseFormPanel<MJContentItemEntity
 export class FileCategoryHierarchyPanel extends BaseFormPanel<MJFileCategoryEntity> {
     public get treeConfig(): HierarchyTreeConfig {
         return {
-            EntityName: 'File Categories',
+            EntityName: 'MJ: File Categories',
             ParentField: 'ParentID',
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-folder-open',
@@ -504,10 +504,10 @@ export class FileCategoryHierarchyPanel extends BaseFormPanel<MJFileCategoryEnti
 @RegisterClassEx(BaseFormPanel, {
     key: 'form-panel:List Categories:hierarchy',
     metadata: {
-        entity: 'List Categories',
+        entity: 'MJ: List Categories',
         slot: 'after-related',
         sortKey: 50,
-        relatedEntity: 'List Categories',
+        relatedEntity: 'MJ: List Categories',
         relatedJoinField: 'ParentID'
     }
 })
@@ -538,7 +538,7 @@ export class FileCategoryHierarchyPanel extends BaseFormPanel<MJFileCategoryEnti
 export class ListCategoryHierarchyPanel extends BaseFormPanel<MJListCategoryEntity> {
     public get treeConfig(): HierarchyTreeConfig {
         return {
-            EntityName: 'List Categories',
+            EntityName: 'MJ: List Categories',
             ParentField: 'ParentID',
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-table-list',
@@ -557,10 +557,10 @@ export class ListCategoryHierarchyPanel extends BaseFormPanel<MJListCategoryEnti
 @RegisterClassEx(BaseFormPanel, {
     key: 'form-panel:Record Process Categories:hierarchy',
     metadata: {
-        entity: 'Record Process Categories',
+        entity: 'MJ: Record Process Categories',
         slot: 'after-related',
         sortKey: 50,
-        relatedEntity: 'Record Process Categories',
+        relatedEntity: 'MJ: Record Process Categories',
         relatedJoinField: 'ParentID'
     }
 })
@@ -591,7 +591,7 @@ export class ListCategoryHierarchyPanel extends BaseFormPanel<MJListCategoryEnti
 export class RecordProcessCategoryHierarchyPanel extends BaseFormPanel<MJRecordProcessCategoryEntity> {
     public get treeConfig(): HierarchyTreeConfig {
         return {
-            EntityName: 'Record Process Categories',
+            EntityName: 'MJ: Record Process Categories',
             ParentField: 'ParentID',
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-diagram-next',
@@ -610,10 +610,10 @@ export class RecordProcessCategoryHierarchyPanel extends BaseFormPanel<MJRecordP
 @RegisterClassEx(BaseFormPanel, {
     key: 'form-panel:Skills:hierarchy',
     metadata: {
-        entity: 'Skills',
+        entity: 'MJ: Skills',
         slot: 'after-related',
         sortKey: 50,
-        relatedEntity: 'Skills',
+        relatedEntity: 'MJ: Skills',
         relatedJoinField: 'ParentID'
     }
 })
@@ -644,7 +644,7 @@ export class RecordProcessCategoryHierarchyPanel extends BaseFormPanel<MJRecordP
 export class SkillHierarchyPanel extends BaseFormPanel<MJSkillEntity> {
     public get treeConfig(): HierarchyTreeConfig {
         return {
-            EntityName: 'Skills',
+            EntityName: 'MJ: Skills',
             ParentField: 'ParentID',
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-wand-magic',
@@ -663,10 +663,10 @@ export class SkillHierarchyPanel extends BaseFormPanel<MJSkillEntity> {
 @RegisterClassEx(BaseFormPanel, {
     key: 'form-panel:Template Categories:hierarchy',
     metadata: {
-        entity: 'Template Categories',
+        entity: 'MJ: Template Categories',
         slot: 'after-related',
         sortKey: 50,
-        relatedEntity: 'Template Categories',
+        relatedEntity: 'MJ: Template Categories',
         relatedJoinField: 'ParentID'
     }
 })
@@ -697,7 +697,7 @@ export class SkillHierarchyPanel extends BaseFormPanel<MJSkillEntity> {
 export class TemplateCategoryHierarchyPanel extends BaseFormPanel<MJTemplateCategoryEntity> {
     public get treeConfig(): HierarchyTreeConfig {
         return {
-            EntityName: 'Template Categories',
+            EntityName: 'MJ: Template Categories',
             ParentField: 'ParentID',
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-folder-open',
@@ -716,10 +716,10 @@ export class TemplateCategoryHierarchyPanel extends BaseFormPanel<MJTemplateCate
 @RegisterClassEx(BaseFormPanel, {
     key: 'form-panel:Test Suites:hierarchy',
     metadata: {
-        entity: 'Test Suites',
+        entity: 'MJ: Test Suites',
         slot: 'after-related',
         sortKey: 50,
-        relatedEntity: 'Test Suites',
+        relatedEntity: 'MJ: Test Suites',
         relatedJoinField: 'ParentID'
     }
 })
@@ -750,7 +750,7 @@ export class TemplateCategoryHierarchyPanel extends BaseFormPanel<MJTemplateCate
 export class TestSuiteHierarchyPanel extends BaseFormPanel<MJTestSuiteEntity> {
     public get treeConfig(): HierarchyTreeConfig {
         return {
-            EntityName: 'Test Suites',
+            EntityName: 'MJ: Test Suites',
             ParentField: 'ParentID',
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-vial',
@@ -769,10 +769,10 @@ export class TestSuiteHierarchyPanel extends BaseFormPanel<MJTestSuiteEntity> {
 @RegisterClassEx(BaseFormPanel, {
     key: 'form-panel:User View Categories:hierarchy',
     metadata: {
-        entity: 'User View Categories',
+        entity: 'MJ: User View Categories',
         slot: 'after-related',
         sortKey: 50,
-        relatedEntity: 'User View Categories',
+        relatedEntity: 'MJ: User View Categories',
         relatedJoinField: 'ParentID'
     }
 })
@@ -803,7 +803,7 @@ export class TestSuiteHierarchyPanel extends BaseFormPanel<MJTestSuiteEntity> {
 export class UserViewCategoryHierarchyPanel extends BaseFormPanel<MJUserViewCategoryEntity> {
     public get treeConfig(): HierarchyTreeConfig {
         return {
-            EntityName: 'User View Categories',
+            EntityName: 'MJ: User View Categories',
             ParentField: 'ParentID',
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-folder-tree',
