@@ -399,16 +399,38 @@ jobs:
               pnpm run build
             else
               echo "PR scope — building only the packages that changed."
+              # Record WHICH packages this PR rebuilt from changed source, so the guard below
+              # imports only those. The build's own `[ref]` filter also compiles each one's
+              # transitive dependencies (turbo `dependsOn: ["^build"]`), so "has a dist/" is a
+              # far wider set than "could have gained a bad specifier" — a one-package PR deep
+              # in the graph leaves a few hundred packages built and needlessly swept. A
+              # dependency's dist is regenerated but emitted from ITS unchanged source, so it
+              # cannot acquire an extensionless specifier this PR is answerable for.
+              npx turbo run build "--filter=[origin/${{ github.base_ref }}]" --dry=json > /tmp/esm-dry.json
+              node -e '
+                const j = JSON.parse(require("fs").readFileSync("/tmp/esm-dry.json", "utf8"));
+                const selected = new Set(j.packages || []);
+                const dirs = new Set();
+                for (const t of j.tasks || []) if (selected.has(t.package) && t.directory) dirs.add(t.directory);
+                process.stdout.write([...dirs].join("\n") + "\n");
+              ' > esm-scope.txt
+              echo "Scoping the ESM sweep to $(grep -c . esm-scope.txt) changed package(s)."
+              echo "ESM_SCOPE_ARG=--scope-file=$PWD/esm-scope.txt" >> "$GITHUB_ENV"
               npx turbo run build --log-order=stream "--filter=[origin/${{ github.base_ref }}]"
             fi
           else
             pnpm run build
           fi
 
+      # On the root/global and push/schedule paths ESM_SCOPE_ARG is unset and the sweep covers
+      # every "type": "module" package — a root tsconfig or lockfile change can alter emit
+      # repo-wide, which is exactly when the full backstop is worth its ~11 minutes.
+      # Unquoted on purpose: the variable is one token or absent, and quoting an empty value
+      # would pass an empty argument the guard would read as a root path.
       - name: Native-ESM import guard
         run: |
           npx vitest run --config .github/scripts/vitest.config.mts
-          node .github/scripts/check-esm-imports.mjs packages
+          node .github/scripts/check-esm-imports.mjs packages $ESM_SCOPE_ARG
 
   # ---------------------------------------------------------------------------------------
   # Backstop alarm, in its own job so that several red jobs still file ONE issue, not one each.

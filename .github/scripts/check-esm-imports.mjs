@@ -329,9 +329,17 @@ const CONCURRENCY = 8;
  * Check every `"type": "module"` package under rootDir (skipping node_modules and
  * dist trees). Returns all results plus the gating subset: `failures` holds the
  * OWN_DIST_MISSING_EXT results — the only bucket that should fail CI.
+ *
+ * `only` is an optional Set of absolute package directories; when present, packages
+ * outside it are discovered but not imported. Unscoped sweeps stay the default.
  */
-export async function sweep(rootDir) {
-    const pkgs = findModulePackageDirs(rootDir);
+export async function sweep(rootDir, { only = null } = {}) {
+    const found = findModulePackageDirs(rootDir);
+    // `only` (absolute dirs) narrows the sweep to the packages a PR actually rebuilt from
+    // changed source. Filtering here rather than in findModulePackageDirs keeps discovery —
+    // and therefore the "no type:module packages found" misconfiguration check — unchanged;
+    // only the expensive per-package import is skipped.
+    const pkgs = only ? found.filter((p) => only.has(resolve(p.dir))) : found;
     const results = [];
     let next = 0;
     async function worker() {
@@ -384,7 +392,13 @@ function firstLine(text) {
 }
 
 async function main() {
-    const rootDir = resolve(process.argv[2] ?? 'packages');
+    const argv = process.argv.slice(2);
+    // `--scope-file=<path>`: newline-separated package directories (repo-relative or absolute).
+    // The affected-PR build only compiles the packages whose source changed, so importing the
+    // whole tree spends most of its time on packages this PR could not have broken.
+    const SCOPE_FLAG = '--scope-file=';
+    const scopeFile = argv.find((a) => a.startsWith(SCOPE_FLAG))?.slice(SCOPE_FLAG.length);
+    const rootDir = resolve(argv.find((a) => !a.startsWith('--')) ?? 'packages');
     if (!existsSync(rootDir)) {
         console.error(`esm-guard: root directory not found: ${rootDir}`);
         process.exit(2);
@@ -396,8 +410,22 @@ async function main() {
         console.error(`esm-guard: ${rootDir} is not a directory — pass a directory to sweep (e.g. "packages").`);
         process.exit(2);
     }
-    console.log(`esm-guard: native-ESM-importing every "type": "module" package under ${rootDir} ...`);
-    const { results, failures } = await sweep(rootDir);
+    let only = null;
+    if (scopeFile !== undefined) {
+        if (!existsSync(scopeFile)) {
+            console.error(`esm-guard: scope file not found: ${scopeFile}`);
+            process.exit(2);
+        }
+        const dirs = readFileSync(scopeFile, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean);
+        only = new Set(dirs.map((d) => resolve(d)));
+    }
+
+    console.log(
+        only
+            ? `esm-guard: native-ESM-importing the "type": "module" packages among ${only.size} changed package(s) under ${rootDir} ...`
+            : `esm-guard: native-ESM-importing every "type": "module" package under ${rootDir} ...`
+    );
+    const { results, failures } = await sweep(rootDir, { only });
 
     const counts = {};
     for (const r of results) counts[r.status] = (counts[r.status] ?? 0) + 1;
@@ -405,6 +433,10 @@ async function main() {
     // Zero "type": "module" packages found at all means a wrong path / misconfiguration
     // (running from the wrong directory) — a genuine error, fail hard.
     if (results.length === 0) {
+        if (only) {
+            console.log(`esm-guard: none of the ${only.size} changed package(s) are "type": "module" — nothing to import, nothing to verify.`);
+            return;
+        }
         console.error(`esm-guard: no "type": "module" packages found under ${rootDir} — nothing verified. Run from the repo root or pass a valid packages path.`);
         process.exit(2);
     }
