@@ -591,6 +591,20 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
+   * True when the environment provides `IntersectionObserver`.
+   *
+   * False under SSR and in the unit-test projects. Both observer syncs are reached a
+   * microtask late (see the `HasMoreAbove` setter), so a spec that stubs the global and
+   * restores it synchronously has already restored it by the time the sync runs — the
+   * constructor call then throws inside a `.then()` with no catch, which surfaces as an
+   * unhandled rejection rather than a test failure and fails the run despite every
+   * assertion passing.
+   */
+  private get canObserve(): boolean {
+    return typeof IntersectionObserver !== 'undefined';
+  }
+
+  /**
    * Keeps the IntersectionObserver attached to the current sentinel element.
    *
    * The sentinel lives inside `@if (HasMoreAbove)`, so it is created and destroyed as the
@@ -601,6 +615,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * not one per frame.
    */
   private syncOlderObserver(): void {
+    if (!this.canObserve) {
+      return;
+    }
     if (!this.HasMoreAbove) {
       this._olderObserver?.disconnect();
       this._olderObserver = undefined;
@@ -998,6 +1015,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * which is already in memory — this never triggers a fetch.
    */
   private syncSpacerObserver(): void {
+    if (!this.canObserve) {
+      return;
+    }
     const root = this.resolveScrollParent();
     if (!root) {
       this._spacerObserver?.disconnect();
