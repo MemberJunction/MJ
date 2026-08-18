@@ -1318,7 +1318,12 @@ export abstract class BaseEntity<T = unknown> {
      * values are present (via {@link UpdateSavedStateFromPrimaryKeys}).
      *
      * The parent chain is handled recursively: if this entity has an IS-A parent, the
-     * parent is hydrated first (deepest ancestor first) via SetMany's built-in routing.
+     * parent is hydrated first (deepest ancestor first). Each level only receives the
+     * fields it owns — a child's view row is the union of every ancestor plus its own
+     * columns, and passing that whole row to the parent used to trip
+     * `WarningManager` ("fields were not found in entity definitions") for every
+     * child-only column. That is how loading `Accounting Company Profiles` as
+     * entity objects produced a `MJ: Companies` missing-field dump at MJAPI boot.
      *
      * @param data - A plain object whose properties map to field names on this entity
      *               (and potentially parent entities in the IS-A chain).
@@ -1337,9 +1342,24 @@ export abstract class BaseEntity<T = unknown> {
         // Populate this entity's fields. SetMany also routes parent field values to
         // _parentEntity via the IS-A routing block (which now includes PK fields).
         // replaceOldValues=true ensures OldValue matches Value (no false dirty flags).
-        // ignoreNonExistentFields=true because data may contain fields from other
-        // entities in the chain that don't exist on this entity.
-        this.SetMany(data, true, true, true);
+        // ignoreNonExistentFields=true remains as a safety net; ownedFieldsFrom already
+        // dropped columns that belong to another level of the IS-A chain.
+        this.SetMany(this.ownedFieldsFrom(data), true, true, true);
+    }
+
+    /**
+     * Columns on `data` that this entity actually defines (by field name or CodeName).
+     * Used by {@link Hydrate} so an IS-A ancestor is not asked to SetMany its child's
+     * extra view columns.
+     */
+    private ownedFieldsFrom(data: Record<string, unknown>): Record<string, unknown> {
+        const owned: Record<string, unknown> = {};
+        for (const key of Object.keys(data)) {
+            if (this.GetFieldByName(key) || this.GetFieldByCodeName(key)) {
+                owned[key] = data[key];
+            }
+        }
+        return owned;
     }
 
     // ─── Entity Companions ──────────────────────────────────────────────────────
