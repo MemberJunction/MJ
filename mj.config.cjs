@@ -57,7 +57,7 @@ module.exports = {
    * adopters point this at their own check packages.
    */
   testing: {
-    checkModules: ['@memberjunction/integration-test-suite'],
+    checkModules: [require('node:path').join(__dirname, 'packages/TestingFramework/integration-test-suite/dist/index.js')],
   },
 
   dbPlatform: dbPlatform() || 'sqlserver',

@@ -6,7 +6,7 @@ on:
     branches: [next]
     paths:
       - 'package.json'
-      - 'package-lock.json'
+      - 'pnpm-lock.yaml'
       - 'packages/**'
       - 'vitest.*'
       # A change to ONLY a root tsconfig must trigger the workflow — package tsconfigs extend the
@@ -61,27 +61,18 @@ concurrency:
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
-  test:
-    name: Run unit tests
-    # 60 (not 30): the full-suite backstop (push/nightly) builds + tests ALL packages and was
-    # still running at ~27 min when the old 30-min cap killed it.
-    #
-    # NB: PR runs are NOT the "couple of minutes" this comment used to claim. Measured over the
-    # last 25 runs the median PR run is ~20 min, because `--filter=...[base]` barely narrows
-    # anything here: on PR #3231-era runs it selected 303 build tasks, versus 297 for the
-    # declared FULL suite. Nearly every package depends on @memberjunction/global or core, so
-    # "affected + dependents" fans out to the whole repo and every PR pays a full build.
-    timeout-minutes: 60
+  # ---------------------------------------------------------------------------------------
+  # Gates that need NO dependency install at all — every script here imports only Node
+  # builtins (and the Python suite needs pip, not node_modules). Split out of the test job so
+  # they report in well under a minute instead of behind a ~2.5-minute `pnpm install` and a
+  # ~20-minute build. Previously a vacuous-assertion failure was invisible until the whole
+  # suite had been scheduled, and the dynamic-replace guard could be skipped entirely by an
+  # earlier failure.
+  # ---------------------------------------------------------------------------------------
+  quick-gates:
+    name: Fast file gates
     runs-on: ubuntu-latest
-    # issues:write so a red BACKSTOP run (push/schedule) can auto-file an alert issue (see final step).
-    permissions:
-      contents: read
-      issues: write
-    env:
-      # Pin turbo's cache to a repo-relative path so actions/cache can persist it across runs.
-      # The default (node_modules/.cache/turbo) lives inside a directory the pnpm setup owns and
-      # would be awkward to cache independently of the store.
-      TURBO_CACHE_DIR: .turbo/cache
+    timeout-minutes: 10
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -89,63 +80,10 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-
       - name: Set up node
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      # Turbo's cache is the single biggest lever on this workflow's runtime. Runners are
-      # ephemeral, so without this every run reported `0 cached` and rebuilt all ~300 packages
-      # from scratch — 11m38s of a 19-minute PR run, and 9m29s of a 28-minute backstop run.
-      # (`cache: 'pnpm'` on setup-node above caches only the pnpm STORE, which is why installs
-      # are already a fast ~17s; it does nothing for build outputs.)
-      #
-      # Restore-only here; the matching save runs after the build, and ONLY on the backstop
-      # events. See the save step for why PRs deliberately don't write their own entry.
-      - name: Restore turbo build cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .turbo/cache
-          # Exact key so a re-run of the SAME commit is a perfect hit; the prefix key falls
-          # back to the most recent cache on this ref, then to `next`'s (GitHub lets any run
-          # read the default branch's caches — `next` IS the default branch here, which is
-          # what makes the backstop-seeds-every-PR arrangement work).
-          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
-          restore-keys: |
-            turbo-v1-${{ runner.os }}-
-
-      - name: Create MJExplorer environment file
-        run: |
-          mkdir -p packages/MJExplorer/src/environments
-          cat > packages/MJExplorer/src/environments/environment.ts << 'ENVEOF'
-          export const environment = {
-            GRAPHQL_URI: "http://localhost:4000",
-            GRAPHQL_WS_URI: "ws://localhost:4000",
-            REDIRECT_URI: "http://localhost:4200",
-            CLIENT_ID: "00000000-0000-0000-0000-000000000000",
-            TENANT_ID: "00000000-0000-0000-0000-000000000000",
-            CLIENT_AUTHORITY: "https://login.microsoftonline.com/common",
-            AUTH_TYPE: "msal" as const,
-            NODE_ENV: "test",
-            AUTOSAVE_DEBOUNCE_MS: 1200,
-            SEARCH_DEBOUNCE_MS: 800,
-            MIN_SEARCH_LENGTH: 3,
-            MJ_CORE_SCHEMA_NAME: "__mj",
-            production: false,
-            APPLICATION_NAME: "MJ Explorer CI",
-            APPLICATION_INSTANCE: "CI",
-            AUTH0_DOMAIN: "",
-            AUTH0_CLIENTID: ""
-          };
-          ENVEOF
-          sed -i 's/^          //' packages/MJExplorer/src/environments/environment.ts
 
       # Fast pure-file guards (no build needed), all Phase-4 "keep tests honest" gates:
       # 1) A *.dom.test.ts placed inside __tests__/ is silently excluded from BOTH projects
@@ -217,13 +155,128 @@ jobs:
       #    (Root package.json matters: editing `workspaces` globs or root `scripts` reshapes
       #    the whole build without necessarily touching package-lock.json.)
       #  - push to next / schedule / manual dispatch: always FULL (the backstop).
+      # Python dialect tests against the COMMITTED sqlglot pin (issue #3252 review): the
+      # sqlglot-ts vitest suite auto-skips when Python/sqlglot is absent, so CI never
+      # executed mj_postgres.py — which let the code reference exp.IfBlock (added in
+      # sqlglot 29.0.0) while requirements.txt pinned ~=27.18.0: an AttributeError on
+      # every statement reaching the plain-SQL path, in exactly the environments the pin
+      # exists to make reproducible. Install `-r requirements.txt` verbatim and run the
+      # dialect suite (which includes an exp.*-attribute existence guard), so the pin and
+      # the code can never drift apart silently again. PR runs skip it when SQLGlotTS is
+      # untouched; backstop runs (push/schedule/dispatch) always execute it.
+      - name: Python dialect tests (pinned sqlglot)
+        run: |
+          RUN_DIALECT=1
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags origin "${{ github.base_ref }}" 2>/dev/null || true
+            if ! git diff --name-only "origin/${{ github.base_ref }}...HEAD" | grep -q '^packages/SQLGlotTS/'; then
+              RUN_DIALECT=0
+              echo "No SQLGlotTS changes — skipping the Python dialect suite."
+            fi
+          fi
+          if [ "$RUN_DIALECT" = "1" ]; then
+            python3 -m pip install --quiet -r packages/SQLGlotTS/requirements.txt
+            python3 packages/SQLGlotTS/src/python/test_mj_postgres.py
+          fi
+
+      # Native-ESM import guard (#3142, follow-up to #3137): import every BUILT
+      # "type": "module" package's entry point with Node's native ESM resolver and fail
+      # on the extensionless-relative-specifier signature in the package's own dist/ —
+      # the bug class that tsc + bundler builds tolerate but Vitest-externalized deps,
+      # plain Node, and non-symlinked installs reject with ERR_MODULE_NOT_FOUND.
+      # Packages without a built dist/ classify NOT_BUILT and are skipped, so PR-scoped
+      # affected runs check exactly what they built; the push/nightly full-suite backstop
+      # (which builds everything) sweeps all packages.
+
+  test:
+    name: Run unit tests
+    # 60 (not 30): the full-suite backstop (push/nightly) builds + tests ALL packages and was
+    # still running at ~27 min when the old 30-min cap killed it.
+    #
+    # NB: PR runs are NOT the "couple of minutes" this comment used to claim. Measured over the
+    # last 25 runs the median PR run is ~20 min, because `--filter=...[base]` barely narrows
+    # anything here: on PR #3231-era runs it selected 303 build tasks, versus 297 for the
+    # declared FULL suite. Nearly every package depends on @memberjunction/global or core, so
+    # "affected + dependents" fans out to the whole repo and every PR pays a full build.
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    # issues:write so a red BACKSTOP run (push/schedule) can auto-file an alert issue (see final step).
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Turbo's cache is the single biggest lever on this workflow's runtime — runners are
+      # ephemeral, so without it every run rebuilds all ~310 packages from scratch. (`cache:
+      # 'pnpm'` on setup-node above caches only the pnpm STORE, which is why installs are a
+      # fast ~17s; it does nothing for build outputs.)
+      #
+      # This replaces a hand-rolled actions/cache arrangement that stored ONE ~2.5 GB tarball
+      # of .turbo/cache keyed by commit sha, with a `turbo-v1-<os>-` prefix fallback. Three
+      # problems: GitHub's prefix match returns the most recently CREATED entry, not the PR's
+      # nearest ancestor, so a PR could restore a `next` commit sharing almost nothing with it;
+      # the monolith was all-or-nothing, with no partial credit; and every merge wrote another
+      # 2.5 GB, so the repo budget cycled several times a day and evicted its own seed.
+      #
+      # This action runs a localhost server speaking turbo's remote-cache protocol, backed by
+      # the same Actions Cache API but storing ONE ENTRY PER TASK HASH. Turbo then asks "do you
+      # have artifact <hash>?" per task and gets a per-task answer, so eviction drops cold task
+      # hashes instead of the whole seed, and the hand-rolled prune step is no longer needed.
+      # Note this changes eviction blast radius, not total volume — the repo cache size limit
+      # still has to accommodate the working set.
+      - name: Set up turbo remote cache
+        uses: rharkor/caching-for-turbo@v2.5.1
+
+      - name: Create MJExplorer environment file
+        run: |
+          mkdir -p packages/MJExplorer/src/environments
+          cat > packages/MJExplorer/src/environments/environment.ts << 'ENVEOF'
+          export const environment = {
+            GRAPHQL_URI: "http://localhost:4000",
+            GRAPHQL_WS_URI: "ws://localhost:4000",
+            REDIRECT_URI: "http://localhost:4200",
+            CLIENT_ID: "00000000-0000-0000-0000-000000000000",
+            TENANT_ID: "00000000-0000-0000-0000-000000000000",
+            CLIENT_AUTHORITY: "https://login.microsoftonline.com/common",
+            AUTH_TYPE: "msal" as const,
+            NODE_ENV: "test",
+            AUTOSAVE_DEBOUNCE_MS: 1200,
+            SEARCH_DEBOUNCE_MS: 800,
+            MIN_SEARCH_LENGTH: 3,
+            MJ_CORE_SCHEMA_NAME: "__mj",
+            production: false,
+            APPLICATION_NAME: "MJ Explorer CI",
+            APPLICATION_INSTANCE: "CI",
+            AUTH0_DOMAIN: "",
+            AUTH0_CLIENTID: ""
+          };
+          ENVEOF
+          sed -i 's/^          //' packages/MJExplorer/src/environments/environment.ts
+
       - name: Determine test scope
         run: |
           FILTER=""
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch --no-tags origin "${{ github.base_ref }}"
             CHANGED="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
-            if echo "$CHANGED" | grep -qE '^(package\.json|package-lock\.json|turbo\.json|vitest\.[^/]+|tsconfig[^/]*\.json|\.github/workflows/test\.yml)$'; then
+            if echo "$CHANGED" | grep -qE '^(package\.json|pnpm-lock\.yaml|turbo\.json|vitest\.[^/]+|tsconfig[^/]*\.json|\.github/workflows/test\.yml)$'; then
               echo "Root/global change detected — running the FULL suite."
             else
               FILTER="--filter=...[origin/${{ github.base_ref }}]"
@@ -282,92 +335,89 @@ jobs:
           fi
           echo "Class-registration manifests are fresh."
 
-      # The cache directory is restored, added to, and saved again every backstop run, so without
-      # a bound it grows monotonically: each merge's entries pile on top of every previous merge's.
-      # Cap it by deleting the oldest entries until the total is under CAP_MB. Entries are
-      # (<hash>.tar.zst, <hash>-meta.json) pairs, so both are removed together.
-      - name: Prune turbo cache to a bounded size
-        if: always() && (github.event_name == 'push' || github.event_name == 'schedule')
-        env:
-          CAP_MB: 3072
-        run: |
-          node -e '
-            const fs = require("fs"), path = require("path");
-            const dir = process.env.TURBO_CACHE_DIR;
-            const capBytes = Number(process.env.CAP_MB) * 1024 * 1024;
-            if (!fs.existsSync(dir)) { console.log("No turbo cache dir — nothing to prune."); process.exit(0); }
 
-            const archives = fs.readdirSync(dir)
-              .filter((f) => f.endsWith(".tar.zst"))
-              .map((f) => { const s = fs.statSync(path.join(dir, f)); return { f, size: s.size, mtime: s.mtimeMs }; })
-              .sort((a, b) => b.mtime - a.mtime);   // newest first — we keep from the top down
-
-            const total = archives.reduce((n, a) => n + a.size, 0);
-            console.log(`turbo cache: ${archives.length} entries, ${(total / 1048576).toFixed(0)} MB (cap ${process.env.CAP_MB} MB)`);
-
-            let kept = 0, removed = 0;
-            for (const a of archives) {
-              if (kept + a.size <= capBytes) { kept += a.size; continue; }
-              fs.rmSync(path.join(dir, a.f), { force: true });
-              fs.rmSync(path.join(dir, a.f.replace(/\.tar\.zst$/, "-meta.json")), { force: true });
-              removed++;
-            }
-            console.log(`pruned ${removed} entries; keeping ${(kept / 1048576).toFixed(0)} MB`);
-          '
-
-      # Save ONLY on the backstop events (push to next / nightly), never on PRs. Two reasons:
-      #  1) The backstop builds EVERY package, so its cache is the most complete seed a PR can
-      #     restore from. A PR's cache would be partial (affected-only) and, being scoped to the
-      #     PR ref, unreadable by any other PR anyway — it would seed nothing.
-      #  2) Budget. The repo shares a 10 GB Actions cache across all keys, and the existing pnpm
-      #     store entries are ~583 MB each. Writing a turbo entry per PR run would thrash that
-      #     budget via LRU eviction and start evicting the very `next` entry PRs restore from.
-      # `always()` so a RED test run still saves the build outputs it produced — the build
-      # succeeding is independent of whether the suite passed, and re-running a failed PR
-      # shouldn't pay for a second cold build.
-      - name: Save turbo build cache
-        if: always() && (github.event_name == 'push' || github.event_name == 'schedule')
-        uses: actions/cache/save@v4
+  # ---------------------------------------------------------------------------------------
+  # Native-ESM import guard, in its OWN job. It spawns one cold Node process per package and
+  # took a flat ~10.5 minutes on every run — PR and nightly alike — while sitting AFTER the
+  # test suite in the same job, i.e. directly on the critical path. It depends on nothing the
+  # tests produce, so running it in parallel takes that ~10 minutes off every run.
+  #
+  # Packages without a built dist/ classify NOT_BUILT and are skipped, which is what scopes the
+  # PR run: building only the packages whose OWN files changed (turbo's `[ref]` selection,
+  # WITHOUT the `...` dependent fan-out) leaves everything else unbuilt and skipped. That
+  # matches the gating signature, which is always a break in a package's own dist. The backstop
+  # still sweeps all ~219 via the full `pnpm run build`.
+  # ---------------------------------------------------------------------------------------
+  esm-guard:
+    name: Native-ESM import guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
         with:
-          path: .turbo/cache
-          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
 
-      # Python dialect tests against the COMMITTED sqlglot pin (issue #3252 review): the
-      # sqlglot-ts vitest suite auto-skips when Python/sqlglot is absent, so CI never
-      # executed mj_postgres.py — which let the code reference exp.IfBlock (added in
-      # sqlglot 29.0.0) while requirements.txt pinned ~=27.18.0: an AttributeError on
-      # every statement reaching the plain-SQL path, in exactly the environments the pin
-      # exists to make reproducible. Install `-r requirements.txt` verbatim and run the
-      # dialect suite (which includes an exp.*-attribute existence guard), so the pin and
-      # the code can never drift apart silently again. PR runs skip it when SQLGlotTS is
-      # untouched; backstop runs (push/schedule/dispatch) always execute it.
-      - name: Python dialect tests (pinned sqlglot)
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set up turbo remote cache
+        uses: rharkor/caching-for-turbo@v2.5.1
+
+      - name: Build the packages to sweep
         run: |
-          RUN_DIALECT=1
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch --no-tags origin "${{ github.base_ref }}" 2>/dev/null || true
-            if ! git diff --name-only "origin/${{ github.base_ref }}...HEAD" | grep -q '^packages/SQLGlotTS/'; then
-              RUN_DIALECT=0
-              echo "No SQLGlotTS changes — skipping the Python dialect suite."
+            git fetch --no-tags origin "${{ github.base_ref }}"
+            CHANGED="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
+            if echo "$CHANGED" | grep -qE '^(package\.json|pnpm-lock\.yaml|turbo\.json|vitest\.[^/]+|tsconfig[^/]*\.json|\.github/workflows/test\.yml)$'; then
+              echo "Root/global change — building everything."
+              pnpm run build
+            else
+              echo "PR scope — building only the packages that changed."
+              npx turbo run build --log-order=stream "--filter=[origin/${{ github.base_ref }}]"
             fi
-          fi
-          if [ "$RUN_DIALECT" = "1" ]; then
-            python3 -m pip install --quiet -r packages/SQLGlotTS/requirements.txt
-            python3 packages/SQLGlotTS/src/python/test_mj_postgres.py
+          else
+            pnpm run build
           fi
 
-      # Native-ESM import guard (#3142, follow-up to #3137): import every BUILT
-      # "type": "module" package's entry point with Node's native ESM resolver and fail
-      # on the extensionless-relative-specifier signature in the package's own dist/ —
-      # the bug class that tsc + bundler builds tolerate but Vitest-externalized deps,
-      # plain Node, and non-symlinked installs reject with ERR_MODULE_NOT_FOUND.
-      # Packages without a built dist/ classify NOT_BUILT and are skipped, so PR-scoped
-      # affected runs check exactly what they built; the push/nightly full-suite backstop
-      # (which builds everything) sweeps all packages.
       - name: Native-ESM import guard
         run: |
           npx vitest run --config .github/scripts/vitest.config.mts
           node .github/scripts/check-esm-imports.mjs packages
+
+  # ---------------------------------------------------------------------------------------
+  # Backstop alarm, in its own job so that several red jobs still file ONE issue, not one each.
+  # `needs` the other three and inspects their results, because the alarm conditions used to be
+  # `failure()` / `success()` on the single job they lived in.
+  # ---------------------------------------------------------------------------------------
+  backstop-alert:
+    name: Alert on backstop failure
+    needs: [quick-gates, test, esm-guard]
+    if: always() && (github.event_name == 'push' || github.event_name == 'schedule')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
 
       # Backstop-failure alert (rkihm-BC #2990): a red PUSH (merge to next) or nightly SCHEDULE run
       # means a runtime-only break (e.g. @RegisterClass/ClassFactory coupling with no package.json edge)
@@ -380,7 +430,7 @@ jobs:
       # rolling issue — red comments on it, green (below) closes it — so a fresh issue means a fresh break.
       # Logic + tests live in .github/scripts/backstop-alarm.mjs.
       - name: Alert on backstop failure
-        if: failure() && (github.event_name == 'push' || github.event_name == 'schedule')
+        if: ${{ contains(needs.*.result, 'failure') }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node .github/scripts/backstop-alarm.mjs red
@@ -391,7 +441,7 @@ jobs:
       # turn a green backstop red, because that would file an alarm about the alarm. The script logs
       # `::error::` so the failure is still visible in the run summary.
       - name: Resolve backstop alarm on green
-        if: success() && (github.event_name == 'push' || github.event_name == 'schedule')
+        if: ${{ !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -411,8 +461,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    env:
-      TURBO_CACHE_DIR: .turbo/cache
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -431,15 +479,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Restore-only: this job never writes cache entries (the backstop's save is the
-      # canonical writer). A warm restore makes the build below a near-total cache replay.
-      - name: Restore turbo build cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .turbo/cache
-          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
-          restore-keys: |
-            turbo-v1-${{ runner.os }}-
+      # Same task-granular remote cache as the test job, so this nightly build is a
+      # near-total replay of whatever the backstop already built.
+      - name: Set up turbo remote cache
+        uses: rharkor/caching-for-turbo@v2.5.1
 
       - name: Create MJExplorer environment file
         run: |
