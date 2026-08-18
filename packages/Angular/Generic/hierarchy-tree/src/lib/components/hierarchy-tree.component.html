@@ -105,7 +105,7 @@
                 <g class="mj-nodes-group">
                     @for (node of AllNodes; track node.ID) {
                         @if (node.x != null && node.y != null) {
-                            <svg:foreignObject
+                            <foreignObject
                                 [attr.x]="node.x"
                                 [attr.y]="node.y"
                                 [attr.width]="Config.NodeWidth || 230"
@@ -177,7 +177,7 @@
                                         }
                                     </div>
                                 </div>
-                            </svg:foreignObject>
+                            </foreignObject>
                         }
                     }
                 </g>

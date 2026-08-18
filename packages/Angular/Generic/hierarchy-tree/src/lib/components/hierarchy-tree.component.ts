@@ -285,6 +285,19 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
     }
 
     /**
+     * Helper to retrieve a property value from a record item in a case-insensitive manner.
+     */
+    private getItemValue(item: Record<string, unknown>, fieldName?: string): unknown {
+        if (!item || !fieldName) return undefined;
+        if (item[fieldName] !== undefined) return item[fieldName];
+        const lower = fieldName.toLowerCase();
+        for (const [k, v] of Object.entries(item)) {
+            if (k.toLowerCase() === lower) return v;
+        }
+        return undefined;
+    }
+
+    /**
      * Constructs the in-memory tree nodes, computes composite keys, descendant counts, and depths.
      */
     public buildTreeFromData(items: Record<string, unknown>[]): void {
@@ -300,13 +313,17 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         // 1. Create flat nodes
         for (const item of items) {
             const { pk, id } = this.extractPrimaryKey(item);
-            const parentVal = item[parentFieldName];
+            const parentVal = this.getItemValue(item, parentFieldName);
             const parentId = parentVal != null && String(parentVal).trim() !== '' ? String(parentVal) : null;
 
-            const name = String(item[nameFieldName] ?? item['Name'] ?? 'Unnamed');
-            const subtitle = subtitleFieldName ? String(item[subtitleFieldName] ?? '') : undefined;
-            const icon = iconFieldName ? String(item[iconFieldName] ?? '') : this.Config.DefaultIcon;
-            const color = colorFieldName ? String(item[colorFieldName] ?? '') : this.Config.DefaultColor;
+            const nameVal = this.getItemValue(item, nameFieldName) ?? this.getItemValue(item, 'Name') ?? 'Unnamed';
+            const name = String(nameVal);
+            const subtitleVal = this.getItemValue(item, subtitleFieldName);
+            const subtitle = subtitleVal != null ? String(subtitleVal) : undefined;
+            const iconVal = this.getItemValue(item, iconFieldName);
+            const icon = iconVal != null ? String(iconVal) : this.Config.DefaultIcon;
+            const colorVal = this.getItemValue(item, colorFieldName);
+            const color = colorVal != null ? String(colorVal) : this.Config.DefaultColor;
 
             const node: HierarchyNodeData = {
                 ID: id,
@@ -416,13 +433,13 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
             for (const k of this.entityInfo.PrimaryKeys) {
                 pk.KeyValuePairs.push({
                     FieldName: k.Name,
-                    Value: item[k.Name]
+                    Value: this.getItemValue(item, k.Name)
                 });
             }
         } else {
             pk.KeyValuePairs.push({
                 FieldName: 'ID',
-                Value: item['ID'] ?? item['id'] ?? ''
+                Value: this.getItemValue(item, 'ID') ?? this.getItemValue(item, 'id') ?? ''
             });
         }
         const id = pk.KeyValuePairs.length === 1 ? String(pk.KeyValuePairs[0].Value) : pk.ToURLSegment();
@@ -576,6 +593,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
             .attr('fill', 'none');
 
         this.cdr?.detectChanges();
+        this.fitToScreen(true);
     }
 
     // --- Interactive Actions ---
@@ -758,11 +776,27 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         this.svgSelection.transition().duration(250).call(this.zoomBehavior.transform, d3.zoomIdentity);
     }
 
-    public fitToScreen(): void {
+    public fitToScreen(immediate = false): void {
         if (!this.svgSelection || !this.zoomBehavior || !this.svgContainerRef?.nativeElement) return;
 
-        const bounds = this.gSelection?.node()?.getBBox();
-        if (!bounds || bounds.width === 0 || bounds.height === 0) return;
+        const visibleNodes = this.AllNodes.filter((n) => n.x != null && n.y != null);
+        if (visibleNodes.length === 0) return;
+
+        const nodeWidth = this.Config.NodeWidth || 230;
+        const nodeHeight = this.Config.NodeHeight || 90;
+
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for (const n of visibleNodes) {
+            minX = Math.min(minX, n.x!);
+            maxX = Math.max(maxX, n.x! + nodeWidth);
+            minY = Math.min(minY, n.y!);
+            maxY = Math.max(maxY, n.y! + nodeHeight);
+        }
+
+        const treeWidth = maxX - minX;
+        const treeHeight = maxY - minY;
+        const treeCenterX = (minX + maxX) / 2;
+        const treeCenterY = (minY + maxY) / 2;
 
         const container = this.svgContainerRef.nativeElement;
         const width = container.clientWidth || 800;
@@ -770,18 +804,21 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         const padding = 40;
 
         const scale = Math.min(
-            (width - padding * 2) / bounds.width,
-            (height - padding * 2) / bounds.height,
-            1.2
+            (width - padding * 2) / Math.max(treeWidth, 1),
+            (height - padding * 2) / Math.max(treeHeight, 1),
+            1.15
         );
 
-        const tx = width / 2 - (bounds.x + bounds.width / 2) * scale;
-        const ty = height / 2 - (bounds.y + bounds.height / 2) * scale;
+        const tx = width / 2 - treeCenterX * scale;
+        const ty = height / 2 - treeCenterY * scale;
 
-        this.svgSelection.transition().duration(350).call(
-            this.zoomBehavior.transform,
-            d3.zoomIdentity.translate(tx, ty).scale(scale)
-        );
+        const targetTransform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+
+        if (immediate) {
+            this.svgSelection.call(this.zoomBehavior.transform, targetTransform);
+        } else {
+            this.svgSelection.transition().duration(350).call(this.zoomBehavior.transform, targetTransform);
+        }
     }
 
     public exportAsSVG(): string {
