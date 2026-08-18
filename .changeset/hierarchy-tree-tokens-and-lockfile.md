@@ -19,6 +19,14 @@ overlay backdrop is `--mj-bg-overlay`; and the primary-button hover is
 `--mj-brand-primary-hover`. Neutral `rgba(0,0,0,…)` / `rgba(255,255,255,…)` shadow and
 overlay values are unchanged — the gate permits them and no semantic token replaces them.
 
+**The component bound the global metadata provider.** It is an L1 widget
+(`"mjUILayer": "widgets"`), so `new Metadata()` and `new RunView()` were UI-layering
+violations: hosted against a non-default connection — as it is inside Explorer's
+`core-entity-forms` — the tree would silently query the wrong database.
+`HierarchyTreeComponent` now extends `BaseAngularComponent`, which supplies the standard
+`@Input() Provider` and `ProviderToUse`, and both call sites route through it. Callers
+that never set `Provider` are unaffected: it falls back to the ambient provider.
+
 `HierarchyTreeConfig.DefaultColor` now defaults to `'var(--mj-brand-primary, #38bdf8)'`
 rather than the bare hex. It is bound to `[style.background]` / `[style.color]`, so the
 token resolves at paint time and the default node accent follows the active theme instead
