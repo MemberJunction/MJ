@@ -92,7 +92,7 @@ interface DhxGridColumn {
              [style.display]="loading ? 'none' : 'block'"></div>
     `,
     styles: [`
-        :host { display: block; font-family: var(--mj-font-family); }
+        :host { display: block; height: 100%; font-family: var(--mj-font-family); }
 
         .mj-gantt-container {
             width: 100%;

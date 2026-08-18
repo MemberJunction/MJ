@@ -221,7 +221,14 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
 
     /** True when a registration's `entity` matches this slot's entity, or is the `'*'` wildcard. */
     private entityMatches(registeredEntity: string | undefined): boolean {
-        return registeredEntity === '*' || registeredEntity === this.Entity;
+        if (!registeredEntity || !this.Entity) return false;
+        if (registeredEntity === '*') return true;
+        const a = registeredEntity.trim().toLowerCase();
+        const b = this.Entity.trim().toLowerCase();
+        if (a === b) return true;
+        // Normalize schema prefixes like "MJ: " or "MJ_"
+        const strip = (s: string) => s.replace(/^mj[:_\s]+/i, '').replace(/[\s_]+/g, '').toLowerCase();
+        return strip(a) === strip(b);
     }
 
     /**
