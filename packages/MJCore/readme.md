@@ -362,7 +362,7 @@ const data = { ...entity.GetAll(), customField: 'value' };
 
 #### Recursive Foreign Keys & Hierarchy Traversal
 
-When an entity has a self-referencing foreign key (e.g. `ParentID`), CodeGen automatically adds strongly-typed hierarchy traversal helper methods to the generated subclass in `@memberjunction/core-entities`:
+When an entity has a single-column primary key and a self-referencing foreign key configured as a hierarchy (`EntityField.Configuration` setting `{ "Hierarchy": { "IsHierarchy": true } }`), CodeGen automatically adds strongly-typed hierarchy traversal helper methods to the generated subclass in `@memberjunction/core-entities`:
 
 ```typescript
 // Fetch all descendants in the subtree with an optional maxDepth limit

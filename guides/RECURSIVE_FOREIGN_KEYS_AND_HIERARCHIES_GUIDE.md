@@ -55,8 +55,8 @@ To prevent unwanted SQL generation, MemberJunction uses explicit field-level met
 ```
 
 - **Opt-In Requirement**: CodeGen only generates the TVF suite and base view lateral joins for self-referencing foreign keys where `field.IsHierarchy === true` (i.e. `Configuration.Hierarchy.IsHierarchy === true`).
-- **Core Seeding**: In the core MemberJunction schema, `ParentID` fields on categories, entities, resource types, roles, and tags are pre-seeded with `{"Hierarchy":{"IsHierarchy":true}}`.
-- **Application Schemas**: When building new applications or adding recursive tree structures to OpenApps, author a metadata JSON seed file setting `Configuration: "{\"Hierarchy\":{\"IsHierarchy\":true}}"` on the intended parent field.
+- **Core Seeding**: In the core MemberJunction schema, `ParentID` fields on categories, entities, resource types, roles, and tags are pre-seeded with `{ "Hierarchy": { "IsHierarchy": true } }`.
+- **Application Schemas**: When building new applications or adding recursive tree structures to OpenApps, author a metadata JSON seed file setting `"Configuration": { "Hierarchy": { "IsHierarchy": true } }` on the intended parent field.
 
 ---
 
@@ -116,7 +116,7 @@ flowchart TD
 
 ## 3. Database Layer: Generated Hierarchy TVF Suite
 
-For every self-referencing foreign key detected on an entity (where `RelatedEntityID === Entity.ID`), CodeGen emits four specialized routines ahead of the base view:
+For every self-referencing foreign key configured as a hierarchy on an entity (where `RelatedEntityID === Entity.ID`, `field.IsHierarchy === true`, and the entity has a single-column primary key), CodeGen emits four specialized routines ahead of the base view:
 
 | Routine Suffix | SQL Server Name Pattern | PostgreSQL Name Pattern | Returns | Primary Use Case |
 |---|---|---|---|---|
@@ -127,7 +127,7 @@ For every self-referencing foreign key detected on an entity (where `RelatedEnti
 
 ### 3.1. Hierarchy Metadata Columns in Generated Base Views
 
-Every entity with a recursive foreign key automatically projects five computed columns into its `vw<Entities>` view:
+Every entity with a configured hierarchy foreign key automatically projects five computed columns into its `vw<Entities>` view:
 
 ```sql
 -- SQL Server View Projection Example

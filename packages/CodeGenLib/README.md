@@ -438,7 +438,7 @@ export const AIPromptSchema = z.object({
 
 ### SQL Views & Hierarchy Traversal Engine
 
-For tables with self-referential foreign keys (e.g. `ParentID`), CodeGen automatically generates a 4-routine Table-Valued Function (TVF) suite and projects enriched hierarchy columns into base views via `OUTER APPLY` (T-SQL) or `LEFT JOIN LATERAL` (PostgreSQL):
+For tables with self-referential foreign keys configured as hierarchies (`EntityField.Configuration` setting `{ "Hierarchy": { "IsHierarchy": true } }`) and single-column primary keys, CodeGen automatically generates a 4-routine Table-Valued Function (TVF) suite and projects enriched hierarchy columns into base views via `OUTER APPLY` (T-SQL) or `LEFT JOIN LATERAL` (PostgreSQL):
 
 ```sql
 -- Generated Base View with Hierarchy Columns (T-SQL)
