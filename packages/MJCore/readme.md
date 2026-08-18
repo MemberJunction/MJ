@@ -1792,7 +1792,7 @@ This library is written in TypeScript and provides full type definitions. All ge
 
 ## License
 
-ISC License - see LICENSE file for details.
+Business Source License 1.1 - see LICENSE file for details.
 
 ## Remote Operations (the 4th Data Primitive)
 

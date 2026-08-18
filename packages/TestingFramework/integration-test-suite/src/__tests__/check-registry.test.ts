@@ -146,7 +146,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['materialized-entity-read', MaterializedEntityReadChecks, 2], // EMR1-EMR2 entity base-view RunView redirect (IT78)
         ['scoped-anon-elevation', ScopedAnonElevationChecks, 5], // SA1-SA5 scoped-anonymous elevation permission contract (IT68)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
-        ['entity-embedded', EntityEmbeddedChecks, 5], // EE1-EE5 owner-held embedded records
+        ['entity-embedded', EntityEmbeddedChecks, 6], // EE1-EE6 owner-held embedded records
         ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
         ['task-graph-orchestration', TaskGraphOrchestrationChecks, 18], // TG1-TG18 submission, validation and trigger bindings (IT71)
         // TX1-TX27, the dispatcher actually running graphs (IT74). TX8-TX11 landed with Round 1
@@ -239,7 +239,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'conversation-compaction': 12,
         'dataset-cache': 3,
         'entity-actions': 8,
-        'entity-embedded': 5,
+        'entity-embedded': 6,
         'entity-graph': 11,
         'entity-graph-client': 9,
         'entity-server-invariants': 9,
@@ -383,6 +383,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'entity-embedded.EE3',
         'entity-embedded.EE4',
         'entity-embedded.EE5',
+        'entity-embedded.EE6',
         'entity-graph-client.EGC3',
         'entity-graph-client.EGC4',
         'entity-graph-client.EGC5',

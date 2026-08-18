@@ -18,7 +18,7 @@
     "test:concurrency": "vitest run providerBase.concurrency.test.ts"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3",

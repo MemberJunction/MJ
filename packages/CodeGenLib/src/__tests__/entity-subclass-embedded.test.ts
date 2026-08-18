@@ -18,6 +18,9 @@ vi.mock('@memberjunction/core', () => ({
             if (id === 'rel-orders') {
                 return { ID: id, Name: 'MJ_BizApps_Orders: Order Headers', ClassName: 'mjBizAppsOrdersOrderHeader', SchemaName: '__mj_BizAppsOrders' };
             }
+            if (id === 'rel-users') {
+                return { ID: id, Name: 'Users', ClassName: 'User', SchemaName: '__mj' };
+            }
             return undefined;
         }
     },
@@ -99,6 +102,25 @@ describe('GenerateEmbeddedRecords — emission', () => {
         expect(out).not.toContain('get OrderID_Object(): mjBizAppsOrdersOrderHeaderEntity | null');
     });
 
+    it('emits getters from CodeName when it differs from Name', () => {
+        const out = EntitySubClassGeneratorBase.GenerateEmbeddedRecords(
+            makeEntity([makeField({ CodeName: 'OrderID_' })]),
+        );
+        expect(out).toContain('get OrderID__Object()');
+        expect(out).toContain('OrderID__EnsureObject()');
+        expect(out).toContain('__emb_OrderID_');
+        expect(out).toContain("ForeignKeyField: 'OrderID'");
+    });
+
+    it('accepts a space-named field when CodeName is a valid identifier', () => {
+        const out = EntitySubClassGeneratorBase.GenerateEmbeddedRecords(
+            makeEntity([makeField({ Name: 'Order ID', CodeName: 'OrderID' })]),
+        );
+        expect(out).toContain('get OrderID_Object()');
+        expect(out).toContain("ForeignKeyField: 'Order ID'");
+        expect(logError).not.toHaveBeenCalled();
+    });
+
     it('emits OnClear and LoadNested when set', () => {
         const out = EntitySubClassGeneratorBase.GenerateEmbeddedRecords(
             makeEntity([makeField({ EmbeddedRecord: JSON.stringify({ OnClear: 'delete', LoadNested: 'related' }) })]),
@@ -150,5 +172,15 @@ describe('CollectEmbeddedImports', () => {
             new Set(['mjBizAppsOrdersOrderHeaderEntity']),
         );
         expect(imports).toEqual([]);
+    });
+
+    it('imports a core-schema peer from @memberjunction/core-entities', () => {
+        const imports = EntitySubClassGeneratorBase.CollectEmbeddedImports(
+            makeEntity([makeField({ Name: 'UserID', RelatedEntityID: 'rel-users' })]),
+            new Set(['DealEntity']),
+        );
+        expect(imports.some(s => s.includes("@memberjunction/core-entities"))).toBe(true);
+        expect(imports.some(s => s.includes('UserEntity'))).toBe(true);
+        expect(imports.some(s => s.includes('mj_generatedentities'))).toBe(false);
     });
 });
