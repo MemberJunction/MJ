@@ -1,6 +1,7 @@
 ---
 "@memberjunction/ng-hierarchy-tree": minor
 "@memberjunction/ng-core-entity-forms": patch
+"@memberjunction/ng-base-forms": patch
 "@memberjunction/ng-gantt": patch
 ---
 

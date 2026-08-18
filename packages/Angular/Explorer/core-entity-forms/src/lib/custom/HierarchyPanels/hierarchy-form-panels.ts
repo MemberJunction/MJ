@@ -243,7 +243,7 @@ export class DashboardCategoryHierarchyPanel extends BaseFormPanel<MJDashboardCa
         slot: 'after-related',
         sortKey: 50,
         relatedEntity: 'Query Categories',
-        relatedJoinField: 'ParentCategoryID'
+        relatedJoinField: 'ParentID'
     }
 })
 @Component({
@@ -274,7 +274,7 @@ export class QueryCategoryHierarchyPanel extends BaseFormPanel<MJQueryCategoryEn
     public get treeConfig(): HierarchyTreeConfig {
         return {
             EntityName: 'Query Categories',
-            ParentField: 'ParentCategoryID',
+            ParentField: 'ParentID',
             SubtitleField: 'Description',
             DefaultIcon: 'fa-solid fa-database',
             DefaultColor: '#06b6d4',
