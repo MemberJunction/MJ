@@ -12,9 +12,11 @@ import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/globa
 import {
     ParseEntityConfiguration,
     ParseEntityRelationshipConfiguration,
+    ParseEntityFieldConfiguration,
     ReadRelationshipJoinFields,
     type IEntityConfiguration,
     type IEntityRelationshipConfiguration,
+    type IEntityFieldConfiguration,
 } from "./entityConfiguration"
 
 /**
@@ -657,6 +659,38 @@ export class EntityFieldInfo extends BaseInfo {
      * Can include imports, multiple types, or any valid TypeScript.
      */
     JSONTypeDefinition: string = null;
+
+    /**
+     * Optional JSON configuration bag (shape = {@link IEntityFieldConfiguration}).
+     * Defines field-level configurations such as Hierarchy options (IsHierarchy, MaxDepth).
+     */
+    Configuration: string = null;
+
+    private _configurationObject: IEntityFieldConfiguration | null | undefined = undefined;
+
+    /**
+     * Parsed {@link Configuration}. Null when the column is empty or not valid JSON.
+     */
+    get ConfigurationObject(): IEntityFieldConfiguration | null {
+        if (this._configurationObject === undefined) {
+            this._configurationObject = ParseEntityFieldConfiguration(this.Configuration);
+        }
+        return this._configurationObject;
+    }
+
+    /**
+     * Returns true if this field is explicitly configured as an intentional recursive tree hierarchy.
+     */
+    get IsHierarchy(): boolean {
+        return this.ConfigurationObject?.Hierarchy?.IsHierarchy === true;
+    }
+
+    /**
+     * Maximum recursion depth configured for this hierarchy field (defaults to 100).
+     */
+    get HierarchyMaxDepth(): number {
+        return this.ConfigurationObject?.Hierarchy?.MaxDepth ?? 100;
+    }
 
     RelatedEntityDisplayType: 'Search' | 'Dropdown' = null
     EntityIDFieldName: string = null

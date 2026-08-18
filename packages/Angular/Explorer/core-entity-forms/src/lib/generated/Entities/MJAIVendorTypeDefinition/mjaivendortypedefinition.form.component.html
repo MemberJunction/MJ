@@ -82,9 +82,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Vendors','TypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Model Vendors')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Model Vendors','TypeID')"
                 [AllowLoad]="IsSectionExpanded('mJAIModelVendors')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIModelVendors', $event.totalRowCount)"
                 >
@@ -107,9 +107,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Vendor Types','TypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Vendor Types')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Vendor Types','TypeID')"
                 [AllowLoad]="IsSectionExpanded('mJAIVendorTypes')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIVendorTypes', $event.totalRowCount)"
                 >
