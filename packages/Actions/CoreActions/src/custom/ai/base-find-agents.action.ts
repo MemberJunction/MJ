@@ -90,8 +90,13 @@ export abstract class BaseFindAgentsAction extends BaseAction {
                 const agent = agentsById.get(NormalizeUUID(r.recordId));
                 if (agent) {
                     matched.push(agent);
-                    // Report a meaningful 0–1 score: cosine when present, else the lexical score.
-                    scoreById.set(NormalizeUUID(agent.ID), semantic ?? lexical ?? r.score);
+                    // Report the STRONGEST 0–1 signal that qualified this match. Using
+                    // `semantic ?? lexical` would report a below-floor semantic component
+                    // (e.g. 0.3) even when the match actually passed on a strong lexical hit
+                    // (e.g. 0.85) — a misleadingly low score. Fall back to r.score only when
+                    // neither component is present.
+                    const reported = Math.max(semantic ?? 0, lexical ?? 0) || r.score;
+                    scoreById.set(NormalizeUUID(agent.ID), reported);
                 }
             }
 

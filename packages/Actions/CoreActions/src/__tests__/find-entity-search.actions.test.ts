@@ -261,6 +261,26 @@ describe('FindCandidateAgentsAction (wrapper)', () => {
         expect(payload.allMatches[0].similarityScore).toBe(0.85);
     });
 
+    it('reports the stronger component score when a lexical hit qualifies a below-floor semantic match', async () => {
+        // Passes on lexical merit (0.85) even though its semantic component (0.3) is below the
+        // 0.5 floor. The reported score is the stronger of the two components (0.85), so a
+        // lexical-qualified match isn't labelled with its weak semantic score.
+        aiEngineState.agents = [
+            { ID: 'H1', Name: 'Invoice Wizard', Description: 'invoice helper', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, DefaultArtifactType: null },
+        ];
+        accessibleAgentsMock.mockResolvedValue([{ ID: 'H1' }]);
+        searchEntityMock.mockResolvedValue([
+            { recordId: 'H1', score: 0.02, matchType: 'hybrid', components: { semantic: 0.3, lexical: 0.85 }, entityRecordDocumentId: 'e1' },
+        ]);
+
+        const r = await run(new FindCandidateAgentsAction(), makeParams([{ Name: 'TaskDescription', Value: 'invoice' }]));
+
+        expect(r.Success).toBe(true);
+        const payload = JSON.parse(r.Message);
+        expect(payload.matchCount).toBe(1);
+        expect(payload.allMatches[0].similarityScore).toBe(0.85);
+    });
+
     it('still drops a semantic-only match below the similarity floor', async () => {
         // Regression guard: the cosine floor is now applied to components.semantic (not the
         // RRF-blended r.score). A weak semantic match with no lexical hit must NOT survive.

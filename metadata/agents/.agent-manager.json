@@ -586,6 +586,30 @@
               "*"
             ]
           },
+          "relatedEntities": {
+            "MJ: AI Agent Actions": [
+              {
+                "_comment": "Tombstone: this action binding belonged to the Flow-based Agent Spec Loader, now superseded by Agent Manager calling the Load Agent Spec action directly. Deleted via deleteRecord (not just omitted) so MetadataSync removes it from existing DBs and the deletion reaches the consolidated release migration.",
+                "primaryKey": {
+                  "ID": "90BB672E-1837-4CF3-8C75-6F1A454C6D3A"
+                },
+                "deleteRecord": {
+                  "delete": true
+                }
+              }
+            ],
+            "MJ: AI Agent Steps": [
+              {
+                "_comment": "Tombstone: the loader's single Action step, removed for the same reason as the action binding above.",
+                "primaryKey": {
+                  "ID": "33533220-480D-4693-BAC0-980E98077CC7"
+                },
+                "deleteRecord": {
+                  "delete": true
+                }
+              }
+            ]
+          },
           "primaryKey": {
             "ID": "09D7E6EE-A3DC-4DBD-BA72-349FC68FE8C0"
           }
