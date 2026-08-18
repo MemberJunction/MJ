@@ -174,6 +174,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
     public MatchingNodeCount = 0;
     public FocusedNode: HierarchyNodeData | null = null;
     public SelectedNode: HierarchyNodeData | null = null;
+    public ShowDetailsDrawer = false;
 
     /** Flattened list of all loaded hierarchy nodes for search and lookup. */
     public AllNodes: HierarchyNodeData[] = [];
@@ -625,13 +626,13 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
     /**
      * Computes the D3 hierarchy tree layout and updates the SVG rendering.
      */
-    public renderTree(): void {
+    public renderTree(preserveTransform = false): void {
         if (!this.svgRef?.nativeElement || !this.gSelection) {
             if (this.svgRef?.nativeElement) {
                 this.initD3Zoom();
             }
             if (!this.gSelection) {
-                setTimeout(() => this.renderTree(), 30);
+                setTimeout(() => this.renderTree(preserveTransform), 30);
                 return;
             }
         }
@@ -731,7 +732,9 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         this.AllNodes = [...this.AllNodes];
         this.cdr?.markForCheck();
         this.cdr?.detectChanges();
-        this.fitToScreen(true);
+        if (!preserveTransform) {
+            this.fitToScreen(true);
+        }
     }
 
     // --- Interactive Actions ---
@@ -760,23 +763,40 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
             this.AfterNodeExpand.emit({ Node: node, OriginalEvent: event });
         }
 
-        this.renderTree();
+        this.renderTree(true);
+    }
+
+    public closeDetailsDrawer(): void {
+        this.ShowDetailsDrawer = false;
+        this.cdr?.markForCheck();
+    }
+
+    public openDetailsDrawer(): void {
+        this.ShowDetailsDrawer = true;
+        this.cdr?.markForCheck();
+    }
+
+    public onCanvasBackgroundClick(event: MouseEvent): void {
+        const target = event.target as HTMLElement;
+        if (target?.closest('.mj-details-drawer') || target?.closest('.mj-node-card') || target?.closest('.mj-tool-btn')) {
+            return;
+        }
     }
 
     public onNodeClick(node: HierarchyNodeData, event: MouseEvent): void {
+        event.stopPropagation();
         this.SelectedNode = node;
+        this.ShowDetailsDrawer = true;
         for (const n of this.AllNodes) {
             n.IsSelected = UUIDsEqual(n.ID, node.ID);
         }
         this.NodeClick.emit({ Node: node, OriginalEvent: event });
         this.NodeSelect.emit({ Node: node, OriginalEvent: event });
-
-        if (this.Config?.NavigateOnNodeClick !== false) {
-            this.navigateToRecord(node, event);
-        }
+        this.cdr?.markForCheck();
     }
 
     public onNodeDoubleClick(node: HierarchyNodeData, event: MouseEvent): void {
+        event.stopPropagation();
         this.NodeDoubleClick.emit({ Node: node, OriginalEvent: event });
         this.navigateToRecord(node, event);
     }
@@ -812,6 +832,26 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         this.Navigate.emit(navEvent);
     }
 
+    public getRecordAttributeEntries(record: Record<string, unknown>): { key: string; label: string; value: string }[] {
+        const entries: { key: string; label: string; value: string }[] = [];
+        const skipFields = new Set([
+            'id', 'parentid', 'parentproductcategoryid', 'parentcategoryid',
+            'companyid', '__mj_version', 'createdat', 'updatedat', 'name'
+        ]);
+
+        for (const [k, v] of Object.entries(record)) {
+            if (skipFields.has(k.toLowerCase()) || k.startsWith('__mj_') || v == null) continue;
+            const strVal = typeof v === 'object' ? JSON.stringify(v) : String(v);
+            if (strVal.trim() === '') continue;
+            entries.push({
+                key: k,
+                label: k.replace(/([A-Z])/g, ' $1').trim(),
+                value: strVal
+            });
+        }
+        return entries.slice(0, 8);
+    }
+
     // --- Search & Highlight ---
 
     public onSearchInput(): void {
@@ -821,27 +861,52 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
                 n.IsHighlighted = false;
             }
             this.MatchingNodeCount = 0;
-            this.renderTree();
+            this.renderTree(true);
             return;
         }
 
         let count = 0;
+        let firstMatch: HierarchyNodeData | null = null;
         for (const n of this.AllNodes) {
             const matches = n.Name.toLowerCase().includes(q) || (n.Subtitle && n.Subtitle.toLowerCase().includes(q));
             n.IsHighlighted = !!matches;
             if (matches) {
                 count++;
+                if (!firstMatch) firstMatch = n;
                 this.expandAncestors(n);
             }
         }
 
         this.MatchingNodeCount = count;
-        this.renderTree();
+        this.renderTree(true);
+
+        if (firstMatch && firstMatch.x != null && firstMatch.y != null) {
+            this.centerOnNode(firstMatch);
+        }
     }
 
     public clearSearch(): void {
         this.SearchQuery = '';
         this.onSearchInput();
+    }
+
+    public centerOnNode(node: HierarchyNodeData): void {
+        if (!this.svgSelection || !this.zoomBehavior || node.x == null || node.y == null) return;
+        const container = this.svgContainerRef?.nativeElement;
+        const width = container?.clientWidth || 800;
+        const height = container?.clientHeight || 500;
+        const currentScale = this.currentZoomTransform?.k || 1;
+        const nodeWidth = this.Config.NodeWidth || 230;
+        const nodeHeight = this.Config.NodeHeight || 90;
+
+        const nodeCenterX = node.x + nodeWidth / 2;
+        const nodeCenterY = node.y + nodeHeight / 2;
+
+        const tx = width / 2 - nodeCenterX * currentScale;
+        const ty = height / 2 - nodeCenterY * currentScale;
+
+        const target = d3.zoomIdentity.translate(tx, ty).scale(currentScale);
+        this.svgSelection.transition().duration(400).call(this.zoomBehavior.transform, target);
     }
 
     private expandAncestors(node: HierarchyNodeData): void {
@@ -885,7 +950,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
             n.IsExpanded = true;
             n.Children = [...(n._allChildren || [])];
         }
-        this.renderTree();
+        this.renderTree(true);
     }
 
     public collapseAll(): void {
@@ -895,17 +960,25 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
                 n.Children = [];
             }
         }
-        this.renderTree();
+        this.renderTree(true);
     }
 
     public zoomIn(): void {
         if (!this.svgSelection || !this.zoomBehavior) return;
-        this.svgSelection.transition().duration(250).call(this.zoomBehavior.scaleBy, 1.25);
+        const currentScale = this.currentZoomTransform?.k || 1;
+        const targetScale = Math.min(currentScale * 1.25, 4.0);
+        this.setZoomLevel(targetScale, true);
+        this.ZoomLevel = targetScale;
+        this.ZoomChange.emit(targetScale);
     }
 
     public zoomOut(): void {
         if (!this.svgSelection || !this.zoomBehavior) return;
-        this.svgSelection.transition().duration(250).call(this.zoomBehavior.scaleBy, 0.8);
+        const currentScale = this.currentZoomTransform?.k || 1;
+        const targetScale = Math.max(currentScale * 0.8, 0.1);
+        this.setZoomLevel(targetScale, true);
+        this.ZoomLevel = targetScale;
+        this.ZoomChange.emit(targetScale);
     }
 
     public setZoomLevel(scale: number, animated = true): void {

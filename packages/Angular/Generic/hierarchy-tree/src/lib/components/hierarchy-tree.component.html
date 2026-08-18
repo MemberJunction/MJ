@@ -38,7 +38,7 @@
             <!-- Toolbar Action Buttons -->
             @if (Config.ShowToolbar) {
                 <div class="mj-toolbar-actions">
-                    <button type="button" class="mj-tool-btn" (click)="expandAll()" title="Expand all nodes">
+                    <button type="button" class="mj-tool-btn" (click)="expandAll()" title="Expand all subtrees">
                         <i class="fa-solid fa-folder-open"></i>
                     </button>
                     <button type="button" class="mj-tool-btn" (click)="collapseAll()" title="Collapse all subtrees">
@@ -51,11 +51,8 @@
                     <button type="button" class="mj-tool-btn" (click)="zoomOut()" title="Zoom out">
                         <i class="fa-solid fa-minus"></i>
                     </button>
-                    <button type="button" class="mj-tool-btn" (click)="fitToScreen()" title="Fit hierarchy to screen">
+                    <button type="button" class="mj-tool-btn" (click)="fitToScreen()" title="Fit hierarchy to view">
                         <i class="fa-solid fa-expand"></i>
-                    </button>
-                    <button type="button" class="mj-tool-btn" (click)="resetZoom()" title="Reset zoom (1:1)">
-                        <i class="fa-solid fa-arrows-to-dot"></i>
                     </button>
                     <div class="mj-tool-divider"></div>
                     <button type="button" class="mj-tool-btn" (click)="refresh()" title="Reload hierarchy data">
@@ -67,7 +64,7 @@
     }
 
     <!-- SVG Canvas Container -->
-    <div #svgContainer class="mj-canvas-container">
+    <div #svgContainer class="mj-canvas-container" (click)="onCanvasBackgroundClick($event)">
         @if (Loading) {
             <div class="mj-state-overlay">
                 <div class="mj-spinner"></div>
@@ -183,5 +180,101 @@
                 </g>
             </g>
         </svg>
+
+        <!-- Slide-In Node Details Drawer -->
+        <aside
+            class="mj-details-drawer"
+            [class.open]="SelectedNode != null && ShowDetailsDrawer"
+            aria-label="Node details panel"
+        >
+            @if (SelectedNode) {
+                <div class="mj-drawer-header">
+                    <div class="mj-drawer-title-group">
+                        <div class="mj-drawer-icon" [style.color]="SelectedNode.Color || Config.DefaultColor">
+                            <i [class]="SelectedNode.Icon || Config.DefaultIcon"></i>
+                        </div>
+                        <div class="mj-drawer-titles">
+                            <h4 class="mj-drawer-name" [title]="SelectedNode.Name">{{ SelectedNode.Name }}</h4>
+                            @if (SelectedNode.Subtitle) {
+                                <p class="mj-drawer-subtitle">{{ SelectedNode.Subtitle }}</p>
+                            }
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        class="mj-drawer-close-btn"
+                        (click)="closeDetailsDrawer()"
+                        title="Close details"
+                    >
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <div class="mj-drawer-body">
+                    <div class="mj-drawer-stats">
+                        <div class="mj-stat-card">
+                            <span class="mj-stat-num">{{ SelectedNode.Depth }}</span>
+                            <span class="mj-stat-label">Hierarchy Level</span>
+                        </div>
+                        <div class="mj-stat-card">
+                            <span class="mj-stat-num">{{ SelectedNode.DirectChildCount }}</span>
+                            <span class="mj-stat-label">Direct Children</span>
+                        </div>
+                        <div class="mj-stat-card">
+                            <span class="mj-stat-num">{{ SelectedNode.TotalDescendantCount }}</span>
+                            <span class="mj-stat-label">Total Subtree</span>
+                        </div>
+                    </div>
+
+                    @if (SelectedNode.Record && getRecordAttributeEntries(SelectedNode.Record).length > 0) {
+                        <div class="mj-drawer-section">
+                            <h5 class="mj-section-heading">Attributes</h5>
+                            <dl class="mj-attr-list">
+                                @for (attr of getRecordAttributeEntries(SelectedNode.Record); track attr.key) {
+                                    <div class="mj-attr-row">
+                                        <dt class="mj-attr-dt">{{ attr.label }}</dt>
+                                        <dd class="mj-attr-dd" [title]="attr.value">{{ attr.value }}</dd>
+                                    </div>
+                                }
+                            </dl>
+                        </div>
+                    }
+
+                    <div class="mj-drawer-actions">
+                        <button
+                            type="button"
+                            class="mj-drawer-btn-primary"
+                            (click)="navigateToRecord(SelectedNode)"
+                            title="Open this record in Explorer"
+                        >
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                            <span>Open Record</span>
+                        </button>
+
+                        <div class="mj-drawer-btn-row">
+                            @if (SelectedNode.DirectChildCount > 0) {
+                                <button
+                                    type="button"
+                                    class="mj-drawer-btn-secondary"
+                                    (click)="toggleNodeExpansion(SelectedNode)"
+                                >
+                                    <i class="fa-solid" [class.fa-folder-open]="SelectedNode.IsExpanded" [class.fa-folder]="!SelectedNode.IsExpanded"></i>
+                                    <span>{{ SelectedNode.IsExpanded ? 'Collapse' : 'Expand' }}</span>
+                                </button>
+                            }
+                            <button
+                                type="button"
+                                class="mj-drawer-btn-secondary"
+                                (click)="setFocusRoot(SelectedNode.ID)"
+                                title="Focus hierarchy on this subtree"
+                            >
+                                <i class="fa-solid fa-crosshairs"></i>
+                                <span>Focus Tree</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </aside>
     </div>
 </div>
