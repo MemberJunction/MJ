@@ -1,128 +1,140 @@
 # Generic Record Attachments (File Links UX)
 
-**Goal.** A paperclip on the form toolbar of any record. Click it, a panel slides in listing every
-file attached to that record — across all storage providers — with preview, download, and upload.
-Per-entity opt-in, default off. Invisible when the instance has no storage configured.
+**Goal.** Files attached to any record, discovered automatically: a paperclip on the form toolbar, a
+panel listing every file on that record across all storage providers, with preview, open/download, and
+two ways to add one. Per-entity opt-in, default off. Invisible when the instance has no storage.
 
-## Headline finding: ~80% of this is already built
+**Driving consumer.** `bizapps-contracts` [PR #6](https://github.com/MemberJunction/bizapps-contracts/pull/6)
+drops its planned `Contract.ExecutedDocumentFileID` FK (ERD §9, R-8) for `FileEntityRecordLink` alone.
+Its capability write-up reaches this plan's conclusion independently: *"a generic record-scoped
+attachments panel is a small, obviously-useful contribution back to MJ, and contracts is the app that
+most wants it."*
 
-The pieces exist — they were wired for *artifacts* and *agent recordings*, not for records.
+## Two headline findings
+
+**1. ~80% of the file plumbing exists** — built for *artifacts* and *agent recordings*, never pointed
+at records. `FileEntityRecordLink` has exactly one live writer today and it works.
 
 | Need | Already exists | Verdict |
 |---|---|---|
-| Link a file to any record | `MJ: File Entity Record Links` (FileID, EntityID, RecordID) | as-is |
+| Link a file to any record | `MJ: File Entity Record Links` (FileID, EntityID, RecordID) | extend |
 | Storage accounts/providers, **client-side** | `FileStorageEngineBase` (`BaseEngine`, `CacheLocal`, in `core-entities`) | as-is |
-| Reference write path: upload → File row → link | `storeRealtimeRecording()` (`AI/Agents/src/realtime/realtime-recording-store.ts:214`) | copy |
+| Reference write path: upload → File row → link | `storeRealtimeRecording()` (`AI/Agents/.../realtime-recording-store.ts:214`) | copy |
 | Authenticated same-origin byte URL, any MIME, Range | `CreateMediaAccessToken` → `GET /media/:fileId?token=` (`FileResolver.ts:402`) | as-is |
-| Viewers: pdf, docx, xlsx, image, svg, video, audio, md, json | `Angular/Generic/artifacts/.../components/plugins/*` (pdfjs + mammoth already deps) | extend |
-| Resizable slide-in panel | `<mj-slide-panel>` (`ui-components/src/lib/slide-panel/`) | as-is |
-| Toolbar button + count badge + entity-flag gate | Tags/History buttons in `base-forms/.../toolbar/form-toolbar.component.*` | copy |
-| Per-entity bit: default-off + backfill + CodeGen default | `V202604131300__v5.26.x__Add_AllowCaching_And_DetectExternalChanges…sql` | copy |
+| Viewers: pdf, docx, xlsx, image, svg, video, audio, md, json | `Angular/Generic/artifacts/.../plugins/*` (pdfjs + mammoth already deps) | extend |
+| Per-entity capability bit, default-off + CodeGen default | `V202604131300__v5.26.x__Add_AllowCaching_And_DetectExternalChanges…sql` | copy |
 
-`FileEntityRecordLink` is not dormant-and-broken — it has one live producer (agent session
-recordings) and it works.
+No per-record UI exists — `ng-file-storage`'s `files-grid` / `file-upload` take **`CategoryID` only**,
+making them a global file *browser* (and they drag in `ag-grid`).
 
-## What's missing
-
-**(a)** No UI surface — `ng-file-storage` is a global file *browser* (and drags in `ag-grid`), not a
-per-record panel. **(b)** No entity opt-in flag on `MJ: Entities`. **(c)** No client-callable
-"attach to this record" API: `FileStorageEngine.UploadFile()` is server-only, neither client path
-creates a link, and `CreatePreAuthUploadUrl` is documented as *"does NOT create a File entity
-record"*. **(d)** Viewers are welded to artifacts — they take `@Input() artifactVersion!:
-MJArtifactVersionEntity`.
+**2. Amith's new forms system already has the auto-discovery mechanism** — a better fit than the
+Tags-style wiring I first assumed. `FormPanelRegistrationMetadata`
+(`base-forms/src/lib/panel-slot/base-form-panel.ts`, touched 2026-08-18) supports **`entity: '*'`** — an
+entity-agnostic panel mounting on *every* form — and its docs state the contract: *"Wildcard panels are
+expected to self-hide (render nothing) when they don't apply to the current record."* Discovery is
+`ClassFactory.GetAllRegistrationsByMetadata`, so **`base-forms` needs no dependency on the attachments
+package** — strictly better than cloning `ng-record-tags`, hardcoded into `record-form-container…html`.
 
 ## Design
 
-**New package `@memberjunction/ng-record-attachments`** (L2 generic), modeled line-for-line on
-`ng-record-tags`. `base-forms` takes a dependency on it — it already depends on `ng-record-tags`,
-`ng-record-changes`, and `ng-list-management`, so this is the established pattern. It must **not**
-depend on `ng-file-storage` (ag-grid) or `@memberjunction/storage` (server SDKs).
+**New package `@memberjunction/ng-record-attachments`** (L2 generic). One component, registered once:
 
-**Toolbar.** Add `ShowAttachmentsButton` to `FormToolbarConfig` (`types/toolbar-config.ts`) plus
-`@Input() AttachmentCount` / `@Output() AttachmentsPanelToggled` — an exact clone of the Tags trio.
-Visibility mirrors the History button (`form-toolbar.component.ts:288`, `.html:54`) —
-`@if (Config.ShowAttachmentsButton && SupportsAttachments && HasStorageAccounts)`, where
-`SupportsAttachments` is the new `EntityInfo` flag and `HasStorageAccounts` is
-`FileStorageEngineBase.Instance.AccountsWithProviders.length > 0`. That makes the zero-provider case
-free, with no new API.
+```ts
+@RegisterClass(BaseFormPanel, { metadata: { entity: '*', slot: 'after-fields', inclusion: 'Primary' } })
+```
 
-**Panel.** `<mj-record-attachments>` wrapping `<mj-slide-panel>`, rendered from
-`container/record-form-container.component.html` beside `<mj-record-tags>` (~line 308). The count
-badge follows `LoadTagCount()` (`…component.ts:1248`) — including its comment about *not* narrowing
-`Fields`, which poisons the server's RunView cache.
+The slot host injects `Record`, `FormComponent`, and `FormContext` before first change detection — no
+per-entity wiring, no CodeGen change. The panel self-hides when `!EntityInfo.SupportsFileAttachments` or
+`FileStorageEngineBase.Instance.AccountsWithProviders.length === 0`, making the zero-provider case free
+with no new API. Admins can already rename, move, or hide the rail section per entity via L3
+`MJ: Form Chrome Rules`, which outranks the registration's `inclusion`.
+
+**Toolbar paperclip.** Panels are pluggable but **toolbar buttons are not** — `FormToolbarConfig` is a
+static interface whose only extension points are host-supplied `CustomButtons` / `AdditionalActions`. So
+this is the one `base-forms` edit: `ShowAttachmentsButton` plus `@Input() AttachmentCount` /
+`@Output() AttachmentsPanelToggled`, gated like the History button (`form-toolbar.component.ts:288`,
+`.html:54`). It imports nothing from the new package — it calls
+`FormChromeCoordinatorService.SetActiveGroup('attachments')` to jump to the rail section, and/or opens
+the *same component* in `<mj-slide-panel>` for the slide-out you described.
 
 **Read path.** One batched `RunViews`: links filtered
-`EntityID='…' AND RecordID='<record.PrimaryKey.Values()>'` (the canonical composite-key
-serialization, same as tags), then `MJ: Files` by `FileID IN (…)`. Since each `MJ: Files` row carries
-its own `ProviderID`, the unified multi-provider list is **one query, not a fan-out**.
+`EntityID='…' AND RecordID='<record.PrimaryKey.Values()>'` (canonical composite-key serialization, same
+as tags), then `MJ: Files` by `FileID IN (…)`. Since each `MJ: Files` row carries its own `ProviderID`,
+the unified cross-provider list is **one query, not a fan-out** — but `MJ: Files` has **no size column**
+(unlike `ArtifactVersion`), so byte sizes would cost a `GetObjectMetadata` per file. Omit size in v1.
 
-**Write path.** Two-step, so bytes never transit the API: `CreatePreAuthUploadUrl` (account-based,
-Credential-Engine credentials) → client PUTs → new mutation **`RegisterRecordAttachment`** creates
-the `MJ: Files` row and the link together. This is `storeRealtimeRecording` split across the wire.
+**Two ways to add, both first-class.** Contracts' *primary* flow is not upload: executed PDFs reach
+SharePoint via PandaDoc → HubSpot, by a route MJ never sees. One mutation, two modes:
+
+- **`RegisterRecordAttachment(entityId, recordId, accountId, providerKey, …)`** — attach **by
+  reference**: create the `MJ: Files` row pointing at an object already in the provider, move no bytes,
+  then link. Contracts flags this as *"a small piece of code we would write; MJ's own `CreateFile`
+  mutation assumes the upload flow."*
+- **Upload** — `CreatePreAuthUploadUrl` (account creds via Credential Engine) → client PUTs → the same
+  mutation registers the result. Bytes never transit the API.
+
+**Link role.** Add `Role NVARCHAR(100) NULL` (+ `Sequence INT NULL`) to `FileEntityRecordLink` so "the
+executed document" is addressable without a named FK on every host table. That is what lets contracts
+keep R-8; without it every app re-adds its own `…FileID` column and the panel can't label or order.
 
 ## Entity opt-in
 
-```sql
-ALTER TABLE ${flyway:defaultSchema}.Entity ADD SupportsFileAttachments BIT NOT NULL
-    CONSTRAINT DF_Entity_SupportsFileAttachments DEFAULT 0;                        -- GO
-UPDATE ${flyway:defaultSchema}.Entity SET SupportsFileAttachments = 1 WHERE Name IN (…);
-EXEC sp_addextendedproperty …;   -- required; CodeGen reads it as the field Description
-EXEC sp_refreshview '${flyway:defaultSchema}.vwEntities';
-```
-
-One column, no `AutoUpdate…` twin — that twin exists only where CodeGen LLM-infers a value
-(`SupportsGeoCoding`). Then `mj sync push`, then `mj codegen`, in that order.
-
-**CodeGen will not stomp a hand-set flag:** `createNewEntityInsertSQL()`
-(`CodeGenLib/src/Database/manage-metadata.ts:6530`) is INSERT-only, for brand-new entities. Adding
-`newEntityDefaults.SupportsFileAttachments` — plus an optional `…BySchema` override copying
-`resolveAllowCachingForSchema()` (line 6590) — gives "on for new, off for existing" exactly as asked,
-and lets a downstream app set its own default in `mj.config.cjs`. The flag reaches `EntityInfo`
-automatically; apps flip individual entities via metadata sync.
+`Entity.SupportsFileAttachments BIT NOT NULL DEFAULT 0`, then backfill the curated list — the exact
+shape of the `AllowCaching` migration, extended property and `sp_refreshview` included. One column, no
+`AutoUpdate…` twin (that exists only where CodeGen LLM-infers a value). **CodeGen will not stomp a
+hand-set flag:** `createNewEntityInsertSQL()` (`CodeGenLib/.../manage-metadata.ts:6530`) is INSERT-only,
+for brand-new entities, so adding `newEntityDefaults.SupportsFileAttachments` — plus an optional
+`…BySchema` override copying `resolveAllowCachingForSchema()` — gives "on for new, off for existing" as
+asked, and lets an app set its own default in `mj.config.cjs`. The flag reaches `EntityInfo`
+automatically; apps flip entities via metadata sync.
 
 ## Preview: phase it, and buy nothing
 
 `GET /media/:fileId?token=` serves **any** content type with the file's own MIME plus Range support —
-the "media" name undersells it. So the first cut needs zero new dependencies: images via `<img>`, PDF
-via `<iframe>` (browser-native viewer), audio/video via `MJStorageMediaPlayerComponent`,
-text/markdown via fetch + the already-present `ng-markdown`; everything else gets a type icon and a
-download. docx/xlsx/code/json come later, by generalizing `BaseArtifactViewerPluginComponent` off
-`MJArtifactVersionEntity` onto a content-source interface and resolving a viewer by MIME through
-`MJGlobal.Instance.ClassFactory` — the registry those plugins already use.
+the "media" name undersells it. So images, PDF (browser-native `<iframe>`), audio/video
+(`MJStorageMediaPlayerComponent`) and text/markdown (`ng-markdown`) all preview with **zero new
+dependencies**; everything else gets a type icon and an open. docx/xlsx/code/json come later, by
+generalizing `BaseArtifactViewerPluginComponent` off `MJArtifactVersionEntity` — its only coupling —
+onto a content-source interface resolved by MIME through the same `ClassFactory` registry those plugins
+already use. Because `ArtifactVersion.FileID` points at `MJ: Files`, the panel also covers documents
+filed by MJ eSignature's `writeSignedArtifact` — contracts' phase-2 path.
 
 ## Phases
 
 | # | Scope | Done when |
 |---|---|---|
-| 1 | Migration + CodeGen default + `EntityInfo` flag | An entity can be marked attachment-capable; nothing renders yet |
-| 2 | `ng-record-attachments` read-only panel + toolbar button + badge | Paperclip shows only for opted-in entities with storage; lists + downloads links |
-| 3 | Upload (`RegisterRecordAttachment`), delete, drag-and-drop, account picker | Users add and remove attachments on any opted-in record |
-| 4 | Inline preview — the zero-dependency types, then the viewer registry | PDFs and images preview in-panel without leaving the form |
+| 1 | Migration: entity flag, link `Role`/`Sequence`, `File.FileStorageAccountID`; CodeGen default | An entity is attachment-capable and a link can be labelled |
+| 2 | `ng-record-attachments` read-only panel registered at `entity: '*'` | Panel appears on every opted-in form with zero per-entity wiring; lists + opens |
+| 3 | Toolbar paperclip + count badge (`base-forms`) | One-click access to the panel from the toolbar |
+| 4 | `RegisterRecordAttachment` — by-reference first, then upload, delete, account picker | Contracts can point a record at a SharePoint object; users can upload |
+| 5 | Inline preview — zero-dependency types, then the viewer registry | PDFs and images preview in-panel |
 
-Each phase is independently shippable and its own PR. Phase 2 is useful alone — agent session
-recordings already produce links.
+Each is independently shippable and its own PR. Phase 2 is useful alone — agent session recordings
+already produce links. Contracts needs 1, 2 and 4; only 4 is on its critical path.
 
 ## Risks
 
 1. **The permission model is wrong for this use case.** `CreateMediaAccessToken` gates on loading the
-   `MJ: Files` row under the user's context — on *Files* permission, not the host record's
-   readability. Someone who can read Files could read an attachment on an Account they can't see.
-   *Fix:* gate the panel read and `RegisterRecordAttachment` on the host entity. **Blocks phase 2.**
+   `MJ: Files` row under the user's context — on *Files* permission, not the host record's readability.
+   Someone who can read Files could read an attachment on an Account they can't see. *Fix:* gate the
+   panel read and `RegisterRecordAttachment` on the host entity. **Blocks phase 2.**
 2. **`MJ: Files` has `ProviderID` but no `AccountID`.** With two accounts on one provider,
-   `ResolveStorageAccount()` picks "first active" and download can hit the wrong one. *Fix:* add
-   `FileStorageAccountID` (additive) in phase 3; until then, one account per provider in the picker.
-3. **Two divergent upload paths** — `CreateFile` (env-var creds) vs `CreatePreAuthUploadUrl`
-   (Credential Engine). The legacy one is a dead end; this design commits to the account path.
-4. **Bearer-token URLs.** `/media` mounts before auth middleware, no row-level re-check. *Fix:* short
-   TTL, never log the URL, keep it out of browser history.
-5. **Dependency creep into `base-forms`** — every form in every MJ app pays. *Fix:* hold the new
-   package's deps at the `ng-record-tags` level; ag-grid and pdfjs stay behind lazy phase-4 viewers.
+   `ResolveStorageAccount()` picks "first active" and download can hit the wrong one — and contracts is
+   explicitly a multi-account SharePoint story. *Fix:* additive column in phase 1.
+3. **Attach-by-reference trusts a client-supplied `ProviderKey`** — a crafted key could register a
+   `File` row pointing at any object in the account. *Fix:* validate via `ObjectExists` and confine to
+   the account's `rootFolderID` before saving.
+4. **A wildcard panel runs on every form in every MJ app.** Its self-hide path must be two synchronous
+   checks with no query, or every form in the product pays. Same for bearer-token `/media` URLs, which
+   mount before auth middleware and get no row-level re-check: short TTL, never logged.
 
 ## Decisions I need from you
 
-1. **Permission semantics** (risk 1): gate on the *host record* (my recommendation) or on
-   `MJ: Files`? Shapes the API — phase-2 blocking.
-2. **The curated on-list.** Which MJ entities ship with the flag set? My default: nothing in `__mj`
-   beyond AI Agent Sessions, Conversations, and Tasks — metadata tables stay off.
-3. **New-entity default.** You leaned on; I'd ship phase 1 *off* and flip it once the panel exists,
-   so the flag never advertises UI that isn't there.
+1. **Permission semantics** (risk 1): gate on the *host record* (my recommendation) or on `MJ: Files`?
+   Shapes the API — phase-2 blocking.
+2. **Rail section, slide-out, or both?** The registry gives the rail section free and admin-tunable;
+   the slide-out matches how you described it. I'd ship the rail first, paperclip in phase 3.
+3. **`Role` on the link table** — worth a core schema change made largely for one app? I'd add it; the
+   alternative is every app re-adding `…FileID` columns.
+4. **The curated on-list** — my default: nothing in `__mj` beyond AI Agent Sessions, Conversations, Tasks.
+5. **New-entity default.** You leaned on; I'd ship phase 1 *off* and flip it once the panel exists.
