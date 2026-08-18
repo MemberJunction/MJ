@@ -79,10 +79,10 @@
         }
       </div>
       <div class="chat-actions chat-actions-buttons">
-        @if (allowPinning && pinnedMessages.length > 0) {
-          <button class="pin-chip" [class.active]="showPinsPanel" (click)="showPinsPanel = !showPinsPanel" title="View pinned messages">
+        @if (allowPinning && pinnedMessageCount > 0) {
+          <button class="pin-chip" [class.active]="showPinsPanel" (click)="TogglePinsPanel()" title="View pinned messages">
             <i class="fas fa-thumbtack"></i>
-            <span class="pin-chip-count">{{ pinnedMessages.length }}</span>
+            <span class="pin-chip-count">{{ pinnedMessageCount }}</span>
           </button>
         }
         @if (showArtifactIndicator && artifactCountDisplay > 0) {
@@ -438,6 +438,7 @@
     @if (allowPinning && showPinsPanel) {
       <mj-pinned-messages-panel
         [pinnedMessages]="pinnedMessages"
+        [isLoading]="isLoadingPins"
         (closed)="showPinsPanel = false"
         (jumpRequested)="onJumpToMessage($event)"
         (unpinRequested)="onUnpinFromPanel($event)">

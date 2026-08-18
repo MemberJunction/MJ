@@ -10,6 +10,14 @@ import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 export class PinnedMessagesPanelComponent {
   @Input() public pinnedMessages: MJConversationDetailEntity[] = [];
 
+  /**
+   * True during the panel's first open, while its rows are being fetched.
+   *
+   * Pins are no longer loaded during conversation open — the open path reads only a count —
+   * so the panel can now render before its contents exist.
+   */
+  @Input() public isLoading = false;
+
   @Output() public closed = new EventEmitter<void>();
   @Output() public jumpRequested = new EventEmitter<string>(); // emits messageId
   @Output() public unpinRequested = new EventEmitter<MJConversationDetailEntity>();

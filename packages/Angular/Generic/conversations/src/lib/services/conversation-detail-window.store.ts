@@ -42,6 +42,12 @@ export interface ConversationDetailWindowSnapshot extends ConversationDetailWind
     Cursor: ConversationDetailWindowCursor;
     /** Pinned rows for the pins panel, INCLUDING pins older than the window. */
     PinnedDetails: MJConversationDetailEntity[];
+    /**
+     * TRUE total pins in the conversation, which is NOT `PinnedDetails.length` until the
+     * panel has been opened — the open path reads only the count so the chip has a number
+     * without hydrating anything.
+     */
+    PinnedTotalCount: number;
     IsLoadingLatest: boolean;
     IsLoadingOlder: boolean;
 }
@@ -66,6 +72,7 @@ export class ConversationDetailWindowStore {
     private conversationId: string | null = null;
     private loadedDetails: MJConversationDetailEntity[] = [];
     private pinnedDetails: MJConversationDetailEntity[] = [];
+    private pinnedTotalCount = 0;
     private peripherals: ConversationDetailWindowPeripherals = emptyPeripherals();
     private cursor: ConversationDetailWindowCursor = emptyCursor();
     private generation = 0;
@@ -82,6 +89,7 @@ export class ConversationDetailWindowStore {
         this.conversationId = conversationId;
         this.loadedDetails = [];
         this.pinnedDetails = [];
+        this.pinnedTotalCount = 0;
         this.peripherals = emptyPeripherals();
         this.cursor = emptyCursor();
         this.isLoadingLatest = false;
@@ -259,12 +267,30 @@ export class ConversationDetailWindowStore {
     public RemoveDetail(detailId: string): void {
         const key = NormalizeUUID(detailId);
         this.loadedDetails = this.loadedDetails.filter(d => NormalizeUUID(d.ID) !== key);
+        const pinnedBefore = this.pinnedDetails.length;
         this.pinnedDetails = this.pinnedDetails.filter(d => NormalizeUUID(d.ID) !== key);
+        if (this.pinnedDetails.length < pinnedBefore) {
+            this.pinnedTotalCount = Math.max(0, this.pinnedTotalCount - 1);
+        }
+    }
+
+    /**
+     * Records how many pins exist WITHOUT loading them.
+     *
+     * The conversation-open path calls only this: the chip needs a number, the panel needs
+     * nothing until it is opened, and hydrating every pin on open re-imports the cost this
+     * windowing work exists to remove.
+     */
+    public SetPinnedCount(total: number): void {
+        this.pinnedTotalCount = Math.max(0, total);
     }
 
     /** Replaces the pins panel's contents. Pins outside the window are expected here. */
     public SetPinnedDetails(pins: MJConversationDetailEntity[]): void {
         this.pinnedDetails = [...pins];
+        // Hydration is unbounded, so once it lands the loaded set IS the whole set — any
+        // drift the local pin/unpin bookkeeping accumulated is reconciled here on purpose.
+        this.pinnedTotalCount = pins.length;
     }
 
     /**
@@ -275,8 +301,19 @@ export class ConversationDetailWindowStore {
      */
     public ApplyLocalPin(detail: MJConversationDetailEntity): void {
         const key = NormalizeUUID(detail.ID);
+        const wasPinned = this.pinnedDetails.some(d => NormalizeUUID(d.ID) === key);
         const without = this.pinnedDetails.filter(d => NormalizeUUID(d.ID) !== key);
         this.pinnedDetails = detail.IsPinned ? [detail, ...without] : without;
+
+        // Counted independently of the set: before the panel is opened `pinnedDetails` is
+        // deliberately EMPTY, so deriving a count from its length would report zero pins on
+        // a conversation that has many. `wasPinned` keeps the two in step — without it an
+        // unpin of a row that was never in the set decrements a count it never entered.
+        if (detail.IsPinned && !wasPinned) {
+            this.pinnedTotalCount++;
+        } else if (!detail.IsPinned && wasPinned) {
+            this.pinnedTotalCount = Math.max(0, this.pinnedTotalCount - 1);
+        }
     }
 
     /** Everything the chat area needs to render. Arrays are fresh so ngOnChanges fires. */
@@ -288,6 +325,7 @@ export class ConversationDetailWindowStore {
             Timeline: BuildConversationTimeline(details),
             Cursor: { ...this.cursor },
             PinnedDetails: [...this.pinnedDetails],
+            PinnedTotalCount: this.pinnedTotalCount,
             // Peripheral maps are handed out by reference — the chat area copies them into
             // its own UI-shaped maps (LazyArtifactInfo etc.) rather than mutating these.
             AgentRunsByDetailId: this.peripherals.AgentRunsByDetailId,

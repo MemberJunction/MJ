@@ -20,7 +20,7 @@ import {
 } from '@angular/core';
 import { MJConversationDetailEntity, MJConversationEntity, RatingJSON } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey } from '@memberjunction/core';
-import { NormalizeUUID } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent, MessageAttachment } from './message-item.component';
 import {
@@ -449,9 +449,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     const timeline = BuildConversationTimeline(this.messages);
     const item = timeline.find(entry =>
       entry.Kind === 'session'
-        ? stampedSessionId !== null
-            && NormalizeUUID(entry.Group.SessionID) === NormalizeUUID(stampedSessionId)
-        : entry.Detail.ID === detail.ID
+        ? stampedSessionId !== null && UUIDsEqual(entry.Group.SessionID, stampedSessionId)
+        : UUIDsEqual(entry.Detail.ID, detail.ID)
     );
     if (!item) {
       return false;

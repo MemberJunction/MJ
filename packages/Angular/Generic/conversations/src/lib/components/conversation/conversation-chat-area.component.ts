@@ -880,6 +880,40 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   // Pinned messages panel state
   public showPinsPanel: boolean = false;
 
+  /** True once the pin ENTITIES are loaded. The COUNT is known from conversation open. */
+  private pinsHydrated = false;
+
+  /** Spinner state for the panel's first open — the rows now arrive after the panel does. */
+  public isLoadingPins = false;
+
+  /**
+   * TRUE pin count for the chip. Deliberately NOT `pinnedMessages.length`, which is 0 until
+   * the panel has been opened and would hide the chip on a conversation full of pins.
+   */
+  get pinnedMessageCount(): number {
+    return this.windowStore.GetSnapshot().PinnedTotalCount;
+  }
+
+  /**
+   * Opens/closes the pins panel, hydrating its rows on first open.
+   *
+   * Lazy on purpose: the panel is closed by default, so loading pin entities during
+   * conversation open costs every user for a panel most never open.
+   */
+  public async TogglePinsPanel(): Promise<void> {
+    this.showPinsPanel = !this.showPinsPanel;
+    if (this.showPinsPanel && !this.pinsHydrated && this.conversationId) {
+      this.isLoadingPins = true;
+      this.cdr.detectChanges();
+      try {
+        await this.hydratePinnedMessages(this.conversationId);
+      } finally {
+        this.isLoadingPins = false;
+      }
+    }
+    this.cdr.detectChanges();
+  }
+
   /**
    * All currently pinned messages in the active conversation, newest pin first.
    *
@@ -1477,6 +1511,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.showTestFeedbackDialog = false;
     this.testFeedbackDialogData = null;
     this.showPinsPanel = false;
+    this.pinsHydrated = false;
     this.showAgentPanel = false;
     this.showExportModal = false;
     this.showShareModal = false;
@@ -1621,14 +1656,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // The store owns the loaded window and its paging cursors; the engine's full-history
       // LoadConversationDetails stays untouched for agent/server callers. There is no
       // forceRefresh here — a window is always fetched fresh, so no cache can go stale.
-      await this.windowStore.LoadLatest(conversationId, this.currentUser);
-      if (!this.isActiveConversationLoad(conversationId, loadToken)) {
-        return;
-      }
-
-      // Pins are fetched separately: a pin can sit far below the window's oldest Sequence,
+      // Pins are counted separately: a pin can sit far below the window's oldest Sequence,
       // and the pins panel must list ALL of them, not just the ones currently on screen.
-      await this.loadPinnedMessages(conversationId, loadToken);
+      // Concurrent with the window — the two share only the conversation id, and running the
+      // pin read after the window made it delay first paint for no reason.
+      await Promise.all([
+        this.windowStore.LoadLatest(conversationId, this.currentUser),
+        this.loadPinnedMessageCount(conversationId, loadToken)
+      ]);
       if (!this.isActiveConversationLoad(conversationId, loadToken)) {
         return;
       }
@@ -1697,15 +1732,40 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
 
   /**
-   * Loads the conversation's pinned messages into the window store.
+   * Reads only the PIN COUNT on conversation open.
    *
-   * Separate from the transcript window on purpose: pinning is not bounded by `Sequence`, so
-   * a pin can live far below the loaded window's oldest row. Filtering `messages` for
-   * `IsPinned` — as this used to do — would silently drop those from the panel.
+   * `count_only` returns no rows at all — the chip needs a number, and the panel needs
+   * nothing until it is opened. Hydrating every pin here put an unbounded `entity_object`
+   * read on the critical path of a change whose whole point is a bounded open, and because
+   * it was awaited AFTER the window load it also delayed first paint.
    *
-   * A failure here leaves the pin set empty rather than breaking the transcript.
+   * The entities load in {@link hydratePinnedMessages}, on first panel open.
    */
-  private async loadPinnedMessages(conversationId: string, loadToken: number): Promise<void> {
+  private async loadPinnedMessageCount(conversationId: string, loadToken: number): Promise<void> {
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const result = await rv.RunView<MJConversationDetailEntity>({
+      EntityName: 'MJ: Conversation Details',
+      ExtraFilter: `ConversationID='${conversationId}' AND IsPinned=1`,
+      ResultType: 'count_only'
+    }, this.currentUser);
+
+    if (!this.isActiveConversationLoad(conversationId, loadToken)) {
+      return;
+    }
+    this.windowStore.SetPinnedCount(result.Success ? result.TotalRowCount : 0);
+  }
+
+  /**
+   * Hydrates the pins panel's rows — first panel open only.
+   *
+   * Deliberately unbounded: the panel's contract is that it lists EVERY pin, including ones
+   * below the loaded window, and by this point the user has explicitly asked for them.
+   *
+   * `entity_object` is required, not incidental — {@link onUnpinFromPanel} mutates `IsPinned`
+   * and calls `.Save()` on these instances directly, so `'simple'` would break unpinning
+   * from the panel with no error at all.
+   */
+  private async hydratePinnedMessages(conversationId: string): Promise<void> {
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJConversationDetailEntity>({
       EntityName: 'MJ: Conversation Details',
@@ -1714,16 +1774,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       ResultType: 'entity_object'
     }, this.currentUser);
 
-    if (!this.isActiveConversationLoad(conversationId, loadToken)) {
+    if (!this.isActiveConversation(conversationId)) {
       return;
     }
     if (!result.Success) {
       console.error('Failed to load pinned messages:', result.ErrorMessage);
-      this.windowStore.SetPinnedDetails([]);
-      return;
+      return;   // keep the count — the chip stays honest even though the panel is empty
     }
     this.windowStore.SetPinnedDetails(result.Results ?? []);
+    this.pinsHydrated = true;
   }
+
 
   /**
    * Builds the display maps (agent runs, artifacts, ratings) for the LOADED WINDOW.
@@ -2836,11 +2897,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // exist on the GetConversationComplete stored query).
     this.windowStore.ApplyLocalDetail(message);
     // The pins panel reads a separate set (it must show pins older than the window), so it
-    // needs the toggle applied explicitly.
-    this.windowStore.ApplyLocalPin(message);
+    // needs the toggle applied explicitly — but only once that set is REAL. Applying a pin
+    // to a not-yet-hydrated (empty) set would leave one entry that looks like the whole set,
+    // and opening the panel would show a single pin on a conversation with many.
+    if (this.pinsHydrated) {
+      this.windowStore.ApplyLocalPin(message);
+    } else {
+      this.windowStore.SetPinnedCount(this.pinnedMessageCount + (message.IsPinned ? 1 : -1));
+    }
 
     // Auto-close the panel when the last pin is removed
-    if (this.showPinsPanel && this.pinnedMessages.length === 0) {
+    if (this.showPinsPanel && this.pinnedMessageCount === 0) {
       setTimeout(() => { this.showPinsPanel = false; this.cdr.detectChanges(); }, 600);
     }
     this.cdr.detectChanges();

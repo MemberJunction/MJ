@@ -294,3 +294,86 @@ describe('ConversationDetailWindowStore', () => {
         expect(store.CanLoadOlder()).toBe(false);
     });
 });
+
+/**
+ * Pin COUNT vs pin SET.
+ *
+ * These are deliberately separate state now: conversation open reads only a `count_only`
+ * total so the chip has a number, and the rows themselves are hydrated on first panel open.
+ * Everything below guards the window where the two legitimately disagree — which is exactly
+ * where a length-derived count would report zero pins on a conversation full of them.
+ */
+describe('ConversationDetailWindowStore — pin count vs pin set', () => {
+    let store: ConversationDetailWindowStore;
+
+    beforeEach(() => {
+        store = new ConversationDetailWindowStore({ LoadDetailWindow: vi.fn() } as DetailWindowLoader);
+        store.Reset('conv-a');
+    });
+
+    it('carries a count with no rows loaded — the conversation-open state', () => {
+        store.SetPinnedCount(137);
+        const snapshot = store.GetSnapshot();
+        expect(snapshot.PinnedTotalCount).toBe(137);
+        expect(snapshot.PinnedDetails).toEqual([]);
+    });
+
+    it('pinning before hydration moves the count without inventing a set', () => {
+        store.SetPinnedCount(5);
+        store.ApplyLocalPin(detail(10, { IsPinned: true }));
+        // The row IS added to the set here; the guard against a misleading partial set lives
+        // in the chat area, which skips ApplyLocalPin entirely until hydration. What matters
+        // for the store is that the count tracked the change rather than being re-derived.
+        expect(store.GetSnapshot().PinnedTotalCount).toBe(6);
+    });
+
+    it('unpinning a row that is not in the loaded set cannot push the count negative', () => {
+        store.SetPinnedCount(3);
+        store.ApplyLocalPin(detail(99, { IsPinned: false }));   // never was in pinnedDetails
+        expect(store.GetSnapshot().PinnedTotalCount).toBe(3);   // untouched, not 2
+    });
+
+    it('unpinning a row that IS in the set decrements once, not twice', () => {
+        const pin = detail(10, { IsPinned: true });
+        store.SetPinnedDetails([pin]);
+        expect(store.GetSnapshot().PinnedTotalCount).toBe(1);
+
+        store.ApplyLocalPin(detail(10, { IsPinned: false }));
+        const snapshot = store.GetSnapshot();
+        expect(snapshot.PinnedTotalCount).toBe(0);
+        expect(snapshot.PinnedDetails).toEqual([]);
+    });
+
+    it('re-pinning an already-pinned row does not double-count', () => {
+        store.SetPinnedDetails([detail(10, { IsPinned: true })]);
+        store.ApplyLocalPin(detail(10, { IsPinned: true }));
+        expect(store.GetSnapshot().PinnedTotalCount).toBe(1);
+    });
+
+    it('hydration reconciles the count to the loaded set', () => {
+        store.SetPinnedCount(99);                                  // stale/drifted
+        store.SetPinnedDetails([detail(1, { IsPinned: true }), detail(2, { IsPinned: true })]);
+        expect(store.GetSnapshot().PinnedTotalCount).toBe(2);
+    });
+
+    it('deleting a pinned row decrements the count', () => {
+        store.SetPinnedDetails([detail(1, { IsPinned: true }), detail(2, { IsPinned: true })]);
+        store.RemoveDetail('d-1');
+        expect(store.GetSnapshot().PinnedTotalCount).toBe(1);
+    });
+
+    it('deleting an unpinned row leaves the count alone', () => {
+        store.SetPinnedCount(4);
+        store.RemoveDetail('d-77');
+        expect(store.GetSnapshot().PinnedTotalCount).toBe(4);
+    });
+
+    it('Reset zeroes both the count and the set', () => {
+        store.SetPinnedDetails([detail(1, { IsPinned: true })]);
+        store.SetPinnedCount(9);
+        store.Reset('conv-b');
+        const snapshot = store.GetSnapshot();
+        expect(snapshot.PinnedTotalCount).toBe(0);
+        expect(snapshot.PinnedDetails).toEqual([]);
+    });
+});
