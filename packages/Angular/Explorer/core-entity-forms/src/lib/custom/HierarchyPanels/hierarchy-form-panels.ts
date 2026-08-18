@@ -29,7 +29,19 @@ import {
  */
 @Directive()
 export abstract class BaseHierarchyFormPanel<TRecord extends BaseEntity> extends BaseFormPanel<TRecord> {
-    public abstract get treeConfig(): HierarchyTreeConfig;
+    private _cachedTreeConfig: HierarchyTreeConfig | null = null;
+    private _cachedRecordId: string | null = null;
+
+    public get treeConfig(): HierarchyTreeConfig {
+        const recId = this.Record?.PrimaryKey ? this.Record.PrimaryKey.ToString() : null;
+        if (!this._cachedTreeConfig || this._cachedRecordId !== recId) {
+            this._cachedRecordId = recId;
+            this._cachedTreeConfig = this.buildTreeConfig();
+        }
+        return this._cachedTreeConfig;
+    }
+
+    protected abstract buildTreeConfig(): HierarchyTreeConfig;
 
     protected get settingKey(): string {
         const entityName = this.Record?.EntityInfo?.Name || this.treeConfig.EntityName || 'default';
@@ -93,7 +105,7 @@ export abstract class BaseHierarchyFormPanel<TRecord extends BaseEntity> extends
     styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
 })
 export class AIAgentCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJAIAgentCategoryEntity> {
-    public get treeConfig(): HierarchyTreeConfig {
+    protected buildTreeConfig(): HierarchyTreeConfig {
         return {
             EntityName: 'MJ: AI Agent Categories',
             ParentField: 'ParentID',
@@ -150,7 +162,7 @@ export class AIAgentCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJAIAg
     styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
 })
 export class AIPromptCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJAIPromptCategoryEntity> {
-    public get treeConfig(): HierarchyTreeConfig {
+    protected buildTreeConfig(): HierarchyTreeConfig {
         return {
             EntityName: 'MJ: AI Prompt Categories',
             ParentField: 'ParentID',
@@ -207,7 +219,7 @@ export class AIPromptCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJAIP
     styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
 })
 export class ActionCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJActionCategoryEntity> {
-    public get treeConfig(): HierarchyTreeConfig {
+    protected buildTreeConfig(): HierarchyTreeConfig {
         return {
             EntityName: 'MJ: Action Categories',
             ParentField: 'ParentID',
@@ -264,7 +276,7 @@ export class ActionCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJActio
     styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
 })
 export class DashboardCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJDashboardCategoryEntity> {
-    public get treeConfig(): HierarchyTreeConfig {
+    protected buildTreeConfig(): HierarchyTreeConfig {
         return {
             EntityName: 'MJ: Dashboard Categories',
             ParentField: 'ParentID',
@@ -321,7 +333,7 @@ export class DashboardCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJDa
     styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
 })
 export class QueryCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJQueryCategoryEntity> {
-    public get treeConfig(): HierarchyTreeConfig {
+    protected buildTreeConfig(): HierarchyTreeConfig {
         return {
             EntityName: 'MJ: Query Categories',
             ParentField: 'ParentID',
@@ -378,7 +390,7 @@ export class QueryCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJQueryC
     styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
 })
 export class TagHierarchyPanel extends BaseHierarchyFormPanel<MJTagEntity> {
-    public get treeConfig(): HierarchyTreeConfig {
+    protected buildTreeConfig(): HierarchyTreeConfig {
         return {
             EntityName: 'MJ: Tags',
             ParentField: 'ParentID',
@@ -435,7 +447,7 @@ export class TagHierarchyPanel extends BaseHierarchyFormPanel<MJTagEntity> {
     styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
 })
 export class ProjectHierarchyPanel extends BaseHierarchyFormPanel<MJProjectEntity> {
-    public get treeConfig(): HierarchyTreeConfig {
+    protected buildTreeConfig(): HierarchyTreeConfig {
         return {
             EntityName: 'MJ: Projects',
             ParentField: 'ParentID',
@@ -492,7 +504,7 @@ export class ProjectHierarchyPanel extends BaseHierarchyFormPanel<MJProjectEntit
     styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
 })
 export class ContentItemHierarchyPanel extends BaseHierarchyFormPanel<MJContentItemEntity> {
-    public get treeConfig(): HierarchyTreeConfig {
+    protected buildTreeConfig(): HierarchyTreeConfig {
         return {
             EntityName: 'MJ: Content Items',
             ParentField: 'ParentID',
@@ -549,7 +561,7 @@ export class ContentItemHierarchyPanel extends BaseHierarchyFormPanel<MJContentI
     styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
 })
 export class FileCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJFileCategoryEntity> {
-    public get treeConfig(): HierarchyTreeConfig {
+    protected buildTreeConfig(): HierarchyTreeConfig {
         return {
             EntityName: 'MJ: File Categories',
             ParentField: 'ParentID',
@@ -606,7 +618,7 @@ export class FileCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJFileCat
     styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
 })
 export class ListCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJListCategoryEntity> {
-    public get treeConfig(): HierarchyTreeConfig {
+    protected buildTreeConfig(): HierarchyTreeConfig {
         return {
             EntityName: 'MJ: List Categories',
             ParentField: 'ParentID',
@@ -663,7 +675,7 @@ export class ListCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJListCat
     styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
 })
 export class RecordProcessCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJRecordProcessCategoryEntity> {
-    public get treeConfig(): HierarchyTreeConfig {
+    protected buildTreeConfig(): HierarchyTreeConfig {
         return {
             EntityName: 'MJ: Record Process Categories',
             ParentField: 'ParentID',
@@ -720,7 +732,7 @@ export class RecordProcessCategoryHierarchyPanel extends BaseHierarchyFormPanel<
     styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
 })
 export class SkillHierarchyPanel extends BaseHierarchyFormPanel<MJSkillEntity> {
-    public get treeConfig(): HierarchyTreeConfig {
+    protected buildTreeConfig(): HierarchyTreeConfig {
         return {
             EntityName: 'MJ: Skills',
             ParentField: 'ParentID',
@@ -777,7 +789,7 @@ export class SkillHierarchyPanel extends BaseHierarchyFormPanel<MJSkillEntity> {
     styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
 })
 export class TemplateCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJTemplateCategoryEntity> {
-    public get treeConfig(): HierarchyTreeConfig {
+    protected buildTreeConfig(): HierarchyTreeConfig {
         return {
             EntityName: 'MJ: Template Categories',
             ParentField: 'ParentID',
@@ -834,7 +846,7 @@ export class TemplateCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJTem
     styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
 })
 export class TestSuiteHierarchyPanel extends BaseHierarchyFormPanel<MJTestSuiteEntity> {
-    public get treeConfig(): HierarchyTreeConfig {
+    protected buildTreeConfig(): HierarchyTreeConfig {
         return {
             EntityName: 'MJ: Test Suites',
             ParentField: 'ParentSuiteID',
@@ -891,7 +903,7 @@ export class TestSuiteHierarchyPanel extends BaseHierarchyFormPanel<MJTestSuiteE
     styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
 })
 export class UserViewCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJUserViewCategoryEntity> {
-    public get treeConfig(): HierarchyTreeConfig {
+    protected buildTreeConfig(): HierarchyTreeConfig {
         return {
             EntityName: 'MJ: User View Categories',
             ParentField: 'ParentID',

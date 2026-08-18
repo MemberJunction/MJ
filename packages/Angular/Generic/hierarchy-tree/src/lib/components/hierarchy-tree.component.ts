@@ -190,9 +190,19 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
 
     private resizeObserver: ResizeObserver | null = null;
     private entityInfo: EntityInfo | null = null;
+    private previousConfigState: Partial<HierarchyTreeConfig> = {};
 
     public ngOnInit(): void {
         this.initializeConfig();
+        if (this.Config) {
+            this.previousConfigState = {
+                EntityName: this.Config.EntityName,
+                ExtraFilter: this.Config.ExtraFilter,
+                OrderBy: this.Config.OrderBy,
+                MaxRows: this.Config.MaxRows,
+                ParentField: this.Config.ParentField
+            };
+        }
         this.loadData();
     }
 
@@ -207,13 +217,55 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
     public ngOnChanges(changes: SimpleChanges): void {
         if (changes['Config'] && !changes['Config'].isFirstChange()) {
             this.initializeConfig();
-            this.loadData();
+            if (this.hasDataConfigChanged(this.Config)) {
+                this.loadData();
+            } else {
+                const activeId = this.ActiveRecordID || this.Config?.ActiveRecordID;
+                this.updateActiveNodeSelection(activeId);
+            }
+        } else if (changes['ActiveRecordID'] && !changes['ActiveRecordID'].isFirstChange()) {
+            this.updateActiveNodeSelection(this.ActiveRecordID);
         } else if (changes['Data'] && !changes['Data'].isFirstChange()) {
             this.buildTreeFromData(this.Data || []);
         } else if (changes['FocusRecordID'] && !changes['FocusRecordID'].isFirstChange()) {
             this.setFocusRoot(this.FocusRecordID);
         } else if (changes['ZoomLevel'] && !changes['ZoomLevel'].isFirstChange() && this.ZoomLevel !== undefined) {
             this.setZoomLevel(this.ZoomLevel, true);
+        }
+    }
+
+    private hasDataConfigChanged(newConfig?: HierarchyTreeConfig): boolean {
+        if (!newConfig) return false;
+        const prev = this.previousConfigState;
+        const hasChanged =
+            prev.EntityName !== newConfig.EntityName ||
+            prev.ExtraFilter !== newConfig.ExtraFilter ||
+            prev.OrderBy !== newConfig.OrderBy ||
+            prev.MaxRows !== newConfig.MaxRows ||
+            prev.ParentField !== newConfig.ParentField;
+
+        if (hasChanged) {
+            this.previousConfigState = {
+                EntityName: newConfig.EntityName,
+                ExtraFilter: newConfig.ExtraFilter,
+                OrderBy: newConfig.OrderBy,
+                MaxRows: newConfig.MaxRows,
+                ParentField: newConfig.ParentField
+            };
+        }
+        return hasChanged;
+    }
+
+    private updateActiveNodeSelection(activeId?: string): void {
+        if (!activeId) return;
+        const activeNode = this.nodeMap.get(NormalizeUUID(activeId));
+        if (activeNode && (!this.SelectedNode || !UUIDsEqual(this.SelectedNode.ID, activeNode.ID))) {
+            for (const n of this.AllNodes) {
+                n.IsSelected = UUIDsEqual(n.ID, activeNode.ID);
+            }
+            this.SelectedNode = activeNode;
+            this.expandAncestors(activeNode);
+            this.renderTree();
         }
     }
 
