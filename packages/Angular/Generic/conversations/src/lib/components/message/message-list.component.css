@@ -1,3 +1,7 @@
+/* Scrolls itself ONLY when no host scroller was supplied — see the `mj-list-host-scrolled`
+   host binding. `overflow-y` here makes this element the nearest scrolling ancestor, which is
+   what `position: sticky` binds to; when the host owns the scrolling this container never
+   moves, so anything sticky inside it silently scrolls away instead of pinning. */
 .message-list-container {
   flex: 1;
   overflow-y: auto;
@@ -120,4 +124,16 @@
 .transcript-spacer {
   width: 100%;
   flex-shrink: 0;
+}
+
+/* Host owns the scrolling: stop creating a scroll context here so `position: sticky`
+   descendants (the date navigator) bind to the host's real scroller and actually pin.
+
+   BOTH axes, not just `overflow-y`. Per CSS Overflow, when one axis is `visible` and the
+   other is not, the `visible` one computes to `auto` — so leaving `overflow-x: hidden` in
+   place silently kept this element a scroll container and the header kept scrolling away.
+   Horizontal clipping is not lost: the host's own scroller (`.chat-messages-container`)
+   already carries `overflow-x: hidden`. */
+:host(.mj-list-host-scrolled) .message-list-container {
+  overflow: visible;
 }

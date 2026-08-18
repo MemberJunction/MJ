@@ -1371,6 +1371,31 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * Never throws: a failed load returns an empty window so the transcript renders empty
      * rather than breaking the chat area.
      *
+     * ### Round-trip profile — the counterweight to the payload win
+     *
+     * This trades ONE fat query for several thin ones. Per page:
+     *
+     *   1. {@link fetchDetailRowsBySequence} — always
+     *   2. {@link expandOldestSession} — only when the oldest row is session-stamped
+     *   3. {@link hasOlderDetails} — always, in parallel with (4)
+     *   4. {@link buildWindowPeripherals} — one batched `RunViews` of 3
+     *   5. {@link loadWindowUsers} — whenever the window references any user
+     *   6-7. {@link buildWindowArtifactMap} — up to two SEQUENTIAL reads, and it cannot batch
+     *        them: the version ids come from the junction rows and the artifact ids from the
+     *        versions.
+     *
+     * That is 3-6 round trips / 5-9 queries per page, against the single
+     * `GetConversationComplete` call that previously covered the ENTIRE conversation.
+     *
+     * For first paint this is unambiguously the right trade — the old call scaled with total
+     * conversation length, this one does not. For a reader paging back it inverts: past
+     * roughly ten pages the cumulative round trips exceed the old single load.
+     *
+     * The lever for that is `PageSize`, NOT this method. The per-page cost above is fixed
+     * regardless of how many rows come back, so a larger page for OLDER pages amortizes it
+     * over more content — and unlike first paint, a reader who has scrolled up has already
+     * committed to reading back. If paging up ever feels slow, that is the number to raise.
+     *
      * @param params - Conversation, optional `Sequence` bound, and page sizing
      * @param contextUser - The requesting user (entity RLS applies)
      */
@@ -1392,8 +1417,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const oldestSequence = details[0].Sequence;
         const newestSequence = details[details.length - 1].Sequence;
 
-        const hasMoreAbove = await this.hasOlderDetails(params.ConversationID, oldestSequence, contextUser);
-        const peripherals = await this.buildWindowPeripherals(details, contextUser);
+        // Concurrent, not sequential: the probe needs only `oldestSequence` and the peripherals
+        // need only `details`, both of which are settled above. Neither rejects — each degrades
+        // to an empty/false result on a failed read — so `Promise.all` cannot introduce a
+        // rejection path this method did not already have.
+        const [hasMoreAbove, peripherals] = await Promise.all([
+            this.hasOlderDetails(params.ConversationID, oldestSequence, contextUser),
+            this.buildWindowPeripherals(details, contextUser)
+        ]);
 
         return {
             Details: details,

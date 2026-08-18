@@ -43,6 +43,15 @@ import { GenerateAndApplyConversationName } from '../../services/conversation-na
 import type { ExportBranding } from '../../services/export.service';
 import { RealtimeNavigateRequest, RealtimeStartLiveRequest } from '../realtime/realtime-session-overlay.component';
 import { RealtimeSessionTimelineMeta } from '../../utils/realtime-session-timeline';
+import {
+  ResolveDateJumpTarget,
+  CombineDateJumpOutcome,
+  DescribeDateJumpOutcome,
+  DATE_JUMP_MAX_PAGES,
+  type DateJumpPeriod,
+  type DateJumpOutcome
+} from '../../utils/date-jump';
+import { MessageListComponent } from '../message/message-list.component';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 
 // PR 2c — Widget extension surface
@@ -893,6 +902,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
+   * The transcript list — needed so a date jump can scroll AFTER this component has finished
+   * paging older history. The list owns the scroll; this component owns the window.
+   */
+  @ViewChild(MessageListComponent) private messageListComponent?: MessageListComponent;
+
+  /**
    * The element that actually scrolls the transcript, handed to the message list so its
    * "earlier messages" observer has a correct root.
    *
@@ -927,6 +942,46 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.lastLoadedConversationId = null;
     await this.loadPeripheralData(conversationId!, snapshot);
     this.cdr.detectChanges();
+  }
+
+  /**
+   * Pages older history until a date jump can be satisfied, then scrolls to it.
+   *
+   * Windowing is exactly what broke the old implementation: the transcript no longer holds
+   * every day, so "jump to last month" targets messages that are simply not loaded. This
+   * pages until the target is in the loaded set, history runs out, or the page cap is hit —
+   * and always reports the outcome, because the plan forbids a silent no-op here.
+   */
+  public async onDateJumpRequested(period: DateJumpPeriod): Promise<void> {
+    const conversationId = this.conversationId;
+    let pagesLoaded = 0;
+
+    // The loop's ONLY job is to load enough history for the jump to be answerable. It does
+    // not decide whether the jump succeeded — see CombineDateJumpOutcome.
+    while (pagesLoaded < DATE_JUMP_MAX_PAGES) {
+      const snapshot = this.windowStore.GetSnapshot();
+      const { NeedsOlder } = ResolveDateJumpTarget(snapshot.Details, period, new Date());
+      if (!NeedsOlder || !snapshot.Cursor.HasMoreAbove) {
+        break;                              // answerable, or no more history to load
+      }
+
+      await this.onOlderMessagesRequested();
+      if (!this.isActiveConversation(conversationId)) {
+        return;                             // user switched away mid-jump
+      }
+      pagesLoaded++;
+    }
+
+    // Let the prepended pages render before measuring element positions.
+    this.cdr.detectChanges();
+    const scrollOutcome = this.messageListComponent?.ScrollToDateTarget(period) ?? 'empty';
+    const finalOutcome = CombineDateJumpOutcome(scrollOutcome, pagesLoaded >= DATE_JUMP_MAX_PAGES);
+
+    if (finalOutcome !== 'reached') {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        DescribeDateJumpOutcome(finalOutcome, period), 'info', 3000
+      );
+    }
   }
 
   // Test feedback dialog state

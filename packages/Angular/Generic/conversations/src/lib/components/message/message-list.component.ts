@@ -2,6 +2,7 @@ import {
   Component,
   Input,
   Output,
+  HostBinding,
   EventEmitter,
   ViewChild,
   ViewContainerRef,
@@ -37,6 +38,11 @@ import {
 } from '../../utils/realtime-session-timeline';
 import { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { DEFAULT_TRANSCRIPT_PAGE_SIZE } from '../../utils/conversation-detail-window';
+import {
+    ResolveDateJumpTarget,
+    type DateJumpPeriod,
+    type DateJumpOutcome
+} from '../../utils/date-jump';
 
 /** Context handed to the `messageRenderer` slot template per message. */
 interface MessageRendererContext {
@@ -80,6 +86,19 @@ interface SpacerContext {
  * Uses dynamic component creation (like skip-chat) to avoid Angular binding overhead
  * This dramatically improves performance when messages are added/removed
  */
+/** Dropdown label per period. Kept beside the guard so a new period cannot render blank. */
+const DATE_JUMP_LABELS: Record<DateJumpPeriod, string> = {
+    'today': 'Today',
+    'yesterday': 'Yesterday',
+    'last-week': 'Last week',
+    'last-month': 'Last month'
+};
+
+/** Narrows the template's string to the period union — the template cannot type its own literals. */
+function isDateJumpPeriod(value: string): value is DateJumpPeriod {
+    return Object.prototype.hasOwnProperty.call(DATE_JUMP_LABELS, value);
+}
+
 @Component({
   standalone: false,
   selector: 'mj-conversation-message-list',
@@ -123,6 +142,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       return;
     }
     this._hasMoreAbove = value;
+    // Gates the date navigator too — see updateDateFilterVisibility. Without this the button
+    // would only re-evaluate on a `messages` change, so exhausting history would leave it up.
+    this.updateDateFilterVisibility();
     // Deferred: the `@if` has not rendered the sentinel yet at set time.
     Promise.resolve().then(() => this.syncOlderObserver());
   }
@@ -159,6 +181,27 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     return this._scrollRoot;
   }
   private _scrollRoot: HTMLElement | null = null;
+
+  /**
+   * Marks the host as "someone else owns the scrolling", which drops `overflow-y` on this
+   * component's own container.
+   *
+   * `position: sticky` pins to the nearest ancestor with `overflow-y: auto|scroll`. When a
+   * host supplies a scroller, this component's container still declared `overflow-y: auto`
+   * but never actually scrolled (its content grows to fit), so the sticky date header bound
+   * to a container whose `scrollTop` is permanently 0 — it rendered, then rode out of view
+   * with the messages and could not be clicked.
+   *
+   * Driven off `_scrollRoot` rather than `resolveScrollParent()` on purpose: the DOM walk is
+   * lazy and layout-dependent, and dropping `overflow-y` for a consumer that turned out to
+   * have NO scrolling ancestor would leave the transcript unable to scroll or page at all.
+   * The explicit input is the only signal that is safe here — a host that passes it has, by
+   * definition, a scroller of its own.
+   */
+  @HostBinding('class.mj-list-host-scrolled')
+  public get HostSuppliesScroller(): boolean {
+    return this._scrollRoot !== null;
+  }
 
   // ── Assistant identity overrides — static host config forwarded to every message
   //    item (null = engine identity). Setters (not ngOnChanges) so an imperative
@@ -257,6 +300,12 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    */
   @Output() public OlderRequested = new EventEmitter<void>();
 
+  /**
+   * Asks the host to page older history far enough back to satisfy a date jump, then scroll.
+   * Emitted instead of handled locally because paging belongs to the window store.
+   */
+  @Output() public DateJumpRequested = new EventEmitter<DateJumpPeriod>();
+
   @ViewChild('messageContainer', { read: ViewContainerRef }) messageContainerRef!: ViewContainerRef;
   @ViewChild('scrollContainer') scrollContainer!: ElementRef;
   /** Only present while `HasMoreAbove` is true — the `@if` creates and destroys it. */
@@ -341,26 +390,79 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     this.showDateNav = !this.showDateNav;
   }
 
+  /**
+   * Handles a date-navigator selection.
+   *
+   * The list cannot page history itself — it is a Generic widget with no store — so it asks
+   * the host, which owns the window and runs the older-page loop, then calls back into
+   * {@link ScrollToDateTarget}. The label updates immediately so the dropdown feels responsive
+   * while paging runs.
+   */
   public jumpToDate(period: string): void {
-    // TODO: Implement date jumping logic
-    console.log('Jump to date:', period);
     this.showDateNav = false;
-
-    // Update display based on period
-    switch(period) {
-      case 'today':
-        this.currentDateDisplay = 'Today';
-        break;
-      case 'yesterday':
-        this.currentDateDisplay = 'Yesterday';
-        break;
-      case 'last-week':
-        this.currentDateDisplay = 'Last week';
-        break;
-      case 'last-month':
-        this.currentDateDisplay = 'Last month';
-        break;
+    if (!isDateJumpPeriod(period)) {
+      return;
     }
+    this.currentDateDisplay = DATE_JUMP_LABELS[period];
+    this.DateJumpRequested.emit(period);
+  }
+
+  /**
+   * Scrolls to the start of `period` within the currently loaded messages.
+   *
+   * Called by the host AFTER it has paged as far back as it intends to, so whatever is loaded
+   * now is the best answer available. Returns the outcome rather than failing silently — the
+   * plan's explicit requirement for this path.
+   */
+  public ScrollToDateTarget(period: DateJumpPeriod): DateJumpOutcome {
+    if (!this.messages || this.messages.length === 0) {
+      return 'empty';
+    }
+
+    const { Detail } = ResolveDateJumpTarget(this.messages, period, new Date());
+    // A miss lands the user on the oldest loaded message — where paging left them — rather
+    // than leaving the viewport wherever it happened to be.
+    const target = Detail ?? this.messages[0];
+    const scrolled = this.scrollToDetail(target);
+    if (!scrolled) {
+      return 'empty';
+    }
+    return Detail ? 'reached' : 'oldest';
+  }
+
+  /**
+   * Scrolls a loaded detail into view, mounted or not.
+   *
+   * Resolves through the TIMELINE KEY rather than querying `[data-message-id]`, because the
+   * jump target is by definition far above the viewport — exactly the region this component
+   * unmounts and replaces with height-holding spacers. A DOM query for the message id misses
+   * every unmounted target, which made a legitimate jump report "nothing loaded to jump to".
+   *
+   * Spacers carry the same timeline key as the item they stand in for, so scrolling to the
+   * key lands on the right place either way; the spacer observer then remounts the real item
+   * as it enters the viewport.
+   */
+  private scrollToDetail(detail: MJConversationDetailEntity): boolean {
+    // A session-stamped row folds into its session CARD, which is the thing on screen — so
+    // match through the stamp rather than looking for the row itself, which has no node.
+    const stampedSessionId = detail.AgentSessionID?.trim() || null;
+    const timeline = BuildConversationTimeline(this.messages);
+    const item = timeline.find(entry =>
+      entry.Kind === 'session'
+        ? stampedSessionId !== null
+            && NormalizeUUID(entry.Group.SessionID) === NormalizeUUID(stampedSessionId)
+        : entry.Detail.ID === detail.ID
+    );
+    if (!item) {
+      return false;
+    }
+
+    const node = this.nodeForKey(this.getTimelineKey(item));
+    if (!node) {
+      return false;
+    }
+    node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return true;
   }
 
   // Track whether initial render has happened
@@ -1381,6 +1483,15 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * Only show if conversation is long and spans multiple days
    */
   private updateDateFilterVisibility(): void {
+    // `messages` is the loaded WINDOW, not the conversation. The 20-message / 3-day heuristic
+    // below reads it as if it were full history, so under windowing a long multi-week thread
+    // opens with ~10 items, fails the length check, and never offers date navigation at all —
+    // the one case where it is most useful. `HasMoreAbove` is the only windowing-safe signal
+    // that more conversation exists above, so it short-circuits the heuristic.
+    if (this.HasMoreAbove) {
+      this.shouldShowDateFilter = true;
+      return;
+    }
     if (!this.messages || this.messages.length < 20) {
       this.shouldShowDateFilter = false;
       return;

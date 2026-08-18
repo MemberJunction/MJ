@@ -284,6 +284,7 @@
               [IsLoadingOlder]="isLoadingOlderMessages"
               [ScrollRoot]="messageScrollRoot"
               (OlderRequested)="onOlderMessagesRequested()"
+              (DateJumpRequested)="onDateJumpRequested($event)"
               [conversation]="conversation"
               [currentUser]="currentUser"
               [isProcessing]="isProcessing"
