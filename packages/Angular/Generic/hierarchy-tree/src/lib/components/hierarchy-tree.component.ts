@@ -892,34 +892,6 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         this.onSearchInput();
     }
 
-    private applyTransform(target: d3.ZoomTransform, duration = 400, immediate = false): void {
-        if (!this.svgSelection || !this.zoomBehavior || !this.svgRef?.nativeElement) return;
-
-        if (immediate || duration <= 0) {
-            this.svgSelection.interrupt().call(this.zoomBehavior.transform, target);
-            return;
-        }
-
-        const start = this.currentZoomTransform || d3.zoomTransform(this.svgRef.nativeElement);
-        const interpolateK = d3.interpolateNumber(start.k, target.k);
-        const interpolateX = d3.interpolateNumber(start.x, target.x);
-        const interpolateY = d3.interpolateNumber(start.y, target.y);
-
-        this.svgSelection
-            .interrupt()
-            .transition()
-            .duration(duration)
-            .ease(d3.easeCubicOut)
-            .tween('zoom-transform', () => {
-                return (t: number) => {
-                    const currentT = d3.zoomIdentity
-                        .translate(interpolateX(t), interpolateY(t))
-                        .scale(interpolateK(t));
-                    this.svgSelection!.call(this.zoomBehavior!.transform, currentT);
-                };
-            });
-    }
-
     public centerOnNode(node: HierarchyNodeData): void {
         if (!this.svgSelection || !this.zoomBehavior || !this.svgContainerRef?.nativeElement) return;
         if (node.x == null || node.y == null) return;
@@ -941,7 +913,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         const ty = height / 2 - nodeCenterY * currentScale;
 
         const target = d3.zoomIdentity.translate(tx, ty).scale(currentScale);
-        this.applyTransform(target, 400);
+        this.svgSelection.interrupt().transition().duration(400).ease(d3.easeCubicOut).call(this.zoomBehavior.transform, target);
     }
 
     private expandAncestors(node: HierarchyNodeData): void {
@@ -968,14 +940,14 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         target.IsFocusRoot = true;
         this.FocusedNode = target;
         this.renderTree();
-        this.fitToScreen(false, true);
+        this.onFitToViewClick();
     }
 
     public resetFocus(): void {
         for (const n of this.AllNodes) n.IsFocusRoot = false;
         this.FocusedNode = null;
         this.renderTree();
-        this.fitToScreen(false, true);
+        this.onFitToViewClick();
     }
 
     // --- Toolbar Actions / Verbs ---
@@ -1029,12 +1001,23 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         const newY = cy - (cy - current.y) * (scale / (current.k || 1));
         const target = d3.zoomIdentity.translate(newX, newY).scale(scale);
 
-        this.applyTransform(target, animated ? 250 : 0, !animated);
+        if (animated) {
+            this.svgSelection.interrupt().transition().duration(250).ease(d3.easeCubicOut).call(this.zoomBehavior.transform, target);
+        } else {
+            this.svgSelection.interrupt().call(this.zoomBehavior.transform, target);
+        }
     }
 
     public resetZoom(): void {
         if (!this.svgSelection || !this.zoomBehavior) return;
+        this.onFitToViewClick();
+    }
+
+    public onFitToViewClick(): void {
         this.fitToScreen(false, true);
+        setTimeout(() => {
+            this.fitToScreen(false, true);
+        }, 320);
     }
 
     public fitToScreen(immediate = false, forceAutoScale = false): void {
@@ -1091,7 +1074,11 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
 
         this.log(`[HierarchyTree:fitToScreen] Container=${width}x${height} (visible=${visibleWidth}), visibleNodes=${visibleNodes.length}, bounds=[${minX.toFixed(1)}, ${minY.toFixed(1)}] to [${maxX.toFixed(1)}, ${maxY.toFixed(1)}] (${treeWidth.toFixed(1)}x${treeHeight.toFixed(1)}), autoScale=${autoScale.toFixed(3)}, usingScale=${scale.toFixed(3)}, translate=(${tx.toFixed(1)}, ${ty.toFixed(1)})`);
 
-        this.applyTransform(targetTransform, 400, immediate);
+        if (immediate) {
+            this.svgSelection.interrupt().call(this.zoomBehavior.transform, targetTransform);
+        } else {
+            this.svgSelection.interrupt().transition().duration(300).ease(d3.easeCubicOut).call(this.zoomBehavior.transform, targetTransform);
+        }
     }
 
     public exportAsSVG(): string {
