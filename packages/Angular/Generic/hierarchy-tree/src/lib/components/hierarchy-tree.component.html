@@ -1,0 +1,187 @@
+<div class="mj-hierarchy-wrapper" [style.height]="Config.Height || '560px'">
+    <!-- Top Controls Bar -->
+    @if (Config.ShowToolbar || Config.ShowSearch) {
+        <div class="mj-hierarchy-toolbar">
+            <!-- Search Box -->
+            @if (Config.ShowSearch) {
+                <div class="mj-search-box">
+                    <i class="fa-solid fa-magnifying-glass mj-search-icon"></i>
+                    <input
+                        type="text"
+                        class="mj-search-input"
+                        placeholder="Search hierarchy..."
+                        [(ngModel)]="SearchQuery"
+                        (input)="onSearchInput()"
+                    />
+                    @if (SearchQuery) {
+                        <button type="button" class="mj-clear-btn" (click)="clearSearch()" title="Clear search">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    }
+                    @if (SearchQuery && MatchingNodeCount > 0) {
+                        <span class="mj-match-badge">{{ MatchingNodeCount }} found</span>
+                    }
+                </div>
+            }
+
+            <!-- Focus Subtree Indicator -->
+            @if (FocusedNode) {
+                <div class="mj-focus-indicator">
+                    <i class="fa-solid fa-crosshairs"></i>
+                    <span>Focusing subtree: <strong>{{ FocusedNode.Name }}</strong></span>
+                    <button type="button" class="mj-reset-focus-btn" (click)="resetFocus()" title="Show entire hierarchy">
+                        <i class="fa-solid fa-rotate-left"></i> View Full Hierarchy
+                    </button>
+                </div>
+            }
+
+            <!-- Toolbar Action Buttons -->
+            @if (Config.ShowToolbar) {
+                <div class="mj-toolbar-actions">
+                    <button type="button" class="mj-tool-btn" (click)="expandAll()" title="Expand all nodes">
+                        <i class="fa-solid fa-folder-open"></i>
+                    </button>
+                    <button type="button" class="mj-tool-btn" (click)="collapseAll()" title="Collapse all subtrees">
+                        <i class="fa-solid fa-folder"></i>
+                    </button>
+                    <div class="mj-tool-divider"></div>
+                    <button type="button" class="mj-tool-btn" (click)="zoomIn()" title="Zoom in">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                    <button type="button" class="mj-tool-btn" (click)="zoomOut()" title="Zoom out">
+                        <i class="fa-solid fa-minus"></i>
+                    </button>
+                    <button type="button" class="mj-tool-btn" (click)="fitToScreen()" title="Fit to screen">
+                        <i class="fa-solid fa-expand"></i>
+                    </button>
+                    <button type="button" class="mj-tool-btn" (click)="resetZoom()" title="Reset zoom">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                    </button>
+                    <div class="mj-tool-divider"></div>
+                    <button type="button" class="mj-tool-btn" (click)="refresh()" title="Reload data">
+                        <i class="fa-solid fa-rotate"></i>
+                    </button>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- SVG Canvas Container -->
+    <div #svgContainer class="mj-canvas-container">
+        @if (Loading) {
+            <div class="mj-state-overlay">
+                <div class="mj-spinner"></div>
+                <span>Loading hierarchy...</span>
+            </div>
+        } @else if (ErrorMessage) {
+            <div class="mj-state-overlay mj-error-state">
+                <i class="fa-solid fa-circle-exclamation mj-error-icon"></i>
+                <span>{{ ErrorMessage }}</span>
+                <button type="button" class="mj-retry-btn" (click)="loadData()">Retry</button>
+            </div>
+        } @else if (AllNodes.length === 0) {
+            <div class="mj-state-overlay mj-empty-state">
+                <i class="fa-solid fa-sitemap mj-empty-icon"></i>
+                <span>No hierarchy records found.</span>
+            </div>
+        }
+
+        <svg #svgElement class="mj-hierarchy-svg">
+            <defs>
+                <pattern id="mj-tree-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+                    <circle cx="12" cy="12" r="1" fill="var(--mj-border-subtle, #1e293b)" opacity="0.4" />
+                </pattern>
+            </defs>
+
+            <!-- Background grid -->
+            <rect width="100%" height="100%" fill="url(#mj-tree-grid)" />
+
+            <!-- Main Canvas Group (Zoomable & Pannable) -->
+            <g class="mj-hierarchy-canvas">
+                <!-- Connective Link Curves -->
+                <g class="mj-links-group"></g>
+
+                <!-- Interactive Node Cards via ForeignObject -->
+                <g class="mj-nodes-group">
+                    @for (node of AllNodes; track node.ID) {
+                        @if (node.x != null && node.y != null) {
+                            <svg:foreignObject
+                                [attr.x]="node.x"
+                                [attr.y]="node.y"
+                                [attr.width]="Config.NodeWidth || 230"
+                                [attr.height]="Config.NodeHeight || 90"
+                                class="mj-node-foreign-object"
+                            >
+                                <div
+                                    class="mj-node-card"
+                                    [class.selected]="node.IsSelected"
+                                    [class.highlighted]="node.IsHighlighted"
+                                    [class.focus-root]="node.IsFocusRoot"
+                                    (click)="onNodeClick(node, $event)"
+                                    (dblclick)="onNodeDoubleClick(node, $event)"
+                                >
+                                    <!-- Accent Top Border -->
+                                    <div class="mj-card-accent" [style.background]="node.Color || Config.DefaultColor"></div>
+
+                                    <!-- Node Card Header -->
+                                    <div class="mj-node-header">
+                                        <div class="mj-node-icon" [style.color]="node.Color || Config.DefaultColor">
+                                            <i [class]="node.Icon || Config.DefaultIcon"></i>
+                                        </div>
+                                        <div class="mj-node-title-group">
+                                            <div class="mj-node-name" [title]="node.Name">{{ node.Name }}</div>
+                                            @if (node.Subtitle) {
+                                                <div class="mj-node-subtitle">{{ node.Subtitle }}</div>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <!-- Node Card Footer & Actions -->
+                                    <div class="mj-node-footer">
+                                        <!-- Subtree Expansion Pill -->
+                                        @if (node.DirectChildCount > 0) {
+                                            <button
+                                                type="button"
+                                                class="mj-expand-badge"
+                                                [class.collapsed]="!node.IsExpanded"
+                                                (click)="toggleNodeExpansion(node, $event)"
+                                                [title]="node.IsExpanded ? 'Collapse sub-branch' : 'Expand ' + node.DirectChildCount + ' children'"
+                                            >
+                                                <i class="fa-solid" [class.fa-chevron-down]="node.IsExpanded" [class.fa-chevron-right]="!node.IsExpanded"></i>
+                                                <span>{{ node.DirectChildCount }}</span>
+                                            </button>
+                                        } @else {
+                                            <span class="mj-leaf-indicator">Leaf</span>
+                                        }
+
+                                        <!-- Quick Action Buttons -->
+                                        @if (AllowNodeActions) {
+                                            <div class="mj-node-actions">
+                                                <button
+                                                    type="button"
+                                                    class="mj-node-action-btn"
+                                                    (click)="onNodeAction(node, 'focus', $event)"
+                                                    title="Focus on this subtree"
+                                                >
+                                                    <i class="fa-solid fa-crosshairs"></i>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    class="mj-node-action-btn"
+                                                    (click)="onNodeAction(node, 'open', $event)"
+                                                    title="Open record in Explorer"
+                                                >
+                                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </svg:foreignObject>
+                        }
+                    }
+                </g>
+            </g>
+        </svg>
+    </div>
+</div>
