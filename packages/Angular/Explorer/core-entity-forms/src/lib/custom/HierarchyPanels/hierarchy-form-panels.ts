@@ -86,7 +86,7 @@ export abstract class BaseHierarchyFormPanel<TRecord extends BaseEntity> extends
     template: `
         <mj-collapsible-panel
             SectionKey="agentCategoryHierarchy"
-            SectionName="Agent Category Hierarchy & Taxonomy"
+            SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
             [Form]="FormComponent"
@@ -102,7 +102,7 @@ export abstract class BaseHierarchyFormPanel<TRecord extends BaseEntity> extends
             }
         </mj-collapsible-panel>
     `,
-    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
+    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 640px; min-height: calc(100vh - 280px); flex: 1; margin-bottom: 20px; }`]
 })
 export class AIAgentCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJAIAgentCategoryEntity> {
     protected buildTreeConfig(): HierarchyTreeConfig {
@@ -114,7 +114,7 @@ export class AIAgentCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJAIAg
             DefaultColor: '#8b5cf6',
             ActiveRecordID: this.Record?.ID || undefined,
             Height: '100%',
-            MinHeight: '520px',
+            MinHeight: '640px',
             ShowSearch: true,
             ShowToolbar: true,
             NavigateOnNodeClick: true
@@ -143,7 +143,7 @@ export class AIAgentCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJAIAg
     template: `
         <mj-collapsible-panel
             SectionKey="promptCategoryHierarchy"
-            SectionName="Prompt Category Hierarchy"
+            SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
             [Form]="FormComponent"
@@ -159,7 +159,7 @@ export class AIAgentCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJAIAg
             }
         </mj-collapsible-panel>
     `,
-    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
+    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 640px; min-height: calc(100vh - 280px); flex: 1; margin-bottom: 20px; }`]
 })
 export class AIPromptCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJAIPromptCategoryEntity> {
     protected buildTreeConfig(): HierarchyTreeConfig {
@@ -171,7 +171,7 @@ export class AIPromptCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJAIP
             DefaultColor: '#ec4899',
             ActiveRecordID: this.Record?.ID || undefined,
             Height: '100%',
-            MinHeight: '520px',
+            MinHeight: '640px',
             ShowSearch: true,
             ShowToolbar: true,
             NavigateOnNodeClick: true
@@ -200,7 +200,7 @@ export class AIPromptCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJAIP
     template: `
         <mj-collapsible-panel
             SectionKey="actionCategoryHierarchy"
-            SectionName="Action Category Taxonomy"
+            SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
             [Form]="FormComponent"
@@ -216,7 +216,7 @@ export class AIPromptCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJAIP
             }
         </mj-collapsible-panel>
     `,
-    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
+    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 640px; min-height: calc(100vh - 280px); flex: 1; margin-bottom: 20px; }`]
 })
 export class ActionCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJActionCategoryEntity> {
     protected buildTreeConfig(): HierarchyTreeConfig {
@@ -228,7 +228,7 @@ export class ActionCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJActio
             DefaultColor: '#f59e0b',
             ActiveRecordID: this.Record?.ID || undefined,
             Height: '100%',
-            MinHeight: '520px',
+            MinHeight: '640px',
             ShowSearch: true,
             ShowToolbar: true,
             NavigateOnNodeClick: true
@@ -257,7 +257,7 @@ export class ActionCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJActio
     template: `
         <mj-collapsible-panel
             SectionKey="dashboardCategoryHierarchy"
-            SectionName="Dashboard Category Hierarchy"
+            SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
             [Form]="FormComponent"
@@ -273,7 +273,7 @@ export class ActionCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJActio
             }
         </mj-collapsible-panel>
     `,
-    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
+    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 640px; min-height: calc(100vh - 280px); flex: 1; margin-bottom: 20px; }`]
 })
 export class DashboardCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJDashboardCategoryEntity> {
     protected buildTreeConfig(): HierarchyTreeConfig {
@@ -285,7 +285,7 @@ export class DashboardCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJDa
             DefaultColor: '#06b6d4',
             ActiveRecordID: this.Record?.ID || undefined,
             Height: '100%',
-            MinHeight: '520px',
+            MinHeight: '640px',
             ShowSearch: true,
             ShowToolbar: true,
             NavigateOnNodeClick: true
@@ -314,7 +314,7 @@ export class DashboardCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJDa
     template: `
         <mj-collapsible-panel
             SectionKey="queryCategoryHierarchy"
-            SectionName="Query Category Hierarchy & Taxonomy"
+            SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
             [Form]="FormComponent"
@@ -330,7 +330,7 @@ export class DashboardCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJDa
             }
         </mj-collapsible-panel>
     `,
-    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
+    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 640px; min-height: calc(100vh - 280px); flex: 1; margin-bottom: 20px; }`]
 })
 export class QueryCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJQueryCategoryEntity> {
     protected buildTreeConfig(): HierarchyTreeConfig {
@@ -342,7 +342,7 @@ export class QueryCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJQueryC
             DefaultColor: '#10b981',
             ActiveRecordID: this.Record?.ID || undefined,
             Height: '100%',
-            MinHeight: '520px',
+            MinHeight: '640px',
             ShowSearch: true,
             ShowToolbar: true,
             NavigateOnNodeClick: true
@@ -371,7 +371,7 @@ export class QueryCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJQueryC
     template: `
         <mj-collapsible-panel
             SectionKey="tagHierarchy"
-            SectionName="Tag Taxonomy & Hierarchy"
+            SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
             [Form]="FormComponent"
@@ -387,7 +387,7 @@ export class QueryCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJQueryC
             }
         </mj-collapsible-panel>
     `,
-    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
+    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 640px; min-height: calc(100vh - 280px); flex: 1; margin-bottom: 20px; }`]
 })
 export class TagHierarchyPanel extends BaseHierarchyFormPanel<MJTagEntity> {
     protected buildTreeConfig(): HierarchyTreeConfig {
@@ -399,7 +399,7 @@ export class TagHierarchyPanel extends BaseHierarchyFormPanel<MJTagEntity> {
             DefaultColor: '#6366f1',
             ActiveRecordID: this.Record?.ID || undefined,
             Height: '100%',
-            MinHeight: '520px',
+            MinHeight: '640px',
             ShowSearch: true,
             ShowToolbar: true,
             NavigateOnNodeClick: true
@@ -428,7 +428,7 @@ export class TagHierarchyPanel extends BaseHierarchyFormPanel<MJTagEntity> {
     template: `
         <mj-collapsible-panel
             SectionKey="projectHierarchy"
-            SectionName="Project Structure & Subprojects (WBS)"
+            SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
             [Form]="FormComponent"
@@ -444,7 +444,7 @@ export class TagHierarchyPanel extends BaseHierarchyFormPanel<MJTagEntity> {
             }
         </mj-collapsible-panel>
     `,
-    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
+    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 640px; min-height: calc(100vh - 280px); flex: 1; margin-bottom: 20px; }`]
 })
 export class ProjectHierarchyPanel extends BaseHierarchyFormPanel<MJProjectEntity> {
     protected buildTreeConfig(): HierarchyTreeConfig {
@@ -456,7 +456,7 @@ export class ProjectHierarchyPanel extends BaseHierarchyFormPanel<MJProjectEntit
             DefaultColor: '#3b82f6',
             ActiveRecordID: this.Record?.ID || undefined,
             Height: '100%',
-            MinHeight: '520px',
+            MinHeight: '640px',
             ShowSearch: true,
             ShowToolbar: true,
             NavigateOnNodeClick: true
@@ -485,7 +485,7 @@ export class ProjectHierarchyPanel extends BaseHierarchyFormPanel<MJProjectEntit
     template: `
         <mj-collapsible-panel
             SectionKey="contentItemHierarchy"
-            SectionName="Content Hierarchy & Child Items"
+            SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
             [Form]="FormComponent"
@@ -501,7 +501,7 @@ export class ProjectHierarchyPanel extends BaseHierarchyFormPanel<MJProjectEntit
             }
         </mj-collapsible-panel>
     `,
-    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
+    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 640px; min-height: calc(100vh - 280px); flex: 1; margin-bottom: 20px; }`]
 })
 export class ContentItemHierarchyPanel extends BaseHierarchyFormPanel<MJContentItemEntity> {
     protected buildTreeConfig(): HierarchyTreeConfig {
@@ -513,7 +513,7 @@ export class ContentItemHierarchyPanel extends BaseHierarchyFormPanel<MJContentI
             DefaultColor: '#14b8a6',
             ActiveRecordID: this.Record?.ID || undefined,
             Height: '100%',
-            MinHeight: '520px',
+            MinHeight: '640px',
             ShowSearch: true,
             ShowToolbar: true,
             NavigateOnNodeClick: true
@@ -542,7 +542,7 @@ export class ContentItemHierarchyPanel extends BaseHierarchyFormPanel<MJContentI
     template: `
         <mj-collapsible-panel
             SectionKey="fileCategoryHierarchy"
-            SectionName="File Category Hierarchy"
+            SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
             [Form]="FormComponent"
@@ -558,7 +558,7 @@ export class ContentItemHierarchyPanel extends BaseHierarchyFormPanel<MJContentI
             }
         </mj-collapsible-panel>
     `,
-    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
+    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 640px; min-height: calc(100vh - 280px); flex: 1; margin-bottom: 20px; }`]
 })
 export class FileCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJFileCategoryEntity> {
     protected buildTreeConfig(): HierarchyTreeConfig {
@@ -570,7 +570,7 @@ export class FileCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJFileCat
             DefaultColor: '#0284c7',
             ActiveRecordID: this.Record?.ID || undefined,
             Height: '100%',
-            MinHeight: '520px',
+            MinHeight: '640px',
             ShowSearch: true,
             ShowToolbar: true,
             NavigateOnNodeClick: true
@@ -599,7 +599,7 @@ export class FileCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJFileCat
     template: `
         <mj-collapsible-panel
             SectionKey="listCategoryHierarchy"
-            SectionName="List Category Hierarchy"
+            SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
             [Form]="FormComponent"
@@ -615,7 +615,7 @@ export class FileCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJFileCat
             }
         </mj-collapsible-panel>
     `,
-    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
+    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 640px; min-height: calc(100vh - 280px); flex: 1; margin-bottom: 20px; }`]
 })
 export class ListCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJListCategoryEntity> {
     protected buildTreeConfig(): HierarchyTreeConfig {
@@ -627,7 +627,7 @@ export class ListCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJListCat
             DefaultColor: '#84cc16',
             ActiveRecordID: this.Record?.ID || undefined,
             Height: '100%',
-            MinHeight: '520px',
+            MinHeight: '640px',
             ShowSearch: true,
             ShowToolbar: true,
             NavigateOnNodeClick: true
@@ -656,7 +656,7 @@ export class ListCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJListCat
     template: `
         <mj-collapsible-panel
             SectionKey="recordProcessCategoryHierarchy"
-            SectionName="Process Category Hierarchy"
+            SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
             [Form]="FormComponent"
@@ -672,7 +672,7 @@ export class ListCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJListCat
             }
         </mj-collapsible-panel>
     `,
-    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
+    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 640px; min-height: calc(100vh - 280px); flex: 1; margin-bottom: 20px; }`]
 })
 export class RecordProcessCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJRecordProcessCategoryEntity> {
     protected buildTreeConfig(): HierarchyTreeConfig {
@@ -684,7 +684,7 @@ export class RecordProcessCategoryHierarchyPanel extends BaseHierarchyFormPanel<
             DefaultColor: '#f97316',
             ActiveRecordID: this.Record?.ID || undefined,
             Height: '100%',
-            MinHeight: '520px',
+            MinHeight: '640px',
             ShowSearch: true,
             ShowToolbar: true,
             NavigateOnNodeClick: true
@@ -713,7 +713,7 @@ export class RecordProcessCategoryHierarchyPanel extends BaseHierarchyFormPanel<
     template: `
         <mj-collapsible-panel
             SectionKey="skillHierarchy"
-            SectionName="Skill Hierarchy & Taxonomy"
+            SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
             [Form]="FormComponent"
@@ -729,7 +729,7 @@ export class RecordProcessCategoryHierarchyPanel extends BaseHierarchyFormPanel<
             }
         </mj-collapsible-panel>
     `,
-    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
+    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 640px; min-height: calc(100vh - 280px); flex: 1; margin-bottom: 20px; }`]
 })
 export class SkillHierarchyPanel extends BaseHierarchyFormPanel<MJSkillEntity> {
     protected buildTreeConfig(): HierarchyTreeConfig {
@@ -741,7 +741,7 @@ export class SkillHierarchyPanel extends BaseHierarchyFormPanel<MJSkillEntity> {
             DefaultColor: '#a855f7',
             ActiveRecordID: this.Record?.ID || undefined,
             Height: '100%',
-            MinHeight: '520px',
+            MinHeight: '640px',
             ShowSearch: true,
             ShowToolbar: true,
             NavigateOnNodeClick: true
@@ -770,7 +770,7 @@ export class SkillHierarchyPanel extends BaseHierarchyFormPanel<MJSkillEntity> {
     template: `
         <mj-collapsible-panel
             SectionKey="templateCategoryHierarchy"
-            SectionName="Template Category Hierarchy"
+            SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
             [Form]="FormComponent"
@@ -786,7 +786,7 @@ export class SkillHierarchyPanel extends BaseHierarchyFormPanel<MJSkillEntity> {
             }
         </mj-collapsible-panel>
     `,
-    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
+    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 640px; min-height: calc(100vh - 280px); flex: 1; margin-bottom: 20px; }`]
 })
 export class TemplateCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJTemplateCategoryEntity> {
     protected buildTreeConfig(): HierarchyTreeConfig {
@@ -798,7 +798,7 @@ export class TemplateCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJTem
             DefaultColor: '#0ea5e9',
             ActiveRecordID: this.Record?.ID || undefined,
             Height: '100%',
-            MinHeight: '520px',
+            MinHeight: '640px',
             ShowSearch: true,
             ShowToolbar: true,
             NavigateOnNodeClick: true
@@ -827,7 +827,7 @@ export class TemplateCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJTem
     template: `
         <mj-collapsible-panel
             SectionKey="testSuiteHierarchy"
-            SectionName="Test Suite Hierarchy & Sub-Suites"
+            SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
             [Form]="FormComponent"
@@ -843,7 +843,7 @@ export class TemplateCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJTem
             }
         </mj-collapsible-panel>
     `,
-    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
+    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 640px; min-height: calc(100vh - 280px); flex: 1; margin-bottom: 20px; }`]
 })
 export class TestSuiteHierarchyPanel extends BaseHierarchyFormPanel<MJTestSuiteEntity> {
     protected buildTreeConfig(): HierarchyTreeConfig {
@@ -855,7 +855,7 @@ export class TestSuiteHierarchyPanel extends BaseHierarchyFormPanel<MJTestSuiteE
             DefaultColor: '#10b981',
             ActiveRecordID: this.Record?.ID || undefined,
             Height: '100%',
-            MinHeight: '520px',
+            MinHeight: '640px',
             ShowSearch: true,
             ShowToolbar: true,
             NavigateOnNodeClick: true
@@ -884,7 +884,7 @@ export class TestSuiteHierarchyPanel extends BaseHierarchyFormPanel<MJTestSuiteE
     template: `
         <mj-collapsible-panel
             SectionKey="userViewCategoryHierarchy"
-            SectionName="View Category Hierarchy"
+            SectionName="Hierarchy"
             Icon="fa-solid fa-sitemap"
             Variant="related-entity"
             [Form]="FormComponent"
@@ -900,7 +900,7 @@ export class TestSuiteHierarchyPanel extends BaseHierarchyFormPanel<MJTestSuiteE
             }
         </mj-collapsible-panel>
     `,
-    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 520px; margin-bottom: 20px; }`]
+    styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 640px; min-height: calc(100vh - 280px); flex: 1; margin-bottom: 20px; }`]
 })
 export class UserViewCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJUserViewCategoryEntity> {
     protected buildTreeConfig(): HierarchyTreeConfig {
@@ -912,7 +912,7 @@ export class UserViewCategoryHierarchyPanel extends BaseHierarchyFormPanel<MJUse
             DefaultColor: '#6366f1',
             ActiveRecordID: this.Record?.ID || undefined,
             Height: '100%',
-            MinHeight: '520px',
+            MinHeight: '640px',
             ShowSearch: true,
             ShowToolbar: true,
             NavigateOnNodeClick: true
