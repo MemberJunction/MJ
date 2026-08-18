@@ -30,7 +30,7 @@
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
   },
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "dependencies": {
     "@memberjunction/predictive-studio-core": "6.1.0-edge.2"
   },

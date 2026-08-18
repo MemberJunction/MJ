@@ -19,7 +19,7 @@
     "plugin"
   ],
   "author": "MemberJunction",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "dependencies": {
     "@memberjunction/global": "6.1.0-edge.2",
     "@oclif/core": "^3.27.0",

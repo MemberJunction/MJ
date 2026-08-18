@@ -19,7 +19,7 @@
     "interfaces"
   ],
   "author": "MemberJunction",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "dependencies": {
     "@memberjunction/ai-agents": "6.1.0-edge.2",
     "@memberjunction/ai-core-plus": "6.1.0-edge.2",

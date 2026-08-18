@@ -257,7 +257,7 @@ Your application starts with a schema. MJ doesn't hide SQL from you — it embra
 
 A defining choice in MJ: **the database is the source of truth for your schema, and you (DBA/developer) own all DDL.** MJ performs **no implicit schema changes**. Instead, it **introspects** your database to discover tables, columns, keys, indexes, and relationships, **reads the documentation already in the database** (SQL Server extended properties / Postgres `COMMENT`s), and **keeps its metadata layer in sync** with what's actually there. You're free to use any column types, indexing strategy, schemas, computed columns, or vendor features you like — MJ adapts to your schema rather than dictating it.
 
-Schema changes flow through **explicit, versioned migrations** applied by **[Skyway](https://github.com/MemberJunction/skyway)** — MJ's open-source, **Flyway-compatible** migration engine written in TypeScript. This is what makes MJ's upgrade story **deterministic, verifiable, and robust**, and why it slots cleanly into CI/CD:
+Schema changes flow through **explicit, versioned migrations** applied by **[Skyway](https://github.com/MemberJunction/skyway)** — MJ's source-available, **Flyway-compatible** migration engine written in TypeScript. This is what makes MJ's upgrade story **deterministic, verifiable, and robust**, and why it slots cleanly into CI/CD:
 
 - **Deterministic & repeatable.** The *same* immutable, versioned migration files run in dev, staging, and production, in the same order, producing the same result. No "it worked on my environment" schema drift.
 - **Verifiable.** Migrations are **checksum-verified** against the recorded history — if a previously-applied migration is altered, Skyway detects it and refuses to proceed, so tampering and accidental drift surface immediately instead of silently corrupting an environment.
@@ -283,7 +283,7 @@ Two metadata features matter especially when you're **ingesting data from third-
 #### Reference material
 
 - **[migrations/CLAUDE.md](../migrations/CLAUDE.md)** — Authoring database migrations: naming conventions, hardcoded UUIDs, and what CodeGen adds automatically (timestamps, FK indexes) so you don't.
-- **[Skyway](https://github.com/MemberJunction/skyway)** — The open-source, Flyway-compatible TypeScript migration engine that applies your migrations atomically and verifiably.
+- **[Skyway](https://github.com/MemberJunction/skyway)** — The source-available, Flyway-compatible TypeScript migration engine that applies your migrations atomically and verifiably.
 - **[IS-A Relationships](../packages/MJCore/docs/isa-relationships.md)** & **[Organic Keys](../packages/MJCore/docs/organic-keys.md)** — Type inheritance and natural/soft-key matching (see above).
 - **[Virtual Entities](../packages/MJCore/docs/virtual-entities.md)** — Surface a view or external source as a first-class entity without a physical table.
 - **[Soft Deletes Guide](SOFT_DELETES_GUIDE.md)** — Opt into `DeleteType='Soft'` and get filtered views + soft-delete stored procedures managed for you.
@@ -582,11 +582,11 @@ If you're weighing MemberJunction against the stacks you already know — Next.j
 
 ## Building on MJ & joining the community
 
-MemberJunction is open source (ISC), and there are two complementary ways to engage with it — building *on* the platform, and helping shape the platform itself.
+MemberJunction's full source code is public on GitHub (Business Source License 1.1), and there are two complementary ways to engage with it — building *on* the platform, and helping shape the platform itself.
 
 ### Build your application on MJ
 
-You're encouraged to build on MJ, whether your app is **commercial or open source**. The platform gives you the data layer, API, security, UI, Actions, and AI; you bring the domain. Several **open-source apps in the MemberJunction org** show this in practice and are worth studying as references (and reusing):
+You're encouraged to build on MJ, whether your app is **commercial or community-driven**. The platform gives you the data layer, API, security, UI, Actions, and AI; you bring the domain. Several **apps in the MemberJunction org** show this in practice and are worth studying as references (and reusing):
 
 - **[BizApps Common](https://github.com/MemberJunction/bizapps-common)** — a production-ready, schema-complete, fully-typed set of **foundational business entities** (people, organizations, addresses, relationships) packaged as an MJ Open App, so applications share these core entities instead of reinventing them.
 - **[BizApps Tasks](https://github.com/MemberJunction/bizapps-tasks)** — a complete, reusable **task-management system** as an MJ Open App: multi-person assignment, sub-task hierarchies, dependency tracking, and templating that any MJ app can integrate without building its own.
@@ -602,7 +602,7 @@ If you want to extend the framework itself, the best first step isn't to fork in
 - **File [Issues](https://github.com/MemberJunction/MJ/issues)** for bugs and feature requests.
 - **Raise pull requests** with fixes, new features, ideas, and plugins — see [`CONTRIBUTING.md`](../CONTRIBUTING.md) for setup, coding standards, and the PR process.
 
-And of course, because MJ is open source, you can always **read, fork, and extend** the platform directly. But contributing back through the community means your extensions are maintained with the project rather than diverging from it.
+And of course, because MJ's source is fully public, you can always **read, fork, and extend** the platform directly. But contributing back through the community means your extensions are maintained with the project rather than diverging from it.
 
 ---
 
