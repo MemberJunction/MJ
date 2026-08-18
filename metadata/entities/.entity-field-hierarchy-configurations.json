@@ -11,7 +11,11 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "Configuration": "{\"Hierarchy\":{\"IsHierarchy\":true}}"
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entities&Name=ParentID"
@@ -31,7 +35,11 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "Configuration": "{\"Hierarchy\":{\"IsHierarchy\":true}}"
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User View Categories&Name=ParentID"
@@ -51,7 +59,11 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "Configuration": "{\"Hierarchy\":{\"IsHierarchy\":true}}"
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Resource Types&Name=ParentID"
@@ -71,7 +83,11 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "Configuration": "{\"Hierarchy\":{\"IsHierarchy\":true}}"
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Roles&Name=ParentID"
@@ -91,7 +107,11 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "Configuration": "{\"Hierarchy\":{\"IsHierarchy\":true}}"
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Dashboard Categories&Name=ParentID"
@@ -111,7 +131,11 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "Configuration": "{\"Hierarchy\":{\"IsHierarchy\":true}}"
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Query Categories&Name=ParentID"
@@ -131,7 +155,11 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "Configuration": "{\"Hierarchy\":{\"IsHierarchy\":true}}"
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: File Categories&Name=ParentID"
@@ -151,7 +179,11 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "Configuration": "{\"Hierarchy\":{\"IsHierarchy\":true}}"
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: List Categories&Name=ParentID"
@@ -171,7 +203,11 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "Configuration": "{\"Hierarchy\":{\"IsHierarchy\":true}}"
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Template Categories&Name=ParentID"
@@ -191,7 +227,11 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "Configuration": "{\"Hierarchy\":{\"IsHierarchy\":true}}"
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Credential Categories&Name=ParentID"
@@ -211,7 +251,11 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "Configuration": "{\"Hierarchy\":{\"IsHierarchy\":true}}"
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Remote Operation Categories&Name=ParentID"
@@ -231,7 +275,11 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "Configuration": "{\"Hierarchy\":{\"IsHierarchy\":true}}"
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Process Categories&Name=ParentID"
@@ -251,7 +299,11 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "Configuration": "{\"Hierarchy\":{\"IsHierarchy\":true}}"
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Generated Code Categories&Name=ParentID"
@@ -271,7 +323,11 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "Configuration": "{\"Hierarchy\":{\"IsHierarchy\":true}}"
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Prompt Categories&Name=ParentID"
@@ -291,7 +347,11 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "Configuration": "{\"Hierarchy\":{\"IsHierarchy\":true}}"
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tags&Name=ParentID"
@@ -311,7 +371,11 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "Configuration": "{\"Hierarchy\":{\"IsHierarchy\":true}}"
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tests&Name=ParentID"
@@ -331,7 +395,11 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "Configuration": "{\"Hierarchy\":{\"IsHierarchy\":true}}"
+            "Configuration": {
+              "Hierarchy": {
+                "IsHierarchy": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tasks&Name=ParentID"
