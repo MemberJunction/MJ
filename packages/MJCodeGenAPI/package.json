@@ -20,7 +20,7 @@
     "zip": "zip -qr deploy.zip ./node_modules ./dist ./package.json"
   },
   "author": "",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "dependencies": {
     "@memberjunction/core": "6.1.0-edge.2",
     "@memberjunction/global": "6.1.0-edge.2",

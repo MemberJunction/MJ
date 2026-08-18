@@ -1,5 +1,6 @@
 {
   "name": "mj_explorer",
+  "license": "BUSL-1.1",
   "description": "MemberJunction Explorer UI",
   "version": "1.0.0",
   "scripts": {

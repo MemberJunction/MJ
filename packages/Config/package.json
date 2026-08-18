@@ -18,7 +18,7 @@
     "config"
   ],
   "author": "MemberJunction",
-  "license": "MIT",
+  "license": "BUSL-1.1",
   "dependencies": {
     "cosmiconfig": "^9.0.0",
     "lodash.mergewith": "^4.6.2",

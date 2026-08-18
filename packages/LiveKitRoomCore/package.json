@@ -14,7 +14,7 @@
     "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "dependencies": {
     "@livekit/krisp-noise-filter": "^0.4.3",
     "@livekit/track-processors": "^0.7.2",

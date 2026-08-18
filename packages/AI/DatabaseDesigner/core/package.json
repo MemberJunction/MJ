@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/database-designer-core",
+  "license": "BUSL-1.1",
   "type": "module",
   "version": "6.1.0-edge.2",
   "description": "Database Designer Agent — conversational AI for creating and modifying database entities via natural language",
