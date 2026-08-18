@@ -132,4 +132,52 @@ describe('PostgreSQLCodeGenProvider — Hierarchy Functions suite', () => {
             'LEFT JOIN LATERAL "sales"."fn_category_parent_id_get_hierarchy_meta"(c."ID", c."ParentID") AS hier_ParentID ON true'
         );
     });
+
+    it('throws descriptive error when entity has composite primary keys', () => {
+        const compositePKEntity = createHierarchyEntity({
+            EntityFields: [
+                {
+                    ID: 'pk-1',
+                    Name: 'TenantID',
+                    Type: 'uuid',
+                    Length: 16,
+                    IsPrimaryKey: true,
+                    AllowsNull: false,
+                },
+                {
+                    ID: 'pk-2',
+                    Name: 'ID',
+                    Type: 'uuid',
+                    Length: 16,
+                    IsPrimaryKey: true,
+                    AllowsNull: false,
+                },
+                {
+                    ID: 'fk-parent',
+                    Name: 'ParentID',
+                    Type: 'uuid',
+                    Length: 16,
+                    IsPrimaryKey: false,
+                    AllowsNull: true,
+                    RelatedEntityID: 'entity-categories',
+                    RelatedEntity: 'Categories',
+                },
+            ],
+        });
+        const compFkField = compositePKEntity.Fields.find(f => f.Name === 'ParentID')!;
+
+        expect(() => provider.generateHierarchyMetaFunction(compositePKEntity, compFkField)).toThrow(
+            /requires a single-column primary key/
+        );
+        expect(() => provider.generateDescendantsFunction(compositePKEntity, compFkField)).toThrow(
+            /requires a single-column primary key/
+        );
+        expect(() => provider.generateAncestorsFunction(compositePKEntity, compFkField)).toThrow(
+            /requires a single-column primary key/
+        );
+        expect(() => provider.generateRootIDFunction(compositePKEntity, compFkField)).toThrow(
+            /requires a single-column primary key/
+        );
+    });
 });
+

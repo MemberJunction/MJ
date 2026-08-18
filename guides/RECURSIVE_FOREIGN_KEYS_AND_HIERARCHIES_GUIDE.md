@@ -23,6 +23,22 @@ Hierarchical and tree-structured data models (e.g. self-referencing entities whe
 - **Strongly Typed TypeScript Methods**: Entity subclasses automatically gain `GetDescendants()`, `GetAncestors()`, and `GetChildren()` backed by single-query `RunView` calls.
 - **Out-of-the-Box Angular Visualization**: The `<mj-hierarchy-tree>` form component renders interactive visual trees with automatic zoom-to-fit, pan, centering, and deep-link node selection.
 
+### 1.1. Single-Column Primary Key & Foreign Key Invariant
+
+> [!IMPORTANT]
+> **MemberJunction's automated hierarchy TVFs, base view lateral projections, and `BaseEntity` traversal methods require a single-column primary key and single-column foreign key (typically UUID `uniqueidentifier`).**
+
+While MemberJunction core natively supports composite keys of any degree for general entity CRUD, recursive tree hierarchies and materialized lineage representations rely on single-valued identity keys for the following architectural reasons:
+
+1. **Deterministic Lineage Paths**: The materialized path format (`/UUID1/UUID2/UUID3/`) requires a single scalar string representation per node level. Composite keys would produce ambiguous path delimiters and require complex multipart tokenization.
+2. **Set-Based CTE Traversal & Index Alignment**: Inline table-valued functions (ITVFs) and recursive common table expressions take scalar `@RecordID` and `@ParentID` arguments that map 1:1 to indexed B-trees.
+3. **Lateral Base View Joins**: Base view column projection joins (`OUTER APPLY [fn..._GetHierarchyMeta](b.[PK], b.[ParentID])`) bind directly to the single primary key column.
+
+**Validation & Safety Guarantees**:
+- **CodeGen Detection**: If CodeGen encounters an entity with a recursive foreign key on a table with composite primary keys (`entity.PrimaryKeys.length !== 1`), it emits a descriptive warning and gracefully skips generating hierarchy TVFs and base view lateral joins.
+- **Subclass Emission**: `EntitySubClassGeneratorBase` skips emitting `GetDescendants()`, `GetAncestors()`, and `GetChildren()` on generated classes for composite-PK entities.
+- **Runtime Guard**: `BaseEntity.GetDescendants()`, `GetAncestors()`, and `GetChildren()` inspect `this.PrimaryKeys.length` and log an error if invoked on a composite-PK entity, returning `[]` safely rather than issuing an invalid query.
+
 ---
 
 ## 2. End-to-End Hierarchy Flow

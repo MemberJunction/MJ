@@ -678,6 +678,9 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
      * The function is named `fn{BaseTable}{FieldName}_GetHierarchyMeta`.
      */
     generateHierarchyMetaFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
         const primaryKey = entity.FirstPrimaryKey.Name;
         const primaryKeyType = entity.FirstPrimaryKey.SQLFullType;
         const schemaName = entity.SchemaName;
@@ -749,6 +752,9 @@ GO
      * The function is named `fn{BaseTable}{FieldName}_GetDescendants`.
      */
     generateDescendantsFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
         const primaryKey = entity.FirstPrimaryKey.Name;
         const primaryKeyType = entity.FirstPrimaryKey.SQLFullType;
         const schemaName = entity.SchemaName;
@@ -816,6 +822,9 @@ GO
      * The function is named `fn{BaseTable}{FieldName}_GetAncestors`.
      */
     generateAncestorsFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
         const primaryKey = entity.FirstPrimaryKey.Name;
         const primaryKeyType = entity.FirstPrimaryKey.SQLFullType;
         const schemaName = entity.SchemaName;
@@ -907,6 +916,9 @@ GO
      * designed to be consumed via `OUTER APPLY` in the entity's base view.
      */
     generateRootIDFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
         const primaryKey = entity.FirstPrimaryKey.Name;
         const primaryKeyType = entity.FirstPrimaryKey.SQLFullType;
         const schemaName = entity.SchemaName;

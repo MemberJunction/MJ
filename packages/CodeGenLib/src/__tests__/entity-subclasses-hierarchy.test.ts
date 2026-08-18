@@ -99,4 +99,45 @@ describe('EntitySubClassGeneratorBase — Hierarchy Traversal Methods', () => {
         const code = EntitySubClassGeneratorBase.GenerateHierarchyMethods(entity, 'PlainEntityEntity');
         expect(code).toBe('');
     });
+
+    it('skips generating hierarchy methods when entity has composite primary keys', () => {
+        const compositeEntity = new EntityInfo({
+            ID: 'entity-composite',
+            Name: 'CompositeHierarchy',
+            SchemaName: '__mj',
+            BaseTable: 'CompositeHierarchy',
+            BaseTableCodeName: 'CompositeHierarchy',
+            BaseView: 'vwCompositeHierarchies',
+            EntityFields: [
+                {
+                    ID: 'pk-1',
+                    Name: 'TenantID',
+                    Type: 'uniqueidentifier',
+                    IsPrimaryKey: true,
+                    AllowsNull: false,
+                },
+                {
+                    ID: 'pk-2',
+                    Name: 'ID',
+                    Type: 'uniqueidentifier',
+                    IsPrimaryKey: true,
+                    AllowsNull: false,
+                },
+                {
+                    ID: 'fk-rec',
+                    Name: 'ParentID',
+                    Type: 'uniqueidentifier',
+                    IsPrimaryKey: false,
+                    AllowsNull: true,
+                    RelatedEntityID: 'entity-composite',
+                    RelatedEntity: 'CompositeHierarchy',
+                },
+            ],
+            EntityPermissions: [],
+        });
+
+        const code = EntitySubClassGeneratorBase.GenerateHierarchyMethods(compositeEntity, 'CompositeHierarchyEntity');
+        expect(code).toBe('');
+    });
 });
+

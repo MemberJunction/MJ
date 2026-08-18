@@ -4943,7 +4943,12 @@ export abstract class BaseEntity<T = unknown> {
      * self-referencing foreign key field found on the entity.
      */
     protected getRecursiveForeignKeyField(parentFieldName?: string): EntityFieldInfo | null {
-        const fields = this.EntityInfo?.Fields ?? [];
+        if (!this.EntityInfo) return null;
+        if (this.PrimaryKeys.length !== 1) {
+            LogError(`BaseEntity hierarchy methods: Entity '${this.EntityInfo.Name}' has ${this.PrimaryKeys.length} primary key fields. MemberJunction hierarchy traversal requires a single-column primary key.`);
+            return null;
+        }
+        const fields = this.EntityInfo.Fields ?? [];
         if (parentFieldName) {
             const match = fields.find(f => f.Name.toLowerCase() === parentFieldName.toLowerCase() || f.CodeName.toLowerCase() === parentFieldName.toLowerCase());
             return match ?? null;

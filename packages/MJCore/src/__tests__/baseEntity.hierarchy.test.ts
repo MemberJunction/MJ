@@ -106,4 +106,55 @@ describe('BaseEntity hierarchy traversal methods', () => {
         const ancestors = await entity.GetAncestors();
         expect(ancestors).toEqual([]);
     });
+
+    it('returns null and logs error when entity has composite primary keys', async () => {
+        const compositeEntityInfo = new EntityInfo({
+            ID: '22222222-2222-2222-2222-222222222222',
+            Name: 'Composite Entity',
+            BaseTable: 'CompositeEntity',
+            BaseView: 'vwCompositeEntities',
+            Status: 'Active',
+            Fields: [
+                {
+                    ID: 'f1',
+                    Name: 'TenantID',
+                    Type: 'uniqueidentifier',
+                    IsPrimaryKey: true,
+                    AllowsNull: false,
+                    Status: 'Active',
+                },
+                {
+                    ID: 'f2',
+                    Name: 'ID',
+                    Type: 'uniqueidentifier',
+                    IsPrimaryKey: true,
+                    AllowsNull: false,
+                    Status: 'Active',
+                },
+                {
+                    ID: 'f3',
+                    Name: 'ParentID',
+                    Type: 'uniqueidentifier',
+                    AllowsNull: true,
+                    RelatedEntityID: '22222222-2222-2222-2222-222222222222',
+                    RelatedEntity: 'Composite Entity',
+                    Status: 'Active',
+                },
+            ],
+        });
+
+        const entity = new MockCategoryEntity(compositeEntityInfo);
+        const field = (entity as unknown as { getRecursiveForeignKeyField: (name?: string) => unknown }).getRecursiveForeignKeyField();
+        expect(field).toBeNull();
+
+        const descendants = await entity.GetDescendants();
+        expect(descendants).toEqual([]);
+
+        const ancestors = await entity.GetAncestors();
+        expect(ancestors).toEqual([]);
+
+        const children = await entity.GetChildren();
+        expect(children).toEqual([]);
+    });
 });
+

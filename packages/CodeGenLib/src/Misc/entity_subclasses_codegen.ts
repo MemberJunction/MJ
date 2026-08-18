@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import ts from 'typescript';
 import { makeDir, sortBySequenceAndCreatedAt } from '../Misc/util';
-import { logError, logStatus } from './status_logging';
+import { logError, logStatus, logWarning } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
 import { mj_core_schema, resolveEntityPackageName } from '../Config/config';
 import { SQLLogging } from './sql_logging';
@@ -898,6 +898,15 @@ ${fields}
       f => f.RelatedEntityID != null && (UUIDsEqual(f.RelatedEntityID, entity.ID) || f.RelatedEntity === entity.Name) && !f.IsVirtual
     );
     if (recursiveFKs.length === 0) {
+      return '';
+    }
+
+    if (entity.PrimaryKeys.length !== 1) {
+      logWarning(
+        `[Hierarchy] Entity '${entity.Name}' has ${recursiveFKs.length} recursive foreign key(s) ` +
+        `(${recursiveFKs.map(f => f.Name).join(', ')}), but has ${entity.PrimaryKeys.length} primary key fields. ` +
+        `MemberJunction hierarchy traversal requires a single-column primary key; skipping subclass hierarchy methods.`
+      );
       return '';
     }
 
