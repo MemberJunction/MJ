@@ -184,6 +184,12 @@ export interface HierarchyTreeConfig {
     OrderBy?: string;
 
     /**
+     * Optional maximum number of rows to retrieve via `RunView`. `0` loads all records.
+     * @default 0
+     */
+    MaxRows?: number;
+
+    /**
      * Optional active / selected record ID. When provided, the node is highlighted and all ancestors
      * are expanded so it is visible in full tree context.
      */
