@@ -74,7 +74,10 @@ const {
 
 vi.mock('../config.js', () => ({ configInfo: mockConfig }));
 
-vi.mock('@memberjunction/generic-database-provider', () => {
+// On the 5.x line UserCache is exported by @memberjunction/sqlserver-dataprovider, not
+// generic-database-provider — mocking it here is what keeps the real SQLServerDataProvider
+// (and its mssql-dependent config module) out of the module graph.
+vi.mock('@memberjunction/sqlserver-dataprovider', () => {
     const instance = {
         UserByName: mockUserByName,
         get Users() {
