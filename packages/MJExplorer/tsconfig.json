@@ -17,7 +17,8 @@
       "fs": ["./src/fs.ts"],
       "@memberjunction/ng-bootstrap": ["../Angular/Bootstrap/dist"],
       "@memberjunction/ng-bootstrap-lite": ["../Angular/BootstrapLite/dist"],
-      "@memberjunction/ng-graph-view": ["../Angular/Generic/graph-view/dist"]
+      "@memberjunction/ng-graph-view": ["../Angular/Generic/graph-view/dist"],
+      "@memberjunction/ng-hierarchy-tree": ["../Angular/Generic/hierarchy-tree/dist"]
     }
   },
   "angularCompilerOptions": {
