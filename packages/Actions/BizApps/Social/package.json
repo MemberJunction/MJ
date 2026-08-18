@@ -7,9 +7,10 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "watch": "tsc -w",
-    "clean": "rimraf dist",
-    "test": "vitest run"
+    "clean": "rimraf dist"
   },
   "keywords": [
     "memberjunction",

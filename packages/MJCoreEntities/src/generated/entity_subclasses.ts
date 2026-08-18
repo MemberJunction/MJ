@@ -10179,6 +10179,131 @@ export const MJAuditLogSchema = z.object({
 export type MJAuditLogEntityType = z.infer<typeof MJAuditLogSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Authentication Providers
+ */
+export const MJAuthenticationProviderSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique, human-readable name for this provider instance (e.g. "WorkOS Production", "Corporate Azure AD"). Also the key used to register the provider with AuthProviderFactory.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional administrator notes describing this provider configuration.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseAuthProvider, DriverClass). MUST match the @RegisterClass key on the concrete server provider (e.g. "workos", "auth0", "okta", "msal", "cognito", "google"). The browser resolves its matching MJAuthBase subclass from the same key, so a driver ships as a server/browser pair under one name.`),
+    Issuer: z.string().nullable().describe(`
+        * * Field Name: Issuer
+        * * Display Name: Issuer
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Expected JWT issuer (the "iss" claim). Used to route an incoming token to this provider and to validate the token. E.g. https://api.workos.com/user_management/<clientId>.`),
+    Audience: z.string().nullable().describe(`
+        * * Field Name: Audience
+        * * Display Name: Audience
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Expected JWT audience (the "aud" claim) enforced during validation.`),
+    JWKSUri: z.string().nullable().describe(`
+        * * Field Name: JWKSUri
+        * * Display Name: JWKS URI
+        * * SQL Data Type: nvarchar(500)
+        * * Description: JWKS endpoint URL used to fetch the signing keys that verify token signatures. E.g. https://api.workos.com/sso/jwks/<clientId>.`),
+    ClientID: z.string().nullable().describe(`
+        * * Field Name: ClientID
+        * * Display Name: Client ID
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Public OAuth client ID. Safe to expose to the browser and published in the pre-auth provider catalog.`),
+    Domain: z.string().nullable().describe(`
+        * * Field Name: Domain
+        * * Display Name: Domain
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Provider domain where applicable (e.g. Auth0/Okta tenant domain). Optional; published in the pre-auth provider catalog.`),
+    Scopes: z.string().nullable().describe(`
+        * * Field Name: Scopes
+        * * Display Name: Scopes
+        * * SQL Data Type: nvarchar(500)
+        * * Description: OAuth scopes to request, space-delimited (e.g. "openid profile email"). Published in the pre-auth provider catalog.`),
+    AdditionalConfiguration: z.string().nullable().describe(`
+        * * Field Name: AdditionalConfiguration
+        * * Display Name: Additional Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: SERVER-SIDE ONLY driver configuration as a JSON object, for fields not modeled as columns. NEVER published to the pre-auth catalog. Merged into the provider config when the server driver is instantiated. Put anything the browser must not read here.`),
+    ClientConfiguration: z.string().nullable().describe(`
+        * * Field Name: ClientConfiguration
+        * * Display Name: Client Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Browser driver configuration as a JSON object (e.g. WorkOS apiHostname, Cognito region/userPoolId, redirectUri). PUBLISHED VERBATIM in the unauthenticated pre-auth provider catalog, so every value here must be considered world-readable. Server-only settings belong in AdditionalConfiguration.`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Lifecycle status. Only Active providers are registered at startup and offered for login.`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, this provider is the default selection -- pre-highlighted in the login picker, and used directly when it is the only Active, client-visible provider.`),
+    ClientVisible: z.boolean().describe(`
+        * * Field Name: ClientVisible
+        * * Display Name: Client Visible
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, this provider appears in the browser pre-auth login picker and is included in the public catalog endpoint. Set false for providers that only validate machine-to-machine tokens and should never be offered as an interactive login.`),
+    DisplayName: z.string().nullable().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Label shown on the login picker button (e.g. "Microsoft", rendered as "Continue with Microsoft"). Falls back to Name when null.`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Icon for the login picker button -- a Font Awesome class (e.g. "fa-brands fa-microsoft") or a known brand-logo key the picker maps to a brand chip.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Ordering of this provider within the login picker (ascending).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Credential: z.string().nullable().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJAuthenticationProviderEntityType = z.infer<typeof MJAuthenticationProviderSchema>;
+
+/**
  * zod schema definition for the entity MJ: Authorization Roles
  */
 export const MJAuthorizationRoleSchema = z.object({
@@ -16417,7 +16542,7 @@ export const MJEntitySchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     AutoUpdateDescription: z.boolean().describe(`
         * * Field Name: AutoUpdateDescription
-        * * Display Name: Auto-Update Description
+        * * Display Name: Auto Update Description
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When set to 1 (default), whenever a description is modified in the underlying view (first choice) or table (second choice), the Description column in the entity definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.`),
@@ -16445,7 +16570,7 @@ export const MJEntitySchema = z.object({
         * * Description: Database schema containing this entity's table and view.`),
     VirtualEntity: z.boolean().describe(`
         * * Field Name: VirtualEntity
-        * * Display Name: Is Virtual Entity
+        * * Display Name: Virtual Entity
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this is a virtual entity without a physical database table.`),
@@ -16511,40 +16636,40 @@ export const MJEntitySchema = z.object({
         * * Description: Enabling this bit will result in search being possible at the API and UI layers`),
     FullTextSearchEnabled: z.boolean().describe(`
         * * Field Name: FullTextSearchEnabled
-        * * Display Name: Full-Text Search Enabled
+        * * Display Name: Full Text Search Enabled
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether full-text search indexing is enabled for this entity.`),
     FullTextCatalog: z.string().nullable().describe(`
         * * Field Name: FullTextCatalog
-        * * Display Name: Full-Text Catalog
+        * * Display Name: Full Text Catalog
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the SQL Server full-text catalog if search is enabled.`),
     FullTextCatalogGenerated: z.boolean().describe(`
         * * Field Name: FullTextCatalogGenerated
-        * * Display Name: Full-Text Catalog Generated
+        * * Display Name: Full Text Catalog Generated
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates if the full-text catalog was auto-generated by CodeGen.`),
     FullTextIndex: z.string().nullable().describe(`
         * * Field Name: FullTextIndex
-        * * Display Name: Full-Text Index
+        * * Display Name: Full Text Index
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the full-text index on this entity's table.`),
     FullTextIndexGenerated: z.boolean().describe(`
         * * Field Name: FullTextIndexGenerated
-        * * Display Name: Full-Text Index Generated
+        * * Display Name: Full Text Index Generated
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates if the full-text index was auto-generated by CodeGen.`),
     FullTextSearchFunction: z.string().nullable().describe(`
         * * Field Name: FullTextSearchFunction
-        * * Display Name: Full-Text Search Function
+        * * Display Name: Full Text Search Function
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the function used for full-text searching this entity.`),
     FullTextSearchFunctionGenerated: z.boolean().describe(`
         * * Field Name: FullTextSearchFunctionGenerated
-        * * Display Name: Full-Text Search Function Generated
+        * * Display Name: Full Text Search Function Generated
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates if the search function was auto-generated by CodeGen.`),
@@ -16556,17 +16681,17 @@ export const MJEntitySchema = z.object({
         * * Description: Maximum number of rows to return in user-created views for this entity.`),
     spCreate: z.string().nullable().describe(`
         * * Field Name: spCreate
-        * * Display Name: Create Procedure
+        * * Display Name: Create Stored Procedure
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the stored procedure for creating records in this entity.`),
     spUpdate: z.string().nullable().describe(`
         * * Field Name: spUpdate
-        * * Display Name: Update Procedure
+        * * Display Name: Update Stored Procedure
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the stored procedure for updating records in this entity.`),
     spDelete: z.string().nullable().describe(`
         * * Field Name: spDelete
-        * * Display Name: Delete Procedure
+        * * Display Name: Delete Stored Procedure
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the stored procedure for deleting records in this entity.`),
     spCreateGenerated: z.boolean().describe(`
@@ -16611,12 +16736,12 @@ export const MJEntitySchema = z.object({
         * * Description: This field must be turned on in order to enable merging of records for the entity. For AllowRecordMerge to be turned on, AllowDeleteAPI must be set to 1, and DeleteType must be set to Soft`),
     spMatch: z.string().nullable().describe(`
         * * Field Name: spMatch
-        * * Display Name: Match Procedure
+        * * Display Name: Match Stored Procedure
         * * SQL Data Type: nvarchar(255)
         * * Description: When specified, this stored procedure is used to find matching records in this particular entity. The convention is to pass in the primary key(s) columns for the given entity to the procedure and the return will be zero to many rows where there is a column for each primary key field(s) and a ProbabilityScore (numeric(1,12)) column that has a 0 to 1 value of the probability of a match.`),
     RelationshipDefaultDisplayType: z.union([z.literal('Dropdown'), z.literal('Search')]).describe(`
         * * Field Name: RelationshipDefaultDisplayType
-        * * Display Name: Default Display Type
+        * * Display Name: Relationship Default Display Type
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Search
     * * Value List Type: List
@@ -16632,12 +16757,12 @@ export const MJEntitySchema = z.object({
         * * Description: Indicates if the default user form was auto-generated for this entity.`),
     EntityObjectSubclassName: z.string().nullable().describe(`
         * * Field Name: EntityObjectSubclassName
-        * * Display Name: Subclass Name
+        * * Display Name: Entity Object Subclass Name
         * * SQL Data Type: nvarchar(255)
         * * Description: TypeScript class name for the entity subclass in the codebase.`),
     EntityObjectSubclassImport: z.string().nullable().describe(`
         * * Field Name: EntityObjectSubclassImport
-        * * Display Name: Subclass Import
+        * * Display Name: Entity Object Subclass Import
         * * SQL Data Type: nvarchar(255)
         * * Description: Import path for the entity subclass in the TypeScript codebase.`),
     PreferredCommunicationField: z.string().nullable().describe(`
@@ -16662,7 +16787,7 @@ export const MJEntitySchema = z.object({
         * * Default Value: getutcdate()`),
     ScopeDefault: z.string().nullable().describe(`
         * * Field Name: ScopeDefault
-        * * Display Name: Default Scope
+        * * Display Name: Scope Default
         * * SQL Data Type: nvarchar(100)
         * * Description: Optional, comma-delimited string indicating the default scope for entity visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for simple defaults for filtering entity visibility, not security enforcement.`),
     RowsToPackWithSchema: z.union([z.literal('All'), z.literal('None'), z.literal('Sample')]).describe(`
@@ -16737,13 +16862,13 @@ export const MJEntitySchema = z.object({
         * * Description: When false (default), child types are disjoint - a record can only be one child type at a time. When true, a record can simultaneously exist as multiple child types (e.g., a Person can be both a Member and a Volunteer).`),
     AutoUpdateFullTextSearch: z.boolean().describe(`
         * * Field Name: AutoUpdateFullTextSearch
-        * * Display Name: Auto-Update Full-Text Search
+        * * Display Name: Auto Update Full Text Search
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true, CodeGen LLM can auto-configure full-text search settings (FullTextSearchEnabled, catalog, index, function) during code generation runs.`),
     AutoUpdateAllowUserSearchAPI: z.boolean().describe(`
         * * Field Name: AutoUpdateAllowUserSearchAPI
-        * * Display Name: Auto-Update Search API
+        * * Display Name: Auto Update Allow User Search API
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true, CodeGen LLM can auto-set AllowUserSearchAPI during code generation runs.`),
@@ -16755,13 +16880,13 @@ export const MJEntitySchema = z.object({
         * * Description: When true (default), the server-side RunView cache will store and return cached results for this entity, trusting that all mutations flow through BaseEntity.Save() which fires cache invalidation events. Set to false for entities whose rows are created as side-effects of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal), since those inserts bypass BaseEntity and never trigger cache invalidation.`),
     SupportsGeoCoding: z.boolean().describe(`
         * * Field Name: SupportsGeoCoding
-        * * Display Name: Supports Geo-Coding
+        * * Display Name: Supports Geo Coding
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, CodeGen generates geo-aware subclass code, adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields (address, lat/lng, etc.).`),
     AutoUpdateSupportsGeoCoding: z.boolean().describe(`
         * * Field Name: AutoUpdateSupportsGeoCoding
-        * * Display Name: Auto-Update Geo-Coding
+        * * Display Name: Auto Update Supports Geo Coding
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true (default), CodeGen can automatically set SupportsGeoCoding based on LLM analysis of entity fields. Set to 0 to lock the value and prevent CodeGen from changing it.`),
@@ -16810,6 +16935,12 @@ export const MJEntitySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, this entity may have rows removed by DELETE statements that do not go through BaseEntity.Delete() — purge and retention routines, or integration sync reconciling a remote source. Default 0, meaning every delete is expected to flow through BaseEntity so that record-change tracking, entity actions, cascade handling and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, and additionally requires DeleteType = 'Hard' — a direct DELETE removes the row outright rather than setting DeletedAt, which would defeat soft delete.`),
+    Configuration: z.any().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJEntityEntity_IEntityConfiguration
+        * * Description: Optional JSON configuration bag for this entity (shape = IEntityConfiguration). Nested UI.Form holds generated-form chrome: Layout (accordion | left-nav | auto) and AutoLeftNavAt. NULL / omitted keys = today's behavior (accordion; every DisplayInForm relationship is first-class). Expand by adding a property on the interface — no schema change. Anything the engine filters or joins on stays a column; anything the UI or a BaseFormPolicy consumes at render time belongs here.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -18111,6 +18242,12 @@ export const MJEntityFieldSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, this field is a SQL Server computed column or PostgreSQL generated column — physically present in the base table but read-only at the SQL layer. Distinct from IsVirtual, which means the column is not in the base table at all (e.g., joined name lookups in the base view). A computed column has both IsVirtual=1 (read-only at the API layer) and IsComputed=1 (physically in the table). The difference matters for base-view JOIN target selection: when an FK's related Name Field is computed, the generated view joins to the related entity's base table instead of its view.`),
+    EmbeddedRecord: z.any().nullable().describe(`
+        * * Field Name: EmbeddedRecord
+        * * Display Name: Embedded Record
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJEntityFieldEntity_IEmbeddedRecordConfig
+        * * Description: Optional JSON policy object that declares this foreign-key field as a first-class embedded record, so CodeGen can emit {FieldName}_Object / {FieldName}_EnsureObject() on the entity subclass. Shape is IEmbeddedRecordConfig: OnClear ('delete' | 'orphan' | 'refuse', default orphan) and LoadNested ('inherit' | 'related', default inherit). RelatedEntity and the FK field name are NOT repeated here — they are this row's RelatedEntityID and Name. AllowsNull on this same row decides whether the object is provisioned with GetEntityObject (required FK) or via Ensure (nullable FK). NULL means the field is an ordinary FK, which is the default and reproduces pre-feature behaviour exactly.`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -18698,7 +18835,7 @@ export const MJEntityRelationshipSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity
+        * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     Sequence: z.number().describe(`
@@ -18709,18 +18846,18 @@ export const MJEntityRelationshipSchema = z.object({
         * * Description: Used for display order in generated forms and in other places in the UI where relationships for an entity are shown`),
     RelatedEntityID: z.string().describe(`
         * * Field Name: RelatedEntityID
-        * * Display Name: Related Entity
+        * * Display Name: Related Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     BundleInAPI: z.boolean().describe(`
         * * Field Name: BundleInAPI
-        * * Display Name: Bundle In API
+        * * Display Name: Bundle in API
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether to include related records when fetching the parent entity via API.`),
     IncludeInParentAllQuery: z.boolean().describe(`
         * * Field Name: IncludeInParentAllQuery
-        * * Display Name: Include In Parent Query
+        * * Display Name: Include in Parent All Query
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether to include this relationship when querying all fields of the parent entity.`),
@@ -18761,7 +18898,7 @@ export const MJEntityRelationshipSchema = z.object({
         * * Description: For many-to-many, the field in the junction table linking to the related entity.`),
     DisplayInForm: z.boolean().describe(`
         * * Field Name: DisplayInForm
-        * * Display Name: Display In Form
+        * * Display Name: Display in Form
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When unchecked the relationship will NOT be displayed on the generated form`),
@@ -18798,17 +18935,17 @@ export const MJEntityRelationshipSchema = z.object({
         * * Description: If specified, the icon `),
     DisplayUserViewID: z.string().nullable().describe(`
         * * Field Name: DisplayUserViewID
-        * * Display Name: Display User View
+        * * Display Name: Display User View ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: User Views (vwUserViews.ID)`),
     DisplayComponentID: z.string().nullable().describe(`
         * * Field Name: DisplayComponentID
-        * * Display Name: Display Component
+        * * Display Name: Display Component ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Relationship Display Components (vwEntityRelationshipDisplayComponents.ID)`),
     DisplayComponentConfiguration: z.string().nullable().describe(`
         * * Field Name: DisplayComponentConfiguration
-        * * Display Name: Display Component Config
+        * * Display Name: Display Component Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: If DisplayComponentID is specified, this field can optionally be used to track component-specific and relationship-specific configuration details that will be used by CodeGen to provide to the display component selected.`),
     __mj_CreatedAt: z.date().describe(`
@@ -18823,30 +18960,36 @@ export const MJEntityRelationshipSchema = z.object({
         * * Default Value: getutcdate()`),
     AutoUpdateFromSchema: z.boolean().describe(`
         * * Field Name: AutoUpdateFromSchema
-        * * Display Name: Auto-Update From Schema
+        * * Display Name: Auto Update From Schema
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Indicates whether this relationship should be automatically updated by CodeGen. When set to 0, the record will not be modified by CodeGen. Defaults to 1.`),
     AdditionalFieldsToInclude: z.string().nullable().describe(`
         * * Field Name: AdditionalFieldsToInclude
-        * * Display Name: Additional Fields
+        * * Display Name: Additional Fields to Include
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of additional field names to include when joining through this relationship (for junction tables, e.g., ["RoleName", "UserEmail"])`),
     AutoUpdateAdditionalFieldsToInclude: z.boolean().describe(`
         * * Field Name: AutoUpdateAdditionalFieldsToInclude
-        * * Display Name: Auto-Update Additional Fields
+        * * Display Name: Auto Update Additional Fields
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When 1, allows system/LLM to auto-update AdditionalFieldsToInclude; when 0, user has locked this field`),
     RelatedRecordCollection: z.any().nullable().describe(`
         * * Field Name: RelatedRecordCollection
-        * * Display Name: Related Record Collection Policy
+        * * Display Name: Related Record Collection
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJEntityRelationshipEntity_IRelatedRecordCollectionConfig
         * * Description: Optional JSON policy object that declares this relationship as a first-class related-record collection, so CodeGen can emit a typed DeclareRelatedRecords(...) declaration on the entity subclass. Shape is IRelatedRecordCollectionConfig: Name (the generated property name, e.g. "Lines"), Load ('explicit' | 'immediate' | 'lazy' | 'never'), Source ('database' | 'cache'), ReadOnly, OnRemove ('delete' | 'orphan' | 'refuse'), OrderBy, Sequence ({ Field, From }), and ClearAfterSave. Source 'cache' reads the related records from whichever loaded BaseEngine already holds that entity, costing no query, and defaults ReadOnly to true because those are the engine's own instances; 'lazy' fills on first access and requires both. RelatedEntity and RelatedEntityJoinField are NOT repeated here — they are read from this row's own columns. NULL means the relationship is not a declared collection, which is the default and reproduces pre-6.2 behaviour exactly.`),
+    Configuration: z.any().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJEntityRelationshipEntity_IEntityRelationshipConfiguration
+        * * Description: Optional JSON configuration bag for this relationship (shape = IEntityRelationshipConfiguration). Nested UI.FormRole is Primary (first-class chrome) or Detail (parked in a More group). Distinct from RelatedRecordCollection (composite-graph policy), DisplayComponentConfiguration (selected display-component knobs), and AdditionalFieldsToInclude (join-field names) — those columns are owned by CodeGen for other jobs. NULL / omitted keys = today's behavior (the relationship is first-class when DisplayInForm is set).`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity Name
+        * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
     EntityBaseTable: z.string().describe(`
         * * Field Name: EntityBaseTable
@@ -18858,7 +19001,7 @@ export const MJEntityRelationshipSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     RelatedEntity: z.string().describe(`
         * * Field Name: RelatedEntity
-        * * Display Name: Related Entity Name
+        * * Display Name: Related Entity
         * * SQL Data Type: nvarchar(255)`),
     RelatedEntityBaseTable: z.string().describe(`
         * * Field Name: RelatedEntityBaseTable
@@ -61147,6 +61290,322 @@ export class MJAuditLogEntity extends BaseEntity<MJAuditLogEntityType> {
 
 
 /**
+ * MJ: Authentication Providers - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AuthenticationProvider
+ * * Base View: vwAuthenticationProviders
+ * * @description Metadata catalog of authentication providers. Each row defines one provider (Auth0, Okta, MSAL, Cognito, Google, WorkOS, or any third-party driver) whose implementation is resolved at runtime from DriverClass via MJGlobal.ClassFactory.CreateInstance(BaseAuthProvider, DriverClass). Supersedes the hard-wired mj.config.cjs authProviders array, which remains a back-compat fallback when this table is empty.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Authentication Providers')
+export class MJAuthenticationProviderEntity extends BaseEntity<MJAuthenticationProviderEntityType> {
+    /**
+    * Loads the MJ: Authentication Providers record from the database
+    * @param ID: string - primary key value to load the MJ: Authentication Providers record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAuthenticationProviderEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique, human-readable name for this provider instance (e.g. "WorkOS Production", "Corporate Azure AD"). Also the key used to register the provider with AuthProviderFactory.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional administrator notes describing this provider configuration.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseAuthProvider, DriverClass). MUST match the @RegisterClass key on the concrete server provider (e.g. "workos", "auth0", "okta", "msal", "cognito", "google"). The browser resolves its matching MJAuthBase subclass from the same key, so a driver ships as a server/browser pair under one name.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Issuer
+    * * Display Name: Issuer
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Expected JWT issuer (the "iss" claim). Used to route an incoming token to this provider and to validate the token. E.g. https://api.workos.com/user_management/<clientId>.
+    */
+    get Issuer(): string | null {
+        return this.Get('Issuer');
+    }
+    set Issuer(value: string | null) {
+        this.Set('Issuer', value);
+    }
+
+    /**
+    * * Field Name: Audience
+    * * Display Name: Audience
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Expected JWT audience (the "aud" claim) enforced during validation.
+    */
+    get Audience(): string | null {
+        return this.Get('Audience');
+    }
+    set Audience(value: string | null) {
+        this.Set('Audience', value);
+    }
+
+    /**
+    * * Field Name: JWKSUri
+    * * Display Name: JWKS URI
+    * * SQL Data Type: nvarchar(500)
+    * * Description: JWKS endpoint URL used to fetch the signing keys that verify token signatures. E.g. https://api.workos.com/sso/jwks/<clientId>.
+    */
+    get JWKSUri(): string | null {
+        return this.Get('JWKSUri');
+    }
+    set JWKSUri(value: string | null) {
+        this.Set('JWKSUri', value);
+    }
+
+    /**
+    * * Field Name: ClientID
+    * * Display Name: Client ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Public OAuth client ID. Safe to expose to the browser and published in the pre-auth provider catalog.
+    */
+    get ClientID(): string | null {
+        return this.Get('ClientID');
+    }
+    set ClientID(value: string | null) {
+        this.Set('ClientID', value);
+    }
+
+    /**
+    * * Field Name: Domain
+    * * Display Name: Domain
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Provider domain where applicable (e.g. Auth0/Okta tenant domain). Optional; published in the pre-auth provider catalog.
+    */
+    get Domain(): string | null {
+        return this.Get('Domain');
+    }
+    set Domain(value: string | null) {
+        this.Set('Domain', value);
+    }
+
+    /**
+    * * Field Name: Scopes
+    * * Display Name: Scopes
+    * * SQL Data Type: nvarchar(500)
+    * * Description: OAuth scopes to request, space-delimited (e.g. "openid profile email"). Published in the pre-auth provider catalog.
+    */
+    get Scopes(): string | null {
+        return this.Get('Scopes');
+    }
+    set Scopes(value: string | null) {
+        this.Set('Scopes', value);
+    }
+
+    /**
+    * * Field Name: AdditionalConfiguration
+    * * Display Name: Additional Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: SERVER-SIDE ONLY driver configuration as a JSON object, for fields not modeled as columns. NEVER published to the pre-auth catalog. Merged into the provider config when the server driver is instantiated. Put anything the browser must not read here.
+    */
+    get AdditionalConfiguration(): string | null {
+        return this.Get('AdditionalConfiguration');
+    }
+    set AdditionalConfiguration(value: string | null) {
+        this.Set('AdditionalConfiguration', value);
+    }
+
+    /**
+    * * Field Name: ClientConfiguration
+    * * Display Name: Client Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Browser driver configuration as a JSON object (e.g. WorkOS apiHostname, Cognito region/userPoolId, redirectUri). PUBLISHED VERBATIM in the unauthenticated pre-auth provider catalog, so every value here must be considered world-readable. Server-only settings belong in AdditionalConfiguration.
+    */
+    get ClientConfiguration(): string | null {
+        return this.Get('ClientConfiguration');
+    }
+    set ClientConfiguration(value: string | null) {
+        this.Set('ClientConfiguration', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Lifecycle status. Only Active providers are registered at startup and offered for login.
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, this provider is the default selection -- pre-highlighted in the login picker, and used directly when it is the only Active, client-visible provider.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: ClientVisible
+    * * Display Name: Client Visible
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, this provider appears in the browser pre-auth login picker and is included in the public catalog endpoint. Set false for providers that only validate machine-to-machine tokens and should never be offered as an interactive login.
+    */
+    get ClientVisible(): boolean {
+        return this.Get('ClientVisible');
+    }
+    set ClientVisible(value: boolean) {
+        this.Set('ClientVisible', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Label shown on the login picker button (e.g. "Microsoft", rendered as "Continue with Microsoft"). Falls back to Name when null.
+    */
+    get DisplayName(): string | null {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string | null) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Icon for the login picker button -- a Font Awesome class (e.g. "fa-brands fa-microsoft") or a known brand-logo key the picker maps to a brand chip.
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Ordering of this provider within the login picker (ascending).
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string | null {
+        return this.Get('Credential');
+    }
+}
+
+
+/**
  * MJ: Authorization Roles - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AuthorizationRole
@@ -77729,6 +78188,93 @@ export class MJEncryptionKeyEntity extends BaseEntity<MJEncryptionKeyEntityType>
 
 
 /**
+ * Optional per-entity configuration bag.
+ *
+ * Stored as JSON in `MJ: Entities.Configuration`. CodeGen emits a typed
+ * `ConfigurationObject` accessor on `MJEntityEntity` that returns
+ * `MJEntityEntity_IEntityConfiguration | null`.
+ *
+ * **NULL / `{}` / omitted keys = today's behavior.** Nothing is required of any
+ * application. Apps that want last-wins chrome or cancelable section events
+ * still register an optional `BaseFormPolicy`; this bag is only the
+ * tenant-editable default the container reads when no policy overrides it.
+ *
+ * Expand by adding a property here — no schema migration. Anything the engine
+ * filters, sorts, or joins on stays a **column** on `Entity`. Anything the UI
+ * or a policy consumes at render time belongs in this bag.
+ *
+ * @see plans/form-chrome-policy.md
+ */
+export interface MJEntityEntity_IEntityConfiguration {
+    /**
+     * Presentation / chrome. Null = host defaults (`Layout: auto`,
+     * `RelatedRolePolicy: smart`).
+     */
+    UI?: MJEntityEntity_IEntityUIConfiguration;
+}
+
+/**
+ * Entity-level presentation configuration.
+ *
+ * Nested under {@link MJEntityEntity_IEntityConfiguration.UI} so later UI concerns (list
+ * cards, search chrome, map defaults) can sit beside `Form` without a
+ * migration.
+ */
+export interface MJEntityEntity_IEntityUIConfiguration {
+    /**
+     * How the generated record form arranges its sections.
+     * Null = inherit {@link MJEntityEntity_IEntityFormConfiguration} defaults.
+     */
+    Form?: MJEntityEntity_IEntityFormConfiguration;
+}
+
+/**
+ * Generated-form chrome for this entity.
+ *
+ * Consumed by `<mj-record-form-container>` (and by a winning
+ * `BaseFormPolicy.ResolveChrome`, which may ignore these defaults).
+ */
+export interface MJEntityEntity_IEntityFormConfiguration {
+    /**
+     * Layout chrome for the generated form.
+     *
+     * - `'accordion'` — every first-class section is a collapsible panel (today).
+     * - `'left-nav'` — a left rail of section groups; the body shows one group.
+     * - `'auto'` — accordion until the first-class section count reaches
+     *   {@link AutoLeftNavAt}, then left-nav.
+     *
+     * Omit to treat as `'auto'`.
+     */
+    Layout?: 'accordion' | 'left-nav' | 'auto';
+
+    /**
+     * Section-count threshold used when {@link Layout} is `'auto'` (or omitted).
+     * Defaults to 8. Ignored for an explicit `'accordion'` or `'left-nav'`.
+     */
+    AutoLeftNavAt?: number;
+
+    /**
+     * How omitted `FormRole` on a relationship is resolved.
+     *
+     * - `'keep-all-primary'` — every `DisplayInForm` related grid stays first-class (today).
+     * - `'smart'` — budgeted ranker: same-schema 1:N / collections / custom
+     *   display components stay top-level; cross-schema hang-ons and platform
+     *   plumbing fold into More once the untagged pool exceeds
+     *   {@link PrimaryRelatedBudget}. **Not** "everything in More".
+     *
+     * Omit to treat as `'smart'`.
+     */
+    RelatedRolePolicy?: 'keep-all-primary' | 'smart';
+
+    /**
+     * Max untagged related grids that stay first-class when
+     * {@link RelatedRolePolicy} is `'smart'`. Default 6. Explicit
+     * `FormRole: 'Primary'` punches are never capped by this number.
+     */
+    PrimaryRelatedBudget?: number;
+}
+
+/**
  * MJ: Entities - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Entity
@@ -77936,7 +78482,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: AutoUpdateDescription
-    * * Display Name: Auto-Update Description
+    * * Display Name: Auto Update Description
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When set to 1 (default), whenever a description is modified in the underlying view (first choice) or table (second choice), the Description column in the entity definition will be automatically updated. If you never set metadata in the database directly, you can leave this alone. However, if you have metadata set in the database level for description, and you want to provide a DIFFERENT description in this entity definition, turn this bit off and then set the Description field and future CodeGen runs will NOT override the Description field here.
@@ -77998,7 +78544,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: VirtualEntity
-    * * Display Name: Is Virtual Entity
+    * * Display Name: Virtual Entity
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this is a virtual entity without a physical database table.
@@ -78152,7 +78698,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextSearchEnabled
-    * * Display Name: Full-Text Search Enabled
+    * * Display Name: Full Text Search Enabled
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether full-text search indexing is enabled for this entity.
@@ -78166,7 +78712,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextCatalog
-    * * Display Name: Full-Text Catalog
+    * * Display Name: Full Text Catalog
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the SQL Server full-text catalog if search is enabled.
     */
@@ -78179,7 +78725,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextCatalogGenerated
-    * * Display Name: Full-Text Catalog Generated
+    * * Display Name: Full Text Catalog Generated
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates if the full-text catalog was auto-generated by CodeGen.
@@ -78193,7 +78739,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextIndex
-    * * Display Name: Full-Text Index
+    * * Display Name: Full Text Index
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the full-text index on this entity's table.
     */
@@ -78206,7 +78752,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextIndexGenerated
-    * * Display Name: Full-Text Index Generated
+    * * Display Name: Full Text Index Generated
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates if the full-text index was auto-generated by CodeGen.
@@ -78220,7 +78766,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextSearchFunction
-    * * Display Name: Full-Text Search Function
+    * * Display Name: Full Text Search Function
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the function used for full-text searching this entity.
     */
@@ -78233,7 +78779,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: FullTextSearchFunctionGenerated
-    * * Display Name: Full-Text Search Function Generated
+    * * Display Name: Full Text Search Function Generated
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates if the search function was auto-generated by CodeGen.
@@ -78261,7 +78807,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: spCreate
-    * * Display Name: Create Procedure
+    * * Display Name: Create Stored Procedure
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the stored procedure for creating records in this entity.
     */
@@ -78274,7 +78820,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: spUpdate
-    * * Display Name: Update Procedure
+    * * Display Name: Update Stored Procedure
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the stored procedure for updating records in this entity.
     */
@@ -78287,7 +78833,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: spDelete
-    * * Display Name: Delete Procedure
+    * * Display Name: Delete Stored Procedure
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the stored procedure for deleting records in this entity.
     */
@@ -78388,7 +78934,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: spMatch
-    * * Display Name: Match Procedure
+    * * Display Name: Match Stored Procedure
     * * SQL Data Type: nvarchar(255)
     * * Description: When specified, this stored procedure is used to find matching records in this particular entity. The convention is to pass in the primary key(s) columns for the given entity to the procedure and the return will be zero to many rows where there is a column for each primary key field(s) and a ProbabilityScore (numeric(1,12)) column that has a 0 to 1 value of the probability of a match.
     */
@@ -78401,7 +78947,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: RelationshipDefaultDisplayType
-    * * Display Name: Default Display Type
+    * * Display Name: Relationship Default Display Type
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Search
     * * Value List Type: List
@@ -78433,7 +78979,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: EntityObjectSubclassName
-    * * Display Name: Subclass Name
+    * * Display Name: Entity Object Subclass Name
     * * SQL Data Type: nvarchar(255)
     * * Description: TypeScript class name for the entity subclass in the codebase.
     */
@@ -78446,7 +78992,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: EntityObjectSubclassImport
-    * * Display Name: Subclass Import
+    * * Display Name: Entity Object Subclass Import
     * * SQL Data Type: nvarchar(255)
     * * Description: Import path for the entity subclass in the TypeScript codebase.
     */
@@ -78505,7 +79051,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: ScopeDefault
-    * * Display Name: Default Scope
+    * * Display Name: Scope Default
     * * SQL Data Type: nvarchar(100)
     * * Description: Optional, comma-delimited string indicating the default scope for entity visibility. Options include Users, Admins, AI, and All. Defaults to All when NULL. This is used for simple defaults for filtering entity visibility, not security enforcement.
     */
@@ -78668,7 +79214,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: AutoUpdateFullTextSearch
-    * * Display Name: Auto-Update Full-Text Search
+    * * Display Name: Auto Update Full Text Search
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When true, CodeGen LLM can auto-configure full-text search settings (FullTextSearchEnabled, catalog, index, function) during code generation runs.
@@ -78682,7 +79228,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: AutoUpdateAllowUserSearchAPI
-    * * Display Name: Auto-Update Search API
+    * * Display Name: Auto Update Allow User Search API
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When true, CodeGen LLM can auto-set AllowUserSearchAPI during code generation runs.
@@ -78710,7 +79256,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: SupportsGeoCoding
-    * * Display Name: Supports Geo-Coding
+    * * Display Name: Supports Geo Coding
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When true, CodeGen generates geo-aware subclass code, adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields (address, lat/lng, etc.).
@@ -78724,7 +79270,7 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
     /**
     * * Field Name: AutoUpdateSupportsGeoCoding
-    * * Display Name: Auto-Update Geo-Coding
+    * * Display Name: Auto Update Supports Geo Coding
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When true (default), CodeGen can automatically set SupportsGeoCoding based on LLM analysis of entity fields. Set to 0 to lock the value and prevent CodeGen from changing it.
@@ -78843,6 +79389,41 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
     set AllowDirectSQLDelete(value: boolean) {
         this.Set('AllowDirectSQLDelete', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJEntityEntity_IEntityConfiguration
+    * * Description: Optional JSON configuration bag for this entity (shape = IEntityConfiguration). Nested UI.Form holds generated-form chrome: Layout (accordion | left-nav | auto) and AutoLeftNavAt. NULL / omitted keys = today's behavior (accordion; every DisplayInForm relationship is first-class). Expand by adding a property on the interface — no schema change. Anything the engine filters or joins on stays a column; anything the UI or a BaseFormPolicy consumes at render time belongs here.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    private _ConfigurationObject_cached: MJEntityEntity_IEntityConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Configuration — returns parsed JSON as MJEntityEntity_IEntityConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ConfigurationObject(): MJEntityEntity_IEntityConfiguration | null {
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
+    }
+    set ConfigurationObject(value: MJEntityEntity_IEntityConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -81136,6 +81717,22 @@ export class MJEntityFieldValueEntity extends BaseEntity<MJEntityFieldValueEntit
 
 
 /**
+ * Declares an `EntityField` (a foreign key on **this** entity) as a first-class
+ * **embedded record** — a 1:1 peer `BaseEntity` that loads, validates and persists
+ * as one unit with its owner.
+ *
+ * Stored in the `EmbeddedRecord` column of `MJ: Entity Fields`. When non-null,
+ * CodeGen emits `{FieldName}_Object` / `{FieldName}_EnsureObject()` on the
+ * generated entity subclass.
+ *
+ * @see packages/MJCore/docs/embedded-records.md
+ */
+export interface MJEntityFieldEntity_IEmbeddedRecordConfig {
+    OnClear?: 'delete' | 'orphan' | 'refuse';
+    LoadNested?: 'inherit' | 'related';
+}
+
+/**
  * MJ: Entity Fields - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: EntityField
@@ -81977,6 +82574,41 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     }
     set JSONTypeDefinition(value: string | null) {
         this.Set('JSONTypeDefinition', value);
+    }
+
+    /**
+    * * Field Name: EmbeddedRecord
+    * * Display Name: Embedded Record
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJEntityFieldEntity_IEmbeddedRecordConfig
+    * * Description: Optional JSON policy object that declares this foreign-key field as a first-class embedded record, so CodeGen can emit {FieldName}_Object / {FieldName}_EnsureObject() on the entity subclass. Shape is IEmbeddedRecordConfig: OnClear ('delete' | 'orphan' | 'refuse', default orphan) and LoadNested ('inherit' | 'related', default inherit). RelatedEntity and the FK field name are NOT repeated here — they are this row's RelatedEntityID and Name. AllowsNull on this same row decides whether the object is provisioned with GetEntityObject (required FK) or via Ensure (nullable FK). NULL means the field is an ordinary FK, which is the default and reproduces pre-feature behaviour exactly.
+    */
+    get EmbeddedRecord(): string | null {
+        return this.Get('EmbeddedRecord');
+    }
+    set EmbeddedRecord(value: string | null) {
+        this.Set('EmbeddedRecord', value);
+    }
+
+    private _EmbeddedRecordObject_cached: MJEntityFieldEntity_IEmbeddedRecordConfig | null | undefined = undefined;
+    private _EmbeddedRecordObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for EmbeddedRecord — returns parsed JSON as MJEntityFieldEntity_IEmbeddedRecordConfig.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get EmbeddedRecordObject(): MJEntityFieldEntity_IEmbeddedRecordConfig | null {
+        const raw = this.EmbeddedRecord;
+        if (raw !== this._EmbeddedRecordObject_lastRaw) {
+            this._EmbeddedRecordObject_cached = raw ? JSON.parse(raw) : null;
+            this._EmbeddedRecordObject_lastRaw = raw;
+        }
+        return this._EmbeddedRecordObject_cached!;
+    }
+    set EmbeddedRecordObject(value: MJEntityFieldEntity_IEmbeddedRecordConfig | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.EmbeddedRecord = raw;
+        this._EmbeddedRecordObject_cached = value;
+        this._EmbeddedRecordObject_lastRaw = raw;
     }
 
     /**
@@ -83689,6 +84321,61 @@ export interface MJEntityRelationshipEntity_IRelatedRecordCollectionConfig {
 }
 
 /**
+ * Optional per-relationship configuration bag.
+ *
+ * Stored as JSON in `MJ: Entity Relationships.Configuration`. CodeGen emits a
+ * typed `ConfigurationObject` accessor on `MJEntityRelationshipEntity` that
+ * returns `MJEntityRelationshipEntity_IEntityRelationshipConfiguration | null`.
+ *
+ * Distinct from the other JSON columns on the same row, which CodeGen already
+ * owns for other jobs:
+ *
+ * - `RelatedRecordCollection` — `IRelatedRecordCollectionConfig` (composite graphs)
+ * - `DisplayComponentConfiguration` — knobs for the selected display component
+ * - `AdditionalFieldsToInclude` — join-field name list
+ *
+ * **NULL / `{}` / omitted keys = Auto.** The parent entity's
+ * `RelatedRolePolicy` ranker decides Primary vs Detail. Explicit
+ * `FormRole` always wins.
+ *
+ * Expand by adding a property here — no schema migration.
+ *
+ * @see plans/form-chrome-policy.md
+ */
+export interface MJEntityRelationshipEntity_IEntityRelationshipConfiguration {
+    /**
+     * Presentation / chrome for this relationship on the parent form.
+     * Null = the parent entity's related-role ranker decides.
+     */
+    UI?: MJEntityRelationshipEntity_IEntityRelationshipUIConfiguration;
+}
+
+/**
+ * How this relationship appears on the parent entity's generated form.
+ *
+ * Nested under {@link MJEntityRelationshipEntity_IEntityRelationshipConfiguration.UI} so later UI
+ * concerns (group, default-expanded, badge) can sit beside `FormRole`
+ * without a migration.
+ */
+export interface MJEntityRelationshipEntity_IEntityRelationshipUIConfiguration {
+    /**
+     * Weight of this relationship in the parent form's chrome.
+     *
+     * - `'Primary'` — always first-class (own accordion / rail item). Punches
+     *   through the parent entity's {@link IEntityFormConfiguration.PrimaryRelatedBudget}.
+     * - `'Detail'` — always parked in More.
+     *
+     * Omit to let the parent entity's `RelatedRolePolicy` ranker decide.
+     * Default policy is `'smart'` — same-schema children stay top-level;
+     * cross-schema hang-ons fold once the budget is exceeded. Not "all More".
+     *
+     * Field panels already have this idea via `EntityField.GeneratedFormSection`.
+     * Do not add a parallel column on `EntityField`.
+     */
+    FormRole?: 'Primary' | 'Detail';
+}
+
+/**
  * MJ: Entity Relationships - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: EntityRelationship
@@ -83733,7 +84420,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity
+    * * Display Name: Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -83760,7 +84447,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: RelatedEntityID
-    * * Display Name: Related Entity
+    * * Display Name: Related Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -83773,7 +84460,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: BundleInAPI
-    * * Display Name: Bundle In API
+    * * Display Name: Bundle in API
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether to include related records when fetching the parent entity via API.
@@ -83787,7 +84474,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: IncludeInParentAllQuery
-    * * Display Name: Include In Parent Query
+    * * Display Name: Include in Parent All Query
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Whether to include this relationship when querying all fields of the parent entity.
@@ -83884,7 +84571,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: DisplayInForm
-    * * Display Name: Display In Form
+    * * Display Name: Display in Form
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When unchecked the relationship will NOT be displayed on the generated form
@@ -83961,7 +84648,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: DisplayUserViewID
-    * * Display Name: Display User View
+    * * Display Name: Display User View ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: User Views (vwUserViews.ID)
     */
@@ -83971,7 +84658,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: DisplayComponentID
-    * * Display Name: Display Component
+    * * Display Name: Display Component ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Relationship Display Components (vwEntityRelationshipDisplayComponents.ID)
     */
@@ -83984,7 +84671,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: DisplayComponentConfiguration
-    * * Display Name: Display Component Config
+    * * Display Name: Display Component Configuration
     * * SQL Data Type: nvarchar(MAX)
     * * Description: If DisplayComponentID is specified, this field can optionally be used to track component-specific and relationship-specific configuration details that will be used by CodeGen to provide to the display component selected.
     */
@@ -84017,7 +84704,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: AutoUpdateFromSchema
-    * * Display Name: Auto-Update From Schema
+    * * Display Name: Auto Update From Schema
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Indicates whether this relationship should be automatically updated by CodeGen. When set to 0, the record will not be modified by CodeGen. Defaults to 1.
@@ -84031,7 +84718,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: AdditionalFieldsToInclude
-    * * Display Name: Additional Fields
+    * * Display Name: Additional Fields to Include
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array of additional field names to include when joining through this relationship (for junction tables, e.g., ["RoleName", "UserEmail"])
     */
@@ -84044,7 +84731,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: AutoUpdateAdditionalFieldsToInclude
-    * * Display Name: Auto-Update Additional Fields
+    * * Display Name: Auto Update Additional Fields
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When 1, allows system/LLM to auto-update AdditionalFieldsToInclude; when 0, user has locked this field
@@ -84058,7 +84745,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: RelatedRecordCollection
-    * * Display Name: Related Record Collection Policy
+    * * Display Name: Related Record Collection
     * * SQL Data Type: nvarchar(MAX)
     * * JSON Type: MJEntityRelationshipEntity_IRelatedRecordCollectionConfig
     * * Description: Optional JSON policy object that declares this relationship as a first-class related-record collection, so CodeGen can emit a typed DeclareRelatedRecords(...) declaration on the entity subclass. Shape is IRelatedRecordCollectionConfig: Name (the generated property name, e.g. "Lines"), Load ('explicit' | 'immediate' | 'lazy' | 'never'), Source ('database' | 'cache'), ReadOnly, OnRemove ('delete' | 'orphan' | 'refuse'), OrderBy, Sequence ({ Field, From }), and ClearAfterSave. Source 'cache' reads the related records from whichever loaded BaseEngine already holds that entity, costing no query, and defaults ReadOnly to true because those are the engine's own instances; 'lazy' fills on first access and requires both. RelatedEntity and RelatedEntityJoinField are NOT repeated here — they are read from this row's own columns. NULL means the relationship is not a declared collection, which is the default and reproduces pre-6.2 behaviour exactly.
@@ -84092,8 +84779,43 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
     }
 
     /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJEntityRelationshipEntity_IEntityRelationshipConfiguration
+    * * Description: Optional JSON configuration bag for this relationship (shape = IEntityRelationshipConfiguration). Nested UI.FormRole is Primary (first-class chrome) or Detail (parked in a More group). Distinct from RelatedRecordCollection (composite-graph policy), DisplayComponentConfiguration (selected display-component knobs), and AdditionalFieldsToInclude (join-field names) — those columns are owned by CodeGen for other jobs. NULL / omitted keys = today's behavior (the relationship is first-class when DisplayInForm is set).
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    private _ConfigurationObject_cached: MJEntityRelationshipEntity_IEntityRelationshipConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Configuration — returns parsed JSON as MJEntityRelationshipEntity_IEntityRelationshipConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ConfigurationObject(): MJEntityRelationshipEntity_IEntityRelationshipConfiguration | null {
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
+    }
+    set ConfigurationObject(value: MJEntityRelationshipEntity_IEntityRelationshipConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
+    }
+
+    /**
     * * Field Name: Entity
-    * * Display Name: Entity Name
+    * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -84120,7 +84842,7 @@ export class MJEntityRelationshipEntity extends BaseEntity<MJEntityRelationshipE
 
     /**
     * * Field Name: RelatedEntity
-    * * Display Name: Related Entity Name
+    * * Display Name: Related Entity
     * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntity(): string {

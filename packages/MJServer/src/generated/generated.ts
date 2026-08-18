@@ -18,7 +18,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentCredentialEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentHarnessEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSearchScopeEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemChunkEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationCompactionRunEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMaterializedResultQueryEntity, MJMaterializedResultEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJPermissionDomainEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJRSUPendingWorkEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentCredentialEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentHarnessEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSearchScopeEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthenticationProviderEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemChunkEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationCompactionRunEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMaterializedResultQueryEntity, MJMaterializedResultEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJPermissionDomainEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJRSUPendingWorkEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -2196,16 +2196,23 @@ export class MJAction_ {
     
     @Field(() => [MJAction_])
     MJActions_ParentIDArray: MJAction_[]; // Link to MJActions
-    
+    // Relationship field to MJ_BizApps_Tasks: Task Notification Configs not generated: its GraphQL type is not declared in this file.
+
     @Field(() => [MJRecordProcess_])
     MJRecordProcesses_ActionIDArray: MJRecordProcess_[]; // Link to MJRecordProcesses
-    
+    // Relationship field to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+
     @Field(() => [MJAISkillAction_])
     MJAISkillActions_ActionIDArray: MJAISkillAction_[]; // Link to MJAISkillActions
     
     @Field(() => [MJTask_])
     MJTasks_ActionIDArray: MJTask_[]; // Link to MJTasks
-    
+    // Relationship field to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+
 }
 
 //****************************************************************************
@@ -2546,7 +2553,8 @@ export class MJActionResolver extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Actions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Tasks: Task Notification Configs not generated: its GraphQL type is not declared in this file.
+
     @FieldResolver(() => [MJRecordProcess_])
     async MJRecordProcesses_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Record Processes', userPayload);
@@ -2556,7 +2564,8 @@ export class MJActionResolver extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Processes', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+
     @FieldResolver(() => [MJAISkillAction_])
     async MJAISkillActions_ActionIDArray(@Root() mjaction_: MJAction_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Skill Actions', userPayload);
@@ -2576,7 +2585,12 @@ export class MJActionResolver extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tasks', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+
     @Mutation(() => MJAction_)
     async CreateMJAction(
         @Arg('input', () => CreateMJActionInput) input: CreateMJActionInput,
@@ -28392,6 +28406,315 @@ export class MJAuditLogResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Authentication Providers
+//****************************************************************************
+@ObjectType({ description: `Metadata catalog of authentication providers. Each row defines one provider (Auth0, Okta, MSAL, Cognito, Google, WorkOS, or any third-party driver) whose implementation is resolved at runtime from DriverClass via MJGlobal.ClassFactory.CreateInstance(BaseAuthProvider, DriverClass). Supersedes the hard-wired mj.config.cjs authProviders array, which remains a back-compat fallback when this table is empty.` })
+export class MJAuthenticationProvider_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Unique, human-readable name for this provider instance (e.g. "WorkOS Production", "Corporate Azure AD"). Also the key used to register the provider with AuthProviderFactory.`}) 
+    @MaxLength(100)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional administrator notes describing this provider configuration.`}) 
+    Description?: string;
+        
+    @Field({description: `Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseAuthProvider, DriverClass). MUST match the @RegisterClass key on the concrete server provider (e.g. "workos", "auth0", "okta", "msal", "cognito", "google"). The browser resolves its matching MJAuthBase subclass from the same key, so a driver ships as a server/browser pair under one name.`}) 
+    @MaxLength(255)
+    DriverClass: string;
+        
+    @Field({nullable: true, description: `Expected JWT issuer (the "iss" claim). Used to route an incoming token to this provider and to validate the token. E.g. https://api.workos.com/user_management/<clientId>.`}) 
+    @MaxLength(500)
+    Issuer?: string;
+        
+    @Field({nullable: true, description: `Expected JWT audience (the "aud" claim) enforced during validation.`}) 
+    @MaxLength(500)
+    Audience?: string;
+        
+    @Field({nullable: true, description: `JWKS endpoint URL used to fetch the signing keys that verify token signatures. E.g. https://api.workos.com/sso/jwks/<clientId>.`}) 
+    @MaxLength(500)
+    JWKSUri?: string;
+        
+    @Field({nullable: true, description: `Public OAuth client ID. Safe to expose to the browser and published in the pre-auth provider catalog.`}) 
+    @MaxLength(255)
+    ClientID?: string;
+        
+    @Field({nullable: true, description: `Provider domain where applicable (e.g. Auth0/Okta tenant domain). Optional; published in the pre-auth provider catalog.`}) 
+    @MaxLength(255)
+    Domain?: string;
+        
+    @Field({nullable: true, description: `OAuth scopes to request, space-delimited (e.g. "openid profile email"). Published in the pre-auth provider catalog.`}) 
+    @MaxLength(500)
+    Scopes?: string;
+        
+    @Field({nullable: true, description: `SERVER-SIDE ONLY driver configuration as a JSON object, for fields not modeled as columns. NEVER published to the pre-auth catalog. Merged into the provider config when the server driver is instantiated. Put anything the browser must not read here.`}) 
+    AdditionalConfiguration?: string;
+        
+    @Field({nullable: true, description: `Browser driver configuration as a JSON object (e.g. WorkOS apiHostname, Cognito region/userPoolId, redirectUri). PUBLISHED VERBATIM in the unauthenticated pre-auth provider catalog, so every value here must be considered world-readable. Server-only settings belong in AdditionalConfiguration.`}) 
+    ClientConfiguration?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    CredentialID?: string;
+        
+    @Field({description: `Lifecycle status. Only Active providers are registered at startup and offered for login.`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field(() => Boolean, {description: `When true, this provider is the default selection -- pre-highlighted in the login picker, and used directly when it is the only Active, client-visible provider.`}) 
+    IsDefault: boolean;
+        
+    @Field(() => Boolean, {description: `When true, this provider appears in the browser pre-auth login picker and is included in the public catalog endpoint. Set false for providers that only validate machine-to-machine tokens and should never be offered as an interactive login.`}) 
+    ClientVisible: boolean;
+        
+    @Field({nullable: true, description: `Label shown on the login picker button (e.g. "Microsoft", rendered as "Continue with Microsoft"). Falls back to Name when null.`}) 
+    @MaxLength(100)
+    DisplayName?: string;
+        
+    @Field({nullable: true, description: `Icon for the login picker button -- a Font Awesome class (e.g. "fa-brands fa-microsoft") or a known brand-logo key the picker maps to a brand chip.`}) 
+    @MaxLength(100)
+    Icon?: string;
+        
+    @Field(() => Int, {description: `Ordering of this provider within the login picker (ascending).`}) 
+    Sequence: number;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Credential?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Authentication Providers
+//****************************************************************************
+@InputType()
+export class CreateMJAuthenticationProviderInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    Issuer: string | null;
+
+    @Field({ nullable: true })
+    Audience: string | null;
+
+    @Field({ nullable: true })
+    JWKSUri: string | null;
+
+    @Field({ nullable: true })
+    ClientID: string | null;
+
+    @Field({ nullable: true })
+    Domain: string | null;
+
+    @Field({ nullable: true })
+    Scopes: string | null;
+
+    @Field({ nullable: true })
+    AdditionalConfiguration: string | null;
+
+    @Field({ nullable: true })
+    ClientConfiguration: string | null;
+
+    @Field({ nullable: true })
+    CredentialID: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    ClientVisible?: boolean;
+
+    @Field({ nullable: true })
+    DisplayName: string | null;
+
+    @Field({ nullable: true })
+    Icon: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Authentication Providers
+//****************************************************************************
+@InputType()
+export class UpdateMJAuthenticationProviderInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    Issuer?: string | null;
+
+    @Field({ nullable: true })
+    Audience?: string | null;
+
+    @Field({ nullable: true })
+    JWKSUri?: string | null;
+
+    @Field({ nullable: true })
+    ClientID?: string | null;
+
+    @Field({ nullable: true })
+    Domain?: string | null;
+
+    @Field({ nullable: true })
+    Scopes?: string | null;
+
+    @Field({ nullable: true })
+    AdditionalConfiguration?: string | null;
+
+    @Field({ nullable: true })
+    ClientConfiguration?: string | null;
+
+    @Field({ nullable: true })
+    CredentialID?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    ClientVisible?: boolean;
+
+    @Field({ nullable: true })
+    DisplayName?: string | null;
+
+    @Field({ nullable: true })
+    Icon?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Authentication Providers
+//****************************************************************************
+@ObjectType()
+export class RunMJAuthenticationProviderViewResult {
+    @Field(() => [MJAuthenticationProvider_])
+    Results: MJAuthenticationProvider_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAuthenticationProvider_)
+export class MJAuthenticationProviderResolver extends ResolverBase {
+    @Query(() => RunMJAuthenticationProviderViewResult)
+    async RunMJAuthenticationProviderViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAuthenticationProviderViewResult)
+    async RunMJAuthenticationProviderViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAuthenticationProviderViewResult)
+    async RunMJAuthenticationProviderDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Authentication Providers';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAuthenticationProvider_, { nullable: true })
+    async MJAuthenticationProvider(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAuthenticationProvider_ | null> {
+        this.CheckUserReadPermissions('MJ: Authentication Providers', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAuthenticationProviders')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Authentication Providers', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Authentication Providers', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAuthenticationProvider_)
+    async CreateMJAuthenticationProvider(
+        @Arg('input', () => CreateMJAuthenticationProviderInput) input: CreateMJAuthenticationProviderInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Authentication Providers', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAuthenticationProvider_)
+    async UpdateMJAuthenticationProvider(
+        @Arg('input', () => UpdateMJAuthenticationProviderInput) input: UpdateMJAuthenticationProviderInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Authentication Providers', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAuthenticationProvider_)
+    async DeleteMJAuthenticationProvider(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Authentication Providers', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Authorization Roles
 //****************************************************************************
 @ObjectType({ description: `Links authorizations to roles, defining which permissions are granted to users assigned to specific roles in the system.` })
@@ -31072,7 +31395,27 @@ export class MJCompany_ {
     
     @Field(() => [MJSignatureAccount_])
     MJSignatureAccounts_CompanyIDArray: MJSignatureAccount_[]; // Link to MJSignatureAccounts
-    
+    // Relationship field to MJ_BizApps_Accounting: Tax Liabilities not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: GL Accounts not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Intercompany Account Matches not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Intercompany Account Matches not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Journal Entry Sequences not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Journal Entries not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Company Tax Nexus not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Journal Entry Batches not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Accounting Company Profiles not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Payment Providers not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Products not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Promotions not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Order Company Policies not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Order Lines not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Product Categories not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Stored Value Accounts not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Payment Details not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Order Headers not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Subscriptions not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Payment Headers not generated: its GraphQL type is not declared in this file.
+
 }
 
 //****************************************************************************
@@ -31259,7 +31602,27 @@ export class MJCompanyResolver extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Signature Accounts', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Accounting: Tax Liabilities not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: GL Accounts not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Intercompany Account Matches not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Intercompany Account Matches not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Journal Entry Sequences not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Journal Entries not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Company Tax Nexus not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Journal Entry Batches not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Accounting Company Profiles not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Payment Providers not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Products not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Promotions not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Order Company Policies not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Order Lines not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Product Categories not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Stored Value Accounts not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Payment Details not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Order Headers not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Subscriptions not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Payment Headers not generated: its GraphQL type is not declared in this file.
+
     @Mutation(() => MJCompany_)
     async CreateMJCompany(
         @Arg('input', () => CreateMJCompanyInput) input: CreateMJCompanyInput,
@@ -41758,6 +42121,9 @@ export class MJCredential_ {
     @Field(() => [MJAIAgentCredential_])
     MJAIAgentCredentials_CredentialIDArray: MJAIAgentCredential_[]; // Link to MJAIAgentCredentials
     
+    @Field(() => [MJAuthenticationProvider_])
+    MJAuthenticationProviders_CredentialIDArray: MJAuthenticationProvider_[]; // Link to MJAuthenticationProviders
+    
 }
 
 //****************************************************************************
@@ -42008,6 +42374,16 @@ export class MJCredentialResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentCredentials')} WHERE ${provider.QuoteIdentifier('CredentialID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Credentials', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjcredential_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Credentials', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAuthenticationProvider_])
+    async MJAuthenticationProviders_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Authentication Providers', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAuthenticationProviders')} WHERE ${provider.QuoteIdentifier('CredentialID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Authentication Providers', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjcredential_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Authentication Providers', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -47189,6 +47565,9 @@ export class MJEntity_ {
     @Field(() => Boolean, {description: `When 1, this entity may have rows removed by DELETE statements that do not go through BaseEntity.Delete() — purge and retention routines, or integration sync reconciling a remote source. Default 0, meaning every delete is expected to flow through BaseEntity so that record-change tracking, entity actions, cascade handling and cache invalidation all run. This column DECLARES intent for the code paths and tooling that consult it; it does not and cannot prevent anyone from executing SQL. Requires TrackRecordChanges = 0 and TrustServerCacheCompletely = 0, and additionally requires DeleteType = 'Hard' — a direct DELETE removes the row outright rather than setting DeletedAt, which would defeat soft delete.`}) 
     AllowDirectSQLDelete: boolean;
         
+    @Field({nullable: true, description: `Optional JSON configuration bag for this entity (shape = IEntityConfiguration). Nested UI.Form holds generated-form chrome: Layout (accordion | left-nav | auto) and AutoLeftNavAt. NULL / omitted keys = today's behavior (accordion; every DisplayInForm relationship is first-class). Expand by adding a property on the interface — no schema change. Anything the engine filters or joins on stays a column; anything the UI or a BaseFormPolicy consumes at render time belongs here.`}) 
+    Configuration?: string;
+        
     @Field({nullable: true, description: `Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.`}) 
     CodeName?: string;
         
@@ -47318,7 +47697,8 @@ export class MJEntity_ {
     
     @Field(() => [MJUser_])
     MJUsers_LinkedEntityIDArray: MJUser_[]; // Link to MJUsers
-    
+    // Relationship field to MJ_BizApps_Common: Address Links not generated: its GraphQL type is not declared in this file.
+
     @Field(() => [MJAccessControlRule_])
     MJAccessControlRules_EntityIDArray: MJAccessControlRule_[]; // Link to MJAccessControlRules
     
@@ -47402,10 +47782,12 @@ export class MJEntity_ {
     
     @Field(() => [MJProcessRunDetail_])
     MJProcessRunDetails_EntityIDArray: MJProcessRunDetail_[]; // Link to MJProcessRunDetails
-    
+    // Relationship field to MJ_BizApps_Tasks: Task Assignments not generated: its GraphQL type is not declared in this file.
+
     @Field(() => [MJProcessRun_])
     MJProcessRuns_EntityIDArray: MJProcessRun_[]; // Link to MJProcessRuns
-    
+    // Relationship field to MJ_BizApps_Tasks: Task Links not generated: its GraphQL type is not declared in this file.
+
     @Field(() => [MJRecordProcessWatermark_])
     MJRecordProcessWatermarks_EntityIDArray: MJRecordProcessWatermark_[]; // Link to MJRecordProcessWatermarks
     
@@ -47435,10 +47817,13 @@ export class MJEntity_ {
     
     @Field(() => [MJMaterializedResult_])
     MJMaterializedResults_SourceEntityIDArray: MJMaterializedResult_[]; // Link to MJMaterializedResults
-    
+    // Relationship field to MJ_BizApps_Accounting: GL Account Links not generated: its GraphQL type is not declared in this file.
+
     @Field(() => [MJMaterializedResult_])
     MJMaterializedResults_GeneratedEntityIDArray: MJMaterializedResult_[]; // Link to MJMaterializedResults
-    
+    // Relationship field to MJ_BizApps_Accounting: Journal Entries not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Order Line Price Components not generated: its GraphQL type is not declared in this file.
+
 }
 
 //****************************************************************************
@@ -47646,6 +48031,9 @@ export class CreateMJEntityInput {
 
     @Field(() => Boolean, { nullable: true })
     AllowDirectSQLDelete?: boolean;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -47857,6 +48245,9 @@ export class UpdateMJEntityInput {
 
     @Field(() => Boolean, { nullable: true })
     AllowDirectSQLDelete?: boolean;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -48281,7 +48672,8 @@ export class MJEntityResolverBase extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Users', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Common: Address Links not generated: its GraphQL type is not declared in this file.
+
     @FieldResolver(() => [MJAccessControlRule_])
     async MJAccessControlRules_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Access Control Rules', userPayload);
@@ -48561,7 +48953,8 @@ export class MJEntityResolverBase extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Run Details', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Tasks: Task Assignments not generated: its GraphQL type is not declared in this file.
+
     @FieldResolver(() => [MJProcessRun_])
     async MJProcessRuns_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Process Runs', userPayload);
@@ -48571,7 +48964,8 @@ export class MJEntityResolverBase extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Runs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Tasks: Task Links not generated: its GraphQL type is not declared in this file.
+
     @FieldResolver(() => [MJRecordProcessWatermark_])
     async MJRecordProcessWatermarks_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Record Process Watermarks', userPayload);
@@ -48671,7 +49065,8 @@ export class MJEntityResolverBase extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Materialized Results', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Accounting: GL Account Links not generated: its GraphQL type is not declared in this file.
+
     @FieldResolver(() => [MJMaterializedResult_])
     async MJMaterializedResults_GeneratedEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Materialized Results', userPayload);
@@ -48681,7 +49076,9 @@ export class MJEntityResolverBase extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Materialized Results', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Accounting: Journal Entries not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Order Line Price Components not generated: its GraphQL type is not declared in this file.
+
     @Mutation(() => MJEntity_)
     async CreateMJEntity(
         @Arg('input', () => CreateMJEntityInput) input: CreateMJEntityInput,
@@ -51621,6 +52018,9 @@ export class MJEntityField_ {
         
     @Field({nullable: true, description: `Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.`}) 
     JSONTypeDefinition?: string;
+
+    @Field({nullable: true, description: `Optional JSON policy object that declares this foreign-key field as a first-class embedded record, so CodeGen can emit {FieldName}_Object / {FieldName}_EnsureObject() on the entity subclass. Shape is IEmbeddedRecordConfig: OnClear ('delete' | 'orphan' | 'refuse', default orphan) and LoadNested ('inherit' | 'related', default inherit). RelatedEntity and the FK field name are NOT repeated here — they are this row's RelatedEntityID and Name. AllowsNull on this same row decides whether the object is provisioned with GetEntityObject (required FK) or via Ensure (nullable FK). NULL means the field is an ordinary FK, which is the default and reproduces pre-feature behaviour exactly.`})
+    EmbeddedRecord?: string;
         
     @Field({description: `Search predicate controlling how user search queries match against this field. Valid values: BeginsWith, Contains, EndsWith, Exact.`}) 
     @MaxLength(20)
@@ -51834,6 +52234,9 @@ export class CreateMJEntityFieldInput {
     JSONTypeDefinition: string | null;
 
     @Field({ nullable: true })
+    EmbeddedRecord?: string | null;
+
+    @Field({ nullable: true })
     UserSearchPredicateAPI?: string;
 
     @Field(() => Boolean, { nullable: true })
@@ -51995,6 +52398,9 @@ export class UpdateMJEntityFieldInput {
 
     @Field({ nullable: true })
     JSONTypeDefinition?: string | null;
+
+    @Field({ nullable: true })
+    EmbeddedRecord?: string | null;
 
     @Field({ nullable: true })
     UserSearchPredicateAPI?: string;
@@ -53638,6 +54044,9 @@ export class MJEntityRelationship_ {
     @Field({nullable: true, description: `Optional JSON policy object that declares this relationship as a first-class related-record collection, so CodeGen can emit a typed DeclareRelatedRecords(...) declaration on the entity subclass. Shape is IRelatedRecordCollectionConfig: Name (the generated property name, e.g. "Lines"), Load ('explicit' | 'immediate' | 'lazy' | 'never'), Source ('database' | 'cache'), ReadOnly, OnRemove ('delete' | 'orphan' | 'refuse'), OrderBy, Sequence ({ Field, From }), and ClearAfterSave. Source 'cache' reads the related records from whichever loaded BaseEngine already holds that entity, costing no query, and defaults ReadOnly to true because those are the engine's own instances; 'lazy' fills on first access and requires both. RelatedEntity and RelatedEntityJoinField are NOT repeated here — they are read from this row's own columns. NULL means the relationship is not a declared collection, which is the default and reproduces pre-6.2 behaviour exactly.`}) 
     RelatedRecordCollection?: string;
         
+    @Field({nullable: true, description: `Optional JSON configuration bag for this relationship (shape = IEntityRelationshipConfiguration). Nested UI.FormRole is Primary (first-class chrome) or Detail (parked in a More group). Distinct from RelatedRecordCollection (composite-graph policy), DisplayComponentConfiguration (selected display-component knobs), and AdditionalFieldsToInclude (join-field names) — those columns are owned by CodeGen for other jobs. NULL / omitted keys = today's behavior (the relationship is first-class when DisplayInForm is set).`}) 
+    Configuration?: string;
+        
     @Field() 
     @MaxLength(255)
     Entity: string;
@@ -53751,6 +54160,9 @@ export class CreateMJEntityRelationshipInput {
     @Field({ nullable: true })
     RelatedRecordCollection: string | null;
 
+    @Field({ nullable: true })
+    Configuration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -53829,6 +54241,9 @@ export class UpdateMJEntityRelationshipInput {
 
     @Field({ nullable: true })
     RelatedRecordCollection?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -57179,7 +57594,8 @@ export class MJFile_ {
     
     @Field(() => [MJMLModel_])
     MJMLModels_ArtifactFileIDArray: MJMLModel_[]; // Link to MJMLModels
-    
+    // Relationship field to MJ_BizApps_Accounting: Journal Entries not generated: its GraphQL type is not declared in this file.
+
 }
 
 //****************************************************************************
@@ -57388,7 +57804,8 @@ export class MJFileResolver extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: ML Models', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Accounting: Journal Entries not generated: its GraphQL type is not declared in this file.
+
     @Mutation(() => MJFile_)
     async CreateMJFile(
         @Arg('input', () => CreateMJFileInput) input: CreateMJFileInput,
@@ -77115,7 +77532,8 @@ export class MJRole_ {
     
     @Field(() => [MJConversationWidgetInstance_])
     MJConversationWidgetInstances_GuestRoleIDArray: MJConversationWidgetInstance_[]; // Link to MJConversationWidgetInstances
-    
+    // Relationship field to MJ_BizApps_Orders: Sales Rules not generated: its GraphQL type is not declared in this file.
+
 }
 
 //****************************************************************************
@@ -77396,7 +77814,8 @@ export class MJRoleResolver extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Widget Instances', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Orders: Sales Rules not generated: its GraphQL type is not declared in this file.
+
     @Mutation(() => MJRole_)
     async CreateMJRole(
         @Arg('input', () => CreateMJRoleInput) input: CreateMJRoleInput,
@@ -93953,7 +94372,8 @@ export class MJUser_ {
     
     @Field(() => [MJWorkspace_])
     MJWorkspaces_UserIDArray: MJWorkspace_[]; // Link to MJWorkspaces
-    
+    // Relationship field to MJ_BizApps_Common: People not generated: its GraphQL type is not declared in this file.
+
     @Field(() => [MJAIAgentNote_])
     MJAIAgentNotes_UserIDArray: MJAIAgentNote_[]; // Link to MJAIAgentNotes
     
@@ -94163,7 +94583,8 @@ export class MJUser_ {
     
     @Field(() => [MJAIAgentSession_])
     MJAIAgentSessions_UserIDArray: MJAIAgentSession_[]; // Link to MJAIAgentSessions
-    
+    // Relationship field to MJ_BizApps_Tasks: Task Notification Logs not generated: its GraphQL type is not declared in this file.
+
     @Field(() => [MJAIAgentSessionBridgeParticipant_])
     MJAIAgentSessionBridgeParticipants_UserIDArray: MJAIAgentSessionBridgeParticipant_[]; // Link to MJAIAgentSessionBridgeParticipants
     
@@ -94184,7 +94605,14 @@ export class MJUser_ {
     
     @Field(() => [MJUserRoutineRecipient_])
     MJUserRoutineRecipients_UserIDArray: MJUserRoutineRecipient_[]; // Link to MJUserRoutineRecipients
-    
+    // Relationship field to MJ_BizApps_Orders: Sales Authorities not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Order Headers not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Accounting Company Profiles not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Order Headers not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Journal Entry Batches not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Orders: Payment Lines not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Accounting: Journal Entry Batches not generated: its GraphQL type is not declared in this file.
+
 }
 
 //****************************************************************************
@@ -94629,7 +95057,8 @@ export class MJUserResolverBase extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Workspaces', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Common: People not generated: its GraphQL type is not declared in this file.
+
     @FieldResolver(() => [MJAIAgentNote_])
     async MJAIAgentNotes_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Notes', userPayload);
@@ -95329,7 +95758,8 @@ export class MJUserResolverBase extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Sessions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Tasks: Task Notification Logs not generated: its GraphQL type is not declared in this file.
+
     @FieldResolver(() => [MJAIAgentSessionBridgeParticipant_])
     async MJAIAgentSessionBridgeParticipants_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Session Bridge Participants', userPayload);
@@ -95399,7 +95829,14 @@ export class MJUserResolverBase extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User Routine Recipients', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Orders: Sales Authorities not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Order Headers not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Accounting Company Profiles not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Order Headers not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Journal Entry Batches not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Orders: Payment Lines not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Accounting: Journal Entry Batches not generated: its GraphQL type is not declared in this file.
+
     @Mutation(() => MJUser_)
     async CreateMJUser(
         @Arg('input', () => CreateMJUserInput) input: CreateMJUserInput,

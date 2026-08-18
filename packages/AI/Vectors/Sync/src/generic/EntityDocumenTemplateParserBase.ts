@@ -86,7 +86,9 @@ export abstract class EntityDocumentTemplateParserBase {
     // Replace each placeholder in the template with its resolved value
     let resolvedTemplate = processedTemplate;
     resolvedReplacements.forEach((replacement) => {
-      resolvedTemplate = resolvedTemplate.replace(replacement.old, replacement.new);
+      // Function replacement: the resolved value is field data, so `$&`/`` $` ``/`$'`/`$$`
+      // in it must be text rather than splice directives. See issue #3171.
+      resolvedTemplate = resolvedTemplate.replace(replacement.old, () => replacement.new);
     });
 
     return resolvedTemplate;

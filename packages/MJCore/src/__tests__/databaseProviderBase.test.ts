@@ -30,6 +30,11 @@ class TestSQLServerProvider extends DatabaseProviderBase {
         throw new Error('Not supported.');
     }
 
+    /** Test-only passthrough — ValidateUserProvidedSQLClause is protected on the base class. */
+    public TestValidateUserProvidedSQLClause(clause: string): boolean {
+        return this.ValidateUserProvidedSQLClause(clause);
+    }
+
     // RLS test hooks
     public checkRecordRLSResult = true;
     public checkCreateRLSResult = true;
@@ -392,6 +397,85 @@ describe('DatabaseProviderBase', () => {
             // Replay returns entity.GetAll() which has data, so ValidateDeleteResult runs
             // (but our mock may not satisfy it fully; the key thing is RLS didn't block it)
             expect(result).toBeDefined();
+        });
+    });
+
+    /**
+     * 🚨 SECURITY REGRESSION SUITE — ValidateUserProvidedSQLClause screens caller-supplied
+     * `ExtraFilter` / `OrderBy` / `UserSearchString` fragments, which are raw SQL. It strips string
+     * literals and then applies a keyword denylist, so the ONLY thing standing between a hostile
+     * filter and the database is that the stripper agrees with the database about where literals
+     * begin and end.
+     *
+     * The bypass these tests pin: the stripper once honored backslash escaping, which SQL Server and
+     * PostgreSQL do not. A payload could hide an entire stacked statement inside a fake "literal".
+     * If someone reintroduces backslash handling — here or in StripSQLStringLiterals — these fail.
+     */
+    describe('ValidateUserProvidedSQLClause — injection screening', () => {
+        let provider: TestSQLServerProvider;
+
+        beforeEach(() => {
+            provider = new TestSQLServerProvider();
+        });
+
+        describe('rejects backslash-hidden payloads (the stripper/parser mismatch)', () => {
+            // The trailing `'` makes the quote count even, so a backslash-aware stripper swallows
+            // the whole payload. The database closes the literal at the FIRST unescaped quote and
+            // executes what follows.
+            it('rejects a stacked DROP hidden behind a backslash', () => {
+                expect(
+                    provider.TestValidateUserProvidedSQLClause(`FirstName = 'a\\') ; DROP TABLE Users; --'`)
+                ).toBe(false);
+            });
+
+            it('rejects a time-based WAITFOR hidden behind a backslash', () => {
+                expect(
+                    provider.TestValidateUserProvidedSQLClause(`ID = 'x\\') ; WAITFOR DELAY '0:0:5'; --'`)
+                ).toBe(false);
+            });
+
+            it('rejects a stacked UPDATE hidden behind a backslash', () => {
+                expect(
+                    provider.TestValidateUserProvidedSQLClause(`Name = 'a\\') ; UPDATE Users SET IsActive=1; --'`)
+                ).toBe(false);
+            });
+        });
+
+        describe('rejects plain injection attempts', () => {
+            it.each([
+                ['stacked statement', `Name = 'x'; DROP TABLE Users`],
+                ['line comment', `Name = 'x' -- rest`],
+                ['block comment', `Name = 'x' /* rest */`],
+                ['UNION', `Name = 'x' UNION SELECT 1`],
+                ['EXEC', `Name = 'x' EXEC sp_who`],
+                ['extended proc', `Name = 'x' AND xp_cmdshell 'dir' = 1`],
+                ['unterminated literal hiding a keyword', `Name = 'abc; DROP TABLE t`],
+                ['double-quoted identifier cannot hide a payload', `"Name") ; DROP TABLE Users; --"`],
+            ])('rejects %s', (_label, clause) => {
+                expect(provider.TestValidateUserProvidedSQLClause(clause)).toBe(false);
+            });
+        });
+
+        describe('accepts legitimate clauses (no false positives)', () => {
+            it.each([
+                ['keyword-looking text inside a literal', `Comments LIKE '%DROP TABLE%'`],
+                ['comment marker inside a literal', `Comments LIKE '%--%'`],
+                ['SQL-standard doubled quote', `Name = 'O''Brien'`],
+                ['doubled quote next to a denied keyword', `Note = 'it''s a delete; really'`],
+                ['backslash as ordinary data', `Path = 'C:\\temp\\'`],
+                ['simple comparison', `IsActive = 1`],
+                ['order by', `CreatedAt DESC, Name ASC`],
+                ['IN list', `Status IN ('Active', 'Pending')`],
+            ])('accepts %s', (_label, clause) => {
+                expect(provider.TestValidateUserProvidedSQLClause(clause)).toBe(true);
+            });
+        });
+
+        it('is linear-time on a long unterminated literal (no catastrophic backtracking)', () => {
+            const clause = `Name = '${'a'.repeat(50000)}`;
+            const start = Date.now();
+            provider.TestValidateUserProvidedSQLClause(clause);
+            expect(Date.now() - start).toBeLessThan(1000);
         });
     });
 });

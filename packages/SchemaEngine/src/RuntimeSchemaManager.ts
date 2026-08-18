@@ -178,6 +178,60 @@ export interface RSUPipelineStep {
 }
 
 /**
+ * A lifecycle notification from the RSU pipeline, delivered to an out-of-band
+ * {@link RSUPipelineObserver}.
+ *
+ * Why an observer instead of emitting progress directly: an RSU run's steps (CodeGen, compile,
+ * restart) take minutes, and until now the only live signal was `GetStatus()` polling — a caller had
+ * no durable record of what a run did, and a restart mid-run left nothing to read. The durable
+ * artifact stream that solves that lives in `@memberjunction/integration-progress-artifacts`, which
+ * is a LAYER ABOVE this package. So SchemaEngine publishes plain lifecycle events and lets the
+ * server wire them to the emitter, keeping the dependency direction intact.
+ */
+export type RSUObserverEvent =
+  | {
+      Kind: 'run.start';
+      /** Number of migrations in this batch. */
+      ItemCount: number;
+      /** One description per input, in input order. */
+      Descriptions: string[];
+      /** Union of every input's AffectedTables, de-duplicated. */
+      AffectedTables: string[];
+      /** Expected total steps for the run — the denominator of a determinate progress bar. */
+      StepTotal: number;
+    }
+  | { Kind: 'step.start'; Name: string; StepIndex?: number; StepTotal?: number }
+  | {
+      Kind: 'step.end';
+      Name: string;
+      Status: RSUPipelineStep['Status'];
+      DurationMs: number;
+      Message: string;
+      StepIndex?: number;
+      StepTotal?: number;
+    }
+  | {
+      Kind: 'run.end';
+      Success: boolean;
+      SuccessCount: number;
+      FailureCount: number;
+      TotalCount: number;
+      /** Present when the run failed — the first failing step's message. */
+      ErrorMessage?: string;
+      /** Present when the run failed — the name of the step that failed. */
+      ErrorStep?: string;
+    };
+
+/**
+ * Receives {@link RSUObserverEvent}s for every RSU pipeline run in this process.
+ *
+ * Synchronous and fire-and-forget by contract: the pipeline never awaits an observer and never
+ * fails because one threw. A throw is logged and swallowed — progress reporting must not be able
+ * to break a schema migration.
+ */
+export type RSUPipelineObserver = (event: RSUObserverEvent) => void;
+
+/**
  * Result of a full RSU pipeline run.
  */
 export interface RSUPipelineResult {
@@ -767,6 +821,85 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     this._stepTotal = null;
   }
 
+  // ── Pipeline observer ──────────────────────────────────────────────
+  /**
+   * Optional observer notified of every step and run boundary. Set once at process startup (see
+   * the RSU progress bridge in MJServer) — a single observer is sufficient because RSU runs are
+   * serialized by the pipeline lock, so events can never interleave between runs.
+   *
+   * Never awaited, never allowed to fail the pipeline. See {@link RSUPipelineObserver}.
+   */
+  public PipelineObserver: RSUPipelineObserver | null = null;
+
+  /** Delivers an event to {@link PipelineObserver}, swallowing (but logging) any throw. */
+  private notifyObserver(event: RSUObserverEvent): void {
+    const observer = this.PipelineObserver;
+    if (!observer) return;
+    try {
+      observer(event);
+    } catch (error: unknown) {
+      // Progress reporting must never break a schema migration.
+      this.rsuLog(`Pipeline observer threw on ${event.Kind} (ignored): ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Records a completed step onto `steps` AND publishes it to the observer, so a step is never
+   * visible in the result but absent from the event stream. Every step recording goes through
+   * here — including the ones computed inline rather than via {@link runStep}.
+   */
+  private recordStep(steps: RSUPipelineStep[], step: RSUPipelineStep): void {
+    steps.push(step);
+    this.notifyObserver({
+      Kind: 'step.end',
+      Name: step.Name,
+      Status: step.Status,
+      DurationMs: step.DurationMs,
+      Message: step.Message,
+      StepIndex: step.StepIndex,
+      StepTotal: step.StepTotal,
+    });
+  }
+
+  /**
+   * Maps a finished batch onto its terminal `run.end` event.
+   *
+   * `result` is undefined when a throw escaped the pipeline before a result existed — that case
+   * must still produce a FAILED run.end, otherwise an observer's run would hang in-flight forever.
+   *
+   * Public + static so the mapping is unit-testable without a live pipeline.
+   */
+  public static BuildRunEndEvent(
+    result: RSUPipelineBatchResult | undefined,
+    totalCount: number
+  ): Extract<RSUObserverEvent, { Kind: 'run.end' }> {
+    if (!result) {
+      return {
+        Kind: 'run.end',
+        Success: false,
+        SuccessCount: 0,
+        FailureCount: totalCount,
+        TotalCount: totalCount,
+        ErrorMessage: 'Pipeline threw before producing a result',
+      };
+    }
+    const firstFailure = result.Results.find((r) => !r.Success);
+    return {
+      Kind: 'run.end',
+      Success: result.FailureCount === 0,
+      SuccessCount: result.SuccessCount,
+      FailureCount: result.FailureCount,
+      TotalCount: result.TotalCount,
+      ErrorMessage: firstFailure?.ErrorMessage,
+      ErrorStep: firstFailure?.ErrorStep,
+    };
+  }
+
+  /** Publishes the terminal run boundary. `result` is undefined when a throw escaped the pipeline. */
+  private notifyRunEnd(result: RSUPipelineBatchResult | undefined, totalCount: number): void {
+    this.notifyObserver(RuntimeSchemaManager.BuildRunEndEvent(result, totalCount));
+  }
+
   // ─── Pipeline ────────────────────────────────────────────────────
 
   /**
@@ -809,10 +942,24 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     // U11 — arm the determinate step counter (index of expected total) for this run.
     this.beginStepTracking(inputs.length);
+    this.notifyObserver({
+      Kind: 'run.start',
+      ItemCount: inputs.length,
+      Descriptions: inputs.map((i) => i.Description),
+      AffectedTables: [...new Set(inputs.flatMap((i) => i.AffectedTables))],
+      StepTotal: this._stepTotal ?? 0,
+    });
+
+    // Captured so the `finally` can publish the terminal run boundary on EVERY exit path —
+    // early validation failure, normal completion, or a throw (which leaves it undefined).
+    let batchResult: RSUPipelineBatchResult | undefined;
     try {
       // Phase 1: Validate
       const validationFailure = await this.validateBatch(inputs, sharedSteps);
-      if (validationFailure) return validationFailure;
+      if (validationFailure) {
+        batchResult = validationFailure;
+        return batchResult;
+      }
 
       // Phase 2: Execute migrations under lock
       const itemResults = await this.executeMigrations(inputs, sharedSteps);
@@ -822,9 +969,11 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       const postResult = await this.runPostMigrationPipeline(inputs, successfulItems, sharedSteps);
 
       // Phase 4: Build per-caller results
-      return this.buildPerCallerResults(itemResults, successfulItems, sharedSteps, postResult);
+      batchResult = this.buildPerCallerResults(itemResults, successfulItems, sharedSteps, postResult);
+      return batchResult;
     } finally {
       this.endStepTracking();
+      this.notifyRunEnd(batchResult, inputs.length);
     }
   }
 
@@ -838,11 +987,11 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     for (const input of inputs) {
       const validation = ValidateMigrationSQL(input.MigrationSQL, this.getProtectedSchemas());
       if (!validation.Valid) {
-        sharedSteps.push({ Name: 'ValidateSQL', Status: 'failed', DurationMs: 0, Message: validation.Errors.join('; ') });
+        this.recordStep(sharedSteps, { Name: 'ValidateSQL', Status: 'failed', DurationMs: 0, Message: validation.Errors.join('; ') });
         return this.buildBatchResult(inputs.map((i) => this.buildFailedResult(i, 'ValidateSQL', sharedSteps)));
       }
     }
-    sharedSteps.push({ Name: 'ValidateSQL', Status: 'success', DurationMs: 0, Message: `Validated ${inputs.length} migration(s)` });
+    this.recordStep(sharedSteps, { Name: 'ValidateSQL', Status: 'success', DurationMs: 0, Message: `Validated ${inputs.length} migration(s)` });
     return null;
   }
 
@@ -884,7 +1033,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
       if (itemResults.some((r) => r.Success)) {
         this.MarkOutOfSync();
-        sharedSteps.push({ Name: 'MarkOutOfSync', Status: 'success', DurationMs: 0, Message: 'DB changed, API out-of-sync until CodeGen completes' });
+        this.recordStep(sharedSteps, { Name: 'MarkOutOfSync', Status: 'success', DurationMs: 0, Message: 'DB changed, API out-of-sync until CodeGen completes' });
       }
     } finally {
       await this.releaseLock();
@@ -2220,17 +2369,18 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     const stepIndex = this._currentStepIndex ?? undefined;
     const stepTotal = this._stepTotal ?? undefined;
     this.rsuLog(`▶ Starting step${stepIndex && stepTotal ? ` ${stepIndex}/${stepTotal}` : ''}: ${name}`);
+    this.notifyObserver({ Kind: 'step.start', Name: name, StepIndex: stepIndex, StepTotal: stepTotal });
     try {
       const result = await fn();
       const durationMs = Date.now() - start;
       const msg = `${name} completed successfully`;
-      steps.push({ Name: name, Status: 'success', DurationMs: durationMs, Message: msg, StepIndex: stepIndex, StepTotal: stepTotal });
+      this.recordStep(steps, { Name: name, Status: 'success', DurationMs: durationMs, Message: msg, StepIndex: stepIndex, StepTotal: stepTotal });
       this.rsuLog(`✓ ${name} — ${durationMs}ms`);
       return result;
     } catch (error: unknown) {
       const durationMs = Date.now() - start;
       const msg = error instanceof Error ? error.message : String(error);
-      steps.push({ Name: name, Status: 'failed', DurationMs: durationMs, Message: msg, StepIndex: stepIndex, StepTotal: stepTotal });
+      this.recordStep(steps, { Name: name, Status: 'failed', DurationMs: durationMs, Message: msg, StepIndex: stepIndex, StepTotal: stepTotal });
       this.rsuLog(`✗ ${name} — FAILED after ${durationMs}ms: ${msg}`);
       return undefined;
     }

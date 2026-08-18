@@ -12,32 +12,26 @@ name: Update package documentation
 # Every build uses the docs-site/ TOOLING from next (overlaid onto the content
 # checkout), so ingest/site fixes apply to all versions without cherry-picks.
 # Because this file lives on the default branch (next), the workflow_run
-# trigger fires from here regardless of what main or lts/* carry; pushes to
-# lts/* are forwarded by the thin dispatcher workflow on those branches.
+# trigger fires from here regardless of what main or lts/* carry.
 
 on:
+  # Release-following only: a docs deploy is the last step of shipping, never a
+  # side effect of merging. Between releases both `main` and the npm registry
+  # lag `next`, so a merge-triggered deploy publishes authoritative-looking
+  # documentation — canonical links into `main` included — for bits nobody can
+  # install yet. Both publish paths are covered: the Edge line publishes from
+  # main, and a line release is dispatched from its own lts/* branch. The
+  # resolve job below hard-fails a trigger that did not conclude `success`.
   workflow_run:
-    workflows: [Build and publish new package versions]
-    branches: [main]
+    workflows:
+      - Build and publish new package versions  # publish.yml     — Edge line, runs on main
+      - Publish LTS line release                # publish-lts.yml — one line, runs on lts/*
+    branches: [main, 'lts/*']
     types:
       - completed
 
-  # Docs content or tooling changes on next: Edge content and the shared
-  # tooling both live here, so any of these paths can change the built site.
-  push:
-    branches: [next]
-    paths:
-      - 'docs-site/**'
-      - 'guides/**'
-      - 'README.md'
-      - 'UPGRADE-v5.0.md'
-      - 'UPGRADE-v6.0.md'
-      - 'CONTRIBUTING.md'
-      - 'metadata/README.md'
-      - '.claude/skills/**'
-      - 'releases/**'
-      - '.github/workflows/docs.yml'
-
+  # Manual escape hatch: re-deploy a docs-only fix without waiting for a
+  # release, and the only way to exercise the full pipeline from a branch.
   workflow_dispatch: {}
 
 permissions:
@@ -66,10 +60,11 @@ jobs:
             exit 1
           fi
 
-      # github.sha is the commit this run was triggered for: the pushed next
-      # commit, the default-branch head for workflow_run, or the chosen ref's
-      # head for a manual dispatch (which is what lets a feature branch test
-      # the full pipeline before merging).
+      # github.sha is the commit this run was triggered for: the default-branch
+      # head for workflow_run, or the chosen ref's head for a manual dispatch
+      # (which is what lets a feature branch test the full pipeline before
+      # merging). Note for workflow_run this is next's head, NOT the released
+      # commit — the ref each version's CONTENT comes from is the matrix below.
       - name: Checkout repo
         uses: actions/checkout@v4
         with:

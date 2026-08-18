@@ -59,13 +59,15 @@ import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-de
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { IntegrationSyncWorkerService } from './services/IntegrationSyncWorkerService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, SetVerboseLogging } from '@memberjunction/core';
-import { getSystemUser } from './auth/index.js';
+import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js';
+import { createAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
+import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
 import { SessionJanitor } from './agentSessions/index.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
@@ -104,6 +106,10 @@ export function getDbType(): DatabasePlatform {
 
 export { MaxLength } from 'class-validator';
 export * from 'type-graphql';
+// Named re-export so Open App generated resolvers get a live ESM binding for
+// Int/Float/ID. `export *` from type-graphql can leave these undefined for
+// later importers, which makes schema build fail on ViewResult.RowCount.
+export { Int, Float, ID } from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
 export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
 export { ServerExtensionLoader, BaseServerExtension } from '@memberjunction/server-extensions-core';
@@ -344,6 +350,10 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     const pgStartupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
     await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: pgStartupMode.mode });
 
+    // Both provider sources have now had their turn — config/env at module load, metadata via
+    // AuthProviderEngine's startup hook — so "no providers at all" is finally a meaningful check.
+    validateAuthProvidersRegistered();
+
     // Monkey-patch SQLServerDataProvider.ExecuteSQLWithPool to support PostgreSQL
     // Generated resolvers call this static method with bracket-quoted SQL.
     // When the pool is our PG-compat wrapper, translate and execute via pg.Pool.
@@ -500,6 +510,10 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     // MJ_STARTUP_MODE / mj.config.cjs startup.mode can override per the shared precedence chain
     const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
     await setupSQLServerClient(config, { mode: startupMode.mode });
+
+    // See the note on the PostgreSQL path above: this is the first point at which both the
+    // config/env providers and the metadata catalog have been registered.
+    validateAuthProvidersRegistered();
     lap('Metadata + Provider Setup', tPhase);
     startupLog.BeginPhase('Initializing data provider');
     const md = new Metadata(); // global-provider-ok: bootstrap
@@ -842,6 +856,14 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     })
   );
 
+  // Give Runtime Schema Update runs the same durable, tailable event stream as syncs and connector
+  // builds. `IntegrationRunKind` has always had an 'RSU' kind and RUN_KIND_TO_TOPIC has always
+  // mapped it to an 'RSU' channel, but nothing published to it — the only live signal was polling
+  // RuntimeSchemaUpdateStatus, which reports the current step and keeps no history, and which goes
+  // silent entirely across the API restart the pipeline performs on itself. Registered AFTER the
+  // publish hook above so the first RSU event also reaches live subscribers.
+  RegisterRSUProgressBridge();
+
   // Global listener: broadcast CACHE_INVALIDATION to all browser clients whenever
   // ANY BaseEntity save/delete occurs on this server — regardless of whether it
   // originated from a GraphQL mutation or internal server-side code (agents, actions,
@@ -1114,7 +1136,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     const { callbackRouter, authenticatedRouter } = createOAuthCallbackHandler({
       publicUrl: oauthPublicUrl,
       successRedirectUrl: `${oauthPublicUrl}/oauth/success`,
-      errorRedirectUrl: `${oauthPublicUrl}/oauth/error`
+      errorRedirectUrl: `${oauthPublicUrl}/oauth/error`,
+      // Constrains where a caller-supplied frontendReturnUrl may point (open-redirect guard).
+      allowedFrontendOrigins: configInfo.cors?.allowedOrigins ?? ['*']
     });
     oauthAuthenticatedRouter = authenticatedRouter;
 
@@ -1262,6 +1286,14 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     const allHealthy = results.length === 0 || results.every(r => r.Healthy);
     res.status(allHealthy ? 200 : 503).json({ extensions: results });
   });
+
+  // ─── Public authentication-provider catalog (PUBLIC, before auth mw) ──────
+  // The browser needs the provider list BEFORE it holds a token, so this is necessarily
+  // unauthenticated and must mount ahead of the auth middleware. It publishes only the
+  // non-secret allow-list (see AuthProviderEngine.GetPublicCatalog) — the same values a
+  // single-provider SPA already compiled into its bundle.
+  app.use(AUTH_CATALOG_MOUNT_PATH, cors<cors.CorsRequest>(), createAuthProviderCatalogRouter());
+  startupLog.LogIf('verbose', `[Auth] Public provider catalog registered at ${AUTH_CATALOG_MOUNT_PATH}/providers`);
 
   // ─── Unified auth middleware (replaces both REST authMiddleware and contextFunction auth) ─────
   app.use(createUnifiedAuthMiddleware(dataSources));
