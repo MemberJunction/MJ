@@ -703,6 +703,12 @@ export class APIKeyEngine {
         hash: string,
         contextUser: UserInfo
     ): Promise<KeyHashValidationResult> {
+        // The hash is always a SHA-256 hex digest. Enforce that at this public entry point so the
+        // guarantee holds at the SQL sink (ExtraFilter is a raw SQL fragment) regardless of caller —
+        // a non-conforming value can never carry a quote and therefore cannot inject.
+        if (!/^[a-f0-9]{64}$/i.test(hash)) {
+            return { Valid: false, Reason: 'API key not found' };
+        }
         const rv = new RunView();
         const result = await rv.RunView<MJAPIKeyEntity>({
             EntityName: 'MJ: API Keys',

@@ -186,6 +186,42 @@ export const getSystemUser = async (dataSource?: sql.ConnectionPool, attemptCach
   return systemUser;
 };
 
+/**
+ * Extracts the lowercased domain portion of an email address.
+ *
+ * @returns the domain, or an empty string when the value is not an email address (e.g. an IdP that
+ *          issues a bare username). Callers MUST treat an empty result as "cannot be authorized"
+ *          rather than as a wildcard.
+ */
+const extractEmailDomain = (email: string): string => {
+  const parts = email.split('@');
+  // Reject anything that isn't exactly local@domain — a value with 0 or 2+ '@' is not an address we
+  // can make a trust decision about.
+  if (parts.length !== 2) return '';
+  return parts[1].toLowerCase().trim();
+};
+
+/**
+ * Tests a domain against `userHandling.newUserAuthorizedDomains`, honoring `*` wildcards.
+ *
+ * Note that a pattern is matched in full, so `*.example.com` matches `mail.example.com` but NOT
+ * `example.com` — list both if you need both.
+ */
+const isDomainAuthorized = (domain: string): boolean =>
+  configInfo.userHandling.newUserAuthorizedDomains.some((pattern) => {
+    // Convert wildcard domain patterns to regular expressions
+    const regex = new RegExp('^' + pattern.toLowerCase().trim().replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
+    return regex.test(domain);
+  });
+
+/**
+ * Resolves a verified identity to an MJ `UserInfo`, optionally auto-provisioning a new user.
+ *
+ * @param requestDomain the hostname parsed from the request's `Origin` header. **Not used for any
+ *        authorization decision** — it is spoofable on non-browser requests, and new-user domain
+ *        authorization runs against the verified JWT's email domain instead. Retained for audit
+ *        logging and for the recursive retry call.
+ */
 export const verifyUserRecord = async (
   email?: string,
   firstName?: string,
@@ -206,23 +242,21 @@ export const verifyUserRecord = async (
   });
 
   if (!user) {
-    if (
-      configInfo.userHandling.autoCreateNewUsers &&
-      firstName &&
-      lastName &&
-      (requestDomain || configInfo.userHandling.newUserLimitedToAuthorizedDomains === false)
-    ) {
-      // check to see if the domain that we have a request coming in from matches one of the domains in the autoCreateNewUsersDomains setting
+    // NOTE: `requestDomain` (parsed from the spoofable `Origin` header) is deliberately NOT part of
+    // this condition. It was previously required here, which meant a non-browser client sending no
+    // Origin could never auto-provision while an attacker simply forged one — it gated entry without
+    // authorizing anything. Authorization happens below, against the verified identity's email domain.
+    if (configInfo.userHandling.autoCreateNewUsers && firstName && lastName) {
+      // SECURITY: authorize against the EMAIL DOMAIN of the cryptographically-verified identity,
+      // NOT the request `Origin` header. Origin is trivially spoofable on non-browser / bearer-token
+      // requests, so gating on it let a holder of any valid IdP token auto-provision an account under
+      // an authorized domain by sending a forged Origin. The email comes from the verified JWT.
+      const emailDomain: string = extractEmailDomain(email);
       let passesDomainCheck: boolean =
         configInfo.userHandling.newUserLimitedToAuthorizedDomains ===
         false; /*in this first condition, we are set up to NOT care about domain */
-      if (!passesDomainCheck && requestDomain) {
-        /*in this second condition, we check the domain against authorized domains*/
-        passesDomainCheck = configInfo.userHandling.newUserAuthorizedDomains.some((pattern) => {
-          // Convert wildcard domain patterns to regular expressions
-          const regex = new RegExp('^' + pattern.toLowerCase().trim().replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
-          return regex.test(requestDomain?.toLowerCase().trim());
-        });
+      if (!passesDomainCheck) {
+        passesDomainCheck = emailDomain.length > 0 && isDomainAuthorized(emailDomain);
       }
 
       if (passesDomainCheck) {
@@ -248,9 +282,16 @@ export const verifyUserRecord = async (
           UserCache.Instance.Users.push(user);
           console.warn(`   >>> New user ${email} created successfully!`);
         }
+      } else if (emailDomain.length === 0) {
+        // The verified identity carries no email domain at all — typically an IdP that issues a bare
+        // `preferred_username` with no `email` claim. There is nothing to match against, so the gate
+        // denies rather than falling back to anything spoofable.
+        console.warn(
+          `User ${email} not found in cache and will NOT be auto-created: the verified identity has no email domain (no '@'), so it cannot be matched against newUserAuthorizedDomains. This usually means the identity provider issues a username rather than an email address — configure it to emit an 'email' claim, or set newUserLimitedToAuthorizedDomains to false to disable domain checking.`
+        );
       } else {
         console.warn(
-          `User ${email} not found in cache. Request domain '${requestDomain}' does not match any of the domains in the newUserAuthorizedDomains setting. To ignore domain, make sure you set the newUserLimitedToAuthorizedDomains setting to false. In this case we are NOT creating a new user.`
+          `User ${email} not found in cache. Email domain '${emailDomain}' does not match any of the domains in the newUserAuthorizedDomains setting. NOTE: this check is against the EMAIL DOMAIN of the verified identity, NOT the browser Origin — if newUserAuthorizedDomains lists frontend hostnames (e.g. 'app.example.com'), replace them with email domains (e.g. 'example.com'). To ignore domain, make sure you set the newUserLimitedToAuthorizedDomains setting to false. In this case we are NOT creating a new user.`
         );
       }
     }

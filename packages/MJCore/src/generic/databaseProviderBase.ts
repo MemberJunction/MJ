@@ -10,7 +10,7 @@ import { LogError } from "./logging";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunReportResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { RunReportParams } from "./runReport";
-import { SQLExpressionValidator, uuidv4 } from "@memberjunction/global";
+import { SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
@@ -981,15 +981,21 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @returns true if the clause is safe, false if it contains forbidden patterns
      */
     protected ValidateUserProvidedSQLClause(clause: string): boolean {
-        // Remove string literals to avoid false positives
-        const stringLiteralPattern = /(['"])(?:(?=(\\?))\2[\s\S])*?\1/g;
-        const clauseWithoutStrings = clause.replace(stringLiteralPattern, '');
+        // Remove string literals to avoid false positives.
+        //
+        // 🚨 SECURITY: this uses the SHARED stripper in @memberjunction/global. It must match how
+        // SQL Server / PostgreSQL actually parse literals — see StripSQLStringLiterals for the full
+        // rationale and the backslash-escape bypass it exists to prevent. Do NOT inline a regex here;
+        // an inline copy is exactly how this screen and SQLExpressionValidator drifted apart before.
+        const clauseWithoutStrings = StripSQLStringLiterals(clause);
         const lowerClause = clauseWithoutStrings.toLowerCase();
 
         const forbiddenPatterns: RegExp[] = [
             /\binsert\b/, /\bupdate\b/, /\bdelete\b/,
             /\bexec\b/, /\bexecute\b/, /\bdrop\b/,
             /--/, /\/\*/, /\*\//, /\bunion\b/, /\bxp_/, /;/,
+            // Time-based blind injection vector — no legitimate filter/order-by clause uses WAITFOR.
+            /\bwaitfor\b/,
         ];
 
         for (const pattern of forbiddenPatterns) {

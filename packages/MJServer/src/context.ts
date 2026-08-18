@@ -1,4 +1,5 @@
 import { IncomingMessage } from 'http';
+import { createHash, timingSafeEqual } from 'crypto';
 import { default as jwt } from 'jsonwebtoken';
 import 'reflect-metadata';
 import { Subject, firstValueFrom } from 'rxjs';
@@ -319,7 +320,13 @@ const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayloa
       return;
     }
 
-    const verifyOptions: jwt.VerifyOptions = {};
+    const verifyOptions: jwt.VerifyOptions = {
+      // SECURITY: explicitly pin the accepted signature algorithms to the asymmetric family.
+      // The signing key here comes from the issuer's JWKS (an RSA/EC public key), so without an
+      // explicit allow-list a future key-format change or library regression could reintroduce
+      // classic `alg=none` / RS256->HS256 confusion attacks. Pinning fails such tokens closed.
+      algorithms: ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512', 'PS256'],
+    };
     if (Array.isArray(options.audience)) {
       verifyOptions.audience = options.audience as [string, ...string[]];
     } else {
@@ -420,7 +427,17 @@ export const getUserPayload = async (
     // Check for system API key (x-mj-api-key header)
     // This authenticates as the system user for system-level operations
     if (systemApiKey && systemApiKey != String(undefined)) {
-      if (systemApiKey === apiKey) {
+      // SECURITY: compare the superadmin system API key in constant time. A plain `===`
+      // short-circuits on the first differing byte, leaking a timing side-channel that could
+      // be used to recover the key byte-by-byte. Hash both sides to fixed-length digests so
+      // timingSafeEqual never throws on length mismatch and the comparison is length-agnostic.
+      // The Uint8Array wrappers are required by the @types/node version this line is pinned to
+      // (20.14.2, via the root `overrides`), whose `timingSafeEqual` takes NodeJS.ArrayBufferView —
+      // a type its own non-generic `Buffer` does not satisfy under TypeScript 5.9's lib. Copying
+      // two fixed-length 32-byte digests is content-independent, so the comparison stays constant time.
+      const systemKeyDigest = new Uint8Array(createHash('sha256').update(String(systemApiKey)).digest());
+      const providedKeyDigest = new Uint8Array(createHash('sha256').update(String(apiKey)).digest());
+      if (timingSafeEqual(systemKeyDigest, providedKeyDigest)) {
         const systemUser = await getSystemUser(readOnlyDataSource);
         return {
           userRecord: systemUser,
