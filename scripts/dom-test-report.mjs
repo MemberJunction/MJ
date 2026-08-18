@@ -57,6 +57,10 @@ const DEFERRALS = [
   // has open UI-layering violations tracked separately — the spec should be written against
   // whatever navigation contract that resolves to, not the current one.
   [/\/graph-view\.component\.ts$/, "new generic graph-view UI; DOM spec pending"],
+  // HierarchyTreeComponent landed on `next` in #3927 without a DOM spec, pushing the count to
+  // 135 and turning this gate red on `next` itself from that merge onward. Deferred here so the
+  // ratchet stays honest until the hierarchy-tree team backfills a spec (then remove this).
+  [/\/hierarchy-tree\.component\.ts$/, "new generic hierarchy-tree UI; DOM spec pending"],
 ];
 const deferralReason = (rel) => (DEFERRALS.find(([re]) => re.test(rel)) || [])[1] || "";
 
