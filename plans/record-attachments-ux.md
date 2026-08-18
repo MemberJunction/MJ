@@ -44,17 +44,14 @@ package** — strictly better than cloning `ng-record-tags`, hardcoded into `rec
   metadata: { entity: '*', slot: 'after-fields', sortKey: 30, inclusion: 'Primary' } })
 ```
 
-`RegisterClass`'s second positional arg is `key: string | null` and `metadata` is its **sixth**
-(`MJGlobal/src/RegisterClass.ts:51-62`), so the options bag only works on `RegisterClassEx` — which is
-what all three existing panels in `core-entity-forms` use. **But the tree-shake manifest generator
-matches the identifier literally** (`GenerateClassRegistrationsManifest.ts:461,569`:
-`expression.text !== 'RegisterClass'`), so every `RegisterClassEx` registration is invisible to it:
-`ModelPredictionPanel`, the repo's only other `entity: '*'` panel, has **zero** entries in
-`Angular/Bootstrap/src/generated/mj-class-registrations.ts` and survives only because the manifest
-imports its package barrel. A new standalone package has no such barrel — the panel silently never
-registers and the paperclip opens nothing, with no build or runtime error. Teaching the generator
-about `RegisterClassEx` is a one-line CodeGen fix that de-risks the three existing panels too; do it
-in phase 2, or accept a dependency edge from an already-manifested package.
+The options bag only works on `RegisterClassEx` (on `RegisterClass`, `metadata` is the *sixth*
+positional arg) — which is what all 25+ existing `BaseFormPanel` contributions use. **⚠ Blocked on
+[#3944](https://github.com/MemberJunction/MJ/issues/3944):** the tree-shake manifest generator matches
+the decorator identifier literally, so `RegisterClassEx` registrations are invisible to it *and* to the
+coverage audit meant to catch that. Existing panels survive only because the manifest imports their
+package barrel; a new standalone package has none, so the panel would silently never register and the
+paperclip would open nothing. Phase 2 depends on #3944, or on accepting a dependency edge from an
+already-manifested package.
 
 The slot host injects `Record`, `FormComponent`, and `FormContext` before first change detection — no
 per-entity wiring, no CodeGen change. The panel self-hides when `!EntityInfo.SupportsFileAttachments` or
@@ -116,7 +113,7 @@ eSignature's `writeSignedArtifact` — contracts' phase-2 path.
 
 | # | Scope | Done when |
 |---|---|---|
-| 1 | Migration: **fix `UQ_FileEntityRecordLink`**, entity flag, link `Role`/`Sequence`, `File.FileStorageAccountID`; CodeGen default | A file can be linked to many records; an entity is attachment-capable |
+| 1 | Migration: entity flag, link `Role`/`Sequence`, `File.FileStorageAccountID`; CodeGen default. **Needs #3943 first** | A file can link to many records; an entity is attachment-capable |
 | 2 | `ng-record-attachments` read-only panel registered at `entity: '*'` | Panel appears on every opted-in form with zero per-entity wiring; lists + opens |
 | 3 | Toolbar paperclip + count badge (`base-forms`) | One-click access to the panel from the toolbar |
 | 4 | `RegisterRecordAttachment` — by-reference first, then upload, delete, account picker | Contracts can point a record at a SharePoint object; users can upload |
@@ -127,14 +124,11 @@ already produce links. Contracts needs 1, 2 and 4; only 4 is on its critical pat
 
 ## Risks
 
-0. **The link table's unique constraint forbids the feature.**
-   `UQ_FileEntityRecordLink_EntityID_FileID UNIQUE ([EntityID], [FileID])`
-   (`B202607091514__v5.46.x__Baseline.sql:3875`, added by
-   `V202605221002__v5.37.x__Add_Unique_Constraints_To_MJ_Junction_Tables.sql:441`, never dropped)
-   **omits `RecordID`** — so one file can be linked to exactly one record per entity, and the same
-   executed PDF cannot be attached to two contracts. The lone existing writer never hit this because
-   each recording is a fresh file. *Fix:* drop and re-add as `(EntityID, RecordID, FileID)` in phase 1.
-   **Hard blocker; nothing works until this lands.**
+0. **The link table's unique constraint forbids the feature** —
+   `UQ_FileEntityRecordLink_EntityID_FileID UNIQUE ([EntityID], [FileID])` **omits `RecordID`**, so one
+   file can attach to exactly one record per entity and the same executed PDF cannot go on two
+   contracts. Tracked as [#3943](https://github.com/MemberJunction/MJ/issues/3943) with the migration.
+   **Hard blocker; phase 1 depends on it.**
 1. **The permission model is wrong for this use case.** `CreateMediaAccessToken` gates on loading the
    `MJ: Files` row under the user's context — on *Files* permission, not the host record's readability.
    Someone who can read Files could read an attachment on an Account they can't see. *Fix:* gate the
