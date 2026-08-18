@@ -16,21 +16,20 @@ import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 
 // Import Generated Components
 
+   
+
+
+
 @NgModule({
 declarations: [
 ],
 imports: [
-    CommonModule,
-    FormsModule,
-    BaseFormsModule,
-    EntityViewerModule,
-    LinkDirectivesModule
-],
-exports: [
+    
 ]
 })
 export class GeneratedFormsModule { }
-
+    
 // Note: LoadXXXGeneratedForms() functions have been removed. Tree-shaking prevention
 // is now handled by the pre-built class registration manifest system.
 // See packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md for details.
+    

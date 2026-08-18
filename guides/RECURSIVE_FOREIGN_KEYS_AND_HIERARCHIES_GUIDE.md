@@ -222,6 +222,38 @@ if (path) {
 }
 ```
 
+### 4.3. Querying Hierarchies Directly via `RunView` (Outside `BaseEntity`)
+
+You do not need an instantiated entity object to query hierarchy structures. Because the base view (`vw<Entities>`) automatically projects `Root<Field>`, `<Field>Depth`, `<Field>Path`, `<Field>IsLeaf`, and `<Field>ChildCount`, you can pass standard filter expressions into `RunView`:
+
+```typescript
+import { RunView } from '@memberjunction/core';
+import type { CategoryEntity } from '@memberjunction/core-entities';
+
+const rv = new RunView();
+
+// 1. Retrieve all descendants under an item across the wire (with full RLS, permissions, and caching)
+const descendantsResult = await rv.RunView<CategoryEntity>({
+    EntityName: 'Product Categories',
+    ExtraFilter: `RootParentProductCategoryID = '${categoryId}'`,
+    OrderBy: 'ParentProductCategoryIDDepth ASC',
+});
+const descendants = descendantsResult.Success ? descendantsResult.Results : [];
+
+// 2. Retrieve subtree bounded to a maximum depth (e.g. 2 levels deep)
+const shallowResult = await rv.RunView<CategoryEntity>({
+    EntityName: 'Product Categories',
+    ExtraFilter: `RootParentProductCategoryID = '${categoryId}' AND ParentProductCategoryIDDepth <= 2`,
+    OrderBy: 'ParentProductCategoryIDDepth ASC',
+});
+
+// 3. Retrieve direct children only
+const childrenResult = await rv.RunView<CategoryEntity>({
+    EntityName: 'Product Categories',
+    ExtraFilter: `ParentProductCategoryID = '${categoryId}'`,
+});
+```
+
 ---
 
 ## 5. UI Layer: Angular `<mj-hierarchy-tree>` Component
@@ -263,9 +295,9 @@ graph TD
 
 ---
 
-## 6. SQL Query Recipes & Advanced Patterns
+## 6. SQL Query Recipes & Direct TVF Invocations
 
-### Recipe 1: Query All Records Belonging to a Specific Tree
+### Recipe 1: Query All Records Belonging to a Specific Tree via Base View
 ```sql
 -- Find all categories under the 'Electronics' root category
 SELECT
@@ -297,7 +329,44 @@ ORDER BY
     ParentIDDepth ASC;
 ```
 
-### Recipe 3: Leaf-Only Aggregations
+### Recipe 3: Invoking Generated TVF Routines Directly in Backend SQL & Stored Procedures
+
+For server-side ETL, reporting queries, or custom stored procedures, you can query the generated table-valued functions directly:
+
+#### A. Full Subtree Descendants
+```sql
+-- SQL Server (T-SQL)
+SELECT d.ID, d.Depth, d.Path, c.Name
+FROM [__mj].[fnCategoryParentID_GetDescendants]('E2B45F20-1111-4A1B-8234-A0B1C2D3E4F5', NULL) d
+JOIN [__mj].[vwCategories] c ON c.ID = d.ID
+ORDER BY d.Depth ASC;
+
+-- PostgreSQL (PL/pgSQL)
+SELECT d."ID", d."Depth", d."Path", c."Name"
+FROM "__mj"."fn_category_parent_id_get_descendants"('e2b45f20-1111-4a1b-8234-a0b1c2d3e4f5', NULL) d
+JOIN "__mj"."vwCategories" c ON c."ID" = d."ID"
+ORDER BY d."Depth" ASC;
+```
+
+#### B. Ancestor Lineage (Root Down to Parent)
+```sql
+-- SQL Server (T-SQL)
+SELECT * FROM [__mj].[fnCategoryParentID_GetAncestors]('A7C89D01-2222-4B2C-9345-B1C2D3E4F5A6');
+
+-- PostgreSQL (PL/pgSQL)
+SELECT * FROM "__mj"."fn_category_parent_id_get_ancestors"('a7c89d01-2222-4b2c-9345-b1c2d3e4f5a6');
+```
+
+#### C. Fast Top-Level Root ID Resolution
+```sql
+-- SQL Server (T-SQL)
+SELECT [__mj].[fnCategoryParentID_GetRootID]('A7C89D01-2222-4B2C-9345-B1C2D3E4F5A6') AS RootID;
+
+-- PostgreSQL (PL/pgSQL)
+SELECT "__mj"."fn_category_parent_id_get_root_id"('a7c89d01-2222-4b2c-9345-b1c2d3e4f5a6') AS "RootID";
+```
+
+### Recipe 4: Leaf-Only Aggregations
 ```sql
 -- Calculate sum of product inventory across leaf categories only
 SELECT
@@ -321,3 +390,4 @@ GROUP BY
 1. **Automatic View Regeneration**: When CodeGen detects a recursive foreign key in metadata, it generates the TVF suite and drops/recreates the base view with hierarchy columns.
 2. **Metadata Synchronization**: When upgrading an existing database, run `mj codegen` so that `spUpdateExistingEntityFieldsFromSchema` registers the new `Root*`, `*Depth`, `*Path`, `*IsLeaf`, and `*ChildCount` columns in the `EntityField` catalog.
 3. **Cross-Engine Support**: The hierarchy traversal engine is fully tested and supported on both **Microsoft SQL Server (2019+)** and **PostgreSQL (14+)**.
+
