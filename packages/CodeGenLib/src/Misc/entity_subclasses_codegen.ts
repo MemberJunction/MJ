@@ -921,68 +921,41 @@ ${fields}
 
       const isPrimaryHierarchy = recursiveFKs.length === 1 || fieldName === 'ParentID';
 
-      const descMethodName = isPrimaryHierarchy ? 'GetDescendants' : `Get${fieldName}Descendants`;
-      const ancMethodName = isPrimaryHierarchy ? 'GetAncestors' : `Get${fieldName}Ancestors`;
-      const childMethodName = isPrimaryHierarchy ? 'GetChildren' : `Get${fieldName}Children`;
+      // For primary hierarchies (e.g. ParentID), BaseEntity already provides strongly-typed
+      // GetDescendants<T = this>(), GetAncestors<T = this>(), and GetChildren<T = this>().
+      // We only generate named helper methods for non-primary hierarchy fields (e.g. ManagerID).
+      if (isPrimaryHierarchy) {
+        continue;
+      }
 
       methods.push(`
   /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
+   * Retrieves all descendant records in the ${fieldName} hierarchy under this record using a single RunView query.
    * @param maxDepth Optional maximum relative depth to retrieve.
    * @returns Array of descendant entity instances ordered by hierarchy depth.
    */
-  public async ${descMethodName}(maxDepth?: number): Promise<${sClassName}[]> {
-    const rv = new RunView();
-    const rootId = this.Get('${pkName}') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? \`${rootField} = '\${rootId}' AND ${depthField} <= \${maxDepth}\`
-      : \`${rootField} = '\${rootId}'\`;
-    const result = await rv.RunView<${sClassName}>({
-      EntityName: '${entity.Name}',
-      ExtraFilter: filter,
-      OrderBy: '${depthField} ASC',
-    });
-    return result.Success ? result.Results : [];
+  public async Get${fieldName}Descendants<T extends BaseEntity = this>(maxDepth?: number): Promise<T[]> {
+    return this.GetDescendants<T>({ parentFieldName: '${fieldName}', maxDepth });
   }
 
   /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
+   * Retrieves all ancestor records in the ${fieldName} hierarchy from the top-level root down to this record using a single RunView query.
    * @returns Array of ancestor entity instances ordered from root down to parent.
    */
-  public async ${ancMethodName}(): Promise<${sClassName}[]> {
-    const path = this.Get('${pathField}') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('${pkName}') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => \`'\${id}'\`).join(',');
-    const result = await rv.RunView<${sClassName}>({
-      EntityName: '${entity.Name}',
-      ExtraFilter: \`${pkName} IN (\${idList})\`,
-      OrderBy: '${depthField} ASC',
-    });
-    return result.Success ? result.Results : [];
+  public async Get${fieldName}Ancestors<T extends BaseEntity = this>(): Promise<T[]> {
+    return this.GetAncestors<T>('${fieldName}');
   }
 
   /**
-   * Retrieves all direct child records of this record using a single RunView query.
+   * Retrieves all direct child records in the ${fieldName} hierarchy of this record using a single RunView query.
    * @returns Array of direct child entity instances.
    */
-  public async ${childMethodName}(): Promise<${sClassName}[]> {
-    const currentId = this.Get('${pkName}') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<${sClassName}>({
-      EntityName: '${entity.Name}',
-      ExtraFilter: \`${fieldName} = '\${currentId}'\`,
-    });
-    return result.Success ? result.Results : [];
+  public async Get${fieldName}Children<T extends BaseEntity = this>(): Promise<T[]> {
+    return this.GetChildren<T>('${fieldName}');
   }`);
     }
 
-    return '\n' + methods.join('\n');
+    return methods.length > 0 ? '\n' + methods.join('\n') : '';
   }
 
   /**

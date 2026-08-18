@@ -4970,7 +4970,7 @@ export abstract class BaseEntity<T = unknown> {
      * @param optionsOrMaxDepth Optional maximum relative depth to retrieve, or an options object.
      * @returns Array of descendant entity instances ordered by hierarchy depth.
      */
-    public async GetDescendants<T extends BaseEntity = BaseEntity>(options?: { parentFieldName?: string; maxDepth?: number } | number): Promise<T[]> {
+    public async GetDescendants<T extends BaseEntity = this>(options?: { parentFieldName?: string; maxDepth?: number } | number): Promise<T[]> {
         const maxDepth = typeof options === 'number' ? options : options?.maxDepth;
         const parentFieldName = typeof options === 'object' ? options?.parentFieldName : undefined;
         const fkField = this.getRecursiveForeignKeyField(parentFieldName);
@@ -5003,7 +5003,7 @@ export abstract class BaseEntity<T = unknown> {
      * @param parentFieldName Optional recursive foreign key field name (defaults to 'ParentID' or the first recursive FK found).
      * @returns Array of ancestor entity instances ordered from root down to parent.
      */
-    public async GetAncestors<T extends BaseEntity = BaseEntity>(parentFieldName?: string): Promise<T[]> {
+    public async GetAncestors<T extends BaseEntity = this>(parentFieldName?: string): Promise<T[]> {
         const fkField = this.getRecursiveForeignKeyField(parentFieldName);
         if (!fkField) {
             LogError(`BaseEntity.GetAncestors(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
@@ -5035,7 +5035,7 @@ export abstract class BaseEntity<T = unknown> {
      * @param parentFieldName Optional recursive foreign key field name (defaults to 'ParentID' or the first recursive FK found).
      * @returns Array of direct child entity instances.
      */
-    public async GetChildren<T extends BaseEntity = BaseEntity>(parentFieldName?: string): Promise<T[]> {
+    public async GetChildren<T extends BaseEntity = this>(parentFieldName?: string): Promise<T[]> {
         const fkField = this.getRecursiveForeignKeyField(parentFieldName);
         if (!fkField) {
             LogError(`BaseEntity.GetChildren(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);

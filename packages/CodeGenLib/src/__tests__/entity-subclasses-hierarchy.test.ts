@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { EntityInfo } from '@memberjunction/core';
 import { EntitySubClassGeneratorBase } from '../Misc/entity_subclasses_codegen';
 
-function createEntityWithRecursiveFK(fkFieldName: string = 'ParentID', isHierarchy: boolean = true): EntityInfo {
+function createEntityWithRecursiveFK(fkFieldName: string = 'ParentID', isHierarchy: boolean = true, extraFields: Array<Record<string, unknown>> = []): EntityInfo {
     const fields = [
         {
             ID: 'pk-1',
@@ -40,6 +40,7 @@ function createEntityWithRecursiveFK(fkFieldName: string = 'ParentID', isHierarc
             IsVirtual: false,
             AutoIncrement: false,
         },
+        ...extraFields,
     ];
 
     return new EntityInfo({
@@ -59,22 +60,38 @@ function createEntityWithRecursiveFK(fkFieldName: string = 'ParentID', isHierarc
 }
 
 describe('EntitySubClassGeneratorBase — Hierarchy Traversal Methods', () => {
-    it('generates GetDescendants, GetAncestors, and GetChildren for entity with ParentID recursive FK', () => {
-        const entity = createEntityWithRecursiveFK('ParentID', true);
+    it('generates named GetManagerDescendants, GetManagerAncestors, and GetManagerChildren for secondary recursive FK when multiple exist', () => {
+        const entity = createEntityWithRecursiveFK('ParentID', true, [
+            {
+                ID: 'fk-rec-2',
+                Name: 'ManagerID',
+                Type: 'uniqueidentifier',
+                Length: 16,
+                IsPrimaryKey: false,
+                AllowsNull: true,
+                AllowUpdateAPI: true,
+                IsVirtual: false,
+                AutoIncrement: false,
+                RelatedEntityID: 'entity-test',
+                RelatedEntity: 'TestHierarchy',
+                Configuration: '{"Hierarchy":{"IsHierarchy":true}}',
+            },
+        ]);
+
         const code = EntitySubClassGeneratorBase.GenerateHierarchyMethods(entity, 'TestHierarchyEntity');
 
-        expect(code).toContain('public async GetDescendants(maxDepth?: number): Promise<TestHierarchyEntity[]>');
-        expect(code).toContain("EntityName: 'TestHierarchy'");
-        expect(code).toContain("RootParentID = '${rootId}'");
-        expect(code).toContain("ParentIDDepth <= ${maxDepth}");
-        expect(code).toContain("OrderBy: 'ParentIDDepth ASC'");
+        expect(code).toContain('public async GetManagerIDDescendants<T extends BaseEntity = this>(maxDepth?: number): Promise<T[]>');
+        expect(code).toContain("parentFieldName: 'ManagerID'");
+        expect(code).toContain('public async GetManagerIDAncestors<T extends BaseEntity = this>(): Promise<T[]>');
+        expect(code).toContain("this.GetAncestors<T>('ManagerID')");
+        expect(code).toContain('public async GetManagerIDChildren<T extends BaseEntity = this>(): Promise<T[]>');
+        expect(code).toContain("this.GetChildren<T>('ManagerID')");
+    });
 
-        expect(code).toContain('public async GetAncestors(): Promise<TestHierarchyEntity[]>');
-        expect(code).toContain("this.Get('ParentIDPath')");
-        expect(code).toContain("ExtraFilter: `ID IN (${idList})`");
-
-        expect(code).toContain('public async GetChildren(): Promise<TestHierarchyEntity[]>');
-        expect(code).toContain("ExtraFilter: `ParentID = '${currentId}'`");
+    it('defers primary ParentID hierarchy methods to BaseEntity to avoid subclass shadowing and ensure this typing', () => {
+        const entity = createEntityWithRecursiveFK('ParentID', true);
+        const code = EntitySubClassGeneratorBase.GenerateHierarchyMethods(entity, 'TestHierarchyEntity');
+        expect(code).toBe('');
     });
 
     it('skips generating hierarchy methods for self-referencing FKs that lack IsHierarchy=true (e.g. LastRunID)', () => {

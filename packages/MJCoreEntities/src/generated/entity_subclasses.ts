@@ -34460,60 +34460,8 @@ export class MJActionAuthorizationEntity extends BaseEntity<MJActionAuthorizatio
 @RegisterClass(BaseEntity, 'MJ: Action Categories')
 export class MJActionCategoryEntity extends BaseEntity<MJActionCategoryEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJActionCategoryEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJActionCategoryEntity>({
-      EntityName: 'MJ: Action Categories',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJActionCategoryEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJActionCategoryEntity>({
-      EntityName: 'MJ: Action Categories',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJActionCategoryEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJActionCategoryEntity>({
-      EntityName: 'MJ: Action Categories',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Action Categories record from the database
     * @param ID: string - primary key value to load the MJ: Action Categories record.
@@ -36006,60 +35954,8 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
   });
 
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJActionEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJActionEntity>({
-      EntityName: 'MJ: Actions',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJActionEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJActionEntity>({
-      EntityName: 'MJ: Actions',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJActionEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJActionEntity>({
-      EntityName: 'MJ: Actions',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Actions record from the database
     * @param ID: string - primary key value to load the MJ: Actions record.
@@ -37259,60 +37155,8 @@ export class MJAIAgentArtifactTypeEntity extends BaseEntity<MJAIAgentArtifactTyp
 @RegisterClass(BaseEntity, 'MJ: AI Agent Categories')
 export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJAIAgentCategoryEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJAIAgentCategoryEntity>({
-      EntityName: 'MJ: AI Agent Categories',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJAIAgentCategoryEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJAIAgentCategoryEntity>({
-      EntityName: 'MJ: AI Agent Categories',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJAIAgentCategoryEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJAIAgentCategoryEntity>({
-      EntityName: 'MJ: AI Agent Categories',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: AI Agent Categories record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Categories record.
@@ -40348,60 +40192,8 @@ export interface MJAIAgentNoteEntity_IAISecondaryScopes {
 @RegisterClass(BaseEntity, 'MJ: AI Agent Notes')
 export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJAIAgentNoteEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootConsolidatedIntoNoteID = '${rootId}' AND ConsolidatedIntoNoteIDDepth <= ${maxDepth}`
-      : `RootConsolidatedIntoNoteID = '${rootId}'`;
-    const result = await rv.RunView<MJAIAgentNoteEntity>({
-      EntityName: 'MJ: AI Agent Notes',
-      ExtraFilter: filter,
-      OrderBy: 'ConsolidatedIntoNoteIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJAIAgentNoteEntity[]> {
-    const path = this.Get('ConsolidatedIntoNoteIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJAIAgentNoteEntity>({
-      EntityName: 'MJ: AI Agent Notes',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ConsolidatedIntoNoteIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJAIAgentNoteEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJAIAgentNoteEntity>({
-      EntityName: 'MJ: AI Agent Notes',
-      ExtraFilter: `ConsolidatedIntoNoteID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: AI Agent Notes record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Notes record.
@@ -42649,60 +42441,8 @@ export interface MJAIAgentRunStepEntity_AgentSkillInvocationProvenance {
 @RegisterClass(BaseEntity, 'MJ: AI Agent Run Steps')
 export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJAIAgentRunStepEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJAIAgentRunStepEntity>({
-      EntityName: 'MJ: AI Agent Run Steps',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJAIAgentRunStepEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJAIAgentRunStepEntity>({
-      EntityName: 'MJ: AI Agent Run Steps',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJAIAgentRunStepEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJAIAgentRunStepEntity>({
-      EntityName: 'MJ: AI Agent Run Steps',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: AI Agent Run Steps record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Run Steps record.
@@ -45407,60 +45147,8 @@ export class MJAIAgentSessionChannelEntity extends BaseEntity<MJAIAgentSessionCh
 @RegisterClass(BaseEntity, 'MJ: AI Agent Sessions')
 export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJAIAgentSessionEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootLastSessionID = '${rootId}' AND LastSessionIDDepth <= ${maxDepth}`
-      : `RootLastSessionID = '${rootId}'`;
-    const result = await rv.RunView<MJAIAgentSessionEntity>({
-      EntityName: 'MJ: AI Agent Sessions',
-      ExtraFilter: filter,
-      OrderBy: 'LastSessionIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJAIAgentSessionEntity[]> {
-    const path = this.Get('LastSessionIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJAIAgentSessionEntity>({
-      EntityName: 'MJ: AI Agent Sessions',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'LastSessionIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJAIAgentSessionEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJAIAgentSessionEntity>({
-      EntityName: 'MJ: AI Agent Sessions',
-      ExtraFilter: `LastSessionID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: AI Agent Sessions record from the database
     * @param ID: string - primary key value to load the MJ: AI Agent Sessions record.
@@ -47191,60 +46879,8 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
   });
 
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJAIAgentEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJAIAgentEntity>({
-      EntityName: 'MJ: AI Agents',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJAIAgentEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJAIAgentEntity>({
-      EntityName: 'MJ: AI Agents',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJAIAgentEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJAIAgentEntity>({
-      EntityName: 'MJ: AI Agents',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
 
   /**
    * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
@@ -48903,60 +48539,8 @@ if this limit is exceeded.
 @RegisterClass(BaseEntity, 'MJ: AI Architectures')
 export class MJAIArchitectureEntity extends BaseEntity<MJAIArchitectureEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJAIArchitectureEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentArchitectureID = '${rootId}' AND ParentArchitectureIDDepth <= ${maxDepth}`
-      : `RootParentArchitectureID = '${rootId}'`;
-    const result = await rv.RunView<MJAIArchitectureEntity>({
-      EntityName: 'MJ: AI Architectures',
-      ExtraFilter: filter,
-      OrderBy: 'ParentArchitectureIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJAIArchitectureEntity[]> {
-    const path = this.Get('ParentArchitectureIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJAIArchitectureEntity>({
-      EntityName: 'MJ: AI Architectures',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentArchitectureIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJAIArchitectureEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJAIArchitectureEntity>({
-      EntityName: 'MJ: AI Architectures',
-      ExtraFilter: `ParentArchitectureID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: AI Architectures record from the database
     * @param ID: string - primary key value to load the MJ: AI Architectures record.
@@ -50062,60 +49646,8 @@ export class MJAIConfigurationParamEntity extends BaseEntity<MJAIConfigurationPa
 @RegisterClass(BaseEntity, 'MJ: AI Configurations')
 export class MJAIConfigurationEntity extends BaseEntity<MJAIConfigurationEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJAIConfigurationEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJAIConfigurationEntity>({
-      EntityName: 'MJ: AI Configurations',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJAIConfigurationEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJAIConfigurationEntity>({
-      EntityName: 'MJ: AI Configurations',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJAIConfigurationEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJAIConfigurationEntity>({
-      EntityName: 'MJ: AI Configurations',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: AI Configurations record from the database
     * @param ID: string - primary key value to load the MJ: AI Configurations record.
@@ -52896,60 +52428,8 @@ export interface MJAIModelEntity_IAIModelConfiguration {
 @RegisterClass(BaseEntity, 'MJ: AI Models')
 export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJAIModelEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootPriorVersionID = '${rootId}' AND PriorVersionIDDepth <= ${maxDepth}`
-      : `RootPriorVersionID = '${rootId}'`;
-    const result = await rv.RunView<MJAIModelEntity>({
-      EntityName: 'MJ: AI Models',
-      ExtraFilter: filter,
-      OrderBy: 'PriorVersionIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJAIModelEntity[]> {
-    const path = this.Get('PriorVersionIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJAIModelEntity>({
-      EntityName: 'MJ: AI Models',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'PriorVersionIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJAIModelEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJAIModelEntity>({
-      EntityName: 'MJ: AI Models',
-      ExtraFilter: `PriorVersionID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: AI Models record from the database
     * @param ID: string - primary key value to load the MJ: AI Models record.
@@ -53359,60 +52839,8 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
 @RegisterClass(BaseEntity, 'MJ: AI Prompt Categories')
 export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJAIPromptCategoryEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJAIPromptCategoryEntity>({
-      EntityName: 'MJ: AI Prompt Categories',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJAIPromptCategoryEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJAIPromptCategoryEntity>({
-      EntityName: 'MJ: AI Prompt Categories',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJAIPromptCategoryEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJAIPromptCategoryEntity>({
-      EntityName: 'MJ: AI Prompt Categories',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: AI Prompt Categories record from the database
     * @param ID: string - primary key value to load the MJ: AI Prompt Categories record.
@@ -54207,60 +53635,8 @@ export class MJAIPromptRunMediaEntity extends BaseEntity<MJAIPromptRunMediaEntit
 @RegisterClass(BaseEntity, 'MJ: AI Prompt Runs')
 export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJAIPromptRunEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJAIPromptRunEntity>({
-      EntityName: 'MJ: AI Prompt Runs',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJAIPromptRunEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJAIPromptRunEntity>({
-      EntityName: 'MJ: AI Prompt Runs',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJAIPromptRunEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJAIPromptRunEntity>({
-      EntityName: 'MJ: AI Prompt Runs',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
 
   /**
    * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
@@ -55924,60 +55300,8 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
   });
 
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJAIPromptEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootResultSelectorPromptID = '${rootId}' AND ResultSelectorPromptIDDepth <= ${maxDepth}`
-      : `RootResultSelectorPromptID = '${rootId}'`;
-    const result = await rv.RunView<MJAIPromptEntity>({
-      EntityName: 'MJ: AI Prompts',
-      ExtraFilter: filter,
-      OrderBy: 'ResultSelectorPromptIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJAIPromptEntity[]> {
-    const path = this.Get('ResultSelectorPromptIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJAIPromptEntity>({
-      EntityName: 'MJ: AI Prompts',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ResultSelectorPromptIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJAIPromptEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJAIPromptEntity>({
-      EntityName: 'MJ: AI Prompts',
-      ExtraFilter: `ResultSelectorPromptID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: AI Prompts record from the database
     * @param ID: string - primary key value to load the MJ: AI Prompts record.
@@ -59950,60 +59274,8 @@ export class MJAPIKeyEntity extends BaseEntity<MJAPIKeyEntityType> {
 @RegisterClass(BaseEntity, 'MJ: API Scopes')
 export class MJAPIScopeEntity extends BaseEntity<MJAPIScopeEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJAPIScopeEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJAPIScopeEntity>({
-      EntityName: 'MJ: API Scopes',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJAPIScopeEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJAPIScopeEntity>({
-      EntityName: 'MJ: API Scopes',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJAPIScopeEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJAPIScopeEntity>({
-      EntityName: 'MJ: API Scopes',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: API Scopes record from the database
     * @param ID: string - primary key value to load the MJ: API Scopes record.
@@ -62290,60 +61562,8 @@ export class MJArtifactPermissionEntity extends BaseEntity<MJArtifactPermissionE
 @RegisterClass(BaseEntity, 'MJ: Artifact Types')
 export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJArtifactTypeEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJArtifactTypeEntity>({
-      EntityName: 'MJ: Artifact Types',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJArtifactTypeEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJArtifactTypeEntity>({
-      EntityName: 'MJ: Artifact Types',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJArtifactTypeEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJArtifactTypeEntity>({
-      EntityName: 'MJ: Artifact Types',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Artifact Types record from the database
     * @param ID: string - primary key value to load the MJ: Artifact Types record.
@@ -63419,60 +62639,8 @@ export class MJArtifactEntity extends BaseEntity<MJArtifactEntityType> {
 @RegisterClass(BaseEntity, 'MJ: Audit Log Types')
 export class MJAuditLogTypeEntity extends BaseEntity<MJAuditLogTypeEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJAuditLogTypeEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJAuditLogTypeEntity>({
-      EntityName: 'MJ: Audit Log Types',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJAuditLogTypeEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJAuditLogTypeEntity>({
-      EntityName: 'MJ: Audit Log Types',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJAuditLogTypeEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJAuditLogTypeEntity>({
-      EntityName: 'MJ: Audit Log Types',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Audit Log Types record from the database
     * @param ID: string - primary key value to load the MJ: Audit Log Types record.
@@ -64303,60 +63471,8 @@ export class MJAuthorizationRoleEntity extends BaseEntity<MJAuthorizationRoleEnt
 @RegisterClass(BaseEntity, 'MJ: Authorizations')
 export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJAuthorizationEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJAuthorizationEntity>({
-      EntityName: 'MJ: Authorizations',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJAuthorizationEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJAuthorizationEntity>({
-      EntityName: 'MJ: Authorizations',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJAuthorizationEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJAuthorizationEntity>({
-      EntityName: 'MJ: Authorizations',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Authorizations record from the database
     * @param ID: string - primary key value to load the MJ: Authorizations record.
@@ -65263,60 +64379,8 @@ export class MJCollectionPermissionEntity extends BaseEntity<MJCollectionPermiss
 @RegisterClass(BaseEntity, 'MJ: Collections')
 export class MJCollectionEntity extends BaseEntity<MJCollectionEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJCollectionEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJCollectionEntity>({
-      EntityName: 'MJ: Collections',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJCollectionEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJCollectionEntity>({
-      EntityName: 'MJ: Collections',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJCollectionEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJCollectionEntity>({
-      EntityName: 'MJ: Collections',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Collections record from the database
     * @param ID: string - primary key value to load the MJ: Collections record.
@@ -69795,60 +68859,8 @@ export class MJContentItemAttributeEntity extends BaseEntity<MJContentItemAttrib
 @RegisterClass(BaseEntity, 'MJ: Content Item Chunks')
 export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJContentItemChunkEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentChunkID = '${rootId}' AND ParentChunkIDDepth <= ${maxDepth}`
-      : `RootParentChunkID = '${rootId}'`;
-    const result = await rv.RunView<MJContentItemChunkEntity>({
-      EntityName: 'MJ: Content Item Chunks',
-      ExtraFilter: filter,
-      OrderBy: 'ParentChunkIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJContentItemChunkEntity[]> {
-    const path = this.Get('ParentChunkIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJContentItemChunkEntity>({
-      EntityName: 'MJ: Content Item Chunks',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentChunkIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJContentItemChunkEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJContentItemChunkEntity>({
-      EntityName: 'MJ: Content Item Chunks',
-      ExtraFilter: `ParentChunkID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Content Item Chunks record from the database
     * @param ID: string - primary key value to load the MJ: Content Item Chunks record.
@@ -70672,60 +69684,8 @@ export class MJContentItemTagEntity extends BaseEntity<MJContentItemTagEntityTyp
 @RegisterClass(BaseEntity, 'MJ: Content Items')
 export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJContentItemEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJContentItemEntity>({
-      EntityName: 'MJ: Content Items',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJContentItemEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJContentItemEntity>({
-      EntityName: 'MJ: Content Items',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJContentItemEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJContentItemEntity>({
-      EntityName: 'MJ: Content Items',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Content Items record from the database
     * @param ID: string - primary key value to load the MJ: Content Items record.
@@ -74711,60 +73671,8 @@ export class MJConversationDetailRatingEntity extends BaseEntity<MJConversationD
 @RegisterClass(BaseEntity, 'MJ: Conversation Details')
 export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJConversationDetailEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJConversationDetailEntity>({
-      EntityName: 'MJ: Conversation Details',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJConversationDetailEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJConversationDetailEntity>({
-      EntityName: 'MJ: Conversation Details',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJConversationDetailEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJConversationDetailEntity>({
-      EntityName: 'MJ: Conversation Details',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Conversation Details record from the database
     * @param ID: string - primary key value to load the MJ: Conversation Details record.
@@ -75812,60 +74720,8 @@ export class MJConversationWidgetInstanceEntity extends BaseEntity<MJConversatio
 @RegisterClass(BaseEntity, 'MJ: Conversations')
 export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJConversationEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootLastConversationID = '${rootId}' AND LastConversationIDDepth <= ${maxDepth}`
-      : `RootLastConversationID = '${rootId}'`;
-    const result = await rv.RunView<MJConversationEntity>({
-      EntityName: 'MJ: Conversations',
-      ExtraFilter: filter,
-      OrderBy: 'LastConversationIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJConversationEntity[]> {
-    const path = this.Get('LastConversationIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJConversationEntity>({
-      EntityName: 'MJ: Conversations',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'LastConversationIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJConversationEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJConversationEntity>({
-      EntityName: 'MJ: Conversations',
-      ExtraFilter: `LastConversationID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Conversations record from the database
     * @param ID: string - primary key value to load the MJ: Conversations record.
@@ -76639,60 +75495,8 @@ export class MJCountryEntity extends BaseEntity<MJCountryEntityType> {
 @RegisterClass(BaseEntity, 'MJ: Credential Categories')
 export class MJCredentialCategoryEntity extends BaseEntity<MJCredentialCategoryEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJCredentialCategoryEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJCredentialCategoryEntity>({
-      EntityName: 'MJ: Credential Categories',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJCredentialCategoryEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJCredentialCategoryEntity>({
-      EntityName: 'MJ: Credential Categories',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJCredentialCategoryEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJCredentialCategoryEntity>({
-      EntityName: 'MJ: Credential Categories',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Credential Categories record from the database
     * @param ID: string - primary key value to load the MJ: Credential Categories record.
@@ -77247,60 +76051,8 @@ export class MJCredentialEntity extends BaseEntity<MJCredentialEntityType> {
 @RegisterClass(BaseEntity, 'MJ: Dashboard Categories')
 export class MJDashboardCategoryEntity extends BaseEntity<MJDashboardCategoryEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJDashboardCategoryEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJDashboardCategoryEntity>({
-      EntityName: 'MJ: Dashboard Categories',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJDashboardCategoryEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJDashboardCategoryEntity>({
-      EntityName: 'MJ: Dashboard Categories',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJDashboardCategoryEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJDashboardCategoryEntity>({
-      EntityName: 'MJ: Dashboard Categories',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Dashboard Categories record from the database
     * @param ID: string - primary key value to load the MJ: Dashboard Categories record.
@@ -80703,60 +79455,8 @@ export class MJEmployeeSkillEntity extends BaseEntity<MJEmployeeSkillEntityType>
 @RegisterClass(BaseEntity, 'MJ: Employees')
 export class MJEmployeeEntity extends BaseEntity<MJEmployeeEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJEmployeeEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootSupervisorID = '${rootId}' AND SupervisorIDDepth <= ${maxDepth}`
-      : `RootSupervisorID = '${rootId}'`;
-    const result = await rv.RunView<MJEmployeeEntity>({
-      EntityName: 'MJ: Employees',
-      ExtraFilter: filter,
-      OrderBy: 'SupervisorIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJEmployeeEntity[]> {
-    const path = this.Get('SupervisorIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJEmployeeEntity>({
-      EntityName: 'MJ: Employees',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'SupervisorIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJEmployeeEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJEmployeeEntity>({
-      EntityName: 'MJ: Employees',
-      ExtraFilter: `SupervisorID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Employees record from the database
     * @param ID: string - primary key value to load the MJ: Employees record.
@@ -81629,60 +80329,8 @@ export interface MJEntityEntity_IEntityFormConfiguration {
 @RegisterClass(BaseEntity, 'MJ: Entities')
 export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJEntityEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJEntityEntity>({
-      EntityName: 'MJ: Entities',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJEntityEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJEntityEntity>({
-      EntityName: 'MJ: Entities',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJEntityEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJEntityEntity>({
-      EntityName: 'MJ: Entities',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Entities record from the database
     * @param ID: string - primary key value to load the MJ: Entities record.
@@ -90064,60 +88712,8 @@ export class MJExternalDataSourceEntity extends BaseEntity<MJExternalDataSourceE
 @RegisterClass(BaseEntity, 'MJ: File Categories')
 export class MJFileCategoryEntity extends BaseEntity<MJFileCategoryEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJFileCategoryEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJFileCategoryEntity>({
-      EntityName: 'MJ: File Categories',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJFileCategoryEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJFileCategoryEntity>({
-      EntityName: 'MJ: File Categories',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJFileCategoryEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJFileCategoryEntity>({
-      EntityName: 'MJ: File Categories',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: File Categories record from the database
     * @param ID: string - primary key value to load the MJ: File Categories record.
@@ -91373,60 +89969,8 @@ export class MJFormChromeRuleEntity extends BaseEntity<MJFormChromeRuleEntityTyp
 @RegisterClass(BaseEntity, 'MJ: Generated Code Categories')
 export class MJGeneratedCodeCategoryEntity extends BaseEntity<MJGeneratedCodeCategoryEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJGeneratedCodeCategoryEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJGeneratedCodeCategoryEntity>({
-      EntityName: 'MJ: Generated Code Categories',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJGeneratedCodeCategoryEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJGeneratedCodeCategoryEntity>({
-      EntityName: 'MJ: Generated Code Categories',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJGeneratedCodeCategoryEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJGeneratedCodeCategoryEntity>({
-      EntityName: 'MJ: Generated Code Categories',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Generated Code Categories record from the database
     * @param ID: string - primary key value to load the MJ: Generated Code Categories record.
@@ -93948,60 +92492,8 @@ export class MJLibraryItemEntity extends BaseEntity<MJLibraryItemEntityType> {
 @RegisterClass(BaseEntity, 'MJ: List Categories')
 export class MJListCategoryEntity extends BaseEntity<MJListCategoryEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJListCategoryEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJListCategoryEntity>({
-      EntityName: 'MJ: List Categories',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJListCategoryEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJListCategoryEntity>({
-      EntityName: 'MJ: List Categories',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJListCategoryEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJListCategoryEntity>({
-      EntityName: 'MJ: List Categories',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: List Categories record from the database
     * @param ID: string - primary key value to load the MJ: List Categories record.
@@ -102469,60 +100961,8 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
 @RegisterClass(BaseEntity, 'MJ: Projects')
 export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJProjectEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJProjectEntity>({
-      EntityName: 'MJ: Projects',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJProjectEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJProjectEntity>({
-      EntityName: 'MJ: Projects',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJProjectEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJProjectEntity>({
-      EntityName: 'MJ: Projects',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Projects record from the database
     * @param ID: string - primary key value to load the MJ: Projects record.
@@ -103390,60 +101830,8 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
 @RegisterClass(BaseEntity, 'MJ: Query Categories')
 export class MJQueryCategoryEntity extends BaseEntity<MJQueryCategoryEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJQueryCategoryEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJQueryCategoryEntity>({
-      EntityName: 'MJ: Query Categories',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJQueryCategoryEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJQueryCategoryEntity>({
-      EntityName: 'MJ: Query Categories',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJQueryCategoryEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJQueryCategoryEntity>({
-      EntityName: 'MJ: Query Categories',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Query Categories record from the database
     * @param ID: string - primary key value to load the MJ: Query Categories record.
@@ -105983,60 +104371,8 @@ export class MJRecordChangeReplayRunEntity extends BaseEntity<MJRecordChangeRepl
 @RegisterClass(BaseEntity, 'MJ: Record Changes')
 export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJRecordChangeEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootRestoredFromID = '${rootId}' AND RestoredFromIDDepth <= ${maxDepth}`
-      : `RootRestoredFromID = '${rootId}'`;
-    const result = await rv.RunView<MJRecordChangeEntity>({
-      EntityName: 'MJ: Record Changes',
-      ExtraFilter: filter,
-      OrderBy: 'RestoredFromIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJRecordChangeEntity[]> {
-    const path = this.Get('RestoredFromIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJRecordChangeEntity>({
-      EntityName: 'MJ: Record Changes',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'RestoredFromIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJRecordChangeEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJRecordChangeEntity>({
-      EntityName: 'MJ: Record Changes',
-      ExtraFilter: `RestoredFromID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Record Changes record from the database
     * @param ID: string - primary key value to load the MJ: Record Changes record.
@@ -107265,60 +105601,8 @@ export class MJRecordMergeLogEntity extends BaseEntity<MJRecordMergeLogEntityTyp
 @RegisterClass(BaseEntity, 'MJ: Record Process Categories')
 export class MJRecordProcessCategoryEntity extends BaseEntity<MJRecordProcessCategoryEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJRecordProcessCategoryEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJRecordProcessCategoryEntity>({
-      EntityName: 'MJ: Record Process Categories',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJRecordProcessCategoryEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJRecordProcessCategoryEntity>({
-      EntityName: 'MJ: Record Process Categories',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJRecordProcessCategoryEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJRecordProcessCategoryEntity>({
-      EntityName: 'MJ: Record Process Categories',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Record Process Categories record from the database
     * @param ID: string - primary key value to load the MJ: Record Process Categories record.
@@ -108152,60 +106436,8 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 @RegisterClass(BaseEntity, 'MJ: Remote Operation Categories')
 export class MJRemoteOperationCategoryEntity extends BaseEntity<MJRemoteOperationCategoryEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJRemoteOperationCategoryEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJRemoteOperationCategoryEntity>({
-      EntityName: 'MJ: Remote Operation Categories',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJRemoteOperationCategoryEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJRemoteOperationCategoryEntity>({
-      EntityName: 'MJ: Remote Operation Categories',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJRemoteOperationCategoryEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJRemoteOperationCategoryEntity>({
-      EntityName: 'MJ: Remote Operation Categories',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Remote Operation Categories record from the database
     * @param ID: string - primary key value to load the MJ: Remote Operation Categories record.
@@ -114607,60 +112839,8 @@ export class MJSignatureRequestEntity extends BaseEntity<MJSignatureRequestEntit
 @RegisterClass(BaseEntity, 'MJ: Skills')
 export class MJSkillEntity extends BaseEntity<MJSkillEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJSkillEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJSkillEntity>({
-      EntityName: 'MJ: Skills',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJSkillEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJSkillEntity>({
-      EntityName: 'MJ: Skills',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJSkillEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJSkillEntity>({
-      EntityName: 'MJ: Skills',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Skills record from the database
     * @param ID: string - primary key value to load the MJ: Skills record.
@@ -116162,60 +114342,8 @@ export class MJTaggedItemEntity extends BaseEntity<MJTaggedItemEntityType> {
 @RegisterClass(BaseEntity, 'MJ: Tags')
 export class MJTagEntity extends BaseEntity<MJTagEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJTagEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJTagEntity>({
-      EntityName: 'MJ: Tags',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJTagEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJTagEntity>({
-      EntityName: 'MJ: Tags',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJTagEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJTagEntity>({
-      EntityName: 'MJ: Tags',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
 
   /**
    * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
@@ -117356,60 +115484,8 @@ export interface MJTaskEntity_ITaskExecutionPolicy {
 @RegisterClass(BaseEntity, 'MJ: Tasks')
 export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJTaskEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJTaskEntity>({
-      EntityName: 'MJ: Tasks',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJTaskEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJTaskEntity>({
-      EntityName: 'MJ: Tasks',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJTaskEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJTaskEntity>({
-      EntityName: 'MJ: Tasks',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Tasks record from the database
     * @param ID: string - primary key value to load the MJ: Tasks record.
@@ -118029,60 +116105,8 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 @RegisterClass(BaseEntity, 'MJ: Template Categories')
 export class MJTemplateCategoryEntity extends BaseEntity<MJTemplateCategoryEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJTemplateCategoryEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJTemplateCategoryEntity>({
-      EntityName: 'MJ: Template Categories',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJTemplateCategoryEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJTemplateCategoryEntity>({
-      EntityName: 'MJ: Template Categories',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJTemplateCategoryEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJTemplateCategoryEntity>({
-      EntityName: 'MJ: Template Categories',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Template Categories record from the database
     * @param ID: string - primary key value to load the MJ: Template Categories record.
@@ -120792,60 +118816,8 @@ export class MJTestSuiteTestEntity extends BaseEntity<MJTestSuiteTestEntityType>
 @RegisterClass(BaseEntity, 'MJ: Test Suites')
 export class MJTestSuiteEntity extends BaseEntity<MJTestSuiteEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJTestSuiteEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJTestSuiteEntity>({
-      EntityName: 'MJ: Test Suites',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJTestSuiteEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJTestSuiteEntity>({
-      EntityName: 'MJ: Test Suites',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJTestSuiteEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJTestSuiteEntity>({
-      EntityName: 'MJ: Test Suites',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Test Suites record from the database
     * @param ID: string - primary key value to load the MJ: Test Suites record.
@@ -124047,60 +122019,8 @@ export class MJUserSettingEntity extends BaseEntity<MJUserSettingEntityType> {
 @RegisterClass(BaseEntity, 'MJ: User View Categories')
 export class MJUserViewCategoryEntity extends BaseEntity<MJUserViewCategoryEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJUserViewCategoryEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJUserViewCategoryEntity>({
-      EntityName: 'MJ: User View Categories',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJUserViewCategoryEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJUserViewCategoryEntity>({
-      EntityName: 'MJ: User View Categories',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJUserViewCategoryEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJUserViewCategoryEntity>({
-      EntityName: 'MJ: User View Categories',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: User View Categories record from the database
     * @param ID: string - primary key value to load the MJ: User View Categories record.
@@ -126702,60 +124622,8 @@ export class MJVersionLabelRestoreEntity extends BaseEntity<MJVersionLabelRestor
 @RegisterClass(BaseEntity, 'MJ: Version Labels')
 export class MJVersionLabelEntity extends BaseEntity<MJVersionLabelEntityType> {
 
-  /**
-   * Retrieves all descendant records in the hierarchy under this record using a single RunView query.
-   * @param maxDepth Optional maximum relative depth to retrieve.
-   * @returns Array of descendant entity instances ordered by hierarchy depth.
-   */
-  public async GetDescendants(maxDepth?: number): Promise<MJVersionLabelEntity[]> {
-    const rv = new RunView();
-    const rootId = this.Get('ID') as string | null | undefined;
-    if (!rootId) return [];
-    const filter = maxDepth != null
-      ? `RootParentID = '${rootId}' AND ParentIDDepth <= ${maxDepth}`
-      : `RootParentID = '${rootId}'`;
-    const result = await rv.RunView<MJVersionLabelEntity>({
-      EntityName: 'MJ: Version Labels',
-      ExtraFilter: filter,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all ancestor records in the hierarchy from the top-level root down to this record using a single RunView query.
-   * @returns Array of ancestor entity instances ordered from root down to parent.
-   */
-  public async GetAncestors(): Promise<MJVersionLabelEntity[]> {
-    const path = this.Get('ParentIDPath') as string | null | undefined;
-    if (!path) return [];
-    const currentId = this.Get('ID') as string | null | undefined;
-    const rawIds = path.split('/').filter((id: string) => id.length > 0 && id !== currentId);
-    if (rawIds.length === 0) return [];
-    const rv = new RunView();
-    const idList = rawIds.map((id: string) => `'${id}'`).join(',');
-    const result = await rv.RunView<MJVersionLabelEntity>({
-      EntityName: 'MJ: Version Labels',
-      ExtraFilter: `ID IN (${idList})`,
-      OrderBy: 'ParentIDDepth ASC',
-    });
-    return result.Success ? result.Results : [];
-  }
 
-  /**
-   * Retrieves all direct child records of this record using a single RunView query.
-   * @returns Array of direct child entity instances.
-   */
-  public async GetChildren(): Promise<MJVersionLabelEntity[]> {
-    const currentId = this.Get('ID') as string | null | undefined;
-    if (!currentId) return [];
-    const rv = new RunView();
-    const result = await rv.RunView<MJVersionLabelEntity>({
-      EntityName: 'MJ: Version Labels',
-      ExtraFilter: `ParentID = '${currentId}'`,
-    });
-    return result.Success ? result.Results : [];
-  }
     /**
     * Loads the MJ: Version Labels record from the database
     * @param ID: string - primary key value to load the MJ: Version Labels record.
