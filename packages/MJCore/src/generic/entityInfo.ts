@@ -149,25 +149,44 @@ export class EntityRelationshipInfo extends BaseInfo  {
     RelatedRecordCollection: string = null
 
     /**
+     * Raw string representation of Configuration from metadata.
+     */
+    protected _configuration: string = null;
+    private _configurationObject: IEntityRelationshipConfiguration | null | undefined = undefined;
+
+    /**
      * Optional JSON configuration bag (shape = {@link IEntityRelationshipConfiguration}).
      * Nested `UI.inclusion` is Primary, More, or None (omit = Auto ranker).
      * `UI.FormRole` is an accepted alias (`Detail` = More). Distinct from
      * RelatedRecordCollection, DisplayComponentConfiguration, and AdditionalFieldsToInclude.
+     * Parsed lazily on first access and cached using {@link SafeJSONParse}.
      *
      * @see packages/MJCore/src/generic/entityConfiguration.ts
      */
-    Configuration: string = null
-
-    private _configurationObject: IEntityRelationshipConfiguration | null | undefined = undefined;
+    get Configuration(): IEntityRelationshipConfiguration | null {
+        if (this._configurationObject === undefined) {
+            this._configurationObject = this._configuration ? SafeJSONParse<IEntityRelationshipConfiguration>(this._configuration, false) : null;
+        }
+        return this._configurationObject;
+    }
+    set Configuration(value: string | IEntityRelationshipConfiguration | null) {
+        if (typeof value === 'string') {
+            this._configuration = value;
+            this._configurationObject = undefined;
+        } else if (value && typeof value === 'object') {
+            this._configurationObject = value;
+            this._configuration = JSON.stringify(value);
+        } else {
+            this._configuration = null;
+            this._configurationObject = null;
+        }
+    }
 
     /**
      * Parsed {@link Configuration}. Null when the column is empty or not valid JSON.
      */
     get ConfigurationObject(): IEntityRelationshipConfiguration | null {
-        if (this._configurationObject === undefined) {
-            this._configurationObject = ParseEntityRelationshipConfiguration(this.Configuration);
-        }
-        return this._configurationObject;
+        return this.Configuration;
     }
 
     // virtual fields - returned by the database VIEW
@@ -683,21 +702,40 @@ export class EntityFieldInfo extends BaseInfo {
     JSONTypeDefinition: string = null;
 
     /**
+     * Raw string representation of Configuration from metadata.
+     */
+    protected _configuration: string = null;
+    private _configurationObject: IEntityFieldConfiguration | null | undefined = undefined;
+
+    /**
      * Optional JSON configuration bag (shape = {@link IEntityFieldConfiguration}).
      * Defines field-level configurations such as Hierarchy options (IsHierarchy, MaxDepth).
+     * Parsed lazily on first access and cached using {@link SafeJSONParse}.
      */
-    Configuration: string = null;
-
-    private _configurationObject: IEntityFieldConfiguration | null | undefined = undefined;
+    get Configuration(): IEntityFieldConfiguration | null {
+        if (this._configurationObject === undefined) {
+            this._configurationObject = this._configuration ? SafeJSONParse<IEntityFieldConfiguration>(this._configuration, false) : null;
+        }
+        return this._configurationObject;
+    }
+    set Configuration(value: string | IEntityFieldConfiguration | null) {
+        if (typeof value === 'string') {
+            this._configuration = value;
+            this._configurationObject = undefined;
+        } else if (value && typeof value === 'object') {
+            this._configurationObject = value;
+            this._configuration = JSON.stringify(value);
+        } else {
+            this._configuration = null;
+            this._configurationObject = null;
+        }
+    }
 
     /**
      * Parsed {@link Configuration}. Null when the column is empty or not valid JSON.
      */
     get ConfigurationObject(): IEntityFieldConfiguration | null {
-        if (this._configurationObject === undefined) {
-            this._configurationObject = ParseEntityFieldConfiguration(this.Configuration);
-        }
-        return this._configurationObject;
+        return this.Configuration;
     }
 
     /**
@@ -1884,24 +1922,43 @@ export class EntityInfo extends BaseInfo {
     Icon: string = null
 
     /**
+     * Raw string representation of Configuration from metadata.
+     */
+    protected _configuration: string = null;
+    private _configurationObject: IEntityConfiguration | null | undefined = undefined;
+
+    /**
      * Optional JSON configuration bag (shape = {@link IEntityConfiguration}).
      * Nested `UI.Form` holds generated-form chrome: layout, auto left-nav
      * threshold, related-role policy, and the Primary related budget.
+     * Parsed lazily on first access and cached using {@link SafeJSONParse}.
      *
      * @see packages/MJCore/src/generic/entityConfiguration.ts
      */
-    Configuration: string = null
-
-    private _configurationObject: IEntityConfiguration | null | undefined = undefined;
+    get Configuration(): IEntityConfiguration | null {
+        if (this._configurationObject === undefined) {
+            this._configurationObject = this._configuration ? SafeJSONParse<IEntityConfiguration>(this._configuration, false) : null;
+        }
+        return this._configurationObject;
+    }
+    set Configuration(value: string | IEntityConfiguration | null) {
+        if (typeof value === 'string') {
+            this._configuration = value;
+            this._configurationObject = undefined;
+        } else if (value && typeof value === 'object') {
+            this._configurationObject = value;
+            this._configuration = JSON.stringify(value);
+        } else {
+            this._configuration = null;
+            this._configurationObject = null;
+        }
+    }
 
     /**
      * Parsed {@link Configuration}. Null when the column is empty or not valid JSON.
      */
     get ConfigurationObject(): IEntityConfiguration | null {
-        if (this._configurationObject === undefined) {
-            this._configurationObject = ParseEntityConfiguration(this.Configuration);
-        }
-        return this._configurationObject;
+        return this.Configuration;
     }
     /**
      * Date and time when this entity was created
