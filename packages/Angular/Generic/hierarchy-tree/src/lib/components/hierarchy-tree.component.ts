@@ -300,6 +300,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
             Height: '100%',
             MinHeight: '500px',
             NavigateOnNodeClick: true,
+            AutoRootFocus: true,
             Verbose: true,
             ...this.Config
         };
@@ -494,6 +495,16 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
                     curr.IsExpanded = true;
                     curr.Children = [...(curr._allChildren || [])];
                     curr = curr.ParentID ? this.nodeMap.get(NormalizeUUID(curr.ParentID)) : undefined;
+                }
+
+                // If AutoRootFocus is enabled and multiple roots exist, focus on the active root tree
+                if (this.Config.AutoRootFocus !== false && roots.length > 1 && !this.FocusRecordID && !this.Config.FocusRecordID) {
+                    let rootAncestor = activeNode;
+                    while (rootAncestor.ParentID && this.nodeMap.has(NormalizeUUID(rootAncestor.ParentID))) {
+                        rootAncestor = this.nodeMap.get(NormalizeUUID(rootAncestor.ParentID))!;
+                    }
+                    rootAncestor.IsFocusRoot = true;
+                    this.FocusedNode = rootAncestor;
                 }
             }
         }

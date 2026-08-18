@@ -285,6 +285,14 @@ export interface HierarchyTreeConfig {
     NavigateOnNodeClick?: boolean;
 
     /**
+     * When multiple root trees exist and an active/focus record is specified,
+     * automatically focuses on the root branch containing the active record.
+     * Users can click "Show All Roots" to zoom out to the full forest.
+     * @default true
+     */
+    AutoRootFocus?: boolean;
+
+    /**
      * Whether to enable verbose diagnostic console logging.
      * @default false
      */
