@@ -586,17 +586,19 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
             });
 
         this.svgSelection.call(this.zoomBehavior);
-
-        if (this.ZoomLevel && this.ZoomLevel > 0) {
-            this.setZoomLevel(this.ZoomLevel, false);
-        }
     }
 
     private setupResizeObserver(): void {
         if (!this.svgContainerRef?.nativeElement) return;
 
-        this.resizeObserver = new ResizeObserver(() => {
-            this.renderTree();
+        this.resizeObserver = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                if (entry.contentRect.width > 50 && entry.contentRect.height > 50) {
+                    if (this.AllNodes.length > 0) {
+                        this.renderTree();
+                    }
+                }
+            }
         });
         this.resizeObserver.observe(this.svgContainerRef.nativeElement);
     }
@@ -887,8 +889,16 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
 
     public setZoomLevel(scale: number, animated = true): void {
         if (!this.svgSelection || !this.zoomBehavior || !scale) return;
+        const container = this.svgContainerRef?.nativeElement;
+        const width = container?.clientWidth || 800;
+        const height = container?.clientHeight || 500;
         const current = this.currentZoomTransform || d3.zoomIdentity;
-        const target = d3.zoomIdentity.translate(current.x, current.y).scale(scale);
+        const cx = width / 2;
+        const cy = height / 2;
+        const newX = cx - (cx - current.x) * (scale / (current.k || 1));
+        const newY = cy - (cy - current.y) * (scale / (current.k || 1));
+        const target = d3.zoomIdentity.translate(newX, newY).scale(scale);
+
         if (animated) {
             this.svgSelection.transition().duration(250).call(this.zoomBehavior.transform, target);
         } else {
@@ -898,7 +908,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
 
     public resetZoom(): void {
         if (!this.svgSelection || !this.zoomBehavior) return;
-        this.svgSelection.transition().duration(250).call(this.zoomBehavior.transform, d3.zoomIdentity);
+        this.fitToScreen(true);
     }
 
     public fitToScreen(immediate = false): void {
@@ -924,16 +934,22 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         const treeCenterY = (minY + maxY) / 2;
 
         const container = this.svgContainerRef.nativeElement;
-        const width = container.clientWidth || 800;
-        const height = container.clientHeight || 500;
+        const width = Math.max(container.clientWidth || 800, 300);
+        const height = Math.max(container.clientHeight || 500, 300);
         const padding = 40;
 
-        const scale = Math.min(
-            (width - padding * 2) / Math.max(treeWidth, 1),
-            (height - padding * 2) / Math.max(treeHeight, 1),
-            1.15
+        const availWidth = Math.max(width - padding * 2, 100);
+        const availHeight = Math.max(height - padding * 2, 100);
+        const autoScale = Math.max(
+            Math.min(
+                availWidth / Math.max(treeWidth, 1),
+                availHeight / Math.max(treeHeight, 1),
+                1.15
+            ),
+            0.15
         );
 
+        const scale = (this.ZoomLevel && this.ZoomLevel > 0) ? this.ZoomLevel : autoScale;
         const tx = width / 2 - treeCenterX * scale;
         const ty = height / 2 - treeCenterY * scale;
 
