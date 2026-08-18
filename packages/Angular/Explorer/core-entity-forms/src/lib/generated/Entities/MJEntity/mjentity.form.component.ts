@@ -92,7 +92,9 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false },
             { sectionKey: 'mJBizAppsTasksTaskLinks', sectionName: 'Task Links', isExpanded: false },
             { sectionKey: 'mJRecordProcessWatermarks', sectionName: 'Record Process Watermarks', isExpanded: false },
+            { sectionKey: 'mJBizAppsIssuesIssuesSourceEntityID', sectionName: 'Issues (Source Entity ID)', isExpanded: false },
             { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false },
+            { sectionKey: 'mJBizAppsIssuesIssuesAssigneeEntityID', sectionName: 'Issues (Assignee Entity ID)', isExpanded: false },
             { sectionKey: 'mJMLTrainingPipelines', sectionName: 'ML Training Pipelines', isExpanded: false },
             { sectionKey: 'mJMLModelScoringBindings', sectionName: 'ML Model Scoring Bindings', isExpanded: false },
             { sectionKey: 'mJAIAgentSessions', sectionName: 'AI Agent Sessions', isExpanded: false },
@@ -104,7 +106,10 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJBizAppsAccountingGLAccountLinks', sectionName: 'GL Account Links', isExpanded: false },
             { sectionKey: 'mJMaterializedResultsGeneratedEntityID', sectionName: 'Materialized Results (Generated Entity ID)', isExpanded: false },
             { sectionKey: 'mJBizAppsAccountingJournalEntries', sectionName: 'Journal Entries', isExpanded: false },
-            { sectionKey: 'mJBizAppsOrdersOrderLinePriceComponents', sectionName: 'Order Line Price Components', isExpanded: false }
+            { sectionKey: 'mJBizAppsOrdersOrderLinePriceComponents', sectionName: 'Order Line Price Components', isExpanded: false },
+            { sectionKey: 'mJFormChromeRulesRelatedEntityID', sectionName: 'Form Chrome Rules (Related Entity)', isExpanded: false },
+            { sectionKey: 'mJFormChromeRulesEntityID', sectionName: 'Form Chrome Rules (Parent Entity)', isExpanded: false },
+            { sectionKey: 'mJBizAppsCommonActivityLinks', sectionName: 'Activity Links', isExpanded: false }
         ]);
     }
 }

@@ -532,3 +532,40 @@ function schemasEqual(a: string | null | undefined, b: string | null | undefined
 function hasText(value: string | null | undefined): boolean {
     return value != null && value.trim().length > 0;
 }
+
+/**
+ * Shape of `MJ: Entity Fields.Configuration`.
+ *
+ * Keep in lockstep with `metadata/entities/JSONType-interfaces/IEntityFieldConfiguration.ts`.
+ */
+export interface IEntityFieldHierarchyConfig {
+    /**
+     * When true, declares this self-referencing foreign key as an intentional tree hierarchy.
+     * CodeGen will emit the 4-part Table-Valued Function (TVF) suite (RootID, Descendants, Ancestors, HierarchyMeta),
+     * project Root/Depth/Path/IsLeaf/ChildCount columns into the base view, and generate typed GetDescendants(),
+     * GetAncestors(), and GetChildren() methods on the entity subclass.
+     */
+    IsHierarchy?: boolean;
+
+    /**
+     * Optional custom maximum recursion depth guard (defaults to 100).
+     */
+    MaxDepth?: number;
+}
+
+export interface IEntityFieldConfiguration {
+    /** Hierarchy and tree structure configuration for self-referencing foreign keys */
+    Hierarchy?: IEntityFieldHierarchyConfig;
+
+    /** Future extensible field-level configuration bags */
+    [key: string]: unknown;
+}
+
+/**
+ * Safely parses an `EntityField.Configuration` JSON string.
+ */
+export function ParseEntityFieldConfiguration(raw: string | null | undefined): IEntityFieldConfiguration | null {
+    if (raw == null || raw.trim().length === 0) return null;
+    return SafeJSONParse<IEntityFieldConfiguration>(raw, false);
+}
+

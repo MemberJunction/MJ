@@ -40,8 +40,12 @@ export class MJActionFormComponent extends BaseFormComponent {
             { sectionKey: 'mJBizAppsTasksTaskTypesOnPercentChangeActionID', sectionName: 'Task Types (On Percent Change Action ID)', isExpanded: false },
             { sectionKey: 'mJBizAppsTasksTaskTypesOnAssignActionID', sectionName: 'Task Types (On Assign Action ID)', isExpanded: false },
             { sectionKey: 'mJBizAppsTasksTaskTypesOnCompleteActionID', sectionName: 'Task Types (On Complete Action ID)', isExpanded: false },
+            { sectionKey: 'mJBizAppsIssuesIssueTypesOnStatusChangeActionID', sectionName: 'Issue Types (On Status Change Action ID)', isExpanded: false },
             { sectionKey: 'mJBizAppsTasksTaskTypesOnCancelActionID', sectionName: 'Task Types (On Cancel Action ID)', isExpanded: false },
-            { sectionKey: 'mJBizAppsTasksTaskTypesOnRejectActionID', sectionName: 'Task Types (On Reject Action ID)', isExpanded: false }
+            { sectionKey: 'mJBizAppsIssuesIssueTypesOnCreateActionID', sectionName: 'Issue Types (On Create Action ID)', isExpanded: false },
+            { sectionKey: 'mJBizAppsTasksTaskTypesOnRejectActionID', sectionName: 'Task Types (On Reject Action ID)', isExpanded: false },
+            { sectionKey: 'mJBizAppsIssuesIssueTypesOnAssignActionID', sectionName: 'Issue Types (On Assign Action ID)', isExpanded: false },
+            { sectionKey: 'mJBizAppsIssuesIssueTypesOnCloseActionID', sectionName: 'Issue Types (On Close Action ID)', isExpanded: false }
         ]);
     }
 }
