@@ -258,7 +258,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
 
             const rv = new RunView();
             const result = await rv.RunView({
-                EntityName: this.Config.EntityName,
+                EntityName: this.entityInfo ? this.entityInfo.Name : this.Config.EntityName,
                 ExtraFilter: this.Config.ExtraFilter || '',
                 OrderBy: this.Config.OrderBy || 'Name ASC',
                 ResultType: 'simple'
