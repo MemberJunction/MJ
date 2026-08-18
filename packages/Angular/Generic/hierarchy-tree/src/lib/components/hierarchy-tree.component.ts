@@ -587,8 +587,10 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
                 if (this.gSelection) {
                     this.gSelection.attr('transform', event.transform.toString());
                 }
-                this.ZoomLevel = event.transform.k;
-                this.ZoomChange.emit(event.transform.k);
+                if (event.sourceEvent != null) {
+                    this.ZoomLevel = event.transform.k;
+                    this.ZoomChange.emit(event.transform.k);
+                }
             });
 
         this.svgSelection.call(this.zoomBehavior);
@@ -715,6 +717,8 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
             .attr('stroke-width', (d) => (d.target.data.IsHighlighted ? 2.5 : 1.5))
             .attr('fill', 'none');
 
+        this.AllNodes = [...this.AllNodes];
+        this.cdr?.markForCheck();
         this.cdr?.detectChanges();
         this.fitToScreen(true);
     }
