@@ -15,9 +15,10 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Metadata, RunView, CompositeKey, EntityInfo } from '@memberjunction/core';
+import { RunView, CompositeKey, EntityInfo } from '@memberjunction/core';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { FormNavigationEvent, RecordNavigationEvent } from '@memberjunction/ng-base-forms';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import * as d3 from 'd3';
 import {
     HierarchyTreeConfig,
@@ -69,8 +70,10 @@ import {
     templateUrl: './hierarchy-tree.component.html',
     styleUrls: ['./hierarchy-tree.component.css']
 })
-export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges, OnDestroy {
-    constructor(private cdr?: ChangeDetectorRef) {}
+export class HierarchyTreeComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnChanges, OnDestroy {
+    constructor(private cdr?: ChangeDetectorRef) {
+        super();
+    }
 
     @ViewChild('svgContainer', { static: false }) svgContainerRef!: ElementRef<HTMLDivElement>;
     @ViewChild('svgElement', { static: false }) svgRef!: ElementRef<SVGSVGElement>;
@@ -326,7 +329,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         this.cdr?.detectChanges();
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const configEntityLower = this.Config.EntityName.toLowerCase();
             const configEntityStripped = this.Config.EntityName.replace(/^mj[:_\s]+/i, '').trim().toLowerCase();
             this.entityInfo = md.Entities.find((e) => {
@@ -350,7 +353,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
                 return;
             }
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const rvParams = {
                 EntityName: targetEntityName,
                 ExtraFilter: this.Config.ExtraFilter || '',
