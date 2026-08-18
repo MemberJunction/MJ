@@ -326,7 +326,7 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         this.cdr?.detectChanges();
 
         try {
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: Angular UI component uses ambient client metadata provider
             const configEntityLower = this.Config.EntityName.toLowerCase();
             const configEntityStripped = this.Config.EntityName.replace(/^mj[:_\s]+/i, '').trim().toLowerCase();
             this.entityInfo = md.Entities.find((e) => {
