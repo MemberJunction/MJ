@@ -431,8 +431,12 @@ export const getUserPayload = async (
       // short-circuits on the first differing byte, leaking a timing side-channel that could
       // be used to recover the key byte-by-byte. Hash both sides to fixed-length digests so
       // timingSafeEqual never throws on length mismatch and the comparison is length-agnostic.
-      const systemKeyDigest = createHash('sha256').update(String(systemApiKey)).digest();
-      const providedKeyDigest = createHash('sha256').update(String(apiKey)).digest();
+      // The Uint8Array wrappers are required by the @types/node version this line is pinned to
+      // (20.14.2, via the root `overrides`), whose `timingSafeEqual` takes NodeJS.ArrayBufferView —
+      // a type its own non-generic `Buffer` does not satisfy under TypeScript 5.9's lib. Copying
+      // two fixed-length 32-byte digests is content-independent, so the comparison stays constant time.
+      const systemKeyDigest = new Uint8Array(createHash('sha256').update(String(systemApiKey)).digest());
+      const providedKeyDigest = new Uint8Array(createHash('sha256').update(String(apiKey)).digest());
       if (timingSafeEqual(systemKeyDigest, providedKeyDigest)) {
         const systemUser = await getSystemUser(readOnlyDataSource);
         return {
