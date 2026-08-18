@@ -1,9 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
+    ApplyFormChromeRules,
+    ContributionInclusionFromRules,
     DEFAULT_AUTO_LEFT_NAV_AT,
     DEFAULT_PRIMARY_RELATED_BUDGET,
     ParseEntityConfiguration,
     ParseEntityRelationshipConfiguration,
+    ReadRelationshipInclusion,
+    ReadRelationshipJoinFields,
+    ReadRelationshipSortKey,
     RELATED_ROLE_SCORE,
     ResolveFormLayout,
     ResolveRelatedFormRoles,
@@ -47,6 +52,45 @@ describe('ParseEntityRelationshipConfiguration', () => {
     it('reads FormRole', () => {
         const parsed = ParseEntityRelationshipConfiguration(JSON.stringify({ UI: { FormRole: 'Detail' } }));
         expect(parsed?.UI?.FormRole).toBe('Detail');
+    });
+
+    it('reads inclusion and join.fields', () => {
+        const parsed = ParseEntityRelationshipConfiguration(JSON.stringify({
+            UI: { inclusion: 'Primary', join: { mode: 'any', fields: ['BillToPersonID', 'ShipToPersonID'] } },
+        }));
+        expect(parsed?.UI?.inclusion).toBe('Primary');
+        expect(parsed?.UI?.join?.fields).toEqual(['BillToPersonID', 'ShipToPersonID']);
+    });
+});
+
+describe('ReadRelationshipInclusion / ReadRelationshipJoinFields', () => {
+    it('prefers inclusion over FormRole', () => {
+        expect(ReadRelationshipInclusion(JSON.stringify({
+            UI: { inclusion: 'None', FormRole: 'Primary' },
+        }))).toBe('None');
+    });
+
+    it('maps FormRole Detail to More', () => {
+        expect(ReadRelationshipInclusion(JSON.stringify({ UI: { FormRole: 'Detail' } }))).toBe('More');
+        expect(ReadRelationshipInclusion(JSON.stringify({ UI: { FormRole: 'Primary' } }))).toBe('Primary');
+    });
+
+    it('reads sortKey from the UI bag', () => {
+        expect(ReadRelationshipSortKey(JSON.stringify({ UI: { sortKey: 90 } }))).toBe(90);
+        expect(ReadRelationshipSortKey(JSON.stringify({ UI: { inclusion: 'Primary' } }))).toBeNull();
+        expect(ReadRelationshipSortKey(null)).toBeNull();
+    });
+
+    it('returns null when the bag is Auto', () => {
+        expect(ReadRelationshipInclusion(null)).toBeNull();
+        expect(ReadRelationshipInclusion('{}')).toBeNull();
+    });
+
+    it('reads cleaned join fields', () => {
+        expect(ReadRelationshipJoinFields(JSON.stringify({
+            UI: { join: { mode: 'any', fields: [' BillToPersonID ', '', 'ShipToPersonID'] } },
+        }))).toEqual(['BillToPersonID', 'ShipToPersonID']);
+        expect(ReadRelationshipJoinFields(null)).toBeNull();
     });
 });
 
@@ -265,5 +309,127 @@ describe('ResolveRelatedFormRoles', () => {
         const hidden = candidate({ ID: 'x', RelatedEntity: 'Hidden', DisplayInForm: false });
         const result = ResolveRelatedFormRoles(COMMON, null, [contacts, hidden]);
         expect(result.Assignments.map((a) => a.RelationshipID)).toEqual(['c']);
+    });
+
+    it('drops inclusion None before the Auto pool and does not consume budget', () => {
+        const comments = candidate({
+            ID: 'tc',
+            RelatedEntity: 'MJ_BizApps_Tasks: Task Comments',
+            RelatedEntitySchemaName: 'MJ_BizApps_Tasks',
+            Configuration: JSON.stringify({ UI: { inclusion: 'None' } }),
+        });
+        const result = ResolveRelatedFormRoles(COMMON, { PrimaryRelatedBudget: 2 }, [contacts, addresses, comments]);
+        const dropped = result.Assignments.find((a) => a.RelationshipID === 'tc');
+        expect(dropped?.Inclusion).toBe('None');
+        expect(dropped?.Role).toBe('Detail');
+        expect(dropped?.Reason).toBe('explicit-none');
+        expect(result.Assignments.filter((a) => a.Reason === 'under-budget')).toHaveLength(2);
+    });
+
+    it('maps inclusion More to Detail and keeps JoinFields on the assignment', () => {
+        const billed = {
+            ...orders,
+            Configuration: JSON.stringify({
+                UI: {
+                    inclusion: 'More',
+                    join: { mode: 'any', fields: ['BillToPersonID', 'ShipToPersonID'] },
+                },
+            }),
+        };
+        const result = ResolveRelatedFormRoles(COMMON, null, [contacts, billed]);
+        const billedAssignment = result.Assignments.find((a) => a.RelationshipID === billed.ID);
+        expect(billedAssignment?.Inclusion).toBe('More');
+        expect(billedAssignment?.Role).toBe('Detail');
+        expect(billedAssignment?.ExplicitInclusion).toBe('More');
+        expect(billedAssignment?.JoinFields).toEqual(['BillToPersonID', 'ShipToPersonID']);
+    });
+
+    it('does not offer sibling FKs when one relationship owns join.fields', () => {
+        const billed = candidate({
+            ID: 'bill',
+            RelatedEntity: 'MJ_BizApps_Orders: Order Headers',
+            RelatedEntityID: 'orders-entity',
+            RelatedEntitySchemaName: ORDERS,
+            RelatedEntityJoinField: 'BillToPersonID',
+            Configuration: JSON.stringify({
+                UI: {
+                    inclusion: 'Primary',
+                    join: { mode: 'any', fields: ['BillToPersonID', 'ShipToPersonID'] },
+                },
+            }),
+        });
+        const sold = candidate({
+            ID: 'sold',
+            RelatedEntity: 'MJ_BizApps_Orders: Order Headers',
+            RelatedEntityID: 'orders-entity',
+            RelatedEntitySchemaName: ORDERS,
+            RelatedEntityJoinField: 'SoldToPersonID',
+        });
+        const result = ResolveRelatedFormRoles(COMMON, null, [contacts, billed, sold]);
+        expect(result.Assignments.find((a) => a.RelationshipID === 'sold')?.Inclusion).toBe('None');
+        expect(result.Assignments.find((a) => a.RelationshipID === 'sold')?.Reason).toBe('join-sibling-none');
+        expect(result.Assignments.find((a) => a.RelationshipID === 'bill')?.Inclusion).toBe('Primary');
+    });
+
+    it('keeps None out of keep-all-primary', () => {
+        const folded = {
+            ...orders,
+            Configuration: JSON.stringify({ UI: { inclusion: 'None' } }),
+        };
+        const result = ResolveRelatedFormRoles(
+            COMMON,
+            { RelatedRolePolicy: 'keep-all-primary' },
+            [contacts, folded],
+        );
+        expect(result.Assignments.find((a) => a.RelationshipID === folded.ID)?.Inclusion).toBe('None');
+        expect(result.Assignments.find((a) => a.RelationshipID === contacts.ID)?.Reason).toBe('keep-all-primary');
+    });
+});
+
+describe('ApplyFormChromeRules', () => {
+    const parentId = 'parent-people';
+    const contacts = candidate({ ID: 'c', RelatedEntity: 'Contact Methods', RelatedEntityID: 'cm' });
+    const orders = candidate({
+        ID: 'o',
+        RelatedEntity: 'Order Headers',
+        RelatedEntityID: 'oh',
+        RelatedEntitySchemaName: ORDERS,
+    });
+
+    it('pins a related entity to None and can attach JoinFields', () => {
+        const resolved = ResolveRelatedFormRoles(COMMON, null, [contacts, orders]);
+        const next = ApplyFormChromeRules(parentId, resolved.Assignments, [{
+            EntityID: parentId,
+            TargetKind: 'Relationship',
+            RelatedEntityID: 'oh',
+            Inclusion: 'None',
+            JoinFields: ['BillToPersonID', 'ShipToPersonID'],
+            Sequence: 1,
+        }]);
+        const order = next.find((a) => a.RelationshipID === 'o');
+        expect(order?.Inclusion).toBe('None');
+        expect(order?.Reason).toBe('install-none');
+        expect(order?.JoinFields).toEqual(['BillToPersonID', 'ShipToPersonID']);
+        expect(next.find((a) => a.RelationshipID === 'c')?.Inclusion).toBe('Primary');
+    });
+
+    it('last Sequence wins on the same related entity', () => {
+        const resolved = ResolveRelatedFormRoles(COMMON, null, [orders]);
+        const next = ApplyFormChromeRules(parentId, resolved.Assignments, [
+            { EntityID: parentId, TargetKind: 'Relationship', RelatedEntityID: 'oh', Inclusion: 'None', Sequence: 1 },
+            { EntityID: parentId, TargetKind: 'Relationship', RelatedEntityID: 'oh', Inclusion: 'Primary', Sequence: 2 },
+        ]);
+        expect(next[0]?.Inclusion).toBe('Primary');
+        expect(next[0]?.Reason).toBe('install-primary');
+    });
+
+    it('reads a contribution pin by key', () => {
+        expect(ContributionInclusionFromRules(parentId, 'addresses', [{
+            EntityID: parentId,
+            TargetKind: 'Contribution',
+            ContributionKey: 'addresses',
+            Inclusion: 'None',
+        }])).toBe('None');
+        expect(ContributionInclusionFromRules(parentId, 'addresses', [])).toBeNull();
     });
 });

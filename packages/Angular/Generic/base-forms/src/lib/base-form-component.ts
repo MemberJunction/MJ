@@ -169,7 +169,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   /** Subscription to form state changes */
   private formStateSubscription?: Subscription;
 
-  @ViewChildren(MjCollapsiblePanelComponent) collapsiblePanels!: QueryList<MjCollapsiblePanelComponent>;
+  @ViewChildren(MjCollapsiblePanelComponent)
+  collapsiblePanels!: QueryList<MjCollapsiblePanelComponent>;
 
   async ngOnInit() {
     if (this.record) {
@@ -578,12 +579,37 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return undefined;
   }
 
-  public NewRecordValues(relatedEntityName: string): Record<string, unknown> {
-    const eri = this.GetEntityRelationshipByRelatedEntityName(relatedEntityName);
-    if (eri)
-      return this.NewRecordValuesByEntityRelationship(eri);
-    else
-      return {};
+  /**
+   * Default values for a new related-entity record so it links back here.
+   * Pass `relatedEntityJoinField` when more than one relationship targets the
+   * same entity (Bill-To vs Ship-To). When omitted and several matches exist,
+   * every matching FK is set — same fields the related grid is filtering on.
+   */
+  public NewRecordValues(relatedEntityName: string, relatedEntityJoinField?: string): Record<string, unknown> {
+    if (!this.record) return {};
+    if (relatedEntityJoinField) {
+      const eri = this.GetEntityRelationshipByRelatedEntityName(relatedEntityName, relatedEntityJoinField);
+      if (eri) return this.NewRecordValuesByEntityRelationship(eri);
+      return EntityInfo.BuildRelationshipNewRecordValuesForJoinFields(this.record, [relatedEntityJoinField]);
+    }
+    const matches = this.record.EntityInfo.RelatedEntities.filter(
+      (x) => x.RelatedEntity.trim().toLowerCase() === relatedEntityName.trim().toLowerCase(),
+    );
+    if (matches.length === 0) return {};
+    if (matches.length === 1) return this.NewRecordValuesByEntityRelationship(matches[0]);
+    return EntityInfo.BuildRelationshipNewRecordValuesForJoinFields(
+      this.record,
+      matches.map((m) => m.RelatedEntityJoinField),
+    );
+  }
+
+  /**
+   * Default values for a new related record, setting every listed join field
+   * to this record's key. Pair with {@link BuildRelationshipViewParamsForJoinFields}.
+   */
+  public NewRecordValuesForJoinFields(relatedEntityName: string, joinFields: readonly string[]): Record<string, unknown> {
+    if (!this.record || !relatedEntityName) return {};
+    return EntityInfo.BuildRelationshipNewRecordValuesForJoinFields(this.record, joinFields);
   }
 
   public NewRecordValuesByEntityRelationship(item: EntityRelationshipInfo): Record<string, unknown> {
@@ -862,10 +888,18 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   public SetSectionRowCount(sectionKey: string, rowCount: number): void {
-    const section = this.sectionMap.get(sectionKey);
-    if (section) {
+    let section = this.sectionMap.get(sectionKey);
+    if (!section) {
+      // Contribution panels use their own SectionKey (e.g. 'orders') which
+      // is never seeded by generated initSections(). Upsert so the left-nav
+      // rail badge can read the count the same way baked grids do.
+      section = new BaseFormSectionInfo(sectionKey, sectionKey, false, rowCount);
+      this.sections.push(section);
+      this.sectionMap.set(sectionKey, section);
+    } else {
       section.rowCount = rowCount;
     }
+    this.cdr.markForCheck();
   }
 
   public GetSectionPanelHeight(sectionKey: string): number | undefined {

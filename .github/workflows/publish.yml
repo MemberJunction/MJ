@@ -190,6 +190,14 @@ jobs:
       - name: Build packages
         run: pnpm run build
 
+      # BUSL is parameterized: "BUSL-1.1" in package.json tells a consumer
+      # nothing about the Change Date or the Additional Use Grant. Every
+      # package sets files:["/dist"], and npm only auto-includes a LICENSE
+      # sitting at the package root — so without this step the tarballs ship
+      # no license text at all. Copies are generated here, never committed.
+      - name: Stage per-package LICENSE files
+        run: node .github/scripts/stage-package-licenses.mjs
+
       # LTS process (plans/lts-process.md §4.2): no publish ever completes without its
       # channel tag asserted — derived here, cross-checked against pre.json before the
       # publish, verified against the registry after it (pre mode forbids an explicit

@@ -508,7 +508,7 @@ Contributions are welcome! Please follow the MemberJunction contribution guideli
 
 ## License
 
-ISC License - See LICENSE file for details
+Business Source License 1.1 - See LICENSE file for details
 
 ## Support
 

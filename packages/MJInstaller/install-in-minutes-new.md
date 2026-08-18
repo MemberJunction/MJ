@@ -1,6 +1,6 @@
 # Installation in Minutes
 
-MemberJunction is an open-source platform designed to help organizations efficiently manage data, build applications, and leverage AI for better insights. This guide walks you through the complete setup process using the automated installer, which handles downloading, configuring, building, and validating your MemberJunction installation.
+MemberJunction is a platform designed to help organizations efficiently manage data, build applications, and leverage AI for better insights. This guide walks you through the complete setup process using the automated installer, which handles downloading, configuring, building, and validating your MemberJunction installation.
 
 ## Prerequisites
 

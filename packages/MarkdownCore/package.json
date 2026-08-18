@@ -21,7 +21,7 @@
     "react-native"
   ],
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "devDependencies": {
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"

@@ -18,7 +18,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentCredentialEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentHarnessEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSearchScopeEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemChunkEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationCompactionRunEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMaterializedResultQueryEntity, MJMaterializedResultEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJPermissionDomainEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJRSUPendingWorkEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentCredentialEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentHarnessEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSearchScopeEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthenticationProviderEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemChunkEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationCompactionRunEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJFormChromeRuleEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMaterializedResultQueryEntity, MJMaterializedResultEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJPermissionDomainEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJRSUPendingWorkEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -469,6 +469,18 @@ export class MJActionCategory_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
     @Field(() => [MJActionCategory_])
     MJActionCategories_ParentIDArray: MJActionCategory_[]; // Link to MJActionCategories
@@ -2164,6 +2176,18 @@ export class MJAction_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
     @Field(() => [MJActionParam_])
     MJActionParams_ActionIDArray: MJActionParam_[]; // Link to MJActionParams
     
@@ -2210,8 +2234,12 @@ export class MJAction_ {
     // Relationship field to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
 // Relationship field to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
 // Relationship field to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Issues: Issue Types not generated: its GraphQL type is not declared in this file.
 // Relationship field to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Issues: Issue Types not generated: its GraphQL type is not declared in this file.
 // Relationship field to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Issues: Issue Types not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Issues: Issue Types not generated: its GraphQL type is not declared in this file.
 
 }
 
@@ -2588,8 +2616,12 @@ export class MJActionResolver extends ResolverBase {
         // Relationship to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
 // Relationship to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
 // Relationship to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Issues: Issue Types not generated: its GraphQL type is not declared in this file.
 // Relationship to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Issues: Issue Types not generated: its GraphQL type is not declared in this file.
 // Relationship to MJ_BizApps_Tasks: Task Types not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Issues: Issue Types not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Issues: Issue Types not generated: its GraphQL type is not declared in this file.
 
     @Mutation(() => MJAction_)
     async CreateMJAction(
@@ -3293,6 +3325,18 @@ export class MJAIAgentCategory_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
     @Field(() => [MJAIAgentCategory_])
     MJAIAgentCategories_ParentIDArray: MJAIAgentCategory_[]; // Link to MJAIAgentCategories
@@ -6323,6 +6367,18 @@ export class MJAIAgentNote_ {
     @MaxLength(36)
     RootConsolidatedIntoNoteID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ConsolidatedIntoNoteIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ConsolidatedIntoNoteIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ConsolidatedIntoNoteIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ConsolidatedIntoNoteIDChildCount?: number;
+        
     @Field(() => [MJAIAgentNote_])
     MJAIAgentNotes_ConsolidatedIntoNoteIDArray: MJAIAgentNote_[]; // Link to MJAIAgentNotes
     
@@ -8210,6 +8266,18 @@ detailed information about what validation rules failed.`})
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
     @Field(() => [MJAIAgentRunStep_])
     MJAIAgentRunSteps_ParentIDArray: MJAIAgentRunStep_[]; // Link to MJAIAgentRunSteps
     
@@ -8711,9 +8779,33 @@ each time the agent processes a prompt step.`})
     @MaxLength(36)
     RootParentRunID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentRunIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentRunIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentRunIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentRunIDChildCount?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(36)
     RootLastRunID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    LastRunIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    LastRunIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    LastRunIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    LastRunIDChildCount?: number;
         
     @Field(() => [MJAIAgentExample_])
     MJAIAgentExamples_SourceAIAgentRunIDArray: MJAIAgentExample_[]; // Link to MJAIAgentExamples
@@ -10375,6 +10467,18 @@ export class MJAIAgentSession_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootLastSessionID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    LastSessionIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    LastSessionIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    LastSessionIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    LastSessionIDChildCount?: number;
         
     @Field(() => [MJAIAgentRun_])
     MJAIAgentRuns_AgentSessionIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
@@ -12082,9 +12186,33 @@ if this limit is exceeded.`})
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(36)
     RootDefaultCoAgentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    DefaultCoAgentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    DefaultCoAgentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    DefaultCoAgentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    DefaultCoAgentIDChildCount?: number;
         
     @Field(() => [MJAIAgentAction_])
     MJAIAgentActions_AgentIDArray: MJAIAgentAction_[]; // Link to MJAIAgentActions
@@ -13206,6 +13334,18 @@ export class MJAIArchitecture_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentArchitectureID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentArchitectureIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentArchitectureIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentArchitectureIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentArchitectureIDChildCount?: number;
         
     @Field(() => [MJAIArchitecture_])
     MJAIArchitectures_ParentArchitectureIDArray: MJAIArchitecture_[]; // Link to MJAIArchitectures
@@ -14492,6 +14632,18 @@ export class MJAIConfiguration_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
     @Field(() => [MJAIAgentConfiguration_])
     MJAIAgentConfigurations_AIConfigurationIDArray: MJAIAgentConfiguration_[]; // Link to MJAIAgentConfigurations
@@ -17775,6 +17927,18 @@ export class MJAIPromptCategory_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
     @Field(() => [MJAIPrompt_])
     MJAIPrompts_CategoryIDArray: MJAIPrompt_[]; // Link to MJAIPrompts
     
@@ -18837,9 +19001,33 @@ export class MJAIPromptRun_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(36)
     RootRerunFromPromptRunID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    RerunFromPromptRunIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    RerunFromPromptRunIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    RerunFromPromptRunIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    RerunFromPromptRunIDChildCount?: number;
         
     @Field(() => [MJContentProcessRunPromptRun_])
     MJContentProcessRunPromptRuns_AIPromptRunIDArray: MJContentProcessRunPromptRun_[]; // Link to MJContentProcessRunPromptRuns
@@ -19961,6 +20149,18 @@ export class MJAIPrompt_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootResultSelectorPromptID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ResultSelectorPromptIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ResultSelectorPromptIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ResultSelectorPromptIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ResultSelectorPromptIDChildCount?: number;
         
     @Field(() => [MJAIAgentAction_])
     MJAIAgentActions_CompactPromptIDArray: MJAIAgentAction_[]; // Link to MJAIAgentActions
@@ -24223,6 +24423,18 @@ export class MJAPIScope_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
     @Field(() => [MJAPIApplicationScope_])
     MJAPIApplicationScopes_ScopeIDArray: MJAPIApplicationScope_[]; // Link to MJAPIApplicationScopes
     
@@ -26727,6 +26939,18 @@ export class MJArtifactType_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
     @Field(() => [MJAIAgentArtifactType_])
     MJAIAgentArtifactTypes_ArtifactTypeIDArray: MJAIAgentArtifactType_[]; // Link to MJAIAgentArtifactTypes
     
@@ -28004,6 +28228,18 @@ export class MJAuditLogType_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
     @Field(() => [MJAuditLogType_])
     MJAuditLogTypes_ParentIDArray: MJAuditLogType_[]; // Link to MJAuditLogTypes
     
@@ -28406,6 +28642,315 @@ export class MJAuditLogResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Authentication Providers
+//****************************************************************************
+@ObjectType({ description: `Metadata catalog of authentication providers. Each row defines one provider (Auth0, Okta, MSAL, Cognito, Google, WorkOS, or any third-party driver) whose implementation is resolved at runtime from DriverClass via MJGlobal.ClassFactory.CreateInstance(BaseAuthProvider, DriverClass). Supersedes the hard-wired mj.config.cjs authProviders array, which remains a back-compat fallback when this table is empty.` })
+export class MJAuthenticationProvider_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Unique, human-readable name for this provider instance (e.g. "WorkOS Production", "Corporate Azure AD"). Also the key used to register the provider with AuthProviderFactory.`}) 
+    @MaxLength(100)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional administrator notes describing this provider configuration.`}) 
+    Description?: string;
+        
+    @Field({description: `Driver key resolved at runtime via MJGlobal.ClassFactory.CreateInstance(BaseAuthProvider, DriverClass). MUST match the @RegisterClass key on the concrete server provider (e.g. "workos", "auth0", "okta", "msal", "cognito", "google"). The browser resolves its matching MJAuthBase subclass from the same key, so a driver ships as a server/browser pair under one name.`}) 
+    @MaxLength(255)
+    DriverClass: string;
+        
+    @Field({nullable: true, description: `Expected JWT issuer (the "iss" claim). Used to route an incoming token to this provider and to validate the token. E.g. https://api.workos.com/user_management/<clientId>.`}) 
+    @MaxLength(500)
+    Issuer?: string;
+        
+    @Field({nullable: true, description: `Expected JWT audience (the "aud" claim) enforced during validation.`}) 
+    @MaxLength(500)
+    Audience?: string;
+        
+    @Field({nullable: true, description: `JWKS endpoint URL used to fetch the signing keys that verify token signatures. E.g. https://api.workos.com/sso/jwks/<clientId>.`}) 
+    @MaxLength(500)
+    JWKSUri?: string;
+        
+    @Field({nullable: true, description: `Public OAuth client ID. Safe to expose to the browser and published in the pre-auth provider catalog.`}) 
+    @MaxLength(255)
+    ClientID?: string;
+        
+    @Field({nullable: true, description: `Provider domain where applicable (e.g. Auth0/Okta tenant domain). Optional; published in the pre-auth provider catalog.`}) 
+    @MaxLength(255)
+    Domain?: string;
+        
+    @Field({nullable: true, description: `OAuth scopes to request, space-delimited (e.g. "openid profile email"). Published in the pre-auth provider catalog.`}) 
+    @MaxLength(500)
+    Scopes?: string;
+        
+    @Field({nullable: true, description: `SERVER-SIDE ONLY driver configuration as a JSON object, for fields not modeled as columns. NEVER published to the pre-auth catalog. Merged into the provider config when the server driver is instantiated. Put anything the browser must not read here.`}) 
+    AdditionalConfiguration?: string;
+        
+    @Field({nullable: true, description: `Browser driver configuration as a JSON object (e.g. WorkOS apiHostname, Cognito region/userPoolId, redirectUri). PUBLISHED VERBATIM in the unauthenticated pre-auth provider catalog, so every value here must be considered world-readable. Server-only settings belong in AdditionalConfiguration.`}) 
+    ClientConfiguration?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    CredentialID?: string;
+        
+    @Field({description: `Lifecycle status. Only Active providers are registered at startup and offered for login.`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field(() => Boolean, {description: `When true, this provider is the default selection -- pre-highlighted in the login picker, and used directly when it is the only Active, client-visible provider.`}) 
+    IsDefault: boolean;
+        
+    @Field(() => Boolean, {description: `When true, this provider appears in the browser pre-auth login picker and is included in the public catalog endpoint. Set false for providers that only validate machine-to-machine tokens and should never be offered as an interactive login.`}) 
+    ClientVisible: boolean;
+        
+    @Field({nullable: true, description: `Label shown on the login picker button (e.g. "Microsoft", rendered as "Continue with Microsoft"). Falls back to Name when null.`}) 
+    @MaxLength(100)
+    DisplayName?: string;
+        
+    @Field({nullable: true, description: `Icon for the login picker button -- a Font Awesome class (e.g. "fa-brands fa-microsoft") or a known brand-logo key the picker maps to a brand chip.`}) 
+    @MaxLength(100)
+    Icon?: string;
+        
+    @Field(() => Int, {description: `Ordering of this provider within the login picker (ascending).`}) 
+    Sequence: number;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Credential?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Authentication Providers
+//****************************************************************************
+@InputType()
+export class CreateMJAuthenticationProviderInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    Issuer: string | null;
+
+    @Field({ nullable: true })
+    Audience: string | null;
+
+    @Field({ nullable: true })
+    JWKSUri: string | null;
+
+    @Field({ nullable: true })
+    ClientID: string | null;
+
+    @Field({ nullable: true })
+    Domain: string | null;
+
+    @Field({ nullable: true })
+    Scopes: string | null;
+
+    @Field({ nullable: true })
+    AdditionalConfiguration: string | null;
+
+    @Field({ nullable: true })
+    ClientConfiguration: string | null;
+
+    @Field({ nullable: true })
+    CredentialID: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    ClientVisible?: boolean;
+
+    @Field({ nullable: true })
+    DisplayName: string | null;
+
+    @Field({ nullable: true })
+    Icon: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Authentication Providers
+//****************************************************************************
+@InputType()
+export class UpdateMJAuthenticationProviderInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    Issuer?: string | null;
+
+    @Field({ nullable: true })
+    Audience?: string | null;
+
+    @Field({ nullable: true })
+    JWKSUri?: string | null;
+
+    @Field({ nullable: true })
+    ClientID?: string | null;
+
+    @Field({ nullable: true })
+    Domain?: string | null;
+
+    @Field({ nullable: true })
+    Scopes?: string | null;
+
+    @Field({ nullable: true })
+    AdditionalConfiguration?: string | null;
+
+    @Field({ nullable: true })
+    ClientConfiguration?: string | null;
+
+    @Field({ nullable: true })
+    CredentialID?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    ClientVisible?: boolean;
+
+    @Field({ nullable: true })
+    DisplayName?: string | null;
+
+    @Field({ nullable: true })
+    Icon?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Authentication Providers
+//****************************************************************************
+@ObjectType()
+export class RunMJAuthenticationProviderViewResult {
+    @Field(() => [MJAuthenticationProvider_])
+    Results: MJAuthenticationProvider_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAuthenticationProvider_)
+export class MJAuthenticationProviderResolver extends ResolverBase {
+    @Query(() => RunMJAuthenticationProviderViewResult)
+    async RunMJAuthenticationProviderViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAuthenticationProviderViewResult)
+    async RunMJAuthenticationProviderViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAuthenticationProviderViewResult)
+    async RunMJAuthenticationProviderDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Authentication Providers';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAuthenticationProvider_, { nullable: true })
+    async MJAuthenticationProvider(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAuthenticationProvider_ | null> {
+        this.CheckUserReadPermissions('MJ: Authentication Providers', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAuthenticationProviders')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Authentication Providers', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Authentication Providers', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAuthenticationProvider_)
+    async CreateMJAuthenticationProvider(
+        @Arg('input', () => CreateMJAuthenticationProviderInput) input: CreateMJAuthenticationProviderInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Authentication Providers', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAuthenticationProvider_)
+    async UpdateMJAuthenticationProvider(
+        @Arg('input', () => UpdateMJAuthenticationProviderInput) input: UpdateMJAuthenticationProviderInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Authentication Providers', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAuthenticationProvider_)
+    async DeleteMJAuthenticationProvider(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Authentication Providers', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Authorization Roles
 //****************************************************************************
 @ObjectType({ description: `Links authorizations to roles, defining which permissions are granted to users assigned to specific roles in the system.` })
@@ -28623,6 +29168,18 @@ export class MJAuthorization_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
     @Field(() => [MJActionAuthorization_])
     MJActionAuthorizations_AuthorizationIDArray: MJActionAuthorization_[]; // Link to MJActionAuthorizations
@@ -29739,6 +30296,18 @@ export class MJCollection_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
     @Field(() => [MJCollectionArtifact_])
     MJCollectionArtifacts_CollectionIDArray: MJCollectionArtifact_[]; // Link to MJCollectionArtifacts
@@ -35144,6 +35713,18 @@ export class MJContentItemChunk_ {
     @MaxLength(36)
     RootParentChunkID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentChunkIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentChunkIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentChunkIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentChunkIDChildCount?: number;
+        
     @Field(() => [MJContentItemChunk_])
     MJContentItemChunks_ParentChunkIDArray: MJContentItemChunk_[]; // Link to MJContentItemChunks
     
@@ -35935,6 +36516,18 @@ export class MJContentItem_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
     @Field(() => [MJContentItemAttribute_])
     MJContentItemAttributes_ContentItemIDArray: MJContentItemAttribute_[]; // Link to MJContentItemAttributes
@@ -39835,6 +40428,18 @@ export class MJConversationDetail_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
     @Field(() => [MJConversationDetailArtifact_])
     MJConversationDetailArtifacts_ConversationDetailIDArray: MJConversationDetailArtifact_[]; // Link to MJConversationDetailArtifacts
     
@@ -40680,6 +41285,18 @@ export class MJConversation_ {
     @MaxLength(36)
     RootLastConversationID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    LastConversationIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    LastConversationIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    LastConversationIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    LastConversationIDChildCount?: number;
+        
     @Field(() => [MJConversationDetail_])
     MJConversationDetails_ConversationIDArray: MJConversationDetail_[]; // Link to MJConversationDetails
     
@@ -41302,6 +41919,18 @@ export class MJCredentialCategory_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
     @Field(() => [MJCredentialCategory_])
     MJCredentialCategories_ParentIDArray: MJCredentialCategory_[]; // Link to MJCredentialCategories
     
@@ -41812,6 +42441,9 @@ export class MJCredential_ {
     @Field(() => [MJAIAgentCredential_])
     MJAIAgentCredentials_CredentialIDArray: MJAIAgentCredential_[]; // Link to MJAIAgentCredentials
     
+    @Field(() => [MJAuthenticationProvider_])
+    MJAuthenticationProviders_CredentialIDArray: MJAuthenticationProvider_[]; // Link to MJAuthenticationProviders
+    
 }
 
 //****************************************************************************
@@ -42065,6 +42697,16 @@ export class MJCredentialResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJAuthenticationProvider_])
+    async MJAuthenticationProviders_CredentialIDArray(@Root() mjcredential_: MJCredential_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Authentication Providers', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAuthenticationProviders')} WHERE ${provider.QuoteIdentifier('CredentialID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Authentication Providers', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjcredential_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Authentication Providers', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJCredential_)
     async CreateMJCredential(
         @Arg('input', () => CreateMJCredentialInput) input: CreateMJCredentialInput,
@@ -42135,6 +42777,18 @@ export class MJDashboardCategory_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
     @Field(() => [MJDashboardCategory_])
     MJDashboardCategories_ParentIDArray: MJDashboardCategory_[]; // Link to MJDashboardCategories
@@ -47468,10 +48122,12 @@ export class MJEntity_ {
 
     @Field(() => [MJRecordProcessWatermark_])
     MJRecordProcessWatermarks_EntityIDArray: MJRecordProcessWatermark_[]; // Link to MJRecordProcessWatermarks
-    
+    // Relationship field to MJ_BizApps_Issues: Issues not generated: its GraphQL type is not declared in this file.
+
     @Field(() => [MJRecordProcess_])
     MJRecordProcesses_EntityIDArray: MJRecordProcess_[]; // Link to MJRecordProcesses
-    
+    // Relationship field to MJ_BizApps_Issues: Issues not generated: its GraphQL type is not declared in this file.
+
     @Field(() => [MJMLTrainingPipeline_])
     MJMLTrainingPipelines_TargetEntityIDArray: MJMLTrainingPipeline_[]; // Link to MJMLTrainingPipelines
     
@@ -47501,6 +48157,13 @@ export class MJEntity_ {
     MJMaterializedResults_GeneratedEntityIDArray: MJMaterializedResult_[]; // Link to MJMaterializedResults
     // Relationship field to MJ_BizApps_Accounting: Journal Entries not generated: its GraphQL type is not declared in this file.
 // Relationship field to MJ_BizApps_Orders: Order Line Price Components not generated: its GraphQL type is not declared in this file.
+
+    @Field(() => [MJFormChromeRule_])
+    MJFormChromeRules_RelatedEntityIDArray: MJFormChromeRule_[]; // Link to MJFormChromeRules
+    
+    @Field(() => [MJFormChromeRule_])
+    MJFormChromeRules_EntityIDArray: MJFormChromeRule_[]; // Link to MJFormChromeRules
+    // Relationship field to MJ_BizApps_Common: Activity Links not generated: its GraphQL type is not declared in this file.
 
 }
 
@@ -48653,7 +49316,8 @@ export class MJEntityResolverBase extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Process Watermarks', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Issues: Issues not generated: its GraphQL type is not declared in this file.
+
     @FieldResolver(() => [MJRecordProcess_])
     async MJRecordProcesses_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Record Processes', userPayload);
@@ -48663,7 +49327,8 @@ export class MJEntityResolverBase extends ResolverBase {
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Processes', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
-        
+        // Relationship to MJ_BizApps_Issues: Issues not generated: its GraphQL type is not declared in this file.
+
     @FieldResolver(() => [MJMLTrainingPipeline_])
     async MJMLTrainingPipelines_TargetEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: ML Training Pipelines', userPayload);
@@ -48756,6 +49421,27 @@ export class MJEntityResolverBase extends ResolverBase {
     }
         // Relationship to MJ_BizApps_Accounting: Journal Entries not generated: its GraphQL type is not declared in this file.
 // Relationship to MJ_BizApps_Orders: Order Line Price Components not generated: its GraphQL type is not declared in this file.
+
+    @FieldResolver(() => [MJFormChromeRule_])
+    async MJFormChromeRules_RelatedEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Form Chrome Rules', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwFormChromeRules')} WHERE ${provider.QuoteIdentifier('RelatedEntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Form Chrome Rules', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Form Chrome Rules', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJFormChromeRule_])
+    async MJFormChromeRules_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Form Chrome Rules', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwFormChromeRules')} WHERE ${provider.QuoteIdentifier('EntityID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Form Chrome Rules', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjentity_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Form Chrome Rules', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        // Relationship to MJ_BizApps_Common: Activity Links not generated: its GraphQL type is not declared in this file.
 
     @Mutation(() => MJEntity_)
     async CreateMJEntity(
@@ -51713,6 +52399,9 @@ export class MJEntityField_ {
     @Field(() => Boolean, {description: `When 1, this field is a SQL Server computed column or PostgreSQL generated column — physically present in the base table but read-only at the SQL layer. Distinct from IsVirtual, which means the column is not in the base table at all (e.g., joined name lookups in the base view). A computed column has both IsVirtual=1 (read-only at the API layer) and IsComputed=1 (physically in the table). The difference matters for base-view JOIN target selection: when an FK's related Name Field is computed, the generated view joins to the related entity's base table instead of its view.`}) 
     IsComputed: boolean;
         
+    @Field({nullable: true, description: `Optional JSON policy object that declares this foreign-key field as a first-class embedded record, so CodeGen can emit {FieldName}_Object / {FieldName}_EnsureObject() on the entity subclass. Shape is IEmbeddedRecordConfig: OnClear ('delete' | 'orphan' | 'refuse', default orphan) and LoadNested ('inherit' | 'related', default inherit). RelatedEntity and the FK field name are NOT repeated here — they are this row's RelatedEntityID and Name. AllowsNull on this same row decides whether the object is provisioned with GetEntityObject (required FK) or via Ensure (nullable FK). NULL means the field is an ordinary FK, which is the default and reproduces pre-feature behaviour exactly.`}) 
+    EmbeddedRecord?: string;
+        
     @Field({nullable: true}) 
     FieldCodeName?: string;
         
@@ -51923,6 +52612,9 @@ export class CreateMJEntityFieldInput {
     @Field(() => Boolean, { nullable: true })
     IsComputed?: boolean;
 
+    @Field({ nullable: true })
+    EmbeddedRecord: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -52085,6 +52777,9 @@ export class UpdateMJEntityFieldInput {
 
     @Field(() => Boolean, { nullable: true })
     IsComputed?: boolean;
+
+    @Field({ nullable: true })
+    EmbeddedRecord?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -56115,6 +56810,18 @@ export class MJFileCategory_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
     @Field(() => [MJFileCategory_])
     MJFileCategories_ParentIDArray: MJFileCategory_[]; // Link to MJFileCategories
     
@@ -57264,6 +57971,7 @@ export class MJFile_ {
     @Field(() => [MJMLModel_])
     MJMLModels_ArtifactFileIDArray: MJMLModel_[]; // Link to MJMLModels
     // Relationship field to MJ_BizApps_Accounting: Journal Entries not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Common: Activity Files not generated: its GraphQL type is not declared in this file.
 
 }
 
@@ -57474,6 +58182,7 @@ export class MJFileResolver extends ResolverBase {
         return result;
     }
         // Relationship to MJ_BizApps_Accounting: Journal Entries not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Common: Activity Files not generated: its GraphQL type is not declared in this file.
 
     @Mutation(() => MJFile_)
     async CreateMJFile(
@@ -57500,6 +58209,223 @@ export class MJFileResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Files', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Form Chrome Rules
+//****************************************************************************
+@ObjectType({ description: `Install-overlay (L3) pins for generated-form chrome. One row sets Primary / More / None for a parent form\'s related entity or contribution. Not app-synced — site admin only.` })
+export class MJFormChromeRule_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `Parent form entity this rule applies to.`}) 
+    @MaxLength(36)
+    EntityID: string;
+        
+    @Field({description: `'Relationship' targets a related entity on the parent form. 'Contribution' targets a form contribution by key.`}) 
+    @MaxLength(20)
+    TargetKind: string;
+        
+    @Field({nullable: true, description: `Related entity to pin when TargetKind is Relationship. Null for Contribution rows.`}) 
+    @MaxLength(36)
+    RelatedEntityID?: string;
+        
+    @Field({nullable: true, description: `Contribution key to pin when TargetKind is Contribution. Null for Relationship rows.`}) 
+    @MaxLength(256)
+    ContributionKey?: string;
+        
+    @Field({description: `How the target appears on the parent form: Primary (first-class rail), More (parked), or None (not a candidate).`}) 
+    @MaxLength(20)
+    Inclusion: string;
+        
+    @Field({nullable: true, description: `Optional JSON string array of join field names for a same-table OR filter (Bill-To OR Ship-To). Null keeps the L1 join, if any.`}) 
+    JoinFields?: string;
+        
+    @Field(() => Int, {description: `Tie-break when more than one rule matches the same target. Higher Sequence wins.`}) 
+    Sequence: number;
+        
+    @Field({nullable: true, description: `Optional admin display title for this section. Null keeps the relationship DisplayName or contribution name. Survives OpenApp upgrades because the row is keyed by RelatedEntityID / ContributionKey, not by the previous label.`}) 
+    @MaxLength(100)
+    Title?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    Entity: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    RelatedEntity?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Form Chrome Rules
+//****************************************************************************
+@InputType()
+export class CreateMJFormChromeRuleInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    TargetKind?: string;
+
+    @Field({ nullable: true })
+    RelatedEntityID: string | null;
+
+    @Field({ nullable: true })
+    ContributionKey: string | null;
+
+    @Field({ nullable: true })
+    Inclusion?: string;
+
+    @Field({ nullable: true })
+    JoinFields: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Title: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Form Chrome Rules
+//****************************************************************************
+@InputType()
+export class UpdateMJFormChromeRuleInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    TargetKind?: string;
+
+    @Field({ nullable: true })
+    RelatedEntityID?: string | null;
+
+    @Field({ nullable: true })
+    ContributionKey?: string | null;
+
+    @Field({ nullable: true })
+    Inclusion?: string;
+
+    @Field({ nullable: true })
+    JoinFields?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Title?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Form Chrome Rules
+//****************************************************************************
+@ObjectType()
+export class RunMJFormChromeRuleViewResult {
+    @Field(() => [MJFormChromeRule_])
+    Results: MJFormChromeRule_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJFormChromeRule_)
+export class MJFormChromeRuleResolver extends ResolverBase {
+    @Query(() => RunMJFormChromeRuleViewResult)
+    async RunMJFormChromeRuleViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJFormChromeRuleViewResult)
+    async RunMJFormChromeRuleViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJFormChromeRuleViewResult)
+    async RunMJFormChromeRuleDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Form Chrome Rules';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJFormChromeRule_, { nullable: true })
+    async MJFormChromeRule(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJFormChromeRule_ | null> {
+        this.CheckUserReadPermissions('MJ: Form Chrome Rules', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwFormChromeRules')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Form Chrome Rules', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Form Chrome Rules', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJFormChromeRule_)
+    async CreateMJFormChromeRule(
+        @Arg('input', () => CreateMJFormChromeRuleInput) input: CreateMJFormChromeRuleInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Form Chrome Rules', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJFormChromeRule_)
+    async UpdateMJFormChromeRule(
+        @Arg('input', () => UpdateMJFormChromeRuleInput) input: UpdateMJFormChromeRuleInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Form Chrome Rules', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJFormChromeRule_)
+    async DeleteMJFormChromeRule(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Form Chrome Rules', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -57537,6 +58463,18 @@ export class MJGeneratedCodeCategory_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
     @Field(() => [MJGeneratedCodeCategory_])
     MJGeneratedCodeCategories_ParentIDArray: MJGeneratedCodeCategory_[]; // Link to MJGeneratedCodeCategories
@@ -60325,6 +61263,18 @@ export class MJListCategory_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
     @Field(() => [MJListCategory_])
     MJListCategories_ParentIDArray: MJListCategory_[]; // Link to MJListCategories
@@ -69779,6 +70729,18 @@ export class MJProject_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
     @Field(() => [MJProject_])
     MJProjects_ParentIDArray: MJProject_[]; // Link to MJProjects
     
@@ -70727,6 +71689,18 @@ export class MJQueryCategory_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
     @Field(() => [MJQuery_])
     MJQueries_CategoryIDArray: MJQuery_[]; // Link to MJQueries
@@ -73848,6 +74822,18 @@ export class MJRecordChange_ {
     @MaxLength(36)
     RootRestoredFromID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    RestoredFromIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    RestoredFromIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    RestoredFromIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    RestoredFromIDChildCount?: number;
+        
     @Field(() => [MJRecordChange_])
     MJRecordChanges_RestoredFromIDArray: MJRecordChange_[]; // Link to MJRecordChanges
     
@@ -75044,6 +76030,18 @@ export class MJRecordProcessCategory_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
     @Field(() => [MJRecordProcessCategory_])
     MJRecordProcessCategories_ParentIDArray: MJRecordProcessCategory_[]; // Link to MJRecordProcessCategories
     
@@ -75881,6 +76879,18 @@ export class MJRemoteOperationCategory_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
     @Field(() => [MJRemoteOperationCategory_])
     MJRemoteOperationCategories_ParentIDArray: MJRemoteOperationCategory_[]; // Link to MJRemoteOperationCategories
@@ -83100,6 +84110,18 @@ export class MJSkill_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
     @Field(() => [MJEmployeeSkill_])
     MJEmployeeSkills_SkillIDArray: MJEmployeeSkill_[]; // Link to MJEmployeeSkills
     
@@ -84978,9 +86000,33 @@ export class MJTag_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(36)
     RootMergedIntoTagID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    MergedIntoTagIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    MergedIntoTagIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    MergedIntoTagIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    MergedIntoTagIDChildCount?: number;
         
     @Field(() => [MJTaggedItem_])
     MJTaggedItems_TagIDArray: MJTaggedItem_[]; // Link to MJTaggedItems
@@ -85871,6 +86917,18 @@ export class MJTask_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
     @Field(() => [MJTaskDependency_])
     MJTaskDependencies_TaskIDArray: MJTaskDependency_[]; // Link to MJTaskDependencies
     
@@ -86224,6 +87282,18 @@ export class MJTemplateCategory_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
     @Field(() => [MJTemplateCategory_])
     MJTemplateCategories_ParentIDArray: MJTemplateCategory_[]; // Link to MJTemplateCategories
@@ -89321,6 +90391,18 @@ export class MJTestSuite_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
     @Field(() => [MJTestSuite_])
     MJTestSuites_ParentIDArray: MJTestSuite_[]; // Link to MJTestSuites
@@ -92932,6 +94014,18 @@ export class MJUserViewCategory_ {
     @MaxLength(36)
     RootParentID?: string;
         
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
+        
     @Field(() => [MJUserViewCategory_])
     MJUserViewCategories_ParentIDArray: MJUserViewCategory_[]; // Link to MJUserViewCategories
     
@@ -94281,6 +95375,8 @@ export class MJUser_ {
 // Relationship field to MJ_BizApps_Accounting: Journal Entry Batches not generated: its GraphQL type is not declared in this file.
 // Relationship field to MJ_BizApps_Orders: Payment Lines not generated: its GraphQL type is not declared in this file.
 // Relationship field to MJ_BizApps_Accounting: Journal Entry Batches not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Common: Activity Sync Connections not generated: its GraphQL type is not declared in this file.
+// Relationship field to MJ_BizApps_Common: Activities not generated: its GraphQL type is not declared in this file.
 
 }
 
@@ -95505,6 +96601,8 @@ export class MJUserResolverBase extends ResolverBase {
 // Relationship to MJ_BizApps_Accounting: Journal Entry Batches not generated: its GraphQL type is not declared in this file.
 // Relationship to MJ_BizApps_Orders: Payment Lines not generated: its GraphQL type is not declared in this file.
 // Relationship to MJ_BizApps_Accounting: Journal Entry Batches not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Common: Activity Sync Connections not generated: its GraphQL type is not declared in this file.
+// Relationship to MJ_BizApps_Common: Activities not generated: its GraphQL type is not declared in this file.
 
     @Mutation(() => MJUser_)
     async CreateMJUser(
@@ -96735,6 +97833,18 @@ export class MJVersionLabel_ {
     @Field({nullable: true}) 
     @MaxLength(36)
     RootParentID?: string;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDDepth?: number;
+        
+    @Field({nullable: true}) 
+    ParentIDPath?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    ParentIDIsLeaf?: boolean;
+        
+    @Field(() => Int, {nullable: true}) 
+    ParentIDChildCount?: number;
         
     @Field(() => [MJVersionLabelRestore_])
     MJVersionLabelRestores_VersionLabelIDArray: MJVersionLabelRestore_[]; // Link to MJVersionLabelRestores

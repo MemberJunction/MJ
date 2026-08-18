@@ -11,6 +11,7 @@ import {
 } from '@memberjunction/ng-entity-viewer';
 import { EntityInfo } from '@memberjunction/core';
 import { FormNavigationEvent } from './types/navigation-events';
+import { RELATED_GRID_DEFAULT_MAX_PX, RelatedGridHeightPx } from './related-grid-height';
 
 /**
  * Wrapper for EntityDataGridComponent that emits navigation events on row double-click.
@@ -41,7 +42,7 @@ import { FormNavigationEvent } from './types/navigation-events';
             [ShowDuplicateSearchButton]="ShowDuplicateSearchButton"
             [ShowCommunicationButton]="ShowCommunicationButton"
             [ShowRecycleBin]="ShowRecycleBin"
-            [Height]="Height"
+            [Height]="ResolvedHeight"
             [ToolbarConfig]="ToolbarConfig"
             [SelectionMode]="SelectionMode"
             [AllowColumnToggle]="false"
@@ -57,7 +58,10 @@ import { FormNavigationEvent } from './types/navigation-events';
             height: 100%;
             width: 100%;
         }
-    `]
+    `],
+    host: {
+        '[style.height]': 'hostHeightStyle',
+    },
 })
 export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy {
     @ViewChild('innerGrid') innerGrid!: EntityDataGridComponent;
@@ -82,15 +86,25 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
         return this.isInsideRelatedEntityPanel();
     }
 
+    /**
+     * Related-entity accordion AND left-nav panels. Accordion used to leave
+     * Height='auto' (100% of an auto-sized parent) so AG Grid's viewport
+     * collapsed to 0 while the toolbar still showed "N rows".
+     */
     private isInsideRelatedEntityPanel(): boolean {
+        return this.findRelatedEntityPanel() != null;
+    }
+
+    private findRelatedEntityPanel(): HTMLElement | null {
         let el: HTMLElement | null = this.elementRef.nativeElement?.parentElement ?? null;
         while (el) {
-            if (el.tagName?.toLowerCase() === 'mj-collapsible-panel') {
-                return el.getAttribute('data-variant') === 'related-entity';
+            if (el.tagName?.toLowerCase() === 'mj-collapsible-panel'
+                && el.getAttribute('data-variant') === 'related-entity') {
+                return el;
             }
             el = el.parentElement;
         }
-        return false;
+        return null;
     }
     /** Search box on the left of the toolbar. Default true. */
     @Input() ShowSearch: boolean = true;
@@ -106,8 +120,34 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     @Input() ShowCommunicationButton: boolean = false;
     @Input() ShowRecycleBin: boolean = true;
     @Input() Height: number | 'auto' | 'fit-content' = 'auto';
+    /**
+     * When the grid sizes to its rows (left-nav related panels), this is the
+     * cap. Content taller than the cap scrolls inside AG Grid — it does not
+     * switch to paging. `null` means grow with the rows, no cap.
+     */
+    @Input() MaxHeight: number | null = RELATED_GRID_DEFAULT_MAX_PX;
     @Input() ToolbarConfig: GridToolbarConfig = {};
     @Input() SelectionMode: GridSelectionMode = 'single';
+
+    /**
+     * Related-entity grids (accordion and left-nav) size to toolbar + header
+     * + rows instead of `height: 100%` of leftover / auto space. Re-read the
+     * panel each time — the host may mount before it is wrapped, and left-nav
+     * adds `mj-chrome-show` only when the rail item is selected.
+     */
+    private sizedHeightPx = RelatedGridHeightPx(0);
+
+    get ResolvedHeight(): number | 'auto' | 'fit-content' {
+        return this.shouldSizeToRows() ? this.sizedHeightPx : this.Height;
+    }
+
+    get hostHeightStyle(): string {
+        return this.shouldSizeToRows() ? `${this.sizedHeightPx}px` : '100%';
+    }
+
+    private shouldSizeToRows(): boolean {
+        return this.isInsideRelatedEntityPanel();
+    }
 
     /**
      * When true (default), the inner grid does not fetch until this component's host
@@ -214,8 +254,12 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     }
 
     onDataLoad(event: AfterDataLoadEventArgs): void {
-        // Re-emit the event for any consumers
         this.AfterDataLoad.emit(event);
+        if (!this.shouldSizeToRows()) {
+            return;
+        }
+        this.sizedHeightPx = RelatedGridHeightPx(event.loadedRowCount, this.MaxHeight);
+        this.cdr.markForCheck();
     }
 
     /**

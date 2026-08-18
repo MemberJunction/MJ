@@ -63,6 +63,17 @@ git branch --set-upstream-to=origin/my-feature-branch my-feature-branch
 ### 4. START WORK ON A FEATURE BRANCH
 Before starting a new line of work, check the current branch. It must be (a) separate from the remote default branch and (b) named for the work being requested. If not, **ask first**, then cut and switch to one.
 
+### 5. NO HAND-LINKING IN THE M5 JOINED WORKSPACE
+This clone sits under `/Users/amith/Dropbox/develop/M5/`, a pnpm mega-workspace that already
+live-links every `@memberjunction/*` and `@mj-biz-apps/*` package. **Never** add per-package
+`node_modules` symlinks, `pnpm link`, or `rsync` another worktree's `dist/` to unstick a resolve.
+That duplicates `type-graphql`. Then `Int`/`Float`/`ID` imported from `@memberjunction/server`
+are `undefined` and MJAPI fails schema build (`CannotDetermineGraphQLTypeError` on `MaxRows` /
+`RowCount`). Explorer shows `GraphQL Error (Code: unknown)`. **Do not patch `generated.js` or
+`MJServer/dist` to work around it.** Undo the extra link, `pnpm install` **only at `M5/`**,
+rebuild the package you changed, restart with `pnpm start` from `packages/MJAPI`. Full do/don't:
+[`../CLAUDE.md`](../CLAUDE.md) (the M5 workspace file).
+
 ---
 
 ## ✅ Definition of Done
@@ -117,6 +128,10 @@ After making code changes, **always compile the affected package** and fix all T
 **PostgreSQL is toolchain territory — do not hand-author it, and do not build tooling for it.** A feature PR ships the **T-SQL migration only**. Never write a `migrations-pg/**` counterpart, and never write a script that checks, generates, or gates PG parity. Converting T-SQL to PG is deterministic transpilation (`mj migrate convert`, the SQLConverter package, `/pg-migrate-v2`) run by the **build engineer at release time** — the same cadence as the consolidated metadata-sync migration. LLM-inferred PG SQL and one-off parity scripts are exactly what that toolchain exists to replace: they drift from the converter, gate feature PRs on work that is not theirs, and rot. If PG conversion looks wrong, fix the converter or tell the build engineer — do not route around it. Details: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
 
 **Record Changes**: MJ has built-in version control for all entities. Don't implement custom versioning.
+
+**Never stage or commit local host artifacts**: Never commit `mj.config.cjs`, `mj.config.json`, or generated host folders (`packages/GeneratedEntities/**`, `packages/MJAPI/src/generated/**`, `packages/MJExplorer/src/app/generated/**`) to the repository. They belong strictly to local running environments.
+
+**Migration authoring structure**: Hand-written DDL at top (`ALTER TABLE`, extended properties) → at least 50 blank lines → standard CodeGen comment block → appended CodeGen output (`EntityField` INSERT with apply-time sequence, procs, views, permissions). Never do ad-hoc inline metadata updates in migrations; manage metadata via `metadata/*.json` seed files (`mj sync push`).
 
 ---
 
@@ -178,6 +193,7 @@ npm run check:standards   # every adopted MJ standard (see .mj-standards.json)
 npm run check:esm         # native-ESM import guard for "type": "module" packages
 npm run check:claude-md   # instruction-file budget, link validity, and routing-table coverage
 npm run check:changeset   # changeset bump levels (local only — no CI gate enforces this one)
+npm run check:codegen-tail # new-table migrations ship their generated entity (same command CI runs)
 ```
 
 ---

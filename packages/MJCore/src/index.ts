@@ -16,6 +16,7 @@ export * from "./generic/entityTransactionScope";
 export * from "./generic/entityCompanion";
 export * from "./generic/entitySavePlan";
 export * from "./generic/relatedRecordCollection";
+export * from "./generic/embeddedRecord";
 export * from "./generic/relatedRecordBatchLoader";
 export * from "./generic/saveEntityGraphOperation";
 export * from "./generic/BaseEntitySaveQueue";
