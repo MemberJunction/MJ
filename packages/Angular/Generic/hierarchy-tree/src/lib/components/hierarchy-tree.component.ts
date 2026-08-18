@@ -893,22 +893,27 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
     }
 
     public centerOnNode(node: HierarchyNodeData): void {
-        if (!this.svgSelection || !this.zoomBehavior || node.x == null || node.y == null) return;
-        const container = this.svgContainerRef?.nativeElement;
-        const width = container?.clientWidth || 800;
-        const height = container?.clientHeight || 500;
-        const currentScale = this.currentZoomTransform?.k || 1;
+        if (!this.svgSelection || !this.zoomBehavior || !this.svgContainerRef?.nativeElement) return;
+        if (node.x == null || node.y == null) return;
+
+        const rect = this.svgContainerRef.nativeElement.getBoundingClientRect();
+        const width = rect.width > 50 ? rect.width : (this.svgContainerRef.nativeElement.clientWidth || 800);
+        const height = rect.height > 50 ? rect.height : (this.svgContainerRef.nativeElement.clientHeight || 500);
+        const rightMargin = (this.ShowDetailsDrawer && this.SelectedNode) ? 340 : 0;
+        const visibleWidth = Math.max(width - rightMargin, 200);
+
+        const currentScale = this.currentZoomTransform?.k || this.ZoomLevel || 1;
         const nodeWidth = this.Config.NodeWidth || 230;
         const nodeHeight = this.Config.NodeHeight || 90;
 
         const nodeCenterX = node.x + nodeWidth / 2;
         const nodeCenterY = node.y + nodeHeight / 2;
 
-        const tx = width / 2 - nodeCenterX * currentScale;
+        const tx = visibleWidth / 2 - nodeCenterX * currentScale;
         const ty = height / 2 - nodeCenterY * currentScale;
 
         const target = d3.zoomIdentity.translate(tx, ty).scale(currentScale);
-        this.svgSelection.transition().duration(400).call(this.zoomBehavior.transform, target);
+        this.svgSelection.interrupt().transition().duration(400).ease(d3.easeCubicOut).call(this.zoomBehavior.transform, target);
     }
 
     private expandAncestors(node: HierarchyNodeData): void {
@@ -935,14 +940,14 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         target.IsFocusRoot = true;
         this.FocusedNode = target;
         this.renderTree();
-        this.fitToScreen();
+        this.fitToScreen(false, true);
     }
 
     public resetFocus(): void {
         for (const n of this.AllNodes) n.IsFocusRoot = false;
         this.FocusedNode = null;
         this.renderTree();
-        this.fitToScreen();
+        this.fitToScreen(false, true);
     }
 
     // --- Toolbar Actions / Verbs ---
@@ -986,8 +991,9 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
     public setZoomLevel(scale: number, animated = true): void {
         if (!this.svgSelection || !this.zoomBehavior || !scale) return;
         const container = this.svgContainerRef?.nativeElement;
-        const width = container?.clientWidth || 800;
-        const height = container?.clientHeight || 500;
+        const rect = container?.getBoundingClientRect();
+        const width = rect?.width && rect.width > 50 ? rect.width : (container?.clientWidth || 800);
+        const height = rect?.height && rect.height > 50 ? rect.height : (container?.clientHeight || 500);
         const current = this.currentZoomTransform || d3.zoomIdentity;
         const cx = width / 2;
         const cy = height / 2;
@@ -996,9 +1002,9 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         const target = d3.zoomIdentity.translate(newX, newY).scale(scale);
 
         if (animated) {
-            this.svgSelection.transition().duration(250).call(this.zoomBehavior.transform, target);
+            this.svgSelection.interrupt().transition().duration(250).ease(d3.easeCubicOut).call(this.zoomBehavior.transform, target);
         } else {
-            this.svgSelection.call(this.zoomBehavior.transform, target);
+            this.svgSelection.interrupt().call(this.zoomBehavior.transform, target);
         }
     }
 
@@ -1024,17 +1030,19 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
             maxY = Math.max(maxY, n.y! + nodeHeight);
         }
 
-        const treeWidth = maxX - minX;
-        const treeHeight = maxY - minY;
+        const treeWidth = Math.max(maxX - minX, 1);
+        const treeHeight = Math.max(maxY - minY, 1);
         const treeCenterX = (minX + maxX) / 2;
         const treeCenterY = (minY + maxY) / 2;
 
         const rect = this.svgContainerRef.nativeElement.getBoundingClientRect();
         const width = rect.width > 50 ? rect.width : (this.svgContainerRef.nativeElement.clientWidth || 800);
         const height = rect.height > 50 ? rect.height : (this.svgContainerRef.nativeElement.clientHeight || 500);
+        const rightMargin = (this.ShowDetailsDrawer && this.SelectedNode) ? 340 : 0;
+        const visibleWidth = Math.max(width - rightMargin, 200);
         const padding = 40;
 
-        const availWidth = Math.max(width - padding * 2, 100);
+        const availWidth = Math.max(visibleWidth - padding * 2, 100);
         const availHeight = Math.max(height - padding * 2, 100);
         const autoScale = Math.max(
             Math.min(
@@ -1052,17 +1060,17 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
             this.ZoomChange.emit(autoScale);
         }
 
-        const tx = width / 2 - treeCenterX * scale;
+        const tx = visibleWidth / 2 - treeCenterX * scale;
         const ty = height / 2 - treeCenterY * scale;
 
         const targetTransform = d3.zoomIdentity.translate(tx, ty).scale(scale);
 
-        this.log(`[HierarchyTree:fitToScreen] Container=${width}x${height}, visibleNodes=${visibleNodes.length}, bounds=[${minX.toFixed(1)}, ${minY.toFixed(1)}] to [${maxX.toFixed(1)}, ${maxY.toFixed(1)}] (${treeWidth.toFixed(1)}x${treeHeight.toFixed(1)}), autoScale=${autoScale.toFixed(3)}, usingScale=${scale.toFixed(3)}, translate=(${tx.toFixed(1)}, ${ty.toFixed(1)})`);
+        this.log(`[HierarchyTree:fitToScreen] Container=${width}x${height} (visible=${visibleWidth}), visibleNodes=${visibleNodes.length}, bounds=[${minX.toFixed(1)}, ${minY.toFixed(1)}] to [${maxX.toFixed(1)}, ${maxY.toFixed(1)}] (${treeWidth.toFixed(1)}x${treeHeight.toFixed(1)}), autoScale=${autoScale.toFixed(3)}, usingScale=${scale.toFixed(3)}, translate=(${tx.toFixed(1)}, ${ty.toFixed(1)})`);
 
         if (immediate) {
-            this.svgSelection.call(this.zoomBehavior.transform, targetTransform);
+            this.svgSelection.interrupt().call(this.zoomBehavior.transform, targetTransform);
         } else {
-            this.svgSelection.transition().duration(350).call(this.zoomBehavior.transform, targetTransform);
+            this.svgSelection.interrupt().transition().duration(400).ease(d3.easeCubicOut).call(this.zoomBehavior.transform, targetTransform);
         }
     }
 
