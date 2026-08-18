@@ -80,10 +80,14 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up node
         uses: actions/setup-node@v6
         with:
           node-version: 24
+          cache: 'pnpm'
 
       # Fast pure-file guards (no build needed), all Phase-4 "keep tests honest" gates:
       # 1) A *.dom.test.ts placed inside __tests__/ is silently excluded from BOTH projects
@@ -106,6 +110,17 @@ jobs:
 
       - name: Explorer DOM coverage gate
         run: node scripts/classify-explorer-components.mjs --min 85
+
+      # The two ratchets below are the only guards in this job that need node_modules:
+      # dom-test-report.mjs reads component surfaces through scripts/lib/component-surface.mjs,
+      # which imports the real TypeScript compiler to parse them. Node resolves that bare
+      # specifier by walking up for node_modules, so with no install the step dies with
+      # ERR_MODULE_NOT_FOUND before it counts anything. Installing here rather than moving the
+      # ratchets back into `test` keeps them off the far side of the ~24-minute build+test step;
+      # with the pnpm store cached the install is ~20s, and the three guards above still run
+      # before it, so the cheapest checks keep failing first.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Generic DOM coverage ratchet
         run: node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=134
