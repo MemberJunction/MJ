@@ -69,7 +69,7 @@ jobs:
         run: |
           # Use MJServer package since core and global are pinned at 2.100.3
           VERSION=$(jq -r .version packages/MJServer/package.json)
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
 
       # A prerelease suffix (`-edge.N`, `-rc.N`, …) means uncertified bits.
       # The guard keys off the version grammar rather than the trigger, so it
@@ -141,7 +141,7 @@ jobs:
 
           echo "Waiting for SQL Server..."
           SQL_READY=0
-          for i in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             if docker run --rm --network boot-net mcr.microsoft.com/mssql-tools \
                  /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "SELECT 1" >/dev/null 2>&1; then
               SQL_READY=1; break
@@ -162,7 +162,7 @@ jobs:
           # Entrypoint runs mj migrate + mj codegen on the fresh DB before the API
           # starts — allow up to 15 minutes, but fail fast if the container dies.
           OK=0
-          for i in $(seq 1 90); do
+          for _ in $(seq 1 90); do
             if curl -fsS http://localhost:4000/healthcheck >/dev/null 2>&1; then
               OK=1; break
             fi

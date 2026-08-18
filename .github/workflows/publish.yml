@@ -231,13 +231,13 @@ jobs:
           # Use MJServer package as version reference since core and global are pinned at 2.100.3
           CURRENT_VERSION=$(jq -r .version packages/MJServer/package.json)
           IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
-          NEXT_MINOR_VERSION="${VERSION_PARTS[0]}.$(( ${VERSION_PARTS[1]} + 1 )).0"
-          NEXT_PATCH_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$(( ${VERSION_PARTS[2]} + 1 ))"
-          NEW_MIGRATION_FILES=$(git --no-pager diff --name-only v${CURRENT_VERSION} ${{ github.sha }} -- migrations/)
+          NEXT_MINOR_VERSION="${VERSION_PARTS[0]}.$(( VERSION_PARTS[1] + 1 )).0"
+          NEXT_PATCH_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$(( VERSION_PARTS[2] + 1 ))"
+          NEW_MIGRATION_FILES=$(git --no-pager diff --name-only "v${CURRENT_VERSION}" "${{ github.sha }}" -- migrations/)
           if [ -n "$NEW_MIGRATION_FILES" ]; then
-            echo "EXPECTED_NEXT_VERSION=$NEXT_MINOR_VERSION" >> $GITHUB_OUTPUT
+            echo "EXPECTED_NEXT_VERSION=$NEXT_MINOR_VERSION" >> "$GITHUB_OUTPUT"
           else
-            echo "EXPECTED_NEXT_VERSION=$NEXT_PATCH_VERSION" >> $GITHUB_OUTPUT
+            echo "EXPECTED_NEXT_VERSION=$NEXT_PATCH_VERSION" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Update version and check against expected
@@ -375,8 +375,8 @@ jobs:
           git pull
           git log -n1
           VERSION="v"$(jq -r .version packages/MJServer/package.json)
-          echo "Release for verison $VERSION" >> $GITHUB_STEP_SUMMARY
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release for verison $VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Push release commit and tag
         if: ${{ env.BRANCH == 'main' }}
@@ -480,8 +480,10 @@ jobs:
 
       - name: Guard - there must be changesets to release
         run: |
-          count=$(ls .changeset/*.md 2>/dev/null | grep -cv 'README.md' || true)
-          if [ "$count" = "0" ]; then
+          # Equivalent to publish-lts.yml's `ls .changeset/*.md | grep -cv README.md`,
+          # written as a glob so shellcheck (SC2010) is satisfied.
+          count=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l)
+          if [ "$count" -eq 0 ]; then
             echo "::error::No changesets on $LINE - nothing to release. Backported fixes carry their changeset files; did the backport PR merge?"
             exit 1
           fi
