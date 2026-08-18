@@ -40,8 +40,21 @@ package** — strictly better than cloning `ng-record-tags`, hardcoded into `rec
 **New package `@memberjunction/ng-record-attachments`** (L2 generic). One component, registered once:
 
 ```ts
-@RegisterClass(BaseFormPanel, { metadata: { entity: '*', slot: 'after-fields', inclusion: 'Primary' } })
+@RegisterClassEx(BaseFormPanel, { key: 'record-attachments:panel',
+  metadata: { entity: '*', slot: 'after-fields', sortKey: 30, inclusion: 'Primary' } })
 ```
+
+`RegisterClass`'s second positional arg is `key: string | null` and `metadata` is its **sixth**
+(`MJGlobal/src/RegisterClass.ts:51-62`), so the options bag only works on `RegisterClassEx` — which is
+what all three existing panels in `core-entity-forms` use. **But the tree-shake manifest generator
+matches the identifier literally** (`GenerateClassRegistrationsManifest.ts:461,569`:
+`expression.text !== 'RegisterClass'`), so every `RegisterClassEx` registration is invisible to it:
+`ModelPredictionPanel`, the repo's only other `entity: '*'` panel, has **zero** entries in
+`Angular/Bootstrap/src/generated/mj-class-registrations.ts` and survives only because the manifest
+imports its package barrel. A new standalone package has no such barrel — the panel silently never
+registers and the paperclip opens nothing, with no build or runtime error. Teaching the generator
+about `RegisterClassEx` is a one-line CodeGen fix that de-risks the three existing panels too; do it
+in phase 2, or accept a dependency edge from an already-manifested package.
 
 The slot host injects `Record`, `FormComponent`, and `FormContext` before first change detection — no
 per-entity wiring, no CodeGen change. The panel self-hides when `!EntityInfo.SupportsFileAttachments` or
@@ -93,17 +106,17 @@ automatically; apps flip entities via metadata sync.
 `GET /media/:fileId?token=` serves **any** content type with the file's own MIME plus Range support —
 the "media" name undersells it. So images, PDF (browser-native `<iframe>`), audio/video
 (`MJStorageMediaPlayerComponent`) and text/markdown (`ng-markdown`) all preview with **zero new
-dependencies**; everything else gets a type icon and an open. docx/xlsx/code/json come later, by
+dependencies**; everything else gets a type icon and an open. docx/xlsx/code/json come later by
 generalizing `BaseArtifactViewerPluginComponent` off `MJArtifactVersionEntity` — its only coupling —
-onto a content-source interface resolved by MIME through the same `ClassFactory` registry those plugins
-already use. Because `ArtifactVersion.FileID` points at `MJ: Files`, the panel also covers documents
-filed by MJ eSignature's `writeSignedArtifact` — contracts' phase-2 path.
+onto a content-source interface resolved by MIME through the same `ClassFactory` registry. And since
+`ArtifactVersion.FileID` points at `MJ: Files`, the panel also covers documents filed by MJ
+eSignature's `writeSignedArtifact` — contracts' phase-2 path.
 
 ## Phases
 
 | # | Scope | Done when |
 |---|---|---|
-| 1 | Migration: entity flag, link `Role`/`Sequence`, `File.FileStorageAccountID`; CodeGen default | An entity is attachment-capable and a link can be labelled |
+| 1 | Migration: **fix `UQ_FileEntityRecordLink`**, entity flag, link `Role`/`Sequence`, `File.FileStorageAccountID`; CodeGen default | A file can be linked to many records; an entity is attachment-capable |
 | 2 | `ng-record-attachments` read-only panel registered at `entity: '*'` | Panel appears on every opted-in form with zero per-entity wiring; lists + opens |
 | 3 | Toolbar paperclip + count badge (`base-forms`) | One-click access to the panel from the toolbar |
 | 4 | `RegisterRecordAttachment` — by-reference first, then upload, delete, account picker | Contracts can point a record at a SharePoint object; users can upload |
@@ -114,6 +127,14 @@ already produce links. Contracts needs 1, 2 and 4; only 4 is on its critical pat
 
 ## Risks
 
+0. **The link table's unique constraint forbids the feature.**
+   `UQ_FileEntityRecordLink_EntityID_FileID UNIQUE ([EntityID], [FileID])`
+   (`B202607091514__v5.46.x__Baseline.sql:3875`, added by
+   `V202605221002__v5.37.x__Add_Unique_Constraints_To_MJ_Junction_Tables.sql:441`, never dropped)
+   **omits `RecordID`** — so one file can be linked to exactly one record per entity, and the same
+   executed PDF cannot be attached to two contracts. The lone existing writer never hit this because
+   each recording is a fresh file. *Fix:* drop and re-add as `(EntityID, RecordID, FileID)` in phase 1.
+   **Hard blocker; nothing works until this lands.**
 1. **The permission model is wrong for this use case.** `CreateMediaAccessToken` gates on loading the
    `MJ: Files` row under the user's context — on *Files* permission, not the host record's readability.
    Someone who can read Files could read an attachment on an Account they can't see. *Fix:* gate the
@@ -138,3 +159,7 @@ already produce links. Contracts needs 1, 2 and 4; only 4 is on its critical pat
    alternative is every app re-adding `…FileID` columns.
 4. **The curated on-list** — my default: nothing in `__mj` beyond AI Agent Sessions, Conversations, Tasks.
 5. **New-entity default.** You leaned on; I'd ship phase 1 *off* and flip it once the panel exists.
+
+*Also flagged but not yet verified:* `MJ: Files` and the link entity may be seeded read-only for the
+`UI` role, which would make the feature read-only for real users until an `EntityPermission` grant
+ships. Confirm against a live DB before phase 4.
