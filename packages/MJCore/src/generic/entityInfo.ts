@@ -12,9 +12,11 @@ import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/globa
 import {
     ParseEntityConfiguration,
     ParseEntityRelationshipConfiguration,
+    ParseEntityFieldConfiguration,
     ReadRelationshipJoinFields,
     type IEntityConfiguration,
     type IEntityRelationshipConfiguration,
+    type IEntityFieldConfiguration,
 } from "./entityConfiguration"
 
 /**
@@ -115,6 +117,16 @@ export class EntityRelationshipInfo extends BaseInfo  {
     AutoUpdateFromSchema: boolean = true
 
     /**
+     * Comma-delimited list of extra related-entity fields to project in base views.
+     */
+    AdditionalFieldsToInclude: string = null
+
+    /**
+     * Whether CodeGen automatically updates AdditionalFieldsToInclude from schema metadata.
+     */
+    AutoUpdateAdditionalFieldsToInclude: boolean = true
+
+    /**
     * * Field Name: RelatedRecordCollection
     * * SQL Data Type: nvarchar(MAX), nullable
     *
@@ -137,25 +149,44 @@ export class EntityRelationshipInfo extends BaseInfo  {
     RelatedRecordCollection: string = null
 
     /**
+     * Raw string representation of Configuration from metadata.
+     */
+    protected _configuration: string = null;
+    private _configurationObject: IEntityRelationshipConfiguration | null | undefined = undefined;
+
+    /**
      * Optional JSON configuration bag (shape = {@link IEntityRelationshipConfiguration}).
      * Nested `UI.inclusion` is Primary, More, or None (omit = Auto ranker).
      * `UI.FormRole` is an accepted alias (`Detail` = More). Distinct from
      * RelatedRecordCollection, DisplayComponentConfiguration, and AdditionalFieldsToInclude.
+     * Parsed lazily on first access and cached using {@link SafeJSONParse}.
      *
      * @see packages/MJCore/src/generic/entityConfiguration.ts
      */
-    Configuration: string = null
-
-    private _configurationObject: IEntityRelationshipConfiguration | null | undefined = undefined;
+    get Configuration(): IEntityRelationshipConfiguration | null {
+        if (this._configurationObject === undefined) {
+            this._configurationObject = this._configuration ? SafeJSONParse<IEntityRelationshipConfiguration>(this._configuration, false) : null;
+        }
+        return this._configurationObject;
+    }
+    set Configuration(value: string | IEntityRelationshipConfiguration | null) {
+        if (typeof value === 'string') {
+            this._configuration = value;
+            this._configurationObject = undefined;
+        } else if (value && typeof value === 'object') {
+            this._configurationObject = value;
+            this._configuration = JSON.stringify(value);
+        } else {
+            this._configuration = null;
+            this._configurationObject = null;
+        }
+    }
 
     /**
      * Parsed {@link Configuration}. Null when the column is empty or not valid JSON.
      */
     get ConfigurationObject(): IEntityRelationshipConfiguration | null {
-        if (this._configurationObject === undefined) {
-            this._configurationObject = ParseEntityRelationshipConfiguration(this.Configuration);
-        }
-        return this._configurationObject;
+        return this.Configuration;
     }
 
     // virtual fields - returned by the database VIEW
@@ -554,6 +585,18 @@ export class EntityFieldInfo extends BaseInfo {
     DisplayName: string = null 
     Description: string = null 
     /**
+     * Whether CodeGen automatically updates Description from the underlying schema object.
+     */
+    AutoUpdateDescription: boolean = true
+    /**
+     * Whether CodeGen automatically updates UserSearchPredicateAPI from schema heuristics.
+     */
+    AutoUpdateUserSearchPredicate: boolean = true
+    /**
+     * Whether CodeGen automatically updates FullTextSearchEnabled from schema indexes.
+     */
+    AutoUpdateFullTextSearch: boolean = true 
+    /**
      * If true, the field is the primary key for the entity. There must be one primary key field per entity.
      */
     IsPrimaryKey: boolean = null
@@ -657,6 +700,57 @@ export class EntityFieldInfo extends BaseInfo {
      * Can include imports, multiple types, or any valid TypeScript.
      */
     JSONTypeDefinition: string = null;
+
+    /**
+     * Raw string representation of Configuration from metadata.
+     */
+    protected _configuration: string = null;
+    private _configurationObject: IEntityFieldConfiguration | null | undefined = undefined;
+
+    /**
+     * Optional JSON configuration bag (shape = {@link IEntityFieldConfiguration}).
+     * Defines field-level configurations such as Hierarchy options (IsHierarchy, MaxDepth).
+     * Parsed lazily on first access and cached using {@link SafeJSONParse}.
+     */
+    get Configuration(): IEntityFieldConfiguration | null {
+        if (this._configurationObject === undefined) {
+            this._configurationObject = this._configuration ? SafeJSONParse<IEntityFieldConfiguration>(this._configuration, false) : null;
+        }
+        return this._configurationObject;
+    }
+    set Configuration(value: string | IEntityFieldConfiguration | null) {
+        if (typeof value === 'string') {
+            this._configuration = value;
+            this._configurationObject = undefined;
+        } else if (value && typeof value === 'object') {
+            this._configurationObject = value;
+            this._configuration = JSON.stringify(value);
+        } else {
+            this._configuration = null;
+            this._configurationObject = null;
+        }
+    }
+
+    /**
+     * Parsed {@link Configuration}. Null when the column is empty or not valid JSON.
+     */
+    get ConfigurationObject(): IEntityFieldConfiguration | null {
+        return this.Configuration;
+    }
+
+    /**
+     * Returns true if this field is explicitly configured as an intentional recursive tree hierarchy.
+     */
+    get IsHierarchy(): boolean {
+        return this.ConfigurationObject?.Hierarchy?.IsHierarchy === true;
+    }
+
+    /**
+     * Maximum recursion depth configured for this hierarchy field (defaults to 100).
+     */
+    get HierarchyMaxDepth(): number {
+        return this.ConfigurationObject?.Hierarchy?.MaxDepth ?? 100;
+    }
 
     RelatedEntityDisplayType: 'Search' | 'Dropdown' = null
     EntityIDFieldName: string = null
@@ -1708,9 +1802,21 @@ export class EntityInfo extends BaseInfo {
      */
     AllowUserSearchAPI: boolean = false
     /**
-     * Whether full-text search is enabled for this entity
+     * Whether full text search is enabled for this entity
      */
-    FullTextSearchEnabled: boolean = false
+    public FullTextSearchEnabled: boolean = null
+    /**
+     * Whether CodeGen automatically updates FullTextSearchEnabled from database catalog/index availability.
+     */
+    public AutoUpdateFullTextSearch: boolean = true
+    /**
+     * Whether CodeGen automatically updates AllowUserSearchAPI from schema rules.
+     */
+    public AutoUpdateAllowUserSearchAPI: boolean = true
+    /**
+     * Whether external changes to records are detected.
+     */
+    public DetectExternalChanges: boolean = false
     /**
      * Name of the SQL Server full-text catalog used for searching
      */
@@ -1816,24 +1922,43 @@ export class EntityInfo extends BaseInfo {
     Icon: string = null
 
     /**
+     * Raw string representation of Configuration from metadata.
+     */
+    protected _configuration: string = null;
+    private _configurationObject: IEntityConfiguration | null | undefined = undefined;
+
+    /**
      * Optional JSON configuration bag (shape = {@link IEntityConfiguration}).
      * Nested `UI.Form` holds generated-form chrome: layout, auto left-nav
      * threshold, related-role policy, and the Primary related budget.
+     * Parsed lazily on first access and cached using {@link SafeJSONParse}.
      *
      * @see packages/MJCore/src/generic/entityConfiguration.ts
      */
-    Configuration: string = null
-
-    private _configurationObject: IEntityConfiguration | null | undefined = undefined;
+    get Configuration(): IEntityConfiguration | null {
+        if (this._configurationObject === undefined) {
+            this._configurationObject = this._configuration ? SafeJSONParse<IEntityConfiguration>(this._configuration, false) : null;
+        }
+        return this._configurationObject;
+    }
+    set Configuration(value: string | IEntityConfiguration | null) {
+        if (typeof value === 'string') {
+            this._configuration = value;
+            this._configurationObject = undefined;
+        } else if (value && typeof value === 'object') {
+            this._configurationObject = value;
+            this._configuration = JSON.stringify(value);
+        } else {
+            this._configuration = null;
+            this._configurationObject = null;
+        }
+    }
 
     /**
      * Parsed {@link Configuration}. Null when the column is empty or not valid JSON.
      */
     get ConfigurationObject(): IEntityConfiguration | null {
-        if (this._configurationObject === undefined) {
-            this._configurationObject = ParseEntityConfiguration(this.Configuration);
-        }
-        return this._configurationObject;
+        return this.Configuration;
     }
     /**
      * Date and time when this entity was created

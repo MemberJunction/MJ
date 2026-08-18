@@ -43,71 +43,31 @@ export const PLATFORM_SCHEMA_NAME = '__mj';
 
 export type FormLayout = 'accordion' | 'left-nav' | 'auto';
 export type RelatedRolePolicy = 'keep-all-primary' | 'smart';
-/** @deprecated Use {@link FormInclusion}. Detail means More. */
 export type FormRole = 'Primary' | 'Detail';
 /** L1 membership on a parent form. None never reaches the ranker. */
 export type FormInclusion = 'Primary' | 'More' | 'None';
 
-export interface IEntityConfiguration {
-    UI?: IEntityUIConfiguration;
-}
+import {
+    IEntityConfiguration,
+    IEntityUIConfiguration,
+    IEntityFormConfiguration
+} from './JSONType-interfaces/IEntityConfiguration';
+import {
+    IEntityFieldConfiguration,
+    IEntityFieldHierarchyConfig
+} from './JSONType-interfaces/IEntityFieldConfiguration';
+import {
+    IEntityRelationshipConfiguration,
+    IEntityRelationshipUIConfiguration
+} from './JSONType-interfaces/IEntityRelationshipConfiguration';
 
-export interface IEntityUIConfiguration {
-    Form?: IEntityFormConfiguration;
-}
-
-export interface IEntityFormConfiguration {
-    /**
-     * `'accordion'` — every first-class section is a collapsible panel (today).
-     * `'left-nav'` — a left rail of section groups; the body shows one group.
-     * `'auto'` — accordion until first-class section count reaches
-     * {@link AutoLeftNavAt}, then left-nav.
-     *
-     * Omit to treat as `'auto'`.
-     */
-    Layout?: FormLayout;
-    /** Threshold used when {@link Layout} is `'auto'` (or omitted). Default 8. */
-    AutoLeftNavAt?: number;
-    /**
-     * How Auto (omitted inclusion) relationships are resolved.
-     * `'keep-all-primary'` — every remaining Auto related stays first-class.
-     * `'smart'` — budgeted ranker (default).
-     */
-    RelatedRolePolicy?: RelatedRolePolicy;
-    /**
-     * Max Auto related grids that stay first-class when
-     * {@link RelatedRolePolicy} is `'smart'`. Default 6. Does not cap
-     * explicit `inclusion: 'Primary'`.
-     */
-    PrimaryRelatedBudget?: number;
-}
-
-export interface IEntityRelationshipConfiguration {
-    UI?: IEntityRelationshipUIConfiguration;
-}
+export * from './JSONType-interfaces/IEntityConfiguration';
+export * from './JSONType-interfaces/IEntityFieldConfiguration';
+export * from './JSONType-interfaces/IEntityRelationshipConfiguration';
 
 export interface IEntityRelationshipJoin {
     mode: 'any';
     fields: string[];
-}
-
-export interface IEntityRelationshipUIConfiguration {
-    /**
-     * L1 inclusion. `'None'` drops the relationship from the parent form.
-     * Omit = Auto (L2 ranker).
-     */
-    inclusion?: FormInclusion;
-    /**
-     * @deprecated Use {@link inclusion}. `'Detail'` maps to More.
-     */
-    FormRole?: FormRole;
-    /** Same-table OR of FKs (Bill-To OR Ship-To). */
-    join?: IEntityRelationshipJoin;
-    /**
-     * Higher = earlier among first-class related rail items (after Details,
-     * after lead contributions). Omit = 0. Same scale as form-panel `sortKey`.
-     */
-    sortKey?: number;
 }
 
 export type RelatedFormRoleReason =
@@ -187,15 +147,19 @@ export interface RelatedFormRoleResolution {
     Assignments: RelatedFormRoleAssignment[];
 }
 
-export function ParseEntityConfiguration(raw: string | null | undefined): IEntityConfiguration | null {
-    if (raw == null || raw.trim().length === 0) return null;
+export function ParseEntityConfiguration(raw: string | IEntityConfiguration | null | undefined): IEntityConfiguration | null {
+    if (raw == null) return null;
+    if (typeof raw === 'object') return raw;
+    if (typeof raw !== 'string' || raw.trim().length === 0) return null;
     return SafeJSONParse<IEntityConfiguration>(raw, false) ?? null;
 }
 
 export function ParseEntityRelationshipConfiguration(
-    raw: string | null | undefined,
+    raw: string | IEntityRelationshipConfiguration | null | undefined,
 ): IEntityRelationshipConfiguration | null {
-    if (raw == null || raw.trim().length === 0) return null;
+    if (raw == null) return null;
+    if (typeof raw === 'object') return raw;
+    if (typeof raw !== 'string' || raw.trim().length === 0) return null;
     return SafeJSONParse<IEntityRelationshipConfiguration>(raw, false) ?? null;
 }
 
@@ -213,7 +177,7 @@ export function ResolveFormLayout(
  * Read L1 inclusion from a relationship Configuration bag.
  * `inclusion` wins. `FormRole: 'Detail'` maps to More. `FormRole: 'Primary'` maps to Primary.
  */
-export function ReadRelationshipInclusion(raw: string | null | undefined): FormInclusion | null {
+export function ReadRelationshipInclusion(raw: string | IEntityRelationshipConfiguration | null | undefined): FormInclusion | null {
     const parsed = ParseEntityRelationshipConfiguration(raw);
     const ui = parsed?.UI;
     if (ui?.inclusion === 'Primary' || ui?.inclusion === 'More' || ui?.inclusion === 'None') {
@@ -225,13 +189,13 @@ export function ReadRelationshipInclusion(raw: string | null | undefined): FormI
 }
 
 /** Higher = earlier among first-class related rail items. Omit / invalid = null. */
-export function ReadRelationshipSortKey(raw: string | null | undefined): number | null {
+export function ReadRelationshipSortKey(raw: string | IEntityRelationshipConfiguration | null | undefined): number | null {
     const sort = ParseEntityRelationshipConfiguration(raw)?.UI?.sortKey;
     if (typeof sort !== 'number' || !Number.isFinite(sort)) return null;
     return sort;
 }
 
-export function ReadRelationshipJoinFields(raw: string | null | undefined): string[] | null {
+export function ReadRelationshipJoinFields(raw: string | IEntityRelationshipConfiguration | null | undefined): string[] | null {
     const fields = ParseEntityRelationshipConfiguration(raw)?.UI?.join?.fields;
     if (!fields || fields.length === 0) return null;
     const cleaned = fields.map((f) => f.trim()).filter((f) => f.length > 0);
@@ -532,3 +496,14 @@ function schemasEqual(a: string | null | undefined, b: string | null | undefined
 function hasText(value: string | null | undefined): boolean {
     return value != null && value.trim().length > 0;
 }
+
+/**
+ * Safely parses an `EntityField.Configuration` JSON string or returns the object.
+ */
+export function ParseEntityFieldConfiguration(raw: string | IEntityFieldConfiguration | null | undefined): IEntityFieldConfiguration | null {
+    if (raw == null) return null;
+    if (typeof raw === 'object') return raw;
+    if (typeof raw !== 'string' || raw.trim().length === 0) return null;
+    return SafeJSONParse<IEntityFieldConfiguration>(raw, false) ?? null;
+}
+
