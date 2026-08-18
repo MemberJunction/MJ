@@ -108,6 +108,11 @@ Sub-directory `CLAUDE.md` files extend this root guide with topic-specific rules
 
 This clone sits under `/Users/amith/Dropbox/develop/M5/`, a pnpm mega-workspace that already live-links every `@memberjunction/*` and `@mj-biz-apps/*` package. **Never** add per-package `node_modules` symlinks, `pnpm link`, or `rsync` another worktree's `dist/` to unstick a resolve. That duplicates `type-graphql`. Then `Int`/`Float`/`ID` imported from `@memberjunction/server` are `undefined` and MJAPI fails schema build (`CannotDetermineGraphQLTypeError` on `MaxRows` / `RowCount`). Explorer shows `GraphQL Error (Code: unknown)`. **Do not patch `generated.js` or `MJServer/dist` to work around it.** Undo the extra link, `pnpm install` **only at `M5/`**, rebuild the package you changed, restart with `pnpm start` from `packages/MJAPI`. Full do/don't: the M5 workspace `CLAUDE.md` one directory above this repo.
 
+### 3c. NEVER STAGE OR COMMIT LOCAL HOST ARTIFACTS
+
+- **NEVER stage or commit local host configuration files (`mj.config.cjs`, `mj.config.json`, `mj.config.js`)** or generated host application packages (`packages/GeneratedEntities/**`, `packages/MJAPI/src/generated/**`, `packages/MJExplorer/src/app/generated/**`) into the MJ repository.
+- These files are specific to local developer test rigs and local application execution. Committing them creates massive merge conflicts and contaminates core framework PRs. Always verify with `git status` / `git diff --name-only` before staging.
+
 ### 4. ANGULAR COMPONENT & MODULE STRATEGY
 
 MemberJunction supports both standalone and NgModule-declared components. Choose the right approach for each situation:

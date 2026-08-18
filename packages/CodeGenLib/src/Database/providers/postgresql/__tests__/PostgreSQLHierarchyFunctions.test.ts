@@ -27,6 +27,7 @@ function createHierarchyEntity(overrides: Record<string, unknown> = {}): EntityI
             AutoIncrement: false,
             RelatedEntityID: 'entity-categories',
             RelatedEntity: 'Categories',
+            Configuration: '{"Hierarchy":{"IsHierarchy":true}}',
         },
         {
             ID: 'f-name',

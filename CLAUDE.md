@@ -129,6 +129,8 @@ After making code changes, **always compile the affected package** and fix all T
 
 **Record Changes**: MJ has built-in version control for all entities. Don't implement custom versioning.
 
+**Never stage or commit local host artifacts**: Never commit `mj.config.cjs`, `mj.config.json`, or generated host folders (`packages/GeneratedEntities/**`, `packages/MJAPI/src/generated/**`, `packages/MJExplorer/src/app/generated/**`) to the repository. They belong strictly to local running environments.
+
 ---
 
 ## Where the rest of the guidance lives

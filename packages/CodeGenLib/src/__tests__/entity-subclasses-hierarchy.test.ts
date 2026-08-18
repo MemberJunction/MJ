@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { EntityInfo } from '@memberjunction/core';
 import { EntitySubClassGeneratorBase } from '../Misc/entity_subclasses_codegen';
 
-function createEntityWithRecursiveFK(fkFieldName: string = 'ParentID'): EntityInfo {
+function createEntityWithRecursiveFK(fkFieldName: string = 'ParentID', isHierarchy: boolean = true): EntityInfo {
     const fields = [
         {
             ID: 'pk-1',
@@ -27,6 +27,7 @@ function createEntityWithRecursiveFK(fkFieldName: string = 'ParentID'): EntityIn
             AutoIncrement: false,
             RelatedEntityID: 'entity-test',
             RelatedEntity: 'TestHierarchy',
+            Configuration: isHierarchy ? '{"Hierarchy":{"IsHierarchy":true}}' : null,
         },
         {
             ID: 'f-name',
@@ -59,7 +60,7 @@ function createEntityWithRecursiveFK(fkFieldName: string = 'ParentID'): EntityIn
 
 describe('EntitySubClassGeneratorBase — Hierarchy Traversal Methods', () => {
     it('generates GetDescendants, GetAncestors, and GetChildren for entity with ParentID recursive FK', () => {
-        const entity = createEntityWithRecursiveFK('ParentID');
+        const entity = createEntityWithRecursiveFK('ParentID', true);
         const code = EntitySubClassGeneratorBase.GenerateHierarchyMethods(entity, 'TestHierarchyEntity');
 
         expect(code).toContain('public async GetDescendants(maxDepth?: number): Promise<TestHierarchyEntity[]>');
@@ -74,6 +75,12 @@ describe('EntitySubClassGeneratorBase — Hierarchy Traversal Methods', () => {
 
         expect(code).toContain('public async GetChildren(): Promise<TestHierarchyEntity[]>');
         expect(code).toContain("ExtraFilter: `ParentID = '${currentId}'`");
+    });
+
+    it('skips generating hierarchy methods for self-referencing FKs that lack IsHierarchy=true (e.g. LastRunID)', () => {
+        const entity = createEntityWithRecursiveFK('LastRunID', false);
+        const code = EntitySubClassGeneratorBase.GenerateHierarchyMethods(entity, 'TestHierarchyEntity');
+        expect(code).toBe('');
     });
 
     it('generates empty string for entities without recursive FKs', () => {
@@ -131,6 +138,7 @@ describe('EntitySubClassGeneratorBase — Hierarchy Traversal Methods', () => {
                     AllowsNull: true,
                     RelatedEntityID: 'entity-composite',
                     RelatedEntity: 'CompositeHierarchy',
+                    Configuration: '{"Hierarchy":{"IsHierarchy":true}}',
                 },
             ],
             EntityPermissions: [],
@@ -140,4 +148,5 @@ describe('EntitySubClassGeneratorBase — Hierarchy Traversal Methods', () => {
         expect(code).toBe('');
     });
 });
+
 

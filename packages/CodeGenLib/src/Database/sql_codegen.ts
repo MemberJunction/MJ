@@ -1538,23 +1538,24 @@ export class SQLCodeGenBase {
      * Returns array of field info objects representing recursive relationships
      */
     protected detectRecursiveForeignKeys(entity: EntityInfo): EntityFieldInfo[] {
-        const recursiveFKs = entity.Fields.filter(field =>
+        const hierarchyFKs = entity.Fields.filter(field =>
             field.RelatedEntityID != null &&
             UUIDsEqual(field.RelatedEntityID, entity.ID) &&
-            !field.IsVirtual
+            !field.IsVirtual &&
+            field.IsHierarchy === true
         );
-        if (recursiveFKs.length === 0) {
+        if (hierarchyFKs.length === 0) {
             return [];
         }
         if (entity.PrimaryKeys.length !== 1) {
             logWarning(
-                `[Hierarchy] Entity '${entity.Name}' has ${recursiveFKs.length} recursive foreign key(s) ` +
-                `(${recursiveFKs.map(f => f.Name).join(', ')}), but has ${entity.PrimaryKeys.length} primary key fields. ` +
+                `[Hierarchy] Entity '${entity.Name}' has ${hierarchyFKs.length} hierarchy foreign key(s) ` +
+                `(${hierarchyFKs.map(f => f.Name).join(', ')}), but has ${entity.PrimaryKeys.length} primary key fields. ` +
                 `MemberJunction hierarchy TVF generation and traversal require a single-column primary key. Skipping hierarchy generation for this entity.`
             );
             return [];
         }
-        return recursiveFKs;
+        return hierarchyFKs;
     }
 
     /**

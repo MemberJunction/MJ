@@ -477,6 +477,7 @@ GO`);
                     RelatedEntityBaseTable: 'Category',
                     RelatedEntityBaseView: 'vwCategories',
                     RelatedEntityNameFieldMap: 'Parent',
+                    Configuration: '{"Hierarchy":{"IsHierarchy":true}}',
                 },
             ],
             EntityPermissions: [],

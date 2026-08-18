@@ -4953,7 +4953,11 @@ export abstract class BaseEntity<T = unknown> {
             const match = fields.find(f => f.Name.toLowerCase() === parentFieldName.toLowerCase() || f.CodeName.toLowerCase() === parentFieldName.toLowerCase());
             return match ?? null;
         }
-        // Check for 'ParentID' first as the standard hierarchy convention
+        // Check for field explicitly configured with IsHierarchy = true first
+        const explicitHierarchyField = fields.find(f => f.IsHierarchy && (UUIDsEqual(f.RelatedEntityID, this.EntityInfo?.ID) || f.RelatedEntity === this.EntityInfo?.Name));
+        if (explicitHierarchyField) return explicitHierarchyField;
+
+        // Check for 'ParentID' self-referencing foreign key next
         const parentIdField = fields.find(f => f.Name.toLowerCase() === 'parentid' && (UUIDsEqual(f.RelatedEntityID, this.EntityInfo?.ID) || f.RelatedEntity === this.EntityInfo?.Name));
         if (parentIdField) return parentIdField;
 

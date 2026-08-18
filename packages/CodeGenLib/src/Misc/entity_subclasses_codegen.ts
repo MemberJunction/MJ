@@ -895,7 +895,7 @@ ${fields}
    */
   public static GenerateHierarchyMethods(entity: EntityInfo, sClassName: string): string {
     const recursiveFKs = (entity.Fields ?? []).filter(
-      f => f.RelatedEntityID != null && (UUIDsEqual(f.RelatedEntityID, entity.ID) || f.RelatedEntity === entity.Name) && !f.IsVirtual
+      f => f.RelatedEntityID != null && (UUIDsEqual(f.RelatedEntityID, entity.ID) || f.RelatedEntity === entity.Name) && !f.IsVirtual && f.IsHierarchy === true
     );
     if (recursiveFKs.length === 0) {
       return '';
@@ -903,7 +903,7 @@ ${fields}
 
     if (entity.PrimaryKeys.length !== 1) {
       logWarning(
-        `[Hierarchy] Entity '${entity.Name}' has ${recursiveFKs.length} recursive foreign key(s) ` +
+        `[Hierarchy] Entity '${entity.Name}' has ${recursiveFKs.length} hierarchy foreign key(s) ` +
         `(${recursiveFKs.map(f => f.Name).join(', ')}), but has ${entity.PrimaryKeys.length} primary key fields. ` +
         `MemberJunction hierarchy traversal requires a single-column primary key; skipping subclass hierarchy methods.`
       );

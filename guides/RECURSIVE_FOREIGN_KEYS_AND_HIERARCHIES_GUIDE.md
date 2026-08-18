@@ -39,6 +39,25 @@ While MemberJunction core natively supports composite keys of any degree for gen
 - **Subclass Emission**: `EntitySubClassGeneratorBase` skips emitting `GetDescendants()`, `GetAncestors()`, and `GetChildren()` on generated classes for composite-PK entities.
 - **Runtime Guard**: `BaseEntity.GetDescendants()`, `GetAncestors()`, and `GetChildren()` inspect `this.PrimaryKeys.length` and log an error if invoked on a composite-PK entity, returning `[]` safely rather than issuing an invalid query.
 
+### 1.2. Explicit Hierarchy Opt-In via `EntityField.Configuration`
+
+Not all self-referencing foreign keys represent tree hierarchies. Columns such as `LastRunID`, `ConsolidatedIntoNoteID`, `MergedIntoID`, `ReplacedByID`, or `PreviousVersionID` point to the same entity table, but they are linear pointers, historical links, or DAG references — not tree structures.
+
+To prevent unwanted SQL generation, MemberJunction uses explicit field-level metadata configuration on `EntityField.Configuration`:
+
+```json
+{
+  "Hierarchy": {
+    "IsHierarchy": true,
+    "MaxDepth": 100
+  }
+}
+```
+
+- **Opt-In Requirement**: CodeGen only generates the TVF suite and base view lateral joins for self-referencing foreign keys where `field.IsHierarchy === true` (i.e. `Configuration.Hierarchy.IsHierarchy === true`).
+- **Core Seeding**: In the core MemberJunction schema, `ParentID` fields on categories, entities, resource types, roles, and tags are pre-seeded with `{"Hierarchy":{"IsHierarchy":true}}`.
+- **Application Schemas**: When building new applications or adding recursive tree structures to OpenApps, author a metadata JSON seed file setting `Configuration: "{\"Hierarchy\":{\"IsHierarchy\":true}}"` on the intended parent field.
+
 ---
 
 ## 2. End-to-End Hierarchy Flow
