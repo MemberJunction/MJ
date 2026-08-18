@@ -12,32 +12,26 @@ name: Update package documentation
 # Every build uses the docs-site/ TOOLING from next (overlaid onto the content
 # checkout), so ingest/site fixes apply to all versions without cherry-picks.
 # Because this file lives on the default branch (next), the workflow_run
-# trigger fires from here regardless of what main or lts/* carry; pushes to
-# lts/* are forwarded by the thin dispatcher workflow on those branches.
+# trigger fires from here regardless of what main or lts/* carry.
 
 on:
+  # Release-following only: a docs deploy is the last step of shipping, never a
+  # side effect of merging. Between releases both `main` and the npm registry
+  # lag `next`, so a merge-triggered deploy publishes authoritative-looking
+  # documentation — canonical links into `main` included — for bits nobody can
+  # install yet. Both publish paths are covered: the Edge line publishes from
+  # main, and a line release is dispatched from its own lts/* branch. The
+  # resolve job below hard-fails a trigger that did not conclude `success`.
   workflow_run:
-    workflows: [Build and publish new package versions]
-    branches: [main]
+    workflows:
+      - Build and publish new package versions  # publish.yml     — Edge line, runs on main
+      - Publish LTS line release                # publish-lts.yml — one line, runs on lts/*
+    branches: [main, 'lts/*']
     types:
       - completed
 
-  # Docs content or tooling changes on next: Edge content and the shared
-  # tooling both live here, so any of these paths can change the built site.
-  push:
-    branches: [next]
-    paths:
-      - 'docs-site/**'
-      - 'guides/**'
-      - 'README.md'
-      - 'UPGRADE-v5.0.md'
-      - 'UPGRADE-v6.0.md'
-      - 'CONTRIBUTING.md'
-      - 'metadata/README.md'
-      - '.claude/skills/**'
-      - 'releases/**'
-      - '.github/workflows/docs.yml'
-
+  # Manual escape hatch: re-deploy a docs-only fix without waiting for a
+  # release, and the only way to exercise the full pipeline from a branch.
   workflow_dispatch: {}
 
 permissions:
@@ -66,10 +60,11 @@ jobs:
             exit 1
           fi
 
-      # github.sha is the commit this run was triggered for: the pushed next
-      # commit, the default-branch head for workflow_run, or the chosen ref's
-      # head for a manual dispatch (which is what lets a feature branch test
-      # the full pipeline before merging).
+      # github.sha is the commit this run was triggered for: the default-branch
+      # head for workflow_run, or the chosen ref's head for a manual dispatch
+      # (which is what lets a feature branch test the full pipeline before
+      # merging). Note for workflow_run this is next's head, NOT the released
+      # commit — the ref each version's CONTENT comes from is the matrix below.
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
@@ -253,6 +248,35 @@ jobs:
           <title>MemberJunction Documentation</title>
           </head>
           <body><a href="/$DEFAULT/">MemberJunction documentation</a></body>
+          </html>
+          EOF
+
+          # /mjcertified is a stable front-door URL: the BUSL's Additional Use
+          # Grant points at the MemberJunction Certified Program by name, so the
+          # program page needs a version-independent address that answers 200.
+          # The 404 forwarder below would also land it, but only after serving a
+          # 404 status — wrong for a page the license refers to.
+          #
+          # It targets the newest BUSL line, NOT $DEFAULT. $DEFAULT is the newest
+          # certified LTS set, which today is v5 — an ISC line that predates the
+          # program entirely, so sending the canonical program URL there would
+          # answer the question on the one set where it does not apply. Falls
+          # back to $DEFAULT before any BUSL line is published.
+          CERT_SET=$(jq -r '[.[] | select((.id | ltrimstr("v") | tonumber) >= 6)] | max_by(.id | ltrimstr("v") | tonumber) | .id // empty' <<<"$VERSIONS")
+          [ -n "$CERT_SET" ] || CERT_SET="$DEFAULT"
+          echo "::notice::/mjcertified -> /$CERT_SET/mjcertified/"
+
+          mkdir -p dist/mjcertified
+          cat > dist/mjcertified/index.html <<EOF
+          <!doctype html>
+          <html lang="en">
+          <head>
+          <meta charset="utf-8">
+          <meta http-equiv="refresh" content="0; url=/$CERT_SET/mjcertified/">
+          <link rel="canonical" href="https://docs.memberjunction.org/$CERT_SET/mjcertified/">
+          <title>MemberJunction Certified Program</title>
+          </head>
+          <body><a href="/$CERT_SET/mjcertified/">MemberJunction Certified Program</a></body>
           </html>
           EOF
 

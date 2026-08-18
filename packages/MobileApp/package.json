@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/mobile-app",
+  "license": "BUSL-1.1",
   "version": "6.1.0-edge.2",
   "private": true,
   "description": "MemberJunction Mobile App (React Native / Expo)",

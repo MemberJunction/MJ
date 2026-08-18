@@ -52018,6 +52018,9 @@ export class MJEntityField_ {
         
     @Field({nullable: true, description: `Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.`}) 
     JSONTypeDefinition?: string;
+
+    @Field({nullable: true, description: `Optional JSON policy object that declares this foreign-key field as a first-class embedded record, so CodeGen can emit {FieldName}_Object / {FieldName}_EnsureObject() on the entity subclass. Shape is IEmbeddedRecordConfig: OnClear ('delete' | 'orphan' | 'refuse', default orphan) and LoadNested ('inherit' | 'related', default inherit). RelatedEntity and the FK field name are NOT repeated here — they are this row's RelatedEntityID and Name. AllowsNull on this same row decides whether the object is provisioned with GetEntityObject (required FK) or via Ensure (nullable FK). NULL means the field is an ordinary FK, which is the default and reproduces pre-feature behaviour exactly.`})
+    EmbeddedRecord?: string;
         
     @Field({description: `Search predicate controlling how user search queries match against this field. Valid values: BeginsWith, Contains, EndsWith, Exact.`}) 
     @MaxLength(20)
@@ -52231,6 +52234,9 @@ export class CreateMJEntityFieldInput {
     JSONTypeDefinition: string | null;
 
     @Field({ nullable: true })
+    EmbeddedRecord?: string | null;
+
+    @Field({ nullable: true })
     UserSearchPredicateAPI?: string;
 
     @Field(() => Boolean, { nullable: true })
@@ -52392,6 +52398,9 @@ export class UpdateMJEntityFieldInput {
 
     @Field({ nullable: true })
     JSONTypeDefinition?: string | null;
+
+    @Field({ nullable: true })
+    EmbeddedRecord?: string | null;
 
     @Field({ nullable: true })
     UserSearchPredicateAPI?: string;

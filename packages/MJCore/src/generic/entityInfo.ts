@@ -625,6 +625,22 @@ export class EntityFieldInfo extends BaseInfo {
      */
     RelatedEntityJoinFields: string = null
     /**
+     * Optional JSON policy object declaring this foreign-key field as a first-class
+     * **embedded record** — a 1:1 peer that loads, validates and persists as one
+     * unit with its owner. Shape is `IEmbeddedRecordConfig` (`OnClear`, `LoadNested`).
+     *
+     * `RelatedEntityID` and this field's `Name` are the join; they are deliberately
+     * not repeated inside the JSON. `AllowsNull` on this same field decides whether
+     * `GetEntityObject` provisions the object (required FK) or the caller uses
+     * `{FieldName}_EnsureObject()` (nullable FK).
+     *
+     * `null` (the default, and every pre-feature row) means the field is an ordinary
+     * FK: nothing is generated and nothing is constructed at `GetEntityObject` time.
+     *
+     * @see packages/MJCore/docs/embedded-records.md
+     */
+    EmbeddedRecord: string = null
+    /**
      * The name of the TypeScript interface/type for this JSON field.
      * When set, CodeGen will emit a strongly-typed getter/setter using this type
      * instead of the default string getter/setter.

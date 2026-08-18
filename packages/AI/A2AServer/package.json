@@ -23,7 +23,7 @@
     "AI"
   ],
   "author": "MemberJunction",
-  "license": "MIT",
+  "license": "BUSL-1.1",
   "dependencies": {
     "@memberjunction/ai": "6.1.0-edge.2",
     "@memberjunction/ai-agents": "6.1.0-edge.2",

@@ -991,4 +991,4 @@ The package uses TypeScript with `tsc` and `tsc-alias` for path alias resolution
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

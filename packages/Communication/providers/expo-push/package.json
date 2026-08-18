@@ -1,5 +1,6 @@
 {
   "name": "@memberjunction/communication-expo-push",
+  "license": "BUSL-1.1",
   "type": "module",
   "version": "6.1.0-edge.2",
   "description": "Expo push notification provider for MemberJunction Communication framework",

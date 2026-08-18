@@ -29,6 +29,7 @@ import { BaseEngineRegistry } from './baseEngineRegistry';
 import { IsVerboseLoggingEnabled, LogStatus } from './logging';
 import { CompositeKey, KeyValuePair } from './compositeKey';
 import { EntityCompanion, EntityCompanionDeserializeMode } from './entityCompanion';
+import { EmbeddedRecord } from './embeddedRecord';
 import type { EntitySavePlan } from './entitySavePlan';
 import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from './entityInfo';
 import type { EntitySaveOptions, IMetadataProvider, IRunViewProvider } from './interfaces';
@@ -164,6 +165,8 @@ export type RelatedRecordCollectionWireItem = {
      * the server try to load a row that does not exist for every client-created child.
      */
     IsNew: boolean;
+    // Embeds declared on the item itself are intentionally not on this wire.
+    // See packages/MJCore/docs/embedded-records.md § Collection items.
 };
 
 /**
@@ -557,7 +560,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
     }
 
     /** @inheritdoc */
-    public override async LoadEager(): Promise<void> {
+    public override async LoadEager(_visited?: Set<string>): Promise<void> {
         if (this.LoadMode === 'immediate') {
             await this.Load();
         }
@@ -1009,6 +1012,11 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
 
     /** @inheritdoc */
     public override ContributeSaveWork(plan: EntitySavePlan, options?: EntitySaveOptions): void {
+        // Caller is writing the collection itself after preparing it (booking, pricing).
+        // Embeds still contribute — this is not the private graph-node recursion guard.
+        if (options?.SkipRelatedCollections) {
+            return;
+        }
         // A read-only collection is a projection, not a unit of work. Contributing nothing is what
         // makes it safe to point one at an engine's shared cache.
         if (this.IsReadOnly) {
@@ -1106,10 +1114,29 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
             return null;
         }
 
+        this.warnIfItemEmbedsOmitted();
+
         return {
             Items: this.items.map(i => ({ Fields: i.GetAll(), IsNew: !i.IsSaved })),
             Removed: this.removed.map(r => this.primaryKeyOf(r)),
         };
+    }
+
+    private warnIfItemEmbedsOmitted(): void {
+        for (const item of this.items) {
+            if (!item.HasCompanions) {
+                continue;
+            }
+            for (const companion of item.Companions) {
+                if (companion instanceof EmbeddedRecord && companion.Dirty) {
+                    LogError(
+                        `RelatedRecordCollection '${this.Name}': item embed '${companion.Name}' is dirty ` +
+                        `but will not ride the GraphQL wire. Save the item as its own root, or persist ` +
+                        `server-side. See packages/MJCore/docs/embedded-records.md § Collection items.`,
+                    );
+                }
+            }
+        }
     }
 
     /** @inheritdoc */
