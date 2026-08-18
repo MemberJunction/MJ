@@ -13,7 +13,7 @@
  *   5. fails the remove loudly when a teardown script errors (never a silent partial remove).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 vi.mock('../github/github-client.js', () => ({
@@ -189,6 +189,21 @@ describe('RemoveApp — migrations-model teardown (HandleTeardown)', () => {
         expect(result.Success).toBe(true);
         expect(DownloadMigrations).not.toHaveBeenCalled();
         expect(executeSQL).not.toHaveBeenCalled();
+    });
+
+    it('removes the teardown temp directory after a successful remove', async () => {
+        await RemoveApp({ AppName: 'acme-connector' }, ctxFor('sqlserver'));
+        // 4th arg of the download call is the engine-created temp dir.
+        const tempDir = vi.mocked(DownloadMigrations).mock.calls[0][3] as string;
+        expect(existsSync(tempDir)).toBe(false);
+    });
+
+    it('removes the teardown temp directory even when a teardown script fails', async () => {
+        const executeSQL = vi.fn(async () => { throw new Error('FK violation'); });
+        const result = await RemoveApp({ AppName: 'acme-connector' }, ctxFor('sqlserver', executeSQL));
+        expect(result.Success).toBe(false);
+        const tempDir = vi.mocked(DownloadMigrations).mock.calls[0][3] as string;
+        expect(existsSync(tempDir)).toBe(false);
     });
 
     it('fails the remove loudly when a teardown script errors (no silent partial remove)', async () => {

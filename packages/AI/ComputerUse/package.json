@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/computer-use",
   "type": "module",
-  "version": "6.1.0-edge.0",
+  "version": "6.1.0-edge.2",
   "description": "MemberJunction: Computer Use - Vision-to-Action engine for driving web browsers via LLM reasoning over screenshots. MJ-independent base layer.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,11 +16,11 @@
     "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/global": "6.1.0-edge.0",
-    "@memberjunction/core": "6.1.0-edge.0",
-    "@memberjunction/ai": "6.1.0-edge.0"
+    "@memberjunction/global": "6.1.0-edge.2",
+    "@memberjunction/core": "6.1.0-edge.2",
+    "@memberjunction/ai": "6.1.0-edge.2"
   },
   "peerDependencies": {
     "playwright": ">=1.40.0"

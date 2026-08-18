@@ -42,18 +42,36 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'MemberJunction',
-      description: 'The open-source, AI-native data platform — unify your data, add intelligence, build AI-native apps on top of it.',
+      description: 'The AI-native data platform — unify your data, add intelligence, build AI-native apps on top of it.',
+      /*
+       * Horizontal lockup (948x132). The previous stacked pair was 200px wide,
+       * which renders soft on retina and reads as a tiny mark once the header
+       * bar constrains it by height. `light`/`dark` name the THEME the file is
+       * shown in, so `light` carries the navy-ink artwork.
+       */
       logo: {
-        light: './src/assets/MJ_logo.webp',
-        dark: './src/assets/MJ_logo_dark.png',
+        light: './src/assets/MJ_logo_wide.png',
+        dark: './src/assets/MJ_logo_wide_dark.png',
         replacesTitle: true,
       },
+      /*
+       * favicon.svg (Starlight's default path) carries the MJ mark with a
+       * prefers-color-scheme swap baked in; these two cover Safari/iOS,
+       * which don't take SVG favicons. Hrefs must carry the base prefix
+       * themselves — Starlight doesn't rewrite head-entry URLs.
+       */
+      head: [
+        { tag: 'link', attrs: { rel: 'icon', type: 'image/png', sizes: '32x32', href: `${base === '/' ? '' : base}/favicon-32.png` } },
+        { tag: 'link', attrs: { rel: 'apple-touch-icon', sizes: '180x180', href: `${base === '/' ? '' : base}/apple-touch-icon.png` } },
+      ],
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/MemberJunction/MJ' }],
       editLink: { baseUrl: 'https://github.com/MemberJunction/MJ/edit/next/docs-site/' },
       lastUpdated: true,
       customCss: ['./src/styles/custom.css'],
       components: {
         Footer: './src/components/Footer.astro',
+        // Appends the documented-line version pill next to the logo lockup.
+        SiteTitle: './src/components/SiteTitle.astro',
         // Adds the documentation-version switcher next to the theme select
         // on versioned deploys (DOCS_VERSION/DOCS_VERSIONS set by docs.yml).
         ThemeSelect: './src/components/ThemeSelect.astro',
@@ -88,6 +106,7 @@ export default defineConfig({
         },
         { label: 'Ecosystem', slug: 'ecosystem' },
         { label: 'Community', slug: 'community' },
+        { label: 'MemberJunction Certified', slug: 'mjcertified' },
         {
           label: 'MJ Central — hosted MJ ↗',
           link: 'https://central.memberjunction.com',

@@ -63,6 +63,17 @@ git branch --set-upstream-to=origin/my-feature-branch my-feature-branch
 ### 4. START WORK ON A FEATURE BRANCH
 Before starting a new line of work, check the current branch. It must be (a) separate from the remote default branch and (b) named for the work being requested. If not, **ask first**, then cut and switch to one.
 
+### 5. NO HAND-LINKING IN THE M5 JOINED WORKSPACE
+This clone sits under `/Users/amith/Dropbox/develop/M5/`, a pnpm mega-workspace that already
+live-links every `@memberjunction/*` and `@mj-biz-apps/*` package. **Never** add per-package
+`node_modules` symlinks, `pnpm link`, or `rsync` another worktree's `dist/` to unstick a resolve.
+That duplicates `type-graphql`. Then `Int`/`Float`/`ID` imported from `@memberjunction/server`
+are `undefined` and MJAPI fails schema build (`CannotDetermineGraphQLTypeError` on `MaxRows` /
+`RowCount`). Explorer shows `GraphQL Error (Code: unknown)`. **Do not patch `generated.js` or
+`MJServer/dist` to work around it.** Undo the extra link, `pnpm install` **only at `M5/`**,
+rebuild the package you changed, restart with `pnpm start` from `packages/MJAPI`. Full do/don't:
+[`../CLAUDE.md`](../CLAUDE.md) (the M5 workspace file).
+
 ---
 
 ## ✅ Definition of Done
@@ -94,11 +105,15 @@ Unit tests passing is necessary but **not sufficient** — the integration tier 
 
 **CodeGen reads JSONType definitions from the database, not from `metadata/`.** Run `mj sync push` **before** `mj codegen`, or CodeGen regenerates from stale definitions and *silently deletes* properties from the generated types. Full ordering + why it's silent: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
 
+**A CodeGen `EntityField` INSERT in a migration must never carry a literal `Sequence`.** The number CodeGen writes is a temporary placeholder that a *repeatable* script renumbers — and Flyway runs every versioned migration before any repeatable script, so on a from-scratch database it never gets renumbered in time and a second migration touching the same entity collides on `UQ_EntityField_EntityID_Sequence`. It then reports itself as an unrelated foreign-key error. This cannot fail on a working dev database; it fails only on fresh installs. Use an apply-time `MAX(Sequence)+1` expression. Gate: `.github/scripts/check-migration-entityfield-sequence.sh`. Full explanation: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
+
+**One database per agent.** Before `mj migrate` / `mj codegen` / `mj sync push`, confirm no other session is using your `DB_DATABASE` — a git worktree isolates the filesystem, **not** the database. Interleaved CodeGen runs leave metadata demanding view columns that no longer exist, and *both* runs report success while someone else's server logs the errors. Rules + the incident that produced them: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
+
 **Build commands** — this is a **pnpm** workspace (`packageManager` in `package.json` pins the version; the lockfile is `pnpm-lock.yaml`). Never run `npm install` here — it would create a `package-lock.json` the repo no longer uses and resolve a different tree:
 ```bash
 pnpm run build            # all packages, from repo root
 pnpm run watch            # watch mode
-pnpm run start:api        # MJAPI (port 4001)
+pnpm run start:api        # MJAPI — port 4000 by default, override with GRAPHQL_PORT
 pnpm run start:explorer   # MJExplorer (port 4201)
 cd packages/PackageName && pnpm run build   # single package — use this, NOT turbo from root
 ```
@@ -106,9 +121,17 @@ After making code changes, **always compile the affected package** and fix all T
 
 **pnpm workspace**: add dependencies to the individual package's `package.json`, then run `pnpm install` **at the repository root**. Never run it inside a package directory. pnpm enforces declared dependencies strictly — a package that imports something it doesn't declare fails to resolve rather than falling through to a hoisted copy, so declare every import.
 
+**Multi-repo dev (MJ + Open App repos side by side)**: `mj dev workspace` generates a pnpm workspace over a plain parent folder of sibling clones — never hand-link repos or run installs inside a member. Setup, daily loop, and recovery: [`guides/DEV_WORKSPACE_QUICKSTART.md`](guides/DEV_WORKSPACE_QUICKSTART.md).
+
 **Migration folder**: the `migrations/v*/` folder must match **the major version in the migration's own filename** — `V…__v6.1.x__Name.sql` belongs in `migrations/v6/`, a `v5.x` file in `migrations/v5/`. Read the folder off the name you just chose; never off a number written down here, which goes stale at every era. Flyway scans `./migrations` recursively and reads the version from the filename, so a misfiled migration still runs — but it strands its PostgreSQL counterpart, which is paired per folder (`migrations/vN` ↔ `migrations-pg/vN`).
 
+**PostgreSQL is toolchain territory — do not hand-author it, and do not build tooling for it.** A feature PR ships the **T-SQL migration only**. Never write a `migrations-pg/**` counterpart, and never write a script that checks, generates, or gates PG parity. Converting T-SQL to PG is deterministic transpilation (`mj migrate convert`, the SQLConverter package, `/pg-migrate-v2`) run by the **build engineer at release time** — the same cadence as the consolidated metadata-sync migration. LLM-inferred PG SQL and one-off parity scripts are exactly what that toolchain exists to replace: they drift from the converter, gate feature PRs on work that is not theirs, and rot. If PG conversion looks wrong, fix the converter or tell the build engineer — do not route around it. Details: [`migrations/CLAUDE.md`](migrations/CLAUDE.md).
+
 **Record Changes**: MJ has built-in version control for all entities. Don't implement custom versioning.
+
+**Never stage or commit local host artifacts**: Never commit `mj.config.cjs`, `mj.config.json`, or generated host folders (`packages/GeneratedEntities/**`, `packages/MJAPI/src/generated/**`, `packages/MJExplorer/src/app/generated/**`) to the repository. They belong strictly to local running environments.
+
+**Migration authoring structure**: Hand-written DDL at top (`ALTER TABLE`, extended properties) → at least 50 blank lines → standard CodeGen comment block → appended CodeGen output (`EntityField` INSERT with apply-time sequence, procs, views, permissions). Never do ad-hoc inline metadata updates in migrations; manage metadata via `metadata/*.json` seed files (`mj sync push`).
 
 ---
 
@@ -124,6 +147,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 | [`typescript-style.md`](.claude/rules/typescript-style.md) | `**/*.ts` | No `any`, no `.Get()`/`.Set()`, derive field types from the entity, no cross-package re-exports, `BaseSingleton`, no dynamic `import()`, naming conventions, functional decomposition, OOD |
 | [`design-tokens.md`](.claude/rules/design-tokens.md) | `**/*.scss`, `**/*.css` | No hardcoded colors, the semantic token catalog, hex→token mappings, `color-mix()`, the CI gates |
 | [`testing.md`](.claude/rules/testing.md) | `**/*.test.ts`, `**/__tests__/**` | Vitest conventions, test structure, the scaffold script, fixing test drift, CI integration |
+| [`changesets.md`](.claude/rules/changesets.md) | `.changeset/**` | Bump levels — `minor` is reserved for migration/metadata branches, everything else `patch`; why the `fixed` group makes one stray `minor` repo-wide; the `check:changeset` self-check |
 
 ### Nested `CLAUDE.md` — load when you read a file in that tree
 
@@ -148,13 +172,13 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 
 ### Guides — the complete index is [`guides/README.md`](guides/README.md)
 
-41 cross-cutting "read this before you build that" guides, categorized. **Consult the index before starting work in an unfamiliar area** — these capture patterns already litigated. Frequently needed: [UI Layering](guides/UI_LAYERING_GUIDE.md), [Caching & Pub/Sub](guides/CACHING_AND_PUBSUB_GUIDE.md), [UUID Comparison](guides/UUID_COMPARISON_GUIDE.md), [Unified Permissions](guides/UNIFIED_PERMISSIONS_GUIDE.md), [Search Overview](guides/SEARCH_OVERVIEW_GUIDE.md), [Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md), [Forms Architecture](guides/FORMS_ARCHITECTURE_GUIDE.md), [Transport Layer](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md), [Remote Operations](guides/REMOTE_OPERATIONS_GUIDE.md).
+41 cross-cutting "read this before you build that" guides, categorized. **Consult the index before starting work in an unfamiliar area** — these capture patterns already litigated. Frequently needed: [Dev Workspace Quickstart](guides/DEV_WORKSPACE_QUICKSTART.md), [UI Layering](guides/UI_LAYERING_GUIDE.md), [Caching & Pub/Sub](guides/CACHING_AND_PUBSUB_GUIDE.md), [UUID Comparison](guides/UUID_COMPARISON_GUIDE.md), [Unified Permissions](guides/UNIFIED_PERMISSIONS_GUIDE.md), [Search Overview](guides/SEARCH_OVERVIEW_GUIDE.md), [Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md), [Forms Architecture](guides/FORMS_ARCHITECTURE_GUIDE.md), [Transport Layer](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md), [Remote Operations](guides/REMOTE_OPERATIONS_GUIDE.md).
 
 **UI work is layered — L0 runtime → L1 widget → L2 composite → L3 Explorer surface.** Nothing below L3 imports `@angular/router` or an Explorer package; nothing at L3 holds domain logic. Read [`guides/UI_LAYERING_GUIDE.md`](guides/UI_LAYERING_GUIDE.md) before building any UI, in this repo or any MJ app repo.
 
 ### Skills — load only when invoked
 
-`debug-build-failures` (package won't build / Turbo / circular deps), `playwright-cli` (browser automation + the MJ dev-server loop), `scaffold-mj-dashboard` (new Explorer dashboard).
+`debug-build-failures` (package won't build / Turbo / circular deps), `playwright-cli` (browser automation + the MJ dev-server loop), `scaffold-mj-dashboard` (new Explorer dashboard), `bootstrap-clean-db` (build a DB from scratch on a private name — clean-room verification, or just a database no other agent is using).
 
 ### Project-wide standards
 
@@ -168,6 +192,8 @@ npm run check:ui          # design-token + button gates on changed CSS/SCSS (mir
 npm run check:standards   # every adopted MJ standard (see .mj-standards.json)
 npm run check:esm         # native-ESM import guard for "type": "module" packages
 npm run check:claude-md   # instruction-file budget, link validity, and routing-table coverage
+npm run check:changeset   # changeset bump levels (local only — no CI gate enforces this one)
+npm run check:codegen-tail # new-table migrations ship their generated entity (same command CI runs)
 ```
 
 ---

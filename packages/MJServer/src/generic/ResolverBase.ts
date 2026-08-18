@@ -20,7 +20,8 @@ import {
   UserInfo,
 } from '@memberjunction/core';
 import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { PubSubEngine, AuthorizationError } from 'type-graphql';
 import { GraphQLError } from 'graphql';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
@@ -62,16 +63,28 @@ export class ResolverBase {
    * - AllowDecryptInAPI=false + SendEncryptedValue=true: Keep encrypted ciphertext
    * - AllowDecryptInAPI=false + SendEncryptedValue=false: Replace with sentinel
    *
+   * Returns a COPY — `dataObject` is never written to. Callers routinely pass rows straight
+   * from `findBy`/`RunView`, which are the server cache's own objects held by reference, and
+   * `LocalCacheManager` deep-freezes them. Renaming in place therefore threw
+   * `Cannot add property _mj__CreatedAt, object is not extensible` on every `UserByEmail` /
+   * `UserByID` / `UserByEmployeeID` call and on every generated single-record resolver whose
+   * entity has caching enabled. (Before the freeze it did something worse but quieter: it
+   * rewrote the cached row's keys, so later readers were served transport-shaped rows that
+   * `BaseEntity.SetMany` rejects.) Copying here fixes every call site at once and makes the
+   * hazard unreachable for future ones.
+   *
    * @param entityName - The entity name
-   * @param dataObject - The data object with field values
+   * @param dataObject - The data object with field values. Not modified.
    * @param contextUser - Optional user context for decryption (required for encrypted fields)
-   * @returns The processed data object
+   * @returns A new object in transport shape, or null when there is nothing to map
    */
   protected async MapFieldNamesToCodeNames(entityName: string, dataObject: any, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<any> {
     // Return null for empty objects (e.g. when no rows found due to RLS filtering)
     if (!dataObject || Object.keys(dataObject).length === 0) {
       return null;
     }
+    // Shallow copy up front so every write below lands on our object, never the caller's.
+    dataObject = { ...dataObject };
 
     // for the given entity name provided, check to see if there are any fields
     // where the code name is different from the field name, and for just those
@@ -184,14 +197,21 @@ export class ResolverBase {
     return true;
   }
 
-  protected async ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[], contextUser?: UserInfo): Promise<any[]> {
-    // iterate through the array and call MapFieldNamesToCodeNames for each element
-    if (dataObjectArray && dataObjectArray.length > 0) {
-      for (const element of dataObjectArray) {
-        await this.MapFieldNamesToCodeNames(entityName, element, contextUser);
-      }
+  /**
+   * Array form of {@link MapFieldNamesToCodeNames}. Returns a NEW array of NEW objects; neither
+   * the input array nor its rows are modified. Both matter: the cache freezes the array as well
+   * as the rows it contains, so collecting the mapped copies (rather than mapping in place and
+   * returning the original) is what makes this safe on cache-served input.
+   */
+  protected async ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[], contextUser?: UserInfo, provider?: IMetadataProvider): Promise<any[]> {
+    if (!dataObjectArray || dataObjectArray.length === 0) {
+      return dataObjectArray;
     }
-    return dataObjectArray;
+    const mapped: any[] = [];
+    for (const element of dataObjectArray) {
+      mapped.push(await this.MapFieldNamesToCodeNames(entityName, element, contextUser, provider));
+    }
+    return mapped;
   }
 
   /**
@@ -388,7 +408,8 @@ export class ResolverBase {
           viewInput.AfterKey
             ? CompositeKey.FromKeyValuePairs((viewInput.AfterKey as { KeyValuePairs: { FieldName: string; Value: string }[] }).KeyValuePairs)
             : undefined,
-          viewInput.BypassCache
+          viewInput.BypassCache,
+          viewInput.DataSource
         );
       }
       else {
@@ -431,7 +452,8 @@ export class ResolverBase {
         viewInput.StartRow,
         viewInput.Aggregates,
         undefined,
-        viewInput.BypassCache
+        viewInput.BypassCache,
+        viewInput.DataSource
       );
     } catch (err) {
       console.log(err);
@@ -477,7 +499,8 @@ export class ResolverBase {
         viewInput.StartRow,
         viewInput.Aggregates,
         undefined,
-        viewInput.BypassCache
+        viewInput.BypassCache,
+        viewInput.DataSource
       );
     } catch (err) {
       console.log(err);
@@ -551,6 +574,7 @@ export class ResolverBase {
           userPayload,
           aggregates: viewInput.Aggregates,
           bypassCache: viewInput.BypassCache,
+          dataSource: viewInput.DataSource,
         });
       } catch (err) {
         LogError(err);
@@ -747,7 +771,8 @@ export class ResolverBase {
     startRow: number | undefined,
     aggregates?: AggregateExpression[],
     afterKey?: CompositeKey,
-    bypassCache?: boolean
+    bypassCache?: boolean,
+    dataSource?: 'Live' | 'Materialized'
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -817,6 +842,7 @@ export class ResolverBase {
           ResultType: rt,
           Aggregates: aggregates,
           BypassCache: bypassCache,
+          DataSource: dataSource,
         },
         user
       );
@@ -826,12 +852,27 @@ export class ResolverBase {
         LogStatus(`[ResolverBase] RunView result aggregate info: entityName=${viewInfo.Entity}, hasAggregateResults=${!!result?.AggregateResults}, aggregateResultCount=${result?.AggregateResults?.length || 0}, aggregateExecutionTime=${result?.AggregateExecutionTime}, aggregateResults=${JSON.stringify(result?.AggregateResults)}`);
       }
 
-      // Process results for GraphQL transport
+      // Process results for GraphQL transport.
+      //
+      // Map onto COPIES, never in place. `FieldMapper.MapFields` renames keys by
+      // mutating (`obj[mapped] = obj[k]; delete obj[k]`), and these rows are the
+      // provider's own result objects — which the server cache holds BY REFERENCE
+      // under a reference-sharing storage provider. Mapping them in place rewrote
+      // `__mj_CreatedAt` to the transport alias `_mj__CreatedAt` inside the live
+      // cache, and because that cache is process-wide, one GraphQL response made
+      // every later read hand back transport-shaped rows that `BaseEntity.SetMany`
+      // rejects. `ArrayFilterEncryptedFieldsForAPI` mutates too, so it must also
+      // see the copies. (FileResolver already maps a spread copy.)
+      //
+      // These copies are LOAD-BEARING, not merely defensive: LocalCacheManager now
+      // deep-freezes cached rows (see ILocalStorageProvider.SharesReferences), so
+      // mapping in place would throw rather than silently corrupt. `{ ...r }` is a
+      // SHALLOW copy, which is sufficient here because the only post-map mutators
+      // rename top-level keys and redact scalar fields — and the cache's freeze is
+      // deep, so a nested value can no longer be reached through the copy either.
       const mapper = new FieldMapper();
       if (result?.Success && result.Results?.length) {
-        for (const r of result.Results) {
-          mapper.MapFields(r);
-        }
+        result.Results = result.Results.map(r => mapper.MapFields({ ...r }));
         // Filter encrypted fields before sending to API client
         await this.ArrayFilterEncryptedFieldsForAPI(
           viewInfo.Entity,
@@ -937,6 +978,7 @@ export class ResolverBase {
           ResultType: rt,
           Aggregates: param.aggregates,
           BypassCache: param.bypassCache,
+          DataSource: param.dataSource,
         });
       }
 
@@ -948,9 +990,9 @@ export class ResolverBase {
       for (let i = 0; i < runViewResults.length; i++) {
         const runViewResult = runViewResults[i];
         if (runViewResult?.Success && runViewResult.Results?.length) {
-          for (const result of runViewResult.Results) {
-            mapper.MapFields(result);
-          }
+          // Copy-then-map, same reason as the single-view path above: these rows
+          // are cache-held references and MapFields renames keys in place.
+          runViewResult.Results = runViewResult.Results.map(r => mapper.MapFields({ ...r }));
           // Filter encrypted fields before sending to API client
           // Use the corresponding param's entity name
           const entityName = params[i]?.viewInfo?.Entity;

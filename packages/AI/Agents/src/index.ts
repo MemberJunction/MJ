@@ -64,6 +64,7 @@ export * from './realtime/realtime-turn-moderator';
 export { RealtimeToolBroker, RealtimeToolBrokerDeps, ExecutedToolCall, DelegatedRunArtifact } from './realtime/realtime-tool-broker';
 export * from './realtime/realtime-client-session-service';
 export * from './realtime/realtime-coagent-config';
+export * from './realtime/realtime-vendor-resolution';
 export * from './realtime/realtime-narration';
 export * from './realtime/realtime-channel-server-host';
 export * from './realtime/whiteboard-channel-server';

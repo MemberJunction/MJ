@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.server.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    // C1: `deliverContinuation` was declared `Promise<boolean>` and fell off the end after a
+    // successful delivery, so every delivered graph resolved `undefined` and its caller read that
+    // as "not resolved" — one wasted settle pass per settlement, run-tree cost query included, plus
+    // a retry counter measuring the wrong thing. The compiler owns that class now. Scoped to this
+    // package rather than the shared server config: this is the package whose control flow decides
+    // whether work re-runs, and widening it repo-wide is a separate change with its own fallout.
+    "noImplicitReturns": true
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "src/__tests__/**",
+    "src/**/*.test.ts"
+  ]
+}

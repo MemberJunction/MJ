@@ -83,6 +83,12 @@ describe('MJWorkspaceTabStripComponent (DOM)', () => {
     expect(t[2].getAttribute('aria-label')).toBe('Rejected one (rejected)');
   });
 
+  it('orders combined state as label, rejected, then unsaved', () => {
+    // Pins the join order in tabAccessibleName for a tab carrying BOTH states.
+    const t = tabs(render({ Tabs: [tab('x', { Label: 'Alpha', Status: 'rejected', Dirty: true })], ActiveId: 'x' }));
+    expect(t[0].getAttribute('aria-label')).toBe('Alpha (rejected) (unsaved changes)');
+  });
+
   it('shows the dirty dot only on dirty tabs, and hides it from assistive tech', () => {
     const f = render();
     const dots = tabs(f).map((t) => t.querySelector('.mj-tabs__dirty'));
@@ -105,11 +111,13 @@ describe('MJWorkspaceTabStripComponent (DOM)', () => {
     expect(close.getAttribute('aria-label')).toBe('Close Overview');
   });
 
-  it('emits NewTabRequested when the pinned control is clicked', () => {
-    const f = render();
+  it('emits NewTabRequested when the pinned control is clicked, named by NewTabLabel', () => {
+    const f = render({ NewTabLabel: 'New draft' });
     const requested = capture(f.componentInstance.NewTabRequested);
+    const control = query(f, '.mj-tabs__new') as HTMLElement;
 
-    (query(f, '.mj-tabs__new') as HTMLElement).click();
+    expect(control.getAttribute('aria-label')).toBe('New draft');
+    control.click();
 
     expect(requested).toHaveLength(1);
   });

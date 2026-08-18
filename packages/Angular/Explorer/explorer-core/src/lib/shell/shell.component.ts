@@ -13,7 +13,7 @@ import {
   AppAccessResult,
   NavItem
 } from '@memberjunction/ng-base-application';
-import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey } from '@memberjunction/core';
+import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM, RecordUrlMatchesTab, ResourceUrlsEquivalent } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
 import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
@@ -924,8 +924,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       const currentUrl = this.router.url;
       const newUrl = resourceUrl;
 
-      // Only update if URL is different (path or query params changed)
-      if (currentUrl !== newUrl) {
+      // Decode before compare. encodeURIComponent writes `%3A` for the
+      // colon in `MJ_BizApps_Orders: Order Headers`; Angular's serializer
+      // leaves `:`. A raw !== is permanently true and reloads the route
+      // until the tab dies (Person → Orders → New).
+      if (!ResourceUrlsEquivalent(currentUrl, newUrl)) {
         // Suppress ResourceResolver for this navigation - we're just syncing the URL
         // to reflect the current active tab, not requesting a new tab to be opened
         this.tabService.SuppressNextResolve();
@@ -1017,12 +1020,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (appRecordMatch) {
         const entityName = decodeURIComponent(appRecordMatch[2]);
         const recordId = decodeURIComponent(appRecordMatch[3]);
-        const compositeKey = new CompositeKey();
-        compositeKey.SimpleLoadFromURLSegment(recordId);
-        // Recreating a closed tab from browser history — the user's CURRENT
-        // page is not where this record came from, so don't stamp it as the
-        // origin (recordSource 'none' = no crumb rather than a false one).
-        this.navigationService.OpenEntityRecord(entityName, compositeKey, { recordSource: 'none' });
+        this.openRecordFromUrl(entityName, recordId, queryParams);
         return;
       }
 
@@ -1064,14 +1062,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (appQueryMatch) {
         const queryId = appQueryMatch[2];
         this.navigationService.OpenQuery(queryId, 'Query');
-        return;
-      }
-
-      // Check for app-scoped report URL: /app/:appName/report/:reportId
-      const appReportMatch = urlPath.match(/^\/app\/([^\/]+)\/report\/(.+)$/);
-      if (appReportMatch) {
-        const reportId = appReportMatch[2];
-        this.navigationService.OpenReport(reportId, 'Report');
         return;
       }
 
@@ -1148,11 +1138,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (legacyRecordMatch) {
         const entityName = decodeURIComponent(legacyRecordMatch[1]);
         const recordId = decodeURIComponent(legacyRecordMatch[2]);
-        const compositeKey = new CompositeKey();
-        compositeKey.SimpleLoadFromURLSegment(recordId);
-        // Same as the app-scoped branch above: history recreation has no
-        // truthful origin — suppress the crumb instead of inventing one.
-        this.navigationService.OpenEntityRecord(entityName, compositeKey, { recordSource: 'none' });
+        this.openRecordFromUrl(entityName, recordId, queryParams);
         return;
       }
 
@@ -1174,6 +1160,32 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     } finally {
       this.urlBasedNavigation = false;
     }
+  }
+
+  /**
+   * Recreate a record tab from a URL. `/new` is OpenNewEntityRecord — feeding
+   * the sentinel through OpenEntityRecord produced an empty CompositeKey and
+   * another forced tab, which is the loop that killed the browser.
+   */
+  private openRecordFromUrl(entityName: string, recordId: string, queryParams: URLSearchParams): void {
+    if (IsNewEntityRecordUrlId(recordId)) {
+      const nrv = queryParams.get(NEW_RECORD_VALUES_QUERY_PARAM) ?? undefined;
+      this.navigationService.OpenNewEntityRecord(entityName, {
+        newRecordValues: nrv,
+        recordSource: 'none',
+      });
+      return;
+    }
+    const compositeKey = new CompositeKey();
+    compositeKey.SimpleLoadFromURLSegment(recordId);
+    this.navigationService.OpenEntityRecord(entityName, compositeKey, { recordSource: 'none' });
+  }
+
+  private recordTabMatchesUrl(tab: WorkspaceTab, entityName: string, recordId: string): boolean {
+    const tabConfig = tab.configuration || {};
+    const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
+    const tabRecordId = (tabConfig['recordId'] ?? tab.resourceRecordId) as string | undefined;
+    return RecordUrlMatchesTab(entityName, recordId, tabEntity, tabRecordId);
   }
 
   /**
@@ -1257,15 +1269,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     if (appRecordMatch) {
       const entityName = decodeURIComponent(appRecordMatch[2]);
       const recordId = decodeURIComponent(appRecordMatch[3]);
-
-      return tabs.find(tab => {
-        const tabConfig = tab.configuration || {};
-        const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
-        const tabRecordId = (tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
-
-        return tabEntity?.toLowerCase() === entityName.toLowerCase() &&
-               tabRecordId === recordId;
-      }) || null;
+      return tabs.find(tab => this.recordTabMatchesUrl(tab, entityName, recordId)) || null;
     }
 
     // Dynamic view: /app/:appName/view/dynamic/:entityName
@@ -1311,20 +1315,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       }) || null;
     }
 
-    // Report: /app/:appName/report/:reportId
-    const appReportMatch = urlPath.match(/^\/app\/([^\/]+)\/report\/(.+)$/);
-    if (appReportMatch) {
-      const reportId = appReportMatch[2];
-
-      return tabs.find(tab => {
-        const tabConfig = tab.configuration || {};
-        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-        const tabReportId = (tabConfig['reportId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
-
-        return resourceType === 'reports' && tabReportId === reportId;
-      }) || null;
-    }
-
     // Artifact: /app/:appName/artifact/:artifactId
     const appArtifactMatch = urlPath.match(/^\/app\/([^\/]+)\/artifact\/(.+)$/);
     if (appArtifactMatch) {
@@ -1359,15 +1349,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     if (recordMatch) {
       const entityName = decodeURIComponent(recordMatch[1]);
       const recordId = decodeURIComponent(recordMatch[2]);
-
-      return tabs.find(tab => {
-        const tabConfig = tab.configuration || {};
-        const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
-        const tabRecordId = (tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
-
-        return tabEntity?.toLowerCase() === entityName.toLowerCase() &&
-               tabRecordId === recordId;
-      }) || null;
+      return tabs.find(tab => this.recordTabMatchesUrl(tab, entityName, recordId)) || null;
     }
 
     // Check for view URL: /resource/view/:viewId
@@ -1450,10 +1432,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const tabAppId = tab.applicationId;
 
     // Helper to append query params to a URL, preserving any existing params
-    const appendQP = (url: string): string => {
-      if (!queryParams || Object.keys(queryParams).length === 0) return url;
+    const appendQP = (url: string, extra?: Record<string, string>): string => {
+      const all = { ...(queryParams ?? {}), ...(extra ?? {}) };
+      if (Object.keys(all).length === 0) return url;
       const separator = url.includes('?') ? '&' : '?';
-      const params = new URLSearchParams(queryParams);
+      const params = new URLSearchParams(all);
       return `${url}${separator}${params.toString()}`;
     };
 
@@ -1572,13 +1555,22 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       switch (resourceType) {
         case 'records':
           // /app/:appName/record/:entityName/:recordId
-          if (entityName && recordId) {
-            // recordId is a CompositeKey URL segment ("ID|<value>") — the '|' MUST be encoded.
-            // Angular's UrlSerializer percent-encodes '|' to %7C in router.url, so if we embed it raw
-            // here, `syncUrlWithWorkspace`'s `currentUrl !== newUrl` check is permanently true and can
-            // drive a re-navigation loop (with onSameUrlNavigation:'reload'). The read side already
-            // decodeURIComponent()s this segment, so encoding here keeps both sides consistent.
-            return appendQP(`/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${encodeURIComponent(recordId)}`);
+          // Unsaved records use the `new` sentinel so they can deeplink with NewRecordValues.
+          if (entityName) {
+            const isNewRecord = config['isNew'] === true || IsNewEntityRecordUrlId(recordId);
+            const idSeg = isNewRecord ? NEW_ENTITY_RECORD_URL_ID : recordId;
+            if (idSeg) {
+              // recordId is a CompositeKey URL segment ("ID|<value>") — the '|' MUST be encoded.
+              // Angular's UrlSerializer percent-encodes '|' to %7C in router.url, so if we embed it raw
+              // here, `syncUrlWithWorkspace`'s `currentUrl !== newUrl` check is permanently true and can
+              // drive a re-navigation loop (with onSameUrlNavigation:'reload'). The read side already
+              // decodeURIComponent()s this segment, so encoding here keeps both sides consistent.
+              const nrv = isNewRecord ? EncodeNewRecordValuesForURL(config['NewRecordValues']) : undefined;
+              return appendQP(
+                `/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${encodeURIComponent(idSeg)}`,
+                nrv ? { [NEW_RECORD_VALUES_QUERY_PARAM]: nrv } : undefined,
+              );
+            }
           }
           break;
 
@@ -1620,13 +1612,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           }
           break;
 
-        case 'reports':
-          // /app/:appName/report/:reportId
-          if (recordId) {
-            return appendQP(`/app/${encodeURIComponent(appPath)}/report/${recordId}`);
-          }
-          break;
-
         case 'search results': {
           // /app/:appName/search/:searchInput?minRelevance=...&Entity=...
           const searchInput = config['SearchInput'] as string | undefined;
@@ -1654,10 +1639,18 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Fallback to legacy routes (for backward compatibility during transition)
     switch (resourceType) {
       case 'records':
-        if (entityName && recordId) {
-          // Encode the CompositeKey segment ('|' → %7C) to match Angular's serialized router.url and
-          // the decodeURIComponent() on the read side — see the app-scoped 'records' case above.
-          return appendQP(`/resource/record/${encodeURIComponent(entityName)}/${encodeURIComponent(recordId)}`);
+        if (entityName) {
+          const isNewRecord = config['isNew'] === true || IsNewEntityRecordUrlId(recordId);
+          const idSeg = isNewRecord ? NEW_ENTITY_RECORD_URL_ID : recordId;
+          if (idSeg) {
+            // Encode the CompositeKey segment ('|' → %7C) to match Angular's serialized router.url and
+            // the decodeURIComponent() on the read side — see the app-scoped 'records' case above.
+            const nrv = isNewRecord ? EncodeNewRecordValuesForURL(config['NewRecordValues']) : undefined;
+            return appendQP(
+              `/resource/record/${encodeURIComponent(entityName)}/${encodeURIComponent(idSeg)}`,
+              nrv ? { [NEW_RECORD_VALUES_QUERY_PARAM]: nrv } : undefined,
+            );
+          }
         }
         break;
 
@@ -2621,7 +2614,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     if (rt === 'Dashboards' || config['dashboardId']) return 'Dashboards';
     if (rt === 'User Views' || rt === 'MJ: User Views' || config['viewId']) return 'User Views';
     if (rt === 'Queries' || config['queryId']) return 'Queries';
-    if (rt === 'Reports' || config['reportId']) return 'Reports';
     if (rt === 'Records' || (config['Entity'] && config['recordId'])) return 'Records';
     if (rt === 'Custom' || config['navItemName']) return 'Custom';
     return rt || 'Custom';

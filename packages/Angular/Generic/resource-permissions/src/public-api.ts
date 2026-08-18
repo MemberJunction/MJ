@@ -4,6 +4,7 @@
 
 export * from './lib/resource-permissions.component';
 export * from './lib/available-resources.component';
+export * from './lib/format-cell';
 export * from './lib/request-access.component';
 export * from './lib/resource-share-adapter';
 export * from './lib/resource-share-dialog.component';

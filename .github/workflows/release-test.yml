@@ -1,5 +1,26 @@
 name: Release Validation Suite
 
+# The validation lane between "green on next" and an npm publish.
+#
+# Two jobs:
+#   * unit-tests — the full build + test:types + unit suite, callable via
+#     workflow_call so publish.yml can require it as a gate on the exact commit
+#     being published (release PRs land on main without ever running test.yml,
+#     which is gated to `next`).
+#   * e2e — the Playwright browser tier (e2e/specs). It needs a live MJAPI +
+#     MJExplorer and a primed signed-in MSAL browser profile, so it only runs
+#     when the repo provides the secrets below; otherwise its steps are skipped and
+#     it finishes green with a prominent ::warning (never failing the release, never
+#     silently claiming UI validation). Runs nightly + on dispatch.
+#
+# Secrets the e2e job needs before it arms itself:
+#   E2E_PW_PROFILE_B64   base64 of a tar.gz of a primed .playwright-cli/profile
+#                        (create per e2e/playwright.config.ts header, then:
+#                        tar -czf - -C .playwright-cli profile | base64 -w0)
+#   E2E_TENANT_ID        Entra tenant for MJAPI token validation (or use
+#   E2E_WEB_CLIENT_ID    Auth0 equivalents in mj env below) — must match the
+#                        identity the profile is signed in with.
+
 on:
   workflow_dispatch:
     inputs:
@@ -7,17 +28,41 @@ on:
         description: 'Branch to test'
         default: 'next'
         type: string
+      run_e2e:
+        description: 'Also run the Playwright e2e tier (requires E2E_* secrets)'
+        default: false
+        type: boolean
+  workflow_call:
+    inputs:
+      branch:
+        description: 'Ref to test (defaults to the calling workflow''s sha)'
+        required: false
+        type: string
+  # Nightly e2e lane (the unit suite already has its own nightly in test.yml,
+  # so the schedule here triggers ONLY the e2e job — see its `if`).
+  schedule:
+    - cron: '30 8 * * *'
 
 jobs:
   unit-tests:
     name: Unit Tests (Vitest)
-    timeout-minutes: 30
+    # Skip on schedule: the nightly cron is for e2e; test.yml's nightly already
+    # runs the full unit backstop.
+    if: github.event_name != 'schedule'
+    # 60, matching test.yml: the full suite was still running at ~27 min when a
+    # 30-min cap killed it — and this job may run with a cold turbo cache.
+    timeout-minutes: 60
     runs-on: ubuntu-latest
+    env:
+      TURBO_CACHE_DIR: .turbo/cache
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch || 'next' }}
+          # workflow_call without a branch input → validate the CALLING commit
+          # (publish gates the exact sha being released). Dispatch → the chosen
+          # branch, defaulting to next.
+          ref: ${{ inputs.branch || github.sha }}
           persist-credentials: false
 
       - name: Set up pnpm
@@ -32,8 +77,210 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Restore-only (test.yml's backstop is the canonical writer). Without this
+      # the job pays a ~11-minute cold build that pushed the old 30-min timeout
+      # past its limit before the suite even started.
+      - name: Restore turbo build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
+
+      - name: Create MJExplorer environment file
+        run: |
+          mkdir -p packages/MJExplorer/src/environments
+          cat > packages/MJExplorer/src/environments/environment.ts << 'ENVEOF'
+          export const environment = {
+            GRAPHQL_URI: "http://localhost:4000",
+            GRAPHQL_WS_URI: "ws://localhost:4000",
+            REDIRECT_URI: "http://localhost:4200",
+            CLIENT_ID: "00000000-0000-0000-0000-000000000000",
+            TENANT_ID: "00000000-0000-0000-0000-000000000000",
+            CLIENT_AUTHORITY: "https://login.microsoftonline.com/common",
+            AUTH_TYPE: "msal" as const,
+            NODE_ENV: "test",
+            AUTOSAVE_DEBOUNCE_MS: 1200,
+            SEARCH_DEBOUNCE_MS: 800,
+            MIN_SEARCH_LENGTH: 3,
+            MJ_CORE_SCHEMA_NAME: "__mj",
+            production: false,
+            APPLICATION_NAME: "MJ Explorer CI",
+            APPLICATION_INSTANCE: "CI",
+            AUTH0_DOMAIN: "",
+            AUTH0_CLIENTID: ""
+          };
+          ENVEOF
+          sed -i 's/^          //' packages/MJExplorer/src/environments/environment.ts
+
       - name: Build packages
         run: pnpm run build
 
+      - name: Spec type-check gate
+        run: npx turbo run test:types
+
       - name: Run unit tests
-        run: npm test
+        run: npm test -- --concurrency=4
+
+  e2e:
+    name: Playwright e2e (Explorer)
+    # Runs on the nightly cron and on explicit dispatch request — never as part
+    # of the callable unit gate (publish shouldn't block on a tier that needs
+    # optional secrets).
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_e2e)
+    timeout-minutes: 90
+    runs-on: ubuntu-latest
+    env:
+      TURBO_CACHE_DIR: .turbo/cache
+    steps:
+      - name: Check e2e prerequisites
+        id: prereq
+        env:
+          PROFILE_B64: ${{ secrets.E2E_PW_PROFILE_B64 }}
+        run: |
+          if [ -z "$PROFILE_B64" ]; then
+            echo "READY=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::e2e tier NOT run — secret E2E_PW_PROFILE_B64 is not configured. The Playwright specs need a primed signed-in browser profile (see e2e/playwright.config.ts header). This job reports success but did NOT validate the UI." | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "READY=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout repo
+        if: steps.prereq.outputs.READY == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.sha }}
+          persist-credentials: false
+
+      - name: Set up pnpm
+        if: steps.prereq.outputs.READY == 'true'
+        uses: pnpm/action-setup@v4
+
+      - name: Set up node
+        if: steps.prereq.outputs.READY == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        if: steps.prereq.outputs.READY == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        if: steps.prereq.outputs.READY == 'true'
+        # Hosted runners ship no Playwright browser cache; the specs launch the bundled chromium,
+        # so without this the first armed run dies with "Executable doesn't exist".
+        run: npx playwright install --with-deps chromium
+
+      - name: Restore turbo build cache
+        if: steps.prereq.outputs.READY == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
+
+      - name: Provision SQL Server + database
+        if: steps.prereq.outputs.READY == 'true'
+        run: |
+          docker network create e2e-net
+          docker run --rm -d --network e2e-net --name sql -p 1433:1433 \
+            -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD='VeryStr0ngP@ssw0rd' \
+            mcr.microsoft.com/mssql/server:2022-latest
+          for i in $(seq 1 60); do
+            docker run --rm --network e2e-net mcr.microsoft.com/mssql-tools \
+              /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "SELECT 1" >/dev/null 2>&1 && break
+            sleep 2
+          done
+          docker run --rm --network e2e-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [mj];"
+
+      - name: Build packages
+        if: steps.prereq.outputs.READY == 'true'
+        run: |
+          mkdir -p packages/MJExplorer/src/environments
+          cat > packages/MJExplorer/src/environments/environment.ts << 'ENVEOF'
+          export const environment = {
+            GRAPHQL_URI: "http://localhost:4001",
+            GRAPHQL_WS_URI: "ws://localhost:4001",
+            REDIRECT_URI: "http://localhost:4201",
+            CLIENT_ID: "${E2E_WEB_CLIENT_ID}",
+            TENANT_ID: "${E2E_TENANT_ID}",
+            CLIENT_AUTHORITY: "https://login.microsoftonline.com/${E2E_TENANT_ID}",
+            AUTH_TYPE: "msal" as const,
+            NODE_ENV: "test",
+            AUTOSAVE_DEBOUNCE_MS: 1200,
+            SEARCH_DEBOUNCE_MS: 800,
+            MIN_SEARCH_LENGTH: 3,
+            MJ_CORE_SCHEMA_NAME: "__mj",
+            production: false,
+            APPLICATION_NAME: "MJ Explorer E2E",
+            APPLICATION_INSTANCE: "E2E",
+            AUTH0_DOMAIN: "",
+            AUTH0_CLIENTID: ""
+          };
+          ENVEOF
+          sed -i 's/^          //' packages/MJExplorer/src/environments/environment.ts
+          sed -i "s/\${E2E_WEB_CLIENT_ID}/${{ secrets.E2E_WEB_CLIENT_ID }}/; s/\${E2E_TENANT_ID}/${{ secrets.E2E_TENANT_ID }}/g" \
+            packages/MJExplorer/src/environments/environment.ts
+          pnpm run build
+
+      - name: Migrate + seed metadata + boot MJAPI and Explorer
+        if: steps.prereq.outputs.READY == 'true'
+        env:
+          DB_HOST: localhost
+          DB_PORT: 1433
+          DB_DATABASE: mj
+          DB_USERNAME: sa
+          DB_PASSWORD: VeryStr0ngP@ssw0rd
+          CODEGEN_DB_USERNAME: sa
+          CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
+          DB_TRUST_SERVER_CERTIFICATE: 'true'
+          GRAPHQL_PORT: 4001
+          TENANT_ID: ${{ secrets.E2E_TENANT_ID }}
+          WEB_CLIENT_ID: ${{ secrets.E2E_WEB_CLIENT_ID }}
+        run: |
+          node packages/MJCLI/bin/run.js migrate
+          node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+          (cd packages/MJAPI && node dist/index.js &> /tmp/mjapi.log &)
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:4001/healthcheck >/dev/null 2>&1 && break
+            sleep 5
+          done
+          curl -fsS http://localhost:4001/healthcheck || { echo "::error::MJAPI failed to boot"; tail -100 /tmp/mjapi.log; exit 1; }
+          (cd packages/MJExplorer && npx ng serve --port 4201 &> /tmp/explorer.log &)
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:4201 >/dev/null 2>&1 && break
+            sleep 5
+          done
+          curl -fsS http://localhost:4201 >/dev/null || { echo "::error::MJExplorer failed to serve"; tail -100 /tmp/explorer.log; exit 1; }
+
+      - name: Restore primed browser profile
+        if: steps.prereq.outputs.READY == 'true'
+        env:
+          PROFILE_B64: ${{ secrets.E2E_PW_PROFILE_B64 }}
+        run: |
+          mkdir -p .playwright-cli
+          echo "$PROFILE_B64" | base64 -d | tar -xzf - -C .playwright-cli
+
+      # Only the specs that need no live AI and no Predictive Studio reference
+      # data. predictive-studio.spec.ts (needs PS metadata seed) and
+      # user-routines.spec.ts (needs a live Sage agent, ~8 min budget) stay
+      # opt-in for local runs until their prerequisites are seeded here too.
+      - name: Run e2e specs
+        if: steps.prereq.outputs.READY == 'true'
+        env:
+          PW_BASE_URL: http://localhost:4201
+          PW_API_URL: http://localhost:4001
+        run: npx playwright test --config e2e/playwright.config.ts omnibar.spec.ts chat-drafts.spec.ts
+
+      - name: Upload Playwright report
+        if: always() && steps.prereq.outputs.READY == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14

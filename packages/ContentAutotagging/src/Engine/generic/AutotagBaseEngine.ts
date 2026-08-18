@@ -17,6 +17,7 @@ import officeparser from 'officeparser'
 import * as fs from 'fs'
 import { ProcessRunParams, JsonObject, ContentItemProcessParams } from './process.types'
 import { ClassificationContextResolver, IContentSourceClassificationConfiguration } from './ClassificationContextResolver'
+import { FieldPathResolver } from './FieldPathResolver'
 import { toZonedTime } from 'date-fns-tz'
 import axios from 'axios'
 import * as cheerio from 'cheerio'
@@ -89,7 +90,16 @@ export interface ResolvedVectorStorageConfig {
     chunkTextStorage: ChunkTextStorage;
     /** How vector metadata is shaped (undefined ⇒ the curated default set). */
     metadata?: VectorMetadataConfig;
+    /**
+     * The entity this source declares its vectors to be, from `ContentSource.Configuration`. Read only
+     * to decide whether the per-vector `Entity` key can be omitted ({@link AutotagBaseEngine.canOmitEntityMetadataKey});
+     * the value itself is never written to metadata, and search validates it at attribution time.
+     */
+    vectorEntityName?: VectorEntityName;
 }
+
+/** The entity a source declares its vectors to be. Derived from the generated JSONType interface. */
+export type VectorEntityName = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['VectorEntityName']>;
 
 /** Column types that cannot be stored in vector metadata at all (binary/rowversion). */
 const UNSTORABLE_METADATA_TYPES = new Set(['varbinary', 'image', 'binary', 'timestamp', 'rowversion']);
@@ -1624,9 +1634,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         let processed = 0;
         const allPromptRunIDs: string[] = [];
 
+        // One resolver per pass: dotted field paths declared by the vector driver
+        // ('<FKField>.<Field>') are batched and cached across every infra group below.
+        const pathResolver = new FieldPathResolver(this.ProviderToUse, contextUser, 'MJ: Content Items');
+
         for (const [groupKey, groupItems] of groups) {
             const infra = await this.resolveGroupInfrastructure(groupKey, contextUser);
-            const groupResult = await this.vectorizeGroup(groupItems, infra, tagMap, batchSize, contextUser, (batchProcessed) => {
+            const groupResult = await this.vectorizeGroup(groupItems, infra, tagMap, batchSize, contextUser, pathResolver, (batchProcessed) => {
                 processed += batchProcessed;
                 onProgress?.(Math.min(processed, eligible.length), eligible.length);
             });
@@ -1657,11 +1671,29 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         tagMap: Map<string, string[]>,
         batchSize: number,
         contextUser: UserInfo,
+        pathResolver: FieldPathResolver,
         onBatchComplete: (count: number) => void
     ): Promise<{ vectorized: number; promptRunIDs: string[] }> {
         let vectorized = 0;
         const promptRunIDs: string[] = [];
         const modelRunner = new AIModelRunner();
+
+        // Provider directives are built for every item BEFORE any embedding spend. A driver may
+        // reject a record from BuildProviderDirectives (e.g. a mandatory routing value its config
+        // requires — such as a tenant-isolation field — is missing); rejected items are marked
+        // Failed individually and excluded so they never poison the rest of the group. Recovery
+        // after fixing the data: reset the item to Pending or use ForceReprocess.
+        const { directives, rejected } = await this.precomputeProviderDirectives(items, infra, pathResolver);
+        if (rejected.length > 0) {
+            LogError(`VectorizeContentItems: ${rejected.length} item(s) rejected by the vector provider's directive policy — marked Failed, remaining items proceed`);
+            await this.updateEmbeddingStatusBatch(rejected, 'Failed', contextUser);
+            onBatchComplete(rejected.length);
+            const rejectedIDs = new Set(rejected.map(i => NormalizeUUID(i.ID)));
+            items = items.filter(i => !rejectedIDs.has(NormalizeUUID(i.ID)));
+        }
+        if (items.length === 0) {
+            return { vectorized, promptRunIDs };
+        }
 
         // Mark every item in this infra group as Processing up front so dashboards
         // reflect in-flight state. Each batch will transition its items to Complete
@@ -1703,7 +1735,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 promptRunIDs.push(runResult.PromptRunID);
             }
 
-            const records = this.buildVectorRecords(allChunks, runResult.Vectors, tagMap, infra);
+            const records = this.buildVectorRecords(allChunks, runResult.Vectors, tagMap, infra, directives);
 
             const batchSuccess = await this.upsertVectorRecords(records, infra);
             if (batchSuccess) {
@@ -1769,7 +1801,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         allChunks: EmbeddingChunk[],
         vectors: number[][],
         tagMap: Map<string, string[]>,
-        infra: ResolvedVectorInfrastructure
+        infra: ResolvedVectorInfrastructure,
+        directivesByItem?: Map<string, Record<string, unknown> | undefined>
     ): VectorRecord[] {
         const countByItem = new Map<string, number>();
         for (const c of allChunks) {
@@ -1779,7 +1812,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         // eligibility). Resolved once per batch — every chunk shares the same source entity.
         const contentItemEntity = this.ProviderToUse.EntityByName('MJ: Content Items');
         return allChunks.map((chunk, idx) =>
-            this.buildVectorRecord(chunk, vectors[idx], countByItem.get(chunk.item.ID) ?? 1, tagMap.get(chunk.item.ID), contentItemEntity, infra)
+            this.buildVectorRecord(chunk, vectors[idx], countByItem.get(chunk.item.ID) ?? 1, tagMap.get(chunk.item.ID), contentItemEntity, infra, directivesByItem)
         );
     }
 
@@ -1797,6 +1830,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * @param tags               Resolved tag names for `chunk.item`, if any.
      * @param contentItemEntity  The 'MJ: Content Items' entity metadata, for display-field resolution.
      * @param infra              Resolved vector infrastructure (source of provider directives).
+     * @param directivesByItem   Directives precomputed per item ({@link precomputeProviderDirectives});
+     *                           when absent, directives are built inline (and a driver rejection throws).
      */
     protected buildVectorRecord(
         chunk: EmbeddingChunk,
@@ -1804,7 +1839,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         chunkCountForItem: number,
         tags: string[] | undefined,
         contentItemEntity: EntityInfo | undefined,
-        infra: ResolvedVectorInfrastructure
+        infra: ResolvedVectorInfrastructure,
+        directivesByItem?: Map<string, Record<string, unknown> | undefined>
     ): VectorRecord {
         const config = this.resolveItemVectorStorageConfig(chunk.item);
         const itemLevel = this.isItemLevelVector(config, chunkCountForItem);
@@ -1813,7 +1849,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             values: vector,
             metadata: this.buildVectorMetadata(chunk, itemLevel, tags, config, contentItemEntity)
         };
-        const directives = this.buildProviderDirectives(chunk.item, infra);
+        const directives = directivesByItem
+            ? directivesByItem.get(NormalizeUUID(chunk.item.ID))
+            : this.buildProviderDirectives(chunk.item, infra);
         if (directives) {
             record.providerTemporaryDirectives = directives;
         }
@@ -1826,17 +1864,85 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * ProviderConfig — the common case — so no provider routing is applied and the base
      * BuildProviderDirectives is not even invoked. The item's full field set (GetAll) is handed to
      * the driver so it can read whatever field its config names (e.g. `namespaceField: 'OrganizationID'`).
-     * Namespace is resolved from the parent ContentItem (org-level), the same source for a chunk's
+     * Directives are always derived from the parent ContentItem — the same source for a chunk's
      * vector as for an item-level vector.
+     *
+     * When the driver declares source-record field paths (`GetSourceRecordFieldPaths` — e.g. a
+     * dotted path resolved from a related record), the caller pre-resolves the per-item values
+     * via {@link FieldPathResolver} and passes them in; each value is injected into the record
+     * under its full path key so the driver's plain `sourceRecord[path]` lookup works unchanged.
+     *
+     * MAY THROW: a driver is allowed to reject a record from `BuildProviderDirectives` (e.g. a
+     * mandatory routing value its config requires is missing). Batch callers go through
+     * {@link precomputeProviderDirectives}, which converts a throw into a per-record failure.
      */
     protected buildProviderDirectives(
         item: MJContentItemEntity,
-        infra: ResolvedVectorInfrastructure
+        infra: ResolvedVectorInfrastructure,
+        resolvedFields?: Map<string, Record<string, unknown>>
     ): Record<string, unknown> | undefined {
         if (!infra.providerConfig) {
             return undefined;
         }
-        return infra.vectorDB.BuildProviderDirectives(item.GetAll(), infra.providerConfig);
+        let sourceRecord = item.GetAll() as Record<string, unknown>;
+        const extra = resolvedFields?.get(NormalizeUUID(item.ID));
+        if (extra) {
+            sourceRecord = { ...sourceRecord, ...extra };
+        }
+        return infra.vectorDB.BuildProviderDirectives(sourceRecord, infra.providerConfig);
+    }
+
+    /**
+     * Resolve the source-record field paths the driver declares for this index, for a batch of
+     * items. Returns per-item bags of `{ pathKey: value }`, or undefined when the driver declares
+     * no paths. Deliberately generic — what a path's value MEANS (a Pinecone namespace, a shard
+     * key, a routing region...) is entirely the driver's business; the engine only resolves data.
+     */
+    private async resolveDriverFieldPaths(
+        items: MJContentItemEntity[],
+        infra: ResolvedVectorInfrastructure,
+        resolver: FieldPathResolver
+    ): Promise<Map<string, Record<string, unknown>> | undefined> {
+        if (!infra.providerConfig) return undefined;
+        const paths = infra.vectorDB.GetSourceRecordFieldPaths(infra.providerConfig);
+        if (!paths || paths.length === 0) return undefined;
+
+        const byItem = new Map<string, Record<string, unknown>>();
+        for (const path of paths) {
+            const values = await resolver.ResolveForItems(items, path);
+            for (const item of items) {
+                const key = NormalizeUUID(item.ID);
+                const bag = byItem.get(key) ?? {};
+                bag[path] = values.get(key);
+                byItem.set(key, bag);
+            }
+        }
+        return byItem;
+    }
+
+    /**
+     * Build directives for every item up front, converting a driver rejection (a throw from
+     * `BuildProviderDirectives`) into a per-record failure. Returns the directive map for the
+     * accepted items plus the rejected items — callers fail the rejected records individually
+     * (before any embedding spend) and proceed with the rest of the batch.
+     */
+    private async precomputeProviderDirectives(
+        items: MJContentItemEntity[],
+        infra: ResolvedVectorInfrastructure,
+        resolver: FieldPathResolver
+    ): Promise<{ directives: Map<string, Record<string, unknown> | undefined>; rejected: MJContentItemEntity[] }> {
+        const directives = new Map<string, Record<string, unknown> | undefined>();
+        const rejected: MJContentItemEntity[] = [];
+        const resolvedFields = await this.resolveDriverFieldPaths(items, infra, resolver);
+        for (const item of items) {
+            try {
+                directives.set(NormalizeUUID(item.ID), this.buildProviderDirectives(item, infra, resolvedFields));
+            } catch (e) {
+                LogError(`Vector provider rejected record ${item.ID}: ${e instanceof Error ? e.message : String(e)}`);
+                rejected.push(item);
+            }
+        }
+        return { directives, rejected };
     }
 
     /**
@@ -2130,12 +2236,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const items = await this.loadChunkParentItems(toPurge, contextUser);
         if (!items) { stats.failed += toPurge.length; return; }
 
+        const itemById = new Map(items.map(i => [NormalizeUUID(i.ID), i]));
         const { sourceMap, typeMap } = await this.loadContentSourceAndTypeMaps(items, contextUser);
         const itemGroups = this.groupItemsByInfrastructure(items, sourceMap, typeMap);
+        const pathResolver = new FieldPathResolver(this.ProviderToUse, contextUser, 'MJ: Content Items');
 
         for (const [groupKey, groupItems] of itemGroups) {
             const groupItemIDs = new Set(groupItems.map(i => NormalizeUUID(i.ID)));
-            const groupChunks = toPurge.filter(c => groupItemIDs.has(NormalizeUUID(c.ContentItemID)));
+            let groupChunks = toPurge.filter(c => groupItemIDs.has(NormalizeUUID(c.ContentItemID)));
             if (groupChunks.length === 0) continue;
 
             let infra: ResolvedVectorInfrastructure;
@@ -2146,7 +2254,22 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 stats.failed += groupChunks.length;
                 continue;
             }
-            await this.purgeChunkGroup(groupChunks, infra, stats);
+
+            // Deletes carry the same per-record directives as the original upsert so drivers can
+            // route each removal correctly. Chunks whose parent the driver rejects can't have
+            // their vectors targeted — they are left 'Pending' (counted failed) and retried after
+            // the data is fixed; the rest of the group proceeds.
+            const { directives, rejected } = await this.precomputeProviderDirectives(groupItems, infra, pathResolver);
+            if (rejected.length > 0) {
+                const rejectedIDs = new Set(rejected.map(i => NormalizeUUID(i.ID)));
+                const blocked = groupChunks.filter(c => rejectedIDs.has(NormalizeUUID(c.ContentItemID)));
+                LogError(`PurgeDeletedChunks: ${blocked.length} chunk(s) rejected by the vector provider's directive policy — cannot target their vectors, left Pending`);
+                stats.failed += blocked.length;
+                groupChunks = groupChunks.filter(c => !rejectedIDs.has(NormalizeUUID(c.ContentItemID)));
+                if (groupChunks.length === 0) continue;
+            }
+
+            await this.purgeChunkGroup(groupChunks, infra, stats, itemById, directives);
         }
     }
 
@@ -2154,11 +2277,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     private async purgeChunkGroup(
         groupChunks: MJContentItemChunkEntity[],
         infra: ResolvedVectorInfrastructure,
-        stats: ChunkPurgeStats
+        stats: ChunkPurgeStats,
+        itemById: Map<string, MJContentItemEntity>,
+        directivesByItem?: Map<string, Record<string, unknown> | undefined>
     ): Promise<void> {
         for (let i = 0; i < groupChunks.length; i += PURGE_VECTORDB_SUBBATCH) {
             const batch = groupChunks.slice(i, i + PURGE_VECTORDB_SUBBATCH);
-            if (await this.deleteChunkVectors(batch, infra)) {
+            if (await this.deleteChunkVectors(batch, infra, itemById, directivesByItem)) {
                 for (const c of batch) {
                     if (await this.markChunkDeleted(c)) stats.purged++; else stats.failed++;
                 }
@@ -2171,9 +2296,23 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     /** Remove a batch of chunk vectors from the vector DB (rate-limited). Returns whether it succeeded. */
     private async deleteChunkVectors(
         batch: MJContentItemChunkEntity[],
-        infra: ResolvedVectorInfrastructure
+        infra: ResolvedVectorInfrastructure,
+        itemById: Map<string, MJContentItemEntity>,
+        directivesByItem?: Map<string, Record<string, unknown> | undefined>
     ): Promise<boolean> {
-        const records: VectorRecord[] = batch.map(c => ({ id: c.VectorRecordID as string, values: [], metadata: {} }));
+        // Deletes carry the same per-record provider directives as the original upsert so
+        // drivers can route each removal correctly (e.g. to the partition the vector lives in).
+        const records: VectorRecord[] = batch.map(c => {
+            const record: VectorRecord = { id: c.VectorRecordID as string, values: [], metadata: {} };
+            const item = itemById.get(NormalizeUUID(c.ContentItemID));
+            const directives = directivesByItem
+                ? directivesByItem.get(NormalizeUUID(c.ContentItemID))
+                : (item ? this.buildProviderDirectives(item, infra) : undefined);
+            if (directives) {
+                record.providerTemporaryDirectives = directives;
+            }
+            return record;
+        });
         await this.VectorDBRateLimiter.Acquire();
         try {
             const resp = await infra.vectorDB.DeleteRecords(records, infra.indexName);
@@ -2207,7 +2346,10 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Bounded per run by `maxItems` and per embed/upsert call by CHUNK_EMBED_SUBBATCH + rate-limited,
      * so a large backlog drains over several runs rather than hammering the API or vector store.
      * Meant to run out-of-band from live vectorization (on demand or scheduled). Best-effort per
-     * chunk — a failure leaves the row 'Pending' (retried next run) and never aborts the pass.
+     * chunk — a transient failure leaves the row 'Pending' (retried next run) and never aborts the
+     * pass. Exception: a chunk whose record the vector driver REJECTS (a throw from
+     * `BuildProviderDirectives`, e.g. a mandatory routing value is missing) is marked 'Failed'
+     * (see {@link markChunkEmbedFailed}) so it cannot starve the oldest-first pending queue.
      *
      * @returns counts of chunks embedded, failed, and skipped (empty text / missing parent).
      */
@@ -2262,10 +2404,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const { sourceMap, typeMap } = await this.loadContentSourceAndTypeMaps(items, contextUser);
         const itemGroups = this.groupItemsByInfrastructure(items, sourceMap, typeMap);
         const tagMap = await this.loadTagsForItems(items, contextUser);
+        const pathResolver = new FieldPathResolver(this.ProviderToUse, contextUser, 'MJ: Content Items');
 
         for (const [groupKey, groupItems] of itemGroups) {
             const groupItemIDs = new Set(groupItems.map(i => NormalizeUUID(i.ID)));
-            const groupChunks = chunks.filter(c => groupItemIDs.has(NormalizeUUID(c.ContentItemID)));
+            let groupChunks = chunks.filter(c => groupItemIDs.has(NormalizeUUID(c.ContentItemID)));
             if (groupChunks.length === 0) continue;
 
             let infra: ResolvedVectorInfrastructure;
@@ -2276,8 +2419,41 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 stats.failed += groupChunks.length;
                 continue;
             }
-            await this.embedChunkGroup(groupChunks, itemById, infra, tagMap, contextUser, stats);
+
+            // Provider directives are built per parent item BEFORE any embedding spend. Chunks
+            // whose parent the driver rejects (see precomputeProviderDirectives) are marked Failed
+            // individually; the rest of the group proceeds. Recovery: fix the data, reset the
+            // rows to Pending.
+            const { directives, rejected } = await this.precomputeProviderDirectives(groupItems, infra, pathResolver);
+            if (rejected.length > 0) {
+                const rejectedIDs = new Set(rejected.map(i => NormalizeUUID(i.ID)));
+                const blocked = groupChunks.filter(c => rejectedIDs.has(NormalizeUUID(c.ContentItemID)));
+                LogError(`EmbedPendingChunks: ${blocked.length} chunk(s) rejected by the vector provider's directive policy — marked Failed, remaining chunks proceed`);
+                for (const c of blocked) {
+                    await this.markChunkEmbedFailed(c);
+                    stats.failed++;
+                }
+                groupChunks = groupChunks.filter(c => !rejectedIDs.has(NormalizeUUID(c.ContentItemID)));
+                if (groupChunks.length === 0) continue;
+            }
+
+            await this.embedChunkGroup(groupChunks, itemById, infra, tagMap, contextUser, stats, directives);
         }
+    }
+
+    /**
+     * Mark a pending chunk's embed as Failed — used when the vector provider rejects the record's
+     * directives. Deliberately NOT left 'Pending': the pending queue drains oldest-first, so rows
+     * that can never succeed without a data fix would permanently occupy the front of every future
+     * run's MaxItems window and starve resolvable chunks behind them. Best-effort save.
+     */
+    private async markChunkEmbedFailed(chunk: MJContentItemChunkEntity): Promise<boolean> {
+        chunk.EmbeddingStatus = 'Failed';
+        const saved = await chunk.Save();
+        if (!saved) {
+            LogError(`EmbedPendingChunks: failed to mark chunk ${chunk.ID} Failed: ${chunk.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        return saved;
     }
 
     /** Embed + upsert one infra group's chunks in bounded sub-batches, then stamp each row Complete. */
@@ -2287,13 +2463,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         infra: ResolvedVectorInfrastructure,
         tagMap: Map<string, string[]>,
         contextUser: UserInfo,
-        stats: ChunkEmbedStats
+        stats: ChunkEmbedStats,
+        directivesByItem?: Map<string, Record<string, unknown> | undefined>
     ): Promise<void> {
         for (let i = 0; i < groupChunks.length; i += CHUNK_EMBED_SUBBATCH) {
             const batch = groupChunks.slice(i, i + CHUNK_EMBED_SUBBATCH);
             const embeddable = this.toEmbeddableChunks(batch, itemById, stats);
             if (embeddable.length === 0) continue;
-            await this.embedAndPersistChunkBatch(embeddable, infra, tagMap, contextUser, stats);
+            await this.embedAndPersistChunkBatch(embeddable, infra, tagMap, contextUser, stats, directivesByItem);
         }
     }
 
@@ -2326,7 +2503,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         infra: ResolvedVectorInfrastructure,
         tagMap: Map<string, string[]>,
         contextUser: UserInfo,
-        stats: ChunkEmbedStats
+        stats: ChunkEmbedStats,
+        directivesByItem?: Map<string, Record<string, unknown> | undefined>
     ): Promise<void> {
         const texts = embeddable.map(e => e.chunk.text);
         await this.EmbeddingRateLimiter.Acquire(texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0));
@@ -2353,7 +2531,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 values: runResult.Vectors[idx],
                 metadata: this.buildVectorMetadata(e.chunk, false, tagMap.get(e.chunk.item.ID), config, contentItemEntity),
             };
-            const directives = this.buildProviderDirectives(e.chunk.item, infra);
+            const directives = directivesByItem
+                ? directivesByItem.get(NormalizeUUID(e.chunk.item.ID))
+                : this.buildProviderDirectives(e.chunk.item, infra);
             if (directives) {
                 record.providerTemporaryDirectives = directives;
             }
@@ -2617,23 +2797,49 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
     /** Create a BaseEmbeddings instance for a given driver class */
     private createEmbeddingInstance(driverClass: string): BaseEmbeddings {
+        // No pre-flight key check, deliberately — the same call the EntityDocument pipeline already
+        // makes (`entityVectorSync.ts`), for the reason documented there: an empty key is legitimate
+        // for local-only drivers (LocalEmbedding runs ONNX in-process and does `super(apiKey || 'local')`),
+        // and for a cloud driver that genuinely needs one the constructor or the first inference call
+        // raises a real provider-level auth error, which is more actionable than a guard here.
+        // Gating up front made local embedding models unusable from this pipeline without inventing a
+        // meaningless AI_VENDOR_API_KEY__LocalEmbedding.
         const apiKey = GetAIAPIKey(driverClass);
-        if (!apiKey) {
-            throw new Error(`No API key found for embedding driver ${driverClass} — set AI_VENDOR_API_KEY__${driverClass} in .env`);
-        }
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(BaseEmbeddings, driverClass, apiKey);
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(BaseEmbeddings, driverClass, apiKey || '');
         if (!instance) throw new Error(`Failed to create embedding instance for ${driverClass}`);
         return instance;
     }
 
-    /** Create a VectorDBBase instance for a given class key */
+    /**
+     * Create a VectorDBBase instance for a given class key, wired for colocated storage where the
+     * provider supports it.
+     *
+     * The ordering is load-bearing. A **colocated** provider (SQLServerVectorDatabase, pgvector) keeps
+     * vectors in the application's own database: it has no credentials to present, and it needs the
+     * active data-provider connection handed to it before use or it throws "requires a host connection".
+     * Neither fact is knowable until the instance exists — so instantiate first, wire, and only then
+     * enforce the key, for providers that actually need one.
+     *
+     * Demanding a key up front made every colocated store unusable from this pipeline: callers had to
+     * invent a meaningless `AI_VENDOR_API_KEY__SQLServerVectorDatabase`, and even then the missing host
+     * connection failed later and confusingly — `CreateIndex` logged and continued, then vectorization
+     * died on a vector-database cache miss, which reads like bad metadata rather than a missing wire-up.
+     *
+     * This mirrors what the EntityDocument pipeline already does (`entityVectorSync.ts`), so the two
+     * vectorization paths now agree about colocated providers.
+     */
     private createVectorDBInstance(classKey: string): VectorDBBase {
         const apiKey = GetAIAPIKey(classKey);
-        if (!apiKey) {
+        // The sentinel is required, not cosmetic: `VectorDBBase`'s constructor rejects an empty key
+        // outright, and a colocated provider does not override it — so passing '' would throw
+        // "API key cannot be empty" for precisely the keyless case this method exists to support.
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(VectorDBBase, classKey, apiKey || 'colocated');
+        if (!instance) throw new Error(`Failed to create vector DB instance for ${classKey}`);
+
+        instance.TryWireColocatedHost(this.ProviderToUse);
+        if (!instance.SupportsColocatedQuery && instance.RequiresAPIKey && !apiKey) {
             throw new Error(`No API key found for vector DB ${classKey} — set AI_VENDOR_API_KEY__${classKey} in .env`);
         }
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(VectorDBBase, classKey, apiKey);
-        if (!instance) throw new Error(`Failed to create vector DB instance for ${classKey}`);
         return instance;
     }
 
@@ -2668,6 +2874,13 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             vectorIDStrategy: srcCfg?.VectorIDStrategy ?? typeCfg?.VectorIDStrategy ?? DEFAULT_VECTOR_ID_STRATEGY,
             chunkTextStorage: srcCfg?.ChunkTextStorage ?? typeCfg?.ChunkTextStorage ?? DEFAULT_CHUNK_TEXT_STORAGE,
             metadata: srcCfg?.VectorMetadata ?? typeCfg?.VectorMetadata ?? undefined,
+            // Source only — deliberately NOT part of the ContentType cascade the other knobs use. The
+            // others describe HOW to store a vector, which a content type can sensibly default for every
+            // source that adopts it. This one asserts WHAT the vectors are, and it decides which entity's
+            // permissions search evaluates, so a type-level default would make that assertion on behalf of
+            // sources the type's author never saw — including ones storing their vectors at a different
+            // level, where the declaration would be wrong.
+            vectorEntityName: srcCfg?.VectorEntityName,
         };
     }
 
@@ -2740,7 +2953,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      *
      * The identity keys are chunk-aware (see the Chunk-Identity Contract); under 'explicit' only
      * `Entity` is kept so content search results stay labeled (record id is recovered from the
-     * vector id under the default 'recordId' strategy).
+     * vector id under the default 'recordId' strategy) — unless the source declares its vector entity,
+     * in which case `Entity` gives way to `ContentSourceID` and search resolves the name from the
+     * declaration. See {@link canOmitEntityMetadataKey} for the conditions and why each one exists.
      */
     protected buildVectorMetadata(
         chunk: EmbeddingChunk,
@@ -2755,7 +2970,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const explicit = strategy === 'explicit';
         const meta: Record<string, string | number | boolean | string[]> = {};
 
-        this.addContentSystemMetadata(meta, chunk, isItemLevel, explicit);
+        this.addContentSystemMetadata(meta, chunk, isItemLevel, explicit, config);
 
         if (!strategy) {
             this.addCuratedMetadata(meta, item);
@@ -2775,20 +2990,34 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         if (metaCfg?.IncludeText && chunk.text) {
             meta['Text'] = chunk.text.substring(0, DEFAULT_METADATA_TRUNCATION);
         }
+
+        this.enforceAttributionKey(meta, chunk, explicit, config);
         return meta;
     }
 
     /**
-     * Add the identity/system keys. `Entity` is always present (chunk-aware). Under 'explicit' the
-     * rest are omitted (minimal metadata); otherwise `RecordID` — plus `ContentItemID` / `Sequence`
-     * for chunk vectors — are included so an external hydrator can fetch the row(s).
+     * Add the identity/system keys. `Entity` is present unless the source declares its vector entity
+     * and {@link canOmitEntityMetadataKey} allows dropping it, in which case `ContentSourceID` takes
+     * its place as the key search attributes through. Under 'explicit' the rest are omitted (minimal
+     * metadata); otherwise `RecordID` — plus `ContentItemID` / `Sequence` for chunk vectors — are
+     * included so an external hydrator can fetch the row(s).
      */
     private addContentSystemMetadata(
         meta: Record<string, string | number | boolean | string[]>,
         chunk: EmbeddingChunk,
         isItemLevel: boolean,
-        explicit: boolean
+        explicit: boolean,
+        config: ResolvedVectorStorageConfig
     ): void {
+        if (this.canOmitEntityMetadataKey(config, explicit)) {
+            // The invariant that makes omission safe, and the whole reason this is not just a deletion:
+            // a vector with no `Entity` key must still carry the key attribution resolves THROUGH, or the
+            // match reaches search with nothing to resolve and is discarded without being shown. Written
+            // unconditionally — a source configuring `ContentSourceID` in its own field list is applied
+            // later (display fields go last) and so still wins, StoreAs coercion included.
+            meta['ContentSourceID'] = chunk.item.ContentSourceID;
+            return;
+        }
         meta['Entity'] = isItemLevel ? 'MJ: Content Items' : 'MJ: Content Item Chunks';
         if (explicit) return;
         if (isItemLevel) {
@@ -2798,6 +3027,172 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             meta['ContentItemID'] = chunk.item.ID;
             meta['Sequence'] = chunk.chunkIndex;
         }
+    }
+
+    /**
+     * Last line of defence for the omission invariant: when `Entity` was dropped, the vector MUST leave
+     * here carrying a `ContentSourceID` search can actually resolve — a non-empty **string**.
+     *
+     * The promoted key is written before the strategy's own display fields, deliberately, so a source
+     * that configures `ContentSourceID` with its own rules wins. That is right for every coercion but
+     * one: `StoreAs: 'boolean'` assigns `Boolean(value)` unconditionally
+     * ({@link setCoercedFieldValue} — the numeric and epoch branches are guarded, that one is not), so
+     * the configured rule would replace the id with `true`. The reader requires a string
+     * (`typeof contentSourceID === 'string'`), so the match would arrive attributable-by-design and
+     * unattributable-in-fact — the silent drop this feature exists to prevent, reintroduced by a field
+     * rule that looks unrelated.
+     *
+     * So configured rules win up to the point where they would break attribution, and no further.
+     */
+    private enforceAttributionKey(
+        meta: Record<string, string | number | boolean | string[]>,
+        chunk: EmbeddingChunk,
+        explicit: boolean,
+        config: ResolvedVectorStorageConfig
+    ): void {
+        if (!this.canOmitEntityMetadataKey(config, explicit)) {
+            return;
+        }
+        const current = meta['ContentSourceID'];
+        if (typeof current === 'string' && current.trim().length > 0) {
+            return;
+        }
+        LogStatus(
+            `[Autotag] Content source ${chunk.item.ContentSourceID} configures ContentSourceID in a way ` +
+            `that leaves no resolvable value (${JSON.stringify(current)}), and its vectors omit the Entity ` +
+            `key — restoring the id so search can still attribute them. Remove the StoreAs override on ` +
+            `ContentSourceID, or set VectorEntityName aside and let Entity be written instead.`
+        );
+        meta['ContentSourceID'] = chunk.item.ContentSourceID;
+    }
+
+    /**
+     * Whether this source's vectors may omit the `Entity` metadata key and let search resolve the entity
+     * from the source's declaration instead of carrying it on every vector.
+     *
+     * Each condition closes a way attribution could otherwise fail, and attribution failure is not a
+     * cosmetic loss: a match search cannot name is discarded by the permission filter, not returned
+     * unlabelled.
+     *
+     * - **`explicit` only.** The other strategies document a populated metadata set; dropping a key their
+     *   consumers are told is always there would be a behavior change for them.
+     * - **A declaration must exist**, and must resolve to the chunk entity or a subtype of it — see
+     *   {@link declarationWillResolve}. Without one nothing downstream can answer what the vector is.
+     * - **`'alwaysChunk'` only.** One declaration names one entity, and `'mixed'` emits ContentItem-level
+     *   vectors for single-chunk items and ContentItemChunk-level vectors for the rest
+     *   ({@link isItemLevelVector}) — two entities out of one source, which a single declaration cannot
+     *   describe. Written as an allowlist so a storage mode added later keeps writing the key until
+     *   someone decides otherwise.
+     * - **`'recordId'` only.** Under `explicit` the `RecordID` key is dropped too, leaving the vector's own
+     *   id as the only pointer back to a row — which IS the chunk id under `'recordId'`, and a SHA-1 digest
+     *   under `'hash'` ({@link resolveChunkVectorID}). Omitting `Entity` under `'hash'` would attribute the
+     *   match successfully and then hand search an id that resolves against no row: the same silent
+     *   disappearance, one step further along.
+     *
+     * The level IS checked here (it was not, originally, and that was wrong — the reader validates
+     * family membership, which both content-item entities satisfy, so a chunk-level source declaring the
+     * item entity passed both sides and pointed search at a table holding none of its ids).
+     */
+    private canOmitEntityMetadataKey(config: ResolvedVectorStorageConfig, explicit: boolean): boolean {
+        // Trimmed, because the reader trims before deciding whether a declaration exists
+        // (`declaredVectorEntityName`). A whitespace-only value is truthy here and empty there, so the
+        // untrimmed test would omit the key against a declaration the reader then refuses.
+        const declared = config.vectorEntityName?.trim();
+        if (!explicit
+            || !declared
+            || config.chunkTextStorage !== 'alwaysChunk'
+            || config.vectorIDStrategy !== 'recordId') {
+            return false;
+        }
+        return this.declarationWillResolve(declared);
+    }
+
+    /** Declarations already reported as unresolvable, so the warning is once per run, not per vector. */
+    private readonly unresolvableDeclarations = new Set<string>();
+
+    /**
+     * Whether a declared entity name resolves in metadata — checked HERE, before the `Entity` key is
+     * dropped, and not left to the reader.
+     *
+     * This asymmetry is the difference between a recoverable mistake and an unrecoverable one. The
+     * reader refuses a name it cannot resolve and falls through to `'Unknown'`, at which point the
+     * results are silently discarded — but by then the vectors were written without `Entity`, so
+     * correcting the name does not bring them back. Only a full re-embed does. The likeliest way in is
+     * the most ordinary: a core entity written without its `MJ: ` prefix.
+     *
+     * Keeping the key when the name does not resolve costs one redundant metadata field and loses
+     * nothing. So this deliberately fails SAFE rather than fail-closed.
+     *
+     * It checks resolution only, not whether the entity is in the content-item family. That refusal is
+     * the reader's security decision to make (an arbitrary entity name in a writable blob must not
+     * choose which permissions apply), and it is not something the write side should be able to
+     * pre-approve.
+     */
+    private declarationWillResolve(declared: string): boolean {
+        const entity = this.ProviderToUse.EntityByName(declared);
+        if (!entity) {
+            this.refuseDeclarationOnce(
+                declared,
+                `does not resolve in metadata (core entities carry the \`MJ: \` prefix)`
+            );
+            return false;
+        }
+        // Level, not just family. Omission requires `alwaysChunk`, so every vector this gate governs is
+        // chunk-level and its id is a ContentItemChunk primary key. A declaration naming the ITEM entity
+        // — or a subtype of it, which is what the config docs steer you toward when row-level security
+        // lives on an extension — would therefore point search at a table containing none of these ids.
+        // The read side validates family membership only, so this is the only place the mismatch can be
+        // caught before the key is gone for good.
+        if (!this.isChunkLevelEntity(entity)) {
+            this.refuseDeclarationOnce(
+                declared,
+                `is not "${AutotagBaseEngine.CHUNK_ENTITY_NAME}" or a subtype of it, but this source stores ` +
+                `chunk-level vectors (ChunkTextStorage 'alwaysChunk'), so their ids are chunk keys`
+            );
+            return false;
+        }
+        return true;
+    }
+
+    /** The entity whose rows chunk-level vectors actually are. */
+    private static readonly CHUNK_ENTITY_NAME = 'MJ: Content Item Chunks';
+
+    /**
+     * Whether an entity IS-A {@link CHUNK_ENTITY_NAME} — itself, or a subtype somewhere up its IS-A
+     * chain, so a consumer may still declare an extension carrying its own row-level security.
+     *
+     * Walks `ParentID` through `this.ProviderToUse` rather than `EntityInfo.ParentChain`, which resolves
+     * each step against the process-global `Metadata.Provider` by design — mixing the two would resolve
+     * the declaration on one metadata set and walk its ancestry on another.
+     */
+    private isChunkLevelEntity(entity: EntityInfo): boolean {
+        const visited = new Set<string>();
+        let current: EntityInfo | undefined = entity;
+        while (current) {
+            if (current.Name === AutotagBaseEngine.CHUNK_ENTITY_NAME) {
+                return true;
+            }
+            if (!current.ParentID || visited.has(current.ID)) {
+                return false; // root reached, or a cycle in the metadata
+            }
+            visited.add(current.ID);
+            current = this.ProviderToUse.EntityByID(current.ParentID) ?? undefined;
+        }
+        return false;
+    }
+
+    /** Report a refused declaration once per run — this is evaluated per vector, so per-call would spam. */
+    private refuseDeclarationOnce(declared: string, because: string): void {
+        if (this.unresolvableDeclarations.has(declared)) {
+            return;
+        }
+        this.unresolvableDeclarations.add(declared);
+        LogStatus(
+            `[Autotag] Vector entity declaration "${declared}" ${because}. Keeping the \`Entity\` key ` +
+            `rather than omitting it — search would otherwise have no way to attribute these vectors, ` +
+            `and because the key would never have been written, correcting the configuration later would ` +
+            `not recover them without a re-embed.`
+        );
     }
 
     /** The curated default content metadata set (historical behavior when no FieldStrategy is set). */

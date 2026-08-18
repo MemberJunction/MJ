@@ -38,7 +38,8 @@
  * absent and the whole suite skips-as-pass (correct — the invariant is unexercised, not violated).
  */
 import { RunView, LocalCacheManager, EntityPermissionType } from '@memberjunction/core';
-import type { UserInfo, IMetadataProvider, RunViewParams, RowLevelSecurityFilterInfo } from '@memberjunction/core';
+import { RowLevelSecurityFilterInfo } from '@memberjunction/core';
+import type { IMetadataProvider, RunViewParams } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -348,10 +349,17 @@ export async function CheckRls7_ClientSmartCacheNoCrossServe(ctx: IntegrationChe
     // same race Q2 settles with a sleep). The sound oracle is the fingerprint identity
     // itself — the exact mechanism whose failure WOULD leak — plus the settled write
     // proving B populated its OWN slot.
-    const entity = (ctx.Provider as unknown as { EntityByName(n: string): { GetUserRowLevelSecurityWhereClause(u: UserInfo, t: EntityPermissionType, s: string): string } | undefined }).EntityByName(fx.EntityName);
-    Assert(!!entity, `RLS entity '${fx.EntityName}' must resolve from provider metadata`);
-    const aClause = entity!.GetUserRowLevelSecurityWhereClause(fx.UserA, EntityPermissionType.Read, '');
-    const bClause = entity!.GetUserRowLevelSecurityWhereClause(fx.UserB, EntityPermissionType.Read, '');
+    // The clauses come FROM THE FIXTURE, not from a re-derivation against `ctx.Provider`. Discovery
+    // computed them once against the SERVER provider — they are the evidence for `Usable` — and this
+    // bundle runs on the Network provider, which returns an EMPTY clause for every user. Re-deriving
+    // here therefore compared '' to '' and reported an RLS LEAK on the tier's #1 security oracle
+    // every time the fixture was usable, which is to say every time the check actually ran.
+    const aClause = fx.ClauseA;
+    const bClause = fx.ClauseB;
+    Assert(aClause !== bClause && aClause !== '',
+        `the fixture promised divergent non-empty clauses but carried aClause=${JSON.stringify(aClause)}, ` +
+        `bClause=${JSON.stringify(bClause)} — discovery and RlsFixture.Usable disagree`);
+
     const conn = connStrOf(ctx.Provider);
     const aFp = LocalCacheManager.Instance.GenerateRunViewFingerprint(params(), conn, aClause);
     const bFp = LocalCacheManager.Instance.GenerateRunViewFingerprint(params(), conn, bClause);
@@ -373,6 +381,61 @@ export async function CheckRls7_ClientSmartCacheNoCrossServe(ctx: IntegrationChe
 }
 
 /** The 'rls-isolation' bundle (server transport): RLS1–RLS6 (discovery) + RLS8–RLS10 (seeded, deterministic). */
+
+/**
+ * RLS11 — a `$` in a substituted user property must not rewrite the predicate (#3171).
+ *
+ * `MarkupFilterText` substitutes user properties into an RLS predicate, and the result is
+ * AND-ed into every RunView read and every Create/Update check by
+ * `GetEffectiveRowFilterWhereClause`. It used to do that with a STRING replacement, so
+ * `$$`, `$&`, `` $` `` and `$'` in a user property were expanded by
+ * `String.prototype.replace` instead of inserted — rewriting the predicate, which is the
+ * exact outcome the `'`-escaping on the same line exists to prevent.
+ *
+ * Unit tests already prove the substituted STRING is byte-exact. They cannot prove the
+ * result is SQL the server accepts and scopes correctly, which is the half that matters
+ * once the predicate reaches a database. This check closes that: it marks up a
+ * `{{UserName}}`-scoped filter with each hostile value, asserts byte-exactness, and then
+ * EXECUTES the predicate so a malformed one fails loudly rather than silently widening a
+ * result set.
+ *
+ * The principal is a CLONE with the hostile name stamped in memory — the same carrier the
+ * KF checks use — so nothing is written and teardown stays a no-op.
+ */
+export async function CheckRls11_DollarInUserProperty(ctx: IntegrationCheckContext): Promise<void> {
+    // `$` before an ordinary character is NOT special; it must survive too.
+    const HOSTILE = ['a$$b', 'a$&b', 'a$`b', "a$'b", 'a$1b', 'a$b', "x$&$`$'$$y"];
+    // Core entities carry the `MJ: ` prefix as of v5.0; the bare name is kept as a
+    // fallback rather than a guess. This ASSERTS instead of skipping: a database with
+    // no Users entity is broken, not a database where the fixture happens to be
+    // unavailable — and a check that skips for a mistyped name is the very failure
+    // mode RLS1/RLS2 sat in.
+    const usersEntity = ctx.Provider.EntityByName('MJ: Users') ?? ctx.Provider.EntityByName('Users');
+    Assert(usersEntity != null, 'RLS11: neither "MJ: Users" nor "Users" resolves in provider metadata');
+    const entityName = usersEntity!.Name;
+
+    for (const value of HOSTILE) {
+        const filter = new RowLevelSecurityFilterInfo({ FilterText: "Name = '{{UserName}}'" });
+        const principal = Object.assign(Object.create(Object.getPrototypeOf(ctx.User)), ctx.User, { Name: value });
+
+        const markup = filter.MarkupFilterText(principal);
+        // The contract is verbatim AFTER SQL quote-escaping: `'`-doubling is deliberate
+        // and must survive; only the `$` expansion was ever the defect.
+        const expected = `Name = '${value.replace(/'/g, "''")}'`;
+        AssertEqual(markup, expected, `RLS predicate corrupted for user name ${JSON.stringify(value)}`);
+
+        // And it has to be SQL. A rewritten predicate can still parse, so assert the
+        // scoping too: no real user carries these names, so the answer must be zero rows.
+        const probe = await new RunView().RunView<Record<string, unknown>>(
+            { EntityName: entityName, ExtraFilter: markup, ResultType: 'simple', MaxRows: 5, BypassCache: true },
+            ctx.User,
+        );
+        Assert(probe.Success, `RLS predicate for ${JSON.stringify(value)} was not valid SQL: ${probe.ErrorMessage}`);
+        AssertEqual(probe.Results.length, 0,
+            `RLS predicate for ${JSON.stringify(value)} matched ${probe.Results.length} row(s) — it does not mean what it says`);
+    }
+}
+
 export const RlsIsolationChecks: NamedCheck[] = [
     {
         Id: 'rls-isolation.RLS1',
@@ -398,6 +461,11 @@ export const RlsIsolationChecks: NamedCheck[] = [
         Id: 'rls-isolation.RLS5',
         Name: 'RLS5: a live RunView as a non-exempt user returns ONLY rows satisfying its RLS predicate',
         Fn: CheckRls5_LiveRunViewScoping
+    },
+    {
+        Id: 'rls-isolation.RLS11',
+        Name: 'RLS11: a $ in a substituted user property does not rewrite the predicate (#3171)',
+        Fn: CheckRls11_DollarInUserProperty
     },
     {
         Id: 'rls-isolation.RLS6',

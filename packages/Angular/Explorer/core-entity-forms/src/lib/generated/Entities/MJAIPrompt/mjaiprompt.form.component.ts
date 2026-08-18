@@ -40,9 +40,10 @@ export class MJAIPromptFormComponent extends BaseFormComponent {
             { sectionKey: 'mJEntityDocuments', sectionName: 'Entity Documents', isExpanded: false },
             { sectionKey: 'mJScopedPromptParts', sectionName: 'Scoped Prompt Parts', isExpanded: false },
             { sectionKey: 'mJScopedPromptConfigs', sectionName: 'Scoped Prompt Configs', isExpanded: false },
-            { sectionKey: 'mJAIAgentsConversationSummaryPromptID', sectionName: 'AI Agents (Conversation Summary Prompt ID)', isExpanded: false },
+            { sectionKey: 'mJAIAgentsConversationSummaryPromptID', sectionName: 'AI Agents (Conversation Summary Prompt)', isExpanded: false },
             { sectionKey: 'mJAIAgentTypesContextCompressionPromptID', sectionName: 'AI Agent Types (Context Compression Prompt ID)', isExpanded: false },
-            { sectionKey: 'mJAIAgentTypesConversationSummaryPromptID', sectionName: 'AI Agent Types (Conversation Summary Prompt ID)', isExpanded: false }
+            { sectionKey: 'mJAIAgentTypesConversationSummaryPromptID', sectionName: 'AI Agent Types (Conversation Summary Prompt ID)', isExpanded: false },
+            { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false }
         ]);
     }
 }

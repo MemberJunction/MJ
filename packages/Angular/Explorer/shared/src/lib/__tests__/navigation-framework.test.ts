@@ -528,6 +528,9 @@ describe('UpdateTabQueryParams guard', () => {
 // ---- BaseResourceComponent query param glue ----
 
 describe('BaseResourceComponent UpdateQueryParams', () => {
+  // Seam for invoking the protected method under test.
+  type UpdateQueryParamsSeam = { UpdateQueryParams(params: Record<string, unknown>): void };
+
   function createComponent(data: { ResourceRecordID?: string; Configuration?: Record<string, unknown> }): {
     component: BaseResourceComponent;
     updateTabQueryParams: ReturnType<typeof vi.fn>;
@@ -543,7 +546,7 @@ describe('BaseResourceComponent UpdateQueryParams', () => {
     component.Data = {
       ResourceRecordID: data.ResourceRecordID || '',
       Configuration: data.Configuration || {}
-    } as any;
+    } as unknown as BaseResourceComponent['Data'];
     return { component, updateTabQueryParams, updateActiveTabQueryParams };
   }
 
@@ -560,7 +563,7 @@ describe('BaseResourceComponent UpdateQueryParams', () => {
       }
     });
 
-    (component as any).UpdateQueryParams({ tab: 'related' });
+    (component as unknown as UpdateQueryParamsSeam).UpdateQueryParams({ tab: 'related' });
 
     expect(updateTabQueryParams).toHaveBeenCalledWith('tab-1', { tab: 'related' }, {
       resourceType: 'Records',
@@ -584,7 +587,7 @@ describe('BaseResourceComponent UpdateQueryParams', () => {
     });
     component.ParentTabId = 'parent-tab';
 
-    (component as any).UpdateQueryParams({ section: 'summary' });
+    (component as unknown as UpdateQueryParamsSeam).UpdateQueryParams({ section: 'summary' });
 
     expect(updateTabQueryParams).toHaveBeenCalledWith('parent-tab', { section: 'summary' }, expect.objectContaining({
       resourceType: 'Dashboards',
@@ -601,7 +604,7 @@ describe('BaseResourceComponent UpdateQueryParams', () => {
       }
     });
 
-    (component as any).UpdateQueryParams({ panel: 'details' });
+    (component as unknown as UpdateQueryParamsSeam).UpdateQueryParams({ panel: 'details' });
 
     expect(updateActiveTabQueryParams).toHaveBeenCalledWith({ panel: 'details' });
     expect(updateTabQueryParams).not.toHaveBeenCalled();

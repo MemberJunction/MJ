@@ -1,13 +1,18 @@
-import { SQLDialect } from '@memberjunction/sql-dialect';
-import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenDatabaseProvider } from './codeGenDatabaseProvider';
+import { SQLDialect, SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
+import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenQueryRow, CodeGenDatabaseProvider, MaterializedColumnSpec } from './codeGenDatabaseProvider';
+import { analyzeQueryForMaterialization, detectAggregationKeyColumns, detectAdditiveMeasures, MATERIALIZATION_SURROGATE_COLUMN, type ReadFilterSpecEntry } from './materializationAnalysis';
+import { evaluateMaterializationDrift, type MaterializationDriftFacts } from './materializationDrift';
+import { classifyQueryParameters, buildHeldValues, type QueryParamDef, type VariantRenderer } from './materializationParamClassifier';
+import { buildBroadRowFilterSQL } from './materializationBroadRender';
+import { QueryParameterProcessor, type QueryTemplateInput } from '@memberjunction/query-processor';
 // Side-effect import — registers `SQLServerCodeGenProvider` with `MJGlobal.ClassFactory`
 // under the `'sqlserver'` key via its `@RegisterClass` decorator. Without this import,
 // `ClassFactory.CreateInstance(CodeGenDatabaseProvider, 'sqlserver')` returns nothing
 // and the SS code path silently fails.
 import './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, currentWorkingDirectory, dbPlatform, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
-import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExternalDataSourceReadRouter, ExternalSchemaObject, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
-import { MJApplicationEntity, MJEntityFieldSchema } from "@memberjunction/core-entities";
+import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExternalDataSourceReadRouter, ExternalSchemaObject, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, RunQuerySQLFilterManager, SeverityType, UserInfo } from "@memberjunction/core";
+import { MJApplicationEntity, MJEntityFieldSchema, MJQueryParameterEntity } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { applyIncludeSchemaScope } from "./schema-scope";
@@ -24,7 +29,7 @@ import {
 } from "./search-guardrails";
 import { mapExternalNativeTypeToMJ } from "../Misc/externalTypeMapping";
 import { SQLParser } from "@memberjunction/sql-parser";
-import { createDisplayName, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
+import { createDisplayName, generatePluralName, MJGlobal, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
 
 import * as fs from 'fs';
@@ -114,6 +119,27 @@ export interface VirtualEntityConfig {
    PrimaryKey?: string[];
    /** Optional soft foreign key definitions for the virtual entity */
    ForeignKeys?: SoftFKFieldConfig[];
+}
+
+/**
+ * Configuration for a base-view materialization in the additionalSchemaInfo config file
+ * (the "no-sprawl convenience case" — materialization plan §2.1/§4.1). Declares a 1:1
+ * snapshot of an *existing* entity's base view. Because the shape is identical to the
+ * source entity, NO new entity is minted — the existing entity is reused and its RLS
+ * applies unchanged (§6.1). CodeGen emits the physical table + wrapper view and attaches
+ * an "MJ: Materialized Results" row (SourceType='EntityBaseView') to the existing entity.
+ */
+export interface MaterializedBaseViewConfig {
+   /** Source entity name (preferred). Either this or BaseTable (+ optional SchemaName) must be set. */
+   EntityName?: string;
+   /** Source base table name — alternative to EntityName when entity names aren't stable yet. */
+   BaseTable?: string;
+   /** Optional schema for BaseTable lookups (defaults to the MJ core schema). */
+   SchemaName?: string;
+   /** Optional cron expression for scheduled refresh; omit for manual-only. */
+   RefreshSchedule?: string;
+   /** Optional note for the selection contract (§8): what this snapshot is good for. */
+   IntendedWorkload?: string;
 }
 
 /**
@@ -309,7 +335,7 @@ export class ManageMetadataBase {
 
    /**
     * Produces a schema-qualified object reference.
-    * SQL Server: [schema].[object], PostgreSQL: schema."object"
+    * SQL Server: [schema].[object], PostgreSQL: "schema"."object"
     */
    protected qs(schema: string, object: string): string {
       return this.dialect.QuoteSchema(schema, object);
@@ -631,6 +657,23 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Extracts the MaterializedBaseViews array from the additionalSchemaInfo config file.
+    * Each entry declares a 1:1 base-view materialization of an existing entity (plan §4.1).
+    */
+   protected extractMaterializedBaseViewsFromConfig(config: Record<string, unknown>): MaterializedBaseViewConfig[] {
+      const decls = config.MaterializedBaseViews;
+      if (!Array.isArray(decls)) return [];
+
+      return decls.map((d: Record<string, unknown>) => ({
+         EntityName: (d.EntityName as string) || undefined,
+         BaseTable: (d.BaseTable as string) || undefined,
+         SchemaName: (d.SchemaName as string) || undefined,
+         RefreshSchedule: (d.RefreshSchedule as string) || undefined,
+         IntendedWorkload: (d.IntendedWorkload as string) || undefined,
+      }));
+   }
+
+   /**
     * Extracts ISARelationships array from the additionalSchemaInfo config file.
     * The config may contain a top-level "ISARelationships" key with an array of
     * parent-child relationship definitions.
@@ -941,6 +984,42 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Builds the entity lookup behind {@link processISARelationshipConfig}: match on Name first, else
+    * on BaseTable, optionally constrained to a schema.
+    *
+    * The schema predicate is composed CONDITIONALLY rather than written as
+    * `(@SchemaName IS NULL OR SchemaName = @SchemaName)`. That form is fatal on PostgreSQL: the
+    * parameter's only unambiguous use is `$n IS NULL`, which gives the planner no type to infer, so
+    * the whole statement fails to prepare with "could not determine data type of parameter $n".
+    * SQL Server infers the type from the other side of the OR and never saw the problem.
+    *
+    * The failure was silent in the worst way — processISARelationshipConfig catches per-relationship
+    * errors and logs them, so CodeGen ran to completion with a zero exit code while every declared
+    * IS-A relationship on PostgreSQL was quietly skipped, leaving Entity.ParentID NULL. Downstream
+    * that means no mirrored parent fields, no parent JOIN in the child base view, and a child whose
+    * Save() never writes the parent row.
+    *
+    * Emitting the predicate only when a schema was supplied keeps the parameter list free of
+    * type-ambiguous entries and is portable to both dialects without a cast.
+    */
+   protected buildISAEntityLookupSQL(
+      schema: string,
+      selectBody: string,
+      nameParam: string,
+      schemaName?: string,
+   ): { sql: string; params: Record<string, unknown> } {
+      const schemaPredicate = schemaName ? ` AND SchemaName = @ISASchemaName` : '';
+      const sql = `
+                  ${this.selectTop(1, selectBody,
+                     `FROM ${this.qs(schema, 'vwEntities')}
+                  WHERE Name = @${nameParam}
+                     OR (BaseTable = @${nameParam}${schemaPredicate})`,
+                     `CASE WHEN Name = @${nameParam} THEN 0 ELSE 1 END`)}
+               `;
+      return { sql, params: schemaName ? { 'ISASchemaName': schemaName } : {} };
+   }
+
+   /**
     * Processes IS-A relationship configurations from the additionalSchemaInfo config.
     * For each configured relationship, looks up both entities by name (or by table name
     * within the given schema) and sets Entity.ParentID on the child entity.
@@ -959,15 +1038,11 @@ export class ManageMetadataBase {
       for (const rel of relationships) {
          try {
             // Look up the parent entity — try by Name first, then by BaseTable within the given schema
-            const parentResult = await this.runQueryWithParams(pool, `
-                  ${this.selectTop(1, 'ID, Name',
-                     `FROM ${this.qs(schema, 'vwEntities')}
-                  WHERE Name = @ParentName
-                     OR (BaseTable = @ParentName AND (@SchemaName IS NULL OR SchemaName = @SchemaName))`,
-                     'CASE WHEN Name = @ParentName THEN 0 ELSE 1 END')}
-               `,
-               { 'ParentName': rel.ParentEntity, 'SchemaName': rel.SchemaName || null }
-               );
+            const parentLookup = this.buildISAEntityLookupSQL(schema, 'ID, Name', 'ParentName', rel.SchemaName);
+            const parentResult = await this.runQueryWithParams(pool, parentLookup.sql, {
+               'ParentName': rel.ParentEntity,
+               ...parentLookup.params,
+            });
 
             if (parentResult.recordset.length === 0) {
                logError(`    > IS-A config: parent entity "${rel.ParentEntity}" not found — skipping`);
@@ -978,15 +1053,11 @@ export class ManageMetadataBase {
             const parentName = parentResult.recordset[0].Name;
 
             // Look up the child entity — same strategy
-            const childResult = await this.runQueryWithParams(pool, `
-                  ${this.selectTop(1, 'ID, Name, ParentID',
-                     `FROM ${this.qs(schema, 'vwEntities')}
-                  WHERE Name = @ChildName
-                     OR (BaseTable = @ChildName AND (@SchemaName IS NULL OR SchemaName = @SchemaName))`,
-                     'CASE WHEN Name = @ChildName THEN 0 ELSE 1 END')}
-               `,
-               { 'ChildName': rel.ChildEntity, 'SchemaName': rel.SchemaName || null }
-               );
+            const childLookup = this.buildISAEntityLookupSQL(schema, 'ID, Name, ParentID', 'ChildName', rel.SchemaName);
+            const childResult = await this.runQueryWithParams(pool, childLookup.sql, {
+               'ChildName': rel.ChildEntity,
+               ...childLookup.params,
+            });
 
             if (childResult.recordset.length === 0) {
                logError(`    > IS-A config: child entity "${rel.ChildEntity}" not found — skipping`);
@@ -1278,6 +1349,797 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Processes base-view materialization declarations from additionalSchemaInfo (plan §4.1).
+    * Each declares a 1:1 snapshot of an existing entity's base view. Because the shape is
+    * identical to the source entity, NO new entity is minted — the existing entity is reused
+    * (its RLS applies unchanged, §6.1). For each declaration this:
+    *   1. resolves the source entity,
+    *   2. derives the column shape from the entity's base-view fields (SQLFullType),
+    *   3. emits the physical table (materialized_<Name>) + wrapper view (materialized_vw<Name>)
+    *      via the cross-engine DDL primitive (create-if-absent, so a migration-provided table
+    *      is reused rather than clobbered — §12),
+    *   4. upserts the "MJ: Materialized Results" row (SourceType='EntityBaseView') keyed on the
+    *      source entity.
+    * Population is the refresh driver's job (a later phase); rows land in Status='Building'.
+    */
+   protected async processBaseViewMaterializations(pool: CodeGenConnection): Promise<{ success: boolean; processedCount: number }> {
+      const config = ManageMetadataBase.getSoftPKFKConfig();
+      if (!config) return { success: true, processedCount: 0 };
+
+      const decls = this.extractMaterializedBaseViewsFromConfig(config as Record<string, unknown>);
+      if (decls.length === 0) return { success: true, processedCount: 0 };
+
+      // Gate on the MaterializedResult table existing. Base-view materializations are DECLARED in config, but the
+      // target DB may not have the materialization migration applied yet (e.g. the PostgreSQL parallel world, or a
+      // fresh env sharing a config). The MaterializedResult upsert below would otherwise throw and abort the whole
+      // codegen pass. Unlike the unconditional gates on the sibling methods this one logs, because the user asked
+      // for these materializations — a silent skip would look like the feature quietly did nothing.
+      if (!(await this.materializedResultTableExists(pool))) {
+         logStatus(`    > Base-view materialization: ${decls.length} declaration${decls.length === 1 ? '' : 's'} in config but the MaterializedResult table is absent on this database — skipping (has the materialization migration been applied?)`);
+         return { success: true, processedCount: 0 };
+      }
+
+      // Enumerate the API-key row-filter layer BEFORE any leak gate below evaluates it. Until this runs the cache
+      // reads 'unknown' and every entity is treated as row-restricted (fail closed) — see loadAPIKeyRowFilterTargets.
+      await this.loadAPIKeyRowFilterTargets(pool);
+
+      // Refresh so entity.Fields reflect this run's field sync before we snapshot the shape.
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+      await md.Refresh();
+
+      const coreSchema = mj_core_schema();
+      const esc = (s: string) => s.replace(/'/g, "''");
+      const lit = (s: string | undefined) => (s ? `'${esc(s)}'` : 'NULL');
+      let processedCount = 0;
+
+      for (const decl of decls) {
+         // 1) Resolve the source entity (by name, else by base table [+ schema]).
+         const entity = decl.EntityName
+            ? md.EntityByName(decl.EntityName)
+            : md.Entities.find(
+                 (e) =>
+                    !!decl.BaseTable &&
+                    (e.BaseTable ?? '').trim().toLowerCase() === decl.BaseTable.trim().toLowerCase() &&
+                    (!decl.SchemaName || (e.SchemaName ?? '').trim().toLowerCase() === decl.SchemaName.trim().toLowerCase()),
+              );
+         if (!entity) {
+            logError(`    > Base-view materialization: source entity not found (${decl.EntityName ?? `${decl.SchemaName ?? coreSchema}.${decl.BaseTable}`}) — skipping`);
+            continue;
+         }
+
+         // SECURITY (Leak 1 / C2 for base views): refuse to materialize an EXTERNAL entity that is
+         // read-RLS-protected. An external entity's live reads are REFUSED under RLS (the read path throws —
+         // MJ can't enforce RLS WHERE clauses on a remote system), and for external entities the read path
+         // returns at the external-dispatch branch BEFORE any materialized-view swap — so the "base-view reads
+         // re-apply source RLS" exemption is unreachable here. Mirroring the remote rows into a local table
+         // would expose, via any raw query joining the wrapper view, data the live path refuses entirely.
+         // (A LOCAL RLS base-view is safe: its read path swaps to the mirror and re-applies the entity's RLS.)
+         if (entity.ExternalDataSourceID && this.entityHasRowLevelRestriction(entity)) {
+            logError(`    > REFUSING base-view materialization of external entity "${entity.Name}": it is row-restricted (role RLS and/or an API-key row filter) and its live reads are refused under RLS, so a local mirror would leak its rows via raw queries over the wrapper view (a mirror cannot reproduce remote row restrictions). Skipping.`);
+            continue;
+         }
+
+         // Schema-name symmetry with the refresh path: MaterializationRefresher validates schema/table/view names
+         // as plain SQL identifiers (^[A-Za-z_][A-Za-z0-9_]*$) before building any DDL. The mint quotes at the
+         // dialect level and would otherwise accept a schema name (e.g. "Sales Data", "crm-prod") the refresh then
+         // permanently rejects — the entity would provision cleanly and never refresh (a silent nightly failure).
+         // Refuse up front, symmetrically, with a clear message. (TableName/ViewName are CodeName-derived and
+         // always identifier-safe, so only the source entity's schema can be non-conforming here.)
+         if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(entity.SchemaName ?? '')) {
+            logError(`    > REFUSING base-view materialization of entity "${entity.Name}": its schema "${entity.SchemaName}" is not a plain SQL identifier — the refresh path requires one, so materialization is only supported for entities in identifier-named schemas. Skipping.`);
+            continue;
+         }
+
+         // 2) Derive the snapshot column shape from the entity's base-view fields.
+         // For EXTERNAL entities, virtual fields are MJ-computed and absent from the remote source, so the
+         // refresh mirror (rebuildFromExternalEntity) only materializes non-virtual columns — the mint column
+         // set MUST match, or the wrapper view would expose virtual columns the refreshed table lacks (breaking
+         // virtual-field reads at the DB AND permanently tripping DriftHold on the next drift scan). LOCAL base
+         // views compute virtual columns in the view itself, so `SELECT * FROM <baseView>` includes them and the
+         // mint keeps all fields — the mint/refresh column sets stay symmetric on both paths.
+         const columns: MaterializedColumnSpec[] = this.materializedEntityFields(entity)
+            .map((f) => ({
+               Name: f.Name,
+               SQLType: f.SQLFullType,
+               Nullable: f.AllowsNull,
+               IsPrimaryKey: f.IsPrimaryKey,
+            }));
+         if (columns.length === 0) {
+            logError(`    > Base-view materialization for "${entity.Name}": no fields resolved — skipping`);
+            continue;
+         }
+
+         // 3) Emit the physical table + wrapper view (create-if-absent; reuse a migration-provided table).
+         const matSchema = entity.SchemaName;
+         const tableName = `materialized_${entity.CodeName}`;
+         const viewName = `materialized_vw${entity.CodeName}`;
+         const tableSQL = this.dbProvider.generateMaterializedTableSQL(matSchema, tableName, columns);
+         const viewSQL = this.dbProvider.generateMaterializedWrapperViewSQL(matSchema, viewName, tableName);
+         // includeBatchSeparator: each is a single GO-free batch (executed via ds.query), but the
+         // migration file needs a GO between statements for Flyway/sqlcmd.
+         await this.LogSQLAndExecute(pool, tableSQL, `Create materialized table for base-view materialization of entity ${entity.Name}`, false, true);
+         await this.LogSQLAndExecute(pool, viewSQL, `Create wrapper view for base-view materialization of entity ${entity.Name}`, false, true);
+
+         // 4) Upsert the MJ: Materialized Results row, keyed on (SourceType, SourceEntityID).
+         const existing = await this.runQueryWithParams(
+            pool,
+            `SELECT ID FROM ${this.qs(coreSchema, 'MaterializedResult')} WHERE SourceType = @SourceType AND SourceEntityID = @EntityID`,
+            { SourceType: 'EntityBaseView', EntityID: entity.ID },
+         );
+         if (existing.recordset.length > 0) {
+            const sqlUpd = `UPDATE ${this.qs(coreSchema, 'MaterializedResult')}
+                              SET SchemaName='${esc(matSchema)}', TableName='${esc(tableName)}', ViewName='${esc(viewName)}',
+                                  RefreshSchedule=${lit(decl.RefreshSchedule)}, IntendedWorkload=${lit(decl.IntendedWorkload)}
+                            WHERE ID='${existing.recordset[0].ID}'`;
+            await this.LogSQLAndExecute(pool, sqlUpd, `Update MJ: Materialized Results for base-view materialization of ${entity.Name}`);
+         } else {
+            const newId = this.createNewUUID();
+            const q = (n: string) => this.qi(n);
+            const sqlIns = `INSERT INTO ${this.qs(coreSchema, 'MaterializedResult')} (
+                                 ${q('ID')}, ${q('SourceType')}, ${q('SourceEntityID')}, ${q('SchemaName')}, ${q('TableName')}, ${q('ViewName')},
+                                 ${q('ParamMode')}, ${q('RefreshStrategy')}, ${q('RefreshSchedule')}, ${q('Status')}, ${q('IntendedWorkload')},
+                                 ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')} )
+                            VALUES ( '${newId}', 'EntityBaseView', '${entity.ID}', '${esc(matSchema)}', '${esc(tableName)}', '${esc(viewName)}',
+                                 'None', 'FullRebuild', ${lit(decl.RefreshSchedule)}, 'Building', ${lit(decl.IntendedWorkload)},
+                                 ${this.utcNow()}, ${this.utcNow()} )`;
+            await this.LogSQLAndExecute(pool, sqlIns, `Insert MJ: Materialized Results for base-view materialization of ${entity.Name}`);
+         }
+
+         processedCount++;
+         logStatus(`    > Base-view materialization ready for entity "${entity.Name}" → [${matSchema}].[${viewName}]`);
+      }
+
+      return { success: true, processedCount };
+   }
+
+   /**
+    * Phase 2d — classifies a parameterized query's parameters (deterministic render-and-diff) and,
+    * when every parameter is a safe row filter, produces the BROAD source SQL the refresh engine
+    * materializes (the query with its row-filter WHERE predicates removed). Returns the persistence
+    * fields, or a precise refusal (per-parameter reasons) so non-qualifying queries are skipped loudly.
+    */
+   protected async classifyParameterizedQueryForMaterialization(
+      pool: CodeGenConnection,
+      queryId: string,
+      queryName: string,
+      outputColumns: string[],
+      currentUser: UserInfo,
+   ): Promise<{ qualifies: true; rowFilterColumns: string[]; broadSQL: string; readFilterSpec: ReadFilterSpecEntry[] } | { qualifies: false; reason: string }> {
+      const coreSchema = mj_core_schema();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+
+      // Load the query template + parameter definitions (typed entities for the renderer).
+      const qRes = await this.runQueryWithParams(pool, `SELECT SQL, UsesTemplate FROM ${this.qs(coreSchema, 'Query')} WHERE ID = @QID`, { QID: queryId });
+      const sqlText = (qRes.recordset[0]?.SQL as string) ?? '';
+      const usesTemplate = !!qRes.recordset[0]?.UsesTemplate;
+      // NB: QueryParameter has no Sequence column (unlike QueryField) — order by Name for deterministic,
+      // stable classification output. (Ordering only affects the persisted spec's element order; the
+      // read-time predicate is an AND of all entries, so it's order-independent for correctness.)
+      const paramRows = await this.runQueryWithParams(pool, `SELECT Name, Type, SampleValue, DefaultValue, IsRequired, ValidationFilters FROM ${this.qs(coreSchema, 'QueryParameter')} WHERE QueryID = @QID ORDER BY Name`, { QID: queryId });
+      const queryParams: MJQueryParameterEntity[] = [];
+      for (const row of paramRows.recordset) {
+         const pe = await md.GetEntityObject<MJQueryParameterEntity>('MJ: Query Parameters', currentUser);
+         pe.LoadFromData(row);
+         queryParams.push(pe);
+      }
+
+      // Platform-aware Nunjucks renderer — the same SQL-safe filters production uses.
+      const platform = this.dbProvider.PlatformKey;
+      RunQuerySQLFilterManager.Instance.SetPlatform(platform);
+      const dialect = platform === 'postgresql' ? new PostgreSQLDialect() : new SQLServerDialect();
+      const templateInput: QueryTemplateInput = { SQL: sqlText, UsesTemplate: usesTemplate, Parameters: queryParams };
+      const render: VariantRenderer = (vals) => {
+         const res = QueryParameterProcessor.processQueryTemplate(templateInput, vals, undefined, true);
+         if (!res.success) {
+            throw new Error(res.error ?? 'template render failed');
+         }
+         return res.processedSQL;
+      };
+
+      const paramDefs: QueryParamDef[] = queryParams.map((p) => ({ Name: p.Name, Type: p.Type, SampleValue: p.SampleValue }));
+      // Phase 2 is shipped: enable Bucket-1 row-filter broad materialization. The provider now auto-injects
+      // the read-time predicate from the persisted ReadFilterSpec (bound params), so a RowFilterBroad
+      // materialization is safe to mint. `allowRowFilterBroad` remains the build-level kill switch.
+      const classification = classifyQueryParameters({ queryName, params: paramDefs, outputColumns, dialect, render, allowRowFilterBroad: true });
+      if (!classification.qualification.qualifies) {
+         const detail = classification.perParam.map((pp) => `${pp.name}: ${pp.verdict.reason}`).join('; ');
+         return { qualifies: false, reason: `${classification.qualification.reason ?? 'parameters not materializable'}${detail ? ` — [${detail}]` : ''}` };
+      }
+      if (classification.qualification.paramMode !== 'RowFilterBroad') {
+         return { qualifies: false, reason: `parameterization mode '${classification.qualification.paramMode}' is not supported for materialization in v1 (only RowFilterBroad)` };
+      }
+
+      // Build the broad source SQL: render a concrete instance (held values) then strip the row-filter predicates.
+      let renderedHeld: string;
+      try {
+         renderedHeld = render(buildHeldValues(paramDefs));
+      } catch (e) {
+         return { qualifies: false, reason: `could not render the query to build broad SQL: ${e instanceof Error ? e.message : String(e)}` };
+      }
+      const expectedRemovals = classification.qualification.rowFilterColumns.length;
+      const broad = buildBroadRowFilterSQL(renderedHeld, classification.qualification.rowFilterColumns, dialect, expectedRemovals);
+      if (broad.removedCount === 0) {
+         return { qualifies: false, reason: `expected to strip row-filter predicate(s) on [${classification.qualification.rowFilterColumns.join(', ')}] but none were removed from the rendered SQL — refusing to avoid a wrongly-filtered materialization` };
+      }
+      if (broad.ambiguous) {
+         return { qualifies: false, reason: `expected to strip exactly ${expectedRemovals} row-filter parameter predicate(s) on [${classification.qualification.rowFilterColumns.join(', ')}] but matched ${broad.removedCount} — the parameter predicate(s) cannot be cleanly isolated from other static or same-named predicates on those columns, so a broad materialization would include or exclude rows the live query never would. Refusing (query stays live-only).` };
+      }
+      return { qualifies: true, rowFilterColumns: classification.qualification.rowFilterColumns, broadSQL: broad.sql, readFilterSpec: classification.qualification.readFilterSpec };
+   }
+
+   /**
+    * Processes query materialization (CodeGen materialization phase, sub-step C — plan §4.2).
+    * Scans queries flagged `IsMaterialized = 1` and, for each that *qualifies* (unparameterized,
+    * has declared output fields — see analyzeQueryForMaterialization, §9/§10):
+    *   1. derives the materialized table's column shape + synthetic surrogate key,
+    *   2. emits the physical table (materialized_<Name>) + wrapper view (materialized_vw<Name>)
+    *      via the cross-engine DDL primitive,
+    *   3. mints a read-only Virtual Entity over the wrapper view (idempotent — reuses an existing
+    *      one), linked back to the source Query,
+    *   4. upserts the "MJ: Materialized Results" row (SourceType='Query') and its
+    *      MaterializedResultQuery join row linking it to the source Query (no direct
+    *      SourceQueryID / MaterializedResultID FK columns — the join table breaks the cycle).
+    * Runs BEFORE manageVirtualEntities so the minted entity's fields get synced from the wrapper
+    * view in the same run. Population is the refresh driver's job (later phase); Status='Building'.
+    * Parameterized queries are skipped with a log (deferred to Phase 2).
+    */
+   protected async processQueryMaterializations(pool: CodeGenConnection, currentUser: UserInfo): Promise<{ success: boolean; processedCount: number; mintedCount: number }> {
+      const coreSchema = mj_core_schema();
+      // Gate the whole method on the IsMaterialized column existing — the flagged-query SELECT below filters on it,
+      // and it (like the MaterializedResult table) is added by the materialization Foundation migration. On a DB
+      // where that migration hasn't run yet the SELECT would throw and abort the entire codegen pass; with no such
+      // column there are no materializations to process anyway. Same defensive pattern as the EDS-column gate below.
+      if (!(await this.queryHasIsMaterializedColumn(pool))) return { success: true, processedCount: 0, mintedCount: 0 };
+      // Gate the ExternalDataSourceID column ref so the SELECT stays valid on a DB without the EDS schema
+      // (PostgreSQL today). When absent, no query can be external, so the flag defaults false everywhere.
+      const queryHasEDSCol = await this.queryHasExternalDataSourceColumn(pool);
+      const flagged = await this.runQueryWithParams(
+         pool,
+         `SELECT ID, Name, SQL${queryHasEDSCol ? ', ExternalDataSourceID' : ''} FROM ${this.qs(coreSchema, 'Query')} WHERE IsMaterialized = ${this.boolLit(true)}`,
+         {},
+      );
+      if (flagged.recordset.length === 0) return { success: true, processedCount: 0, mintedCount: 0 };
+      // Symmetry with the three sibling gates: the per-query loop below also reads/writes the MaterializedResult
+      // TABLE (not just the IsMaterialized column). Don't lean on the "same Foundation migration ships both"
+      // coupling — confirm the table itself exists. If a query is flagged but the table is absent (partial schema),
+      // skip cleanly instead of throwing mid-loop and aborting the whole codegen pass.
+      if (!(await this.materializedResultTableExists(pool))) {
+         logStatus(`    > Query materialization: ${flagged.recordset.length} query(ies) flagged IsMaterialized but the MaterializedResult table is absent on this database — skipping (has the materialization migration been applied?)`);
+         return { success: true, processedCount: 0, mintedCount: 0 };
+      }
+
+      // Enumerate the API-key row-filter layer BEFORE the mint-time RLS gate consults it (see
+      // loadAPIKeyRowFilterTargets — an unloaded cache reads 'unknown' and refuses every materialization).
+      await this.loadAPIKeyRowFilterTargets(pool);
+
+      const esc = (s: string) => s.replace(/'/g, "''");
+      const idLit = (id: string | null | undefined) => (id ? `'${id}'` : 'NULL');
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+      let processedCount = 0;
+      let mintedCount = 0;
+
+      for (const q of flagged.recordset) {
+         const queryId: string = q.ID;
+         const queryName: string = q.Name;
+         const querySQL: string = (q.SQL as string) ?? '';
+
+         // Qualifying inputs: parameterized? declared output fields?
+         const paramCountRes = await this.runQueryWithParams(pool, `SELECT COUNT(*) AS n FROM ${this.qs(coreSchema, 'QueryParameter')} WHERE QueryID = @QID`, { QID: queryId });
+         const isParameterized = (paramCountRes.recordset[0]?.n ?? 0) > 0;
+         const fieldsRes = await this.runQueryWithParams(pool, `SELECT Name, SQLFullType, IsComputed FROM ${this.qs(coreSchema, 'QueryField')} WHERE QueryID = @QID ORDER BY Sequence`, { QID: queryId });
+         const fields = fieldsRes.recordset.map((r: CodeGenQueryRow) => ({ Name: r.Name as string, SQLFullType: r.SQLFullType as string, IsComputed: !!r.IsComputed }));
+
+         // Parameterized queries (Phase 2d): classify via deterministic render-and-diff. A query whose
+         // parameters are all safe row filters materializes BROAD (the row-filter predicate is removed)
+         // and the filter is re-applied at read; anything not provably a safe row filter is refused with
+         // a precise reason. Unparameterized queries skip this entirely.
+         let paramMode: 'None' | 'RowFilterBroad' = 'None';
+         let rowFilterColumns: string[] = [];
+         let broadSQL: string | null = null;
+         let readFilterSpec: ReadFilterSpecEntry[] = [];
+         if (isParameterized) {
+            const pc = await this.classifyParameterizedQueryForMaterialization(pool, queryId, queryName, fields.map((f) => f.Name), currentUser);
+            if (!pc.qualifies) {
+               logStatus(`    > Skipping materialization of parameterized query "${queryName}": ${pc.reason}`);
+               continue;
+            }
+            paramMode = 'RowFilterBroad';
+            rowFilterColumns = pc.rowFilterColumns;
+            broadSQL = pc.broadSQL;
+            readFilterSpec = pc.readFilterSpec;
+         }
+
+         // Phase 3: detect an aggregation key (the grouping columns) so the refresh can compute a stable
+         // hash surrogate (the match key for incremental / dirty-group refresh) instead of a synthetic
+         // row id. Detect against the BROAD SQL for a row-filter query (the actually-materialized shape),
+         // else the raw query SQL. NULL = not keyed → synthetic surrogate + full rebuild (always correct).
+         // Detected BEFORE the shape analysis so the surrogate column can be typed for the keyed case.
+         const detectSQL = paramMode === 'RowFilterBroad' ? (broadSQL ?? '') : querySQL;
+         const matDialect = this.dbProvider.PlatformKey === 'postgresql' ? new PostgreSQLDialect() : new SQLServerDialect();
+         const detectedKeyColumns = detectSQL ? detectAggregationKeyColumns({ sql: detectSQL, dialect: matDialect, fields }) : null;
+         // An EXTERNAL query refreshes via rebuildFromExternalQuery, which fetches all rows through the EDS
+         // driver and writes a SYNTHETIC row-index surrogate — it cannot compute the per-group combined-key
+         // hash and ignores KeyColumns entirely. So minting a keyed (hash-surrogate) entity for an external
+         // query would type the PK varchar/text while the refresh fills it with int row indices (a type +
+         // semantics mismatch). Force such queries un-keyed → synthetic surrogate + FullRebuild, which the
+         // external refresh path supports. (Incremental keyed refresh needs a local __mj_UpdatedAt watermark
+         // the EDS router doesn't expose anyway, so nothing is lost.)
+         const isExternalQuery = queryHasEDSCol && !!q.ExternalDataSourceID;
+         const keyColumns = isExternalQuery ? null : detectedKeyColumns;
+         if (isExternalQuery && detectedKeyColumns && detectedKeyColumns.length > 0) {
+            logStatus(`    > Query "${queryName}" is external + aggregation-keyed; the external refresh path uses a synthetic row-index surrogate, so materializing it un-keyed (FullRebuild) to keep the PK type/value consistent.`);
+         }
+         const isKeyed = !!keyColumns && keyColumns.length > 0;
+         const keyColumnsLit = isKeyed ? `'${esc(JSON.stringify(keyColumns))}'` : 'NULL';
+
+         // Surrogate PK type MUST match what the refresh actually writes into it: a KEYED materialization's
+         // refresh writes the combined-key SHA-256 hash (a fixed-width hex string), so the minted entity's
+         // PK is typed as the hash type; an un-keyed one keeps the synthetic auto-identity. Typing it int
+         // for a keyed materialization would diverge from the post-refresh varchar/text column (breaking PK
+         // typing, keyset pagination, and record lookups against the minted entity).
+         const surrogateSQLType = isKeyed
+            ? this.dbProvider.getMaterializedHashSurrogateColumnType()
+            : this.dbProvider.getMaterializedSurrogateColumnType();
+
+         // The materialized table's column shape is the query's output columns — independent of
+         // parameterization (a row-filter query is materialized broad over the same columns). Pass
+         // isParameterized:false so the analyzer yields the shape; the param gate above already ran.
+         const analysis = analyzeQueryForMaterialization({ queryName, isParameterized: false, fields, surrogateSQLType });
+         if (!analysis.qualifies) {
+            logStatus(`    > Skipping materialization of query "${queryName}": ${analysis.reason}`);
+            continue;
+         }
+
+         // SQL literals for the row-filter persistence columns (shared by the insert/update branches).
+         const rowFilterColumnsLit = rowFilterColumns.length > 0 ? `'${esc(JSON.stringify(rowFilterColumns))}'` : 'NULL';
+         const broadSQLLit = broadSQL ? `'${esc(broadSQL)}'` : 'NULL';
+         // Phase 2: the structured read-filter spec the provider injects at read time (bound params).
+         const readFilterSpecLit = readFilterSpec.length > 0 ? `'${esc(JSON.stringify(readFilterSpec))}'` : 'NULL';
+
+         // Phase 3/4: a keyed aggregation over a SINGLE source table is eligible for incremental in-place
+         // refresh (the refresher still guards at runtime: baseline watermark + delete detection).
+         // Joins/multi-table sources can't be localized by one watermark → keep FullRebuild (§10 bias).
+         // Among eligible ones, a PURELY ADDITIVE aggregation (only SUM/COUNT) uses the MERGE-upsert
+         // 'Incremental' path (in-place, no row churn); non-additive uses 'DirtyGroupRecompute' (delete+insert).
+         const isKeyedSingleSource =
+            isKeyed && !!detectSQL && SQLParser.ExtractTableRefs(detectSQL, matDialect).length === 1;
+         const refreshStrategy: 'FullRebuild' | 'DirtyGroupRecompute' | 'Incremental' = !isKeyedSingleSource
+            ? 'FullRebuild'
+            : detectAdditiveMeasures(detectSQL)
+              ? 'Incremental'
+              : 'DirtyGroupRecompute';
+
+         // RLS downgrade gate (§6.2, ships day one) — a materialized query entity does NOT inherit its
+         // source entities' row-level security. Refuse to materialize when RLS-safety cannot be proven, to
+         // prevent a silent privilege escalation. Asymmetric risk (§10): over-restriction is harmless; the
+         // dangerous direction (protected → unprotected) must be loud. The SAME assessment is re-run on every
+         // CodeGen pass by detectMaterializationDrift, so a source that LATER gains RLS holds the existing
+         // materialization AND revokes its read access rather than leaking (see assessQuerySourceRLSSafety).
+         const sourceLinks = await this.runQueryWithParams(pool, `SELECT EntityID FROM ${this.qs(coreSchema, 'vwQueryEntities')} WHERE QueryID = @QID`, { QID: queryId });
+         const rlsVerdict = this.assessQuerySourceRLSSafety(md, sourceLinks.recordset.map((r: CodeGenQueryRow) => r.EntityID as string), detectSQL);
+         if (!rlsVerdict.safe) {
+            logError(
+               `    > REFUSING to materialize query "${queryName}": ${rlsVerdict.reason}. Run query analysis so its source entities are linked, or use a base-view materialization (which inherits source RLS). Skipping to avoid a silent privilege escalation.`,
+            );
+            continue;
+         }
+         // The resolved source entities (all guaranteed to resolve — the gate above fails closed otherwise)
+         // scope the minted entity's read permissions to the INTERSECTION of source read access (C2). Without
+         // this, the minted entity would receive broad config-default read permissions and a user who cannot
+         // read a source entity could read its rows through the unscoped snapshot.
+         const resolvedSourceEntities = sourceLinks.recordset
+            .map((r: CodeGenQueryRow) => md.EntityByID(r.EntityID as string))
+            .filter((e): e is EntityInfo => !!e);
+
+         // 2) Physical table + wrapper view (create-if-absent; reuse a migration-provided table — §12).
+         const codeName = CodeNameFromString(queryName);
+         const tableName = `materialized_${codeName}`;
+         const viewName = `materialized_vw${codeName}`;
+         // CodeName-collision guard (C3): two query names that normalize to the SAME CodeName (e.g. "Sales
+         // Report" / "Sales-Report" / "sales report") derive the same physical table. Minting the second would
+         // reuse the first's create-if-absent table (wrong columns) and its minted entity, then register a
+         // second MaterializedResult pointing at the SAME table — two refreshers clobbering one snapshot from
+         // different source SQL. Refuse if the derived table is already owned by a different materialization.
+         const tableOwners = await this.runQueryWithParams(
+            pool,
+            `SELECT mr.SourceType, mrq.QueryID FROM ${this.qs(coreSchema, 'MaterializedResult')} mr
+                LEFT JOIN ${this.qs(coreSchema, 'MaterializedResultQuery')} mrq ON mrq.MaterializedResultID = mr.ID
+                WHERE mr.SchemaName = @S AND mr.TableName = @T`,
+            { S: coreSchema, T: tableName },
+         );
+         const foreignOwner = tableOwners.recordset.find((row: CodeGenQueryRow) => !(row.SourceType === 'Query' && UUIDsEqual(row.QueryID as string, queryId)));
+         if (foreignOwner) {
+            logError(
+               `    > REFUSING to materialize query "${queryName}": its derived table [${coreSchema}].[${tableName}] (from CodeName "${codeName}") is already owned by a different materialization (SourceType=${foreignOwner.SourceType}, QueryID=${foreignOwner.QueryID ?? 'n/a'}). Two sources whose names normalize to the same CodeName would clobber each other's snapshot — rename one so their CodeNames differ. Skipping.`,
+            );
+            continue;
+         }
+         const tableSQL = this.dbProvider.generateMaterializedTableSQL(coreSchema, tableName, analysis.columns);
+         const viewSQL = this.dbProvider.generateMaterializedWrapperViewSQL(coreSchema, viewName, tableName);
+         await this.LogSQLAndExecute(pool, tableSQL, `Create materialized table for query "${queryName}"`, false, true);
+         await this.LogSQLAndExecute(pool, viewSQL, `Create wrapper view for query "${queryName}"`, false, true);
+
+         // 3) Mint the read-only Virtual Entity over the wrapper view (idempotent by view).
+         const existingVE = await this.runQueryWithParams(pool, `SELECT ID FROM ${this.qs(coreSchema, 'vwEntities')} WHERE BaseView = @V AND SchemaName = @S`, { V: viewName, S: coreSchema });
+         let generatedEntityId: string | undefined = existingVE.recordset[0]?.ID;
+         if (!generatedEntityId) {
+            try {
+               const createRes = await pool.executeStoredProcedure(`${this.qs(coreSchema, 'spCreateVirtualEntity')}`, {
+                  Name: queryName,
+                  BaseView: viewName,
+                  SchemaName: coreSchema,
+                  PrimaryKeyFieldName: analysis.surrogateColumnName,
+                  Description: `Materialized result of query "${queryName}".`,
+               });
+               generatedEntityId = createRes.recordset?.[0]?.[''] || createRes.recordset?.[0]?.ID || createRes.recordset?.[0]?.Column0;
+               if (generatedEntityId) {
+                  mintedCount++;
+                  await this.addEntityToApplicationForSchema(pool, generatedEntityId, queryName, coreSchema, currentUser);
+                  await this.addMaterializedQueryEntityPermissions(pool, generatedEntityId, queryName, resolvedSourceEntities);
+                  logStatus(`    > Minted materialized entity "${queryName}" (ID: ${generatedEntityId}) over [${coreSchema}].[${viewName}]`);
+               }
+            } catch (err) {
+               logError(`    > Failed to mint materialized entity for query "${queryName}": ${err instanceof Error ? err.message : String(err)}`);
+               continue;
+            }
+         }
+
+         // If the entity was neither pre-existing nor successfully minted-and-identified, we CANNOT safely link
+         // a MaterializedResult — its GeneratedEntityID would be NULL and DataSource:'Materialized' reads could
+         // never resolve it — and spCreateVirtualEntity may have created a physical entity we failed to read the
+         // ID of (an unrecognized result shape). Fail loud and skip rather than silently writing a broken
+         // MaterializedResult row; a human may need to check for an orphaned virtual entity over the view.
+         if (!generatedEntityId) {
+            logError(`    > Could not resolve the entity ID for materialized query "${queryName}" (spCreateVirtualEntity returned an unrecognized result shape). Skipping to avoid a MaterializedResult with a NULL GeneratedEntityID; check for an orphaned virtual entity over [${coreSchema}].[${viewName}].`);
+            continue;
+         }
+
+         // 4) Upsert the MJ: Materialized Results row and its MaterializedResultQuery join row. The MR<->Query
+         //    link lives in the join table — there is no MaterializedResult.SourceQueryID or
+         //    Query.MaterializedResultID column (those direct FKs formed a circular dependency CodeGen rejects;
+         //    the join table carries the relationship with both FKs pointing outward).
+         const existing = await this.runQueryWithParams(
+            pool,
+            `SELECT mr.ID FROM ${this.qs(coreSchema, 'MaterializedResult')} mr
+                JOIN ${this.qs(coreSchema, 'MaterializedResultQuery')} mrq ON mrq.MaterializedResultID = mr.ID
+                WHERE mr.SourceType = @T AND mrq.QueryID = @QID`,
+            { T: 'Query', QID: queryId },
+         );
+         let matResultId: string;
+         if (existing.recordset.length > 0) {
+            matResultId = existing.recordset[0].ID;
+            const sqlUpd = `UPDATE ${this.qs(coreSchema, 'MaterializedResult')}
+                              SET GeneratedEntityID=${idLit(generatedEntityId)}, SchemaName='${esc(coreSchema)}', TableName='${esc(tableName)}', ViewName='${esc(viewName)}',
+                                  ${this.qi('ParamMode')}='${paramMode}', ${this.qi('RowFilterColumns')}=${rowFilterColumnsLit}, ${this.qi('BroadSQL')}=${broadSQLLit}, ${this.qi('ReadFilterSpec')}=${readFilterSpecLit}, ${this.qi('KeyColumns')}=${keyColumnsLit}, ${this.qi('RefreshStrategy')}='${refreshStrategy}'
+                            WHERE ID='${matResultId}'`;
+            await this.LogSQLAndExecute(pool, sqlUpd, `Update MJ: Materialized Results for query "${queryName}"`);
+         } else {
+            matResultId = this.createNewUUID();
+            const c = (n: string) => this.qi(n);
+            const sqlIns = `INSERT INTO ${this.qs(coreSchema, 'MaterializedResult')} (
+                                 ${c('ID')}, ${c('SourceType')}, ${c('GeneratedEntityID')}, ${c('SchemaName')}, ${c('TableName')}, ${c('ViewName')},
+                                 ${c('ParamMode')}, ${c('RowFilterColumns')}, ${c('BroadSQL')}, ${c('ReadFilterSpec')}, ${c('KeyColumns')}, ${c('RefreshStrategy')}, ${c('Status')}, ${c('__mj_CreatedAt')}, ${c('__mj_UpdatedAt')} )
+                            VALUES ( '${matResultId}', 'Query', ${idLit(generatedEntityId)}, '${esc(coreSchema)}', '${esc(tableName)}', '${esc(viewName)}',
+                                 '${paramMode}', ${rowFilterColumnsLit}, ${broadSQLLit}, ${readFilterSpecLit}, ${keyColumnsLit}, '${refreshStrategy}', 'Building', ${this.utcNow()}, ${this.utcNow()} )`;
+            await this.LogSQLAndExecute(pool, sqlIns, `Insert MJ: Materialized Results for query "${queryName}"`);
+            // Link the new materialization to its source Query via the join table.
+            const joinId = this.createNewUUID();
+            const sqlJoinIns = `INSERT INTO ${this.qs(coreSchema, 'MaterializedResultQuery')} (
+                                 ${c('ID')}, ${c('MaterializedResultID')}, ${c('QueryID')}, ${c('__mj_CreatedAt')}, ${c('__mj_UpdatedAt')} )
+                            VALUES ( '${joinId}', '${matResultId}', '${queryId}', ${this.utcNow()}, ${this.utcNow()} )`;
+            await this.LogSQLAndExecute(pool, sqlJoinIns, `Link MJ: Materialized Results to Query "${queryName}" via join row`);
+         }
+
+         processedCount++;
+      }
+
+      // Refresh so manageVirtualEntities (next step) syncs fields for the newly-minted entities.
+      if (mintedCount > 0) {
+         await md.Refresh();
+      }
+
+      return { success: true, processedCount, mintedCount };
+   }
+
+   /**
+    * Phase 4 (§13/§17.2): scan active materializations and flag those whose source shape has drifted
+    * as `DriftHold` (stop refreshing, surface for review). Runs after the entity/field re-sync, so it
+    * compares each materialization's provenance against the CURRENT metadata. Flag-and-hold only — never
+    * auto-rebuilds. Already-held (`DriftHold`) and `Disabled` rows are skipped.
+    */
+   protected async detectMaterializationDrift(pool: CodeGenConnection): Promise<{ success: boolean; heldCount: number }> {
+      const coreSchema = mj_core_schema();
+      // Gate on MaterializedResult existing — the SELECT below reads it. Absent (materialization migration not yet
+      // applied on this DB) ⇒ no materializations exist to check for drift; skip cleanly rather than throwing and
+      // aborting the codegen pass.
+      if (!(await this.materializedResultTableExists(pool))) return { success: true, heldCount: 0 };
+      // Enumerate the API-key row-filter layer BEFORE the per-row C1 re-check / leak guard consults it (see
+      // loadAPIKeyRowFilterTargets — an unloaded cache reads 'unknown' and holds every materialization).
+      await this.loadAPIKeyRowFilterTargets(pool);
+      const rows = await this.runQuery(
+         pool,
+         `SELECT mr.ID, mr.SourceType, mr.SourceEntityID, mrq.QueryID AS SourceQueryID, mr.GeneratedEntityID, mr.SchemaName, mr.TableName
+             FROM ${this.qs(coreSchema, 'MaterializedResult')} mr
+             LEFT JOIN ${this.qs(coreSchema, 'MaterializedResultQuery')} mrq ON mrq.MaterializedResultID = mr.ID
+             WHERE mr.Status NOT IN ('Disabled', 'DriftHold')`,
+      );
+      if (rows.recordset.length === 0) return { success: true, heldCount: 0 };
+
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+      await md.Refresh(); // reflect this run's schema/field sync before judging drift
+      let heldCount = 0;
+      let failedCount = 0;
+
+      // Per-row isolation: a throw while processing ONE materialization (a transient query read, a dropped
+      // source table, a permission edge) must NOT abort reconciliation for the REST — otherwise a single
+      // failing row indefinitely defers the C1 RLS re-check + C2 grant re-narrow for every materialization
+      // after it (a latent fail-open). Log, count, and continue; the pass reports PARTIAL reconciliation.
+      for (const r of rows.recordset) {
+         try {
+            if (await this.evaluateAndHoldDriftRow(pool, md, r as CodeGenQueryRow, coreSchema)) {
+               heldCount++;
+            }
+         } catch (rowErr) {
+            failedCount++;
+            logError(`    > Drift/security re-check FAILED for materialization "${r.TableName}" (ID ${r.ID}) — isolated and skipped, continuing with the rest: ${rowErr instanceof Error ? rowErr.message : String(rowErr)}`);
+         }
+      }
+      if (failedCount > 0) {
+         logError(`    > detectMaterializationDrift: ${failedCount} materialization(s) failed the drift/security re-check and were skipped — reconciliation is PARTIAL this run (a source that gained RLS on a skipped row may still be granting read). Investigate the logged errors.`);
+      }
+      return { success: failedCount === 0, heldCount };
+   }
+
+   /**
+    * Processes ONE materialization row: the C1 RLS re-check, the C2 read-grant re-narrow, the external
+    * base-view leak guard, and generic shape/provenance drift. Returns true if the row was held. Extracted
+    * from {@link detectMaterializationDrift} so a throw on one row can be isolated by the caller's try/catch
+    * instead of aborting reconciliation for every remaining materialization.
+    */
+   protected async evaluateAndHoldDriftRow(pool: CodeGenConnection, md: Metadata, r: CodeGenQueryRow, coreSchema: string): Promise<boolean> {
+      // RLS re-check (C1): a QUERY materialization whose source has SINCE gained a read RLS filter (or lost
+      // its source-entity provenance) would keep serving the full unscoped snapshot to every user — the
+      // mint-time gate cannot see a change made after minting. Re-run the same assessment here and, when it
+      // now fails, hold the materialization AND revoke the minted entity's read access: a precomputed
+      // snapshot cannot enforce per-user scoping, so fail closed until a human authors protection. Base-view
+      // materializations re-apply the source entity's RLS at read time (they reuse the source entity), so
+      // they are exempt from this check.
+      if (r.SourceType === 'Query' && !r.SourceQueryID) {
+         // FAIL CLOSED on LOST PROVENANCE. `SourceQueryID` comes from a LEFT JOIN on MaterializedResultQuery.
+         // `spDeleteQuery` cascade-deletes that join row, but everything the join row protected SURVIVES: the
+         // MaterializedResult, the minted read-only virtual entity, its EntityPermission read grants, and the
+         // already-POPULATED materialized_<Name> table. With a NULL QueryID the C1 RLS re-check and the C2 grant
+         // re-narrow below are both unreachable, `gatherDriftFacts`' Query branch returns all-empty arrays,
+         // `evaluateMaterializationDrift` returns `{drift:false}`, and Status stays 'Active' — so the guard whose
+         // whole job is to revoke read + hold could never fire again and the unscoped snapshot would keep serving
+         // indefinitely. A query materialization that cannot name its source query has, by definition, lost the
+         // provenance every one of those safety checks is computed from, so treat it as drift and drive it down
+         // the established revoke-then-hold path. Over-holding is harmless (a human can relink and re-activate);
+         // under-holding is the leak.
+         await this.revokeReadAndHoldMaterialization(
+            pool,
+            r,
+            coreSchema,
+            'PROVENANCE DRIFT',
+            'its MaterializedResultQuery link is gone (the source query was deleted), so the RLS re-check and read-grant re-narrow can no longer be computed for it',
+         );
+         return true;
+      }
+      if (r.SourceType === 'Query' && r.SourceQueryID) {
+         const qe = await this.runQueryWithParams(pool, `SELECT EntityID FROM ${this.qs(coreSchema, 'QueryEntity')} WHERE QueryID = @Q`, { Q: r.SourceQueryID as string });
+         const sourceEntityIds = qe.recordset.map((x: CodeGenQueryRow) => x.EntityID as string);
+         // Load the query text so the P1 under-linking guard can parse it for source tables the QueryEntity
+         // links may have missed (see assessQuerySourceRLSSafety). Best-effort: if the read fails, the
+         // linked-source checks still run — only a POSITIVE unlinked-RLS detection changes the verdict.
+         const qSqlRes = await this.runQueryWithParams(pool, `SELECT SQL FROM ${this.qs(coreSchema, 'Query')} WHERE ID = @Q`, { Q: r.SourceQueryID as string });
+         const driftSQL = (qSqlRes.recordset?.[0] as CodeGenQueryRow)?.SQL as string | undefined;
+         const rlsVerdict = this.assessQuerySourceRLSSafety(md, sourceEntityIds, driftSQL);
+         if (!rlsVerdict.safe) {
+            await this.revokeReadAndHoldMaterialization(pool, r, coreSchema, 'RLS DRIFT', rlsVerdict.reason ?? 'source RLS drift');
+            return true; // already held for the leak; the shape-drift check below is moot
+         }
+         // Leak 2 (C2 ongoing): RLS is still safe, but a role may have LOST plain read on a source since mint.
+         // The intersection grant is computed once at mint and never re-narrowed by the RLS check above, so
+         // re-narrow it here to the CURRENT source-read intersection — otherwise a role that lost read on a
+         // source keeps reading the snapshot's rows it can no longer read live. Re-narrow only (never re-grant).
+         if (r.GeneratedEntityID) {
+            const sourceEntities = sourceEntityIds.map((id) => md.EntityByID(id)).filter((e): e is EntityInfo => !!e);
+            const revoked = await this.reconcileMaterializedQueryEntityReadGrants(pool, r.GeneratedEntityID as string, r.TableName as string, sourceEntities);
+            if (revoked > 0) {
+               logStatus(`    > PERMISSION DRIFT: materialized entity "${r.TableName}" → revoked ${revoked} over-broad read grant(s) (a role can no longer read every source).`);
+            }
+         }
+      }
+
+      // SECURITY (Leak 1 drift side): an existing base-view materialization of an EXTERNAL read-RLS-protected
+      // entity leaks (the mirror is readable via raw queries, but the entity's live reads are RLS-refused and
+      // the read path never re-applies RLS to an external mirror). The mint gate refuses NEW ones; hold any
+      // that already exist (or whose entity became external/RLS after minting) so refresh stops — and flag for
+      // a human to drop the mirror. (Local base-view RLS is safe and not held.)
+      if (r.SourceType === 'EntityBaseView' && r.SourceEntityID) {
+         const bvEntity = md.EntityByID(r.SourceEntityID as string);
+         if (bvEntity && bvEntity.ExternalDataSourceID && this.entityHasRowLevelRestriction(bvEntity)) {
+            // EMPTY the mirror now — it holds remote rows the live path refuses under RLS, and DriftHold alone
+            // would only stop FUTURE refreshes while leaving the already-populated rows queryable via raw SQL
+            // over the wrapper view. Emptying (not dropping) removes the leaked data without breaking any object
+            // dependency; the wrapper view remains but returns nothing. Then DriftHold so refresh never refills it.
+            await this.LogSQLAndExecute(
+               pool,
+               `DELETE FROM ${this.qs(r.SchemaName as string, r.TableName as string)}`,
+               `Empty external RLS base-view mirror "${r.TableName}" (leak guard — mirror exposed RLS-refused rows)`,
+            );
+            await this.LogSQLAndExecute(
+               pool,
+               `UPDATE ${this.qs(coreSchema, 'MaterializedResult')} SET ${this.qi('Status')}='DriftHold' WHERE ID='${r.ID}'`,
+               `Flag external RLS base-view materialization "${r.TableName}" as DriftHold (leak guard)`,
+            );
+            logError(`    > RLS LEAK GUARD: base-view materialization "${r.TableName}" mirrors an EXTERNAL row-restricted entity ("${bvEntity.Name}" — role RLS and/or an API-key row filter) → mirror EMPTIED + DriftHold (refresh stopped). It exposed rows the live path refuses under RLS.`);
+            return true;
+         }
+      }
+
+      const facts = await this.gatherDriftFacts(pool, md, r as CodeGenQueryRow, coreSchema);
+      const verdict = evaluateMaterializationDrift(facts);
+      if (verdict.drift) {
+         // Fail-closed on ANY hold of a QUERY materialization: once held, the row drops out of
+         // detectMaterializationDrift's `Status NOT IN ('DriftHold', ...)` scan, so the C1 RLS re-check and the
+         // C2 grant re-narrow above NEVER run for it again. A query virtual entity's reads are NOT status-gated
+         // (they always read `materialized_vw…`), so a still-readable held snapshot whose source LATER gains RLS
+         // (or whose role loses source read) would leak the full unscoped rows. Revoke read access on the hold to
+         // close that window now, mirroring the RLS-drift revoke above. Base-view mats reuse the source entity
+         // (RLS re-applied at read time via the status-gated effective base view), so they have no minted grant here.
+         if (r.SourceType === 'Query' && r.GeneratedEntityID) {
+            await this.revokeMaterializedEntityReadAccess(pool, r.GeneratedEntityID as string, r.TableName as string, `drift hold — ${verdict.reason ?? 'shape/provenance drift'}`);
+         }
+         await this.LogSQLAndExecute(
+            pool,
+            `UPDATE ${this.qs(coreSchema, 'MaterializedResult')} SET ${this.qi('Status')}='DriftHold' WHERE ID='${r.ID}'`,
+            `Flag materialization "${r.TableName}" as DriftHold`,
+         );
+         logStatus(`    > DRIFT: materialization "${r.TableName}" → DriftHold — ${verdict.reason}`);
+         return true;
+      }
+      return false;
+   }
+
+   /**
+    * THE single rule for "which of an entity's fields get materialized" in a base-view materialization. Every
+    * site that computes a base-view column set — the MINT (physical table + wrapper view), the DRIFT comparison,
+    * and the runtime REFRESH mirror — must use this one predicate, or they judge each other's output as drift.
+    *
+    * Rule: for an EXTERNAL entity, virtual fields are MJ-computed and absent from the remote source, so the
+    * refresh mirror only materializes non-virtual columns and the mint must match. A LOCAL base view computes its
+    * virtual columns in the view itself, so `SELECT * FROM <baseView>` includes them and every field is kept.
+    * (`MaterializationRefresher.rebuildFromExternalEntity` applies `!f.IsVirtual` on the external path only — the
+    * same rule, expressed in a context where "external" is already established.)
+    */
+   protected materializedEntityFields(entity: EntityInfo): EntityFieldInfo[] {
+      return entity.Fields.filter((f) => !(entity.ExternalDataSourceID && f.IsVirtual));
+   }
+
+   /**
+    * The established fail-closed "stop serving this materialization" sequence, shared by every branch that must
+    * take a query materialization out of service.
+    *
+    * Revoke read FIRST, then flag DriftHold. The revoke is the security-critical action (it closes the leak — a
+    * snapshot serving unscoped source rows); DriftHold only stops FUTURE refreshes. Revoke-first means that if
+    * the second statement fails, the readable window is already closed (fail-safe) — whereas DriftHold-then-revoke
+    * would leave read OPEN if the revoke failed. A row with no minted entity has no grant row to flip; it is still
+    * held.
+    */
+   protected async revokeReadAndHoldMaterialization(
+      pool: CodeGenConnection,
+      r: CodeGenQueryRow,
+      coreSchema: string,
+      label: string,
+      reason: string,
+   ): Promise<void> {
+      if (r.GeneratedEntityID) {
+         await this.revokeMaterializedEntityReadAccess(pool, r.GeneratedEntityID as string, r.TableName as string, reason);
+      }
+      await this.LogSQLAndExecute(
+         pool,
+         `UPDATE ${this.qs(coreSchema, 'MaterializedResult')} SET ${this.qi('Status')}='DriftHold' WHERE ID='${r.ID}'`,
+         `Flag materialization "${r.TableName}" as DriftHold (${label.toLowerCase()})`,
+      );
+      logError(`    > ${label}: materialization "${r.TableName}" → read access revoked + DriftHold — ${reason}`);
+   }
+
+   /** Gathers the drift-relevant existence facts for one materialization against current metadata. */
+   protected async gatherDriftFacts(pool: CodeGenConnection, md: Metadata, r: CodeGenQueryRow, coreSchema: string): Promise<MaterializationDriftFacts> {
+      if (r.SourceType === 'EntityBaseView') {
+         const entity = r.SourceEntityID ? md.EntityByID(r.SourceEntityID as string) : undefined;
+         if (!entity) {
+            return { sourceType: 'EntityBaseView', baseView: { sourceEntityExists: false, currentEntityFields: [], materializedColumns: [] } };
+         }
+         const materializedColumns = await this.getMaterializedTableColumns(pool, r.SchemaName as string, r.TableName as string);
+         return {
+            sourceType: 'EntityBaseView',
+            // MUST use the same field-exclusion rule the MINT and the REFRESH use ({@link materializedEntityFields}).
+            // Comparing the UNFILTERED field list against the mirror's columns made every external entity with an
+            // IsVirtual field look like it had drifted the very first run after minting (added=[<virtual fields>])
+            // → Status='DriftHold' → permanent live-only fallback, and DriftHold rows are excluded from the sweep,
+            // so it could never recover. The comparison has to be apples-to-apples with what was actually built.
+            baseView: { sourceEntityExists: true, currentEntityFields: this.materializedEntityFields(entity).map((f) => f.Name), materializedColumns },
+         };
+      }
+
+      // Query case — provenance via QueryEntity / QueryField / QueryDependency, plus output-shape facts.
+      const missingSourceEntities: string[] = [];
+      const missingSourceFields: string[] = [];
+      const missingComposedQueries: string[] = [];
+      // Output-shape facts (§13 drift): the query's CURRENT declared output columns (ALL fields) vs the
+      // snapshot table's actual DATA columns. Detects a SELECT-list edit on a create-if-absent table that
+      // provenance existence checks can't see. Both empty-tolerant downstream.
+      let currentOutputColumns: string[] = [];
+      let materializedColumns: string[] = [];
+      if (r.SourceQueryID) {
+         const qid = r.SourceQueryID as string;
+         const qe = await this.runQueryWithParams(pool, `SELECT EntityID FROM ${this.qs(coreSchema, 'QueryEntity')} WHERE QueryID = @Q`, { Q: qid });
+         for (const row of qe.recordset) {
+            if (!md.EntityByID(row.EntityID as string)) missingSourceEntities.push(row.EntityID as string);
+         }
+         // ONE QueryField read serves BOTH needs: the output-shape column set (ALL Names) and the provenance
+         // field check (rows whose SourceEntityID+SourceFieldName are both known — only those are judged, to
+         // avoid false positives from incomplete/LLM-inferred provenance; filtered in JS below).
+         const qf = await this.runQueryWithParams(
+            pool,
+            `SELECT Name, SourceEntityID, SourceFieldName FROM ${this.qs(coreSchema, 'QueryField')} WHERE QueryID = @Q`,
+            { Q: qid },
+         );
+         // Both sides of the output-shape comparison must exclude the SAME system columns: the synthetic
+         // surrogate PK and any __mj_* columns are always present in the materialized table but are stripped
+         // from materializedColumns below. A query that legitimately PROJECTS a __mj_* column (e.g. SELECT
+         // __mj_UpdatedAt) would otherwise appear only in currentOutputColumns → a phantom "added" drift that
+         // false-flags DriftHold. Applying the identical filter here keeps the comparison apples-to-apples.
+         const surrogate = MATERIALIZATION_SURROGATE_COLUMN.toLowerCase();
+         const isOutputShapeColumn = (name: string): boolean => {
+            const lc = name.trim().toLowerCase();
+            return lc !== surrogate && !lc.startsWith('__mj_');
+         };
+         currentOutputColumns = qf.recordset.map((row: CodeGenQueryRow) => String(row.Name)).filter(isOutputShapeColumn);
+         for (const row of qf.recordset) {
+            if (row.SourceEntityID == null || row.SourceFieldName == null) continue;
+            const ent = md.EntityByID(row.SourceEntityID as string);
+            const fieldName = String(row.SourceFieldName);
+            if (!ent) {
+               missingSourceFields.push(`${row.SourceEntityID}.${fieldName}`);
+            } else if (!ent.Fields.find((f) => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase())) {
+               missingSourceFields.push(`${ent.Name}.${fieldName}`);
+            }
+         }
+         const qd = await this.runQueryWithParams(pool, `SELECT DependsOnQueryID FROM ${this.qs(coreSchema, 'QueryDependency')} WHERE QueryID = @Q`, { Q: qid });
+         const depIds = qd.recordset.map((row: CodeGenQueryRow) => row.DependsOnQueryID as string).filter((d): d is string => !!d);
+         if (depIds.length > 0) {
+            // ONE set-based existence check instead of a SELECT per dependency (was an N+1 cascade — K
+            // round trips per materialization). DependsOnQueryID values are DB-sourced UUIDs; single-quote
+            // escaped defensively. Case-insensitive membership handles SS-uppercase vs stored casing.
+            const inList = depIds.map((d) => `'${d.replace(/'/g, "''")}'`).join(', ');
+            const existing = await this.runQuery(pool, `SELECT ID FROM ${this.qs(coreSchema, 'Query')} WHERE ID IN (${inList})`);
+            const existingSet = new Set(existing.recordset.map((row: CodeGenQueryRow) => String(row.ID).toLowerCase()));
+            for (const d of depIds) {
+               if (!existingSet.has(d.toLowerCase())) missingComposedQueries.push(d);
+            }
+         }
+         const rawCols = await this.getMaterializedTableColumns(pool, r.SchemaName as string, r.TableName as string);
+         // Same exclusion as currentOutputColumns (see isOutputShapeColumn above) — surrogate + __mj_* columns
+         // are not part of the query's declared output shape.
+         materializedColumns = rawCols.filter(isOutputShapeColumn);
+      }
+      return { sourceType: 'Query', query: { missingSourceEntities, missingSourceFields, missingComposedQueries, currentOutputColumns, materializedColumns } };
+   }
+
+   /** Actual column names of a materialized table (via INFORMATION_SCHEMA), for drift comparison. */
+   protected async getMaterializedTableColumns(pool: CodeGenConnection, schema: string, table: string): Promise<string[]> {
+      const esc = (s: string) => s.replace(/'/g, "''");
+      const res = await this.runQuery(
+         pool,
+         `SELECT COLUMN_NAME AS cn FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='${esc(schema)}' AND TABLE_NAME='${esc(table)}' ORDER BY ORDINAL_POSITION`,
+      );
+      return res.recordset.map((row: CodeGenQueryRow) => row.cn as string);
+   }
+
+   /**
     * Derives an entity name from a view name by removing common prefixes (vw, v_)
     * and converting to a human-friendly format.
     */
@@ -1449,6 +2311,14 @@ export class ManageMetadataBase {
          await md.Refresh();
       }
 
+      // Config-driven query materialization — mint read-only Virtual Entities over materialized
+      // query results. Runs BEFORE manageVirtualEntities so the minted entities' fields get synced
+      // from their wrapper views in this same run (plan §4.2). Internally refreshes metadata when it mints.
+      const queryMatResult = await this.processQueryMaterializations(pool, currentUser);
+      if (queryMatResult.processedCount > 0) {
+         logStatus(`    > Query materialization: processed ${queryMatResult.processedCount} quer${queryMatResult.processedCount === 1 ? 'y' : 'ies'} (${queryMatResult.mintedCount} new entit${queryMatResult.mintedCount === 1 ? 'y' : 'ies'})`);
+      }
+
       const veResult = await this.manageVirtualEntities(pool)
       if (! veResult.success) {
          logError('   Error managing virtual entities');
@@ -1504,6 +2374,23 @@ export class ManageMetadataBase {
       const organicKeyResult = await this.processOrganicKeyConfig(pool);
       if (organicKeyResult.createdCount > 0 || organicKeyResult.updatedCount > 0) {
          logStatus(`    > Organic keys: ${organicKeyResult.createdCount} created, ${organicKeyResult.updatedCount} updated from config`);
+      }
+
+      // Config-driven base-view materialization — emit the physical table + wrapper view and
+      // attach an "MJ: Materialized Results" row to the existing entity. Runs AFTER entity fields
+      // are managed so the snapshot shape reflects the current base view (plan §4.1).
+      const baseViewMatResult = await this.processBaseViewMaterializations(pool);
+      if (baseViewMatResult.processedCount > 0) {
+         logStatus(`    > Base-view materialization: processed ${baseViewMatResult.processedCount} declaration${baseViewMatResult.processedCount === 1 ? '' : 's'} from config`);
+      }
+
+      // Phase 4 (§13/§17.2): flag materializations whose source shape drifted (source entity/field
+      // dropped/renamed, or a composed inner query removed) as DriftHold and stop refreshing them —
+      // flag-and-hold, never silent auto-rebuild. Runs after the entity/field re-sync so it sees the
+      // current schema.
+      const driftResult = await this.detectMaterializationDrift(pool);
+      if (driftResult.heldCount > 0) {
+         logStatus(`    > Materialization drift: held ${driftResult.heldCount} materialization${driftResult.heldCount === 1 ? '' : 's'} for review (Status=DriftHold)`);
       }
 
       start = new Date();
@@ -1620,20 +2507,48 @@ export class ManageMetadataBase {
     * metadataSupportObjects.ts). Cross-platform via INFORMATION_SCHEMA; cached for the run (the schema
     * cannot change mid-run).
     */
-   private _entityHasExternalDataSourceColumn: boolean | null = null;
    protected async entityHasExternalDataSourceColumn(pool: CodeGenConnection): Promise<boolean> {
-      if (this._entityHasExternalDataSourceColumn === null) {
-         // Check the VIEW the gated queries actually read (vwEntities), not the base Entity table — a
-         // schema where the table has the column but the view wasn't refreshed to expose it would still
-         // throw. (Matches the PG guard in metadataSupportObjects.ts, which also checks the view.)
-         const sql = `SELECT COUNT(*) AS ColExists FROM INFORMATION_SCHEMA.COLUMNS ` +
-                     `WHERE TABLE_SCHEMA = '${mj_core_schema()}' AND TABLE_NAME = 'vwEntities' AND COLUMN_NAME = 'ExternalDataSourceID'`;
+      // Check the VIEW the gated queries actually read (vwEntities), not the base Entity table — a
+      // schema where the table has the column but the view wasn't refreshed to expose it would still
+      // throw. (Matches the PG guard in metadataSupportObjects.ts, which also checks the view.)
+      return await this.columnExistsInCoreSchema(pool, 'vwEntities', 'ExternalDataSourceID');
+   }
+
+   /**
+    * Whether the current database's `Query` table has the `ExternalDataSourceID` column. Same rationale as
+    * {@link entityHasExternalDataSourceColumn}: External Data Sources ship as a SQL-Server-only migration, so
+    * on a DB without it (PostgreSQL today) the column is absent and any raw SQL referencing it aborts the
+    * CodeGen run. processQueryMaterializations gates its ExternalDataSourceID reference on this. Cached per run.
+    */
+   protected async queryHasExternalDataSourceColumn(pool: CodeGenConnection): Promise<boolean> {
+      return await this.columnExistsInCoreSchema(pool, 'Query', 'ExternalDataSourceID');
+   }
+
+   /**
+    * True if the Query table has the IsMaterialized column (added by the materialization Foundation migration).
+    * processQueryMaterializations gates on this so codegen doesn't throw on a DB where that migration hasn't run
+    * yet (e.g. the PostgreSQL parallel world's object-availability lag) — same defensive pattern as
+    * queryHasExternalDataSourceColumn. Cached per run.
+    */
+   protected async queryHasIsMaterializedColumn(pool: CodeGenConnection): Promise<boolean> {
+      return await this.columnExistsInCoreSchema(pool, 'Query', 'IsMaterialized');
+   }
+
+   /**
+    * True if the MaterializedResult table exists. createNewEntities and detectMaterializationDrift gate their
+    * references to it on this so codegen doesn't throw on a DB lacking the materialization schema. Cached per run.
+    */
+   private _materializedResultTableExists: boolean | null = null;
+   protected async materializedResultTableExists(pool: CodeGenConnection): Promise<boolean> {
+      if (this._materializedResultTableExists === null) {
+         const sql = `SELECT COUNT(*) AS TblExists FROM INFORMATION_SCHEMA.TABLES ` +
+                     `WHERE TABLE_SCHEMA = '${mj_core_schema()}' AND TABLE_NAME = 'MaterializedResult'`;
          const result = await this.runQuery(pool, sql);
          const row = (result.recordset?.[0] ?? {}) as Record<string, unknown>;
-         const cnt = row.ColExists ?? row.colexists ?? 0;
-         this._entityHasExternalDataSourceColumn = Number(cnt) > 0;
+         const cnt = row.TblExists ?? row.tblexists ?? 0;
+         this._materializedResultTableExists = Number(cnt) > 0;
       }
-      return this._entityHasExternalDataSourceColumn;
+      return this._materializedResultTableExists;
    }
 
    protected async manageExternalEntities(pool: CodeGenConnection, currentUser: UserInfo): Promise<{success: boolean, anyUpdates: boolean, relationshipsUpdated: boolean}> {
@@ -1665,6 +2580,7 @@ export class ManageMetadataBase {
       await import('@memberjunction/external-data-source-sqlserver');
       await import('@memberjunction/external-data-source-mysql');
       await import('@memberjunction/external-data-source-oracle');
+      await import('@memberjunction/external-data-source-databricks');
       const router = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
       if (!router) {
          logError('   Cannot sync external entity fields: no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources (and the relevant driver) are loaded in the CodeGen process.');
@@ -2608,9 +3524,13 @@ export class ManageMetadataBase {
 
          // Check the DATABASE for existing field record — in-memory metadata may be stale
          // (e.g. createNewEntityFieldsFromSchema may have already added this field from the view)
-         const existsResult = await this.runQueryWithParams(pool, `SELECT ID, IsVirtual, Type, Length, Precision, Scale, AllowsNull, AllowUpdateAPI
+         // Identifiers are quoted via qi(): __mj.EntityField's columns are mixed-case, and an
+         // unquoted reference folds to lower case on PostgreSQL — `column "length" does not exist`.
+         // SQL Server's case-insensitive resolution hid this for as long as IS-A ran only there.
+         const existsResult = await this.runQueryWithParams(pool,
+               `SELECT ${this.qi('ID')}, ${this.qi('IsVirtual')}, ${this.qi('Type')}, ${this.qi('Length')}, ${this.qi('Precision')}, ${this.qi('Scale')}, ${this.qi('AllowsNull')}, ${this.qi('AllowUpdateAPI')}
                     FROM ${this.qs(mj_core_schema(), 'EntityField')}
-                    WHERE EntityID = @EntityID AND Name = @FieldName`,
+                    WHERE ${this.qi('EntityID')} = @EntityID AND ${this.qi('Name')} = @FieldName`,
                { 'EntityID': childEntity.ID, 'FieldName': parentField.Name }
                );
 
@@ -2627,14 +3547,14 @@ export class ManageMetadataBase {
 
             if (needsUpdate) {
                const sqlUpdate = `UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
-                  SET IsVirtual=${this.boolLit(true)},
-                      Type='${parentField.Type}',
-                      Length=${parentField.Length},
-                      Precision=${parentField.Precision},
-                      Scale=${parentField.Scale},
-                      AllowsNull=${this.boolLit(parentField.AllowsNull)},
-                      AllowUpdateAPI=${this.boolLit(true)}
-                  WHERE ID='${existingRow.ID}'`;
+                  SET ${this.qi('IsVirtual')}=${this.boolLit(true)},
+                      ${this.qi('Type')}='${parentField.Type}',
+                      ${this.qi('Length')}=${parentField.Length},
+                      ${this.qi('Precision')}=${parentField.Precision},
+                      ${this.qi('Scale')}=${parentField.Scale},
+                      ${this.qi('AllowsNull')}=${this.boolLit(parentField.AllowsNull)},
+                      ${this.qi('AllowUpdateAPI')}=${this.boolLit(true)}
+                  WHERE ${this.qi('ID')}='${existingRow.ID}'`;
                await this.LogSQLAndExecute(pool, sqlUpdate,
                   `Update IS-A parent field ${parentField.Name} on ${childEntity.Name}`);
                bUpdated = true;
@@ -3033,7 +3953,10 @@ export class ManageMetadataBase {
                // the below could fail if there are non-core dependencies on the entity, but that's ok, we will flag that in the console
                // for the admin to handle manually
                try {
-                  const sqlDelete = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteEntityWithCoreDependencies', [`'${e.ID}'`], ['EntityID']);
+                  // discardResult: this routine only performs deletions — nothing below reads rows
+                  // from it — and on PostgreSQL it is declared RETURNS SETOF record, which cannot be
+                  // invoked through the default `SELECT * FROM` form at all.
+                  const sqlDelete = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteEntityWithCoreDependencies', [`'${e.ID}'`], ['EntityID'], true);
                   await this.LogSQLAndExecute(pool, sqlDelete, `SQL text to remove entity ${e.Name}`);
                   logStatus(`      > Removed metadata for table ${e.SchemaName}.${e.BaseTable}`);
 
@@ -3904,6 +4827,42 @@ export class ManageMetadataBase {
       const conflictCheck = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ID = '${newEntityFieldUUID}' OR (EntityID = '${n.EntityID}' AND Name = '${n.FieldName}')`;
       const guard = this.dbProvider.wrapInsertWithConflictGuard(conflictCheck);
 
+      // Sequence is emitted as an expression evaluated AT APPLY TIME, not as the literal we computed
+      // against this database. That distinction is the whole point, so it is worth stating plainly.
+      //
+      // `n.Sequence` here is a TEMPORARY placeholder — `MAX(Sequence) + 100000 + ordinal` — that the
+      // renumber pass (spUpdateExistingEntityFieldsFromSchema, run live and again from
+      // R__RefreshMetadata) rewrites to a proper low value shortly afterwards. Locally that always
+      // works, which is exactly why the bug hides: by the time anyone looks, the number is correct.
+      //
+      // The generated INSERT, however, is appended verbatim to a migration. Flyway runs ALL versioned
+      // migrations before ANY repeatable script, so on a database built only from migrations the
+      // renumber never runs in between. Two migrations that add columns to the SAME entity within one
+      // release therefore both carry a placeholder computed from the same low MAX — and the second one
+      // collides on UQ_EntityField_EntityID_Sequence. The script does not SET XACT_ABORT ON, so that
+      // aborts only the statement; execution continues and the real failure surfaces later as an
+      // unrelated-looking FK violation on EntityFieldValue. (MJ#3670 is the instance that found this.)
+      //
+      // Computing from an apply-time MAX cannot collide, on any database, in any order. COALESCE
+      // rather than ISNULL so the emitted SQL stays valid for both providers.
+      //
+      // The offset is the field's RAW SCHEMA ORDINAL (SourceOrdinal), not a flat +1, so the ORDERING
+      // of a batch of new fields is encoded in the emitted value itself. Order is what actually
+      // matters here — the providers' positional save-capture requires base fields to sort before
+      // virtual ones — and a flat +1 would make that ordering depend on the order the INSERT
+      // statements happen to execute. That order is guaranteed today (the pending-fields query ends
+      // ORDER BY EntityID, Sequence and the batch preserves it), but it would be an implicit,
+      // unstated dependency: parallelise the inserts or drop that ORDER BY later and the ordering
+      // silently changes. Encoding the ordinal removes the dependency rather than relying on it.
+      //
+      // Distinctness holds regardless: MAX is re-evaluated per statement and every ordinal is >= 1,
+      // so each successive insert lands strictly above every existing row. The absolute values are
+      // throwaway — spUpdateExistingEntityFieldsFromSchema overwrites Sequence from the schema on
+      // the next pass (live, and from R__RefreshMetadata.sql).
+      const sourceOrdinal = typeof n.SourceOrdinal === 'number' && n.SourceOrdinal > 0 ? n.SourceOrdinal : 1;
+      const sequenceExpr =
+         `(SELECT COALESCE(MAX(${this.qi('Sequence')}), 0) FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ${this.qi('EntityID')} = '${n.EntityID}') + ${sourceOrdinal}`;
+
       return `
       ${guard.prefix}
          INSERT INTO ${this.qs(mj_core_schema(), 'EntityField')}
@@ -3940,7 +4899,7 @@ export class ManageMetadataBase {
          (
             '${newEntityFieldUUID}',
             '${n.EntityID}', -- Entity: ${n.EntityName}
-            ${n.Sequence},
+            ${sequenceExpr},
             '${n.FieldName}',
             '${fieldDisplayName}',
             ${escapedDescription},
@@ -4639,7 +5598,27 @@ export class ManageMetadataBase {
 
    protected async createNewEntities(pool: CodeGenConnection, currentUser: UserInfo): Promise<boolean> {
       try   {
-         const sSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwSQLTablesAndEntities')} WHERE ${this.qi('EntityID')} IS NULL ` + this.createExcludeTablesAndSchemasFilter('');
+         // Exclude the PHYSICAL materialization tables (materialized_<Name>) from new-entity auto-creation.
+         // They are internal snapshot storage, surfaced ONLY through the read-only virtual entity minted over
+         // their wrapper view. On any codegen re-run after a materialization exists, this scan would otherwise
+         // find the physical table (which has no entity of its own) and auto-mint a spurious CRUD entity over
+         // it — user-visible AND editable, letting someone mutate the snapshot the refresher overwrites. The
+         // wrapper view is already excluded (it carries the minted entity, so EntityID IS NOT NULL). The outer
+         // view is aliased `t` so the correlated MaterializedResult subquery can't resolve columns ambiguously.
+         const coreSchema = mj_core_schema();
+         // Gate the MaterializedResult reference on the table actually existing. Referencing it unconditionally
+         // would throw — breaking new-entity creation for EVERY entity — on any DB where MaterializedResult
+         // isn't present yet (e.g. the PostgreSQL parallel world's object-availability lag). If it's absent we
+         // simply skip the exclusion (the physical materialized table can't exist without it either, so nothing
+         // to exclude). Uses the shared cached helper so all three materialization-schema gates stay consistent.
+         const matResultExists = await this.materializedResultTableExists(pool);
+         const matExclusion = matResultExists
+            ? `AND NOT EXISTS (SELECT 1 FROM ${this.qs(coreSchema, 'MaterializedResult')} mr WHERE mr.${this.qi('SchemaName')} = t.${this.qi('SchemaName')} AND mr.${this.qi('TableName')} = t.${this.qi('TableName')}) `
+            : '';
+         const sSQL = `SELECT t.* FROM ${this.qs(coreSchema, 'vwSQLTablesAndEntities')} t `
+            + `WHERE t.${this.qi('EntityID')} IS NULL `
+            + matExclusion
+            + this.createExcludeTablesAndSchemasFilter('t.');
          const newEntitiesResult = await this.runQuery(pool, sSQL);
       const newEntities = newEntitiesResult.recordset;
 
@@ -5048,8 +6027,12 @@ export class ManageMetadataBase {
          // idempotent. drop-schema clears an app's ApplicationEntity/EntityPermission/Entity rows but NOT
          // its Application row, so replaying this block would otherwise collide on the Application PK.
          const appCheckQuery = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'Application')} WHERE ${this.qi('ID')} = '${appID}'`;
-         const appInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (ID, Name, Description, SchemaAutoAddNewEntities, Path, AutoUpdatePath)
-                       VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', ${this.dialect.BooleanLiteral(true)})`;
+         // Schema-named bucket apps are plumbing (entity links, role grants, SchemaAutoAddNewEntities),
+         // not products — hide them from new users. Application.DefaultForNewUser defaults to 1 in the
+         // DB, so omitting the column here is what put raw '__mj_*'-named apps in every new user's
+         // app switcher while the human-authored metadata app stayed hidden.
+         const appInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'Application')} (ID, Name, Description, SchemaAutoAddNewEntities, Path, AutoUpdatePath, DefaultForNewUser)
+                       VALUES ('${appID}', '${appName}', 'Generated for schema', '${schemaName}', '${path}', ${this.dialect.BooleanLiteral(true)}, ${this.dialect.BooleanLiteral(false)})`;
          const sSQL = this.conditionalInsert(appCheckQuery, appInsert);
          await this.LogSQLAndExecute(pool, sSQL, `SQL generated to create new application ${appName}`);
          LogStatus(`Created new application ${appName} with Path: ${path}`);
@@ -5198,6 +6181,349 @@ export class ManageMetadataBase {
             LogError(`   >>>> ERROR: Unable to find Role ID for role ${p.RoleName} to add permissions for entity ${entityName}`);
          }
       }
+   }
+
+   /**
+    * RLS-safety assessment for a QUERY materialization, shared by the mint-time gate and the per-run drift
+    * re-check (plan §6.2 / §10). A materialized query entity does NOT inherit its source entities' row-level
+    * security, so it is only safe to serve an unscoped snapshot when we can PROVE no source is RLS-protected.
+    * Fails closed (returns `{ safe:false }`) on three conditions, in order of decreasing severity of what we
+    * cannot prove:
+    *  1. **No provenance** — zero linked source entities (raw SQL / un-analyzed query): we cannot inspect any
+    *     source's RLS, so we cannot prove safety.
+    *  2. **Unresolvable link** — a linked EntityID that doesn't resolve to a known `EntityInfo`: if it secretly
+    *     carried a read RLS filter we'd never see it.
+    *  3. **Row-restricted source** — any resolved source protected by role RLS *or* an API-key row filter (see
+    *     {@link entityHasRowLevelRestriction}; the API-key layer matters because such an entity carries no
+    *     `ReadRLSFilterID`, and the minted entity's NEW EntityID would not match the key's EntityID binding).
+    * Over-restriction here is harmless (the query stays live-only, or an existing materialization is held); the
+    * reverse — serving a protected source's rows unscoped — is the leak this guard exists to prevent.
+    */
+   protected assessQuerySourceRLSSafety(md: Metadata, sourceEntityIds: string[], sql?: string): { safe: boolean; reason?: string } {
+      if (sourceEntityIds.length === 0) {
+         return { safe: false, reason: 'no source-entity provenance is recorded (its QueryEntity links are empty), so RLS-safety cannot be verified' };
+      }
+      const resolved = sourceEntityIds.map((id) => ({ id, entity: md.EntityByID(id) }));
+      const unresolved = resolved.filter((x) => !x.entity);
+      if (unresolved.length > 0) {
+         return { safe: false, reason: `${unresolved.length} source-entity link(s) [${unresolved.map((u) => u.id).join(', ')}] do not resolve to a known entity, so their RLS status can't be verified` };
+      }
+      const rlsProtected = resolved
+         .map((x) => x.entity as EntityInfo)
+         .filter((e) => this.entityHasRowLevelRestriction(e));
+      if (rlsProtected.length > 0) {
+         const names = rlsProtected.map((e) => `"${e.Name}"`).join(', ');
+         return { safe: false, reason: `source entit${rlsProtected.length === 1 ? 'y' : 'ies'} ${names} ${rlsProtected.length === 1 ? 'is' : 'are'} read-RLS-protected (role RLS and/or an API-key row filter), and a materialized query entity does NOT inherit source row restrictions (plan §6.2)` };
+      }
+      // P1 hardening — catch RLS sources the LINKER MISSED. The checks above inspect only the LINKED sources
+      // (vwQueryEntities); a source reached via a wrapping view / CTE / function / aliased columns that
+      // query-analysis under-linked would be invisible to them. Parse the query SQL directly, map each table ref
+      // to an entity, and fail closed if a referenced entity is read-RLS-protected but NOT in the linked set —
+      // the precise leak (an unverified RLS source). An unlinked NON-RLS table is not a leak, so it doesn't trip
+      // this (avoids over-refusing legitimate materializations). Parse failure is ignored (the linked-only checks
+      // above still stand); only a POSITIVE detection of an unlinked RLS source refuses.
+      if (sql && sql.trim().length > 0) {
+         const linkedSet = new Set(sourceEntityIds.map((id) => id.trim().toLowerCase()));
+         let refs: { SchemaName?: string; TableName?: string }[] = [];
+         try { refs = SQLParser.ExtractTableRefs(sql, this.dialect) ?? []; } catch { refs = []; }
+         // CTE self-references are emitted by ExtractTableRefs as unqualified (dbo-defaulted) refs, but they are
+         // NOT base-table sources. Since findEntityByBaseObject now falls back to a schema-agnostic name match for
+         // unqualified refs (to catch under-linked __mj/app-schema sources), a CTE that happens to share an
+         // entity's base-table name would otherwise be misread as an under-linked source and over-refuse. Collect
+         // the CTE names and skip any unqualified ref that matches one. (Parse failure → no exclusion; the guard
+         // still fails closed, only slightly more conservatively.)
+         const cteNames = new Set<string>();
+         try {
+            // Extract each CTE's name from its "name AS (...)" definition. Handle all three quotings SQLParser can
+            // emit ([bracket], "double-quote", bare) plus an optional column list — mirroring the parser's own CTE
+            // header regex. A missed name only means a (safe) over-refusal, but bracket names are the common T-SQL
+            // form, so cover them.
+            for (const def of SQLParser.ExtractCTEs(sql, this.dialect)?.CTEDefinitions ?? []) {
+               const m = /^\s*(?:\[([^\]]+)\]|"([^"]+)"|([A-Za-z_][\w$]*))\s*(?:\([^)]*\))?\s+AS\b/i.exec(def);
+               const name = m?.[1] ?? m?.[2] ?? m?.[3];
+               if (name) cteNames.add(name.trim().toLowerCase());
+            }
+         } catch { /* no CTE exclusion available — guard stays fail-closed */ }
+         for (const ref of refs) {
+            if (!ref.TableName) continue;
+            const refSchema = (ref.SchemaName ?? '').trim().toLowerCase();
+            // Skip CTE self-references (only unqualified / dbo-defaulted refs can be a CTE name).
+            if ((refSchema === '' || refSchema === 'dbo') && cteNames.has(ref.TableName.trim().toLowerCase())) continue;
+            // Refuse ANY under-linked entity source, not only RLS-protected ones. Both the RLS-safety check above
+            // AND the read-grant role intersection (addMaterializedQueryEntityPermissions) are computed over the
+            // LINKED set only, so a source query-analysis did NOT link is invisible to both: an RLS source would
+            // leak its rows unscoped, and a merely CanRead-restricted (non-RLS) source would let the minted
+            // entity's read grant exceed "can read every source" — a privilege escalation. A parsed ref maps to an
+            // entity when it IS that entity's base view/table; derived-table aliases map to nothing, and CTE
+            // self-references are excluded above, so a mapped-but-unlinked source is genuine under-linking and
+            // refusing is correct; over-refusal is harmless (the query stays live-only — link the source via full
+            // query analysis, or use a base-view materialization which inherits source read access).
+            // Consider ALL candidate entities the ref can map to and fail closed if ANY is unlinked: an unqualified
+            // ref is schema-ambiguous (the parser collapses it to 'dbo'), so a same-base-name entity in another
+            // schema could be the true referent — picking only the first match could silently pass an unlinked one.
+            const candidates = this.findEntitiesByBaseObject(md, ref.SchemaName, ref.TableName);
+            const unlinked = candidates.find((e) => !linkedSet.has(e.ID.trim().toLowerCase()));
+            if (unlinked) {
+               const rlsNote = this.entityHasRowLevelRestriction(unlinked) ? ' row-restricted (role RLS and/or an API-key row filter)' : ' read-restricted';
+               return { safe: false, reason: `query references${rlsNote} source "${unlinked.Name}" (${ref.SchemaName ?? ''}.${ref.TableName}) that query-analysis did NOT link — an unscoped snapshot cannot prove its per-source read access is honored (P1 under-linking guard)` };
+            }
+         }
+      }
+      return { safe: true };
+   }
+
+   /** Maps a physical (schema, table/view) reference to the MJ entities backed by it — by BaseView or BaseTable,
+    *  case/whitespace-insensitive. Returns ALL candidates so the P1 guard can fail closed on an AMBIGUOUS ref.
+    *  Resolution: an explicit, non-default schema yields only that schema's exact matches; an empty schema OR the
+    *  parser-default `'dbo'` — which {@link SQLParser.ExtractTableRefs} assigns to every UNQUALIFIED ref, while MJ
+    *  core/app entities live in `__mj`/app schemas (never `dbo`) — is treated as unqualified and yields every
+    *  schema-agnostic name match. That way an unqualified reference to a `__mj`/app-schema entity is still caught,
+    *  and a same-base-name collision across schemas surfaces every candidate rather than just the first (so the
+    *  guard refuses if any of them is under-linked). Used by the P1 under-linking guard. */
+   protected findEntitiesByBaseObject(md: Metadata, schema: string | undefined, table: string): EntityInfo[] {
+      const t = table.trim().toLowerCase();
+      const s = (schema ?? '').trim().toLowerCase();
+      const nameMatch = (e: EntityInfo): boolean => {
+         const bv = (e.BaseView ?? '').trim().toLowerCase();
+         const bt = (e.BaseTable ?? '').trim().toLowerCase();
+         return bv === t || bt === t;
+      };
+      if (s && s !== 'dbo') {
+         // Explicit, non-default schema → only that schema's entity qualifies (no cross-schema ambiguity).
+         return md.Entities.filter((e) => (e.SchemaName ?? '').trim().toLowerCase() === s && nameMatch(e));
+      }
+      // Empty schema / parser-default 'dbo' (i.e. UNQUALIFIED) → every name match across schemas is a candidate.
+      return md.Entities.filter(nameMatch);
+   }
+
+   /**
+    * Grants read permissions to a newly-minted materialized QUERY entity scoped to the INTERSECTION of source
+    * read access (C2). A precomputed snapshot has no per-row scoping, so a role may read it only if it can read
+    * EVERY source entity — otherwise a user who cannot read a source could read its rows through the snapshot.
+    * Starts from the same config-default role list as {@link addDefaultPermissionsForEntity} (never grants a
+    * role the defaults wouldn't) and drops any role that lacks explicit read on every source. Always read-only
+    * (the entity is a virtual entity with no CRUD sprocs). If the intersection is empty the entity receives no
+    * role-based read grants — the fail-closed direction (§10); a human can grant read after review.
+    */
+   protected async addMaterializedQueryEntityPermissions(
+      pool: CodeGenConnection,
+      entityId: string,
+      entityName: string,
+      sourceEntities: EntityInfo[],
+   ): Promise<void> {
+      if (!configInfo.newEntityDefaults.PermissionDefaults?.AutoAddPermissionsForNewEntities) {
+         return;
+      }
+      // Fail-closed (C2): with no resolved source entities we cannot prove any role can read EVERY source, so
+      // grant nothing. `sourceEntities.every(...)` is vacuously true on an empty array and would otherwise grant
+      // read to every default role — the exact "read the snapshot without read on a source" leak this method
+      // exists to prevent. Callers already refuse on empty provenance, but guard here too so the security
+      // invariant holds in isolation, not only by a distant caller's gate.
+      if (sourceEntities.length === 0) {
+         logStatus(`    > Materialized entity "${entityName}": no resolved source entities — granting no role-based read (fail-closed).`);
+         return;
+      }
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+      const roleCanReadAllSources = (roleId: string): boolean =>
+         sourceEntities.every((e) => e.Permissions.some((p) => UUIDsEqual(p.RoleID, roleId) && p.CanRead));
+      for (const p of configInfo.newEntityDefaults.PermissionDefaults.Permissions) {
+         const roleId = md.Roles.find((r) => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
+         if (!roleId) {
+            LogError(`   >>>> ERROR: Unable to find Role ID for role ${p.RoleName} to add permissions for materialized entity ${entityName}`);
+            continue;
+         }
+         if (!p.CanRead || !roleCanReadAllSources(roleId)) {
+            logStatus(`    > Materialized entity "${entityName}": role "${p.RoleName}" NOT granted read (it cannot read every source entity; the snapshot has no row-level scoping).`);
+            continue;
+         }
+         const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityPermission')}
+                              (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
+                              ('${entityId}', '${roleId}', ${this.boolLit(true)}, ${this.boolLit(false)}, ${this.boolLit(false)}, ${this.boolLit(false)}, ${this.utcNow()}, ${this.utcNow()})`;
+         await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add read permission for materialized entity ${entityName} for role ${p.RoleName}`);
+      }
+   }
+
+   /**
+    * Revokes read access on a minted materialized entity by setting `CanRead=0` on all its EntityPermission
+    * rows (the __mj_UpdatedAt trigger stamps the timestamp). Used by the drift re-check when a query source
+    * gains RLS after minting: the snapshot can no longer be safely served, so it is made unreadable until a
+    * human authors protection. Non-destructive (rows are kept, just flipped) so the grant can be restored.
+    */
+   protected async revokeMaterializedEntityReadAccess(pool: CodeGenConnection, entityId: string, entityLabel: string, reason: string): Promise<void> {
+      const sql = `UPDATE ${this.qs(mj_core_schema(), 'EntityPermission')} SET ${this.qi('CanRead')}=${this.boolLit(false)} WHERE ${this.qi('EntityID')}='${entityId}' AND ${this.qi('CanRead')}=${this.boolLit(true)}`;
+      await this.LogSQLAndExecute(pool, sql, `Revoke read access on materialized entity "${entityLabel}" (${reason})`);
+   }
+
+   /**
+    * ROLE-RLS LAYER ONLY — true if any of the entity's role permissions carries a non-empty `ReadRLSFilterID`.
+    *
+    * This is deliberately NOT a gate on its own, and no materialization gate may call it directly. MJ enforces
+    * row restrictions in TWO layers (see `EntityInfo.GetEffectiveRowFilterWhereClause`, the sanctioned composer):
+    * role RLS *and* API-key row filters, AND-composed. An entity bound ONLY by an API-key row filter carries no
+    * `ReadRLSFilterID` at all, so a gate that stopped at this layer would judge it unprotected and fail OPEN —
+    * minting a materialized entity with a NEW EntityID, which the API-key binding (which binds by EntityID) no
+    * longer matches, handing a filtered principal a full unscoped snapshot of rows it cannot read live.
+    *
+    * `EntityInfo` exposes no user-free accessor for either layer (`GetEffectiveRowFilterWhereClause` needs a
+    * session `UserInfo`, and CodeGen has no session), so the composition is done explicitly here — by
+    * {@link entityHasRowLevelRestriction}, which is what every gate calls.
+    */
+   protected entityHasRowLevelSecurity(entity: EntityInfo): boolean {
+      return ManageMetadataBase.EntityHasRoleReadRLS(entity);
+   }
+
+   /** Pure form of the role-RLS layer (see {@link entityHasRowLevelSecurity}). IO-free so it can be reused
+    *  verbatim by the runtime refresher's equivalent gate. */
+   public static EntityHasRoleReadRLS(entity: EntityInfo): boolean {
+      return entity.Permissions.some((p) => !!p.ReadRLSFilterID && p.ReadRLSFilterID.trim().length > 0);
+   }
+
+   /**
+    * Per-run cache of the entity NAMES (trimmed + lowercased) that an API-KEY row filter
+    * (`APIKeyScope.RowFilterID`) or an API-APPLICATION row ceiling (`APIApplicationScope.RowFilterID`) binds to.
+    *
+    * `'unknown'` — the INITIAL value — means "not loaded, or could not be enumerated", and makes
+    * {@link entityHasRowLevelRestriction} treat EVERY entity as row-restricted. That is the fail-CLOSED
+    * direction on purpose: refusing to materialize costs nothing (the entity/query stays live-only), while
+    * materializing an entity whose API-key row filter we failed to see is the precise leak these gates exist to
+    * prevent. Loaded by {@link loadAPIKeyRowFilterTargets} at the top of every materialization entry point.
+    * `protected` (not `private`) so a unit-test seam can declare "this fixture configures no API-key row filters".
+    */
+   protected apiKeyRowFilterTargets: ReadonlySet<string> | 'unknown' = 'unknown';
+
+   /**
+    * THE row-restriction gate for materialization. True when the entity is protected by ANY row-level
+    * restriction — role RLS **or** an API-key / API-application row filter — because a materialized snapshot
+    * reproduces neither. Fails closed when the API-key layer could not be enumerated (see
+    * {@link apiKeyRowFilterTargets}).
+    */
+   protected entityHasRowLevelRestriction(entity: EntityInfo): boolean {
+      return ManageMetadataBase.EntityHasRowLevelRestriction(entity, this.apiKeyRowFilterTargets);
+   }
+
+   /**
+    * Pure, IO-free core of {@link entityHasRowLevelRestriction} — the predicate any other layer (e.g. the
+    * runtime `MaterializationRefresher`) should mirror, supplying the API-key target set however it can obtain
+    * it. `'unknown'` for the target set ⇒ true (fail closed).
+    */
+   public static EntityHasRowLevelRestriction(entity: EntityInfo, apiKeyRowFilterTargets: ReadonlySet<string> | 'unknown'): boolean {
+      if (ManageMetadataBase.EntityHasRoleReadRLS(entity)) return true;
+      if (apiKeyRowFilterTargets === 'unknown') return true; // cannot prove the key layer is empty → fail closed
+      return apiKeyRowFilterTargets.has((entity.Name ?? '').trim().toLowerCase());
+   }
+
+   /**
+    * Loads {@link apiKeyRowFilterTargets} once per CodeGen run. Called at the top of every materialization entry
+    * point, BEFORE any gate runs, so the gates never evaluate against an unloaded cache in production.
+    *
+    * Resolution rules (all biased fail-closed):
+    *  - The `RowFilterID` column absent on a scope table ⇒ that binding layer cannot exist on this database
+    *    (pre-v6 schema / the PostgreSQL parallel world) ⇒ contributes nothing. This is CORRECT, not fail-open.
+    *  - A filtered rule's `ResourcePattern` must name ONE exact entity (enforced at rule save). Mappability is
+    *    decided by {@link ResolveSingleEntityResourceTarget}, shared verbatim with the runtime refresher's
+    *    identical gate; a rule it cannot resolve collapses the whole set to `'unknown'` — every entity is then
+    *    treated as restricted.
+    *  - Any error enumerating the rules ⇒ `'unknown'` (never a silently-empty set).
+    * Permission type is deliberately NOT narrowed to `Read`: mapping a scope rule to a permission type requires
+    * the APIScope path taxonomy that lives outside CodeGen, and over-restriction here is harmless.
+    */
+   protected async loadAPIKeyRowFilterTargets(pool: CodeGenConnection): Promise<void> {
+      if (this.apiKeyRowFilterTargets !== 'unknown') return; // already loaded this run
+      try {
+         const targets = new Set<string>();
+         for (const table of ['APIKeyScope', 'APIApplicationScope']) {
+            if (!(await this.columnExistsInCoreSchema(pool, table, 'RowFilterID'))) continue;
+            const res = await this.runQuery(
+               pool,
+               `SELECT DISTINCT ${this.qi('ResourcePattern')} AS ResourcePattern FROM ${this.qs(mj_core_schema(), table)} WHERE ${this.qi('RowFilterID')} IS NOT NULL`,
+            );
+            for (const row of res.recordset ?? []) {
+               const r = row as CodeGenQueryRow;
+               const pattern = ((r.ResourcePattern ?? r.resourcepattern) as string | null) ?? '';
+               // The mappability rule is SHARED with the runtime refresher's identical gate
+               // (ResolveSingleEntityResourceTarget in @memberjunction/global) rather than copied. The two
+               // gates must agree exactly: a copy that drifts open here silently re-opens the leak the
+               // runtime gate closes, and vice versa — with nothing in the build to notice.
+               const target = ResolveSingleEntityResourceTarget(pattern);
+               if (target === null) {
+                  logError(
+                     `    > API-key row-filter enumeration: a filtered scope rule in ${table} has an unmappable ResourcePattern ` +
+                     `("${pattern.trim()}") — it cannot be resolved to a single entity, so EVERY entity is treated as row-restricted ` +
+                     `for materialization this run (fail closed). Fix the rule to name one exact entity.`,
+                  );
+                  this.apiKeyRowFilterTargets = 'unknown';
+                  return;
+               }
+               targets.add(target);
+            }
+         }
+         this.apiKeyRowFilterTargets = targets;
+      } catch (err) {
+         this.apiKeyRowFilterTargets = 'unknown';
+         logError(
+            `    > API-key row-filter enumeration FAILED — every entity will be treated as row-restricted for materialization ` +
+            `this run (fail closed): ${err instanceof Error ? err.message : String(err)}`,
+         );
+      }
+   }
+
+   /**
+    * THE cached INFORMATION_SCHEMA column-existence probe against the MJ core schema — cross-platform, and
+    * cached for the run (the schema cannot change mid-run). Every column gate in this class routes through
+    * it: {@link entityHasExternalDataSourceColumn}, {@link queryHasExternalDataSourceColumn},
+    * {@link queryHasIsMaterializedColumn} and {@link loadAPIKeyRowFilterTargets} are each a one-line call,
+    * so a new gate has no reason to hand-roll a fourth copy of the same query and its own cache field.
+    */
+   private _coreSchemaColumnExists = new Map<string, boolean>();
+   protected async columnExistsInCoreSchema(pool: CodeGenConnection, table: string, column: string): Promise<boolean> {
+      const key = `${table}.${column}`.toLowerCase();
+      const cached = this._coreSchemaColumnExists.get(key);
+      if (cached !== undefined) return cached;
+      const sql = `SELECT COUNT(*) AS ColExists FROM INFORMATION_SCHEMA.COLUMNS ` +
+                  `WHERE TABLE_SCHEMA = '${mj_core_schema()}' AND TABLE_NAME = '${table}' AND COLUMN_NAME = '${column}'`;
+      const result = await this.runQuery(pool, sql);
+      const row = (result.recordset?.[0] ?? {}) as Record<string, unknown>;
+      const cnt = row.ColExists ?? row.colexists ?? 0;
+      const exists = Number(cnt) > 0;
+      this._coreSchemaColumnExists.set(key, exists);
+      return exists;
+   }
+
+   /**
+    * Leak-2 (C2 ongoing): re-narrows a minted materialized QUERY entity's read grants to the CURRENT source-read
+    * intersection. The mint-time grant ({@link addMaterializedQueryEntityPermissions}) is computed once; if a role
+    * later LOSES plain `CanRead` on a source, its grant on the snapshot must be revoked too — otherwise it keeps
+    * reading snapshot rows it can no longer read live. Called from the drift pass on every codegen run. Only ever
+    * REVOKES (the safe direction); re-granting a role that regained access is a human decision after review.
+    * Returns the number of grants revoked.
+    */
+   protected async reconcileMaterializedQueryEntityReadGrants(
+      pool: CodeGenConnection,
+      entityId: string,
+      entityLabel: string,
+      sourceEntities: EntityInfo[],
+   ): Promise<number> {
+      if (sourceEntities.length === 0) return 0; // no sources to intersect against — the RLS/empty gate handles this
+      const roleCanReadAllSources = (roleId: string): boolean =>
+         sourceEntities.every((e) => e.Permissions.some((p) => UUIDsEqual(p.RoleID, roleId) && p.CanRead));
+      const grants = await this.runQuery(
+         pool,
+         `SELECT ${this.qi('RoleID')} FROM ${this.qs(mj_core_schema(), 'EntityPermission')} WHERE ${this.qi('EntityID')}='${entityId}' AND ${this.qi('CanRead')}=${this.boolLit(true)}`,
+      );
+      let revoked = 0;
+      for (const g of grants.recordset) {
+         const roleId = (g as CodeGenQueryRow).RoleID as string | null;
+         if (!roleId) continue;
+         if (!roleCanReadAllSources(roleId)) {
+            await this.LogSQLAndExecute(
+               pool,
+               `UPDATE ${this.qs(mj_core_schema(), 'EntityPermission')} SET ${this.qi('CanRead')}=${this.boolLit(false)} WHERE ${this.qi('EntityID')}='${entityId}' AND ${this.qi('RoleID')}='${roleId}' AND ${this.qi('CanRead')}=${this.boolLit(true)}`,
+               `Narrow read grant on materialized entity "${entityLabel}": role ${roleId} can no longer read every source (C2 intersection re-narrowed)`,
+            );
+            revoked++;
+         }
+      }
+      return revoked;
    }
 
    protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string | null): string {
@@ -5821,6 +7147,10 @@ export class ManageMetadataBase {
     *     `Sequence` from the metadata query).
     *  3. **Fresh pick** — if no flagged field is eligible, take the first eligible LLM
     *     candidate in ranked order.
+    *  4. **Preserve** — if there is still no winner, keep an existing flag on a
+    *     type-safe field rather than clearing it with no replacement (MJ #3551). Only
+    *     a flag on an actively-wrong field (PK / non-text / unbounded) is cleared with
+    *     nothing to replace it.
     *
     * Every NON-winner with `IsNameField=1` and `AutoUpdateIsNameField=1` is CLEARED, so
     * historical accumulation self-heals on the next analysis pass. Fields pinned with
@@ -5870,9 +7200,12 @@ export class ManageMetadataBase {
    /**
     * Picks the single IsNameField winner for an entity per the rules documented on
     * {@link applyNameFieldUpdates}: stable current winner → deterministic repair
-    * (literal `Name`, then field order) → first eligible LLM candidate. Returns null
-    * when nothing eligible exists (the entity simply has no name field — FK-name
-    * virtual columns are skipped for it, which beats pointing them at a PK or blob).
+    * (literal `Name`, then field order) → first eligible LLM candidate → PRESERVE an
+    * existing type-safe flag rather than clearing it with nothing to put in its place.
+    * Returns null only when every flagged field is actively WRONG (a PK, a non-text
+    * type, unbounded text) and the LLM named no usable replacement — there the entity
+    * genuinely ends with no name field, which beats pointing FK-name virtual columns
+    * at a uniqueidentifier or a blob.
     */
    protected selectNameFieldWinner(
       fields: Array<Record<string, unknown>>,
@@ -5883,8 +7216,7 @@ export class ManageMetadataBase {
          return eligibleFlagged[0];
       }
       if (eligibleFlagged.length > 1) {
-         const literalName = eligibleFlagged.find(f => (f.Name as string | undefined)?.trim().toLowerCase() === 'name');
-         return literalName ?? eligibleFlagged[0];
+         return this.preferLiteralNameField(eligibleFlagged);
       }
       for (const candidateName of rankedCandidates) {
          const candidate = fields.find(f => f.Name === candidateName);
@@ -5892,25 +7224,72 @@ export class ManageMetadataBase {
             return candidate;
          }
       }
+      // 4. PRESERVE — never CLEAR without REPLACING (MJ issue #3551). Nothing is
+      //    strictly eligible, but if the entity already carries a flag on a
+      //    type-safe field, keep it: "zero name fields" is not a valid outcome for
+      //    a pass whose whole job is to IDENTIFY one, and silently dropping the
+      //    deterministic answer is strictly worse than keeping a view-routed one.
+      //    Fields that are actively wrong (PK / non-text / MAX) fail the type check
+      //    and are still cleared, which is what the v5.40 guardrail was added for.
+      const typeSafeFlagged = fields.filter(f => f.IsNameField && this.isNameFieldTypeSafe(f));
+      if (typeSafeFlagged.length > 0) {
+         return this.preferLiteralNameField(typeSafeFlagged);
+      }
       return null;
+   }
+
+   /**
+    * Deterministic tie-break across several name-field candidates: the field
+    * literally called `Name` wins, else the first in field order (fields arrive
+    * ordered by `Sequence` from the metadata query). Mirrors `EntityInfo.NameField`'s
+    * runtime preference so CodeGen and runtime never disagree about which one it is.
+    */
+   protected preferLiteralNameField(candidates: Array<Record<string, unknown>>): Record<string, unknown> {
+      const literalName = candidates.find(f => (f.Name as string | undefined)?.trim().toLowerCase() === 'name');
+      return literalName ?? candidates[0];
    }
 
    /**
     * Returns true if the field is a sensible target for IsNameField (i.e. could
     * serve as the entity's human-readable display name). A name field must be
-    * BOUNDED TEXT ON THE BASE TABLE — so we reject primary keys, uniqueidentifiers,
-    * all non-text types, unbounded (MAX) text, and VIRTUAL fields. This stops Smart
-    * Field Identification from flagging a PK/uniqueidentifier as a name field, which
-    * would corrupt every related-entity name virtual field that joins to this entity
-    * (those resolve their SQL type from the related entity's NameField). Virtual
-    * fields are rejected because a view-only name column forces the FK-name join to
-    * target the VIEW instead of the base table — the self-referencing case is
-    * unbuildable on PostgreSQL and SQL Server (see the self-FK skip in the view
-    * generator), and a name that is itself a borrowed FK-name resolves circularly.
+    * BOUNDED TEXT — so we reject primary keys, uniqueidentifiers, all non-text
+    * types, and unbounded (MAX) text. This stops Smart Field Identification from
+    * flagging a PK/uniqueidentifier as a name field, which would corrupt every
+    * related-entity name virtual field that joins to this entity (those resolve
+    * their SQL type from the related entity's NameField).
+    *
+    * VIRTUAL fields are rejected too — with ONE carve-out. A view-only name column
+    * forces the FK-name join to target the VIEW instead of the base table: the
+    * self-referencing case is unbuildable on PostgreSQL and SQL Server (see the
+    * self-FK skip in the view generator), and a name that is itself a BORROWED
+    * FK-name (`_RelatedEntityNameFieldMap`) resolves circularly. But an **IS-A
+    * (Table-Per-Type) inherited** field is neither of those: it is the child's
+    * mirror of a real parent COLUMN, materialized by joining the parent's base
+    * table (`generateParentEntityFieldSelects`), and it is the only sensible
+    * display value the child has. Rejecting it left IS-A children with ZERO name
+    * fields — `selectNameFieldWinner` returned null and the clear-loop then wiped
+    * the `IsNameField=1` the deterministic pass had correctly set on `Name`
+    * (MJ issue #3551).
     */
    protected isFieldEligibleForNameField(field: Record<string, unknown>): boolean {
+      if (field.IsVirtual === true && !this.isInheritedISAField(field)) return false;
+      return this.isNameFieldTypeSafe(field);
+   }
+
+   /**
+    * The TYPE half of {@link isFieldEligibleForNameField}, with no virtuality
+    * opinion: a primary key, a non-text type, or unbounded (MAX) text can never be
+    * a name field, because those are the values that actively CORRUPT the
+    * related-entity name virtual fields that resolve their SQL type from this
+    * entity's NameField.
+    *
+    * Split out so the two halves can be applied separately: virtuality only makes
+    * a field a *worse* choice than a base-table column, while failing this check
+    * makes it a *wrong* one. `selectNameFieldWinner` clears the wrong ones even
+    * with no replacement, but preserves a merely-worse one (see its step 4).
+    */
+   protected isNameFieldTypeSafe(field: Record<string, unknown>): boolean {
       if (field.IsPrimaryKey === true) return false;
-      if (field.IsVirtual === true) return false;
       const type = (field.Type as string | undefined ?? '').toLowerCase();
       const textTypes = new Set(['nvarchar', 'varchar', 'char', 'nchar']);
       if (!textTypes.has(type)) return false;
@@ -5923,6 +7302,27 @@ export class ManageMetadataBase {
       const length = (field.Length ?? field.MaxLength) as number | undefined;
       if (length === -1) return false;
       return true;
+   }
+
+   /**
+    * Is this field an IS-A (Table-Per-Type) INHERITED field — the child entity's
+    * mirror of a column that physically lives on a parent table?
+    *
+    * Uses the same discriminator as the rest of this file (see
+    * `syncISAParentFields` and `buildParentChainContext`): `IsVirtual=1` AND
+    * `AllowUpdateAPI=1`. That pair is unambiguous — every virtual column
+    * discovered from a base VIEW is inserted with `AllowUpdateAPI=0` (the pending-
+    * fields SQL forces `IIF(IsVirtual = 1, 0, …)`), and the IS-A sync is the only
+    * thing that sets `AllowUpdateAPI=1` back on a virtual field. So a borrowed
+    * FK-name column can never satisfy it, which is exactly the separation the
+    * name-field guardrail needs.
+    */
+   protected isInheritedISAField(field: Record<string, unknown>): boolean {
+      const name = (field.Name as string | undefined) ?? '';
+      return field.IsVirtual === true
+         && field.AllowUpdateAPI === true
+         && field.IsPrimaryKey !== true
+         && !name.startsWith('__mj_');
    }
 
    /**

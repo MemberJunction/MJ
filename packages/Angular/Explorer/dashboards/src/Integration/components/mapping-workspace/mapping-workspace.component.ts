@@ -1142,10 +1142,12 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     if (!this.LatestRun) return 'gray';
     if (this.LatestRun.Status === 'Success') return 'green';
     if (this.LatestRun.Status === 'Failed') return 'red';
+    // Deliberately stopped reads as neutral, not as a defect and not as still-running.
+    if (this.LatestRun.Status === 'Cancelled') return 'gray';
     return 'amber';
   }
 
-  FormatDate(dateStr: string | null): string {
+  FormatDate(dateStr: Date | string | null): string {
     if (!dateStr) return '--';
     return new Date(dateStr).toLocaleString(undefined, {
       month: 'short', day: 'numeric',

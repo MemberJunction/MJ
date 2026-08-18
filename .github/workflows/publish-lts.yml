@@ -121,8 +121,9 @@ jobs:
         run: |
           ${{ steps.pm.outputs.PM }} run version
           ${{ steps.pm.outputs.PM == 'pnpm' && 'pnpm install --lockfile-only' || 'npm install' }}
-          if ! git diff --quiet package-lock.json; then
-            git add package-lock.json
+          LOCK=${{ steps.pm.outputs.PM == 'pnpm' && 'pnpm-lock.yaml' || 'package-lock.json' }}
+          if ! git diff --quiet -- "$LOCK"; then
+            git add "$LOCK"
             git commit -m "chore: lockfile for line release [skip ci]"
           fi
           VERSION=$(jq -r .version packages/MJServer/package.json)
@@ -144,30 +145,76 @@ jobs:
         run: ${{ steps.pm.outputs.PM }} run build
 
       - name: Publish to npm (line tag, never latest)
-        run: ${{ steps.pm.outputs.PM }} run change publish -- --tag ${{ steps.version.outputs.NPM_TAG }}
+        # 🚨 Invoke changesets directly, NOT via `<pm> run change publish -- --tag <x>`.
+        # pnpm 10 forwards the `--` separator LITERALLY, so changesets receives
+        # `publish -- --tag lts-x`, dies with "Too many arguments" — and exits 0.
+        # That is the exact silent no-op that version-bumped and tagged 6.1.0-edge.0
+        # while publishing ZERO packages (see publish.yml). npm strips the `--`,
+        # which is why the npm-era lts/5 path would have worked; every pnpm-era line
+        # (lts/6.1 onward) would have hit it. Direct invocation works under both.
+        run: |
+          set -euo pipefail
+          npx changeset publish --tag ${{ steps.version.outputs.NPM_TAG }} 2>&1 | tee /tmp/publish.log
+          if ! grep -qE 'New tag:|Packages published|already published' /tmp/publish.log; then
+            echo "::error::changeset publish produced no evidence of a publish - refusing to report success."
+            exit 1
+          fi
         env:
           NPM_TOKEN: ''
 
-      - name: Verify latest did not move
+      # The registry is the only signal that cannot be lied to (changesets exits 0
+      # on its own errors; log-grep assertions only prove what was printed). Assert
+      # the line dist-tag actually reached the new version, then that `latest` is
+      # untouched.
+      - name: Verify the publish reached npm and latest did not move
         run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          VERSION="${VERSION#v}"
+          NPM_TAG='${{ steps.version.outputs.NPM_TAG }}'
+          AT_TAG=''
+          for i in 1 2 3 4 5; do
+            AT_TAG=$(npm view "@memberjunction/core@$NPM_TAG" version 2>/dev/null || true)
+            [ "$AT_TAG" = "$VERSION" ] && break
+            echo "dist-tag '$NPM_TAG' is at '${AT_TAG:-<unset>}', want $VERSION - retry $i/5 in 15s"
+            sleep 15
+          done
+          if [ "$AT_TAG" != "$VERSION" ]; then
+            echo "::error::npm dist-tag '$NPM_TAG' never reached $VERSION - the publish did not happen (or failed before tagging). Do not trust this run's green steps."
+            exit 1
+          fi
           NOW=$(npm view @memberjunction/core dist-tags.latest)
           if [ "$NOW" != "${{ steps.before.outputs.LATEST }}" ]; then
             echo "::error::npm 'latest' moved during a line publish (${{ steps.before.outputs.LATEST }} -> $NOW). Investigate immediately; restore with ci/dist-tag-all.mjs from the certified tag."
             exit 1
           fi
+          echo "::notice::Verified: @memberjunction/core@$VERSION is live under '$NPM_TAG'; latest unmoved at ${{ steps.before.outputs.LATEST }}"
 
+      # Tag and release steps tolerate a re-run of a partially completed publish
+      # (publish succeeded, a later step failed): the publish step's "already
+      # published" evidence passes, and these skip instead of dying on collisions.
       - name: Push release commit and tag to the line branch
         env:
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
+          set -euo pipefail
           git push origin "HEAD:${{ github.ref_name }}"
-          git tag "$VERSION"
-          git push origin "refs/tags/$VERSION"
+          if git ls-remote --tags origin "refs/tags/$VERSION" | grep -q .; then
+            echo "::notice::Tag $VERSION already exists on origin - skipping (re-run of a partially completed publish)"
+          else
+            git tag "$VERSION"
+            git push origin "refs/tags/$VERSION"
+          fi
 
       - name: Create GitHub Release (never latest; certification promotes)
         env:
           GH_TOKEN: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
+          set -euo pipefail
+          if gh release view "$VERSION" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release $VERSION already exists - skipping creation (re-run of a partially completed publish)"
+            exit 0
+          fi
           gh release create "$VERSION" --title "$VERSION" --generate-notes --latest=false \
             --target "${{ github.ref_name }}" --repo "${{ github.repository }}"

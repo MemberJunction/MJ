@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/core",
   "type": "module",
-  "version": "6.1.0-edge.0",
+  "version": "6.1.0-edge.2",
   "description": "MemberJunction: Core Library including Metadata, Application, Entity Retrieval and Manipulation, and Utilities",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,6 +9,7 @@
     "/dist"
   ],
   "scripts": {
+    "prebuild": "node scripts/sync-json-types.mjs",
     "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
     "test": "vitest run",
@@ -18,7 +19,7 @@
     "test:concurrency": "vitest run providerBase.concurrency.test.ts"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3",
@@ -26,8 +27,8 @@
     "vitest": "^3.1.1"
   },
   "dependencies": {
-    "@memberjunction/global": "6.1.0-edge.0",
-    "@memberjunction/sql-dialect": "6.1.0-edge.0",
+    "@memberjunction/global": "6.1.0-edge.2",
+    "@memberjunction/sql-dialect": "6.1.0-edge.2",
     "rxjs": "^7.8.2",
     "zod": "^3.25.0",
     "debug": "^4.4.3"

@@ -10,15 +10,13 @@ import {
   FileValidationResult,
   EntityDependency,
   ParsedReference,
-  ReferenceType,
 } from '../types/validation';
 import { RecordData } from '../lib/sync-engine';
 import { getSystemUser } from '../lib/provider-utils';
+import { parseMetadataReference } from '../lib/reference-parser';
 import {
   METADATA_KEYWORDS,
-  METADATA_KEYWORD_PREFIXES,
   isMetadataKeyword,
-  getMetadataKeywordType,
   extractKeywordValue
 } from '../constants/metadata-keywords';
 
@@ -622,71 +620,13 @@ export class ValidationService {
   }
 
   /**
-   * Parses a reference string
+   * Parses a reference string.
+   *
+   * Delegates to the pure {@link parseMetadataReference} function so the real
+   * parser is unit-testable without instantiating this service.
    */
   private parseReference(reference: string): ParsedReference | null {
-    const patterns: [ReferenceType, RegExp][] = [
-      [METADATA_KEYWORDS.FILE, /^@file:(.+)$/],
-      [METADATA_KEYWORDS.LOOKUP, /^@lookup:([^.]+)\.(.+)$/],
-      [METADATA_KEYWORDS.TEMPLATE, /^@template:(.+)$/],
-      [METADATA_KEYWORDS.PARENT, /^@parent:(.+)$/],
-      [METADATA_KEYWORDS.ROOT, /^@root:(.+)$/],
-      [METADATA_KEYWORDS.ENV, /^@env:(.+)$/],
-    ];
-
-    for (const [type, pattern] of patterns) {
-      const match = reference.match(pattern);
-      if (match) {
-        if (type === METADATA_KEYWORDS.LOOKUP) {
-          const [, entity, remaining] = match;
-          
-          // Check if this has ?create syntax
-          const hasCreate = remaining.includes('?create');
-          const lookupPart = hasCreate ? remaining.split('?')[0] : remaining;
-          
-          // Parse all lookup fields (can be multiple with &)
-          const lookupPairs = lookupPart.split('&');
-          const fields: Array<{field: string, value: string}> = [];
-          
-          for (const pair of lookupPairs) {
-            const fieldMatch = pair.match(/^(.+?)=(.+)$/);
-            if (fieldMatch) {
-              const [, field, value] = fieldMatch;
-              fields.push({ field: field.trim(), value: value.trim() });
-            }
-          }
-          
-          // For backward compatibility, use the first field as primary
-          const primaryField = fields.length > 0 ? fields[0] : { field: '', value: '' };
-          
-          // Parse additional fields for creation if ?create is present
-          const additionalFields: Record<string, any> = {};
-          if (hasCreate && remaining.includes('?create&')) {
-            const createPart = remaining.split('?create&')[1];
-            const pairs = createPart.split('&');
-            for (const pair of pairs) {
-              const [key, val] = pair.split('=');
-              if (key && val) {
-                additionalFields[key] = decodeURIComponent(val);
-              }
-            }
-          }
-
-          return { 
-            type, 
-            value: primaryField.value, 
-            entity, 
-            field: primaryField.field,
-            fields, // Include all fields for validation
-            createIfMissing: hasCreate, 
-            additionalFields 
-          };
-        }
-        return { type, value: match[1] };
-      }
-    }
-
-    return null;
+    return parseMetadataReference(reference);
   }
 
   /**

@@ -248,6 +248,22 @@ export interface CascadeDeleteContext {
  * The orchestrator (SQLCodeGenBase) calls these methods to produce platform-specific
  * SQL while keeping the high-level generation logic database-agnostic.
  */
+/**
+ * Column specification for generating a materialized result's physical table.
+ * The caller (base-view or query materialization path) resolves these from the
+ * source shape; the provider only assembles the engine-specific DDL.
+ */
+export interface MaterializedColumnSpec {
+    /** Column name, as it appears in the source result shape. */
+    Name: string;
+    /** Engine-native SQL type string, e.g. `nvarchar(255)`, `int`, `decimal(10,2)`. */
+    SQLType: string;
+    /** Whether the column allows NULL. */
+    Nullable: boolean;
+    /** Whether this column is (part of) the single-column surrogate / primary key. */
+    IsPrimaryKey: boolean;
+}
+
 export abstract class CodeGenDatabaseProvider {
     /**
      * The SQL dialect instance for this provider.
@@ -340,6 +356,64 @@ export abstract class CodeGenDatabaseProvider {
      * so the provider only needs to assemble the platform-specific SQL.
      */
     abstract generateBaseView(context: BaseViewGenerationContext): string;
+
+    // ─── MATERIALIZATION ─────────────────────────────────────────────────
+
+    /**
+     * Generates DDL to create a materialized result's physical table — a plain table
+     * holding the snapshot rows, with a single-column surrogate/primary key. Per the
+     * materialization plan (§2.2/§12), the convention is `materialized_<Name>` and the
+     * create is **conditional** (create only if absent) so a migration-provided table
+     * with bespoke indexing is detected and reused rather than clobbered.
+     *
+     * Default throws — each engine provider overrides. (SQL Server first; PostgreSQL
+     * follows.)
+     *
+     * @param schema    Target schema for the physical table.
+     * @param tableName Physical table name (convention: `materialized_<Name>`).
+     * @param columns   Resolved column specs (name, engine-native SQL type, nullability, PK flag).
+     */
+    generateMaterializedTableSQL(schema: string, tableName: string, columns: MaterializedColumnSpec[]): string {
+        throw new Error(`generateMaterializedTableSQL is not implemented for platform '${this.PlatformKey}'`);
+    }
+
+    /**
+     * Generates DDL for the wrapper view over a materialized table (body: `SELECT * FROM`
+     * the physical table). The wrapper view is the **stable read contract**; this same
+     * statement performs the atomic swap by repointing the view at a freshly-built table
+     * (`CREATE OR ALTER VIEW` on SQL Server / `CREATE OR REPLACE VIEW` on PostgreSQL — §11.2),
+     * so readers never see a half-populated or locked result.
+     *
+     * Default throws — each engine provider overrides.
+     *
+     * @param schema    Schema of the view and table.
+     * @param viewName  Wrapper view name (convention: `materialized_vw<Name>`).
+     * @param tableName Physical table the view selects from.
+     */
+    generateMaterializedWrapperViewSQL(schema: string, viewName: string, tableName: string): string {
+        throw new Error(`generateMaterializedWrapperViewSQL is not implemented for platform '${this.PlatformKey}'`);
+    }
+
+    /**
+     * Engine-native column-type clause for the **synthetic surrogate primary key** added to
+     * query-materialized tables in v1 — a full-rebuild-compatible, auto-assigned single-column key
+     * (the deterministic combined-key-set hashing in §5 is Phase 3 and replaces this for incremental).
+     * Default throws — each engine overrides (SQL Server: `int IDENTITY(1,1)`).
+     */
+    getMaterializedSurrogateColumnType(): string {
+        throw new Error(`getMaterializedSurrogateColumnType is not implemented for platform '${this.PlatformKey}'`);
+    }
+
+    /**
+     * Engine-native column-type clause for the surrogate PK of a **KEYED** (aggregation) materialization,
+     * where the surrogate holds the combined-key SHA-256 hash the refresh computes — NOT an auto-assigned
+     * identity. Typed to MATCH the post-refresh physical column (the hash is a fixed-width hex string) so
+     * the minted entity's PK metadata doesn't diverge from the rebuilt table. Default throws — each engine
+     * overrides (SQL Server: `varchar(64)`; PostgreSQL: `text`).
+     */
+    getMaterializedHashSurrogateColumnType(): string {
+        throw new Error(`getMaterializedHashSurrogateColumnType is not implemented for platform '${this.PlatformKey}'`);
+    }
 
     // ─── CRUD ROUTINES ───────────────────────────────────────────────────
 
@@ -472,7 +546,66 @@ export abstract class CodeGenDatabaseProvider {
      */
     abstract generateFullTextSearch(entity: EntityInfo, searchFields: EntityFieldInfo[], primaryKeyIndexName: string): FullTextSearchResult;
 
-    // ─── RECURSIVE FUNCTIONS (ROOT ID) ───────────────────────────────────
+    // ─── RECURSIVE FUNCTIONS (HIERARCHY & ROOT ID) ──────────────────────
+
+    /**
+     * Generates a recursive hierarchy metadata function for a self-referencing FK field.
+     * Computes RootID, Depth, Path, IsLeaf, and ChildCount.
+     * SQL Server: inline TVF with recursive CTE + OUTER APPLY in view.
+     * PostgreSQL: table-valued function with recursive CTE + LEFT JOIN LATERAL in view.
+     */
+    abstract generateHierarchyMetaFunction(entity: EntityInfo, field: EntityFieldInfo): string;
+
+    /**
+     * Generates a TVF for querying all descendants of an arbitrary root node with optional max depth limit.
+     * `fn<Table><FieldName>_GetDescendants(@RootID, @MaxDepth)`
+     */
+    abstract generateDescendantsFunction(entity: EntityInfo, field: EntityFieldInfo): string;
+
+    /**
+     * Generates a TVF for querying all ancestors of an arbitrary node walking upward to the top-level root.
+     * `fn<Table><FieldName>_GetAncestors(@RecordID)`
+     */
+    abstract generateAncestorsFunction(entity: EntityInfo, field: EntityFieldInfo): string;
+
+    /**
+     * Generates the SELECT expressions for hierarchy fields in a base view.
+     * Projects: Root<Field>, <Field>Depth, <Field>Path, <Field>IsLeaf, <Field>ChildCount.
+     */
+    abstract generateHierarchyFieldSelect(entity: EntityInfo, field: EntityFieldInfo, alias: string): string;
+
+    /**
+     * Generates the JOIN clause for the hierarchy metadata function in a base view.
+     */
+    abstract generateHierarchyFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string;
+
+    /**
+     * Produces the canonical database function name for the hierarchy metadata helper function.
+     */
+    getHierarchyMetaFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn${entity.BaseTable}${field.Name}_GetHierarchyMeta`;
+    }
+
+    /**
+     * Produces the canonical database function name for the descendants traversal helper function.
+     */
+    getDescendantsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn${entity.BaseTable}${field.Name}_GetDescendants`;
+    }
+
+    /**
+     * Produces the canonical database function name for the ancestors traversal helper function.
+     */
+    getAncestorsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn${entity.BaseTable}${field.Name}_GetAncestors`;
+    }
+
+    /**
+     * Produces the canonical database function name for the root ID helper function.
+     */
+    getRootIDFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn${entity.BaseTable}${field.Name}_GetRootID`;
+    }
 
     /**
      * Generates a recursive root-ID function for a self-referencing FK field.
@@ -929,8 +1062,13 @@ export abstract class CodeGenDatabaseProvider {
      *              for PostgreSQL they become positional arguments.
      * @param paramNames Optional parameter names for SQL Server's `@Name=value` syntax.
      *                   Ignored on PostgreSQL.
+     * @param discardResult Set for routines whose rows the caller never reads. PostgreSQL needs to
+     *                   know: its default `SELECT * FROM routine(...)` form is rejected outright for
+     *                   a function returning `SETOF record` ("a column definition list is required
+     *                   for functions returning record"), and a routine that only performs work has
+     *                   no column list to give. SQL Server's `EXEC` is unaffected and ignores this.
      */
-    abstract callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[]): string;
+    abstract callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[], discardResult?: boolean): string;
 
     // ─── METADATA MANAGEMENT: CONDITIONAL INSERT ─────────────────────
 

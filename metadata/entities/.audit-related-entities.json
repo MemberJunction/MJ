@@ -65,6 +65,26 @@
   },
   {
     "_comments": [
+      "Company Integration Record Maps - one row per external record ever mapped, re-touched on",
+      "every sync. The highest-volume table the integration sync path writes, so change tracking",
+      "doubled the write volume of every sync. Nothing reads that history: the mapping row IS the",
+      "current state, a prior ExternalSystemRecordID has no diagnostic value, and operators audit a",
+      "sync through the per-run artifact stream (IntegrationTailRunEvents) instead.",
+      "Unlike its Company Integration Run* siblings below this record sets ONLY TrackRecordChanges.",
+      "This is live mapping state rather than a log, so its caching and user-search attributes are",
+      "deliberately left at whatever they are today."
+    ],
+    "fields": {
+      "Name": "MJ: Company Integration Record Maps",
+      "BaseView": "vwCompanyIntegrationRecordMaps",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Company Integration Record Maps"
+    }
+  },
+  {
+    "_comments": [
       "Company Integration Run API Logs - integration API call logs"
     ],
     "fields": {
@@ -457,25 +477,6 @@
   },
   {
     "_comments": [
-      "Report Snapshots - point-in-time report execution snapshots (added with search hygiene)"
-    ],
-    "fields": {
-      "Name": "MJ: Report Snapshots",
-      "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false,
-      "AllowUserSearchAPI": false,
-      "AutoUpdateAllowUserSearchAPI": false
-    },
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=MJ: Report Snapshots"
-    },
-    "sync": {
-      "lastModified": "2026-08-05T18:34:41.584Z",
-      "checksum": "45f782fe5d501db8e4e2b809d55968f8c94f72d759c940ef6c281d0013885b1b"
-    }
-  },
-  {
-    "_comments": [
       "Scheduled Job Runs - scheduled job execution history"
     ],
     "fields": {
@@ -709,22 +710,6 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User View Runs"
-    }
-  },
-  {
-    "_comments": [
-      "Workflow Runs - workflow execution history"
-    ],
-    "fields": {
-      "Name": "MJ: Workflow Runs",
-      "BaseView": "vwWorkflowRuns",
-      "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false,
-      "AllowUserSearchAPI": false,
-      "AutoUpdateAllowUserSearchAPI": false
-    },
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=MJ: Workflow Runs"
     }
   },
   {

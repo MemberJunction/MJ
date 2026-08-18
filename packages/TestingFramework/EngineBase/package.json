@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/testing-engine-base",
   "type": "module",
-  "version": "6.1.0-edge.0",
+  "version": "6.1.0-edge.2",
   "description": "MemberJunction Testing Framework Engine Base - Metadata cache for test types, suites, and tests (UI-safe, no execution)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,16 +14,16 @@
     "test": "vitest run"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3",
     "@types/debug": "^4.1.12"
   },
   "dependencies": {
-    "@memberjunction/global": "6.1.0-edge.0",
-    "@memberjunction/core": "6.1.0-edge.0",
-    "@memberjunction/core-entities": "6.1.0-edge.0",
+    "@memberjunction/global": "6.1.0-edge.2",
+    "@memberjunction/core": "6.1.0-edge.2",
+    "@memberjunction/core-entities": "6.1.0-edge.2",
     "rxjs": "^7.8.2",
     "debug": "^4.4.3"
   },
