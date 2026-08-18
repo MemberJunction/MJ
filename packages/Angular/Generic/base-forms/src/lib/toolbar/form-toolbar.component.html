@@ -198,7 +198,7 @@
             }
           </div>
         }
-        @if (Config.ShowExpandCollapseAllButtons) {
+        @if (ShowExpandCollapseAll) {
           <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only"
             [disabled]="ExpandedSectionCount >= VisibleSectionCount"
             (click)="OnExpandAll()" title="Expand all sections">

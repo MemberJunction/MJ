@@ -1,5 +1,5 @@
-import { Directive, Input } from '@angular/core';
-import { BaseEntity, ValidationResult } from '@memberjunction/core';
+import { Directive, HostBinding, Input } from '@angular/core';
+import { BaseEntity, ValidationResult, type FormInclusion } from '@memberjunction/core';
 import { BaseFormComponent } from '../base-form-component';
 import { FormContext } from '../types/form-types';
 
@@ -60,6 +60,43 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
     entity: string;
     slot: FormPanelSlot;
     sortKey?: number;
+    /**
+     * Identity for last-wins collapse. Two registrations with the same key
+     * compete; highest ClassFactory `Priority` wins. Omit to derive:
+     * `related:${relatedEntity}:${relatedJoinField}` when claiming a
+     * relationship, otherwise the registration is unique and never collapses.
+     */
+    contributionKey?: string;
+    /**
+     * When set, this panel **replaces** the default related-entity grid for
+     * that relationship on `entity`'s form. The baked CodeGen panel (if any)
+     * is hidden; the stock fill-in grid is not mounted.
+     */
+    relatedEntity?: string;
+    /**
+     * Disambiguates two FKs to the same related entity (BillTo vs ShipTo).
+     * Compared after stripping wrapping `[]`.
+     */
+    relatedJoinField?: string;
+    /**
+     * CodeGen `SectionKey` of a baked field (or other) panel this contribution
+     * replaces — e.g. `'details'`, `'personalIdentity'`. Hidden at runtime via
+     * `HiddenSectionKeys`. Use with `slot: 'before-fields'` for a form hero that
+     * is not a collapsible panel. Must name a concrete `entity` (not `'*'`).
+     */
+    replacesSectionKey?: string;
+    /**
+     * Pin this contribution to a chrome bucket instead of its own rail item.
+     * `'details'` — leftover own-fields group. `'more'` — overflow folder.
+     */
+    chromeGroup?: 'details' | 'more';
+    /**
+     * L1 inclusion for this contribution (same verbs as relationships).
+     * `'Primary'` — own first-class rail item, in the lead band before Details.
+     * `'More'` — overflow folder. `'None'` — hidden.
+     * L3 `MJ: Form Chrome Rules` still wins. `chromeGroup` still merges.
+     */
+    inclusion?: FormInclusion;
 }
 
 /**
@@ -82,6 +119,14 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
  */
 @Directive()
 export abstract class BaseFormPanel<TRecord extends BaseEntity = BaseEntity> {
+    /**
+     * Slot-mounted hosts must not sit in the left-nav flex column — leftover
+     * height targets `mj-collapsible-panel` as a direct child of
+     * `.mj-forms-all-panels`. `display: contents` makes the inner panel that child.
+     */
+    @HostBinding('style.display')
+    readonly HostDisplay = 'contents';
+
     /** The entity record being edited. Set by the slot host before view init. */
     @Input() Record!: TRecord;
     /** The host form component (use for EditMode, dirty notifications, etc). Set by the slot host. */

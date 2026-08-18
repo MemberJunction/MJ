@@ -5,6 +5,7 @@ import {
     BaseViewGenerationContext,
     CascadeDeleteContext,
     FullTextSearchResult,
+    MaterializedColumnSpec,
     DataSourceResult,
 } from '../../codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
@@ -141,6 +142,66 @@ SELECT
 FROM
     [${entity.SchemaName}].[${entity.BaseTable}] AS ${alias}${context.parentJoins ? '\n' + context.parentJoins : ''}${context.relatedFieldsJoins ? '\n' + context.relatedFieldsJoins : ''}${context.rootJoins}
 ${whereClause}GO`;
+    }
+
+    // ─── MATERIALIZATION ─────────────────────────────────────────────────
+
+    /**
+     * SQL Server materialized-table DDL. The create is **conditional** (only if the table
+     * is absent) so a migration-provided `materialized_<Name>` table with bespoke indexing
+     * is detected and reused rather than clobbered (plan §12). Emits the single-column
+     * surrogate PRIMARY KEY, which is itself the required unique index.
+     *
+     * Returns a single GO-free batch: it is executed directly via `LogSQLAndExecute`
+     * (`ds.query`, which doesn't split on `GO`), and the caller passes
+     * `includeBatchSeparator: true` so the migration *file* still gets a `GO` after it.
+     */
+    generateMaterializedTableSQL(schema: string, tableName: string, columns: MaterializedColumnSpec[]): string {
+        // Escape the closing bracket in every interpolated identifier (`]`→`]]`) so a column name from an
+        // untrusted source (e.g. an external entity's remote field names) can't break out of its quoting — the
+        // same hardening the refresh path applies via escId. SQLType is metadata-controlled (not an identifier).
+        const esc = (n: string) => n.replace(/\]/g, ']]');
+        const colLines = columns.map((c) => `        [${esc(c.Name)}] ${c.SQLType} ${c.Nullable ? 'NULL' : 'NOT NULL'}`);
+        const pkCols = columns.filter((c) => c.IsPrimaryKey).map((c) => c.Name);
+        const pkClause = pkCols.length
+            ? `,\n        CONSTRAINT [PK_${esc(tableName)}] PRIMARY KEY (${pkCols.map((n) => `[${esc(n)}]`).join(', ')})`
+            : '';
+        return `IF OBJECT_ID('[${esc(schema)}].[${esc(tableName)}]', 'U') IS NULL
+BEGIN
+    CREATE TABLE [${esc(schema)}].[${esc(tableName)}] (
+${colLines.join(',\n')}${pkClause}
+    );
+END`;
+    }
+
+    /**
+     * SQL Server wrapper-view DDL — the stable read contract over the materialized table.
+     * Uses `CREATE OR ALTER VIEW` (SQL Server 2016 SP1+) so the same statement both creates
+     * the view and atomically repoints it at a freshly-built table during refresh (plan §11.2).
+     *
+     * Returns a single GO-free batch (executed via `ds.query`); the caller adds the file
+     * batch separator. `CREATE OR ALTER VIEW` is valid as the sole statement in its batch.
+     */
+    generateMaterializedWrapperViewSQL(schema: string, viewName: string, tableName: string): string {
+        const esc = (n: string) => n.replace(/\]/g, ']]');
+        return `CREATE OR ALTER VIEW [${esc(schema)}].[${esc(viewName)}]
+AS
+SELECT * FROM [${esc(schema)}].[${esc(tableName)}];`;
+    }
+
+    /** SQL Server synthetic surrogate key: an auto-incrementing IDENTITY column. */
+    getMaterializedSurrogateColumnType(): string {
+        return 'int IDENTITY(1,1)';
+    }
+
+    /**
+     * SQL Server KEYED surrogate key type: the combined-key SHA2_256 hash the refresh writes is a
+     * fixed 64-char lowercase-hex string (`CONVERT(varchar(64), HASHBYTES('SHA2_256', …), 2)`), so
+     * the minted entity's PK column is typed to MATCH the post-refresh physical column exactly —
+     * avoiding the int-vs-hash divergence between CodeGen metadata and the rebuilt table.
+     */
+    getMaterializedHashSurrogateColumnType(): string {
+        return 'varchar(64)';
     }
 
     // ─── CRUD ROUTINES ───────────────────────────────────────────────────
@@ -609,7 +670,255 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
      * `fn{BaseTable}{FieldName}_GetRootID` and returns a single-column result (`RootID`),
      * designed to be consumed via `OUTER APPLY` in the entity's base view.
      */
+    // ─── RECURSIVE HIERARCHY FUNCTIONS ──────────────────────────────────
+
+    /**
+     * Generates a SQL Server inline table-valued function (ITVF) that calculates hierarchy metadata
+     * (RootID, Depth, Path, IsLeaf, ChildCount) for a record in a table with a self-referencing foreign key.
+     * The function is named `fn{BaseTable}{FieldName}_GetHierarchyMeta`.
+     */
+    generateHierarchyMetaFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        const primaryKeyType = entity.FirstPrimaryKey.SQLFullType;
+        const schemaName = entity.SchemaName;
+        const tableName = entity.BaseTable;
+        const fieldName = field.Name;
+        const functionName = `fn${entity.BaseTable}${fieldName}_GetHierarchyMeta`;
+
+        return `------------------------------------------------------------
+----- HIERARCHY METADATA FUNCTION FOR: [${tableName}].[${fieldName}]
+------------------------------------------------------------
+IF OBJECT_ID('[${schemaName}].[${functionName}]', 'IF') IS NOT NULL
+    DROP FUNCTION [${schemaName}].[${functionName}];
+GO
+
+CREATE FUNCTION [${schemaName}].[${functionName}]
+(
+    @RecordID ${primaryKeyType},
+    @ParentID ${primaryKeyType}
+)
+RETURNS TABLE
+AS
+RETURN
+(
+    WITH CTE_Ancestors AS (
+        SELECT
+            [${primaryKey}],
+            [${fieldName}],
+            0 AS [Depth],
+            CAST('/' + CAST([${primaryKey}] AS NVARCHAR(36)) + '/' AS NVARCHAR(MAX)) AS [Path]
+        FROM
+            [${schemaName}].[${tableName}]
+        WHERE
+            [${primaryKey}] = @RecordID
+
+        UNION ALL
+
+        SELECT
+            p.[${primaryKey}],
+            p.[${fieldName}],
+            c.[Depth] + 1 AS [Depth],
+            CAST('/' + CAST(p.[${primaryKey}] AS NVARCHAR(36)) + c.[Path] AS NVARCHAR(MAX)) AS [Path]
+        FROM
+            [${schemaName}].[${tableName}] p
+        INNER JOIN
+            CTE_Ancestors c ON p.[${primaryKey}] = c.[${fieldName}]
+        WHERE
+            c.[Depth] < 100
+    )
+    SELECT TOP 1
+        a.[${primaryKey}] AS [RootID],
+        (SELECT MAX([Depth]) FROM CTE_Ancestors) AS [Depth],
+        (SELECT TOP 1 [Path] FROM CTE_Ancestors ORDER BY [Depth] DESC) AS [Path],
+        CAST(CASE WHEN EXISTS (SELECT 1 FROM [${schemaName}].[${tableName}] WHERE [${fieldName}] = @RecordID) THEN 0 ELSE 1 END AS BIT) AS [IsLeaf],
+        (SELECT COUNT(1) FROM [${schemaName}].[${tableName}] WHERE [${fieldName}] = @RecordID) AS [ChildCount]
+    FROM
+        CTE_Ancestors a
+    WHERE
+        a.[${fieldName}] IS NULL OR @ParentID IS NULL
+    ORDER BY
+        a.[Depth] DESC
+);
+GO
+`;
+    }
+
+    /**
+     * Generates a SQL Server inline TVF that returns all descendant records of an arbitrary root node
+     * with an optional maximum relative depth parameter.
+     * The function is named `fn{BaseTable}{FieldName}_GetDescendants`.
+     */
+    generateDescendantsFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        const primaryKeyType = entity.FirstPrimaryKey.SQLFullType;
+        const schemaName = entity.SchemaName;
+        const tableName = entity.BaseTable;
+        const fieldName = field.Name;
+        const functionName = `fn${entity.BaseTable}${fieldName}_GetDescendants`;
+
+        return `------------------------------------------------------------
+----- DESCENDANTS FUNCTION FOR: [${tableName}].[${fieldName}]
+------------------------------------------------------------
+IF OBJECT_ID('[${schemaName}].[${functionName}]', 'IF') IS NOT NULL
+    DROP FUNCTION [${schemaName}].[${functionName}];
+GO
+
+CREATE FUNCTION [${schemaName}].[${functionName}]
+(
+    @RootID ${primaryKeyType},
+    @MaxDepth INT = NULL
+)
+RETURNS TABLE
+AS
+RETURN
+(
+    WITH CTE_Descendants AS (
+        SELECT
+            [${primaryKey}],
+            [${fieldName}],
+            0 AS [RelativeDepth],
+            CAST('/' + CAST([${primaryKey}] AS NVARCHAR(36)) + '/' AS NVARCHAR(MAX)) AS [Path]
+        FROM
+            [${schemaName}].[${tableName}]
+        WHERE
+            [${primaryKey}] = @RootID
+
+        UNION ALL
+
+        SELECT
+            c.[${primaryKey}],
+            c.[${fieldName}],
+            p.[RelativeDepth] + 1 AS [RelativeDepth],
+            CAST(p.[Path] + CAST(c.[${primaryKey}] AS NVARCHAR(36)) + '/' AS NVARCHAR(MAX)) AS [Path]
+        FROM
+            [${schemaName}].[${tableName}] c
+        INNER JOIN
+            CTE_Descendants p ON c.[${fieldName}] = p.[${primaryKey}]
+        WHERE
+            (@MaxDepth IS NULL OR p.[RelativeDepth] < @MaxDepth)
+            AND p.[RelativeDepth] < 100
+    )
+    SELECT
+        d.[${primaryKey}] AS [ID],
+        d.[RelativeDepth] AS [Depth],
+        d.[Path],
+        CAST(CASE WHEN EXISTS (SELECT 1 FROM [${schemaName}].[${tableName}] WHERE [${fieldName}] = d.[${primaryKey}]) THEN 0 ELSE 1 END AS BIT) AS [IsLeaf],
+        (SELECT COUNT(1) FROM [${schemaName}].[${tableName}] WHERE [${fieldName}] = d.[${primaryKey}]) AS [ChildCount]
+    FROM
+        CTE_Descendants d
+);
+GO
+`;
+    }
+
+    /**
+     * Generates a SQL Server inline TVF that returns all ancestors of an arbitrary node walking upward.
+     * The function is named `fn{BaseTable}{FieldName}_GetAncestors`.
+     */
+    generateAncestorsFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        const primaryKeyType = entity.FirstPrimaryKey.SQLFullType;
+        const schemaName = entity.SchemaName;
+        const tableName = entity.BaseTable;
+        const fieldName = field.Name;
+        const functionName = `fn${entity.BaseTable}${fieldName}_GetAncestors`;
+
+        return `------------------------------------------------------------
+----- ANCESTORS FUNCTION FOR: [${tableName}].[${fieldName}]
+------------------------------------------------------------
+IF OBJECT_ID('[${schemaName}].[${functionName}]', 'IF') IS NOT NULL
+    DROP FUNCTION [${schemaName}].[${functionName}];
+GO
+
+CREATE FUNCTION [${schemaName}].[${functionName}]
+(
+    @RecordID ${primaryKeyType}
+)
+RETURNS TABLE
+AS
+RETURN
+(
+    WITH CTE_Ancestors AS (
+        SELECT
+            [${primaryKey}],
+            [${fieldName}],
+            0 AS [LevelUp],
+            CAST('/' + CAST([${primaryKey}] AS NVARCHAR(36)) + '/' AS NVARCHAR(MAX)) AS [Path]
+        FROM
+            [${schemaName}].[${tableName}]
+        WHERE
+            [${primaryKey}] = @RecordID
+
+        UNION ALL
+
+        SELECT
+            p.[${primaryKey}],
+            p.[${fieldName}],
+            c.[LevelUp] + 1 AS [LevelUp],
+            CAST('/' + CAST(p.[${primaryKey}] AS NVARCHAR(36)) + c.[Path] AS NVARCHAR(MAX)) AS [Path]
+        FROM
+            [${schemaName}].[${tableName}] p
+        INNER JOIN
+            CTE_Ancestors c ON p.[${primaryKey}] = c.[${fieldName}]
+        WHERE
+            c.[LevelUp] < 100
+    )
+    SELECT
+        a.[${primaryKey}] AS [ID],
+        a.[LevelUp],
+        a.[Path]
+    FROM
+        CTE_Ancestors a
+);
+GO
+`;
+    }
+
+    /** @inheritdoc */
+    generateHierarchyFieldSelect(_entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
+        const rootFieldName = `Root${field.Name}`;
+        const depthFieldName = `${field.Name}Depth`;
+        const pathFieldName = `${field.Name}Path`;
+        const isLeafFieldName = `${field.Name}IsLeaf`;
+        const childCountFieldName = `${field.Name}ChildCount`;
+        return `${alias}.RootID AS [${rootFieldName}],
+    ${alias}.Depth AS [${depthFieldName}],
+    ${alias}.Path AS [${pathFieldName}],
+    ${alias}.IsLeaf AS [${isLeafFieldName}],
+    ${alias}.ChildCount AS [${childCountFieldName}]`;
+    }
+
+    /**
+     * Generates a SQL Server `OUTER APPLY` clause to join the hierarchy metadata inline TVF
+     * into the entity's base view.
+     */
+    generateHierarchyFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
+        const classNameFirstChar = entity.BaseTableCodeName.charAt(0).toLowerCase();
+        const schemaName = entity.SchemaName;
+        const functionName = `fn${entity.BaseTable}${field.Name}_GetHierarchyMeta`;
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        return `OUTER APPLY\n    [${schemaName}].[${functionName}]([${classNameFirstChar}].[${primaryKey}], [${classNameFirstChar}].[${field.Name}]) AS ${alias}`;
+    }
+
+    /**
+     * Generates a SQL Server inline table-valued function (ITVF) that calculates the top-level root
+     * record ID for a self-referencing foreign key hierarchy. The function is named
+     * `fn{BaseTable}{FieldName}_GetRootID` and returns a single-column result (`RootID`),
+     * designed to be consumed via `OUTER APPLY` in the entity's base view.
+     */
     generateRootIDFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
         const primaryKey = entity.FirstPrimaryKey.Name;
         const primaryKeyType = entity.FirstPrimaryKey.SQLFullType;
         const schemaName = entity.SchemaName;

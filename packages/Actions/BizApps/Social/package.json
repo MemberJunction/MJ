@@ -7,6 +7,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "watch": "tsc -w",
     "clean": "rimraf dist"
   },
@@ -24,7 +26,7 @@
     "buffer"
   ],
   "author": "MemberJunction.com",
-  "license": "SEE LICENSE IN LICENSE.md",
+  "license": "BUSL-1.1",
   "dependencies": {
     "@memberjunction/core": "6.1.0-edge.2",
     "@memberjunction/global": "6.1.0-edge.2",

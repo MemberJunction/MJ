@@ -15,6 +15,26 @@
  */
 
 /** @type {import('@memberjunction/config').MJConfig} */
+/**
+ * The active database platform, with the same contract as `resolveDbPlatformFromEnv` in
+ * @memberjunction/generic-database-provider: case-insensitive, canonical values only, and a LOUD
+ * failure on legacy aliases rather than a silent fallback.
+ *
+ * Duplicated rather than imported because this is CommonJS config, read before any workspace
+ * package is built. Kept deliberately tiny so the two cannot drift far.
+ */
+function dbPlatform() {
+  const raw = process.env.DB_PLATFORM;
+  if (raw === undefined) return undefined;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === '') return undefined;
+  if (normalized === 'sqlserver' || normalized === 'postgresql') return normalized;
+  throw new Error(
+    `Invalid DB_PLATFORM value '${raw}'. Must be 'sqlserver' or 'postgresql' (case-insensitive). ` +
+      `Legacy aliases ('mssql', 'postgres', 'pg') are not supported.`
+  );
+}
+
 module.exports = {
   /**
    * ====================
@@ -40,8 +60,21 @@ module.exports = {
     checkModules: ['@memberjunction/integration-test-suite'],
   },
 
+  dbPlatform: dbPlatform() || 'sqlserver',
   dbHost: process.env.DB_HOST || 'localhost',
-  dbPort: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 1433,
+  // Default port follows the platform. With DB_PLATFORM unset this is the SQL Server default
+  // exactly as before, so existing setups — including integration.yml, which sets neither
+  // variable — are unaffected.
+  //
+  // Both lines resolve through `dbPlatform()` rather than reading the raw variable, so this file
+  // agrees with `resolveDbPlatformFromEnv`, which every other consumer uses. Reading it raw
+  // disagreed twice over: `Postgresql` fell through to 1433, and the legacy aliases `postgres` /
+  // `pg` — which the resolver rejects LOUDLY, precisely so a typo cannot route the wrong dialect at
+  // a real database — were silently accepted here as a platform string while still getting the SQL
+  // Server port. The resulting connection error points at the network, not at the typo.
+  dbPort: process.env.DB_PORT
+    ? parseInt(process.env.DB_PORT)
+    : (dbPlatform() === 'postgresql' ? 5432 : 1433),
   dbDatabase: process.env.DB_DATABASE,
   dbUsername: process.env.DB_USERNAME,
   dbPassword: process.env.DB_PASSWORD,
@@ -390,20 +423,31 @@ module.exports = {
    * OAuth Providers (for MCP Server auth.mode: 'oauth' or 'both')
    * ====================
    *
-   * AUTH PROVIDERS ARE AUTO-CONFIGURED FROM ENVIRONMENT VARIABLES:
+   * AUTH PROVIDERS ARE AUTO-CONFIGURED FROM ENVIRONMENT VARIABLES.
    *
-   * Azure AD / Entra ID (if TENANT_ID and WEB_CLIENT_ID are set in .env):
-   *   - Automatically creates an 'azure' provider using these env vars
-   *   - No manual authProviders config needed!
+   * Each provider class declares its own env-var mapping (the `ConfigFromEnvironment` static —
+   * see IEnvironmentConfigurableProvider in @memberjunction/auth-providers), so this list is not
+   * closed: a third-party provider gets the same treatment by shipping the static, with no change
+   * to MJ core. Providers that ship with MJ:
    *
-   * Auth0 (if AUTH0_DOMAIN and AUTH0_CLIENT_ID are set in .env):
-   *   - Automatically creates an 'auth0' provider using these env vars
-   *   - Optional: AUTH0_CLIENT_SECRET
+   *   Entra ID / Azure AD  TENANT_ID + WEB_CLIENT_ID                      -> provider 'azure'
+   *   Auth0                AUTH0_DOMAIN + AUTH0_CLIENT_ID                 -> provider 'auth0'
+   *                        (optional AUTH0_CLIENT_SECRET)
+   *   Amazon Cognito       COGNITO_USER_POOL_ID + COGNITO_CLIENT_ID
+   *                        + AWS_REGION                                   -> provider 'cognito'
+   *   Okta                 OKTA_DOMAIN + OKTA_CLIENT_ID                   -> provider 'okta'
+   *                        (optional OKTA_ISSUER, OKTA_AUDIENCE)
+   *   WorkOS               WORKOS_CLIENT_ID                               -> provider 'workos'
+   *                        (optional WORKOS_AUDIENCE)
    *
-   * MANUAL OVERRIDE: Only add authProviders below if you need to:
-   *   - Use Okta, Cognito, or Google (no env var defaults yet)
-   *   - Override the auto-configured settings
-   *   - Add multiple providers
+   * MANUAL OVERRIDE: adding an authProviders array below REPLACES the environment-derived set
+   * entirely (arrays replace rather than merge). Use it to pin exact settings or to declare a
+   * provider that has no env-var mapping.
+   *
+   * Beyond config: providers can also be defined as data in the "MJ: Authentication Providers"
+   * entity, which is what enables the multi-IdP login picker and admin-managed configuration.
+   * Config-file and environment providers remain the bootstrap path — you cannot configure auth
+   * through a UI you must authenticate to reach.
    *
    * authProviders: [
    *   {

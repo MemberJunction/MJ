@@ -451,6 +451,41 @@ describe('PostgreSQLDataProvider', () => {
             // "VALID" contains "ID" but not at a word boundary
             expect(quoter.quoteFieldNamesInToken('VALID', fields)).toBe('VALID');
         });
+
+        /**
+         * PostgreSQL identifiers may legally contain regex metacharacters. Both
+         * sides of the substitution used to mishandle them: `fieldName` was
+         * interpolated into the `RegExp` raw (so `$` acted as an end-anchor and the
+         * pattern matched nothing), and the quoted identifier was passed as a string
+         * replacement (so `$$` would collapse). See issue #3171.
+         */
+        it('quotes a field name containing $', () => {
+            const fields = new Set(['a$$b']);
+            expect(quoter.quoteFieldNamesInToken('a$$b', fields)).toBe('"a$$b"');
+        });
+
+        it('does not let a metacharacter name match unrelated text', () => {
+            const fields = new Set(['a.b']);
+            // Without escaping, '.' matched any character and 'axb' was wrongly
+            // quoted as this column. It must now match a literal dot only.
+            expect(quoter.quoteFieldNamesInToken('axb', fields)).toBe('axb');
+        });
+
+        it('quotes a metacharacter name where it does match', () => {
+            const fields = new Set(['a.b']);
+            expect(quoter.quoteFieldNamesInToken('a.b', fields)).toBe('"a.b"');
+        });
+
+        /**
+         * Separate, pre-existing limitation of the `\b` anchoring, not of the
+         * escaping: a name ending in a non-word character (`)`) has no word
+         * boundary after it, so the pattern cannot match however it is escaped.
+         * Recorded so the gap is visible rather than assumed handled.
+         */
+        it('does not quote a field name ending in a non-word character', () => {
+            const fields = new Set(['Amount(USD)']);
+            expect(quoter.quoteFieldNamesInToken('Amount(USD)', fields)).toBe('Amount(USD)');
+        });
     });
 
     /**

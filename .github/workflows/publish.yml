@@ -61,8 +61,19 @@ jobs:
           CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
           DB_TRUST_SERVER_CERTIFICATE: 'true'
 
+  # Release PRs land on main without ever running test.yml (which is gated to `next`),
+  # so before this gate existed NOTHING between "green on next" and `npm publish` ran a
+  # single test. Validate the exact commit being published with the full unit suite.
+  release-validation:
+    name: Validate release commit (full unit suite)
+    uses: ./.github/workflows/release-test.yml
+
   build-and-publish:
     name: Build and publish new versions of NPM packages
+    # Hard preconditions: without `needs`, publish raced its own quality gates —
+    # packages published to npm even when the fresh-DB migration apply failed, and
+    # no test of any kind ran against the release commit. Publish requires both green.
+    needs: [test-migrations, release-validation]
     # 30 minutes was not enough and the failure mode is DESTRUCTIVE, not a clean retry.
     # v6.1.0-edge.1 ran 30m16s and GitHub killed it mid-`changeset publish`, leaving the
     # fixed-version group split across two versions on npm (~100 packages at the new version,
@@ -178,6 +189,14 @@ jobs:
 
       - name: Build packages
         run: pnpm run build
+
+      # BUSL is parameterized: "BUSL-1.1" in package.json tells a consumer
+      # nothing about the Change Date or the Additional Use Grant. Every
+      # package sets files:["/dist"], and npm only auto-includes a LICENSE
+      # sitting at the package root — so without this step the tarballs ship
+      # no license text at all. Copies are generated here, never committed.
+      - name: Stage per-package LICENSE files
+        run: node .github/scripts/stage-package-licenses.mjs
 
       # LTS process (plans/lts-process.md §4.2): no publish ever completes without its
       # channel tag asserted — derived here, cross-checked against pre.json before the

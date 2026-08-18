@@ -15,7 +15,7 @@
     "test:watch": "vitest"
   },
   "author": "MemberJunction",
-  "license": "MIT",
+  "license": "BUSL-1.1",
   "dependencies": {
     "@azure-rest/ai-inference": "^1.0.0-beta.6",
     "@azure/core-auth": "^1.10.1",
@@ -24,6 +24,7 @@
     "@memberjunction/global": "6.1.0-edge.2"
   },
   "devDependencies": {
+    "@memberjunction/unit-testing": "6.1.0-edge.2",
     "rimraf": "^6.1.2",
     "typescript": "^5.9.3"
   },

@@ -29,7 +29,7 @@
     "server"
   ],
   "author": "MemberJunction",
-  "license": "MIT",
+  "license": "BUSL-1.1",
   "dependencies": {
     "@memberjunction/action-runtime-host": "6.1.0-edge.2",
     "@memberjunction/actions": "6.1.0-edge.2",
@@ -149,7 +149,8 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.11",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "@memberjunction/global": "6.1.0-edge.2"
   },
   "files": [
     "dist/**/*"
