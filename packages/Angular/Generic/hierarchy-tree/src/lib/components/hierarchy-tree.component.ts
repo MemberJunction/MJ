@@ -1029,17 +1029,17 @@ export class HierarchyTreeComponent implements OnInit, AfterViewInit, OnChanges,
         const treeCenterX = (minX + maxX) / 2;
         const treeCenterY = (minY + maxY) / 2;
 
-        const container = this.svgContainerRef.nativeElement;
-        const width = Math.max(container.clientWidth || 800, 300);
-        const height = Math.max(container.clientHeight || 500, 300);
-        const padding = 50;
+        const rect = this.svgContainerRef.nativeElement.getBoundingClientRect();
+        const width = rect.width > 50 ? rect.width : (this.svgContainerRef.nativeElement.clientWidth || 800);
+        const height = rect.height > 50 ? rect.height : (this.svgContainerRef.nativeElement.clientHeight || 500);
+        const padding = 40;
 
         const availWidth = Math.max(width - padding * 2, 100);
         const availHeight = Math.max(height - padding * 2, 100);
         const autoScale = Math.max(
             Math.min(
-                availWidth / Math.max(treeWidth, 1),
-                availHeight / Math.max(treeHeight, 1),
+                availWidth / treeWidth,
+                availHeight / treeHeight,
                 1.05
             ),
             0.15
