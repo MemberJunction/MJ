@@ -27,6 +27,9 @@ export interface FormToolbarConfig {
   /** Show the Delete button in read mode. Default: true */
   ShowDeleteButton: boolean;
 
+  /** Show the Refresh button in read mode (reloads record from database). Default: true */
+  ShowRefreshButton: boolean;
+
   /** Show the Favorite/Unfavorite button. Default: true */
   ShowFavoriteButton: boolean;
 
@@ -124,6 +127,7 @@ export interface FormToolbarConfig {
 export const DEFAULT_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowEditButton: true,
   ShowDeleteButton: true,
+  ShowRefreshButton: true,
   ShowFavoriteButton: true,
   ShowHistoryButton: true,
   ShowListButton: true,
@@ -152,6 +156,7 @@ export const DEFAULT_TOOLBAR_CONFIG: FormToolbarConfig = {
 export const EXPLORER_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowEditButton: true,
   ShowDeleteButton: true,
+  ShowRefreshButton: true,
   ShowFavoriteButton: true,
   ShowHistoryButton: true,
   ShowListButton: true,
@@ -184,6 +189,7 @@ export const EXPLORER_TOOLBAR_CONFIG: FormToolbarConfig = {
 export const CUSTOM_LAYOUT_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowEditButton: true,
   ShowDeleteButton: true,
+  ShowRefreshButton: true,
   ShowFavoriteButton: true,
   ShowHistoryButton: true,
   ShowListButton: true,

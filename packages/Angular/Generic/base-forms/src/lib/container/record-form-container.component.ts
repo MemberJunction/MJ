@@ -20,6 +20,7 @@ import { SectionManagerItem, ChromeMembershipChange } from '../section-manager/s
 import {
   BeforeSaveEventArgs,
   BeforeDeleteEventArgs,
+  BeforeRefreshEventArgs,
   BeforeCancelEventArgs,
   BeforeHistoryViewEventArgs,
   BeforeListManagementEventArgs,
@@ -55,6 +56,7 @@ import { CollectFormPanelRegistrations } from '../panel-slot/collect-form-panel-
 import type { FormPanelRegistrationMetadata } from '../panel-slot/base-form-panel';
 import { ContributionHiddenSectionKeys, ResolveFormContributions } from '../panel-slot/form-contribution';
 import { IsFormSectionHidden } from '../types/entity-form-config';
+import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
 
 /**
  * Display shape for the variant picker. Kept minimal so the Generic
@@ -105,8 +107,10 @@ export interface VariantPickerItem {
   encapsulation: ViewEncapsulation.None,
   templateUrl: './record-form-container.component.html',
   styleUrls: ['./record-form-container.component.css'],
-  // FormSlotCoordinator + FormChromeCoordinator scoped per-container.
-  providers: [FormSlotCoordinator, FormChromeCoordinator],
+  // FormSlotCoordinator + FormChromeCoordinator + FormRecordRefreshCoordinator
+  // scoped per-container. `providers` (not viewProviders) so projected
+  // related-entity grids and slot-mounted panels can inject them.
+  providers: [FormSlotCoordinator, FormChromeCoordinator, FormRecordRefreshCoordinator],
 })
 export class MjRecordFormContainerComponent extends BaseAngularComponent implements AfterContentInit, OnDestroy  {
   private cdr = inject(ChangeDetectorRef);
@@ -114,6 +118,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private notificationService = inject(MJNotificationService);
   private chrome = inject(FormChromeCoordinator);
   private slots = inject(FormSlotCoordinator);
+  private recordRefresh = inject(FormRecordRefreshCoordinator);
   private host = inject(ElementRef<HTMLElement>);
   private destroy$ = new Subject<void>();
   private panelNavReset$ = new Subject<void>();
@@ -195,6 +200,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   @Input() DirtyFieldNames: string[] = [];
   @Input() ListCount = 0;
   @Input() IsSaving = false;
+  @Input() IsRefreshing = false;
   @Input() ToolbarConfig: FormToolbarConfig = DEFAULT_TOOLBAR_CONFIG;
   @Input() RegisteredToolbarItems: FormToolbarItemConfig[] = [];
   @Input() ToolbarItemOverrides: ReadonlyMap<string, Partial<FormToolbarItemConfig>> | null = null;
@@ -245,6 +251,12 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Emitted when delete is confirmed (host app handles actual deletion) */
   @Output() DeleteRequested = new EventEmitter<void>();
+
+  /** Emitted BEFORE refresh - can be cancelled by setting event.Cancel = true */
+  @Output() BeforeRefresh = new EventEmitter<BeforeRefreshEventArgs>();
+
+  /** Emitted when refresh is requested (only in standalone mode) */
+  @Output() RefreshRequested = new EventEmitter<void>();
 
   /** Emitted when favorite toggle is requested */
   @Output() FavoriteToggled = new EventEmitter<void>();
@@ -345,6 +357,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   get EffectiveIsSaving(): boolean {
     return this.IsSaving;
+  }
+
+  get EffectiveIsRefreshing(): boolean {
+    return this.fc?.IsRefreshing ?? this.IsRefreshing;
   }
 
   get EffectiveWidthMode(): FormWidthMode {
@@ -1221,6 +1237,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       this.fc.RecordReady.pipe(takeUntil(this.panelNavReset$)).subscribe(() => {
         this.LoadBadgeCounts();
       });
+      this.fc.RecordRefreshed.pipe(takeUntil(this.panelNavReset$)).subscribe((e) => {
+        this.OnFormRecordRefreshed(e.Record);
+      });
     }
 
     this.Panels.forEach(panel => {
@@ -1431,6 +1450,44 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     } else {
       this.CancelRequested.emit();
     }
+  }
+
+  /**
+   * Refresh: delegate to FormComponent if available, otherwise re-emit.
+   * Badge reload + related-grid fan-out happen on `RecordRefreshed` so
+   * `host.Refresh()` (which calls `RefreshRecord()` directly) still notifies.
+   */
+  async OnRefreshRequested(): Promise<void> {
+    if (this.fc?.RefreshRecord) {
+      this.IsRefreshing = true;
+      this.cdr.markForCheck();
+
+      try {
+        await this.fc.RefreshRecord();
+      } finally {
+        await Promise.resolve();
+        this.ngZone.run(() => {
+          this.IsRefreshing = false;
+          this.cdr.markForCheck();
+        });
+      }
+    } else {
+      this.RefreshRequested.emit();
+    }
+  }
+
+  /**
+   * After the form reloads the parent record: refresh chrome that is not
+   * the record itself (badges, open history drawer) and broadcast to
+   * in-form listeners (related grids, IS-A panel, custom panels).
+   */
+  private OnFormRecordRefreshed(record: BaseEntity): void {
+    this.badgeCountsLoaded = false;
+    this.LoadBadgeCounts();
+    if (this.ShowRecordChanges && this.recordChangesDrawer) {
+      this.recordChangesDrawer.Refresh();
+    }
+    this.recordRefresh.Notify(record);
   }
 
   /**

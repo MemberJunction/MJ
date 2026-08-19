@@ -1,4 +1,6 @@
-import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, TemplateRef, ChangeDetectorRef, inject, DoCheck } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, TemplateRef, ChangeDetectorRef, inject, DoCheck, OnInit, OnDestroy } from '@angular/core';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { BaseEntity, EntityInfo, CompositeKey } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -8,9 +10,11 @@ import { IsAccordionFormChrome } from '../chrome/form-chrome';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { DiscoverISADescendants, BuildDescendantTree, IsaRelatedItem } from '../isa-related-panel/isa-hierarchy-utils';
 import { FormWidthMode, FormContext } from '../types/form-types';
+import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
 import {
   BeforeSaveEventArgs,
   BeforeDeleteEventArgs,
+  BeforeRefreshEventArgs,
   BeforeCancelEventArgs,
   BeforeHistoryViewEventArgs,
   BeforeListManagementEventArgs,
@@ -47,8 +51,10 @@ import {
   templateUrl: './form-toolbar.component.html',
   styleUrls: ['./form-toolbar.component.css']
 })
-export class MjFormToolbarComponent extends BaseAngularComponent implements DoCheck {
+export class MjFormToolbarComponent extends BaseAngularComponent implements DoCheck, OnInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
+  private recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
+  private destroy$ = new Subject<void>();
 
   // ---- Deprecated form reference (backward compat) ----
 
@@ -120,6 +126,9 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   /** Whether to show the toolbar in a saving/loading state */
   @Input() IsSaving = false;
+
+  /** Whether a refresh from database operation is currently in progress */
+  @Input() IsRefreshing = false;
 
   // Section controls inputs
   @Input() VisibleSectionCount = 0;
@@ -197,6 +206,12 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   /** Request to delete the current record */
   @Output() DeleteRequested = new EventEmitter<void>();
 
+  /** Emitted BEFORE refresh - can be cancelled by setting event.Cancel = true */
+  @Output() BeforeRefresh = new EventEmitter<BeforeRefreshEventArgs>();
+
+  /** Request to refresh the current record from the database */
+  @Output() RefreshRequested = new EventEmitter<void>();
+
   /** Request to toggle favorite status */
   @Output() FavoriteToggled = new EventEmitter<void>();
 
@@ -250,6 +265,17 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   private _chainsLoading = false;
 
   // ---- Lifecycle ----
+
+  ngOnInit(): void {
+    this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.InvalidateHierarchy();
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
 
   ngDoCheck(): void {
     if (this._formRef) {
@@ -401,6 +427,17 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   // ---- Descendant Chain Computation ----
 
   /**
+   * Force a recompute of the IS-A descendant breadcrumb. Needed after
+   * in-place record refresh because the Record object identity does not
+   * change, so {@link CheckDescendantChains} would otherwise skip.
+   */
+  public InvalidateHierarchy(): void {
+    this._lastRecordForChains = null;
+    this.ComputeDescendantChains();
+    this.cdr.markForCheck();
+  }
+
+  /**
    * Check if descendant chains need recomputation (called from DoCheck).
    * Only triggers async computation when the record identity changes.
    */
@@ -537,6 +574,18 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.cdr.markForCheck();
   }
 
+  OnRefresh(): void {
+    if (this.IsRefreshing || this.IsSaving) return;
+
+    // Emit Before event - handler can cancel by setting event.Cancel = true
+    const beforeEvent = new BeforeRefreshEventArgs();
+    this.BeforeRefresh.emit(beforeEvent);
+    if (beforeEvent.Cancel) return;
+
+    if (this.DispatchToFormRef('RefreshRecord')) return;
+    this.RefreshRequested.emit();
+  }
+
   OnFavoriteToggle(): void {
     if (this.DispatchToFormRef('OnFavoriteToggled')) return;
     this.FavoriteToggled.emit();
@@ -613,6 +662,19 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         Order: 20,
         Visible: this.Config.ShowDeleteButton && this.UserCanDelete,
         Disabled: false,
+      },
+      {
+        Key: 'refresh',
+        Text: '',
+        Description: 'Refresh record from database',
+        Icon: 'fa-solid fa-arrows-rotate',
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 25,
+        Visible: this.Config.ShowRefreshButton !== false && (this.Record?.IsSaved ?? false),
+        Disabled: this.IsSaving || this.IsRefreshing,
+        IsLoading: this.IsRefreshing,
       },
       {
         Key: 'favorite',
@@ -716,7 +778,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
     // 4. Resolve states, evaluate predicates, apply overrides
     const resolved: ResolvedToolbarItem[] = [];
-    const standardKeys: Set<string> = new Set(['edit', 'delete', 'favorite', 'history', 'list', 'tags', 'attachments']);
+    const standardKeys: Set<string> = new Set(['edit', 'delete', 'refresh', 'favorite', 'history', 'list', 'tags', 'attachments']);
 
     for (const item of rawItems) {
       const overrides = this.ItemOverrides?.get(item.Key);
@@ -849,6 +911,9 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
           break;
         case 'delete':
           this.OnDeleteClick();
+          break;
+        case 'refresh':
+          this.OnRefresh();
           break;
         case 'favorite':
           this.OnFavoriteToggle();

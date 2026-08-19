@@ -23,6 +23,7 @@ import {
   FormContext,
   FormNotificationEvent,
   RecordSavedEvent,
+  RecordRefreshedEvent,
   RecordDeletedEvent,
   RecordSaveFailedEvent,
   RecordDeleteFailedEvent,
@@ -53,6 +54,7 @@ import { ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
 @Directive()
 export abstract class BaseFormComponent extends BaseRecordComponent implements AfterViewInit, OnInit, OnDestroy {
   public EditMode: boolean = false;
+  public IsRefreshing: boolean = false;
   public FavoriteInitDone: boolean = false;
 
   /**
@@ -233,6 +235,9 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   /** Emitted after a record is saved successfully */
   @Output() RecordSaved = new EventEmitter<RecordSavedEvent>();
+
+  /** Emitted after a record is refreshed from the database successfully */
+  @Output() RecordRefreshed = new EventEmitter<RecordRefreshedEvent>();
 
   /** Emitted after a record is deleted successfully */
   @Output() RecordDeleted = new EventEmitter<RecordDeletedEvent>();
@@ -521,6 +526,86 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       if (wasNeverSaved) {
         this.Navigate.emit({ Kind: 'dismiss', Reason: 'new-record-discarded' });
       }
+    }
+  }
+
+  /**
+   * Re-fetches the current record from the database, updating field values
+   * in-place and resetting dirty flags. No-op in edit mode or on an unsaved
+   * record. Related-entity grids are notified via the form container's
+   * {@link FormRecordRefreshCoordinator} after this emits {@link RecordRefreshed}.
+   *
+   * @returns true if the record was reloaded from the database.
+   */
+  public async RefreshRecord(): Promise<boolean> {
+    if (!this.canRefreshRecord()) {
+      return false;
+    }
+
+    this.IsRefreshing = true;
+    this.cdr.markForCheck();
+
+    try {
+      return await this.executeRecordRefresh();
+    } finally {
+      this.IsRefreshing = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  private canRefreshRecord(): boolean {
+    return !!this.record && this.record.IsSaved && !this.EditMode;
+  }
+
+  private async executeRecordRefresh(): Promise<boolean> {
+    const record = this.record;
+    if (!record) {
+      return false;
+    }
+
+    try {
+      const ok = await record.Refresh();
+      if (!ok) {
+        this.Notification.emit({
+          Message: 'Failed to refresh record from database',
+          Type: 'error',
+          Duration: 5000,
+        });
+        return false;
+      }
+
+      await this.reloadFavoriteStatusAfterRefresh(record);
+      this.Notification.emit({
+        Message: 'Record refreshed from database',
+        Type: 'info',
+        Duration: 2000,
+      });
+      this.RecordRefreshed.emit({
+        EntityName: record.EntityInfo.Name,
+        Record: record,
+      });
+      return true;
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      this.Notification.emit({
+        Message: 'Error refreshing record: ' + detail,
+        Type: 'error',
+        Duration: 5000,
+      });
+      return false;
+    }
+  }
+
+  private async reloadFavoriteStatusAfterRefresh(record: BaseEntity): Promise<void> {
+    const md = this.ProviderToUse;
+    try {
+      this._isFavorite = await md.GetRecordFavoriteStatus(
+        md.CurrentUser.ID,
+        record.EntityInfo.Name,
+        record.PrimaryKey,
+      );
+    } catch {
+      // Non-critical — favorite status remains as is
     }
   }
 

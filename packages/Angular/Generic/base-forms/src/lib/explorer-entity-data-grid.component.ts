@@ -1,5 +1,8 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, ChangeDetectorRef, NgZone, AfterViewInit, OnDestroy, inject } from '@angular/core';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { RunViewParams } from '@memberjunction/core';
+import { FormRecordRefreshCoordinator } from './form-record-refresh.coordinator';
 import {
     EntityDataGridComponent,
     AfterRowDoubleClickEventArgs,
@@ -69,6 +72,8 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     private elementRef = inject(ElementRef);
     private cdr = inject(ChangeDetectorRef);
     private ngZone = inject(NgZone);
+    private recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
+    private destroy$ = new Subject<void>();
 
     // Pass-through inputs from EntityDataGridComponent
     @Input() Params: RunViewParams | null = null;
@@ -173,6 +178,7 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     }
 
     ngAfterViewInit(): void {
+        this.subscribeToFormRefresh();
         if (!this.DeferLoadUntilVisible || typeof IntersectionObserver === 'undefined') {
             // Deferral off or unsupported environment — preserve eager-load behavior.
             this._hasBeenVisible = true;
@@ -196,8 +202,35 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     }
 
     ngOnDestroy(): void {
+        this.destroy$.next();
+        this.destroy$.complete();
         this._visibilityObserver?.disconnect();
         this._visibilityObserver = undefined;
+    }
+
+    /**
+     * Reload this grid from the database. Used by the grid's own refresh
+     * button and by the parent-form refresh broadcast.
+     */
+    public async Refresh(): Promise<void> {
+        await this.innerGrid?.Refresh();
+    }
+
+    private subscribeToFormRefresh(): void {
+        this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+            void this.refreshIfLoaded();
+        });
+    }
+
+    /**
+     * Parent-form refresh fan-out: only reload grids that have already paid
+     * for a RunView. Collapsed / never-seen related sections stay deferred.
+     */
+    private async refreshIfLoaded(): Promise<void> {
+        if (!this._hasBeenVisible) {
+            return;
+        }
+        await this.Refresh();
     }
 
     private onBecameVisible(): void {

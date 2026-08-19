@@ -161,6 +161,16 @@ export abstract class BaseFormPanel<TRecord extends BaseEntity = BaseEntity> {
     }
 
     /**
+     * Called after the parent form reloads the current record from the database.
+     * Default is a no-op. Override to refresh panel-owned data that is not a
+     * related-entity grid (those already subscribe to
+     * {@link FormRecordRefreshCoordinator} themselves).
+     */
+    public OnRecordRefreshed(_record: TRecord): void {
+        // Subclasses can override
+    }
+
+    /**
      * Registers a dynamic toolbar action item / button into the host form toolbar.
      */
     public RegisterToolbarItem(item: FormToolbarItemConfig): void {

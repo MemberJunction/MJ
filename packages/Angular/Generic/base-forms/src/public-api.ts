@@ -43,6 +43,7 @@ export * from './lib/base-form-section-info';
 // State management
 export * from './lib/form-state.interface';
 export * from './lib/form-state.service';
+export * from './lib/form-record-refresh.coordinator';
 
 // Components
 export * from './lib/toolbar/form-toolbar.component';
