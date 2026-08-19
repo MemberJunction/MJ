@@ -148,6 +148,23 @@ describe('ExplorerEntityDataGridComponent (DOM)', () => {
     expect(host.style.height).toBe(`${RelatedGridHeightPx(2)}px`);
   });
 
+  it('sizes to rows and respects MaxHeight when Height="fit-content"', () => {
+    const f = render({ Height: 'fit-content', MaxHeight: 300 });
+    const host = f.debugElement.nativeElement as HTMLElement;
+
+    inner(f).AfterDataLoad.emit({ loadedRowCount: 1 } as unknown as AfterDataLoadEventArgs);
+    f.detectChanges();
+    expect(f.componentInstance.ResolvedHeight).toBe(RelatedGridHeightPx(1, 300));
+    expect(inner(f).Height).toBe(RelatedGridHeightPx(1, 300));
+    expect(host.style.height).toBe(`${RelatedGridHeightPx(1, 300)}px`);
+
+    inner(f).AfterDataLoad.emit({ loadedRowCount: 20 } as unknown as AfterDataLoadEventArgs);
+    f.detectChanges();
+    expect(f.componentInstance.ResolvedHeight).toBe(300);
+    expect(inner(f).Height).toBe(300);
+    expect(host.style.height).toBe('300px');
+  });
+
   it('translates a new-record request into a Navigate event', () => {
     const f = render();
     const nav = capture(f.componentInstance.Navigate);

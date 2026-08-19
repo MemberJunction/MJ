@@ -135,12 +135,10 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     @Input() SelectionMode: GridSelectionMode = 'single';
 
     /**
-     * Related-entity grids (accordion and left-nav) size to toolbar + header
-     * + rows instead of `height: 100%` of leftover / auto space. Re-read the
-     * panel each time — the host may mount before it is wrapped, and left-nav
-     * adds `mj-chrome-show` only when the rail item is selected.
+     * Related-entity grids (accordion and left-nav) and explicit fit-content grids
+     * size to toolbar + header + rows instead of `height: 100%` of leftover / auto space.
      */
-    private sizedHeightPx = RelatedGridHeightPx(0);
+    private sizedHeightPx = RelatedGridHeightPx(0, this.MaxHeight);
 
     get ResolvedHeight(): number | 'auto' | 'fit-content' {
         return this.shouldSizeToRows() ? this.sizedHeightPx : this.Height;
@@ -151,7 +149,7 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     }
 
     private shouldSizeToRows(): boolean {
-        return this.isInsideRelatedEntityPanel();
+        return this.Height === 'fit-content' || this.isInsideRelatedEntityPanel();
     }
 
     /**
