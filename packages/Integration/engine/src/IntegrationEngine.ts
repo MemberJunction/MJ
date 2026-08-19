@@ -50,6 +50,7 @@ import { RecordMapBatch } from './RecordMapBatch.js';
 import { buildContentHashPrefetchFilter, quoteTextLiteral } from './prefetchFilter.js';
 import { serializeKeyValue } from './KeySerialization.js';
 import { CUSTOM_OVERFLOW_COLUMN, reconcileOverflowValue, foldCustomKeyStats, type CustomKeyAccumulator } from './CustomOverflow.js';
+import { ComputeExcludedSourceNames } from './SyncDirectives.js';
 import { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from './HashDiff.js';
 import { RateLimiter } from './RateLimiter.js';
 import { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrency.js';
@@ -2117,6 +2118,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     ): Promise<SyncResult> {
         const entityMapID = entityMap.ID;
         const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
+        // Field-level exclusions declared by the connector (SourceFieldInfo.SyncDirective
+        // -> IntegrationObjectField.Configuration). Resolved once per map, applied to every
+        // batch below. Empty set on any lookup miss - exclusion can only ever narrow.
+        const excludedSourceNames = this.ResolveExcludedSourceNames(
+            config.companyIntegration.IntegrationID, entityMap.ExternalObjectName);
+        if (excludedSourceNames.size > 0) {
+            logger?.emit('sync.entity-map.exclusions', {
+                externalObjectName: entityMap.ExternalObjectName,
+                excludedFields: Array.from(excludedSourceNames).sort(),
+            });
+        }
         const watermark = await this.runWriteExclusive(() => this.watermarkService.Load(entityMapID, contextUser, 'Pull'));
         logger?.emit('sync.entity-map.start', {
             phase: 'pull-detail',
@@ -2473,7 +2485,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
 
             const mapped = this.fieldMappingEngine.Apply(
-                batch.Records, fieldMaps, entityMap.Entity
+                batch.Records, fieldMaps, entityMap.Entity, excludedSourceNames
             );
             // Custom-key stats: aggregate unmapped keys for EVERY mapped record here —
             // before any skip decision — so candidates + sizing stats exist even when the
@@ -5479,6 +5491,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
     public GetIntegrationObjectFields(objectID: string): MJIntegrationObjectFieldEntity[] {
         return this.Base.GetIntegrationObjectFields(objectID);
+    }
+
+    /**
+     * Source field names the connector declared as SyncDirective 'Exclude' for one
+     * integration object, read from IntegrationObjectField.Configuration. Empty set
+     * on any lookup miss (unknown object, no fields, no integration id) - a failed
+     * lookup must never widen or narrow the sync beyond its declared behaviour.
+     */
+    public ResolveExcludedSourceNames(integrationID: string | null | undefined, externalObjectName: string): Set<string> {
+        if (!integrationID || !externalObjectName) return new Set<string>();
+        const obj = this.GetIntegrationObject(integrationID, externalObjectName);
+        if (!obj) return new Set<string>();
+        return ComputeExcludedSourceNames(this.GetIntegrationObjectFields(obj.ID));
     }
 
     public GetActiveIntegrationObjects(integrationID: string): MJIntegrationObjectEntity[] {
