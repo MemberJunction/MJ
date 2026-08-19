@@ -126,6 +126,28 @@ const FileDownloadQuerySchema = z.object({
   }),
 });
 
+const CreateMediaAccessTokenMutation = gql`
+  mutation CreateMediaAccessToken($fileId: String!) {
+    CreateMediaAccessToken(fileId: $fileId) {
+      Success
+      Token
+      Url
+      MimeType
+      ErrorMessage
+    }
+  }
+`;
+
+const CreateMediaAccessTokenMutationSchema = z.object({
+  CreateMediaAccessToken: z.object({
+    Success: z.boolean(),
+    Token: z.string().optional().nullable(),
+    Url: z.string().optional().nullable(),
+    MimeType: z.string().optional().nullable(),
+    ErrorMessage: z.string().optional().nullable(),
+  }),
+});
+
 /**
  * World-class Angular component for displaying, previewing, uploading,
  * and managing file attachments linked to an entity record.
@@ -799,7 +821,36 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
   }
 
   /**
-   * Downloads an attachment using a pre-signed download URL.
+   * Resolves an authenticated inline URL for streaming, previewing, and opening in a new tab.
+   * Prefers the inline streaming endpoint (/media/:fileId?token=...) so the browser renders
+   * the document/media natively without triggering forced attachment downloads or Save As dialogs.
+   */
+  private async GetInlineFileUrl(fileId: string): Promise<string | null> {
+    try {
+      const mediaResult = await GraphQLDataProvider.ExecuteGQL(CreateMediaAccessTokenMutation, { fileId });
+      const parsedMedia = CreateMediaAccessTokenMutationSchema.safeParse(mediaResult);
+      if (parsedMedia.success && parsedMedia.data.CreateMediaAccessToken.Success && parsedMedia.data.CreateMediaAccessToken.Url) {
+        return parsedMedia.data.CreateMediaAccessToken.Url;
+      }
+    } catch (err) {
+      console.warn('[RecordAttachmentsComponent] CreateMediaAccessToken failed, trying fallback DownloadUrl:', err);
+    }
+
+    try {
+      const gqlResult = await GraphQLDataProvider.ExecuteGQL(FileDownloadQuery, { FileID: fileId });
+      const parsed = FileDownloadQuerySchema.safeParse(gqlResult);
+      if (parsed.success && parsed.data.MJFile?.DownloadUrl) {
+        return parsed.data.MJFile.DownloadUrl;
+      }
+    } catch (err) {
+      console.error('[RecordAttachmentsComponent] GetInlineFileUrl fallback failed:', err);
+    }
+
+    return null;
+  }
+
+  /**
+   * Opens the attachment in a new browser tab for direct viewing.
    */
   public async DownloadAttachment(attachment: RecordAttachmentItem): Promise<boolean> {
     const beforeEvent = new BeforeDownloadAttachmentEventArgs(attachment);
@@ -807,23 +858,19 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
     if (beforeEvent.Cancel) return false;
 
     try {
-      const gqlResult = await GraphQLDataProvider.ExecuteGQL(FileDownloadQuery, {
-        FileID: attachment.FileID,
-      });
-      const parsed = FileDownloadQuerySchema.safeParse(gqlResult);
-
-      if (parsed.success && parsed.data.MJFile.DownloadUrl) {
-        const url = parsed.data.MJFile.DownloadUrl;
-        this.TriggerBrowserDownload(url, attachment.Name);
+      const url = await this.GetInlineFileUrl(attachment.FileID);
+      if (url) {
+        // Open directly in a new tab so the browser displays the document
+        window.open(url, '_blank', 'noopener,noreferrer');
         this.AfterDownload.emit(new AfterDownloadAttachmentEventArgs(attachment, url));
         return true;
       } else {
-        this.notifications.CreateSimpleNotification(`Unable to get download URL for '${attachment.Name}'`, 'error');
+        this.notifications.CreateSimpleNotification(`Unable to open '${attachment.Name}'`, 'error');
         return false;
       }
     } catch (err) {
-      console.error('[RecordAttachmentsComponent] Download error:', err);
-      this.notifications.CreateSimpleNotification('Download failed', 'error');
+      console.error('[RecordAttachmentsComponent] Open in tab error:', err);
+      this.notifications.CreateSimpleNotification('Failed to open file', 'error');
       return false;
     }
   }
@@ -845,20 +892,16 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
     this.cdr.markForCheck();
 
     try {
-      const gqlResult = await GraphQLDataProvider.ExecuteGQL(FileDownloadQuery, {
-        FileID: attachment.FileID,
-      });
-      const parsed = FileDownloadQuerySchema.safeParse(gqlResult);
-
-      if (parsed.success && parsed.data.MJFile.DownloadUrl) {
-        this.ActivePreviewUrl = parsed.data.MJFile.DownloadUrl;
-        this.ActivePreviewSafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.ActivePreviewUrl);
+      const url = await this.GetInlineFileUrl(attachment.FileID);
+      if (url) {
+        this.ActivePreviewUrl = url;
+        this.ActivePreviewSafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(url);
 
         // For text media types, fetch content directly for syntax preview
         const mediaType = this.GetMediaType(attachment);
         if (mediaType === 'text') {
           try {
-            const resp = await window.fetch(this.ActivePreviewUrl);
+            const resp = await window.fetch(url);
             if (resp.ok) {
               this.ActivePreviewTextContent = await resp.text();
             }

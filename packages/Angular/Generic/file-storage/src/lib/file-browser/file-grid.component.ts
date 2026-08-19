@@ -504,16 +504,9 @@ export class FileGridComponent implements OnInit, OnChanges {
       console.log('[FileGrid] Download URL created:', downloadUrl ? 'success' : 'failed');
 
       if (downloadUrl) {
-        // Trigger browser download
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = item.name;
-        link.target = '_blank'; // Open in new tab as fallback
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        this.notifications.CreateSimpleNotification(`Downloading ${item.name}...`, 'info');
+        // Open file in new browser tab for viewing/download
+        window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+        this.notifications.CreateSimpleNotification(`Opening ${item.name}...`, 'info');
       } else {
         this.notifications.CreateSimpleNotification('Failed to generate download URL', 'error');
       }
@@ -1143,18 +1136,9 @@ export class FileGridComponent implements OnInit, OnChanges {
       );
 
       if (downloadUrl) {
-        console.log('[FileGrid] Download URL created, initiating download');
-
-        // Create a temporary anchor element to trigger download
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = item.name;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        this.notifications.CreateSimpleNotification(`Downloading ${item.name}...`, 'info');
+        console.log('[FileGrid] Download URL created, opening in new tab');
+        window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+        this.notifications.CreateSimpleNotification(`Opening ${item.name}...`, 'info');
       } else {
         this.notifications.CreateSimpleNotification('Failed to create download URL', 'error');
       }
