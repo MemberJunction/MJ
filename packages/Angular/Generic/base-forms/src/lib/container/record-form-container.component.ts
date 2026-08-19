@@ -50,6 +50,7 @@ import {
   ParseRailWidthSetting,
   SerializeRailPinnedSetting,
   SerializeRailWidthSetting,
+  ShouldPersistChromeActiveGroup,
 } from '../chrome/form-chrome-rail-pref';
 import { ApplyClippedTitle } from '../chrome/clipped-title';
 import { CollectFormPanelRegistrations } from '../panel-slot/collect-form-panel-registrations';
@@ -1191,8 +1192,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   private RestoreChromePrefs(): void {
-    const group = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('activeGroup'));
-    if (group) this.chrome.ActiveGroupKey = group;
+    if (ShouldPersistChromeActiveGroup(this.EffectiveRecord?.IsSaved)) {
+      const group = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('activeGroup'));
+      if (group) this.chrome.ActiveGroupKey = group;
+    }
     const more = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('moreExpanded'));
     if (more === '1') this.chrome.MoreExpanded = true;
     if (more === '0') this.chrome.MoreExpanded = false;
@@ -1206,7 +1209,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   private PersistChromePrefs(): void {
-    if (this.chrome.ActiveGroupKey) {
+    if (ShouldPersistChromeActiveGroup(this.EffectiveRecord?.IsSaved) && this.chrome.ActiveGroupKey) {
       UserInfoEngine.Instance.SetSettingDebounced(
         this.chromePrefKey('activeGroup'),
         this.chrome.ActiveGroupKey,
