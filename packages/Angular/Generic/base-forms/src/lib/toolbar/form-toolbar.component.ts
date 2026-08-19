@@ -99,6 +99,15 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   /** Whether the tags panel is currently open */
   @Input() IsTagsPanelOpen = false;
 
+  /** Number of attachments linked to this record */
+  @Input() AttachmentCount = 0;
+
+  /** Whether the attachments feature is available for this record */
+  @Input() AttachmentsAvailable = false;
+
+  /** Whether the attachments panel is currently open */
+  @Input() IsAttachmentsPanelOpen = false;
+
   /** Number of record change versions for this record (displayed as "vN" badge on history button) */
   @Input() VersionCount = 0;
 
@@ -192,6 +201,9 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   /** Emitted when the Tags button is clicked */
   @Output() TagsPanelToggled = new EventEmitter<void>();
+
+  /** Emitted when the Attachments button is clicked */
+  @Output() AttachmentsPanelToggled = new EventEmitter<void>();
 
   /** Request to show dirty field changes */
   @Output() ShowChangesRequested = new EventEmitter<void>();
@@ -540,6 +552,11 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   OnTagsPanel(): void {
     if (this.DispatchToFormRef('HandleTagsPanel')) return;
     this.TagsPanelToggled.emit();
+  }
+
+  OnAttachmentsPanel(): void {
+    if (this.DispatchToFormRef('HandleAttachmentsPanel')) return;
+    this.AttachmentsPanelToggled.emit();
   }
 
   OnCustomButtonClick(button: CustomToolbarButton): void {

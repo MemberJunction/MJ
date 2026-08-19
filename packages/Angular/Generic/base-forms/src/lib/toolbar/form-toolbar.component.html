@@ -78,6 +78,17 @@
           }
         </button>
       }
+      @if (Config.ShowAttachmentsButton && AttachmentsAvailable) {
+        <button class="mj-forms-btn mj-forms-btn--attachments"
+          [class.active]="IsAttachmentsPanelOpen"
+          (click)="OnAttachmentsPanel()"
+          [title]="AttachmentCount > 0 ? (AttachmentCount + ' attachment' + (AttachmentCount === 1 ? '' : 's')) : 'Attachments'">
+          <i class="fa-solid fa-paperclip"></i>
+          @if (AttachmentCount > 0) {
+            <span class="mj-list-count-badge">{{ AttachmentCount }}</span>
+          }
+        </button>
+      }
 
       <!-- Custom toolbar buttons -->
       @for (button of Config.CustomButtons; track button.Key) {

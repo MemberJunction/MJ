@@ -7,7 +7,7 @@ import {
 import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { UserInfoEngine } from '@memberjunction/core-entities';
+import { UserInfoEngine, FileStorageEngineBase } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
@@ -137,6 +137,12 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Number of tags on this record */
   TagCount = 0;
+
+  /** Controls visibility of attachments slide panel */
+  ShowAttachmentsPanel = false;
+
+  /** Number of attachments linked to this record */
+  AttachmentCount = 0;
 
   /** Number of tracked record change versions for this record */
   VersionCount = 0;
@@ -1223,8 +1229,22 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   // ---- Badge Count Loading ----
 
   /**
-   * Loads tag count and record change version count for toolbar badges.
-   * Both queries run in parallel for performance.
+   * Whether the attachments feature is available for the current record.
+   * True when record is saved and entity allows attachments (default true).
+   */
+  public get AttachmentsAvailable(): boolean {
+    const record = this.EffectiveRecord;
+    if (!record || !record.IsSaved) return false;
+    const entity = record.EntityInfo;
+    if (!entity) return false;
+    const config = entity.Configuration?.Attachments;
+    if (config?.Enabled === false) return false;
+    return true;
+  }
+
+  /**
+   * Loads tag count, attachment count, and record change version count for toolbar badges.
+   * All queries run in parallel for performance.
    */
   private badgeCountsLoaded = false;
 
@@ -1236,9 +1256,33 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
     this.badgeCountsLoaded = true;
 
-    // Fire both queries in parallel — no await needed, they update state async
+    // Fire queries in parallel — no await needed, they update state async
     this.LoadTagCount(record);
     this.LoadVersionCount(record);
+    this.LoadAttachmentCount(record);
+  }
+
+  /**
+   * Queries the count of linked attachments for the current entity + record
+   * and updates the AttachmentCount badge on the toolbar.
+   */
+  private async LoadAttachmentCount(record: BaseEntity): Promise<void> {
+    if (!this.AttachmentsAvailable) return;
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const result = await rv.RunView<{ ID: string }>({
+        EntityName: 'MJ: File Entity Record Links',
+        Fields: ['ID'],
+        ExtraFilter: `EntityID='${record.EntityInfo.ID}' AND RecordID='${record.PrimaryKey.Values()}'`,
+        ResultType: 'simple'
+      });
+      if (result.Success) {
+        this.AttachmentCount = result.Results.length;
+        this.cdr.detectChanges();
+      }
+    } catch {
+      // Non-critical — badge just stays at 0
+    }
   }
 
   /**
@@ -1435,6 +1479,30 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   OnTagsPanelWidthChanged(width: number): void {
     this.TagsPanelWidth = width;
     UserInfoEngine.Instance.SetSettingDebounced(MjRecordFormContainerComponent.TAGS_WIDTH_KEY, String(width));
+  }
+
+  OnAttachmentsPanelToggled(): void {
+    this.ShowAttachmentsPanel = !this.ShowAttachmentsPanel;
+    this.cdr.detectChanges();
+  }
+
+  OnAttachmentsPanelClosed(): void {
+    this.ShowAttachmentsPanel = false;
+    this.cdr.detectChanges();
+
+    // Refresh attachment count — attachments may have been added/removed while panel was open
+    const record = this.EffectiveRecord;
+    if (record?.EntityInfo) {
+      this.LoadAttachmentCount(record);
+    }
+  }
+
+  /**
+   * Handles live attachment count updates from the attachments panel component.
+   */
+  OnAttachmentCountChanged(count: number): void {
+    this.AttachmentCount = count;
+    this.cdr.markForCheck();
   }
 
   OnTagsRecordNavigate(event: { EntityName: string; RecordID: string }): void {

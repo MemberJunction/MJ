@@ -119,7 +119,7 @@ export interface RelatedFormRoleCandidate {
     JoinView?: string | null;
     Type?: string | null;
     Sequence?: number | null;
-    Configuration?: string | null;
+    Configuration?: string | IEntityRelationshipConfiguration | null;
     /**
      * How many EntityRelationships across metadata point at this related
      * entity. Runtime-only — the ranker uses it as graph in-degree.

@@ -1,0 +1,421 @@
+<mj-dialog
+  [Visible]="Visible"
+  Title="Manage File Storage"
+  [Width]="880"
+  [MinWidth]="600"
+  (Close)="OnDialogClose()">
+
+  <div class="mj-storage-admin-container">
+    <!-- Tab Navigation -->
+    <div class="mj-storage-admin-tabs">
+      <button
+        type="button"
+        class="mj-tab-btn"
+        [class.active]="ActiveTab === 'accounts'"
+        (click)="ActiveTab = 'accounts'">
+        <i class="fa-solid fa-server"></i>
+        <span>Storage Accounts</span>
+        <span class="mj-tab-count">{{ Accounts.length }}</span>
+      </button>
+
+      <button
+        type="button"
+        class="mj-tab-btn"
+        [class.active]="ActiveTab === 'providers'"
+        (click)="ActiveTab = 'providers'">
+        <i class="fa-solid fa-cubes"></i>
+        <span>Storage Providers</span>
+        <span class="mj-tab-count">{{ Providers.length }}</span>
+      </button>
+    </div>
+
+    <!-- ── TAB 1: STORAGE ACCOUNTS ────────────────────────────────────── -->
+    @if (ActiveTab === 'accounts') {
+      <div class="mj-tab-pane">
+        <!-- Toolbar -->
+        <div class="mj-admin-pane-toolbar">
+          <div class="mj-admin-search-wrapper">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input
+              type="text"
+              [(ngModel)]="SearchTerm"
+              placeholder="Search storage accounts by name, provider, or credential..." />
+            @if (SearchTerm) {
+              <button type="button" class="mj-clear-btn" (click)="SearchTerm = ''">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            }
+          </div>
+
+          <button
+            type="button"
+            class="mj-btn mj-btn-primary"
+            (click)="StartCreateAccount()">
+            <i class="fa-solid fa-plus"></i>
+            <span>Add Storage Account</span>
+          </button>
+        </div>
+
+        <!-- Loading -->
+        @if (IsLoading) {
+          <div class="mj-admin-loading">
+            <mj-loading text="Loading storage accounts..."></mj-loading>
+          </div>
+        } @else if (FilteredAccountRows.length === 0) {
+          <mj-empty-state
+            Icon="fa-solid fa-folder-plus"
+            [Title]="SearchTerm ? 'No matching storage accounts' : 'No storage accounts configured'"
+            [Message]="SearchTerm ? 'Try adjusting your search query.' : 'Configure storage accounts to connect MemberJunction to cloud storage services like AWS S3, Azure Blob Storage, Box, Dropbox, or Google Drive.'">
+            @if (!SearchTerm) {
+              <button
+                type="button"
+                class="mj-btn mj-btn-primary mj-empty-cta"
+                (click)="StartCreateAccount()">
+                <i class="fa-solid fa-plus"></i>
+                <span>Configure First Account</span>
+              </button>
+            }
+          </mj-empty-state>
+        } @else {
+          <!-- Accounts List -->
+          <div class="mj-admin-table-container">
+            <table class="mj-admin-table">
+              <thead>
+                <tr>
+                  <th>Account Name</th>
+                  <th>Provider</th>
+                  <th>Credential</th>
+                  <th>Global Search</th>
+                  <th>Role Access</th>
+                  <th class="mj-text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of FilteredAccountRows; track row.account.ID) {
+                  <tr>
+                    <td>
+                      <div class="mj-account-name-cell">
+                        <span class="mj-account-title">{{ row.account.Name }}</span>
+                        @if (row.account.Description) {
+                          <span class="mj-account-desc">{{ row.account.Description }}</span>
+                        }
+                      </div>
+                    </td>
+                    <td>
+                      <span class="mj-provider-badge">
+                        <i [class]="GetProviderIcon(row.provider?.Name || row.account.Provider)"></i>
+                        <span>{{ row.provider?.Name || row.account.Provider }}</span>
+                      </span>
+                    </td>
+                    <td>
+                      @if (row.credentialName) {
+                        <span class="mj-status-badge mj-status-badge--success" [title]="'Credential: ' + row.credentialName">
+                          <i class="fa-solid fa-key"></i>
+                          <span>{{ row.credentialName }}</span>
+                        </span>
+                      } @else {
+                        <span class="mj-status-badge mj-status-badge--warning" title="No credential configured">
+                          <i class="fa-solid fa-triangle-exclamation"></i>
+                          <span>No Credential</span>
+                        </span>
+                      }
+                    </td>
+                    <td>
+                      @if (row.account.IncludeInGlobalSearch) {
+                        <span class="mj-status-badge mj-status-badge--info">
+                          <i class="fa-solid fa-check"></i>
+                          <span>Enabled</span>
+                        </span>
+                      } @else {
+                        <span class="mj-status-badge mj-status-badge--muted">
+                          <span>Disabled</span>
+                        </span>
+                      }
+                    </td>
+                    <td>
+                      <span class="mj-role-count-badge">
+                        <i class="fa-solid fa-user-shield"></i>
+                        <span>{{ row.roleCount === 0 ? 'All Users' : row.roleCount + ' Role(s)' }}</span>
+                      </span>
+                    </td>
+                    <td class="mj-text-right">
+                      <div class="mj-action-button-group">
+                        <button
+                          type="button"
+                          class="mj-action-icon-btn"
+                          title="Edit Account"
+                          (click)="StartEditAccount(row.account)">
+                          <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button
+                          type="button"
+                          class="mj-action-icon-btn mj-action-icon-btn--danger"
+                          title="Delete Account"
+                          (click)="ConfirmDeleteAccount(row.account)">
+                          <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- ── TAB 2: STORAGE PROVIDERS ────────────────────────────────────── -->
+    @if (ActiveTab === 'providers') {
+      <div class="mj-tab-pane">
+        <div class="mj-admin-pane-desc">
+          <i class="fa-solid fa-circle-info"></i>
+          <span>Enable or disable storage provider integrations for your organization. Only active providers are available when configuring accounts.</span>
+        </div>
+
+        <div class="mj-admin-table-container">
+          <table class="mj-admin-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Provider Driver</th>
+                <th>Server Driver Key</th>
+                <th>Client Driver Key</th>
+                <th>Search Support</th>
+                <th class="mj-text-center">Priority</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (prov of Providers; track prov.ID) {
+                <tr [class.mj-row-inactive]="!prov.IsActive">
+                  <td>
+                    <label class="mj-toggle-switch" [title]="prov.IsActive ? 'Deactivate provider' : 'Activate provider'">
+                      <input
+                        type="checkbox"
+                        [checked]="prov.IsActive"
+                        (change)="ToggleProviderActive(prov)" />
+                      <span class="mj-toggle-slider"></span>
+                    </label>
+                  </td>
+                  <td>
+                    <div class="mj-provider-cell">
+                      <div class="mj-provider-icon-circle">
+                        <i [class]="GetProviderIcon(prov.Name)"></i>
+                      </div>
+                      <div>
+                        <div class="mj-provider-name">{{ prov.Name }}</div>
+                        @if (prov.Description) {
+                          <div class="mj-provider-desc">{{ prov.Description }}</div>
+                        }
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <code class="mj-code-pill">{{ prov.ServerDriverKey || '—' }}</code>
+                  </td>
+                  <td>
+                    <code class="mj-code-pill">{{ prov.ClientDriverKey || '—' }}</code>
+                  </td>
+                  <td>
+                    @if (prov.SupportsSearch) {
+                      <span class="mj-status-badge mj-status-badge--success" title="Provider supports full-text file search">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <span>Native Search</span>
+                      </span>
+                    } @else {
+                      <span class="mj-status-badge mj-status-badge--muted">
+                        <span>Standard</span>
+                      </span>
+                    }
+                  </td>
+                  <td class="mj-text-center">
+                    <span class="mj-priority-pill">{{ prov.Priority }}</span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    }
+  </div>
+
+  <mj-dialog-actions>
+    <button type="button" class="mj-btn mj-btn-secondary" (click)="OnDialogClose()">
+      Close
+    </button>
+  </mj-dialog-actions>
+</mj-dialog>
+
+<!-- ── ACCOUNT CREATE / EDIT SUB-DIALOG ──────────────────────────────── -->
+@if (IsEditingAccount) {
+  <mj-dialog
+    [Visible]="IsEditingAccount"
+    [Title]="EditingAccount ? 'Edit Storage Account: ' + EditingAccount.Name : 'Add Storage Account'"
+    [Width]="640"
+    (Close)="CancelEditAccount()">
+
+    <div class="mj-account-editor-form">
+      <!-- Provider Selection -->
+      <div class="mj-form-group">
+        <label class="mj-form-label">Storage Provider <span class="mj-required">*</span></label>
+        <select
+          class="mj-form-select"
+          [(ngModel)]="EditingAccountProviderID"
+          [disabled]="!!EditingAccount">
+          @for (prov of ActiveProviders; track prov.ID) {
+            <option [value]="prov.ID">{{ prov.Name }}</option>
+          }
+        </select>
+        <div class="mj-form-hint">Select the cloud storage engine driver for this account.</div>
+      </div>
+
+      <!-- Account Name -->
+      <div class="mj-form-group">
+        <label class="mj-form-label">Account Name <span class="mj-required">*</span></label>
+        <input
+          type="text"
+          class="mj-form-input"
+          [(ngModel)]="EditingAccountName"
+          placeholder="e.g., Corporate Azure Blob Storage, Marketing S3 Bucket" />
+      </div>
+
+      <!-- Account Description -->
+      <div class="mj-form-group">
+        <label class="mj-form-label">Description</label>
+        <textarea
+          class="mj-form-textarea"
+          rows="2"
+          [(ngModel)]="EditingAccountDescription"
+          placeholder="Optional notes or details about the intended purpose of this storage account..."></textarea>
+      </div>
+
+      <!-- Credential Picker with Inline Create -->
+      <div class="mj-form-group">
+        <div class="mj-form-label-row">
+          <label class="mj-form-label">Storage Credentials</label>
+          <button
+            type="button"
+            class="mj-btn-link"
+            (click)="OpenCreateCredentialDialog()">
+            <i class="fa-solid fa-plus"></i>
+            <span>New Credential</span>
+          </button>
+        </div>
+        <div class="mj-credential-input-row">
+          <select class="mj-form-select" [(ngModel)]="EditingAccountCredentialID">
+            <option value="">-- No Credential Assigned --</option>
+            @for (cred of Credentials; track cred.ID) {
+              <option [value]="cred.ID">{{ cred.Name }}</option>
+            }
+          </select>
+        </div>
+        <div class="mj-form-hint">
+          Credentials manage authentication tokens, connection strings, or API keys securely via the Credential Engine.
+        </div>
+      </div>
+
+      <!-- Global Search Toggle -->
+      <div class="mj-form-checkbox-group">
+        <label class="mj-checkbox-label">
+          <input
+            type="checkbox"
+            [(ngModel)]="EditingAccountIncludeInGlobalSearch" />
+          <span>Include in Global Search</span>
+        </label>
+        <div class="mj-form-hint mj-checkbox-hint">
+          When enabled, file contents and metadata in this account will be indexed for universal MemberJunction search.
+        </div>
+      </div>
+
+      <!-- Role Permissions -->
+      <div class="mj-form-group">
+        <label class="mj-form-label">Role Access Permissions</label>
+        <div class="mj-form-hint">
+          Select specific roles permitted to access this storage account. If no roles are selected, all authorized users have access.
+        </div>
+        <div class="mj-roles-checklist">
+          @for (role of Roles; track role.ID) {
+            <label class="mj-role-check-item">
+              <input
+                type="checkbox"
+                [checked]="IsRoleSelected(role.ID)"
+                (change)="ToggleRoleSelection(role.ID)" />
+              <span>{{ role.Name }}</span>
+            </label>
+          }
+        </div>
+      </div>
+    </div>
+
+    <mj-dialog-actions>
+      <button
+        type="button"
+        class="mj-btn mj-btn-secondary"
+        [disabled]="IsSaving"
+        (click)="CancelEditAccount()">
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="mj-btn mj-btn-primary"
+        [disabled]="IsSaving || !EditingAccountName.trim() || !EditingAccountProviderID"
+        (click)="SaveAccount()">
+        @if (IsSaving) {
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          <span>Saving...</span>
+        } @else {
+          <i class="fa-solid fa-check"></i>
+          <span>{{ EditingAccount ? 'Save Changes' : 'Create Account' }}</span>
+        }
+      </button>
+    </mj-dialog-actions>
+  </mj-dialog>
+}
+
+<!-- ── DELETE CONFIRMATION DIALOG ────────────────────────────────────── -->
+@if (AccountToDelete) {
+  <mj-dialog
+    [Visible]="!!AccountToDelete"
+    Title="Delete Storage Account"
+    [Width]="460"
+    (Close)="CancelDeleteAccount()">
+
+    <div class="mj-delete-confirm-body">
+      <div class="mj-delete-confirm-icon">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <div class="mj-delete-confirm-text">
+        <p class="mj-delete-confirm-title">
+          Are you sure you want to delete <strong>{{ AccountToDelete.Name }}</strong>?
+        </p>
+        <p class="mj-delete-confirm-subtitle">
+          This will remove the storage account connection and role permissions. Existing files in the remote storage service will not be deleted, but will no longer be accessible via this account in MemberJunction.
+        </p>
+      </div>
+    </div>
+
+    <mj-dialog-actions>
+      <button
+        type="button"
+        class="mj-btn mj-btn-secondary"
+        [disabled]="IsDeleting"
+        (click)="CancelDeleteAccount()">
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="mj-btn mj-btn-danger"
+        [disabled]="IsDeleting"
+        (click)="ExecuteDeleteAccount()">
+        @if (IsDeleting) {
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          <span>Deleting...</span>
+        } @else {
+          <i class="fa-solid fa-trash-can"></i>
+          <span>Delete Account</span>
+        }
+      </button>
+    </mj-dialog-actions>
+  </mj-dialog>
+}
