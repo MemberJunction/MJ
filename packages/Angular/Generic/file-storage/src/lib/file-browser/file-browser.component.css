@@ -15,10 +15,10 @@
   height: 100%;
   width: 100%;
   background-color: var(--mj-bg-surface);
-  border: 1px solid var(--mj-border-default);
-  border-radius: var(--mj-radius-lg, 10px);
+  border: none;
+  border-radius: 0;
   overflow: hidden;
-  box-shadow: var(--mj-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+  box-shadow: none;
 }
 
 /* Mobile Header */

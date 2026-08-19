@@ -159,20 +159,12 @@ export class StorageAdminDialogComponent implements OnInit {
 
   public get FilteredAccountRows(): StorageAccountRow[] {
     const term = (this.SearchTerm || '').toLowerCase().trim();
-    const providerMap = new Map<string, MJFileStorageProviderEntity>();
-    for (const p of this.Providers) {
-      providerMap.set(p.ID, p);
-    }
-
-    const credMap = new Map<string, string>();
-    for (const c of this.Credentials) {
-      credMap.set(c.ID, c.Name);
-    }
 
     return this.Accounts.filter((a) => {
       if (!term) return true;
-      const prov = providerMap.get(a.ProviderID);
-      const credName = a.CredentialID ? credMap.get(a.CredentialID) || '' : '';
+      const prov = this.Providers.find((p) => UUIDsEqual(p.ID, a.ProviderID));
+      const cred = this.Credentials.find((c) => UUIDsEqual(c.ID, a.CredentialID));
+      const credName = cred?.Name || '';
       return (
         a.Name.toLowerCase().includes(term) ||
         (a.Description || '').toLowerCase().includes(term) ||
@@ -180,8 +172,9 @@ export class StorageAdminDialogComponent implements OnInit {
         credName.toLowerCase().includes(term)
       );
     }).map((account) => {
-      const provider = providerMap.get(account.ProviderID);
-      const credentialName = account.CredentialID ? credMap.get(account.CredentialID) : undefined;
+      const provider = this.Providers.find((p) => UUIDsEqual(p.ID, account.ProviderID));
+      const credential = this.Credentials.find((c) => UUIDsEqual(c.ID, account.CredentialID));
+      const credentialName = credential?.Name;
       const roleCount = this.AccountPermissions.filter((p) => UUIDsEqual(p.FileStorageAccountID, account.ID)).length;
       return { account, provider, credentialName, roleCount };
     });

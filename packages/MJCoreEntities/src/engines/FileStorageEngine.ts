@@ -87,17 +87,9 @@ export class FileStorageEngineBase extends BaseEngine<FileStorageEngineBase> {
      * Consumers should filter/sort as needed (e.g., by provider.IsActive).
      */
     public get AccountsWithProviders(): StorageAccountWithProvider[] {
-        const providerMap = new Map<string, MJFileStorageProviderEntity>();
-        this.Providers.forEach(p => {
-            if (p.ID) {
-                providerMap.set(p.ID.toLowerCase(), p);
-            }
-        });
-
         return this.Accounts
             .map(account => {
-                const key = account.ProviderID ? account.ProviderID.toLowerCase() : '';
-                const provider = key ? providerMap.get(key) : null;
+                const provider = this.Providers.find(p => UUIDsEqual(p.ID, account.ProviderID));
                 if (!provider) return null;
                 return { account, provider };
             })
