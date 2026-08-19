@@ -934,9 +934,14 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   /**
    * The span of timeline indices that stay mounted.
    *
-   * Follows the tail by default. Once the user scrolls back to a spacer,
-   * {@link _mountedTopKey} pins the top of the span so their position doesn't collapse
-   * back to the newest messages on the next render.
+   * Follows the tail on first paint and whenever nothing measurable is on screen. Once items
+   * are rendered, the span is centred on what the reader is actually looking at — measured
+   * from scroll position, plus {@link MessageListComponent.MOUNT_BUFFER} either side — so
+   * scrolling back does not collapse the window to the newest messages on the next render.
+   *
+   * (An earlier design pinned the top of the span with a remembered key instead. It was
+   * replaced by the measurement below for the reason that comment explains, and the key no
+   * longer exists.)
    */
   private computeMountedRange(
     timeline: ConversationTimelineItem<MJConversationDetailEntity>[]

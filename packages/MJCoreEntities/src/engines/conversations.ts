@@ -305,6 +305,20 @@ export interface DetailWindowLoadResult {
     OldestSequence: number | null;
     /** `Sequence` of the newest loaded row. Used to detect live appends. */
     NewestSequence: number | null;
+    /**
+     * True when a read underlying this window FAILED, as opposed to returning nothing.
+     *
+     * Without this the two are indistinguishable, and the difference matters more than it
+     * looks: `HasMoreAbove: false` from a failed read means "you have reached the start of
+     * the conversation", so a consumer folds a transport blip into its cursor and stops
+     * offering to page. Nothing later restores it. A failed read must leave the caller's
+     * paging state alone, which it can only do if it can tell the two apart.
+     *
+     * Set when the row read failed, when the older-rows probe failed, or when a widening
+     * retry failed. Peripheral failures do NOT set it — those already degrade to empty maps
+     * and the transcript still renders.
+     */
+    Failed: boolean;
 }
 
 /** The peripheral maps of a window, loaded separately from its rows. */
@@ -324,17 +338,18 @@ function emptyWindowPeripherals(): WindowPeripherals {
 }
 
 /**
- * Empty window — the UI-path failure shape. `LoadDetailWindow` never throws (matching
- * `LoadConversationDetails`); a failed transcript load renders empty rather than
- * breaking the chat area.
+ * A window with no rows. Used for BOTH "this conversation has nothing here" and "the read
+ * failed" — `failed` is what tells them apart downstream, and getting it wrong silently
+ * disables the caller's paging. See {@link DetailWindowLoadResult.Failed}.
  */
-function emptyDetailWindowResult(): DetailWindowLoadResult {
+function emptyDetailWindowResult(failed: boolean): DetailWindowLoadResult {
     return {
         Details: [],
         ...emptyWindowPeripherals(),
         HasMoreAbove: false,
         OldestSequence: null,
-        NewestSequence: null
+        NewestSequence: null,
+        Failed: failed
     };
 }
 
@@ -1368,8 +1383,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * a partial entry there would silently starve the agent of everything before the summary
      * boundary, with no error. Use a separate partial cache if incremental caching is needed.
      *
-     * Never throws: a failed load returns an empty window so the transcript renders empty
-     * rather than breaking the chat area.
+     * Does not throw for a read that FAILS — a failed load returns an empty window flagged
+     * {@link DetailWindowLoadResult.Failed} so the caller can leave its paging state intact
+     * rather than mistaking the failure for the start of the conversation.
+     *
+     * It is not, however, exception-proof: there is no `try/catch` here, so a provider that
+     * REJECTS rather than returning `Success: false` propagates out to the caller. That path
+     * is left deliberately — it degrades better than the handled one, because an exception
+     * skips the cursor write entirely and the caller's paging state survives untouched.
      *
      * ### Round-trip profile — the counterweight to the payload win
      *
@@ -1409,8 +1430,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const page = await this.fetchDetailRowsBySequence(
             params.ConversationID, params.BeforeSequence, overread, contextUser
         );
-        if (!page || page.length === 0) {
-            return emptyDetailWindowResult();
+        // Deliberately two branches, not one. `null` is a FAILED read; an empty array is a
+        // range that genuinely holds no rows. Collapsing them is what lets a transport blip
+        // read downstream as "you have reached the start of the conversation".
+        if (page === null) {
+            return emptyDetailWindowResult(true);
+        }
+        if (page.length === 0) {
+            return emptyDetailWindowResult(false);
         }
 
         const details = await this.expandOldestSession(params.ConversationID, page, contextUser);
@@ -1421,7 +1448,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // need only `details`, both of which are settled above. Neither rejects — each degrades
         // to an empty/false result on a failed read — so `Promise.all` cannot introduce a
         // rejection path this method did not already have.
-        const [hasMoreAbove, peripherals] = await Promise.all([
+        const [olderProbe, peripherals] = await Promise.all([
             this.hasOlderDetails(params.ConversationID, oldestSequence, contextUser),
             this.buildWindowPeripherals(details, contextUser)
         ]);
@@ -1429,9 +1456,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         return {
             Details: details,
             ...peripherals,
-            HasMoreAbove: hasMoreAbove,
+            // A failed probe answers `false`, which is indistinguishable from a real "nothing
+            // older" — so the rows are still returned, but the window is marked Failed and the
+            // caller keeps whatever it already believed about what lies above.
+            HasMoreAbove: olderProbe.HasOlder,
             OldestSequence: oldestSequence,
-            NewestSequence: newestSequence
+            NewestSequence: newestSequence,
+            Failed: olderProbe.Failed
         };
     }
 
@@ -1512,12 +1543,15 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      *
      * A one-row probe rather than `page.length === MaxRows`: session expansion changes the
      * row count, so a full page can look short and a short page can look full.
+     *
+     * Returns a TRI-STATE rather than a boolean. "No older rows" and "could not find out"
+     * are both `HasOlder: false`, and only the second must leave the caller's cursor alone.
      */
     private async hasOlderDetails(
         conversationId: string,
         oldestSequence: number,
         contextUser: UserInfo
-    ): Promise<boolean> {
+    ): Promise<{ HasOlder: boolean; Failed: boolean }> {
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const probe = await rv.RunView<Pick<MJConversationDetailEntityType, 'ID'>>({
             EntityName: 'MJ: Conversation Details',
@@ -1528,7 +1562,11 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             ResultType: 'simple'
         }, contextUser);
 
-        return probe.Success && (probe.Results?.length ?? 0) > 0;
+        if (!probe.Success) {
+            console.error('[ConversationEngine] Failed to probe for older details:', probe.ErrorMessage);
+            return { HasOlder: false, Failed: true };
+        }
+        return { HasOlder: (probe.Results?.length ?? 0) > 0, Failed: false };
     }
 
 

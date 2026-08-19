@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ContentChildren, TemplateRef, ElementRef, AfterViewChecked, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
-import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot } from "@memberjunction/ai-core-plus";
 import { ActionableCommandRequest, UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -979,19 +979,31 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /**
    * Re-renders the transcript after one or more older pages have been merged.
    *
-   * Split out of {@link onOlderMessagesRequested} so the JUMP paths can page repeatedly and
-   * pay this ONCE. It rebuilds every peripheral map over the whole accumulated window and
-   * queries attachments for every loaded id, so calling it per iteration made a 50-page jump
-   * O(n^2) — enough to spend back the savings this windowing work exists to produce.
+   * Costs proportional to what was ADDED, not to the whole window. It diffs the snapshot
+   * against the rows currently rendered and hands only the difference to
+   * {@link mergePeripheralsForNewRows} — so ordinary sentinel paging and a 50-page date jump
+   * both pay per new row exactly once, and neither re-queries attachments for rows that are
+   * already on screen.
+   *
+   * `this.messages` is assigned ONCE, after the peripherals land. Assigning it before the
+   * await would show the rows a beat sooner, but the second assignment then changes bubble
+   * heights (artifacts and attachments render) AFTER the list has already restored the
+   * scroll position for the prepend — which is a visible jump. One render keeps the
+   * measurement the list scrolls to and the content it finally paints in agreement.
    */
   private async refreshAfterPaging(conversationId: string): Promise<void> {
     const snapshot = this.windowStore.GetSnapshot();
-    this.messages = [...snapshot.Details];
+    const renderedIds = new Set(this.messages.map(m => NormalizeUUID(m.ID)));
+    const newDetails = snapshot.Details.filter(d => !renderedIds.has(NormalizeUUID(d.ID)));
 
-    // Older rows carry their own artifacts/ratings/runs — clear the once-per-conversation
-    // guard so loadPeripheralData reprocesses the now-larger window.
-    this.lastLoadedConversationId = null;
-    await this.loadPeripheralData(conversationId, snapshot);
+    if (newDetails.length > 0) {
+      await this.mergePeripheralsForNewRows(conversationId, snapshot, newDetails);
+      if (!this.isActiveConversation(conversationId)) {
+        return;
+      }
+    }
+
+    this.messages = [...snapshot.Details];
     this.cdr.detectChanges();
   }
 
@@ -1678,6 +1690,21 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // The store owns the loaded window and its paging cursors; the engine's full-history
       // LoadConversationDetails stays untouched for agent/server callers. There is no
       // forceRefresh here — a window is always fetched fresh, so no cache can go stale.
+      //
+      // DELIBERATE TRADE, both directions. The path this replaced went through
+      // LoadConversationDetails, which cached per conversation id in the engine's
+      // `_detailCache` — so re-entering a conversation you had already opened was instant
+      // with zero database work. `LoadLatest` always fetches, so every re-entry now costs a
+      // window read plus the follow-ups in LoadDetailWindow's round-trip profile. For a user
+      // tabbing between a handful of conversations that is a REGRESSION against the old
+      // behaviour, on a change whose headline is that opening a conversation got cheaper.
+      //
+      // Accepted for now because the win it buys is unbounded (first open no longer scales
+      // with conversation length) and the loss is bounded (a fixed handful of queries), and
+      // because the obvious remedy — caching partial windows — is exactly the thing that must
+      // never leak into `_detailCache`, where `GetAgentContextWindow` would read it as
+      // complete history. A separate `_partialDetailCache` is the shape to reach for if
+      // measurement says re-entry is worth it. Measure before building it.
       // Pins are counted separately: a pin can sit far below the window's oldest Sequence,
       // and the pins panel must list ALL of them, not just the ones currently on screen.
       // Concurrent with the window — the two share only the conversation id, and running the
@@ -1809,6 +1836,104 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
 
   /**
+   * Reshapes one detail's artifacts into the UI's `LazyArtifactInfo` lists, splitting the
+   * system-only ones out. Shared by the full rebuild and the incremental prepend so the two
+   * can never disagree about how an artifact becomes a card.
+   */
+  private applyArtifactsForDetail(detailId: string, artifacts: ArtifactJSON[]): void {
+    const artifactList: LazyArtifactInfo[] = [];
+    const systemArtifactList: LazyArtifactInfo[] = [];
+
+    for (const artifactData of artifacts) {
+      const lazyInfo = new LazyArtifactInfo(artifactData, this.currentUser);
+      if (artifactData.Visibility === 'System Only') {
+        systemArtifactList.push(lazyInfo);
+      } else {
+        artifactList.push(lazyInfo);
+      }
+    }
+
+    if (artifactList.length > 0) {
+      this.artifactsByDetailId.set(detailId, artifactList);
+    }
+    if (systemArtifactList.length > 0) {
+      this.systemArtifactsByDetailId.set(detailId, systemArtifactList);
+    }
+  }
+
+  /**
+   * Extends the display maps with JUST the rows a prepend added.
+   *
+   * The counterpart to {@link loadPeripheralData}, which clears and rebuilds all four maps
+   * over the whole accumulated window, re-queries attachments for every loaded id, and
+   * re-allocates every `LazyArtifactInfo`. Paying that per page makes ordinary scroll-up
+   * paging quadratic — ten pages back re-queries attachments for roughly fifty-five pages'
+   * worth of ids — which, stacked on the per-page round trips documented on
+   * `LoadDetailWindow`, ends up costing more than the single full load this feature replaced.
+   *
+   * Everything here is scoped to `newDetails`, so the cost is proportional to the PAGE. The
+   * store already accumulates peripherals correctly across pages, so the snapshot's maps are
+   * read only at the new ids.
+   *
+   * @param newDetails - Rows present in the snapshot that were not already rendered
+   */
+  private async mergePeripheralsForNewRows(
+    conversationId: string,
+    snapshot: ConversationDetailWindowSnapshot,
+    newDetails: MJConversationDetailEntity[]
+  ): Promise<void> {
+    const newIds = newDetails.map(d => d.ID).filter((id): id is string => !!id);
+
+    // Merge, never clear — the rows already on screen keep the peripherals they were
+    // rendered with.
+    for (const detailId of newIds) {
+      const agentRun = snapshot.AgentRunsByDetailId.get(detailId);
+      if (agentRun) {
+        this.agentRunsByDetailId.set(detailId, agentRun as MJAIAgentRunEntityExtended);
+      }
+      const artifacts = snapshot.ArtifactsByDetailId.get(detailId);
+      if (artifacts) {
+        this.applyArtifactsForDetail(detailId, artifacts);
+      }
+      const ratings = snapshot.RatingsByDetailId.get(detailId);
+      if (ratings) {
+        this.ratingsByDetailId.set(detailId, ratings);
+      }
+    }
+
+    if (newIds.length > 0) {
+      const attachmentsMap = await this.attachmentService.loadAttachmentsForMessages(newIds, this.currentUser);
+      if (!this.isActiveConversation(conversationId)) {
+        return;
+      }
+      for (const [detailId, attachments] of attachmentsMap) {
+        this.attachmentsByDetailId.set(detailId, attachments);
+      }
+    }
+
+    // Session meta MERGES here rather than replacing: an older page's sessions are additional
+    // cards, and replacing would strip the status chips off the ones already rendered.
+    const sessionMeta = await this.fetchRealtimeSessionMeta(newDetails, conversationId);
+    if (sessionMeta === null) {
+      return;
+    }
+    if (sessionMeta.size > 0) {
+      this.realtimeSessionMetaMap = new Map([...this.realtimeSessionMetaMap, ...sessionMeta]);
+    }
+
+    // New references so the message list's ngOnChanges sees the extended maps.
+    this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
+    this.artifactsByDetailId = new Map(this.artifactsByDetailId);
+    this.ratingsByDetailId = new Map(this.ratingsByDetailId);
+    this.systemArtifactsByDetailId = new Map(this.systemArtifactsByDetailId);
+    this.attachmentsByDetailId = new Map(this.attachmentsByDetailId);
+
+    this._combinedArtifactsMap = null;
+    this.artifactCount = this.calculateUniqueArtifactCount();
+    this.updateArtifactCountDisplay();
+  }
+
+  /**
    * Builds the display maps (agent runs, artifacts, ratings) for the LOADED WINDOW.
    *
    * The peripherals arrive with the window itself — `ConversationEngine.LoadDetailWindow`
@@ -1850,24 +1975,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
       // Convert ArtifactJSON[] from engine cache into LazyArtifactInfo[] for UI
       for (const [detailId, artifacts] of cacheEntry.ArtifactsByDetailId) {
-        const artifactList: LazyArtifactInfo[] = [];
-        const systemArtifactList: LazyArtifactInfo[] = [];
-
-        for (const artifactData of artifacts) {
-          const lazyInfo = new LazyArtifactInfo(artifactData, this.currentUser);
-          if (artifactData.Visibility === 'System Only') {
-            systemArtifactList.push(lazyInfo);
-          } else {
-            artifactList.push(lazyInfo);
-          }
-        }
-
-        if (artifactList.length > 0) {
-          this.artifactsByDetailId.set(detailId, artifactList);
-        }
-        if (systemArtifactList.length > 0) {
-          this.systemArtifactsByDetailId.set(detailId, systemArtifactList);
-        }
+        this.applyArtifactsForDetail(detailId, artifacts);
       }
 
       // Copy ratings from engine cache
@@ -1928,6 +2036,29 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * failure leaves the map empty — cards degrade to their generic label.
    */
   private async loadRealtimeSessionMeta(details: MJConversationDetailEntity[], conversationId?: string, loadToken?: number): Promise<void> {
+    const metaMap = await this.fetchRealtimeSessionMeta(details, conversationId, loadToken);
+    if (metaMap === null) {
+      return;                 // stale load — the conversation changed underneath
+    }
+    // New reference so the message list's ngOnChanges sees the update
+    this.realtimeSessionMetaMap = metaMap;
+  }
+
+  /**
+   * Reads the session rows for `details` and returns them, WITHOUT deciding what happens to
+   * the component's map.
+   *
+   * Split from {@link loadRealtimeSessionMeta} because the two callers want opposite
+   * policies: a full (re)load replaces the map, while prepending an older page must merge —
+   * replacing there would strip the status chips off every session card already on screen.
+   *
+   * @returns The fetched meta, or null when the conversation changed mid-read.
+   */
+  private async fetchRealtimeSessionMeta(
+    details: MJConversationDetailEntity[],
+    conversationId?: string,
+    loadToken?: number
+  ): Promise<Map<string, RealtimeSessionTimelineMeta> | null> {
     const sessionIds: string[] = [];
     const seen = new Set<string>();
     for (const detail of details) {
@@ -1976,11 +2107,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
     }
     if (conversationId && !this.isCurrentConversationContext(conversationId, loadToken)) {
-      return;
+      return null;
     }
-
-    // New reference so the message list's ngOnChanges sees the update
-    this.realtimeSessionMetaMap = metaMap;
+    return metaMap;
   }
 
   /**

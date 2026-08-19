@@ -1495,20 +1495,20 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     this.intentCheckStarted.emit({ conversationId: this.conversationId });
 
     try {
-      // Build context from pre-loaded maps (if available)
-      if (!this.artifactsByDetailId || !this.agentRunsByDetailId) {
-        console.warn('⚠️ Artifact/agent run context not available for intent check');
-        return { decision: 'UNSURE' as const, reasoning: 'Context not available' };
+      // The pre-loaded artifact/agent-run maps are no longer passed: they are scoped to the
+      // loaded transcript window, and the service now queries for this agent's artifacts so
+      // the classifier reasons over the whole conversation. A conversation id is what it
+      // needs instead, and without one there is nothing to query.
+      if (!this.conversationId) {
+        console.warn('⚠️ No conversation id available for intent check');
+        return { decision: 'UNSURE' as const, reasoning: 'Conversation not available' };
       }
 
       const intent = await this.agentService.checkAgentContinuityIntent(
+        this.conversationId,
         agentId,
         message,
-        this.conversationHistory,
-        {
-          artifactsByDetailId: this.artifactsByDetailId,
-          agentRunsByDetailId: this.agentRunsByDetailId
-        }
+        this.conversationHistory
       );
       return intent;
     } catch (error) {

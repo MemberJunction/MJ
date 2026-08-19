@@ -46,6 +46,15 @@ export type ConversationDetailWindowPeripherals = Pick<
 interface RefreshedTail {
     Results: DetailWindowLoadResult[];
     ReachedPreviousTail: boolean;
+    /**
+     * True when any read in the bridge failed.
+     *
+     * Kept separate from `ReachedPreviousTail: false`, which means "the tail is genuinely
+     * further away than the budget allows" and legitimately discards the disconnected older
+     * rows. A FAILED read must never trigger that — throwing away a reader's loaded history
+     * because one query blipped is not a recovery, it is the bug wearing a different hat.
+     */
+    Failed: boolean;
 }
 
 /** What the chat area binds to after any store operation. */
@@ -64,6 +73,14 @@ export interface ConversationDetailWindowSnapshot extends ConversationDetailWind
     PinnedTotalCount: number;
     IsLoadingLatest: boolean;
     IsLoadingOlder: boolean;
+    /**
+     * True when the most recent load FAILED, as opposed to returning nothing.
+     *
+     * Exists so an empty transcript can be told apart from a broken one. Without it a failed
+     * first read renders as a conversation with no messages, which reads to the user as "my
+     * conversation is gone" — the one failure mode worse than an error message.
+     */
+    LoadFailed: boolean;
 }
 
 /**
@@ -92,6 +109,7 @@ export class ConversationDetailWindowStore {
     private generation = 0;
     private isLoadingLatest = false;
     private isLoadingOlder = false;
+    private loadFailed = false;
 
     constructor(loader: DetailWindowLoader) {
         this.loader = loader;
@@ -108,6 +126,7 @@ export class ConversationDetailWindowStore {
         this.cursor = emptyCursor();
         this.isLoadingLatest = false;
         this.isLoadingOlder = false;
+        this.loadFailed = false;
     }
 
     /**
@@ -133,6 +152,9 @@ export class ConversationDetailWindowStore {
             const itemCount = BuildConversationTimeline(result.Details).length;
             if (itemCount >= DEFAULT_TRANSCRIPT_PAGE_SIZE) {
                 break;                      // already a full page of display items
+            }
+            if (result.Failed) {
+                break;                      // widening a failed read just fails again
             }
             if (!result.HasMoreAbove) {
                 break;                      // start of the conversation — short IS complete
@@ -185,6 +207,10 @@ export class ConversationDetailWindowStore {
 
             this.mergeDetails(page.Page);
             this.peripherals = peripheralsFrom(result);
+            // A failed first read leaves the window empty. `LoadFailed` is what stops that
+            // rendering as "this conversation has no messages" — there is no cursor to
+            // protect here (an empty window cannot page), so the flag IS the whole remedy.
+            this.loadFailed = result.Failed;
             this.cursor = {
                 OldestSequence: page.OldestIncluded?.Sequence ?? result.OldestSequence,
                 NewestSequence: result.NewestSequence,
@@ -225,6 +251,16 @@ export class ConversationDetailWindowStore {
             if (generation !== this.generation) {
                 return;
             }
+            this.loadFailed = result.Failed;
+            if (result.Failed) {
+                // Leave the cursor EXACTLY as it was. Folding a failed read's `HasMoreAbove:
+                // false` into it would retire the "earlier messages" sentinel permanently —
+                // the template unmounts it, the observer disconnects, and no later call ever
+                // sets the flag back, so one transport blip costs the reader the rest of the
+                // conversation's history with nothing said. The next sentinel fire retries.
+                return;
+            }
+
             // Same over-read slice as LoadLatest: keep the newest page of timeline items
             // from what came back, not every raw row.
             const page = SelectLatestTimelinePage(result.Details, DEFAULT_TRANSCRIPT_PAGE_SIZE);
@@ -276,6 +312,16 @@ export class ConversationDetailWindowStore {
             if (generation !== this.generation) {
                 return;
             }
+            this.loadFailed = tail.Failed;
+            if (tail.Failed) {
+                // Apply NOTHING. A bridge only reaches a second page because the first did not
+                // join, so a failure part-way through means the fresh rows cannot be merged
+                // without opening the very gap this method exists to close — and the fallback
+                // for an unbridgeable tail discards loaded history, which is far too
+                // destructive a response to a transient read error. Leave the window as it
+                // was; the next refresh retries.
+                return;
+            }
             this.applyRefreshedTail(tail, previousOldest, previousNewest);
         } finally {
             if (generation === this.generation) {
@@ -310,16 +356,21 @@ export class ConversationDetailWindowStore {
                 contextUser
             );
             if (generation !== this.generation) {
-                return { Results: results, ReachedPreviousTail: false };   // caller discards it
+                return { Results: results, ReachedPreviousTail: false, Failed: false }; // discarded
+            }
+            // Checked BEFORE tailIsJoined, which reads `HasMoreAbove` — false on a failed read,
+            // which would report the bridge as joined and hand back a set with a hole in it.
+            if (result.Failed) {
+                return { Results: results, ReachedPreviousTail: false, Failed: true };
             }
             results.push(result);
 
             if (this.tailIsJoined(result, previousNewest)) {
-                return { Results: results, ReachedPreviousTail: true };
+                return { Results: results, ReachedPreviousTail: true, Failed: false };
             }
             before = result.OldestSequence ?? undefined;
         }
-        return { Results: results, ReachedPreviousTail: false };
+        return { Results: results, ReachedPreviousTail: false, Failed: false };
     }
 
     /** True when this page reaches back into the loaded window, so nothing sits between them. */
@@ -429,6 +480,11 @@ export class ConversationDetailWindowStore {
         return this.pinnedDetails;
     }
 
+    /** True when the most recent load failed — an empty transcript vs. a broken one. */
+    public get LoadFailed(): boolean {
+        return this.loadFailed;
+    }
+
     /** True when a `LoadOlder` would actually do work. Drives the sentinel's observer. */
     public CanLoadOlder(): boolean {
         return this.conversationId !== null
@@ -524,7 +580,8 @@ export class ConversationDetailWindowStore {
             RatingsByDetailId: this.peripherals.RatingsByDetailId,
             ArtifactsByDetailId: this.peripherals.ArtifactsByDetailId,
             IsLoadingLatest: this.isLoadingLatest,
-            IsLoadingOlder: this.isLoadingOlder
+            IsLoadingOlder: this.isLoadingOlder,
+            LoadFailed: this.loadFailed
         };
     }
 

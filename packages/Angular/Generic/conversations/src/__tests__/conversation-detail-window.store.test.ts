@@ -32,7 +32,7 @@ function windowResult(overrides: Partial<DetailWindowLoadResult> = {}): DetailWi
     return {
         Details: [], AgentRunsByDetailId: new Map(), UserAvatars: new Map(),
         RatingsByDetailId: new Map(), ArtifactsByDetailId: new Map(),
-        HasMoreAbove: false, OldestSequence: null, NewestSequence: null,
+        HasMoreAbove: false, OldestSequence: null, NewestSequence: null, Failed: false,
         ...overrides
     };
 }
@@ -631,5 +631,126 @@ describe('ConversationDetailWindowStore — refresh gap', () => {
 
         expect(store.HasMoreAbove).toBe(true);
         expect(store.GetSnapshot().Cursor.OldestSequence).toBe(17);
+    });
+});
+
+/**
+ * Read failures.
+ *
+ * `LoadDetailWindow` answers a failed read with an EMPTY window, so without a failure flag
+ * "the query broke" and "you have reached the start of the conversation" are the same value.
+ * Folding that into the cursor retires the sentinel permanently — the template unmounts it,
+ * the observer disconnects, and nothing later sets it back. These tests pin that a failure
+ * costs the reader nothing but the one page they asked for.
+ */
+describe('ConversationDetailWindowStore — failed reads', () => {
+    const user = {} as UserInfo;
+
+    /** The shape LoadDetailWindow returns when a read fails: empty, and flagged. */
+    function failedRead(): DetailWindowLoadResult {
+        return windowResult({ Failed: true });
+    }
+
+    it('keeps the sentinel alive when an older page fails to load', async () => {
+        const load: Mock = vi.fn();
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+
+        load.mockResolvedValueOnce(pageOf([20, 21, 22], true));
+        await store.LoadLatest('conv-a', user);
+        expect(store.HasMoreAbove).toBe(true);
+
+        load.mockResolvedValueOnce(failedRead());
+        await store.LoadOlder(user);
+
+        // THE bug: without the flag this is false forever and the user can never page back.
+        expect(store.HasMoreAbove).toBe(true);
+        expect(store.CanLoadOlder()).toBe(true);
+        expect(store.LoadFailed).toBe(true);
+    });
+
+    it('leaves the loaded rows and cursor untouched when an older page fails', async () => {
+        const load: Mock = vi.fn();
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+
+        load.mockResolvedValueOnce(pageOf([20, 21, 22], true));
+        await store.LoadLatest('conv-a', user);
+        const before = store.GetSnapshot().Cursor;
+
+        load.mockResolvedValueOnce(failedRead());
+        await store.LoadOlder(user);
+
+        expect(sequencesOf(store.GetSnapshot().Details)).toEqual([20, 21, 22]);
+        expect(store.GetSnapshot().Cursor).toEqual(before);
+    });
+
+    it('retries on the next sentinel fire and recovers', async () => {
+        const load: Mock = vi.fn();
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+
+        load.mockResolvedValueOnce(pageOf([20, 21, 22], true));
+        await store.LoadLatest('conv-a', user);
+
+        load.mockResolvedValueOnce(failedRead());
+        await store.LoadOlder(user);
+
+        // A transient failure must cost exactly one page, not the rest of the session.
+        load.mockResolvedValueOnce(pageOf([17, 18, 19], false));
+        await store.LoadOlder(user);
+
+        expect(sequencesOf(store.GetSnapshot().Details)).toEqual([17, 18, 19, 20, 21, 22]);
+        expect(store.LoadFailed).toBe(false);
+    });
+
+    it('reports a failed first paint instead of rendering an empty conversation', async () => {
+        const load: Mock = vi.fn().mockResolvedValue(failedRead());
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+
+        await store.LoadLatest('conv-a', user);
+
+        // Empty AND broken. The flag is what stops this reading as "my messages are gone".
+        expect(store.GetSnapshot().Details).toEqual([]);
+        expect(store.LoadFailed).toBe(true);
+    });
+
+    it('does not widen a failed read', async () => {
+        const load: Mock = vi.fn().mockResolvedValue(failedRead());
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+
+        await store.LoadLatest('conv-a', user);
+
+        // A short page normally triggers the over-read growth loop. Re-reading a query that
+        // just failed only fails again, more expensively.
+        expect(load).toHaveBeenCalledTimes(1);
+    });
+
+    it('abandons a refresh whose bridge fails, rather than discarding loaded history', async () => {
+        const load: Mock = vi.fn();
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+
+        load.mockResolvedValueOnce(pageOf([20, 21, 22], true));
+        await store.LoadLatest('conv-a', user);
+
+        // First bridge page lands above the tail; the second read fails. The unbridgeable
+        // fallback DISCARDS older rows — far too destructive a response to a read error.
+        load
+            .mockResolvedValueOnce(pageOf([40, 41, 42], true))
+            .mockResolvedValueOnce(failedRead());
+        await store.RefreshLatest(user);
+
+        expect(sequencesOf(store.GetSnapshot().Details)).toEqual([20, 21, 22]);
+        expect(store.HasMoreAbove).toBe(true);
+        expect(store.LoadFailed).toBe(true);
+    });
+
+    it('clears the failure flag once a load succeeds', async () => {
+        const load: Mock = vi.fn().mockResolvedValueOnce(failedRead());
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+        await store.LoadLatest('conv-a', user);
+        expect(store.LoadFailed).toBe(true);
+
+        load.mockResolvedValueOnce(pageOf([20, 21], false));
+        await store.LoadLatest('conv-a', user);
+
+        expect(store.LoadFailed).toBe(false);
     });
 });

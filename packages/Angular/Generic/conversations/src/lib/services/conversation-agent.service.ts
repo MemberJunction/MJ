@@ -4,7 +4,11 @@ import { Metadata, IMetadataProvider, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { MJConversationDetailEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import {
+  MJConversationDetailEntity,
+  MJArtifactVersionEntity,
+  MJArtifactEntity
+} from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
@@ -15,6 +19,10 @@ import { MentionParserService } from './mention-parser.service';
 import { UUIDsEqual } from '@memberjunction/global';
 
 import { ConversationsRuntimeBootstrap } from './conversations-runtime-bootstrap.service';
+import {
+  GroupVersionsByArtifact,
+  type AgentArtifactSummary
+} from '../utils/agent-artifact-summary';
 
 /**
  * Rows the configuration-preset lookup parses before giving up. The SQL prefilter is a LIKE,
@@ -23,8 +31,21 @@ import { ConversationsRuntimeBootstrap } from './conversations-runtime-bootstrap
 const CONFIG_PRESET_CANDIDATE_ROWS = 5;
 
 /**
- * Context for artifact lookups - provides pre-loaded data from conversation
- * to avoid redundant database queries
+ * Cap on artifact versions listed for the intent classifier.
+ *
+ * The block is a hint, not a record: the prompt prints a name, a type, a version count and
+ * the latest version per artifact. Newest-first ordering means the cap only ever trims the
+ * oldest versions of the busiest artifacts, which are the least useful lines in it.
+ */
+const MAX_AGENT_ARTIFACT_VERSIONS = 40;
+
+/**
+ * Context for artifact lookups — pre-loaded conversation data.
+ *
+ * NO LONGER CONSUMED by this service. Both readers were converted to queries when transcript
+ * windowing made these maps a partial view: they are keyed to the loaded window, so any
+ * lookup for an older row silently missed. Retained as an exported type for API
+ * compatibility; new code should not build one.
  */
 export interface ArtifactLookupContext {
   agentRunsByDetailId: Map<string, MJAIAgentRunEntityExtended>;
@@ -428,10 +449,10 @@ export class ConversationAgentService {
    * Could move to the runtime in a follow-up.
    */
   async checkAgentContinuityIntent(
+    conversationId: string,
     agentId: string,
     latestMessage: string,
-    conversationHistory: MJConversationDetailEntity[],
-    context: ArtifactLookupContext
+    conversationHistory: MJConversationDetailEntity[]
   ): Promise<IntentCheckResult> {
     if (!this._aiClient) {
       console.warn('AI Client not initialized, defaulting to UNSURE for intent check');
@@ -452,11 +473,10 @@ export class ConversationAgentService {
         return { decision: 'UNSURE', reasoning: 'Previous agent not found' };
       }
 
-      const agentArtifacts = this.findAllAgentArtifacts(
-        agentId,
-        conversationHistory,
-        context
-      );
+      // Queried, not read off the caller's window-scoped maps — see findAllAgentArtifacts.
+      // `conversationHistory` below is still the window on purpose: the `.slice(-10)` wants
+      // the most recent exchange, which the loaded tail always contains.
+      const agentArtifacts = await this.findAllAgentArtifacts(conversationId, agentId);
 
       const recentHistory = conversationHistory.slice(-10);
       const compactHistory = recentHistory.map((msg, idx) => {
@@ -540,88 +560,74 @@ ${compactHistory}${artifactContext}
   }
 
   /**
-   * Find all artifacts created by the specified agent in this conversation.
-   * Returns artifacts grouped by artifact with versions, ordered most recent first.
-   * Enables LLM to reason about which artifact/version user is referencing.
+   * Every artifact this agent produced in this conversation, newest version first — resolved
+   * by QUERY, not by scanning the display array.
    *
-   * Uses pre-loaded data from ArtifactLookupContext for performance (no database queries).
+   * The scan this replaces walked `conversationDetails` and looked each row up in the
+   * caller's `artifactsByDetailId` / `agentRunsByDetailId` maps. Both are scoped to the
+   * LOADED WINDOW, so under transcript windowing it saw only the artifacts attached to the
+   * page currently on screen.
+   *
+   * That matters because this list is the "Prior Artifacts Created by This Agent" block fed
+   * to the Check Sage Intent prompt, which is what produces `targetArtifactVersionId`. A
+   * truncated list does not make the classifier fail — it makes it reason over a partial
+   * history and confidently name the wrong version, or miss continuity altogether. Silent,
+   * plausible, and wrong: the same failure class as {@link FindLatestAgentOutputVersion},
+   * closed the same way.
+   *
+   * Two reads, not the four the old shape would have needed — see
+   * {@link AgentArtifactSummary} for why dropping `runId` removes the join back to agent runs.
    */
-  private findAllAgentArtifacts(
-    agentId: string,
-    conversationDetails: MJConversationDetailEntity[],
-    context: ArtifactLookupContext
-  ): Array<{
-    artifactId: string;
-    artifactName: string;
-    artifactType: string;
-    artifactDescription: string | null;
-    versions: Array<{
-      runId: string;
-      versionId: string;
-      versionNumber: number;
-      versionName: string | null;
-      versionDescription: string | null;
-      createdAt: Date;
-    }>;
-  }> {
-    const artifactMap = new Map<string, {
-      artifactId: string;
-      artifactName: string;
-      artifactType: string;
-      artifactDescription: string | null;
-      versions: Array<{
-        runId: string;
-        versionId: string;
-        versionNumber: number;
-        versionName: string | null;
-        versionDescription: string | null;
-        createdAt: Date;
-      }>;
-    }>();
+  private async findAllAgentArtifacts(
+    conversationId: string,
+    agentId: string
+  ): Promise<AgentArtifactSummary[]> {
+    type VersionRow = Pick<MJArtifactVersionEntity, 'ID' | 'ArtifactID' | 'VersionNumber' | 'Name'>;
 
-    for (let i = conversationDetails.length - 1; i >= 0; i--) {
-      const detail = conversationDetails[i];
+    const rv = RunView.FromMetadataProvider(this.Provider);
+    const versionResult = await rv.RunView<VersionRow>({
+      EntityName: 'MJ: Artifact Versions',
+      ExtraFilter: this.agentOutputVersionFilter(conversationId, agentId),
+      OrderBy: '__mj_CreatedAt DESC',
+      MaxRows: MAX_AGENT_ARTIFACT_VERSIONS,
+      Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name'],
+      ResultType: 'simple'
+    }, this.Provider.CurrentUser ?? undefined);
 
-      if (detail.Role !== 'AI' || detail.Status === 'Error') continue;
-
-      const agentRun = context.agentRunsByDetailId.get(detail.ID);
-      if (!agentRun || !UUIDsEqual(agentRun.AgentID, agentId) || agentRun.Status !== 'Completed') {
-        continue;
-      }
-
-      const artifacts = context.artifactsByDetailId.get(detail.ID);
-      if (!artifacts || artifacts.length === 0) continue;
-
-      for (const lazyArtifact of artifacts) {
-        const mainArtifactId = lazyArtifact.artifactId;
-
-        if (!artifactMap.has(mainArtifactId)) {
-          artifactMap.set(mainArtifactId, {
-            artifactId: mainArtifactId,
-            artifactName: lazyArtifact.artifactName,
-            artifactType: lazyArtifact.artifactType,
-            artifactDescription: lazyArtifact.artifactDescription || null,
-            versions: []
-          });
-        }
-
-        const artifactEntry = artifactMap.get(mainArtifactId)!;
-        artifactEntry.versions.push({
-          runId: agentRun.ID,
-          versionId: lazyArtifact.artifactVersionId,
-          versionNumber: lazyArtifact.versionNumber,
-          versionName: lazyArtifact.versionName,
-          versionDescription: lazyArtifact.versionDescription,
-          createdAt: lazyArtifact.versionCreatedAt
-        });
-      }
+    if (!versionResult.Success) {
+      console.error('Failed to load agent artifact versions:', versionResult.ErrorMessage);
+      return [];                    // the classifier degrades to no artifact context
+    }
+    const versions = versionResult.Results || [];
+    if (versions.length === 0) {
+      return [];
     }
 
-    return Array.from(artifactMap.values()).sort((a, b) => {
-      const aLatest = a.versions[0]?.createdAt || new Date(0);
-      const bLatest = b.versions[0]?.createdAt || new Date(0);
-      return bLatest.getTime() - aLatest.getTime();
-    });
+    const artifactsById = await this.loadArtifactNames(
+      [...new Set(versions.map(v => v.ArtifactID))]
+    );
+    return GroupVersionsByArtifact(versions, artifactsById);
+  }
+
+  /** Names and types for the artifacts behind a set of versions. */
+  private async loadArtifactNames(
+    artifactIds: string[]
+  ): Promise<Map<string, Pick<MJArtifactEntity, 'ID' | 'Name' | 'Type'>>> {
+    type ArtifactRow = Pick<MJArtifactEntity, 'ID' | 'Name' | 'Type'>;
+
+    const rv = RunView.FromMetadataProvider(this.Provider);
+    const result = await rv.RunView<ArtifactRow>({
+      EntityName: 'MJ: Artifacts',
+      ExtraFilter: `ID IN (${artifactIds.map(id => `'${id}'`).join(',')})`,
+      Fields: ['ID', 'Name', 'Type'],
+      ResultType: 'simple'
+    }, this.Provider.CurrentUser ?? undefined);
+
+    if (!result.Success) {
+      console.error('Failed to load agent artifacts:', result.ErrorMessage);
+      return new Map<string, ArtifactRow>();
+    }
+    return new Map((result.Results || []).map(a => [a.ID, a]));
   }
 
   /**
@@ -641,7 +647,24 @@ ${compactHistory}${artifactContext}
     conversationId: string,
     agentId: string
   ): Promise<AgentPayloadSource | null> {
-    const filter = `ID IN (
+    return this.runPayloadSourceQuery(
+      this.agentOutputVersionFilter(conversationId, agentId), '__mj_CreatedAt DESC'
+    );
+  }
+
+  /**
+   * `ArtifactVersion.ID IN (...)` for every OUTPUT artifact an agent produced in one
+   * conversation. Shared by {@link FindLatestAgentOutputVersion} and
+   * {@link findAllAgentArtifacts} so the two can never disagree about what "this agent's
+   * artifacts" means.
+   *
+   * Filters on the DETAIL's `Status <> 'Error'` rather than the agent run's
+   * `Status = 'Completed'` (which is what the array scan this replaced used). Doing it on the
+   * run would mean joining back to `MJ: AI Agent Runs` purely to restate a condition the
+   * detail already carries.
+   */
+  private agentOutputVersionFilter(conversationId: string, agentId: string): string {
+    return `ID IN (
         SELECT ArtifactVersionID FROM [__mj].[vwConversationDetailArtifacts]
         WHERE Direction='Output' AND ConversationDetailID IN (
           SELECT ID FROM [__mj].[vwConversationDetails]
@@ -649,7 +672,6 @@ ${compactHistory}${artifactContext}
             AND Role='AI' AND Status <> 'Error'
         )
       )`;
-    return this.runPayloadSourceQuery(filter, '__mj_CreatedAt DESC');
   }
 
   /**

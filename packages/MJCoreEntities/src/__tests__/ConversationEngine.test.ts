@@ -1268,6 +1268,9 @@ describe('ConversationEngine', () => {
             expect(result.OldestSequence).toBeNull();
             expect(result.NewestSequence).toBeNull();
             expect(result.AgentRunsByDetailId.size).toBe(0);
+            // The flag is the whole point: an empty window from a FAILED read must not be
+            // mistaken for the start of the conversation by whoever holds the paging cursor.
+            expect(result.Failed).toBe(true);
             expect(errorSpy).toHaveBeenCalled();
         });
 
@@ -1442,6 +1445,47 @@ describe('ConversationEngine', () => {
 
             expect(engine.GetCachedDetails('conv-1')).toBeUndefined();
             expect(engine.HasCachedDetails('conv-1')).toBe(false);
+        });
+
+        it('distinguishes an empty conversation from a failed read', async () => {
+            // Same rows (none), same HasMoreAbove (false) — `Failed` is the ONLY thing that
+            // separates "there is nothing here" from "we could not find out".
+            runViewResultQueue.push({ Success: true, Results: [] });
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            expect(result.Details).toEqual([]);
+            expect(result.HasMoreAbove).toBe(false);
+            expect(result.Failed).toBe(false);
+        });
+
+        it('flags a failed older-rows probe while still returning the rows it read', async () => {
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            // The page read succeeds; only the probe fails. Its `false` is indistinguishable
+            // from a real "nothing older", so the rows are kept and the window is flagged.
+            runViewResultQueue.push({ Success: true, Results: createWindowRows([20, 19, 18]) });
+            runViewResultQueue.push({ Success: false, Results: [], ErrorMessage: 'probe boom' });
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            expect(result.Details).toHaveLength(3);
+            expect(result.HasMoreAbove).toBe(false);
+            expect(result.Failed).toBe(true);
+            expect(errorSpy).toHaveBeenCalled();
+        });
+
+        it('does not flag a window whose PERIPHERALS failed — the transcript still renders', async () => {
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            enqueuePageAndProbe(createWindowRows([20, 19, 18]), true);
+            // Peripheral reads already degrade to empty maps by design. Flagging them would
+            // make the caller refuse a window it can perfectly well display.
+            runViewResultQueue.push({ Success: false, Results: [], ErrorMessage: 'runs boom' });
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+            expect(result.Details).toHaveLength(3);
+            expect(result.Failed).toBe(false);
+            errorSpy.mockRestore();
         });
     });
 
