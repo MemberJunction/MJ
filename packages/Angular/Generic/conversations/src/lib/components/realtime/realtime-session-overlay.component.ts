@@ -27,7 +27,9 @@ import {
   RealtimeChromeMode, RealtimeControlId, RealtimeUiConnectionState
 } from './realtime-ui-config';
 import { RealtimeAudioVisualFrame, RealtimeAudioVisualSmoother, RealtimeDirection } from './realtime-audio-visuals';
-import { RealtimeChannelTabRegistration, ShouldRemoveReviewWhiteboardTab } from './realtime-surface-tabs.model';
+import {
+  RealtimeChannelTabRegistration, RealtimeSurfaceLayoutMode, ShouldRemoveReviewWhiteboardTab
+} from './realtime-surface-tabs.model';
 import { ShouldRegisterChannelTabUpFront } from './realtime-surface-tab-style';
 import { BaseRealtimeChannelClient } from './channels/base-realtime-channel-client';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
@@ -151,6 +153,22 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /** The active environment id, threaded to the surface panel's artifact viewer. */
   @Input() EnvironmentID = '';
+
+  /**
+   * How the surface panel arranges its surfaces — `'tabs'` (default, one at a time) or
+   * `'split'` (the surfaces {@link SurfaceSplitKeys} names, side by side). Passed straight
+   * through to {@link RealtimeSurfaceTabsComponent.Layout}; see it for the degrade rules.
+   *
+   * A deployment that wants two surfaces on screen at once declares it here rather than
+   * overriding the panel's stylesheet from outside, which silently loses a specificity tie.
+   */
+  @Input() SurfaceLayout: RealtimeSurfaceLayoutMode = 'tabs';
+
+  /**
+   * Which surfaces a `'split'` {@link SurfaceLayout} shows, by channel key (empty = all of
+   * them). Passed straight through to {@link RealtimeSurfaceTabsComponent.SplitKeys}.
+   */
+  @Input() SurfaceSplitKeys: string[] = [];
 
   // ── Declarative UI configuration (host controls every aspect of the surface) ──
   //

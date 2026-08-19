@@ -41,6 +41,8 @@ All inputs are optional and default to the historical behaviour, so existing cal
 | `[ShowActivityRail]` | `boolean` | `true` | Activity rail/tab (delegations, artifacts). |
 | `[ShowDevLinks]` | `boolean` | `true` | Developer links/panels (still gated by per‑session dev mode). |
 | `[AllowResize]` | `boolean` | `true` | Drag‑to‑resize the surface panel. |
+| `[SurfaceLayout]` | `'tabs'\|'split'` | `'tabs'` | How the surface panel arranges surfaces: one at a time, or side by side with draggable splitters. |
+| `[SurfaceSplitKeys]` | `string[]` | `[]` | Which surfaces a `'split'` layout shows, by channel key (empty ⇒ all open ones). Degrades to `'tabs'` below two. |
 | `[UiConfig]` | `RealtimeUiInputs` | — | Programmatic override bag; merged under the individual inputs. |
 | `[Hidden]` | `boolean` | `false` | Minimized (kept alive, CSS‑hidden). |
 | `[AgentName]` | `string` | — | Display name. |

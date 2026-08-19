@@ -217,6 +217,36 @@
   display: flex;
 }
 
+/* ---------- split layout (Layout="split") ---------- */
+/* Golden Layout's container. It carries GL's splitters and its (headerless, empty) container
+   boxes only — the panes are VIRTUAL components that stay in this template and get positioned
+   over this host, so a layout switch never re-creates a surface.
+
+   `flex: 1; min-height: 0` is load-bearing, not cosmetic: GL lays its entire tree into whatever
+   the container measures at init and reports nothing when that is zero. The panel defers the
+   attach until this element measures (see the component's waitForMeasuredSplitHost). */
+.surface__split {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+/* While a split is arranging the panes, their visibility comes from the inline styles it writes.
+   Every other pane stays hidden — including the model's "active" one, which would otherwise take
+   flex space beside the host and squash the arrangement. */
+.surface--split .s-pane {
+  display: none;
+}
+/* A surface the split isn't showing: still listed (the session HAS it), just not reachable
+   without the host changing the layout. */
+.s-tab--outside-split {
+  opacity: 0.45;
+  cursor: default;
+}
+.s-tab--outside-split:hover {
+  background: transparent;
+  color: var(--mj-text-muted);
+}
+
 /* Empty strip (idle voice-first session): a gentle hint rather than a bare grid. */
 .surface__empty {
   flex: 1;
