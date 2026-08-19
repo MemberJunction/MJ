@@ -1,5 +1,35 @@
 name: Build and publish new package versions
 
+# This one file carries BOTH publish paths, and the reason is npm, not taste:
+# every ~300 MJ package's npm trusted-publishing (OIDC) config is scoped to the
+# workflow FILENAME `publish.yml`. A second publishing workflow file means a
+# second trusted publisher entered by hand on every package, so the LTS line
+# release lives here as a separate job rather than in its own file.
+#
+#   Edge line   — a push to `main` (unchanged), or a dispatch FROM main with
+#                 confirm_branch: main and no line_branch.
+#                 Jobs: test-migrations + release-validation -> build-and-publish.
+#   LTS line    — dispatch from `next` with line_branch + confirm_branch.
+#                 Job: publish-lts, which checks out the line branch itself.
+#                 Ported from publish-lts.yml (retired in this PR): guards,
+#                 era detection, --tag lts-<line>, never-latest, registry verify.
+#
+# EXACTLY THREE INVOCATIONS PUBLISH ANYTHING. Every other combination of event,
+# ref and inputs runs nothing at all, and dispatch-guard turns the run red:
+#
+#   1. push to main                                        -> Edge
+#   2. dispatch, ref main, confirm_branch=main, no line    -> Edge
+#   3. dispatch, line_branch=lts/N, confirm_branch=lts/N   -> that line
+#
+# Invocation 2 exists because a bare dispatch with empty inputs used to run the
+# real Edge publish: `changeset version` consumes whatever changesets are sitting
+# on the ref (93 of them on main right now) and publishes. A release is never
+# something you should be able to start by clicking Run workflow and pressing
+# enter, so the Edge path now demands the same double-entry the line path does.
+# The `if:` on every job below encodes this table; the dispatch-guard job asserts
+# the same table so a mismatch between the two shows up as a failed run rather
+# than as a publish nobody asked for.
+
 on:
   push:
     branches:
@@ -8,8 +38,23 @@ on:
   workflow_dispatch:
     inputs:
       targetVersion:
-        description: 'The version to target for this publish'
+        description: 'Edge path only: the version to target for this publish'
         required: false
+      # An LTS line release is dispatched with the ref left at `next` (the
+      # default) so the MAINTAINED copy of this workflow always runs; the line
+      # is a parameter, never the ref. That kills the whole class of bug where a
+      # release runs stale workflow code that was never backported to the line.
+      # Selecting an lts/* ref in the dialog instead cannot silently do the
+      # wrong thing: that ref's publish.yml has no line_branch input, so GitHub
+      # rejects the dispatch outright.
+      line_branch:
+        description: 'LTS path: line branch to release (e.g. lts/5). Leave EMPTY for an Edge publish.'
+        required: false
+        default: ''
+      confirm_branch:
+        description: 'Double-entry confirmation, required for every dispatch: type the line branch again for a line release, or "main" for a manual Edge publish (which must be dispatched from main).'
+        required: false
+        default: ''
 
 
 permissions:
@@ -21,7 +66,60 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # A dispatch that matches none of the three invocations above selects no path,
+  # so nothing publishes — but a green "nothing happened" run is a lie about
+  # intent, and the most dangerous input mistake (typing the line into
+  # confirm_branch alone) used to select the EDGE path. This job re-derives the
+  # table and fails the run, naming the three valid invocations. It deliberately
+  # gates nothing and has no dependents: it cannot block or delay a push.
+  dispatch-guard:
+    name: Validate dispatch inputs
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    env:
+      LINE: ${{ github.event.inputs.line_branch }}
+      CONFIRM: ${{ github.event.inputs.confirm_branch }}
+      REF: ${{ github.ref_name }}
+    steps:
+      - name: A dispatch must be a confirmed Edge publish or a confirmed line release
+        run: |
+          set -euo pipefail
+
+          # Invocation 2 — manual Edge publish. Only from main: every step of
+          # that path is main-gated, and the changesets it consumes are main's.
+          if [ -z "$LINE" ] && [ "$CONFIRM" = 'main' ]; then
+            if [ "$REF" != 'main' ]; then
+              echo "::error::A manual Edge publish must be dispatched from main, but this run's ref is '$REF'. Nothing was published."
+              exit 1
+            fi
+            echo "::notice::Confirmed manual Edge publish from main — the LTS job is skipped."
+            exit 0
+          fi
+
+          # Invocation 3 — line release. Shape is re-checked inside publish-lts,
+          # which is where a mismatch must fail loudly rather than skip.
+          if [ -n "$LINE" ] && [ "$CONFIRM" = "$LINE" ]; then
+            if ! [[ "$LINE" =~ ^lts/[0-9]+(\.[0-9]+)?$ ]]; then
+              echo "::error::line_branch='$LINE' is not a line branch. Expected lts/<major> or lts/<major>.<minor> (e.g. lts/5, lts/6.1). Nothing was published."
+              exit 1
+            fi
+            echo "::notice::Confirmed LTS line release for $LINE — the Edge jobs are skipped."
+            exit 0
+          fi
+
+          echo "::error::This dispatch matches no valid invocation (line_branch='$LINE', confirm_branch='$CONFIRM', ref='$REF') and NOTHING was published. The three ways to publish are: (1) push to main -> Edge release; (2) dispatch from main with confirm_branch=main and line_branch empty -> manual Edge release; (3) dispatch with line_branch=lts/N and confirm_branch=lts/N -> that line's release. An empty dispatch is refused on purpose: it would publish whatever changesets happen to be sitting on the ref."
+          exit 1
+
+  # Edge path. Unconditional on `push` — that trigger is the Edge release and its
+  # behavior is untouched. On a dispatch it additionally requires the invocation-2
+  # confirmation, which is repeated verbatim on all three Edge jobs; GitHub
+  # Actions has no YAML anchors, and duplicating the condition is preferable to
+  # making the release path depend on another job's output.
   test-migrations:
+    # The LTS job validates migration filenames on the line branch's own tree;
+    # this job would test `next`, which says nothing about it.
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.line_branch == '' && github.event.inputs.confirm_branch == 'main' && github.ref_name == 'main') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -66,10 +164,17 @@ jobs:
   # single test. Validate the exact commit being published with the full unit suite.
   release-validation:
     name: Validate release commit (full unit suite)
+    # Edge path only — it tests THIS ref (main). A line release's content is
+    # validated by the line branch's own CI on the backport PRs.
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.line_branch == '' && github.event.inputs.confirm_branch == 'main' && github.ref_name == 'main') }}
     uses: ./.github/workflows/release-test.yml
 
   build-and-publish:
     name: Build and publish new versions of NPM packages
+    # Edge path only. Redundant with `needs` (both gates carry the same `if`),
+    # and deliberately so: this is the job that reaches npm, and it must never
+    # depend on a skip cascade for that.
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.line_branch == '' && github.event.inputs.confirm_branch == 'main' && github.ref_name == 'main') }}
     # Hard preconditions: without `needs`, publish raced its own quality gates —
     # packages published to npm even when the fresh-DB migration apply failed, and
     # no test of any kind ran against the release commit. Publish requires both green.
@@ -158,13 +263,13 @@ jobs:
           # Use MJServer package as version reference since core and global are pinned at 2.100.3
           CURRENT_VERSION=$(jq -r .version packages/MJServer/package.json)
           IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
-          NEXT_MINOR_VERSION="${VERSION_PARTS[0]}.$(( ${VERSION_PARTS[1]} + 1 )).0"
-          NEXT_PATCH_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$(( ${VERSION_PARTS[2]} + 1 ))"
-          NEW_MIGRATION_FILES=$(git --no-pager diff --name-only v${CURRENT_VERSION} ${{ github.sha }} -- migrations/)
+          NEXT_MINOR_VERSION="${VERSION_PARTS[0]}.$(( VERSION_PARTS[1] + 1 )).0"
+          NEXT_PATCH_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$(( VERSION_PARTS[2] + 1 ))"
+          NEW_MIGRATION_FILES=$(git --no-pager diff --name-only "v${CURRENT_VERSION}" "${{ github.sha }}" -- migrations/)
           if [ -n "$NEW_MIGRATION_FILES" ]; then
-            echo "EXPECTED_NEXT_VERSION=$NEXT_MINOR_VERSION" >> $GITHUB_OUTPUT
+            echo "EXPECTED_NEXT_VERSION=$NEXT_MINOR_VERSION" >> "$GITHUB_OUTPUT"
           else
-            echo "EXPECTED_NEXT_VERSION=$NEXT_PATCH_VERSION" >> $GITHUB_OUTPUT
+            echo "EXPECTED_NEXT_VERSION=$NEXT_PATCH_VERSION" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Update version and check against expected
@@ -207,8 +312,9 @@ jobs:
       # behavior, unchanged. From era 6 on, an unsuffixed version is a candidate or
       # certified build and this routine path REFUSES it: `latest` moves only at
       # certification (ci/dist-tag-all.mjs), and candidates publish via the
-      # candidate-cut flow / publish-lts.yml (§15 items 4 and 6). Without this gate
-      # a cycle-2 candidate cut transiting here would seize `latest` uncertified.
+      # candidate-cut flow / this workflow's publish-lts job (§15 items 4 and 6).
+      # Without this gate a cycle-2 candidate cut transiting here would seize
+      # `latest` uncertified.
       - name: Determine release channel from version grammar
         id: channel
         run: |
@@ -221,7 +327,7 @@ jobs:
             NPM_TAG=latest
             PRERELEASE=false
           else
-            echo "::error::Unsuffixed version $VERSION on the routine publish path. Post-era-open, normal versions are candidate/certified builds: publish via the candidate-cut flow (publish-lts.yml); 'latest' moves only at certification via ci/dist-tag-all.mjs."
+            echo "::error::Unsuffixed version $VERSION on the routine publish path. Post-era-open, normal versions are candidate/certified builds: publish via the candidate-cut flow (this workflow, dispatched with line_branch=lts/<N>); 'latest' moves only at certification via ci/dist-tag-all.mjs."
             exit 1
           fi
           echo "NPM_TAG=$NPM_TAG" >> "$GITHUB_OUTPUT"
@@ -301,8 +407,8 @@ jobs:
           git pull
           git log -n1
           VERSION="v"$(jq -r .version packages/MJServer/package.json)
-          echo "Release for verison $VERSION" >> $GITHUB_STEP_SUMMARY
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release for verison $VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Push release commit and tag
         if: ${{ env.BRANCH == 'main' }}
@@ -336,5 +442,275 @@ jobs:
           git checkout next
           git log -n1
           pnpm run mergemain:update-lock
+
+  # ---------------------------------------------------------------------------
+  # LTS line release (guides/RELEASE_ENGINEERING_RUNBOOK.md operation 3;
+  # plans/lts-process.md §5.2 rule 3 / §14.1). Ported verbatim in behavior from
+  # publish-lts.yml, which this PR retires — the only substantive changes are
+  # that the line comes from an INPUT instead of the running ref, and the job
+  # timeout matches the edge path's (see below).
+  #
+  # Actions -> "Build and publish new package versions" -> Run workflow ->
+  # leave the ref at `next` -> line_branch: lts/5 -> confirm_branch: lts/5.
+  #
+  # Sequence: guards -> checkout the line -> era-detect the package manager ->
+  # changeset version (normal, non-pre mode) -> lockfile refresh as its own
+  # [skip ci] commit -> build -> changeset publish --tag lts-<line> -> push the
+  # release commit + tag to the line branch -> GitHub Release (never latest) ->
+  # dispatch the docs deploy (the one step publish-lts.yml never had; docs.yml
+  # cannot watch for this run, see that step's comment).
+  # `latest` NEVER moves here; certification moves it via ci/dist-tag-all.mjs.
+  #
+  # The runbook's prohibition on `workflow_dispatch`ing the routine publish path
+  # from a line branch still stands and is not what this is: the line branch is
+  # never the ref this workflow runs from — it is checked out by this job, and
+  # every main-gated edge step is skipped wholesale by the job `if`s above.
+  # ---------------------------------------------------------------------------
+  publish-lts:
+    name: Publish LTS line release ${{ github.event.inputs.line_branch }}
+    # Gated on line_branch ALONE, deliberately: the confirmation and the branch
+    # shape are checked in the job's first step, so a mismatched attempt at a
+    # line release fails red instead of silently skipping. Nothing can publish
+    # from here without that step passing.
+    if: ${{ github.event.inputs.line_branch != '' }}
+    # 120, not publish-lts.yml's 45, for the reason spelled out on the edge job:
+    # a timeout mid-`changeset publish` is DESTRUCTIVE, not a clean retry — it
+    # splits the fixed-version group across two versions on npm. A line publish
+    # pushes the same ~300 packages serially after a full build, so it carries
+    # the same exposure; 45 minutes was never measured against it.
+    timeout-minutes: 120
+    # Job-level permissions REPLACE the workflow-level block rather than merging
+    # with it, so the two the job already relies on are restated: contents for
+    # checkout, id-token for npm trusted publishing. The delta is one scope —
+    # actions: write, for the docs dispatch in the last step — and it is scoped
+    # to this job so the edge path never gains the ability to start workflows.
+    permissions:
+      contents: write
+      id-token: write
+      actions: write
+    runs-on: ubuntu-latest
+    env:
+      LINE: ${{ github.event.inputs.line_branch }}
+      CONFIRM: ${{ github.event.inputs.confirm_branch }}
+    steps:
+      # Runs BEFORE checkout, so nothing reaches actions/checkout (nor any later
+      # shell) until the input is known to be a well-formed line branch name.
+      - name: Guard - line_branch must name an lts/* line, confirmed twice
+        run: |
+          set -euo pipefail
+          if ! [[ "$LINE" =~ ^lts/[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "::error::line_branch='$LINE' is not a line branch. Expected lts/<major> or lts/<major>.<minor> (e.g. lts/5, lts/6.1)."
+            exit 1
+          fi
+          if [ "$CONFIRM" != "$LINE" ]; then
+            echo "::error::Confirmation mismatch: line_branch='$LINE' but confirm_branch='$CONFIRM'. Re-dispatch with both fields identical."
+            exit 1
+          fi
+          echo "::notice::Releasing line $LINE (workflow file from ${{ github.ref_name }})"
+
+      # A line branch that does not exist fails here, loudly, before anything
+      # else runs: "couldn't find remote ref refs/heads/<line>".
+      - name: Checkout the line branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.line_branch }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Guard - line branch must NOT be in prerelease mode
+        run: |
+          if [ -f .changeset/pre.json ]; then
+            echo "::error::.changeset/pre.json exists on $LINE - pre-mode state leaked from next. Fix the branch before publishing."
+            exit 1
+          fi
+
+      - name: Guard - there must be changesets to release
+        run: |
+          # Equivalent to publish-lts.yml's `ls .changeset/*.md | grep -cv README.md`,
+          # written as a glob so shellcheck (SC2010) is satisfied.
+          count=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l)
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No changesets on $LINE - nothing to release. Backported fixes carry their changeset files; did the backport PR merge?"
+            exit 1
+          fi
+
+      # lts/5 is the last npm line; 6.x and every later LTS line use pnpm. The
+      # lockfile committed on the checked-out ref is the signal, so this needs
+      # no edit when a new line is cut.
+      - name: Detect package manager
+        id: pm
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            PM=pnpm
+          elif [ -f package-lock.json ]; then
+            PM=npm
+          else
+            echo "::error::No lockfile found on $LINE"
+            exit 1
+          fi
+          echo "PM=$PM" >> "$GITHUB_OUTPUT"
+          echo "::notice::Package manager for this ref: $PM"
+
+      - name: Set up pnpm
+        if: steps.pm.outputs.PM == 'pnpm'
+        uses: pnpm/action-setup@v4
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: ${{ steps.pm.outputs.PM }}
+
+      - name: Pin npm to 11.6.4
+        if: steps.pm.outputs.PM == 'npm'
+        run: npm install -g npm@11.6.4
+
+      - name: Validate migration filenames
+        run: ./.github/scripts/validate-migration-filenames.sh
+
+      - name: Validate package-lock.json case-sensitivity
+        if: steps.pm.outputs.PM == 'npm'
+        run: ./.github/scripts/validate-package-lock-case.sh
+
+      - name: Install dependencies
+        run: ${{ steps.pm.outputs.PM == 'pnpm' && 'pnpm install --frozen-lockfile' || 'npm ci' }}
+
+      - name: Validate package repository.url for npm provenance
+        run: ./.github/scripts/validate-package-repository.sh
+
+      - name: Set up git credentials
+        env:
+          REPO_PAT: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+        run: |
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "GitHub Actions"
+          git remote set-url origin "https://$REPO_PAT@github.com/${GITHUB_REPOSITORY}"
+
+      # `.changeset/config.json` sets "commit": true, so `changeset version`
+      # commits the bump itself; the lockfile it leaves behind does not, hence
+      # the explicit second commit.
+      - name: Version (normal mode) and refresh lockfile
+        id: version
+        run: |
+          ${{ steps.pm.outputs.PM }} run version
+          ${{ steps.pm.outputs.PM == 'pnpm' && 'pnpm install --lockfile-only' || 'npm install' }}
+          LOCK=${{ steps.pm.outputs.PM == 'pnpm' && 'pnpm-lock.yaml' || 'package-lock.json' }}
+          if ! git diff --quiet -- "$LOCK"; then
+            git add "$LOCK"
+            git commit -m "chore: lockfile for line release [skip ci]"
+          fi
+          VERSION=$(jq -r .version packages/MJServer/package.json)
+          if [[ "$VERSION" == *-* ]]; then
+            echo "::error::Line release produced a prerelease version ($VERSION) - refusing."
+            exit 1
+          fi
+          NPM_TAG="lts-${LINE#lts/}"
+          echo "VERSION=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "NPM_TAG=$NPM_TAG" >> "$GITHUB_OUTPUT"
+          echo "::notice::Publishing $VERSION from $LINE to npm dist-tag $NPM_TAG"
+
+      - name: Record latest dist-tag before publish
+        id: before
+        run: echo "LATEST=$(npm view @memberjunction/core dist-tags.latest)" >> "$GITHUB_OUTPUT"
+
+      - name: Build packages
+        run: ${{ steps.pm.outputs.PM }} run build
+
+      - name: Publish to npm (line tag, never latest)
+        # 🚨 Invoke changesets directly, NOT via `<pm> run change publish -- --tag <x>`.
+        # pnpm 10 forwards the `--` separator LITERALLY, so changesets receives
+        # `publish -- --tag lts-x`, dies with "Too many arguments" — and exits 0.
+        # That is the exact silent no-op that version-bumped and tagged 6.1.0-edge.0
+        # while publishing ZERO packages (see the edge job above). npm strips the `--`,
+        # which is why the npm-era lts/5 path would have worked; every pnpm-era line
+        # (lts/6.1 onward) would have hit it. Direct invocation works under both.
+        run: |
+          set -euo pipefail
+          npx changeset publish --tag ${{ steps.version.outputs.NPM_TAG }} 2>&1 | tee /tmp/publish.log
+          if ! grep -qE 'New tag:|Packages published|already published' /tmp/publish.log; then
+            echo "::error::changeset publish produced no evidence of a publish - refusing to report success."
+            exit 1
+          fi
+        env:
+          NPM_TOKEN: ''
+
+      # The registry is the only signal that cannot be lied to (changesets exits 0
+      # on its own errors; log-grep assertions only prove what was printed). Assert
+      # the line dist-tag actually reached the new version, then that `latest` is
+      # untouched.
+      - name: Verify the publish reached npm and latest did not move
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          VERSION="${VERSION#v}"
+          NPM_TAG='${{ steps.version.outputs.NPM_TAG }}'
+          AT_TAG=''
+          for i in 1 2 3 4 5; do
+            AT_TAG=$(npm view "@memberjunction/core@$NPM_TAG" version 2>/dev/null || true)
+            [ "$AT_TAG" = "$VERSION" ] && break
+            echo "dist-tag '$NPM_TAG' is at '${AT_TAG:-<unset>}', want $VERSION - retry $i/5 in 15s"
+            sleep 15
+          done
+          if [ "$AT_TAG" != "$VERSION" ]; then
+            echo "::error::npm dist-tag '$NPM_TAG' never reached $VERSION - the publish did not happen (or failed before tagging). Do not trust this run's green steps."
+            exit 1
+          fi
+          NOW=$(npm view @memberjunction/core dist-tags.latest)
+          if [ "$NOW" != "${{ steps.before.outputs.LATEST }}" ]; then
+            echo "::error::npm 'latest' moved during a line publish (${{ steps.before.outputs.LATEST }} -> $NOW). Investigate immediately; restore with ci/dist-tag-all.mjs from the certified tag."
+            exit 1
+          fi
+          echo "::notice::Verified: @memberjunction/core@$VERSION is live under '$NPM_TAG'; latest unmoved at ${{ steps.before.outputs.LATEST }}"
+
+      # Tag and release steps tolerate a re-run of a partially completed publish
+      # (publish succeeded, a later step failed): the publish step's "already
+      # published" evidence passes, and these skip instead of dying on collisions.
+      - name: Push release commit and tag to the line branch
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          set -euo pipefail
+          git push origin "HEAD:$LINE"
+          if git ls-remote --tags origin "refs/tags/$VERSION" | grep -q .; then
+            echo "::notice::Tag $VERSION already exists on origin - skipping (re-run of a partially completed publish)"
+          else
+            git tag "$VERSION"
+            git push origin "refs/tags/$VERSION"
+          fi
+
+      - name: Create GitHub Release (never latest; certification promotes)
+        env:
+          GH_TOKEN: ${{ secrets.MJ_GH_BOT_GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          set -euo pipefail
+          if gh release view "$VERSION" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release $VERSION already exists - skipping creation (re-run of a partially completed publish)"
+            exit 0
+          fi
+          gh release create "$VERSION" --title "$VERSION" --generate-notes --latest=false \
+            --target "$LINE" --repo "${{ github.repository }}"
+
+      # Docs follow releases, and a line release reaches docs.yml ONLY through
+      # this dispatch: docs.yml listens for workflow_run on `main` alone, by
+      # ruling — no docs deploy is ever triggered by an event on `next`, and this
+      # run reports branch `next` because the line is a parameter.
+      #
+      # Two things make this the last step rather than an earlier one. Steps only
+      # run when every previous step succeeded, so a failed publish, a failed
+      # registry verification, a failed push or a failed release cannot deploy
+      # docs. And docs.yml builds each line's content from the LINE BRANCH, so
+      # dispatching before the release commit was pushed would publish the
+      # previous state of the line.
+      #
+      # github.token can start this run: workflow_dispatch is one of the two
+      # documented exceptions to GitHub's "events triggered by GITHUB_TOKEN do
+      # not create a workflow run" recursion suppression. Same pattern, same
+      # command as lts/5's thin docs dispatcher.
+      - name: Deploy docs for the new line release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run docs.yml --repo "$GITHUB_REPOSITORY" --ref next
 
 
