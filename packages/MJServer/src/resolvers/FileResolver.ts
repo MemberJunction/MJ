@@ -633,6 +633,12 @@ export class FileResolver extends FileResolverBase {
       const buffer = Buffer.from(input.Base64Data, 'base64');
       const mimeType = input.MimeType || 'application/octet-stream';
 
+      // Ensure FileStorageEngine is configured under the user context
+      await FileStorageEngine.Instance.Config(false, user, provider);
+      if (input.AccountID && !FileStorageEngine.Instance.GetAccountById(input.AccountID)) {
+        await FileStorageEngine.Instance.Config(true, user, provider);
+      }
+
       const uploadResult = await FileStorageEngine.Instance.UploadFile({
         content: buffer,
         fileName: input.FileName,

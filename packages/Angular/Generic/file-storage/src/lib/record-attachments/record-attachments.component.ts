@@ -318,8 +318,15 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
   private async CheckStorageAndPermissions(): Promise<void> {
     try {
       await FileStorageEngineBase.Instance.Config(false);
-      this.ActiveProviders = FileStorageEngineBase.Instance.Providers.filter((p) => p.IsActive);
-      this.StorageAccounts = FileStorageEngineBase.Instance.AccountsWithProviders.filter((ap) => ap.provider.IsActive);
+      this.ActiveProviders = FileStorageEngineBase.Instance.Providers.filter((p) => p.IsActive !== false);
+      this.StorageAccounts = FileStorageEngineBase.Instance.AccountsWithProviders.filter((ap) => ap.provider.IsActive !== false);
+
+      // If initial cached check returns 0 accounts, force refresh from server in case cache was cold or stale
+      if (this.StorageAccounts.length === 0) {
+        await FileStorageEngineBase.Instance.Config(true);
+        this.ActiveProviders = FileStorageEngineBase.Instance.Providers.filter((p) => p.IsActive !== false);
+        this.StorageAccounts = FileStorageEngineBase.Instance.AccountsWithProviders.filter((ap) => ap.provider.IsActive !== false);
+      }
 
       if (this.StorageAccounts.length > 0) {
         const preferredId = this.Config?.DefaultStorageAccountID;
@@ -439,6 +446,8 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
     this.cdr.markForCheck();
 
     try {
+      await this.CheckStorageAndPermissions();
+
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const linksResult = await rv.RunView<MJFileEntityRecordLinkEntity>({
         EntityName: 'MJ: File Entity Record Links',
@@ -516,6 +525,11 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
     const recordId = this.EffectiveRecordID;
     if (!entityId || !recordId) {
       this.notifications.CreateSimpleNotification('Cannot upload attachments: No record context available', 'error');
+      return [];
+    }
+
+    if (this.StorageAccounts.length === 0) {
+      this.notifications.CreateSimpleNotification('Cannot upload attachments: No active file storage accounts are configured. Please configure a storage provider in system settings.', 'warning');
       return [];
     }
 

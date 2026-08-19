@@ -99,16 +99,21 @@ export class StorageProvidersListComponent implements OnInit {
    * Loads all available file storage accounts with their provider details.
    * Uses FileStorageEngineBase for centralized, cached access.
    */
-  private async loadAccounts(): Promise<void> {
+  private async loadAccounts(forceRefresh = false): Promise<void> {
     this.isLoading = true;
     this.errorMessage = null;
 
     try {
       const engine = FileStorageEngineBase.Instance;
-      await engine.Config(false);  // Use cached data if available
+      await engine.Config(forceRefresh);
 
       // Only show accounts whose provider is active
-      this.accounts = engine.AccountsWithProviders.filter(a => a.provider.IsActive);
+      this.accounts = engine.AccountsWithProviders.filter(a => a.provider.IsActive !== false);
+
+      if (this.accounts.length === 0 && !forceRefresh) {
+        await engine.Config(true);
+        this.accounts = engine.AccountsWithProviders.filter(a => a.provider.IsActive !== false);
+      }
 
       console.log('[StorageAccountsList] Loaded accounts:', this.accounts.map(a => ({
         name: a.account.Name,
@@ -176,7 +181,7 @@ export class StorageProvidersListComponent implements OnInit {
    * Refreshes the accounts list by forcing a reload from the database.
    */
   public refresh(): void {
-    FileStorageEngineBase.Instance.Config(true).then(() => this.loadAccounts());
+    void this.loadAccounts(true);
   }
 
   /**

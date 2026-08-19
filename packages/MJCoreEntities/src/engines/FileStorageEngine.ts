@@ -88,11 +88,16 @@ export class FileStorageEngineBase extends BaseEngine<FileStorageEngineBase> {
      */
     public get AccountsWithProviders(): StorageAccountWithProvider[] {
         const providerMap = new Map<string, MJFileStorageProviderEntity>();
-        this.Providers.forEach(p => providerMap.set(p.ID, p));
+        this.Providers.forEach(p => {
+            if (p.ID) {
+                providerMap.set(p.ID.toLowerCase(), p);
+            }
+        });
 
         return this.Accounts
             .map(account => {
-                const provider = providerMap.get(account.ProviderID);
+                const key = account.ProviderID ? account.ProviderID.toLowerCase() : '';
+                const provider = key ? providerMap.get(key) : null;
                 if (!provider) return null;
                 return { account, provider };
             })

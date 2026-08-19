@@ -322,7 +322,12 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         }
 
         // On-demand fallback: account wasn't in cache (failed init, added late, etc.)
-        const resolved = this.Base.GetAccountWithProvider(accountId);
+        let resolved = this.Base.GetAccountWithProvider(accountId);
+        if (!resolved) {
+            await this.Config(true, contextUser);
+            resolved = this.Base.GetAccountWithProvider(accountId);
+        }
+
         if (!resolved) {
             throw new Error(`FileStorageEngine.GetDriver: account '${accountId}' not found in cached metadata. Did you call Config() first?`);
         }
@@ -367,8 +372,17 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         const { content, fileName, mimeType, contextUser, storageAccountId, provider } = options;
         const md = provider ?? Metadata.Provider;
 
+        // Ensure engine is configured
+        await this.Config(false, contextUser, md);
+
         // 1. Resolve storage account
-        const resolved = this.ResolveStorageAccount(storageAccountId);
+        let resolved = this.ResolveStorageAccount(storageAccountId);
+        if (!resolved) {
+            // Attempt a forced refresh from database in case account was recently added or cache was stale
+            await this.Config(true, contextUser, md);
+            resolved = this.ResolveStorageAccount(storageAccountId);
+        }
+
         if (!resolved) {
             throw new Error('FileStorageEngine.UploadFile: no file storage accounts configured. Cannot upload.');
         }

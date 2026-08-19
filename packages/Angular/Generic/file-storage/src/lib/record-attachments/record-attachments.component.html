@@ -118,7 +118,7 @@
         <mj-empty-state
           Icon="fa-solid fa-paperclip"
           [Title]="SearchTerm ? 'No matching attachments' : 'No attachments yet'"
-          [Message]="SearchTerm ? 'Try adjusting your search query or provider filter.' : (EffectiveAllowUpload ? 'Upload or drop files above to link attachments to this record.' : 'No attachments are linked to this record.')">
+          [Message]="SearchTerm ? 'Try adjusting your search query or provider filter.' : (StorageAccounts.length === 0 ? 'No active file storage accounts are configured. Uploads are disabled until a storage account is configured.' : (EffectiveAllowUpload ? 'Upload or drop files above to link attachments to this record.' : 'No attachments are linked to this record.'))">
         </mj-empty-state>
       } @else {
         <div class="mj-attachments-container" [class.mj-attachments-grid-mode]="ViewMode === 'grid'">
