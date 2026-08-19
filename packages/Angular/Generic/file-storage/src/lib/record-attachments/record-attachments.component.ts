@@ -149,6 +149,30 @@ const CreateMediaAccessTokenMutationSchema = z.object({
   }),
 });
 
+const CreatePreAuthUploadUrlMutation = gql`
+  mutation CreatePreAuthUploadUrl($input: CreatePreAuthUploadUrlInput!) {
+    CreatePreAuthUploadUrl(input: $input) {
+      Success
+      ErrorMessage
+      UploadUrl
+      ProviderKey
+      HttpMethod
+      HttpHeadersJSON
+    }
+  }
+`;
+
+const CreatePreAuthUploadUrlMutationSchema = z.object({
+  CreatePreAuthUploadUrl: z.object({
+    Success: z.boolean().optional(),
+    ErrorMessage: z.string().optional().nullable(),
+    UploadUrl: z.string().optional().nullable(),
+    ProviderKey: z.string().optional().nullable(),
+    HttpMethod: z.string().optional().nullable(),
+    HttpHeadersJSON: z.string().optional().nullable(),
+  }),
+});
+
 /**
  * World-class Angular component for displaying, previewing, uploading,
  * and managing file attachments linked to an entity record.
@@ -631,71 +655,161 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
           continue;
         }
 
-        // Convert to base64
-        console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Converting '${file.name}' to base64...`);
-        const base64Data = await this.fileToBase64(file);
+        let fileId: string | null = null;
+        let fileEntity: MJFileEntity | null = null;
+        let directUploadSucceeded = false;
 
-        this.UploadStatusText = `Uploading ${file.name} (${fileIndex}/${files.length})...`;
-        this.UploadProgressPercent = Math.max(5, progressBase + 2);
-        this.cdr.markForCheck();
+        const targetAccount = this.StorageAccounts.find((a) => UUIDsEqual(a.account.ID, targetAccountID));
+        const timestamp = new Date().toISOString().slice(0, 10);
+        const uniqueId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11);
+        const objectPath = `artifacts/${timestamp}/${uniqueId}/${file.name}`;
 
-        const input = {
-          FileName: file.name,
-          Base64Data: base64Data,
-          MimeType: file.type || 'application/octet-stream',
-          AccountID: beforeEvent.StorageAccountID || undefined,
-          CategoryID: beforeEvent.CategoryID || undefined,
-        };
+        // ─────────────────────────────────────────────────────────────────────
+        // 1. Try Direct Binary Upload via Pre-Authenticated URL
+        // ─────────────────────────────────────────────────────────────────────
+        try {
+          console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Requesting pre-auth upload URL for '${file.name}' on account '${targetAccountID}'...`);
+          const preAuthResult = await GraphQLDataProvider.ExecuteGQL(CreatePreAuthUploadUrlMutation, {
+            input: {
+              AccountID: targetAccountID,
+              ObjectName: objectPath,
+              ContentType: file.type || 'application/octet-stream',
+            },
+          });
 
-        console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Sending UploadStorageFile GraphQL mutation:`, {
-          FileName: input.FileName,
-          MimeType: input.MimeType,
-          AccountID: input.AccountID,
-          CategoryID: input.CategoryID,
-          Base64Length: input.Base64Data.length
-        });
-
-        const gqlResult = await GraphQLDataProvider.ExecuteGQLWithProgress(
-          UploadStorageFileMutation,
-          { input },
-          (progress) => {
-            const singleFileSlice = 85 / files.length;
-            const currentFileBase = (i / files.length) * 100;
-            const computedPercent = Math.min(95, Math.round(currentFileBase + (progress.percent * singleFileSlice / 100)));
-            this.UploadProgressPercent = computedPercent;
-            const loadedStr = FormatAttachmentFileSize(progress.loaded);
-            const totalStr = FormatAttachmentFileSize(progress.total);
-            if (progress.percent < 100) {
-              this.UploadStatusText = `Uploading ${file.name} (${fileIndex}/${files.length}): ${loadedStr} / ${totalStr} (${progress.percent}%)...`;
-            } else {
-              this.UploadStatusText = `Processing ${file.name} on storage server...`;
+          const parsedPreAuth = CreatePreAuthUploadUrlMutationSchema.safeParse(preAuthResult);
+          if (
+            parsedPreAuth.success &&
+            parsedPreAuth.data.CreatePreAuthUploadUrl.Success !== false &&
+            parsedPreAuth.data.CreatePreAuthUploadUrl.UploadUrl
+          ) {
+            const preAuth = parsedPreAuth.data.CreatePreAuthUploadUrl;
+            let customHeaders: Record<string, string> | undefined;
+            if (preAuth.HttpHeadersJSON) {
+              try {
+                customHeaders = JSON.parse(preAuth.HttpHeadersJSON) as Record<string, string>;
+              } catch {
+                // ignore JSON parse error
+              }
             }
+
+            console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Direct binary upload URL obtained. Streaming raw bytes...`);
+            this.UploadStatusText = `Uploading ${file.name} (${fileIndex}/${files.length}) directly to storage...`;
             this.cdr.markForCheck();
+
+            if (preAuth.UploadUrl) {
+              await this.uploadBinaryDirect(
+                preAuth.UploadUrl,
+                file,
+                preAuth.HttpMethod || 'PUT',
+                customHeaders,
+                (loaded, total) => {
+                  const singleFileSlice = 85 / files.length;
+                  const currentFileBase = (i / files.length) * 100;
+                  const percent = Math.round((loaded / total) * 100);
+                  const computedPercent = Math.min(95, Math.round(currentFileBase + (percent * singleFileSlice / 100)));
+                  this.UploadProgressPercent = computedPercent;
+                  const loadedStr = FormatAttachmentFileSize(loaded);
+                  const totalStr = FormatAttachmentFileSize(total);
+                  if (percent < 100) {
+                    this.UploadStatusText = `Uploading ${file.name} (${fileIndex}/${files.length}): ${loadedStr} / ${totalStr} (${percent}%)...`;
+                  } else {
+                    this.UploadStatusText = `Registering ${file.name} in MemberJunction...`;
+                  }
+                  this.cdr.markForCheck();
+                }
+              );
+
+              // Raw binary upload to cloud storage succeeded! Create MJ: Files database record
+              this.UploadStatusText = `Saving ${file.name} record...`;
+              this.cdr.markForCheck();
+
+              const newFile = await md.GetEntityObject<MJFileEntity>('MJ: Files');
+              newFile.Name = file.name;
+              newFile.ContentType = file.type || 'application/octet-stream';
+              newFile.ProviderID = targetAccount?.provider?.ID || '';
+              newFile.ProviderKey = preAuth.ProviderKey || objectPath;
+              if (targetCategoryID) {
+                newFile.CategoryID = targetCategoryID;
+              }
+              newFile.Status = 'Uploaded';
+              const saved = await newFile.Save();
+              if (saved) {
+                fileEntity = newFile;
+                fileId = newFile.ID;
+                directUploadSucceeded = true;
+                console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Direct binary upload & file record created (FileID: ${fileId})`);
+              }
+            }
           }
-        );
-        console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] GraphQL response:`, gqlResult);
+        } catch (preAuthErr) {
+          console.warn(`[RecordAttachmentsComponent] Direct binary upload failed for '${file.name}', falling back to server upload:`, preAuthErr);
+        }
 
-        const parsed = UploadStorageFileMutationSchema.safeParse(gqlResult);
+        // ─────────────────────────────────────────────────────────────────────
+        // 2. Fallback: Base64 Upload via UploadStorageFile mutation
+        // ─────────────────────────────────────────────────────────────────────
+        if (!directUploadSucceeded || !fileId) {
+          console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Using fallback base64 server upload...`);
+          const base64Data = await this.fileToBase64(file);
 
-        if (!parsed.success || !parsed.data.UploadStorageFile.Success || !parsed.data.UploadStorageFile.FileID) {
-          const errorMsg = parsed.success ? parsed.data.UploadStorageFile.ErrorMessage : 'Upload response parsing failed';
-          console.error(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Failed to upload '${file.name}':`, errorMsg, parsed);
-          this.notifications.CreateSimpleNotification(`Failed to upload '${file.name}': ${errorMsg || 'Unknown error'}`, 'error');
+          this.UploadStatusText = `Uploading ${file.name} (${fileIndex}/${files.length})...`;
+          this.UploadProgressPercent = Math.max(5, progressBase + 2);
+          this.cdr.markForCheck();
+
+          const input = {
+            FileName: file.name,
+            Base64Data: base64Data,
+            MimeType: file.type || 'application/octet-stream',
+            AccountID: beforeEvent.StorageAccountID || undefined,
+            CategoryID: beforeEvent.CategoryID || undefined,
+          };
+
+          const gqlResult = await GraphQLDataProvider.ExecuteGQLWithProgress(
+            UploadStorageFileMutation,
+            { input },
+            (progress) => {
+              const singleFileSlice = 85 / files.length;
+              const currentFileBase = (i / files.length) * 100;
+              const computedPercent = Math.min(95, Math.round(currentFileBase + (progress.percent * singleFileSlice / 100)));
+              this.UploadProgressPercent = computedPercent;
+              const loadedStr = FormatAttachmentFileSize(progress.loaded);
+              const totalStr = FormatAttachmentFileSize(progress.total);
+              if (progress.percent < 100) {
+                this.UploadStatusText = `Uploading ${file.name} (${fileIndex}/${files.length}): ${loadedStr} / ${totalStr} (${progress.percent}%)...`;
+              } else {
+                this.UploadStatusText = `Processing ${file.name} on storage server...`;
+              }
+              this.cdr.markForCheck();
+            }
+          );
+
+          const parsed = UploadStorageFileMutationSchema.safeParse(gqlResult);
+          if (!parsed.success || !parsed.data.UploadStorageFile.Success || !parsed.data.UploadStorageFile.FileID) {
+            const errorMsg = parsed.success ? parsed.data.UploadStorageFile.ErrorMessage : 'Upload response parsing failed';
+            console.error(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Failed to upload '${file.name}':`, errorMsg, parsed);
+            this.notifications.CreateSimpleNotification(`Failed to upload '${file.name}': ${errorMsg || 'Unknown error'}`, 'error');
+            continue;
+          }
+
+          fileId = parsed.data.UploadStorageFile.FileID;
+          const loadedFile = await md.GetEntityObject<MJFileEntity>('MJ: Files');
+          const ok = await loadedFile.Load(fileId);
+          if (ok) {
+            fileEntity = loadedFile;
+          }
+        }
+
+        if (!fileId || !fileEntity) {
+          console.error(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] File record unavailable for '${file.name}'`);
           continue;
         }
 
-        const fileId = parsed.data.UploadStorageFile.FileID;
-        console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] File uploaded with FileID '${fileId}'. Loading file entity & creating record link...`);
+        uploadedFileEntities.push(fileEntity);
 
         this.UploadStatusText = `Linking ${file.name} to record...`;
         this.UploadProgressPercent = progressBase + Math.round((1 / files.length) * 95);
         this.cdr.markForCheck();
-
-        const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files');
-        const fileLoaded = await fileEntity.Load(fileId);
-        if (fileLoaded) {
-          uploadedFileEntities.push(fileEntity);
-        }
 
         // Create Link Entity
         const linkEntity: MJFileEntityRecordLinkEntity = await md.GetEntityObject('MJ: File Entity Record Links');
@@ -706,7 +820,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
 
         console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Record link saved (success: ${linkSuccess}, LinkID: ${linkEntity.ID})`);
 
-        if (linkSuccess && fileLoaded) {
+        if (linkSuccess && fileEntity) {
           const newItem: RecordAttachmentItem = {
             LinkID: linkEntity.ID,
             FileID: fileEntity.ID,
@@ -1169,6 +1283,58 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
     document.body.appendChild(link);
     link.click();
     link.parentNode?.removeChild(link);
+  }
+
+  /**
+   * Performs an authenticated direct binary upload of a raw File/Blob to a pre-authenticated cloud storage URL.
+   */
+  private uploadBinaryDirect(
+    uploadUrl: string,
+    file: File,
+    httpMethod: string = 'PUT',
+    headers?: Record<string, string>,
+    onProgress?: (loaded: number, total: number) => void
+  ): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open(httpMethod, uploadUrl, true);
+
+      // Set standard content type
+      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+
+      // Set any provider-specific headers (e.g. Azure BlockBlob)
+      if (headers) {
+        for (const [key, value] of Object.entries(headers)) {
+          xhr.setRequestHeader(key, value);
+        }
+      }
+
+      if (xhr.upload && onProgress) {
+        xhr.upload.onprogress = (event: ProgressEvent) => {
+          if (event.lengthComputable) {
+            onProgress(event.loaded, event.total);
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(true);
+        } else {
+          reject(new Error(`Direct binary upload failed with HTTP status ${xhr.status}: ${xhr.statusText}`));
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error('Network error occurred during direct binary upload.'));
+      };
+
+      xhr.ontimeout = () => {
+        reject(new Error('Direct binary upload timed out.'));
+      };
+
+      xhr.send(file);
+    });
   }
 
   private fileToBase64(file: File): Promise<string> {

@@ -1485,6 +1485,14 @@ export class BoxFileStorage extends FileStorageBase {
     return true;
   }
 
+  public override get SupportsPreAuthUpload(): boolean {
+    return true;
+  }
+
+  public override get SupportsPreAuthDownload(): boolean {
+    return true;
+  }
+
   /**
    * Streams a file's content from Box, optionally honoring a byte range.
    *

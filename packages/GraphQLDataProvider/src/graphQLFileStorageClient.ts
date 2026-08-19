@@ -230,8 +230,12 @@ export class GraphQLFileStorageClient {
             const mutation = gql`
                 mutation CreatePreAuthUploadUrl($input: CreatePreAuthUploadUrlInput!) {
                     CreatePreAuthUploadUrl(input: $input) {
+                        Success
+                        ErrorMessage
                         UploadUrl
                         ProviderKey
+                        HttpMethod
+                        HttpHeadersJSON
                     }
                 }
             `;
@@ -250,9 +254,23 @@ export class GraphQLFileStorageClient {
                 throw new Error("Invalid response from server");
             }
 
+            const data = result.CreatePreAuthUploadUrl;
+            let headers: Record<string, string> | undefined;
+            if (data.HttpHeadersJSON) {
+                try {
+                    headers = JSON.parse(data.HttpHeadersJSON) as Record<string, string>;
+                } catch {
+                    // ignore JSON parse failure
+                }
+            }
+
             return {
-                uploadUrl: result.CreatePreAuthUploadUrl.UploadUrl,
-                providerKey: result.CreatePreAuthUploadUrl.ProviderKey
+                success: data.Success !== false,
+                errorMessage: data.ErrorMessage,
+                uploadUrl: data.UploadUrl || '',
+                providerKey: data.ProviderKey,
+                httpMethod: data.HttpMethod || 'PUT',
+                httpHeaders: headers,
             };
         } catch (e) {
             const error = e as Error;
@@ -711,10 +729,18 @@ export interface StorageListResult {
  * Result from creating a pre-authenticated upload URL
  */
 export interface CreatePreAuthUploadUrlResult {
+    /** Whether URL generation succeeded */
+    success: boolean;
+    /** Error message if failed */
+    errorMessage?: string;
     /** The URL to use for uploading */
     uploadUrl: string;
     /** The provider-specific key for the object */
     providerKey?: string;
+    /** HTTP method to use (e.g. PUT, POST) */
+    httpMethod?: string;
+    /** Additional HTTP headers to pass */
+    httpHeaders?: Record<string, string>;
 }
 
 /**
