@@ -415,6 +415,16 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "581A8F56-96E6-4FF7-8BF0-D804FE48AFF8"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Summarize Content",
             "Status": "Active"
           },
