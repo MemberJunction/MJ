@@ -1486,7 +1486,7 @@ export class BoxFileStorage extends FileStorageBase {
   }
 
   public override get SupportsPreAuthUpload(): boolean {
-    return true;
+    return false;
   }
 
   public override get SupportsPreAuthDownload(): boolean {
