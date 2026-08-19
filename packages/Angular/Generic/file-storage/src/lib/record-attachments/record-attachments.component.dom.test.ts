@@ -12,6 +12,10 @@ import {
   MjSlidePanelComponent,
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import {
+  MJFileStorageAccountEntity,
+  MJFileStorageProviderEntity,
+} from '@memberjunction/core-entities';
 import { RecordAttachmentsComponent } from './record-attachments.component';
 import { RecordAttachmentItem } from './record-attachments.types';
 import {
@@ -84,10 +88,18 @@ describe('RecordAttachmentsComponent (DOM & Verbs)', () => {
         Visible: true,
       },
       setup: (c) => {
+        const mockAccount = { ID: 'sa-1', Name: 'Primary Blob' } satisfies Pick<
+          MJFileStorageAccountEntity,
+          'ID' | 'Name'
+        > as unknown as MJFileStorageAccountEntity;
+        const mockProvider = { ID: 'prov-1', Name: 'Azure Blob Storage', IsActive: true } satisfies Pick<
+          MJFileStorageProviderEntity,
+          'ID' | 'Name' | 'IsActive'
+        > as unknown as MJFileStorageProviderEntity;
         c.StorageAccounts = [
           {
-            account: { ID: 'sa-1', Name: 'Primary Blob' } as never,
-            provider: { ID: 'prov-1', Name: 'Azure Blob Storage', IsActive: true } as never,
+            account: mockAccount,
+            provider: mockProvider,
           },
         ];
       },
