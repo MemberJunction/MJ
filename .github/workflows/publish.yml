@@ -6,15 +6,29 @@ name: Build and publish new package versions
 # second trusted publisher entered by hand on every package, so the LTS line
 # release lives here as a separate job rather than in its own file.
 #
-#   Edge line   — push to `main` (unchanged), or a dispatch with NO line inputs.
+#   Edge line   — a push to `main` (unchanged), or a dispatch FROM main with
+#                 confirm_branch: main and no line_branch.
 #                 Jobs: test-migrations + release-validation -> build-and-publish.
 #   LTS line    — dispatch from `next` with line_branch + confirm_branch.
 #                 Job: publish-lts, which checks out the line branch itself.
 #                 Ported from publish-lts.yml (retired in this PR): guards,
 #                 era detection, --tag lts-<line>, never-latest, registry verify.
 #
-# The two paths are mutually exclusive by construction — see the `if:` on every
-# job and the dispatch-guard job that rejects a half-filled input pair.
+# EXACTLY THREE INVOCATIONS PUBLISH ANYTHING. Every other combination of event,
+# ref and inputs runs nothing at all, and dispatch-guard turns the run red:
+#
+#   1. push to main                                        -> Edge
+#   2. dispatch, ref main, confirm_branch=main, no line    -> Edge
+#   3. dispatch, line_branch=lts/N, confirm_branch=lts/N   -> that line
+#
+# Invocation 2 exists because a bare dispatch with empty inputs used to run the
+# real Edge publish: `changeset version` consumes whatever changesets are sitting
+# on the ref (93 of them on main right now) and publishes. A release is never
+# something you should be able to start by clicking Run workflow and pressing
+# enter, so the Edge path now demands the same double-entry the line path does.
+# The `if:` on every job below encodes this table; the dispatch-guard job asserts
+# the same table so a mismatch between the two shows up as a failed run rather
+# than as a publish nobody asked for.
 
 on:
   push:
@@ -34,11 +48,11 @@ on:
       # wrong thing: that ref's publish.yml has no line_branch input, so GitHub
       # rejects the dispatch outright.
       line_branch:
-        description: 'LTS path: line branch to release (e.g. lts/5). Leave EMPTY for a normal Edge publish.'
+        description: 'LTS path: line branch to release (e.g. lts/5). Leave EMPTY for an Edge publish.'
         required: false
         default: ''
       confirm_branch:
-        description: 'LTS path: type the same line branch again to confirm. Leave EMPTY for a normal Edge publish.'
+        description: 'Double-entry confirmation, required for every dispatch: type the line branch again for a line release, or "main" for a manual Edge publish (which must be dispatched from main).'
         required: false
         default: ''
 
@@ -52,12 +66,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Both paths are opt-in on their own input state, so a HALF-filled pair
-  # (exactly one of the two set) selects neither path: the edge jobs skip
-  # because an LTS input is present, publish-lts skips because line_branch is
-  # empty. Nothing publishes — correct, but a green "nothing happened" run is a
-  # lie about intent, so this job makes it red and says which input is missing.
-  # It deliberately gates nothing: it cannot block the push path.
+  # A dispatch that matches none of the three invocations above selects no path,
+  # so nothing publishes — but a green "nothing happened" run is a lie about
+  # intent, and the most dangerous input mistake (typing the line into
+  # confirm_branch alone) used to select the EDGE path. This job re-derives the
+  # table and fails the run, naming the three valid invocations. It deliberately
+  # gates nothing and has no dependents: it cannot block or delay a push.
   dispatch-guard:
     name: Validate dispatch inputs
     if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -66,28 +80,46 @@ jobs:
     env:
       LINE: ${{ github.event.inputs.line_branch }}
       CONFIRM: ${{ github.event.inputs.confirm_branch }}
+      REF: ${{ github.ref_name }}
     steps:
-      - name: Inputs must name both halves of the LTS pair, or neither
+      - name: A dispatch must be a confirmed Edge publish or a confirmed line release
         run: |
           set -euo pipefail
-          if [ -n "$LINE" ] && [ -z "$CONFIRM" ]; then
-            echo "::error::line_branch='$LINE' but confirm_branch is empty. Re-dispatch with both set to the same line branch (the double-entry guard); nothing was published."
-            exit 1
-          fi
-          if [ -z "$LINE" ] && [ -n "$CONFIRM" ]; then
-            echo "::error::confirm_branch='$CONFIRM' but line_branch is empty — this would have run the EDGE publish path, not a line release. Re-dispatch with line_branch set too; nothing was published."
-            exit 1
-          fi
-          if [ -n "$LINE" ]; then
-            echo "::notice::LTS line release dispatch for $LINE — the Edge jobs are skipped."
-          else
-            echo "::notice::Edge publish dispatch — the LTS job is skipped."
+
+          # Invocation 2 — manual Edge publish. Only from main: every step of
+          # that path is main-gated, and the changesets it consumes are main's.
+          if [ -z "$LINE" ] && [ "$CONFIRM" = 'main' ]; then
+            if [ "$REF" != 'main' ]; then
+              echo "::error::A manual Edge publish must be dispatched from main, but this run's ref is '$REF'. Nothing was published."
+              exit 1
+            fi
+            echo "::notice::Confirmed manual Edge publish from main — the LTS job is skipped."
+            exit 0
           fi
 
+          # Invocation 3 — line release. Shape is re-checked inside publish-lts,
+          # which is where a mismatch must fail loudly rather than skip.
+          if [ -n "$LINE" ] && [ "$CONFIRM" = "$LINE" ]; then
+            if ! [[ "$LINE" =~ ^lts/[0-9]+(\.[0-9]+)?$ ]]; then
+              echo "::error::line_branch='$LINE' is not a line branch. Expected lts/<major> or lts/<major>.<minor> (e.g. lts/5, lts/6.1). Nothing was published."
+              exit 1
+            fi
+            echo "::notice::Confirmed LTS line release for $LINE — the Edge jobs are skipped."
+            exit 0
+          fi
+
+          echo "::error::This dispatch matches no valid invocation (line_branch='$LINE', confirm_branch='$CONFIRM', ref='$REF') and NOTHING was published. The three ways to publish are: (1) push to main -> Edge release; (2) dispatch from main with confirm_branch=main and line_branch empty -> manual Edge release; (3) dispatch with line_branch=lts/N and confirm_branch=lts/N -> that line's release. An empty dispatch is refused on purpose: it would publish whatever changesets happen to be sitting on the ref."
+          exit 1
+
+  # Edge path. Unconditional on `push` — that trigger is the Edge release and its
+  # behavior is untouched. On a dispatch it additionally requires the invocation-2
+  # confirmation, which is repeated verbatim on all three Edge jobs; GitHub
+  # Actions has no YAML anchors, and duplicating the condition is preferable to
+  # making the release path depend on another job's output.
   test-migrations:
-    # Edge path only. The LTS job validates migration filenames on the line
-    # branch's own tree; this job would test `next`, which says nothing about it.
-    if: ${{ github.event.inputs.line_branch == '' && github.event.inputs.confirm_branch == '' }}
+    # The LTS job validates migration filenames on the line branch's own tree;
+    # this job would test `next`, which says nothing about it.
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.line_branch == '' && github.event.inputs.confirm_branch == 'main' && github.ref_name == 'main') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -132,9 +164,9 @@ jobs:
   # single test. Validate the exact commit being published with the full unit suite.
   release-validation:
     name: Validate release commit (full unit suite)
-    # Edge path only — it tests THIS ref (next/main). A line release's content
-    # is validated by the line branch's own CI on the backport PRs.
-    if: ${{ github.event.inputs.line_branch == '' && github.event.inputs.confirm_branch == '' }}
+    # Edge path only — it tests THIS ref (main). A line release's content is
+    # validated by the line branch's own CI on the backport PRs.
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.line_branch == '' && github.event.inputs.confirm_branch == 'main' && github.ref_name == 'main') }}
     uses: ./.github/workflows/release-test.yml
 
   build-and-publish:
@@ -142,7 +174,7 @@ jobs:
     # Edge path only. Redundant with `needs` (both gates carry the same `if`),
     # and deliberately so: this is the job that reaches npm, and it must never
     # depend on a skip cascade for that.
-    if: ${{ github.event.inputs.line_branch == '' && github.event.inputs.confirm_branch == '' }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.line_branch == '' && github.event.inputs.confirm_branch == 'main' && github.ref_name == 'main') }}
     # Hard preconditions: without `needs`, publish raced its own quality gates —
     # packages published to npm even when the fresh-DB migration apply failed, and
     # no test of any kind ran against the release commit. Publish requires both green.
@@ -436,6 +468,10 @@ jobs:
   # ---------------------------------------------------------------------------
   publish-lts:
     name: Publish LTS line release ${{ github.event.inputs.line_branch }}
+    # Gated on line_branch ALONE, deliberately: the confirmation and the branch
+    # shape are checked in the job's first step, so a mismatched attempt at a
+    # line release fails red instead of silently skipping. Nothing can publish
+    # from here without that step passing.
     if: ${{ github.event.inputs.line_branch != '' }}
     # 120, not publish-lts.yml's 45, for the reason spelled out on the edge job:
     # a timeout mid-`changeset publish` is DESTRUCTIVE, not a clean retry — it
