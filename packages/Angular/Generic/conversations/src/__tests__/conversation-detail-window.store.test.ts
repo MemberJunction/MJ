@@ -5,7 +5,11 @@ import {
     ConversationDetailWindowStore,
     DetailWindowLoader
 } from '../lib/services/conversation-detail-window.store';
-import { MAX_OVERREAD_ATTEMPTS, DEFAULT_RAW_OVERREAD } from '../lib/utils/conversation-detail-window';
+import {
+    MAX_OVERREAD_ATTEMPTS,
+    DEFAULT_RAW_OVERREAD,
+    MAX_REFRESH_BACKFILL_PAGES
+} from '../lib/utils/conversation-detail-window';
 
 /**
  * The store that holds ONE conversation's loaded transcript window.
@@ -285,7 +289,6 @@ describe('ConversationDetailWindowStore', () => {
         const snapshot = store.GetSnapshot();
         expect(snapshot.ConversationID).toBe('conv-b');
         expect(snapshot.Details).toEqual([]);
-        expect(snapshot.Timeline).toEqual([]);
         expect(snapshot.PinnedDetails).toEqual([]);
         expect(snapshot.Cursor).toEqual({
             OldestSequence: null,
@@ -453,5 +456,180 @@ describe('ConversationDetailWindowStore — over-read growth', () => {
         await store.LoadLatest('conv-a', user);
 
         expect(load.mock.calls.length).toBeLessThanOrEqual(MAX_OVERREAD_ATTEMPTS);
+    });
+});
+
+/**
+ * The cheap single-value accessors.
+ *
+ * These are what the chat area binds into its template, so they run on every change detection
+ * cycle. `GetSnapshot()` copies the loaded window on every call, which is why the template
+ * path must not go through it — these tests pin both halves of that contract: the accessors
+ * agree with the snapshot, and reading them repeatedly allocates nothing.
+ */
+describe('ConversationDetailWindowStore — template accessors', () => {
+    const user = {} as UserInfo;
+
+    it('agrees with the snapshot for every value the template binds', async () => {
+        const load: Mock = vi.fn().mockResolvedValue(pageOf([20, 21, 22], true));
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+        await store.LoadLatest('conv-a', user);
+        store.SetPinnedDetails([detail(21)]);
+
+        const snapshot = store.GetSnapshot();
+        expect(store.HasMoreAbove).toBe(snapshot.Cursor.HasMoreAbove);
+        expect(store.IsLoadingOlder).toBe(snapshot.IsLoadingOlder);
+        expect(store.IsLoadingLatest).toBe(snapshot.IsLoadingLatest);
+        expect(store.PinnedTotalCount).toBe(snapshot.PinnedTotalCount);
+        expect([...store.PinnedDetails]).toEqual(snapshot.PinnedDetails);
+    });
+
+    it('returns a STABLE pin reference between mutations, so bound inputs do not re-fire', async () => {
+        const load: Mock = vi.fn().mockResolvedValue(pageOf([20, 21], false));
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+        await store.LoadLatest('conv-a', user);
+        store.SetPinnedDetails([detail(21)]);
+
+        // Two reads in the same "change detection cycle" must be the same array. GetSnapshot
+        // copies, so this is exactly the difference the accessors exist to make.
+        expect(store.PinnedDetails).toBe(store.PinnedDetails);
+        expect(store.GetSnapshot().PinnedDetails).not.toBe(store.GetSnapshot().PinnedDetails);
+    });
+
+    it('changes the pin reference when the pin set actually changes', async () => {
+        const load: Mock = vi.fn().mockResolvedValue(pageOf([20, 21], false));
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+        await store.LoadLatest('conv-a', user);
+        store.SetPinnedDetails([detail(21)]);
+
+        const before = store.PinnedDetails;
+        store.ApplyLocalPin(detail(20, { IsPinned: true }));
+
+        // Stability must not become staleness — a real change has to be observable.
+        expect(store.PinnedDetails).not.toBe(before);
+        expect(store.PinnedTotalCount).toBe(2);
+    });
+
+    it('reports HasMoreAbove without building a timeline', async () => {
+        const load: Mock = vi.fn().mockResolvedValue(pageOf([20, 21, 22], true));
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+        await store.LoadLatest('conv-a', user);
+
+        expect(store.HasMoreAbove).toBe(true);
+        store.Reset('conv-b');
+        expect(store.HasMoreAbove).toBe(false);
+    });
+});
+
+/**
+ * The refresh gap.
+ *
+ * `RefreshLatest` reads the newest page. When a conversation grows by more than a page
+ * between reads — a long agent burst, a tab left open — that page begins ABOVE the loaded
+ * tail, and merging the two produces a set that sorts into order and looks whole while
+ * missing its middle. Nothing downstream can detect that: the timeline builds fine, the
+ * scroll geometry is fine, and the reader sees one message follow another that never
+ * followed it. These tests pin the two ways out — bridge the distance, or admit the break.
+ */
+describe('ConversationDetailWindowStore — refresh gap', () => {
+    const user = {} as UserInfo;
+
+    it('pages back until the refreshed tail joins the loaded window', async () => {
+        const load: Mock = vi.fn();
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+
+        load.mockResolvedValueOnce(pageOf([20, 21, 22], true));
+        await store.LoadLatest('conv-a', user);
+
+        // The conversation reached 30 while we held 22. The first refresh page lands entirely
+        // above the loaded tail, so the store reads again from that page's floor.
+        load
+            .mockResolvedValueOnce(pageOf([28, 29, 30], true))
+            .mockResolvedValueOnce(pageOf([22, 23, 24, 25, 26, 27], true));
+
+        await store.RefreshLatest(user);
+
+        // 23-27 are the rows a single-page refresh would have silently dropped.
+        expect(sequencesOf(store.GetSnapshot().Details))
+            .toEqual([20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]);
+        expect(load).toHaveBeenCalledTimes(3);       // 1 latest + 2 refresh reads
+    });
+
+    it('reads only once when the refreshed page already overlaps the tail', async () => {
+        const load: Mock = vi.fn();
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+
+        load.mockResolvedValueOnce(pageOf([20, 21, 22], true));
+        await store.LoadLatest('conv-a', user);
+
+        // The normal case by far: the same rows plus whatever arrived since. Bridging must
+        // not cost a second round trip here.
+        load.mockResolvedValueOnce(pageOf([21, 22, 23], true));
+        await store.RefreshLatest(user);
+
+        expect(load).toHaveBeenCalledTimes(2);
+        expect(sequencesOf(store.GetSnapshot().Details)).toEqual([20, 21, 22, 23]);
+    });
+
+    it('stops bridging when the engine reports nothing below the refreshed page', async () => {
+        const load: Mock = vi.fn();
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+
+        load.mockResolvedValueOnce(pageOf([20, 21, 22], true));
+        await store.LoadLatest('conv-a', user);
+
+        // Above the tail, but HasMoreAbove is false — the rows we hold were deleted server
+        // side, so there is no gap to chase and paging further would read nothing forever.
+        load.mockResolvedValueOnce(pageOf([40, 41], false));
+        await store.RefreshLatest(user);
+
+        expect(load).toHaveBeenCalledTimes(2);
+    });
+
+    it('drops the disconnected older rows rather than present a hole it cannot close', async () => {
+        const load: Mock = vi.fn();
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+
+        load.mockResolvedValueOnce(pageOf([20, 21, 22], true));
+        await store.LoadLatest('conv-a', user);
+
+        // The tail has run hundreds of rows ahead; every backfill page is still above 22.
+        let top = 300;
+        load.mockImplementation(() => {
+            const page = pageOf([top - 2, top - 1, top], true);
+            top -= 3;
+            return Promise.resolve(page);
+        });
+
+        await store.RefreshLatest(user);
+
+        const snapshot = store.GetSnapshot();
+        // The stale rows are gone — keeping them would have implied 22 is followed by 292.
+        expect(snapshot.Details.every(d => d.Sequence > 22)).toBe(true);
+        expect(snapshot.Cursor.OldestSequence).toBeGreaterThan(22);
+        // …and the break is now VISIBLE: the sentinel offers the skipped rows back.
+        expect(snapshot.Cursor.HasMoreAbove).toBe(true);
+        // 1 latest + the bounded budget. Chasing a runaway tail is the unbounded read this
+        // whole feature exists to remove.
+        expect(load).toHaveBeenCalledTimes(1 + MAX_REFRESH_BACKFILL_PAGES + 1);
+    });
+
+    it('keeps HasMoreAbove for pages the refresh never looked below', async () => {
+        const load: Mock = vi.fn();
+        const store = new ConversationDetailWindowStore({ LoadDetailWindow: load });
+
+        load.mockResolvedValueOnce(pageOf([20, 21, 22], true));
+        await store.LoadLatest('conv-a', user);
+        load.mockResolvedValueOnce(pageOf([17, 18, 19], true));
+        await store.LoadOlder(user);
+        expect(store.HasMoreAbove).toBe(true);
+
+        // The refreshed page reports HasMoreAbove for rows below ITS floor, which says nothing
+        // about what is below the window's real floor of 17. The stored answer must survive.
+        load.mockResolvedValueOnce(pageOf([21, 22, 23], false));
+        await store.RefreshLatest(user);
+
+        expect(store.HasMoreAbove).toBe(true);
+        expect(store.GetSnapshot().Cursor.OldestSequence).toBe(17);
     });
 });

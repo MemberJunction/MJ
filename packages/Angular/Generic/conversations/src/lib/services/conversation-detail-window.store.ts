@@ -5,14 +5,15 @@ import type {
     LoadDetailWindowParams,
     DetailWindowLoadResult
 } from '@memberjunction/core-entities';
-import { BuildConversationTimeline, ConversationTimelineItem } from '../utils/realtime-session-timeline';
+import { BuildConversationTimeline } from '../utils/realtime-session-timeline';
 import {
     ConversationDetailWindowCursor,
     SelectLatestTimelinePage,
     DEFAULT_TRANSCRIPT_PAGE_SIZE,
     DEFAULT_RAW_OVERREAD,
     MAX_OVERREAD_ATTEMPTS,
-    OVERREAD_GROWTH_FACTOR
+    OVERREAD_GROWTH_FACTOR,
+    MAX_REFRESH_BACKFILL_PAGES
 } from '../utils/conversation-detail-window';
 
 /**
@@ -35,13 +36,23 @@ export type ConversationDetailWindowPeripherals = Pick<
     'AgentRunsByDetailId' | 'UserAvatars' | 'RatingsByDetailId' | 'ArtifactsByDetailId'
 >;
 
+/**
+ * What a tail refresh read, and whether it managed to reach back to the rows already loaded.
+ *
+ * `ReachedPreviousTail: false` is the "the conversation ran away from us" case — see
+ * {@link MAX_REFRESH_BACKFILL_PAGES}. It is the only signal that the loaded set and the fresh
+ * set do not join up, so it must not be dropped between the read and the merge.
+ */
+interface RefreshedTail {
+    Results: DetailWindowLoadResult[];
+    ReachedPreviousTail: boolean;
+}
+
 /** What the chat area binds to after any store operation. */
 export interface ConversationDetailWindowSnapshot extends ConversationDetailWindowPeripherals {
     ConversationID: string | null;
     /** Loaded rows, chronological by Sequence. A NEW array each call, so ngOnChanges fires. */
     Details: MJConversationDetailEntity[];
-    /** Derived from Details — never independent state. */
-    Timeline: ConversationTimelineItem<MJConversationDetailEntity>[];
     Cursor: ConversationDetailWindowCursor;
     /** Pinned rows for the pins panel, INCLUDING pins older than the window. */
     PinnedDetails: MJConversationDetailEntity[];
@@ -237,16 +248,16 @@ export class ConversationDetailWindowStore {
     }
 
     /**
-     * Re-fetches the NEWEST page and folds it into the existing window.
+     * Re-fetches the tail and folds it into the existing window.
      *
      * The refresh-in-place counterpart to {@link LoadLatest}: used when something changed at
      * the tail (an agent finished, artifacts were written) and the transcript needs to pick
      * it up. Unlike `LoadLatest` it does NOT `Reset`, so a user who has paged up five times
      * keeps those pages instead of being yanked back to a 10-row tail.
      *
-     * `HasMoreAbove` is preserved when older pages are already loaded — the refreshed newest
-     * page only knows what is above ITS oldest row, which says nothing about what is above
-     * the window's true top.
+     * Reads via {@link fetchRefreshedTail}, which keeps paging down until it reaches rows the
+     * window already holds — otherwise a conversation that grew by more than a page leaves a
+     * hole in the middle of the merged set that nothing in the UI can reveal.
      */
     public async RefreshLatest(contextUser: UserInfo): Promise<void> {
         const conversationId = this.conversationId;
@@ -255,42 +266,167 @@ export class ConversationDetailWindowStore {
         }
         const generation = this.generation;
         const previousOldest = this.cursor.OldestSequence;
+        const previousNewest = this.cursor.NewestSequence;
         this.isLoadingLatest = true;
 
         try {
-            const result = await this.loader.LoadDetailWindow(
-                { ConversationID: conversationId, PageSize: DEFAULT_TRANSCRIPT_PAGE_SIZE },
-                contextUser
+            const tail = await this.fetchRefreshedTail(
+                conversationId, previousNewest, generation, contextUser
             );
-
             if (generation !== this.generation) {
                 return;
             }
-            const page = SelectLatestTimelinePage(result.Details, DEFAULT_TRANSCRIPT_PAGE_SIZE);
-            const droppedOlderRows = page.Page.length < result.Details.length;
-
-            this.mergeDetails(page.Page);
-            this.mergePeripherals(result);
-
-            const hasOlderPagesLoaded = previousOldest !== null
-                && page.OldestIncluded !== null
-                && previousOldest < page.OldestIncluded.Sequence;
-
-            this.cursor = {
-                OldestSequence: this.loadedDetails[0]?.Sequence ?? result.OldestSequence,
-                NewestSequence: this.loadedDetails[this.loadedDetails.length - 1]?.Sequence
-                    ?? result.NewestSequence,
-                // Already-loaded older pages keep their answer; otherwise the refreshed page
-                // decides, including rows its own slice discarded.
-                HasMoreAbove: hasOlderPagesLoaded
-                    ? this.cursor.HasMoreAbove
-                    : (result.HasMoreAbove || droppedOlderRows)
-            };
+            this.applyRefreshedTail(tail, previousOldest, previousNewest);
         } finally {
             if (generation === this.generation) {
                 this.isLoadingLatest = false;
             }
         }
+    }
+
+    /**
+     * Reads the newest page, then keeps paging down until the read reaches back to
+     * `previousNewest` — the newest row the window already holds.
+     *
+     * One page is enough in the normal case: a refresh usually returns rows we already have
+     * plus the handful that arrived since. The loop is for the case that is not normal, where
+     * the tail has moved further than a page and a single read would land entirely above the
+     * loaded set.
+     *
+     * @returns Every page read, plus whether the reads joined up with the loaded window.
+     */
+    private async fetchRefreshedTail(
+        conversationId: string,
+        previousNewest: number | null,
+        generation: number,
+        contextUser: UserInfo
+    ): Promise<RefreshedTail> {
+        const results: DetailWindowLoadResult[] = [];
+        let before: number | undefined = undefined;
+
+        for (let page = 0; page <= MAX_REFRESH_BACKFILL_PAGES; page++) {
+            const result = await this.loader.LoadDetailWindow(
+                { ConversationID: conversationId, BeforeSequence: before, PageSize: DEFAULT_TRANSCRIPT_PAGE_SIZE },
+                contextUser
+            );
+            if (generation !== this.generation) {
+                return { Results: results, ReachedPreviousTail: false };   // caller discards it
+            }
+            results.push(result);
+
+            if (this.tailIsJoined(result, previousNewest)) {
+                return { Results: results, ReachedPreviousTail: true };
+            }
+            before = result.OldestSequence ?? undefined;
+        }
+        return { Results: results, ReachedPreviousTail: false };
+    }
+
+    /** True when this page reaches back into the loaded window, so nothing sits between them. */
+    private tailIsJoined(result: DetailWindowLoadResult, previousNewest: number | null): boolean {
+        // Nothing loaded to join up WITH, or the read came back empty — either way, done.
+        if (previousNewest === null || result.OldestSequence === null) {
+            return true;
+        }
+        // The page overlaps or abuts what we hold.
+        if (result.OldestSequence <= previousNewest) {
+            return true;
+        }
+        // The engine's probe says no row exists below this page at all. The rows we hold are
+        // below it, so they have since been deleted — there is no gap left to bridge.
+        return !result.HasMoreAbove;
+    }
+
+    /**
+     * Folds a refreshed tail into the window, choosing what to keep by whether the read
+     * joined up with the rows already loaded.
+     */
+    private applyRefreshedTail(
+        tail: RefreshedTail,
+        previousOldest: number | null,
+        previousNewest: number | null
+    ): void {
+        const fetched = tail.Results.flatMap(result => result.Details);
+        const hasMoreAbove = this.mergeRefreshedRows(tail, fetched, previousOldest, previousNewest);
+
+        for (const result of tail.Results) {
+            this.mergePeripherals(result);
+        }
+        this.cursor = {
+            OldestSequence: this.loadedDetails[0]?.Sequence ?? null,
+            NewestSequence: this.loadedDetails[this.loadedDetails.length - 1]?.Sequence ?? null,
+            HasMoreAbove: hasMoreAbove
+        };
+    }
+
+    /** Merges the refreshed rows per the three refresh cases. @returns the new `HasMoreAbove`. */
+    private mergeRefreshedRows(
+        tail: RefreshedTail,
+        fetched: MJConversationDetailEntity[],
+        previousOldest: number | null,
+        previousNewest: number | null
+    ): boolean {
+        if (previousNewest === null) {
+            // Nothing loaded — this is a first paint wearing a refresh's name, so bound it to
+            // a page the way LoadLatest does.
+            const page = SelectLatestTimelinePage(fetched, DEFAULT_TRANSCRIPT_PAGE_SIZE);
+            this.mergeDetails(page.Page);
+            const last = tail.Results[tail.Results.length - 1];
+            return (last?.HasMoreAbove ?? false) || page.Page.length < fetched.length;
+        }
+
+        if (tail.ReachedPreviousTail) {
+            // Keep EVERY fetched row down to the window's existing floor. Slicing to a page
+            // here is what opened the hole: the read deliberately spans the distance back to
+            // the loaded tail, and discarding its middle throws away the very rows that make
+            // the merged set contiguous. Rows below the floor are dropped so a refresh cannot
+            // quietly grow the window downward — that is LoadOlder's job.
+            this.mergeDetails(previousOldest === null
+                ? fetched
+                : fetched.filter(detail => detail.Sequence >= previousOldest));
+            // The floor did not move, so what is below it is still whatever we last learned.
+            return this.cursor.HasMoreAbove;
+        }
+
+        // Could not bridge within the page budget. Drop the now-disconnected older rows and
+        // keep the fresh tail: a visible gap the sentinel can close beats an invisible one.
+        this.loadedDetails = [];
+        this.mergeDetails(fetched);
+        return true;
+    }
+
+    /**
+     * Cheap single-value reads for TEMPLATE binding.
+     *
+     * These exist because the chat area exposes `HasMoreAbove`, `IsLoadingOlder`,
+     * `PinnedTotalCount`, and `PinnedDetails` as getters bound in its template, so every
+     * change-detection cycle reads all four. Routing those through {@link GetSnapshot} copied
+     * the whole loaded window four times per cycle — during streaming, per token — on a
+     * component whose entire purpose is to stop doing work proportional to conversation length.
+     *
+     * {@link PinnedDetails} deliberately returns the internal array BY REFERENCE. Every mutator
+     * replaces that array rather than mutating it, so the reference is stable between real
+     * changes — which is precisely what keeps the pins panel's `ngOnChanges` from firing on
+     * every cycle. Callers must not mutate it.
+     */
+    public get HasMoreAbove(): boolean {
+        return this.cursor.HasMoreAbove;
+    }
+
+    public get IsLoadingOlder(): boolean {
+        return this.isLoadingOlder;
+    }
+
+    public get IsLoadingLatest(): boolean {
+        return this.isLoadingLatest;
+    }
+
+    public get PinnedTotalCount(): number {
+        return this.pinnedTotalCount;
+    }
+
+    public get PinnedDetails(): readonly MJConversationDetailEntity[] {
+        return this.pinnedDetails;
     }
 
     /** True when a `LoadOlder` would actually do work. Drives the sentinel's observer. */
@@ -365,13 +501,19 @@ export class ConversationDetailWindowStore {
         }
     }
 
-    /** Everything the chat area needs to render. Arrays are fresh so ngOnChanges fires. */
+    /**
+     * Everything the chat area needs to render, copied. Arrays are fresh so ngOnChanges fires.
+     *
+     * Call this from imperative paths (a load completing, a jump loop) — NOT from a template
+     * getter. It copies the loaded set on every call, so binding it into change detection
+     * pays that copy once per checked cycle for state that mostly has not moved. The cheap
+     * single-value accessors above exist for exactly that case.
+     */
     public GetSnapshot(): ConversationDetailWindowSnapshot {
         const details = [...this.loadedDetails];
         return {
             ConversationID: this.conversationId,
             Details: details,
-            Timeline: BuildConversationTimeline(details),
             Cursor: { ...this.cursor },
             PinnedDetails: [...this.pinnedDetails],
             PinnedTotalCount: this.pinnedTotalCount,

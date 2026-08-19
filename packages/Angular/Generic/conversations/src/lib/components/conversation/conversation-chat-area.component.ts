@@ -891,7 +891,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * the panel has been opened and would hide the chip on a conversation full of pins.
    */
   get pinnedMessageCount(): number {
-    return this.windowStore.GetSnapshot().PinnedTotalCount;
+    return this.windowStore.PinnedTotalCount;
   }
 
   /**
@@ -920,19 +920,25 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Read from the window store's separate pin set, NOT filtered out of `messages` — a pin
    * older than the loaded window would otherwise vanish from the panel. Loaded by its own
    * `IsPinned=1` query in {@link loadMessages}, already ordered `Sequence DESC`.
+   *
+   * This and the three getters around it are TEMPLATE-BOUND, so they run on every change
+   * detection cycle. They read the store's cheap single-value accessors rather than
+   * `GetSnapshot()`, which copies the whole loaded window on every call — four of those per
+   * cycle, during streaming per token, is exactly the length-proportional work this feature
+   * exists to remove.
    */
-  get pinnedMessages(): MJConversationDetailEntity[] {
-    return this.windowStore.GetSnapshot().PinnedDetails;
+  get pinnedMessages(): readonly MJConversationDetailEntity[] {
+    return this.windowStore.PinnedDetails;
   }
 
   /** True when older transcript pages remain above the loaded window (drives the sentinel). */
   get hasMoreMessagesAbove(): boolean {
-    return this.windowStore.GetSnapshot().Cursor.HasMoreAbove;
+    return this.windowStore.HasMoreAbove;
   }
 
   /** True while an older transcript page is being fetched. */
   get isLoadingOlderMessages(): boolean {
-    return this.windowStore.GetSnapshot().IsLoadingOlder;
+    return this.windowStore.IsLoadingOlder;
   }
 
   /**

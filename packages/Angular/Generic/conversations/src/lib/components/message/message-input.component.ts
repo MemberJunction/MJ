@@ -2034,7 +2034,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Direction, not on Visibility.
    */
   private async loadPreviousPayloadForAgent(agentId: string): Promise<{
-    payload: any;
+    payload: Record<string, unknown> | null;
     artifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null;
   }> {
     if (!this.conversationId) {
@@ -2246,7 +2246,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     const agentName = previousAgent.Name || 'Agent';
 
-    let previousPayload: any = null;
+    let previousPayload: Record<string, unknown> | null = null;
     let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
 
     // Resolved by QUERY, not from the window's artifact maps: `lastAIMessage` can sit inside
@@ -2506,7 +2506,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     const agentName = agent.Name || 'Agent';
 
-    let previousPayload: any = null;
+    let previousPayload: Record<string, unknown> | null = null;
     let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
     let previousConfigurationId: string | undefined = undefined;
 

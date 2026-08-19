@@ -9,7 +9,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   SelectLatestTimelinePage,
-  NeedsSessionExpansion,
   DEFAULT_TRANSCRIPT_PAGE_SIZE,
   DEFAULT_RAW_OVERREAD
 } from '../lib/utils/conversation-detail-window';
@@ -148,23 +147,6 @@ describe('SelectLatestTimelinePage — session atomicity', () => {
     const { Page } = SelectLatestTimelinePage(rows, 1);
 
     expect(Page).toEqual([blank]);
-  });
-});
-
-describe('NeedsSessionExpansion', () => {
-  it('returns the session id when the oldest fetched row is session-stamped', () => {
-    expect(NeedsSessionExpansion(detail({ AgentSessionID: 'SESSION-A' }))).toBe('SESSION-A');
-  });
-
-  it('trims the stamp so the follow-up filter gets a clean id', () => {
-    expect(NeedsSessionExpansion(detail({ AgentSessionID: '  SESSION-A  ' }))).toBe('SESSION-A');
-  });
-
-  it('returns null for an unstamped row, a blank stamp, or no row at all', () => {
-    expect(NeedsSessionExpansion(detail())).toBeNull();
-    expect(NeedsSessionExpansion(detail({ AgentSessionID: '   ' }))).toBeNull();
-    expect(NeedsSessionExpansion(undefined)).toBeNull();
-    expect(NeedsSessionExpansion(null)).toBeNull();   // ← needs the widened signature
   });
 });
 

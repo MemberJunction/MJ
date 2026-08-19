@@ -34,14 +34,17 @@ export interface ArtifactLookupContext {
 /**
  * An agent's prior OUTPUT artifact, resolved for payload continuity.
  *
- * `payload` is the parsed `ArtifactVersion.Content`. It is null when the version carried no
- * content or the content did not parse — callers treat that the same as "no prior artifact".
+ * `payload` is the parsed `ArtifactVersion.Content`, typed to match what actually consumes it
+ * — `executeAgentContinuation` and `invokeSubAgent` both take `Record<string, unknown> | null`.
+ * It is null when the version carried no content, the content did not parse, or the content
+ * parsed to something that is not a JSON object; callers treat all three the same as "no prior
+ * artifact", which is already a legal agent input.
  */
 export interface AgentPayloadSource {
   artifactId: string;
   versionId: string;
   versionNumber: number;
-  payload: unknown | null;
+  payload: Record<string, unknown> | null;
 }
 
 /**
@@ -326,7 +329,7 @@ export class ConversationAgentService {
     conversationHistory: MJConversationDetailEntity[],
     reasoning: string,
     conversationDetailId: string,
-    payload?: unknown,
+    payload?: Record<string, unknown> | null,
     onProgress?: AgentExecutionProgressCallback,
     sourceArtifactId?: string,
     sourceArtifactVersionId?: string,
@@ -379,7 +382,7 @@ export class ConversationAgentService {
           invocationReason: reasoning,
           ...(appContext ? { appContext } : {}),
         },
-        ...(payload ? { Payload: payload as Record<string, unknown> } : {}),
+        ...(payload ? { Payload: payload } : {}),
         ...(aiConfigurationId ? { ConfigurationId: aiConfigurationId } : {}),
         ...(planMode ? { PlanMode: true } : {}),
         ...(requestedSkillIDs?.length ? { RequestedSkillIDs: requestedSkillIDs } : {}),
@@ -701,18 +704,28 @@ ${compactHistory}${artifactContext}
 }
 
 /**
- * Parses an artifact version's `Content` into a payload. Returns null rather than throwing —
- * a malformed artifact must not take down the send path, and "no payload" is already a legal
- * agent input.
+ * Parses an artifact version's `Content` into an agent payload. Returns null rather than
+ * throwing — a malformed artifact must not take down the send path, and "no payload" is
+ * already a legal agent input.
+ *
+ * A payload must be a JSON OBJECT. Valid JSON that parses to an array, string, or number is
+ * rejected for the same reason a parse failure is: every consumer spreads it or reads named
+ * keys off it, so a non-object would satisfy the type at the boundary and misbehave deeper in.
  */
-function parseArtifactContent(content: string | null | undefined): unknown | null {
+function parseArtifactContent(content: string | null | undefined): Record<string, unknown> | null {
   if (!content) {
     return null;
   }
   try {
-    return JSON.parse(content);
+    const parsed: unknown = JSON.parse(content);
+    return isPayloadObject(parsed) ? parsed : null;
   } catch (error) {
     console.warn('Artifact version content did not parse as JSON:', error);
     return null;
   }
+}
+
+/** Narrows a parsed JSON value to a plain object — the only shape a payload may take. */
+function isPayloadObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

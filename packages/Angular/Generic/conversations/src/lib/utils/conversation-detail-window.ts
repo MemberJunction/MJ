@@ -37,12 +37,15 @@ export function SelectLatestTimelinePage<T extends RealtimeTimelineSourceDetail>
 
 
 
-
-export function NeedsSessionExpansion(
-    oldestFetched: RealtimeTimelineSourceDetail | null | undefined
-): string | null {
-    return trimmedSessionId(oldestFetched?.AgentSessionID ?? null);
-}
+// NOTE: the plan also called for a `NeedsSessionExpansion` helper here, shared between the
+// store and the engine. It is not exported, because there is no such shared caller: deciding
+// whether a fetched page landed mid-session is something only the fetcher can act on, and the
+// fetcher is `ConversationEngine.expandOldestSession` in `@memberjunction/core-entities`.
+// That package cannot import from this one — the dependency runs Angular → core-entities and
+// must never run the other way — so a helper here would have been exported, tested, and
+// called by nothing. The engine makes the same `trim()` check inline against the row it just
+// read. `trimmedSessionId` below keeps that definition honest on THIS side of the boundary,
+// where `SelectLatestTimelinePage` does need it.
 
 /**
  * Trims the stamped session id; empty/whitespace stamps count as unstamped — mirrors the
@@ -77,6 +80,23 @@ export const MAX_OVERREAD_ATTEMPTS = 3;
 
 /** Multiplier applied to the over-read on each retry. */
 export const OVERREAD_GROWTH_FACTOR = 2;
+
+/**
+ * Extra pages a tail refresh may read to bridge back to the rows it already holds.
+ *
+ * A refresh reads the NEWEST page. If the conversation grew by more than a page since the
+ * last read — a long agent burst, a tab left open — that page starts above the loaded tail
+ * and the rows in between belong to neither. Merging the two anyway produces a set that
+ * sorts into order and looks contiguous while silently missing its middle, which is the
+ * worst possible outcome: nothing about the transcript says anything is absent.
+ *
+ * So the refresh pages down until it reaches known rows. Bounded, because "the tail ran away
+ * from us" has no upper limit and chasing it without one is the unbounded read this whole
+ * feature exists to remove. Past the budget the refresh drops the disconnected older rows
+ * instead and lets the sentinel offer them back — a visible gap the reader can close, rather
+ * than an invisible one they cannot.
+ */
+export const MAX_REFRESH_BACKFILL_PAGES = 3;
 
 export interface ConversationDetailWindowCursor {
     /** Exclusive upper bound for the next older fetch. Null only when the window is empty. */
