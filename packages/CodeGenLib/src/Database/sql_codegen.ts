@@ -6,7 +6,7 @@ import path from 'path';
 import { SQLUtilityBase } from './sql';
 import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContext, CodeGenConnection, PhasedExecutionResult } from './codeGenDatabaseProvider';
 
-import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
+import { autoIndexForeignKeys, autoIndexSoftPrimaryKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
 import { ManageMetadataBase, ViewRegenEntry } from './manage-metadata';
 
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -1148,9 +1148,21 @@ export class SQLCodeGenBase {
             let baseViewChanged = false;
             // Indexes for Fkeys for the table (skip for virtual entities — views can't have indexes)
             if (!options.onlyPermissions && !options.entity.VirtualEntity){
-                const shouldGenerateIndexes = autoIndexForeignKeys() || (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.indexes);
+                const forceIndexes = !!(configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.indexes);
+                const shouldGenerateIndexes = autoIndexForeignKeys() || forceIndexes;
                 const indexSQL = shouldGenerateIndexes ? this.generateIndexesForForeignKeys(options.pool, options.entity) : ''; // generate indexes if auto-indexing is on OR force regeneration is enabled
-                const s = this.generateSingleEntitySQLFileHeader(options.entity, 'Index for Foreign Keys') + indexSQL; 
+                // The soft-PK index rides in the same generated file (and therefore the same
+                // migration log), but on its own setting — see generateIndexForSoftPrimaryKey.
+                // Appended rather than prepended so the file's existing content stays
+                // byte-identical for every entity that has no soft PK, which is nearly all of
+                // them: writeFileIfChanged compares content, and reordering would rewrite the
+                // whole tree for no functional gain.
+                const softPKSQL = (autoIndexSoftPrimaryKeys() || forceIndexes)
+                    ? this.generateIndexForSoftPrimaryKey(options.entity)
+                    : '';
+                const s = this.generateSingleEntitySQLFileHeader(options.entity, 'Index for Foreign Keys')
+                    + indexSQL
+                    + (softPKSQL ? (indexSQL ? '\n\n' : '') + softPKSQL : '');
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('index', options.entity.SchemaName, options.entity.BaseTable, false, true));
                     this.writeFileIfChanged(filePath, s);
@@ -1530,6 +1542,20 @@ export class SQLCodeGenBase {
      */
     generateIndexesForForeignKeys(pool: CodeGenConnection, entity: EntityInfo): string {
         const indexStatements = this._dbProvider.generateForeignKeyIndexes(entity);
+        return indexStatements.join('\n\n');
+    }
+
+    /**
+     * Generates the composite index covering the entity's SOFT primary key. Empty for every
+     * entity with a real `PRIMARY KEY` constraint, which is nearly all of them.
+     *
+     * Kept separate from {@link generateIndexesForForeignKeys} and gated by its own setting: a
+     * soft-PK index serves MJ's own per-record existence check on the create path, which is a
+     * different concern from indexing foreign keys for joins and filters, and an operator's
+     * opinion about one is not an opinion about the other.
+     */
+    generateIndexForSoftPrimaryKey(entity: EntityInfo): string {
+        const indexStatements = this._dbProvider.generateSoftPrimaryKeyIndex(entity);
         return indexStatements.join('\n\n');
     }
 
