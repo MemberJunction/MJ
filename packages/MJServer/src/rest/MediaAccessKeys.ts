@@ -24,6 +24,9 @@ import jwt from 'jsonwebtoken';
 /** The token's `typ` claim — the route rejects any token whose `typ` differs. */
 export const MEDIA_ACCESS_TOKEN_TYPE = 'media-access';
 
+/** The upload staging token's `typ` claim. */
+export const MEDIA_UPLOAD_ACCESS_TOKEN_TYPE = 'media-upload';
+
 /** Default media-access token lifetime (hours). Long enough to cover a full playback session. */
 export const MEDIA_ACCESS_DEFAULT_TTL_HOURS = 4;
 
@@ -96,6 +99,38 @@ export class MediaAccessKeyManager extends BaseSingleton<MediaAccessKeyManager> 
   }
 
   /**
+   * Mints a signed upload staging token for a user, expiring after `ttlMinutes`.
+   */
+  public SignUpload(userId: string, ttlMinutes: number = 60): { Token: string; ExpiresAt: Date } {
+    this.ensureSecret();
+    const claims = { fileId: '*', userId, typ: MEDIA_UPLOAD_ACCESS_TOKEN_TYPE };
+    const expiresInSeconds = Math.floor(ttlMinutes * 60);
+    const token = jwt.sign(claims, this.secret, { algorithm: 'HS256', expiresIn: expiresInSeconds });
+    const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
+    return { Token: token, ExpiresAt: expiresAt };
+  }
+
+  /**
+   * Verifies an upload staging token.
+   */
+  public VerifyUpload(token: string): { Valid: boolean; UserId?: string } {
+    this.ensureSecret();
+    try {
+      const decoded = jwt.verify(token, this.secret, { algorithms: ['HS256'] });
+      if (
+        typeof decoded === 'object' && decoded !== null &&
+        (decoded as { typ?: unknown }).typ === MEDIA_UPLOAD_ACCESS_TOKEN_TYPE &&
+        typeof (decoded as { userId?: unknown }).userId === 'string'
+      ) {
+        return { Valid: true, UserId: (decoded as { userId: string }).userId };
+      }
+      return { Valid: false };
+    } catch {
+      return { Valid: false };
+    }
+  }
+
+  /**
    * Verifies a token's signature, expiry, and `typ`. Returns the typed claims on
    * success. Never throws — an invalid/expired/malformed token returns `{ Valid: false }`.
    */
@@ -119,3 +154,4 @@ export class MediaAccessKeyManager extends BaseSingleton<MediaAccessKeyManager> 
     }
   }
 }
+

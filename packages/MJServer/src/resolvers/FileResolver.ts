@@ -41,6 +41,7 @@ import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { GetReadOnlyProvider } from '../util.js';
 import { configInfo } from '../config.js';
 import { MediaAccessKeyManager } from '../rest/MediaAccessKeys.js';
+import { UploadTokenManager } from '../rest/UploadTokenManager.js';
 import { deriveSidecarPath, parsePeaksSidecar } from './peaksSidecar.js';
 
 @InputType()
@@ -51,11 +52,14 @@ export class CreateUploadURLInput {
 
 @InputType()
 export class UploadStorageFileInput {
-  @Field(() => String)
-  FileName: string;
+  @Field(() => String, { nullable: true })
+  FileName?: string;
 
-  @Field(() => String)
-  Base64Data: string;
+  @Field(() => String, { nullable: true })
+  Base64Data?: string;
+
+  @Field(() => String, { nullable: true })
+  UploadToken?: string;
 
   @Field(() => String, { nullable: true })
   MimeType?: string;
@@ -631,8 +635,29 @@ export class FileResolver extends FileResolverBase {
       const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
       fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
-      const buffer = Buffer.from(input.Base64Data, 'base64');
-      const mimeType = input.MimeType || 'application/octet-stream';
+      let buffer: Buffer;
+      let fileName: string = input.FileName || 'file';
+      let mimeType: string = input.MimeType || 'application/octet-stream';
+
+      if (input.UploadToken) {
+        const staged = UploadTokenManager.Instance.Consume(input.UploadToken, user.ID);
+        if (!staged) {
+          return {
+            Success: false,
+            ErrorMessage: 'Upload token is invalid, expired, or has already been used.',
+          };
+        }
+        buffer = staged.buffer;
+        fileName = input.FileName || staged.fileName || 'file';
+        mimeType = input.MimeType || staged.mimeType || 'application/octet-stream';
+      } else if (input.Base64Data) {
+        buffer = Buffer.from(input.Base64Data, 'base64');
+      } else {
+        return {
+          Success: false,
+          ErrorMessage: 'Either UploadToken or Base64Data must be provided.',
+        };
+      }
 
       // Ensure FileStorageEngine is configured under the user context
       await FileStorageEngine.Instance.Config(false, user, provider);
@@ -642,7 +667,7 @@ export class FileResolver extends FileResolverBase {
 
       const uploadResult = await FileStorageEngine.Instance.UploadFile({
         content: buffer,
-        fileName: input.FileName,
+        fileName,
         mimeType,
         contextUser: user,
         storageAccountId: input.AccountID,

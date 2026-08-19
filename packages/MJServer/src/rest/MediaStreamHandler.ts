@@ -20,11 +20,15 @@
 
 import express, { type Router, type Request, type Response } from 'express';
 import { LogError, Metadata, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 import type { FileStorageBase, ByteRange } from '@memberjunction/storage';
+import jwt from 'jsonwebtoken';
 import { getSystemUser } from '../auth/index.js';
 import { MediaAccessKeyManager } from './MediaAccessKeys.js';
+import { UploadTokenManager } from './UploadTokenManager.js';
 import { parseRange, parseRangeHeaderLoose } from './mediaRange.js';
 
 /** A located bytes source for a file: the driver + the provider key to read. */
@@ -35,13 +39,22 @@ interface FileBytesSource {
   fileName: string;
 }
 
-
 /**
- * Builds the Express router exposing `GET /media/:fileId` and `GET /media/:fileId/:filename`.
- * Stateless — verification and byte-source resolution happen per request.
+ * Builds the Express router exposing:
+ * - `GET /media/:fileId` and `GET /media/:fileId/:filename` (Range streaming)
+ * - `POST /media/upload-stage` (Raw binary upload staging)
  */
 export function createMediaStreamRouter(): Router {
   const router = express.Router();
+
+  router.post(
+    '/upload-stage',
+    express.raw({ type: () => true, limit: '100mb' }),
+    async (req: Request, res: Response) => {
+      await handleUploadStageRequest(req, res);
+    }
+  );
+
   router.get('/:fileId', async (req: Request, res: Response) => {
     await handleMediaRequest(req, res);
   });
@@ -49,6 +62,93 @@ export function createMediaStreamRouter(): Router {
     await handleMediaRequest(req, res);
   });
   return router;
+}
+
+/**
+ * Authenticated raw binary upload staging handler (`POST /media/upload-stage`).
+ *
+ * Accepts raw file binary bytes directly in request body, stages in UploadTokenManager
+ * memory cache, and returns an ephemeral single-use upload token for the GraphQL mutation.
+ */
+async function handleUploadStageRequest(req: Request, res: Response): Promise<void> {
+  // Never let CDNs or shared caches retain upload endpoints
+  res.setHeader('Cache-Control', 'private, no-store');
+
+  // 1. Resolve user from Authorization header or ?token=
+  const authHeader = req.headers.authorization || '';
+  const queryToken = typeof req.query.token === 'string' ? req.query.token : '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : (authHeader || queryToken);
+
+  let userId: string | null = null;
+
+  if (token) {
+    // Check if token was minted by MediaAccessKeyManager
+    const uploadVerify = MediaAccessKeyManager.Instance.VerifyUpload(token);
+    if (uploadVerify.Valid && uploadVerify.UserId) {
+      userId = uploadVerify.UserId;
+    } else {
+      // Check standard session JWT
+      try {
+        const decoded = jwt.decode(token);
+        if (typeof decoded === 'object' && decoded !== null) {
+          const d = decoded as { email?: string; preferred_username?: string; sub?: string; user_id?: string; ID?: string; id?: string };
+          const email = (d.email || d.preferred_username || '').trim().toLowerCase();
+          const sub = d.sub || d.user_id || d.ID || d.id || '';
+
+          const cachedUser = UserCache.Instance.Users.find(
+            (u) => (email && u.Email?.toLowerCase() === email) || (sub && UUIDsEqual(u.ID, sub))
+          );
+          userId = cachedUser ? cachedUser.ID : sub || null;
+        }
+      } catch {
+        // invalid token
+      }
+    }
+  }
+
+  if (!userId) {
+    res.status(401).json({ Success: false, ErrorMessage: 'Authentication required.' });
+    return;
+  }
+
+  // 2. Validate binary body
+  const buffer = req.body as Buffer;
+  if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
+    res.status(400).json({ Success: false, ErrorMessage: 'Empty or invalid file payload.' });
+    return;
+  }
+
+  // 3. Extract metadata
+  const rawFileName = (req.headers['x-file-name'] as string) || (req.query.fileName as string) || 'upload.bin';
+  let fileName = 'upload.bin';
+  try {
+    fileName = decodeURIComponent(rawFileName);
+  } catch {
+    fileName = rawFileName;
+  }
+
+  const mimeType = (req.headers['content-type'] as string) || (req.query.mimeType as string) || 'application/octet-stream';
+
+  try {
+    const uploadToken = UploadTokenManager.Instance.Stage({
+      buffer,
+      fileName,
+      mimeType,
+      userId,
+    });
+
+    res.status(200).json({
+      Success: true,
+      UploadToken: uploadToken,
+      FileName: fileName,
+      MimeType: mimeType,
+      ContentLength: buffer.length,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    LogError(`[MediaStream] Upload staging failed for '${fileName}': ${message}`);
+    res.status(400).json({ Success: false, ErrorMessage: message });
+  }
 }
 
 /** Top-level request handler: verify token → resolve bytes → stream/buffer with Range support. */

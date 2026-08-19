@@ -728,10 +728,65 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        // 2. Fallback: Base64 Upload via UploadStorageFile mutation
+        // 2. Tier 2: Ephemeral Binary Upload Staging + GraphQL Token Commit
         // ─────────────────────────────────────────────────────────────────────
         if (!directUploadSucceeded || !fileId) {
-          console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Using fallback base64 server upload...`);
+          try {
+            console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Staging binary bytes via /media/upload-stage...`);
+            this.UploadStatusText = `Uploading ${file.name} (${fileIndex}/${files.length})...`;
+            this.UploadProgressPercent = Math.max(5, progressBase + 2);
+            this.cdr.markForCheck();
+
+            const uploadToken = await this.uploadBinaryStage(file, (loaded, total) => {
+              const singleFileSlice = 85 / files.length;
+              const currentFileBase = (i / files.length) * 100;
+              const percent = Math.round((loaded / total) * 100);
+              const computedPercent = Math.min(95, Math.round(currentFileBase + (percent * singleFileSlice / 100)));
+              this.UploadProgressPercent = computedPercent;
+              const loadedStr = FormatAttachmentFileSize(loaded);
+              const totalStr = FormatAttachmentFileSize(total);
+              if (percent < 100) {
+                this.UploadStatusText = `Uploading ${file.name} (${fileIndex}/${files.length}): ${loadedStr} / ${totalStr} (${percent}%)...`;
+              } else {
+                this.UploadStatusText = `Saving ${file.name} to storage provider...`;
+              }
+              this.cdr.markForCheck();
+            });
+
+            this.UploadStatusText = `Finalizing ${file.name} in MemberJunction...`;
+            this.cdr.markForCheck();
+
+            const gqlResult = await GraphQLDataProvider.ExecuteGQL(UploadStorageFileMutation, {
+              input: {
+                UploadToken: uploadToken,
+                FileName: file.name,
+                MimeType: file.type || 'application/octet-stream',
+                AccountID: beforeEvent.StorageAccountID || undefined,
+                CategoryID: beforeEvent.CategoryID || undefined,
+              },
+            });
+
+            const parsed = UploadStorageFileMutationSchema.safeParse(gqlResult);
+            if (parsed.success && parsed.data.UploadStorageFile.Success && parsed.data.UploadStorageFile.FileID) {
+              fileId = parsed.data.UploadStorageFile.FileID;
+              const loadedFile = await md.GetEntityObject<MJFileEntity>('MJ: Files');
+              const ok = await loadedFile.Load(fileId);
+              if (ok) {
+                fileEntity = loadedFile;
+                directUploadSucceeded = true;
+                console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Tier 2 binary staging & upload completed (FileID: ${fileId})`);
+              }
+            }
+          } catch (stageErr) {
+            console.warn(`[RecordAttachmentsComponent] Tier 2 binary staging failed, falling back to base64:`, stageErr);
+          }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // 3. Tier 3 (Fallback): Base64 Upload via UploadStorageFile mutation
+        // ─────────────────────────────────────────────────────────────────────
+        if (!directUploadSucceeded || !fileId) {
+          console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Using Tier 3 fallback base64 server upload...`);
           const base64Data = await this.fileToBase64(file);
 
           this.UploadStatusText = `Uploading ${file.name} (${fileIndex}/${files.length})...`;
@@ -1308,6 +1363,71 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
 
       xhr.ontimeout = () => {
         reject(new Error('Direct binary upload timed out.'));
+      };
+
+      xhr.send(file);
+    });
+  }
+
+  /**
+   * Performs an authenticated raw binary streaming upload to the /media/upload-stage REST endpoint.
+   * Returns an ephemeral single-use upload token to pass to the GraphQL UploadStorageFile mutation.
+   */
+  private uploadBinaryStage(
+    file: File,
+    onProgress?: (loaded: number, total: number) => void
+  ): Promise<string> {
+    return new Promise((resolve, reject) => {
+      let uploadUrl = '/media/upload-stage';
+      const gqlUrl = GraphQLDataProvider.Instance?.ConfigData?.URL;
+      if (gqlUrl && gqlUrl.startsWith('http')) {
+        uploadUrl = gqlUrl.replace(/\/graphql\/?$/i, '') + '/media/upload-stage';
+      }
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', uploadUrl, true);
+
+      // Auth header
+      const token = GraphQLDataProvider.Instance?.ConfigData?.Token;
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
+
+      // Metadata headers
+      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+      xhr.setRequestHeader('x-file-name', encodeURIComponent(file.name));
+
+      if (xhr.upload && onProgress) {
+        xhr.upload.onprogress = (event: ProgressEvent) => {
+          if (event.lengthComputable) {
+            onProgress(event.loaded, event.total);
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const res = JSON.parse(xhr.responseText) as { Success?: boolean; UploadToken?: string; ErrorMessage?: string };
+            if (res.Success && res.UploadToken) {
+              resolve(res.UploadToken);
+            } else {
+              reject(new Error(res.ErrorMessage || 'Upload staging returned unsuccessful status'));
+            }
+          } catch {
+            reject(new Error('Failed to parse upload staging response JSON'));
+          }
+        } else {
+          reject(new Error(`Upload staging failed with HTTP status ${xhr.status}: ${xhr.statusText}`));
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error('Network error occurred during upload staging.'));
+      };
+
+      xhr.ontimeout = () => {
+        reject(new Error('Upload staging timed out.'));
       };
 
       xhr.send(file);
