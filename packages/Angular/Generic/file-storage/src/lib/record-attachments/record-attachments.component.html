@@ -350,76 +350,78 @@
       </div>
 
       <div class="mj-preview-dialog-body">
-        @if (IsLoadingPreview) {
-          <mj-loading text="Loading preview..."></mj-loading>
-        } @else {
-          @switch (GetMediaType(ActivePreviewItem)) {
-            @case ('image') {
-              @if (ActivePreviewUrl) {
-                <div class="mj-preview-image-container">
-                  <img [src]="ActivePreviewUrl" [alt]="ActivePreviewItem.Name" />
-                </div>
-              } @else {
-                <div class="mj-preview-generic-box">
-                  <i class="fa-solid fa-file-image mj-preview-generic-icon"></i>
-                  <div class="mj-preview-generic-title">{{ ActivePreviewItem.Name }}</div>
-                  <div class="mj-preview-generic-sub">Preview could not be loaded</div>
-                </div>
-              }
-            }
-            @case ('pdf') {
-              @if (ActivePreviewSafeUrl) {
-                <div class="mj-preview-frame-container">
-                  <iframe [src]="ActivePreviewSafeUrl" title="PDF Preview"></iframe>
-                </div>
-              } @else {
-                <div class="mj-preview-generic-box">
-                  <i class="fa-solid fa-file-pdf mj-preview-generic-icon"></i>
-                  <div class="mj-preview-generic-title">{{ ActivePreviewItem.Name }}</div>
-                  <div class="mj-preview-generic-sub">PDF preview could not be loaded</div>
-                </div>
-              }
-            }
-            @case ('video') {
-              @if (ActivePreviewUrl) {
-                <div class="mj-preview-media-container">
-                  <video controls autoplay [src]="ActivePreviewUrl"></video>
-                </div>
-              } @else {
-                <div class="mj-preview-generic-box">
-                  <i class="fa-solid fa-file-video mj-preview-generic-icon"></i>
-                  <div class="mj-preview-generic-title">{{ ActivePreviewItem.Name }}</div>
-                  <div class="mj-preview-generic-sub">Video preview could not be loaded</div>
-                </div>
-              }
-            }
-            @case ('audio') {
-              @if (ActivePreviewUrl) {
-                <div class="mj-preview-media-container mj-preview-audio-box">
-                  <div class="mj-preview-audio-icon"><i class="fa-solid fa-headphones"></i></div>
-                  <audio controls [src]="ActivePreviewUrl"></audio>
-                </div>
-              } @else {
-                <div class="mj-preview-generic-box">
-                  <i class="fa-solid fa-file-audio mj-preview-generic-icon"></i>
-                  <div class="mj-preview-generic-title">{{ ActivePreviewItem.Name }}</div>
-                  <div class="mj-preview-generic-sub">Audio preview could not be loaded</div>
-                </div>
-              }
-            }
-            @case ('text') {
-              <div class="mj-preview-text-container">
-                <pre><code>{{ ActivePreviewTextContent || 'Loading content...' }}</code></pre>
+        @if (IsLoadingPreview || !IsMediaLoaded) {
+          <div class="mj-preview-loading-overlay">
+            <mj-loading [text]="'Loading ' + (ActivePreviewItem.Name || 'preview') + '...'"></mj-loading>
+          </div>
+        }
+
+        @switch (GetMediaType(ActivePreviewItem)) {
+          @case ('image') {
+            @if (ActivePreviewUrl) {
+              <div class="mj-preview-image-container" [class.mj-preview-content--hidden]="!IsMediaLoaded">
+                <img [src]="ActivePreviewUrl" [alt]="ActivePreviewItem.Name" (load)="OnPreviewMediaLoaded()" (error)="OnPreviewMediaLoaded()" />
               </div>
-            }
-            @default {
+            } @else {
               <div class="mj-preview-generic-box">
-                <i [class]="GetFileIcon(ActivePreviewItem)" class="mj-preview-generic-icon"></i>
+                <i class="fa-solid fa-file-image mj-preview-generic-icon"></i>
                 <div class="mj-preview-generic-title">{{ ActivePreviewItem.Name }}</div>
-                <div class="mj-preview-generic-sub">{{ ActivePreviewItem.ContentType || 'Document' }} &bull; {{ FormatSize(ActivePreviewItem.FileSize) }}</div>
-                <div class="mj-preview-generic-desc">{{ ActivePreviewItem.Description || 'Preview not available for this binary file format.' }}</div>
+                <div class="mj-preview-generic-sub">Preview could not be loaded</div>
               </div>
             }
+          }
+          @case ('pdf') {
+            @if (ActivePreviewSafeUrl) {
+              <div class="mj-preview-frame-container" [class.mj-preview-content--hidden]="!IsMediaLoaded">
+                <iframe [src]="ActivePreviewSafeUrl" title="PDF Preview" (load)="OnPreviewMediaLoaded()"></iframe>
+              </div>
+            } @else {
+              <div class="mj-preview-generic-box">
+                <i class="fa-solid fa-file-pdf mj-preview-generic-icon"></i>
+                <div class="mj-preview-generic-title">{{ ActivePreviewItem.Name }}</div>
+                <div class="mj-preview-generic-sub">PDF preview could not be loaded</div>
+              </div>
+            }
+          }
+          @case ('video') {
+            @if (ActivePreviewUrl) {
+              <div class="mj-preview-media-container" [class.mj-preview-content--hidden]="!IsMediaLoaded">
+                <video controls autoplay [src]="ActivePreviewUrl" (loadeddata)="OnPreviewMediaLoaded()" (error)="OnPreviewMediaLoaded()"></video>
+              </div>
+            } @else {
+              <div class="mj-preview-generic-box">
+                <i class="fa-solid fa-file-video mj-preview-generic-icon"></i>
+                <div class="mj-preview-generic-title">{{ ActivePreviewItem.Name }}</div>
+                <div class="mj-preview-generic-sub">Video preview could not be loaded</div>
+              </div>
+            }
+          }
+          @case ('audio') {
+            @if (ActivePreviewUrl) {
+              <div class="mj-preview-media-container mj-preview-audio-box" [class.mj-preview-content--hidden]="!IsMediaLoaded">
+                <div class="mj-preview-audio-icon"><i class="fa-solid fa-headphones"></i></div>
+                <audio controls [src]="ActivePreviewUrl" (loadeddata)="OnPreviewMediaLoaded()" (error)="OnPreviewMediaLoaded()"></audio>
+              </div>
+            } @else {
+              <div class="mj-preview-generic-box">
+                <i class="fa-solid fa-file-audio mj-preview-generic-icon"></i>
+                <div class="mj-preview-generic-title">{{ ActivePreviewItem.Name }}</div>
+                <div class="mj-preview-generic-sub">Audio preview could not be loaded</div>
+              </div>
+            }
+          }
+          @case ('text') {
+            <div class="mj-preview-text-container">
+              <pre><code>{{ ActivePreviewTextContent || 'Loading content...' }}</code></pre>
+            </div>
+          }
+          @default {
+            <div class="mj-preview-generic-box">
+              <i [class]="GetFileIcon(ActivePreviewItem)" class="mj-preview-generic-icon"></i>
+              <div class="mj-preview-generic-title">{{ ActivePreviewItem.Name }}</div>
+              <div class="mj-preview-generic-sub">{{ ActivePreviewItem.ContentType || 'Document' }} &bull; {{ FormatSize(ActivePreviewItem.FileSize) }}</div>
+              <div class="mj-preview-generic-desc">{{ ActivePreviewItem.Description || 'Preview not available for this binary file format.' }}</div>
+            </div>
           }
         }
       </div>

@@ -484,7 +484,7 @@
   inset: 0;
   background: var(--mj-bg-overlay, rgba(15, 23, 42, 0.75));
   backdrop-filter: blur(4px);
-  z-index: 1000;
+  z-index: 25000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -534,6 +534,7 @@
 }
 
 .mj-preview-dialog-body {
+  position: relative;
   flex: 1;
   overflow: auto;
   background: var(--mj-bg-surface-sunken, color-mix(in srgb, var(--mj-text-primary) 3%, var(--mj-bg-surface)));
@@ -541,6 +542,21 @@
   align-items: center;
   justify-content: center;
   padding: 16px;
+}
+
+.mj-preview-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mj-bg-surface-sunken, color-mix(in srgb, var(--mj-text-primary) 3%, var(--mj-bg-surface)));
+}
+
+.mj-preview-content--hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .mj-preview-dialog-footer {

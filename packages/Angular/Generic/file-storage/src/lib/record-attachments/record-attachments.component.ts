@@ -274,11 +274,12 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
 
   /** Active Preview State */
   public PreviewModalOpen: boolean = false;
+  public IsLoadingPreview: boolean = false;
+  public IsMediaLoaded: boolean = false;
   public ActivePreviewItem: RecordAttachmentItem | null = null;
   public ActivePreviewUrl: string | null = null;
   public ActivePreviewSafeUrl: SafeResourceUrl | null = null;
   public ActivePreviewTextContent: string | null = null;
-  public IsLoadingPreview: boolean = false;
 
   /** Replace Target */
   private pendingReplaceItem: RecordAttachmentItem | null = null;
@@ -902,6 +903,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
 
     this.ActivePreviewItem = attachment;
     this.IsLoadingPreview = true;
+    this.IsMediaLoaded = false;
     this.PreviewModalOpen = true;
     this.ActivePreviewUrl = null;
     this.ActivePreviewSafeUrl = null;
@@ -925,22 +927,30 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
           } catch {
             // Text fetch failed, fallback to viewer
           }
+          this.IsMediaLoaded = true;
         }
 
         this.AfterPreview.emit(new AfterPreviewAttachmentEventArgs(attachment));
         return true;
       } else {
         this.notifications.CreateSimpleNotification(`Unable to load preview for '${attachment.Name}'`, 'error');
+        this.IsMediaLoaded = true;
         return false;
       }
     } catch (err) {
       console.error('[RecordAttachmentsComponent] Preview error:', err);
       this.notifications.CreateSimpleNotification('Preview failed', 'error');
+      this.IsMediaLoaded = true;
       return false;
     } finally {
       this.IsLoadingPreview = false;
       this.cdr.markForCheck();
     }
+  }
+
+  public OnPreviewMediaLoaded(): void {
+    this.IsMediaLoaded = true;
+    this.cdr.markForCheck();
   }
 
   /**
@@ -995,6 +1005,8 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
 
   public ClosePreviewModal(): void {
     this.PreviewModalOpen = false;
+    this.IsLoadingPreview = false;
+    this.IsMediaLoaded = false;
     this.ActivePreviewItem = null;
     this.ActivePreviewUrl = null;
     this.ActivePreviewSafeUrl = null;
