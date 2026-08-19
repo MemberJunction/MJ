@@ -24,6 +24,7 @@ import type {
   MJActionCategoryEntity,
 } from '@memberjunction/core-entities';
 import type { SourceSchemaInfo, SourceObjectInfo, SourceFieldInfo } from './types';
+import { ReadFieldSyncDirective, WriteFieldSyncDirective } from './SyncDirectives.js';
 import { ActionMetadataGenerator, type IntegrationObjectInfo } from './ActionMetadataGenerator';
 
 export interface PersistSchemaOptions {
@@ -716,6 +717,18 @@ export class IntegrationSchemaSync {
         existing.Status = 'Active';
         dirty = true;
       }
+      // SyncDirective follows the same rule as every other attribute: a source that STATES
+      // a directive overrides the stored one; a silent source (undefined) keeps whatever is
+      // stored — so a directive set by an operator by hand survives connectors that predate
+      // the feature. Stored in Configuration (JSON), so no DDL is involved.
+      if (srcField.SyncDirective !== undefined) {
+        const nextConfig = WriteFieldSyncDirective(existing.Configuration, srcField.SyncDirective);
+        if (nextConfig !== existing.Configuration
+            && ReadFieldSyncDirective(nextConfig) !== ReadFieldSyncDirective(existing.Configuration)) {
+          existing.Configuration = nextConfig;
+          dirty = true;
+        }
+      }
       const mappedType = MapSourceType(srcField.SourceType);
       const describedAllowsNull = srcField.AllowsNull ?? !srcField.IsRequired;
 
@@ -833,6 +846,11 @@ export class IntegrationSchemaSync {
       field.DisplayName = srcField.Label || srcField.Name;
       if (srcField.Description) field.Description = srcField.Description;
       field.Type = MapSourceType(srcField.SourceType);
+      // A declared 'Exclude' lands in Configuration from the first discovery, so the field
+      // never contributes to a single sync. 'Sync'/undefined writes nothing.
+      if (srcField.SyncDirective === 'Exclude') {
+        field.Configuration = WriteFieldSyncDirective(null, 'Exclude');
+      }
       // Persist the discovered length onto IOF.Length so the schema builder sizes the column
       // (nvarchar(N)). Large-text types carry their MAX in the Type ('nvarchar(MAX)') via
       // MapSourceType, so no length is set for them here.
