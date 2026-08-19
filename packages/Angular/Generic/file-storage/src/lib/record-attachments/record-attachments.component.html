@@ -141,11 +141,11 @@
           @for (item of FilteredAttachments; track item.LinkID) {
             <div class="mj-attachment-card" [class.mj-attachment-card--list]="ViewMode === 'list'">
               <div class="mj-attachment-card-top">
-                <div class="mj-attachment-thumb" [ngClass]="GetFileColorClass(item)">
+                <div class="mj-attachment-thumb" [ngClass]="GetFileColorClass(item)" (click)="OpenAttachmentRecord(item)" title="Open file record">
                   <i [class]="GetFileIcon(item)"></i>
                 </div>
                 <div class="mj-attachment-info">
-                  <div class="mj-attachment-name" (click)="AllowPreview && PreviewAttachment(item)" [title]="item.Name">
+                  <div class="mj-attachment-name" (click)="OpenAttachmentRecord(item)" [title]="item.Name">
                     {{ item.Name }}
                   </div>
                   <div class="mj-attachment-meta">
@@ -175,8 +175,11 @@
 
               <!-- Action Toolbar -->
               <div class="mj-attachment-actions">
+                <button type="button" class="mj-attachment-action-btn" (click)="OpenAttachmentRecord(item)" title="Open file in workspace tab">
+                  <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                </button>
                 @if (AllowPreview) {
-                  <button type="button" class="mj-attachment-action-btn" (click)="PreviewAttachment(item)" title="Preview file">
+                  <button type="button" class="mj-attachment-action-btn" (click)="PreviewAttachment(item)" title="Quick preview">
                     <i class="fa-solid fa-eye"></i>
                   </button>
                 }

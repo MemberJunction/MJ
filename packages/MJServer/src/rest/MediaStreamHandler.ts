@@ -32,16 +32,20 @@ interface FileBytesSource {
   driver: FileStorageBase;
   providerKey: string;
   contentType: string;
+  fileName: string;
 }
 
 
 /**
- * Builds the Express router exposing `GET /media/:fileId`. Stateless — verification
- * and byte-source resolution happen per request.
+ * Builds the Express router exposing `GET /media/:fileId` and `GET /media/:fileId/:filename`.
+ * Stateless — verification and byte-source resolution happen per request.
  */
 export function createMediaStreamRouter(): Router {
   const router = express.Router();
   router.get('/:fileId', async (req: Request, res: Response) => {
+    await handleMediaRequest(req, res);
+  });
+  router.get('/:fileId/:filename', async (req: Request, res: Response) => {
     await handleMediaRequest(req, res);
   });
   return router;
@@ -136,6 +140,7 @@ async function resolveFileBytesSource(fileId: string): Promise<FileBytesSource |
     driver,
     providerKey: file.ProviderKey,
     contentType: file.ContentType ?? 'application/octet-stream',
+    fileName: file.Name || 'file',
   };
 }
 
@@ -166,6 +171,7 @@ async function serveViaStream(res: Response, source: FileBytesSource, rangeHeade
 
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Content-Type', result.ContentType ?? source.contentType);
+  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(source.fileName)}"`);
   if (result.ContentLength != null) {
     res.setHeader('Content-Length', String(result.ContentLength));
   }
@@ -198,6 +204,7 @@ async function serveViaBuffer(res: Response, source: FileBytesSource, rangeHeade
 
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Content-Type', source.contentType);
+  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(source.fileName)}"`);
 
   if (!rangeHeader) {
     res.status(200);

@@ -453,7 +453,8 @@ export class FileResolver extends FileResolverBase {
 
       // Access authorized — mint the capability token.
       const { Token, ExpiresAt } = MediaAccessKeyManager.Instance.Sign(fileId, contextUser.ID);
-      const url = `${this.resolvePublicBaseUrl()}/media/${encodeURIComponent(fileId)}?token=${encodeURIComponent(Token)}`;
+      const fileNameSuffix = fileEntity.Name ? `/${encodeURIComponent(fileEntity.Name)}` : '';
+      const url = `${this.resolvePublicBaseUrl()}/media/${encodeURIComponent(fileId)}${fileNameSuffix}?token=${encodeURIComponent(Token)}`;
 
       // Best-effort: surface precomputed waveform peaks from a peaks.json sidecar beside the file, so
       // the player renders the real waveform instantly without fetching/decoding the audio. Never

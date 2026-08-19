@@ -25,6 +25,7 @@ import {
 } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { NavigationService, SharedService } from '@memberjunction/ng-shared';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { z } from 'zod';
 import {
@@ -283,6 +284,8 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
 
   /** Replace Target */
   private pendingReplaceItem: RecordAttachmentItem | null = null;
+  private navigationService = inject(NavigationService, { optional: true });
+  private mediaLoadedTimer?: ReturnType<typeof setTimeout>;
 
   /** Edit Metadata Dialog */
   public EditMetadataModalOpen: boolean = false;
@@ -949,8 +952,31 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
   }
 
   public OnPreviewMediaLoaded(): void {
-    this.IsMediaLoaded = true;
-    this.cdr.markForCheck();
+    if (this.mediaLoadedTimer) clearTimeout(this.mediaLoadedTimer);
+    // Smoothly retain loading spinner for ~350ms so internal iframe/canvas rasterization finishes before fade-in
+    this.mediaLoadedTimer = setTimeout(() => {
+      this.IsMediaLoaded = true;
+      this.cdr.markForCheck();
+    }, 350);
+  }
+
+  /**
+   * Opens the file record in a dedicated MJ Explorer workspace tab and closes the attachments slide-in panel.
+   * If running standalone/outside Explorer, falls back to opening the in-app media preview modal.
+   */
+  public OpenAttachmentRecord(attachment: RecordAttachmentItem): void {
+    if (attachment.FileID) {
+      const pkey = CompositeKey.FromID(attachment.FileID);
+      if (this.navigationService) {
+        this.navigationService.OpenEntityRecord('MJ: Files', pkey);
+      } else {
+        SharedService.Instance.OpenEntityRecord('MJ: Files', pkey);
+      }
+      this.ClosePanel();
+      this.ClosePreviewModal();
+    } else {
+      void this.PreviewAttachment(attachment);
+    }
   }
 
   /**
@@ -1004,6 +1030,9 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
   }
 
   public ClosePreviewModal(): void {
+    if (this.mediaLoadedTimer) {
+      clearTimeout(this.mediaLoadedTimer);
+    }
     this.PreviewModalOpen = false;
     this.IsLoadingPreview = false;
     this.IsMediaLoaded = false;
