@@ -19,19 +19,31 @@ on:
   # side effect of merging. Between releases both `main` and the npm registry
   # lag `next`, so a merge-triggered deploy publishes authoritative-looking
   # documentation — canonical links into `main` included — for bits nobody can
-  # install yet. Both publish paths are covered: the Edge line publishes from
-  # main, and a line release is dispatched from its own lts/* branch. The
-  # resolve job below hard-fails a trigger that did not conclude `success`.
+  # install yet. The resolve job below hard-fails a trigger that did not
+  # conclude `success`.
+  #
+  # `main` ONLY, and `next` is deliberately absent: no docs deploy is ever
+  # triggered by an event on next (the trigger removed in #3911 does not come
+  # back through a branch filter). The Edge line publishes on a push to main and
+  # is covered here.
+  #
+  # An LTS line release does NOT arrive here as a workflow_run. It is dispatched
+  # from next's ref (publish.yml's publish-lts job, the line being a parameter),
+  # so matching it would mean listening to `next`. Instead that job CHAINS into
+  # the workflow_dispatch below as its own final step, after the release commit
+  # and tag are on the line branch — which is also the only ordering that builds
+  # the released content rather than the previous line state.
   workflow_run:
     workflows:
-      - Build and publish new package versions  # publish.yml     — Edge line, runs on main
-      - Publish LTS line release                # publish-lts.yml — one line, runs on lts/*
-    branches: [main, 'lts/*']
+      - Build and publish new package versions  # publish.yml — the Edge line, on main
+    branches: [main]
     types:
       - completed
 
-  # Manual escape hatch: re-deploy a docs-only fix without waiting for a
-  # release, and the only way to exercise the full pipeline from a branch.
+  # Two callers: an operator re-deploying a docs-only fix without waiting for a
+  # release (also the only way to exercise the full pipeline from a branch), and
+  # publish.yml's publish-lts job chaining a deploy after a line release. lts/5's
+  # thin docs dispatcher forwards its docs-content pushes here the same way.
   workflow_dispatch: {}
 
 permissions:
@@ -78,6 +90,24 @@ jobs:
           # LTS sets: one per lts/N branch. The branch is created by the LTS
           # process at line cut, so its existence is the source of truth for
           # "this line has public docs".
+          #
+          # 🚨 KNOWN GAP — dotted line branches (lts/6.1) get NO docs set: the
+          # filter below takes bare majors only. Do NOT "fix" this by widening
+          # the grep alone. docs-site/src/lib/documented-line.mjs THROWS on a
+          # dotted DOCS_VERSION ("Documented line must look like v6"), and
+          # because `deploy` needs `build`, one failing matrix entry takes the
+          # WHOLE site's deploy down — every line, not just the dotted one.
+          # Today's silent omission would become a total docs outage the day
+          # lts/6.1 is cut.
+          #
+          # The real fix spans docs-site, not this file: split documented-line's
+          # single value into a line-id string (v6.1) and an integer major (6),
+          # because license-line.mjs derives BOTH the BUSL cutoff comparison and
+          # `blob/lts/${documentedMajor}` from it — and Number('6.10') is 6.1,
+          # so a dotted line would link at the wrong branch. This file's own
+          # remaining work is small by comparison: this filter, `sort -V` instead
+          # of `sort -n` (sort -n orders 6.10 before 6.9), and the 404
+          # forwarder's `^(\/v\d+)\/` deep-link regex.
           mapfile -t LTS < <(git ls-remote --heads origin 'lts/*' | sed -E 's#.*refs/heads/lts/##' | grep -E '^[0-9]+$' | sort -n)
           # Edge set: built from next; its major comes from the newest edge tag.
           EDGE_MAJOR=$(git ls-remote --tags origin 'v*-edge.*' | sed -E 's#.*refs/tags/v##; s#\^\{\}$##' | sort -uV | tail -1 | cut -d. -f1)
