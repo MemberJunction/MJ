@@ -1,4 +1,4 @@
-import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase, RunView } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { z } from "zod";
 
@@ -35153,6 +35153,86 @@ export interface MJActionEntity_IRuntimeLibraryReference {
  */
 @RegisterClass(BaseEntity, 'MJ: Actions')
 export class MJActionEntity extends BaseEntity<MJActionEntityType> {
+
+  /**
+  * Related records: MJ: Action Params
+  *
+  * Loads, validates and persists as one unit with this MJ: Actions record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Actions → MJ: Action Params' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: Action Params', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: Action Params', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Params = this.DeclareRelatedRecords<MJActionParamEntity>({
+      Name: 'Params',
+        RelatedEntity: 'MJ: Action Params',
+        RelatedEntityJoinField: 'ActionID',
+        OrderBy: 'Name ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
+
+  /**
+  * Related records: MJ: Action Libraries
+  *
+  * Loads, validates and persists as one unit with this MJ: Actions record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Actions → MJ: Action Libraries' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: Action Libraries', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: Action Libraries', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Libraries = this.DeclareRelatedRecords<MJActionLibraryEntity>({
+      Name: 'Libraries',
+        RelatedEntity: 'MJ: Action Libraries',
+        RelatedEntityJoinField: 'ActionID',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
+
+  /**
+  * Related records: MJ: Action Result Codes
+  *
+  * Loads, validates and persists as one unit with this MJ: Actions record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Actions → MJ: Action Result Codes' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: Action Result Codes', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: Action Result Codes', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly ResultCodes = this.DeclareRelatedRecords<MJActionResultCodeEntity>({
+      Name: 'ResultCodes',
+        RelatedEntity: 'MJ: Action Result Codes',
+        RelatedEntityJoinField: 'ActionID',
+        OrderBy: 'ResultCode ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
     /**
     * Loads the MJ: Actions record from the database
     * @param ID: string - primary key value to load the MJ: Actions record.
@@ -45627,6 +45707,80 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agents')
 export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
+
+  /**
+  * Related records: MJ: AI Agent Actions
+  *
+  * Loads, validates and persists as one unit with this MJ: AI Agents record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: AI Agents → MJ: AI Agent Actions' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: AI Agent Actions', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: AI Agent Actions', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Actions = this.DeclareRelatedRecords<MJAIAgentActionEntity>({
+      Name: 'Actions',
+        RelatedEntity: 'MJ: AI Agent Actions',
+        RelatedEntityJoinField: 'AgentID',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
+
+  /**
+  * Related records: MJ: AI Agent Prompts
+  *
+  * Loads, validates and persists as one unit with this MJ: AI Agents record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: AI Agents → MJ: AI Agent Prompts' relationship; edit that row, not this file.
+  *
+  */
+  public readonly Prompts = this.DeclareRelatedRecords<MJAIAgentPromptEntity>({
+      Name: 'Prompts',
+        RelatedEntity: 'MJ: AI Agent Prompts',
+        RelatedEntityJoinField: 'AgentID',
+        OrderBy: 'ExecutionOrder ASC',
+        Load: 'explicit',
+        OnRemove: 'delete',
+        Source: 'database',
+        ReadOnly: false,
+        Sequence: { Field: 'ExecutionOrder', From: 0 },
+  });
+
+
+  /**
+  * Related records: MJ: AI Agents
+  *
+  * Loads, validates and persists as one unit with this MJ: AI Agents record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: AI Agents → MJ: AI Agents' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: AI Agents', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: AI Agents', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly SubAgents = this.DeclareRelatedRecords<MJAIAgentEntity>({
+      Name: 'SubAgents',
+        RelatedEntity: 'MJ: AI Agents',
+        RelatedEntityJoinField: 'ParentID',
+        OrderBy: 'ExecutionOrder ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
     /**
     * Loads the MJ: AI Agents record from the database
     * @param ID: string - primary key value to load the MJ: AI Agents record.
@@ -53641,6 +53795,33 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: AI Prompts')
 export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
+
+  /**
+  * Related records: MJ: AI Prompt Models
+  *
+  * Loads, validates and persists as one unit with this MJ: AI Prompts record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: AI Prompts → MJ: AI Prompt Models' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: AI Prompt Models', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: AI Prompt Models', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Models = this.DeclareRelatedRecords<MJAIPromptModelEntity>({
+      Name: 'Models',
+        RelatedEntity: 'MJ: AI Prompt Models',
+        RelatedEntityJoinField: 'PromptID',
+        OrderBy: 'Priority ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
     /**
     * Loads the MJ: AI Prompts record from the database
     * @param ID: string - primary key value to load the MJ: AI Prompts record.
@@ -57344,6 +57525,33 @@ export class MJAPIKeyUsageLogEntity extends BaseEntity<MJAPIKeyUsageLogEntityTyp
  */
 @RegisterClass(BaseEntity, 'MJ: API Keys')
 export class MJAPIKeyEntity extends BaseEntity<MJAPIKeyEntityType> {
+
+  /**
+  * Related records: MJ: API Key Scopes
+  *
+  * Loads, validates and persists as one unit with this MJ: API Keys record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: API Keys → MJ: API Key Scopes' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: API Key Scopes', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: API Key Scopes', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Scopes = this.DeclareRelatedRecords<MJAPIKeyScopeEntity>({
+      Name: 'Scopes',
+        RelatedEntity: 'MJ: API Key Scopes',
+        RelatedEntityJoinField: 'APIKeyID',
+        OrderBy: 'Priority ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
     /**
     * Loads the MJ: API Keys record from the database
     * @param ID: string - primary key value to load the MJ: API Keys record.

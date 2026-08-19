@@ -306,9 +306,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Task Dependencies','TaskID')"
-                [NewRecordValues]="NewRecordValues('MJ: Task Dependencies')"
+                [NewRecordValues]="NewRecordValues('MJ: Task Dependencies','TaskID')"
                 [AllowLoad]="IsSectionExpanded('mJTaskDependenciesTaskID')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTaskDependenciesTaskID', $event.totalRowCount)"
                 >
@@ -331,9 +331,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Task Dependencies','DependsOnTaskID')"
-                [NewRecordValues]="NewRecordValues('MJ: Task Dependencies')"
+                [NewRecordValues]="NewRecordValues('MJ: Task Dependencies','DependsOnTaskID')"
                 [AllowLoad]="IsSectionExpanded('mJTaskDependenciesDependsOnTaskID')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTaskDependenciesDependsOnTaskID', $event.totalRowCount)"
                 >
@@ -356,9 +356,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Requests','OriginatingTaskID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Requests')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Requests','OriginatingTaskID')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentRequests')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentRequests', $event.totalRowCount)"
                 >
@@ -381,9 +381,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tasks')"
+                [NewRecordValues]="NewRecordValues('MJ: Tasks','ParentID')"
                 [AllowLoad]="IsSectionExpanded('mJTasks')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTasks', $event.totalRowCount)"
                 >

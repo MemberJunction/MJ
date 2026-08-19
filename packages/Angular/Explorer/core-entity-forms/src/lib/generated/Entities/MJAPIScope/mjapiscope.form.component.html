@@ -149,9 +149,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Application Scopes','ScopeID')"
-                [NewRecordValues]="NewRecordValues('MJ: API Application Scopes')"
+                [NewRecordValues]="NewRecordValues('MJ: API Application Scopes','ScopeID')"
                 [AllowLoad]="IsSectionExpanded('mJAPIApplicationScopes')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAPIApplicationScopes', $event.totalRowCount)"
                 >
@@ -174,9 +174,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Key Scopes','ScopeID')"
-                [NewRecordValues]="NewRecordValues('MJ: API Key Scopes')"
+                [NewRecordValues]="NewRecordValues('MJ: API Key Scopes','ScopeID')"
                 [AllowLoad]="IsSectionExpanded('mJAPIKeyScopes')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAPIKeyScopes', $event.totalRowCount)"
                 >
@@ -199,9 +199,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Scopes','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: API Scopes')"
+                [NewRecordValues]="NewRecordValues('MJ: API Scopes','ParentID')"
                 [AllowLoad]="IsSectionExpanded('mJAPIScopes')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAPIScopes', $event.totalRowCount)"
                 >

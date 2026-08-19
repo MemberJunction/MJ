@@ -117,9 +117,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Categories','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Action Categories')"
+                [NewRecordValues]="NewRecordValues('MJ: Action Categories','ParentID')"
                 [AllowLoad]="IsSectionExpanded('mJActionCategories')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJActionCategories', $event.totalRowCount)"
                 >
@@ -142,9 +142,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Actions','CategoryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Actions')"
+                [NewRecordValues]="NewRecordValues('MJ: Actions','CategoryID')"
                 [AllowLoad]="IsSectionExpanded('mJActions')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJActions', $event.totalRowCount)"
                 >
@@ -167,9 +167,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Server Tools','GeneratedActionCategoryID')"
-                [NewRecordValues]="NewRecordValues('MJ: MCP Server Tools')"
+                [NewRecordValues]="NewRecordValues('MJ: MCP Server Tools','GeneratedActionCategoryID')"
                 [AllowLoad]="IsSectionExpanded('mJMCPServerTools')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPServerTools', $event.totalRowCount)"
                 >

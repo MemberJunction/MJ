@@ -152,9 +152,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Architectures','ParentArchitectureID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Architectures')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Architectures','ParentArchitectureID')"
                 [AllowLoad]="IsSectionExpanded('mJAIArchitectures')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIArchitectures', $event.totalRowCount)"
                 >
@@ -177,9 +177,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Architectures','ArchitectureID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Model Architectures')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Model Architectures','ArchitectureID')"
                 [AllowLoad]="IsSectionExpanded('mJAIModelArchitectures')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIModelArchitectures', $event.totalRowCount)"
                 >

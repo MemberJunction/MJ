@@ -118,9 +118,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Audit Log Types','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Audit Log Types')"
+                [NewRecordValues]="NewRecordValues('MJ: Audit Log Types','ParentID')"
                 [AllowLoad]="IsSectionExpanded('mJAuditLogTypes')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAuditLogTypes', $event.totalRowCount)"
                 >
@@ -143,9 +143,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Audit Logs','AuditLogTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Audit Logs')"
+                [NewRecordValues]="NewRecordValues('MJ: Audit Logs','AuditLogTypeID')"
                 [AllowLoad]="IsSectionExpanded('mJAuditLogs')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAuditLogs', $event.totalRowCount)"
                 >

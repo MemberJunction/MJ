@@ -118,9 +118,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Categories','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Dashboard Categories')"
+                [NewRecordValues]="NewRecordValues('MJ: Dashboard Categories','ParentID')"
                 [AllowLoad]="IsSectionExpanded('mJDashboardCategories')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDashboardCategories', $event.totalRowCount)"
                 >
@@ -143,9 +143,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboards','CategoryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Dashboards')"
+                [NewRecordValues]="NewRecordValues('MJ: Dashboards','CategoryID')"
                 [AllowLoad]="IsSectionExpanded('mJDashboards')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDashboards', $event.totalRowCount)"
                 >
@@ -168,9 +168,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Category Links','DashboardCategoryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Dashboard Category Links')"
+                [NewRecordValues]="NewRecordValues('MJ: Dashboard Category Links','DashboardCategoryID')"
                 [AllowLoad]="IsSectionExpanded('mJDashboardCategoryLinks')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDashboardCategoryLinks', $event.totalRowCount)"
                 >
@@ -193,9 +193,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard Category Permissions','DashboardCategoryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Dashboard Category Permissions')"
+                [NewRecordValues]="NewRecordValues('MJ: Dashboard Category Permissions','DashboardCategoryID')"
                 [AllowLoad]="IsSectionExpanded('mJDashboardCategoryPermissions')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDashboardCategoryPermissions', $event.totalRowCount)"
                 >

@@ -101,9 +101,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Employee Skills','SkillID')"
-                [NewRecordValues]="NewRecordValues('MJ: Employee Skills')"
+                [NewRecordValues]="NewRecordValues('MJ: Employee Skills','SkillID')"
                 [AllowLoad]="IsSectionExpanded('mJEmployeeSkills')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEmployeeSkills', $event.totalRowCount)"
                 >
@@ -126,9 +126,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Skills','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Skills')"
+                [NewRecordValues]="NewRecordValues('MJ: Skills','ParentID')"
                 [AllowLoad]="IsSectionExpanded('mJSkills')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJSkills', $event.totalRowCount)"
                 >

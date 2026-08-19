@@ -109,9 +109,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Generated Code Categories','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Generated Code Categories')"
+                [NewRecordValues]="NewRecordValues('MJ: Generated Code Categories','ParentID')"
                 [AllowLoad]="IsSectionExpanded('mJGeneratedCodeCategories')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJGeneratedCodeCategories', $event.totalRowCount)"
                 >
@@ -134,9 +134,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Generated Codes','CategoryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Generated Codes')"
+                [NewRecordValues]="NewRecordValues('MJ: Generated Codes','CategoryID')"
                 [AllowLoad]="IsSectionExpanded('mJGeneratedCodes')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJGeneratedCodes', $event.totalRowCount)"
                 >
