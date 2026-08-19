@@ -135,9 +135,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Versions','ArtifactID')"
-                [NewRecordValues]="NewRecordValues('MJ: Artifact Versions')"
+                [NewRecordValues]="NewRecordValues('MJ: Artifact Versions','ArtifactID')"
                 [AllowLoad]="IsSectionExpanded('mJArtifactVersions')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJArtifactVersions', $event.totalRowCount)"
                 >
@@ -160,9 +160,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Permissions','ArtifactID')"
-                [NewRecordValues]="NewRecordValues('MJ: Artifact Permissions')"
+                [NewRecordValues]="NewRecordValues('MJ: Artifact Permissions','ArtifactID')"
                 [AllowLoad]="IsSectionExpanded('mJArtifactPermissions')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJArtifactPermissions', $event.totalRowCount)"
                 >
@@ -185,9 +185,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Signature Request Documents','ArtifactID')"
-                [NewRecordValues]="NewRecordValues('MJ: Signature Request Documents')"
+                [NewRecordValues]="NewRecordValues('MJ: Signature Request Documents','ArtifactID')"
                 [AllowLoad]="IsSectionExpanded('mJSignatureRequestDocuments')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJSignatureRequestDocuments', $event.totalRowCount)"
                 >

@@ -513,10 +513,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         const d = await this.ExecuteGQL(this._currentUserQuery, null);
         if (d) {
             // convert the user and the user roles _mj__*** fields back to __mj_***
-            const u = this.ConvertBackToMJFields(d.CurrentUser);
-            const roles = u.MJUserRoles_UserIDArray.map(r => this.ConvertBackToMJFields(r));
-            u.MJUserRoles_UserIDArray = roles;
-            const userInfo = new UserInfo(this, {...u, UserRoles: roles}); // need to pass in the UserRoles as a separate property that is what is expected here
+            const convertedUser = this.ConvertBackToMJFields(d.CurrentUser) as Record<string, unknown> & {
+                Roles?: Record<string, unknown>[];
+            };
+            const { Roles: rawRoles, ...userFields } = convertedUser;
+            const roles = (rawRoles ?? []).map((r: Record<string, unknown>) => this.ConvertBackToMJFields(r));
+            // Drop the transport `Roles` field so UserInfo only sees the converted UserRoles copy.
+            const userInfo = new UserInfo(this, {...userFields, UserRoles: roles});
 
             // Auto-stamp TenantContext from the batched CurrentUserTenantContext query.
             // The server serializes whatever TenantContext the middleware set.
@@ -2859,7 +2862,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     private _innerCurrentUserQueryString = `CurrentUser {
         ${this.userInfoString()}
-        MJUserRoles_UserIDArray {
+        Roles {
             ${this.userRoleInfoString()}
         }
     }
