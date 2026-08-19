@@ -233,6 +233,9 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
 
   public IsLoading: boolean = false;
   public IsUploading: boolean = false;
+  public UploadProgressPercent: number = 0;
+  public UploadStatusText: string = '';
+  public UploadingFileName: string = '';
   public SearchTerm: string = '';
   public SelectedProviderFilter: string = 'all'; // 'all' or ProviderID
 
@@ -363,12 +366,22 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
   // ────────────────────────────────────────────────────────────────────
 
   public get EffectiveEntityID(): string | null {
-    if (this.Record?.EntityInfo) return this.Record.EntityInfo.ID;
+    if (this.Record?.EntityInfo?.ID) return this.Record.EntityInfo.ID;
     return this.EntityID ?? null;
   }
 
   public get EffectiveRecordID(): string | null {
-    if (this.Record) return this.Record.PrimaryKey.Values();
+    if (this.Record) {
+      if (this.Record.PrimaryKey?.KeyValuePairs?.length > 0) {
+        const val = this.Record.PrimaryKey.KeyValuePairs[0].Value;
+        if (val !== null && val !== undefined && String(val).length > 0) return String(val);
+      }
+      const pkVal = this.Record.PrimaryKey?.GetValueByIndex(0);
+      if (pkVal !== null && pkVal !== undefined && String(pkVal).length > 0) return String(pkVal);
+      if ('ID' in this.Record && (this.Record as unknown as { ID: string }).ID) {
+        return String((this.Record as unknown as { ID: string }).ID);
+      }
+    }
     return this.RecordID ?? null;
   }
 
@@ -519,28 +532,51 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
    * Uploads one or more files and links them to the active record.
    */
   public async UploadFiles(files: File[], storageAccountId?: string, categoryId?: string): Promise<RecordAttachmentItem[]> {
+    console.log('[RecordAttachmentsComponent] UploadFiles called with', files.length, 'file(s):', files.map(f => ({ name: f.name, size: f.size, type: f.type })));
+
     if (!files || files.length === 0) return [];
 
     const entityId = this.EffectiveEntityID;
     const recordId = this.EffectiveRecordID;
+
+    console.log('[RecordAttachmentsComponent] Resolved upload context:', {
+      entityId,
+      recordId,
+      recordName: this.Record?.EntityInfo?.Name,
+      explicitEntityID: this.EntityID,
+      explicitRecordID: this.RecordID,
+      storageAccountsAvailable: this.StorageAccounts.length,
+      selectedStorageAccountID: this.SelectedStorageAccountID
+    });
+
     if (!entityId || !recordId) {
+      const errMsg = `Cannot upload attachments: Missing record context (EntityID: ${entityId}, RecordID: ${recordId})`;
+      console.error(`[RecordAttachmentsComponent] ${errMsg}`);
       this.notifications.CreateSimpleNotification('Cannot upload attachments: No record context available', 'error');
       return [];
     }
 
     if (this.StorageAccounts.length === 0) {
-      this.notifications.CreateSimpleNotification('Cannot upload attachments: No active file storage accounts are configured. Please configure a storage provider in system settings.', 'warning');
+      const errMsg = 'Cannot upload attachments: No active file storage accounts are configured. Please configure a storage provider in system settings.';
+      console.warn(`[RecordAttachmentsComponent] ${errMsg}`);
+      this.notifications.CreateSimpleNotification(errMsg, 'warning');
       return [];
     }
 
+    const targetAccountID = storageAccountId ?? this.SelectedStorageAccountID ?? this.StorageAccounts[0]?.account?.ID;
+    const targetCategoryID = categoryId ?? this.Config?.DefaultCategoryID;
+
     // Fire BeforeUpload event
-    const beforeEvent = new BeforeUploadAttachmentEventArgs(files, storageAccountId ?? this.SelectedStorageAccountID, categoryId ?? this.Config?.DefaultCategoryID);
+    const beforeEvent = new BeforeUploadAttachmentEventArgs(files, targetAccountID, targetCategoryID);
     this.BeforeUpload.emit(beforeEvent);
     if (beforeEvent.Cancel) {
+      console.log('[RecordAttachmentsComponent] Upload cancelled by BeforeUpload event');
       return [];
     }
 
     this.IsUploading = true;
+    this.UploadProgressPercent = 5;
+    this.UploadStatusText = `Preparing ${files.length} file${files.length === 1 ? '' : 's'}...`;
     this.cdr.markForCheck();
 
     const uploadedItems: RecordAttachmentItem[] = [];
@@ -549,15 +585,33 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
     try {
       const md = this.ProviderToUse;
 
-      for (const file of files) {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileIndex = i + 1;
+        const progressBase = Math.round((i / files.length) * 100);
+
+        this.UploadingFileName = file.name;
+        this.UploadStatusText = `Reading ${file.name} (${fileIndex}/${files.length})...`;
+        this.UploadProgressPercent = Math.max(5, progressBase + 10);
+        this.cdr.markForCheck();
+
+        console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Starting upload for '${file.name}' (${FormatAttachmentFileSize(file.size)}, type: '${file.type}')`);
+
         // Enforce max size if configured
         if (this.Config?.MaxFileSizeBytes && file.size > this.Config.MaxFileSizeBytes) {
           const maxStr = FormatAttachmentFileSize(this.Config.MaxFileSizeBytes);
+          console.warn(`[RecordAttachmentsComponent] File '${file.name}' exceeds max size of ${maxStr}`);
           this.notifications.CreateSimpleNotification(`File '${file.name}' exceeds max size of ${maxStr}`, 'error');
           continue;
         }
 
+        // Convert to base64
+        console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Converting '${file.name}' to base64...`);
         const base64Data = await this.fileToBase64(file);
+
+        this.UploadStatusText = `Uploading ${file.name} (${fileIndex}/${files.length}) to storage...`;
+        this.UploadProgressPercent = progressBase + Math.round((1 / files.length) * 50);
+        this.cdr.markForCheck();
 
         const input = {
           FileName: file.name,
@@ -567,16 +621,33 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
           CategoryID: beforeEvent.CategoryID || undefined,
         };
 
+        console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Sending UploadStorageFile GraphQL mutation:`, {
+          FileName: input.FileName,
+          MimeType: input.MimeType,
+          AccountID: input.AccountID,
+          CategoryID: input.CategoryID,
+          Base64Length: input.Base64Data.length
+        });
+
         const gqlResult = await GraphQLDataProvider.ExecuteGQL(UploadStorageFileMutation, { input });
+        console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] GraphQL response:`, gqlResult);
+
         const parsed = UploadStorageFileMutationSchema.safeParse(gqlResult);
 
         if (!parsed.success || !parsed.data.UploadStorageFile.Success || !parsed.data.UploadStorageFile.FileID) {
-          const errorMsg = parsed.success ? parsed.data.UploadStorageFile.ErrorMessage : 'Upload failed';
+          const errorMsg = parsed.success ? parsed.data.UploadStorageFile.ErrorMessage : 'Upload response parsing failed';
+          console.error(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Failed to upload '${file.name}':`, errorMsg, parsed);
           this.notifications.CreateSimpleNotification(`Failed to upload '${file.name}': ${errorMsg || 'Unknown error'}`, 'error');
           continue;
         }
 
         const fileId = parsed.data.UploadStorageFile.FileID;
+        console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] File uploaded with FileID '${fileId}'. Loading file entity & creating record link...`);
+
+        this.UploadStatusText = `Linking ${file.name} to record...`;
+        this.UploadProgressPercent = progressBase + Math.round((1 / files.length) * 80);
+        this.cdr.markForCheck();
+
         const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files');
         const fileLoaded = await fileEntity.Load(fileId);
         if (fileLoaded) {
@@ -589,6 +660,8 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
         linkEntity.EntityID = entityId;
         linkEntity.RecordID = recordId;
         const linkSuccess = await linkEntity.Save();
+
+        console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Record link saved (success: ${linkSuccess}, LinkID: ${linkEntity.ID})`);
 
         if (linkSuccess && fileLoaded) {
           const newItem: RecordAttachmentItem = {
@@ -612,6 +685,10 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
         }
       }
 
+      this.UploadProgressPercent = 100;
+      this.UploadStatusText = 'Upload complete!';
+      this.cdr.markForCheck();
+
       if (uploadedItems.length > 0) {
         this.AttachmentCountChanged.emit(this.Attachments.length);
         this.AfterUpload.emit(new AfterUploadAttachmentEventArgs(uploadedItems, uploadedFileEntities));
@@ -622,9 +699,13 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
       }
     } catch (err) {
       console.error('[RecordAttachmentsComponent] Upload error:', err);
-      this.notifications.CreateSimpleNotification('Error uploading attachments', 'error');
+      const errMsg = err instanceof Error ? err.message : 'Error uploading attachments';
+      this.notifications.CreateSimpleNotification(errMsg, 'error');
     } finally {
       this.IsUploading = false;
+      this.UploadProgressPercent = 0;
+      this.UploadStatusText = '';
+      this.UploadingFileName = '';
       this.cdr.markForCheck();
     }
 
@@ -911,6 +992,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
 
   public OnFilesSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
+    console.log('[RecordAttachmentsComponent] OnFilesSelected event fired, files count:', input.files?.length);
     if (input.files && input.files.length > 0) {
       const filesArray = Array.from(input.files);
       input.value = '';
@@ -920,6 +1002,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
 
   public OnReplaceFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
+    console.log('[RecordAttachmentsComponent] OnReplaceFileSelected event fired, files count:', input.files?.length);
     if (input.files && input.files.length > 0 && this.pendingReplaceItem) {
       const file = input.files[0];
       const target = this.pendingReplaceItem;
@@ -937,6 +1020,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
   public OnDrop(event: DragEvent): void {
     event.preventDefault();
     event.stopPropagation();
+    console.log('[RecordAttachmentsComponent] OnDrop event fired, dataTransfer files count:', event.dataTransfer?.files?.length);
     if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
       const filesArray = Array.from(event.dataTransfer.files);
       void this.UploadFiles(filesArray);

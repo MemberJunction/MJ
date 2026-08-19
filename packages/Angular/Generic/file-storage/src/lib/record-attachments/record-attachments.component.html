@@ -68,9 +68,25 @@
         </div>
       }
 
+      <!-- Upload Progress Status Banner -->
+      @if (IsUploading) {
+        <div class="mj-upload-progress-banner">
+          <div class="mj-upload-progress-header">
+            <div class="mj-upload-progress-info">
+              <i class="fa-solid fa-cloud-arrow-up fa-bounce mj-upload-progress-icon"></i>
+              <span class="mj-upload-progress-text">{{ UploadStatusText }}</span>
+            </div>
+            <span class="mj-upload-progress-pct">{{ UploadProgressPercent }}%</span>
+          </div>
+          <div class="mj-upload-progress-track">
+            <div class="mj-upload-progress-bar" [style.width.%]="UploadProgressPercent"></div>
+          </div>
+        </div>
+      }
+
       <!-- Drag & Drop Upload Zone -->
       @if (EffectiveAllowUpload) {
-        <div class="mj-upload-dropzone" (dragover)="OnDragOver($event)" (drop)="OnDrop($event)" (click)="fileInputRef.click()">
+        <div class="mj-upload-dropzone" [class.disabled]="IsUploading" (dragover)="OnDragOver($event)" (drop)="OnDrop($event)" (click)="!IsUploading && fileInputRef.click()">
           <i class="fa-solid fa-cloud-arrow-up mj-upload-dropzone-icon"></i>
           <div class="mj-upload-dropzone-title">
             Drop files to attach, or <span class="mj-upload-dropzone-link">Browse</span>
@@ -82,7 +98,7 @@
           @if (StorageAccounts.length > 1) {
             <div class="mj-upload-storage-row" (click)="$event.stopPropagation()">
               <span>Target storage:</span>
-              <select class="mj-upload-storage-select" [(ngModel)]="SelectedStorageAccountID">
+              <select class="mj-upload-storage-select" [(ngModel)]="SelectedStorageAccountID" [disabled]="IsUploading">
                 @for (sa of StorageAccounts; track sa.account.ID) {
                   <option [value]="sa.account.ID">{{ sa.account.Name }} ({{ sa.provider.Name }})</option>
                 }
