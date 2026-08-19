@@ -119,7 +119,15 @@ export interface RelatedFormRoleCandidate {
     JoinView?: string | null;
     Type?: string | null;
     Sequence?: number | null;
-    Configuration?: string | null;
+    /**
+     * Either shape is accepted, matching the readers below
+     * ({@link ReadRelationshipInclusion}, {@link ReadRelationshipSortKey},
+     * {@link ReadRelationshipJoinFields}): a candidate built from an
+     * `EntityRelationshipInfo` carries the parsed object its `Configuration`
+     * getter returns, while one built straight from a metadata row carries the
+     * raw JSON string.
+     */
+    Configuration?: string | IEntityRelationshipConfiguration | null;
     /**
      * How many EntityRelationships across metadata point at this related
      * entity. Runtime-only — the ranker uses it as graph in-degree.
