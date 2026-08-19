@@ -157,7 +157,7 @@
 
 .mj-forms-btn--accent {
   background: var(--mj-brand-accent, #6366f1);
-  color: #ffffff;
+  color: var(--mj-text-inverse, #ffffff);
   border-color: var(--mj-brand-accent, #6366f1);
 }
 
