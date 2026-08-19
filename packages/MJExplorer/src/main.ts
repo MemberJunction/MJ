@@ -1,4 +1,3 @@
-import '@angular/compiler';
 import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
 import { AuthProviderCatalog } from '@memberjunction/ng-auth-services';
 import { environment } from './environments/environment';
