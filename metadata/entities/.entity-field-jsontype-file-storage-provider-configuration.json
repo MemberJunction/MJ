@@ -23,8 +23,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: File Storage Providers&Name=Configuration"
           },
           "sync": {
-            "lastModified": "2026-08-19T12:00:00.000Z",
-            "checksum": "a1b2c3d4e5f6"
+            "lastModified": "2026-08-19T19:13:04.764Z",
+            "checksum": "dd613c525466860a72bce806077b6bf92ebe33e0cc6f836e559eeb5b632e5be9"
           }
         }
       ]

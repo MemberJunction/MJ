@@ -19,6 +19,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entities&Name=ParentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-19T19:13:03.998Z",
+            "checksum": "c9d7f02681366f41bfee4d9aea7fcd14c0e8d47223c47f20891c562673cfefa1"
           }
         }
       ]
@@ -43,6 +47,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User View Categories&Name=ParentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-19T19:13:04.069Z",
+            "checksum": "c9d7f02681366f41bfee4d9aea7fcd14c0e8d47223c47f20891c562673cfefa1"
           }
         }
       ]
@@ -67,6 +75,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Dashboard Categories&Name=ParentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-19T19:13:04.138Z",
+            "checksum": "c9d7f02681366f41bfee4d9aea7fcd14c0e8d47223c47f20891c562673cfefa1"
           }
         }
       ]
@@ -91,6 +103,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Query Categories&Name=ParentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-19T19:13:04.036Z",
+            "checksum": "c9d7f02681366f41bfee4d9aea7fcd14c0e8d47223c47f20891c562673cfefa1"
           }
         }
       ]
@@ -115,6 +131,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: File Categories&Name=ParentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-19T19:13:04.245Z",
+            "checksum": "c9d7f02681366f41bfee4d9aea7fcd14c0e8d47223c47f20891c562673cfefa1"
           }
         }
       ]
@@ -139,6 +159,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: List Categories&Name=ParentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-19T19:13:04.102Z",
+            "checksum": "c9d7f02681366f41bfee4d9aea7fcd14c0e8d47223c47f20891c562673cfefa1"
           }
         }
       ]
@@ -163,6 +187,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Template Categories&Name=ParentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-19T19:13:04.210Z",
+            "checksum": "c9d7f02681366f41bfee4d9aea7fcd14c0e8d47223c47f20891c562673cfefa1"
           }
         }
       ]
@@ -187,6 +215,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Credential Categories&Name=ParentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-19T19:13:04.174Z",
+            "checksum": "c9d7f02681366f41bfee4d9aea7fcd14c0e8d47223c47f20891c562673cfefa1"
           }
         }
       ]
@@ -211,6 +243,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Remote Operation Categories&Name=ParentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-19T19:13:04.285Z",
+            "checksum": "c9d7f02681366f41bfee4d9aea7fcd14c0e8d47223c47f20891c562673cfefa1"
           }
         }
       ]
@@ -235,6 +271,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Process Categories&Name=ParentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-19T19:13:04.319Z",
+            "checksum": "c9d7f02681366f41bfee4d9aea7fcd14c0e8d47223c47f20891c562673cfefa1"
           }
         }
       ]
@@ -259,6 +299,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Generated Code Categories&Name=ParentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-19T19:13:04.458Z",
+            "checksum": "c9d7f02681366f41bfee4d9aea7fcd14c0e8d47223c47f20891c562673cfefa1"
           }
         }
       ]
@@ -283,6 +327,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Prompt Categories&Name=ParentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-19T19:13:04.421Z",
+            "checksum": "c9d7f02681366f41bfee4d9aea7fcd14c0e8d47223c47f20891c562673cfefa1"
           }
         }
       ]
@@ -307,6 +355,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tags&Name=ParentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-19T19:13:04.384Z",
+            "checksum": "c9d7f02681366f41bfee4d9aea7fcd14c0e8d47223c47f20891c562673cfefa1"
           }
         }
       ]
@@ -331,6 +383,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tasks&Name=ParentID"
+          },
+          "sync": {
+            "lastModified": "2026-08-19T19:13:04.492Z",
+            "checksum": "c9d7f02681366f41bfee4d9aea7fcd14c0e8d47223c47f20891c562673cfefa1"
           }
         }
       ]
