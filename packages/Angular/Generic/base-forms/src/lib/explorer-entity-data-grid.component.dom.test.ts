@@ -6,6 +6,7 @@ import type { EntityInfo } from '@memberjunction/core';
 import type { AfterRowClickEventArgs, AfterRowDoubleClickEventArgs, AfterDataLoadEventArgs } from '@memberjunction/ng-entity-viewer';
 import { renderComponentFixture, capture } from '@memberjunction/ng-test-utils';
 import { ExplorerEntityDataGridComponent } from './explorer-entity-data-grid.component';
+import { RelatedGridHeightPx } from './related-grid-height';
 
 /**
  * DOM coverage for <mj-explorer-entity-data-grid> — the CodeGen-emitted related-entity grid wrapper
@@ -21,6 +22,17 @@ class StubInnerGrid {
   @Input() NewRecordValues: Record<string, unknown> = {};
   @Input() AllowLoad = false;
   @Input() ShowToolbar = false;
+  @Input() ShowSearch = true;
+  @Input() ShowNewButton = true;
+  @Input() ShowRefreshButton = true;
+  @Input() ShowExportButton = true;
+  @Input() ShowDeleteButton = false;
+  @Input() ShowCompareButton = false;
+  @Input() ShowMergeButton = false;
+  @Input() ShowAddToListButton = false;
+  @Input() ShowDuplicateSearchButton = false;
+  @Input() ShowCommunicationButton = false;
+  @Input() ShowRecycleBin = true;
   @Input() Height: unknown;
   @Input() ToolbarConfig: unknown;
   @Input() SelectionMode = '';
@@ -47,8 +59,41 @@ describe('ExplorerEntityDataGridComponent (DOM)', () => {
     const g = inner(f);
     expect(g.Params).toBe(PARAMS);
     expect(g.ShowToolbar).toBe(true);
+    expect(g.ShowSearch).toBe(true);
+    expect(g.ShowNewButton).toBe(true);
+    expect(g.ShowRefreshButton).toBe(true);
+    expect(g.ShowExportButton).toBe(true);
     expect(g.SelectionMode).toBe('multiple');
     expect(g.AllowColumnToggle).toBe(false);
+  });
+
+  it('forwards toolbar chrome so a related list can hide search, buttons, or the whole bar', () => {
+    const g = inner(render({
+      ShowToolbar: false,
+      ShowSearch: false,
+      ShowNewButton: false,
+      ShowRefreshButton: false,
+      ShowExportButton: false,
+      ShowDeleteButton: true,
+      ShowCompareButton: true,
+      ShowMergeButton: true,
+      ShowAddToListButton: true,
+      ShowDuplicateSearchButton: true,
+      ShowCommunicationButton: true,
+      ShowRecycleBin: false,
+    }));
+    expect(g.ShowToolbar).toBe(false);
+    expect(g.ShowSearch).toBe(false);
+    expect(g.ShowNewButton).toBe(false);
+    expect(g.ShowRefreshButton).toBe(false);
+    expect(g.ShowExportButton).toBe(false);
+    expect(g.ShowDeleteButton).toBe(true);
+    expect(g.ShowCompareButton).toBe(true);
+    expect(g.ShowMergeButton).toBe(true);
+    expect(g.ShowAddToListButton).toBe(true);
+    expect(g.ShowDuplicateSearchButton).toBe(true);
+    expect(g.ShowCommunicationButton).toBe(true);
+    expect(g.ShowRecycleBin).toBe(false);
   });
 
   it('passes EffectiveAllowLoad=true to the inner grid when AllowLoad and not deferring', () => {
@@ -82,6 +127,22 @@ describe('ExplorerEntityDataGridComponent (DOM)', () => {
     inner(f).AfterRowDoubleClick.emit({ row: { ID: '1' } } as unknown as AfterRowDoubleClickEventArgs);
     expect(dbl.length).toBe(1);
     expect(nav.length).toBe(0);
+  });
+
+  it('sizes a related-entity accordion grid to toolbar + header + rows', () => {
+    const f = render();
+    const host = f.debugElement.nativeElement as HTMLElement;
+    const wrap = document.createElement('mj-collapsible-panel');
+    wrap.setAttribute('data-variant', 'related-entity');
+    host.parentElement?.insertBefore(wrap, host);
+    wrap.appendChild(host);
+
+    inner(f).AfterDataLoad.emit({ loadedRowCount: 2 } as unknown as AfterDataLoadEventArgs);
+    f.detectChanges();
+
+    expect(f.componentInstance.ResolvedHeight).toBe(RelatedGridHeightPx(2));
+    expect(inner(f).Height).toBe(RelatedGridHeightPx(2));
+    expect(host.style.height).toBe(`${RelatedGridHeightPx(2)}px`);
   });
 
   it('translates a new-record request into a Navigate event', () => {

@@ -12,32 +12,38 @@ name: Update package documentation
 # Every build uses the docs-site/ TOOLING from next (overlaid onto the content
 # checkout), so ingest/site fixes apply to all versions without cherry-picks.
 # Because this file lives on the default branch (next), the workflow_run
-# trigger fires from here regardless of what main or lts/* carry; pushes to
-# lts/* are forwarded by the thin dispatcher workflow on those branches.
+# trigger fires from here regardless of what main or lts/* carry.
 
 on:
+  # Release-following only: a docs deploy is the last step of shipping, never a
+  # side effect of merging. Between releases both `main` and the npm registry
+  # lag `next`, so a merge-triggered deploy publishes authoritative-looking
+  # documentation — canonical links into `main` included — for bits nobody can
+  # install yet. The resolve job below hard-fails a trigger that did not
+  # conclude `success`.
+  #
+  # `main` ONLY, and `next` is deliberately absent: no docs deploy is ever
+  # triggered by an event on next (the trigger removed in #3911 does not come
+  # back through a branch filter). The Edge line publishes on a push to main and
+  # is covered here.
+  #
+  # An LTS line release does NOT arrive here as a workflow_run. It is dispatched
+  # from next's ref (publish.yml's publish-lts job, the line being a parameter),
+  # so matching it would mean listening to `next`. Instead that job CHAINS into
+  # the workflow_dispatch below as its own final step, after the release commit
+  # and tag are on the line branch — which is also the only ordering that builds
+  # the released content rather than the previous line state.
   workflow_run:
-    workflows: [Build and publish new package versions]
+    workflows:
+      - Build and publish new package versions  # publish.yml — the Edge line, on main
     branches: [main]
     types:
       - completed
 
-  # Docs content or tooling changes on next: Edge content and the shared
-  # tooling both live here, so any of these paths can change the built site.
-  push:
-    branches: [next]
-    paths:
-      - 'docs-site/**'
-      - 'guides/**'
-      - 'README.md'
-      - 'UPGRADE-v5.0.md'
-      - 'UPGRADE-v6.0.md'
-      - 'CONTRIBUTING.md'
-      - 'metadata/README.md'
-      - '.claude/skills/**'
-      - 'releases/**'
-      - '.github/workflows/docs.yml'
-
+  # Two callers: an operator re-deploying a docs-only fix without waiting for a
+  # release (also the only way to exercise the full pipeline from a branch), and
+  # publish.yml's publish-lts job chaining a deploy after a line release. lts/5's
+  # thin docs dispatcher forwards its docs-content pushes here the same way.
   workflow_dispatch: {}
 
 permissions:
@@ -66,10 +72,11 @@ jobs:
             exit 1
           fi
 
-      # github.sha is the commit this run was triggered for: the pushed next
-      # commit, the default-branch head for workflow_run, or the chosen ref's
-      # head for a manual dispatch (which is what lets a feature branch test
-      # the full pipeline before merging).
+      # github.sha is the commit this run was triggered for: the default-branch
+      # head for workflow_run, or the chosen ref's head for a manual dispatch
+      # (which is what lets a feature branch test the full pipeline before
+      # merging). Note for workflow_run this is next's head, NOT the released
+      # commit — the ref each version's CONTENT comes from is the matrix below.
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
@@ -83,6 +90,24 @@ jobs:
           # LTS sets: one per lts/N branch. The branch is created by the LTS
           # process at line cut, so its existence is the source of truth for
           # "this line has public docs".
+          #
+          # 🚨 KNOWN GAP — dotted line branches (lts/6.1) get NO docs set: the
+          # filter below takes bare majors only. Do NOT "fix" this by widening
+          # the grep alone. docs-site/src/lib/documented-line.mjs THROWS on a
+          # dotted DOCS_VERSION ("Documented line must look like v6"), and
+          # because `deploy` needs `build`, one failing matrix entry takes the
+          # WHOLE site's deploy down — every line, not just the dotted one.
+          # Today's silent omission would become a total docs outage the day
+          # lts/6.1 is cut.
+          #
+          # The real fix spans docs-site, not this file: split documented-line's
+          # single value into a line-id string (v6.1) and an integer major (6),
+          # because license-line.mjs derives BOTH the BUSL cutoff comparison and
+          # `blob/lts/${documentedMajor}` from it — and Number('6.10') is 6.1,
+          # so a dotted line would link at the wrong branch. This file's own
+          # remaining work is small by comparison: this filter, `sort -V` instead
+          # of `sort -n` (sort -n orders 6.10 before 6.9), and the 404
+          # forwarder's `^(\/v\d+)\/` deep-link regex.
           mapfile -t LTS < <(git ls-remote --heads origin 'lts/*' | sed -E 's#.*refs/heads/lts/##' | grep -E '^[0-9]+$' | sort -n)
           # Edge set: built from next; its major comes from the newest edge tag.
           EDGE_MAJOR=$(git ls-remote --tags origin 'v*-edge.*' | sed -E 's#.*refs/tags/v##; s#\^\{\}$##' | sort -uV | tail -1 | cut -d. -f1)
@@ -253,6 +278,35 @@ jobs:
           <title>MemberJunction Documentation</title>
           </head>
           <body><a href="/$DEFAULT/">MemberJunction documentation</a></body>
+          </html>
+          EOF
+
+          # /mjcertified is a stable front-door URL: the BUSL's Additional Use
+          # Grant points at the MemberJunction Certified Program by name, so the
+          # program page needs a version-independent address that answers 200.
+          # The 404 forwarder below would also land it, but only after serving a
+          # 404 status — wrong for a page the license refers to.
+          #
+          # It targets the newest BUSL line, NOT $DEFAULT. $DEFAULT is the newest
+          # certified LTS set, which today is v5 — an ISC line that predates the
+          # program entirely, so sending the canonical program URL there would
+          # answer the question on the one set where it does not apply. Falls
+          # back to $DEFAULT before any BUSL line is published.
+          CERT_SET=$(jq -r '[.[] | select((.id | ltrimstr("v") | tonumber) >= 6)] | max_by(.id | ltrimstr("v") | tonumber) | .id // empty' <<<"$VERSIONS")
+          [ -n "$CERT_SET" ] || CERT_SET="$DEFAULT"
+          echo "::notice::/mjcertified -> /$CERT_SET/mjcertified/"
+
+          mkdir -p dist/mjcertified
+          cat > dist/mjcertified/index.html <<EOF
+          <!doctype html>
+          <html lang="en">
+          <head>
+          <meta charset="utf-8">
+          <meta http-equiv="refresh" content="0; url=/$CERT_SET/mjcertified/">
+          <link rel="canonical" href="https://docs.memberjunction.org/$CERT_SET/mjcertified/">
+          <title>MemberJunction Certified Program</title>
+          </head>
+          <body><a href="/$CERT_SET/mjcertified/">MemberJunction Certified Program</a></body>
           </html>
           EOF
 

@@ -81,6 +81,8 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     MJExplorerModulesBundle,
 
     // Auth (needs forRoot configuration)
+    // Resolves against the provider catalog preloaded in main.ts (see AuthProviderCatalog.Preload).
+    // No catalog => falls back to environment.AUTH_TYPE, exactly as before.
     AuthServicesModule.forRoot(environment),
 
     // Explorer App Shell (includes login UI, validation, and mj-shell wrapper)

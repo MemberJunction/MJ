@@ -6,6 +6,7 @@ import {
     BaseViewGenerationContext,
     CascadeDeleteContext,
     FullTextSearchResult,
+    MaterializedColumnSpec,
     PhasedExecutionResult,
     DataSourceResult,
 } from '../../codeGenDatabaseProvider';
@@ -411,6 +412,70 @@ EXCEPTION WHEN invalid_table_definition THEN
   DROP TABLE _vw_regen_fn_deps;
 END $vw_regen$;
 `;
+    }
+
+    // ─── MATERIALIZATION ─────────────────────────────────────────────────
+
+    /**
+     * PostgreSQL materialized-table DDL. The create is **conditional** (`CREATE TABLE IF NOT
+     * EXISTS`) so a migration-provided `materialized_<name>` table with bespoke indexing is
+     * detected and reused rather than clobbered (plan §12). Emits the single-column surrogate
+     * PRIMARY KEY, which is itself the required unique index.
+     *
+     * PG dialect vs. SQL Server: double-quoted identifiers, `CREATE TABLE IF NOT EXISTS` in
+     * place of the `IF OBJECT_ID(...) IS NULL` guard, and the surrogate column carries PG's
+     * `GENERATED ALWAYS AS IDENTITY` clause (see {@link getMaterializedSurrogateColumnType}).
+     */
+    override generateMaterializedTableSQL(schema: string, tableName: string, columns: MaterializedColumnSpec[]): string {
+        // MJ entity-field metadata stores CANONICAL (SQL Server-flavored) type names — e.g. 'uniqueidentifier',
+        // 'nvarchar(50)' — regardless of the physical DB dialect. Every other PG DDL path maps these via
+        // mapSQLType (see spCreate/spUpdate generation); the materialized-table DDL must do the same, or a
+        // base-view/query materialization emits `... uniqueidentifier ...` and PG fails the CREATE TABLE with
+        // `type "uniqueidentifier" does not exist`, aborting the whole codegen run.
+        const colLines = columns.map(
+            (c) => `    ${pgDialect.QuoteIdentifier(c.Name)} ${this.mapSQLType(c.SQLType)} ${c.Nullable ? 'NULL' : 'NOT NULL'}`,
+        );
+        const pkCols = columns.filter((c) => c.IsPrimaryKey).map((c) => c.Name);
+        const pkClause = pkCols.length
+            ? `,\n    CONSTRAINT ${pgDialect.QuoteIdentifier(`PK_${tableName}`)} PRIMARY KEY (${pkCols
+                  .map((n) => pgDialect.QuoteIdentifier(n))
+                  .join(', ')})`
+            : '';
+        return `CREATE TABLE IF NOT EXISTS ${pgDialect.QuoteSchema(schema, tableName)} (
+${colLines.join(',\n')}${pkClause}
+);`;
+    }
+
+    /**
+     * PostgreSQL wrapper-view DDL — the stable read contract over the materialized table.
+     * Uses `CREATE OR REPLACE VIEW` so the same statement both creates the view and atomically
+     * repoints it at a freshly-built table during refresh (plan §11.2). The body is always
+     * `SELECT * FROM <table>` and the shadow table shares the column shape, so PG's
+     * `CREATE OR REPLACE` column-compatibility rule is satisfied on the swap.
+     */
+    override generateMaterializedWrapperViewSQL(schema: string, viewName: string, tableName: string): string {
+        return `CREATE OR REPLACE VIEW ${pgDialect.QuoteSchema(schema, viewName)}
+AS
+SELECT * FROM ${pgDialect.QuoteSchema(schema, tableName)};`;
+    }
+
+    /**
+     * PostgreSQL synthetic surrogate key: a SQL-standard auto-assigned identity column
+     * (`GENERATED ALWAYS AS IDENTITY`), `bigint` for headroom on large materialized sets.
+     * v1 full-rebuild only; the deterministic combined-key hashing in §5 replaces this in Phase 3.
+     */
+    override getMaterializedSurrogateColumnType(): string {
+        return 'bigint GENERATED ALWAYS AS IDENTITY';
+    }
+
+    /**
+     * PostgreSQL KEYED surrogate key type: the combined-key SHA-256 hash the refresh writes comes from
+     * `encode(digest(…), 'hex')`, whose type is `text`, and the full rebuild's `CREATE TABLE AS` infers
+     * exactly that. Typing the minted entity's PK column `text` MATCHES the post-refresh physical column,
+     * avoiding the int-vs-hash divergence between CodeGen metadata and the rebuilt table.
+     */
+    override getMaterializedHashSurrogateColumnType(): string {
+        return 'text';
     }
 
     // ─── CRUD CREATE ─────────────────────────────────────────────────────
@@ -1049,7 +1114,243 @@ WHERE ${ftsColName} IS NULL;
      * the parent FK upward, capped at 100 levels to prevent infinite loops. Returns the
      * root record's primary key value.
      */
+    // ─── RECURSIVE HIERARCHY FUNCTIONS ──────────────────────────────────
+
+    /**
+     * Generates a PostgreSQL function returning a table of hierarchy metadata
+     * (RootID, Depth, Path, IsLeaf, ChildCount) for a self-referencing foreign key.
+     */
+    generateHierarchyMetaFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType);
+        const fieldName = field.Name;
+        const fnName = this.getHierarchyMetaFunctionName(entity, field);
+
+        return `
+------------------------------------------------------------
+----- HIERARCHY METADATA FUNCTION FOR: ${entity.BaseTable}.${fieldName}
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
+    p_record_id ${primaryKeyType},
+    p_parent_id ${primaryKeyType}
+) RETURNS TABLE (
+    "RootID" ${primaryKeyType},
+    "Depth" INTEGER,
+    "Path" TEXT,
+    "IsLeaf" BOOLEAN,
+    "ChildCount" INTEGER
+) AS $$
+    WITH RECURSIVE cte_ancestors AS (
+        SELECT
+            ${pgDialect.QuoteIdentifier(primaryKey)},
+            ${pgDialect.QuoteIdentifier(fieldName)},
+            0 AS depth,
+            '/' || ${pgDialect.QuoteIdentifier(primaryKey)}::TEXT || '/' AS path
+        FROM
+            ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
+        WHERE
+            ${pgDialect.QuoteIdentifier(primaryKey)} = p_record_id
+
+        UNION ALL
+
+        SELECT
+            p.${pgDialect.QuoteIdentifier(primaryKey)},
+            p.${pgDialect.QuoteIdentifier(fieldName)},
+            c.depth + 1 AS depth,
+            '/' || p.${pgDialect.QuoteIdentifier(primaryKey)}::TEXT || c.path AS path
+        FROM
+            ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} p
+        INNER JOIN
+            cte_ancestors c ON p.${pgDialect.QuoteIdentifier(primaryKey)} = c.${pgDialect.QuoteIdentifier(fieldName)}
+        WHERE
+            c.depth < 100
+    )
+    SELECT
+        a.${pgDialect.QuoteIdentifier(primaryKey)} AS "RootID",
+        (SELECT MAX(depth) FROM cte_ancestors)::INTEGER AS "Depth",
+        (SELECT path FROM cte_ancestors ORDER BY depth DESC LIMIT 1)::TEXT AS "Path",
+        (NOT EXISTS (SELECT 1 FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} WHERE ${pgDialect.QuoteIdentifier(fieldName)} = p_record_id))::BOOLEAN AS "IsLeaf",
+        (SELECT COUNT(1)::INTEGER FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} WHERE ${pgDialect.QuoteIdentifier(fieldName)} = p_record_id) AS "ChildCount"
+    FROM
+        cte_ancestors a
+    WHERE
+        a.${pgDialect.QuoteIdentifier(fieldName)} IS NULL OR p_parent_id IS NULL
+    ORDER BY
+        a.depth DESC
+    LIMIT 1;
+$$ LANGUAGE sql STABLE;
+`;
+    }
+
+    /**
+     * Generates a PostgreSQL table-valued function returning all descendant records of a root node.
+     */
+    generateDescendantsFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType);
+        const fieldName = field.Name;
+        const fnName = this.getDescendantsFunctionName(entity, field);
+
+        return `
+------------------------------------------------------------
+----- DESCENDANTS FUNCTION FOR: ${entity.BaseTable}.${fieldName}
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
+    p_root_id ${primaryKeyType},
+    p_max_depth INTEGER DEFAULT NULL
+) RETURNS TABLE (
+    "ID" ${primaryKeyType},
+    "Depth" INTEGER,
+    "Path" TEXT,
+    "IsLeaf" BOOLEAN,
+    "ChildCount" INTEGER
+) AS $$
+    WITH RECURSIVE cte_descendants AS (
+        SELECT
+            ${pgDialect.QuoteIdentifier(primaryKey)},
+            ${pgDialect.QuoteIdentifier(fieldName)},
+            0 AS relative_depth,
+            '/' || ${pgDialect.QuoteIdentifier(primaryKey)}::TEXT || '/' AS path
+        FROM
+            ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
+        WHERE
+            ${pgDialect.QuoteIdentifier(primaryKey)} = p_root_id
+
+        UNION ALL
+
+        SELECT
+            c.${pgDialect.QuoteIdentifier(primaryKey)},
+            c.${pgDialect.QuoteIdentifier(fieldName)},
+            p.relative_depth + 1 AS relative_depth,
+            p.path || c.${pgDialect.QuoteIdentifier(primaryKey)}::TEXT || '/' AS path
+        FROM
+            ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} c
+        INNER JOIN
+            cte_descendants p ON c.${pgDialect.QuoteIdentifier(fieldName)} = p.${pgDialect.QuoteIdentifier(primaryKey)}
+        WHERE
+            (p_max_depth IS NULL OR p.relative_depth < p_max_depth)
+            AND p.relative_depth < 100
+    )
+    SELECT
+        d.${pgDialect.QuoteIdentifier(primaryKey)} AS "ID",
+        d.relative_depth AS "Depth",
+        d.path AS "Path",
+        (NOT EXISTS (SELECT 1 FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} WHERE ${pgDialect.QuoteIdentifier(fieldName)} = d.${pgDialect.QuoteIdentifier(primaryKey)}))::BOOLEAN AS "IsLeaf",
+        (SELECT COUNT(1)::INTEGER FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} WHERE ${pgDialect.QuoteIdentifier(fieldName)} = d.${pgDialect.QuoteIdentifier(primaryKey)}) AS "ChildCount"
+    FROM
+        cte_descendants d;
+$$ LANGUAGE sql STABLE;
+`;
+    }
+
+    /**
+     * Generates a PostgreSQL table-valued function returning all ancestors of a node walking upward.
+     */
+    generateAncestorsFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType);
+        const fieldName = field.Name;
+        const fnName = this.getAncestorsFunctionName(entity, field);
+
+        return `
+------------------------------------------------------------
+----- ANCESTORS FUNCTION FOR: ${entity.BaseTable}.${fieldName}
+------------------------------------------------------------
+CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
+    p_record_id ${primaryKeyType}
+) RETURNS TABLE (
+    "ID" ${primaryKeyType},
+    "LevelUp" INTEGER,
+    "Path" TEXT
+) AS $$
+    WITH RECURSIVE cte_ancestors AS (
+        SELECT
+            ${pgDialect.QuoteIdentifier(primaryKey)},
+            ${pgDialect.QuoteIdentifier(fieldName)},
+            0 AS level_up,
+            '/' || ${pgDialect.QuoteIdentifier(primaryKey)}::TEXT || '/' AS path
+        FROM
+            ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
+        WHERE
+            ${pgDialect.QuoteIdentifier(primaryKey)} = p_record_id
+
+        UNION ALL
+
+        SELECT
+            p.${pgDialect.QuoteIdentifier(primaryKey)},
+            p.${pgDialect.QuoteIdentifier(fieldName)},
+            c.level_up + 1 AS level_up,
+            '/' || p.${pgDialect.QuoteIdentifier(primaryKey)}::TEXT || c.path AS path
+        FROM
+            ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} p
+        INNER JOIN
+            cte_ancestors c ON p.${pgDialect.QuoteIdentifier(primaryKey)} = c.${pgDialect.QuoteIdentifier(fieldName)}
+        WHERE
+            c.level_up < 100
+    )
+    SELECT
+        a.${pgDialect.QuoteIdentifier(primaryKey)} AS "ID",
+        a.level_up AS "LevelUp",
+        a.path AS "Path"
+    FROM
+        cte_ancestors a;
+$$ LANGUAGE sql STABLE;
+`;
+    }
+
+    public getHierarchyMetaFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_hierarchy_meta`;
+    }
+
+    public getDescendantsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_descendants`;
+    }
+
+    public getAncestorsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_ancestors`;
+    }
+
+    /** @inheritdoc */
+    generateHierarchyFieldSelect(_entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
+        const rootFieldName = `Root${field.Name}`;
+        const depthFieldName = `${field.Name}Depth`;
+        const pathFieldName = `${field.Name}Path`;
+        const isLeafFieldName = `${field.Name}IsLeaf`;
+        const childCountFieldName = `${field.Name}ChildCount`;
+        return `${alias}."RootID" AS ${pgDialect.QuoteIdentifier(rootFieldName)},
+    ${alias}."Depth" AS ${pgDialect.QuoteIdentifier(depthFieldName)},
+    ${alias}."Path" AS ${pgDialect.QuoteIdentifier(pathFieldName)},
+    ${alias}."IsLeaf" AS ${pgDialect.QuoteIdentifier(isLeafFieldName)},
+    ${alias}."ChildCount" AS ${pgDialect.QuoteIdentifier(childCountFieldName)}`;
+    }
+
+    /**
+     * Generates a `LEFT JOIN LATERAL` clause that invokes the hierarchy metadata function
+     * for a self-referencing field.
+     */
+    generateHierarchyFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
+        const fnName = this.getHierarchyMetaFunctionName(entity, field);
+        const tableAlias = entity.BaseTableCodeName.charAt(0).toLowerCase();
+        return `LEFT JOIN LATERAL ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(${tableAlias}.${pgDialect.QuoteIdentifier(entity.FirstPrimaryKey.Name)}, ${tableAlias}.${pgDialect.QuoteIdentifier(field.Name)}) AS ${alias} ON true`;
+    }
+
+    /**
+     * Generates a PostgreSQL function that recursively calculates the root record ID for a
+     * self-referencing foreign key.
+     */
     generateRootIDFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
         const primaryKey = entity.FirstPrimaryKey.Name;
         const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType);
         const fieldName = field.Name;
@@ -1112,7 +1413,7 @@ $$ LANGUAGE sql STABLE;
      * function`. The snake_case scalar form is codegen's own naming space and
      * is consistent with how downstream views are emitted.
      */
-    private getRootIDFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+    public getRootIDFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
         return `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_root_id`;
     }
 
@@ -1847,6 +2148,18 @@ WHERE p.prokind IN ('f', 'p')
                 f.RelatedEntityID != null && UUIDsEqual(f.RelatedEntityID, entity.ID)
             );
             for (const field of recursiveFKs) {
+                const metaSQL = this.generateHierarchyMetaFunction(entity, field);
+                if (metaSQL && metaSQL.trim().length > 0) {
+                    await client.query(metaSQL);
+                }
+                const descSQL = this.generateDescendantsFunction(entity, field);
+                if (descSQL && descSQL.trim().length > 0) {
+                    await client.query(descSQL);
+                }
+                const ancSQL = this.generateAncestorsFunction(entity, field);
+                if (ancSQL && ancSQL.trim().length > 0) {
+                    await client.query(ancSQL);
+                }
                 const fnSQL = this.generateRootIDFunction(entity, field);
                 if (fnSQL && fnSQL.trim().length > 0) {
                     await client.query(fnSQL);

@@ -11,7 +11,7 @@ import { AIModelConfiguration } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup } from "@memberjunction/core";
-import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, UUIDsEqual } from "@memberjunction/global";
+import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { createHash } from "crypto";
 import { MJAIActionEntity, MJActionEntity,
          MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
@@ -1229,7 +1229,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
         // Sort by creation date (most recent first) and take topK
         const sorted = notes
-            .sort((a, b) => (b.__mj_CreatedAt?.getTime() || 0) - (a.__mj_CreatedAt?.getTime() || 0))
+            .sort((a, b) => ToEpochMs(b.__mj_CreatedAt) - ToEpochMs(a.__mj_CreatedAt))
             .slice(0, topK);
 
         // Return with similarity of 0 to indicate no semantic ranking was applied
@@ -1339,7 +1339,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
                 const scoreA = a.SuccessScore ?? 0;
                 const scoreB = b.SuccessScore ?? 0;
                 if (scoreB !== scoreA) return scoreB - scoreA;
-                return (b.__mj_CreatedAt?.getTime() || 0) - (a.__mj_CreatedAt?.getTime() || 0);
+                return ToEpochMs(b.__mj_CreatedAt) - ToEpochMs(a.__mj_CreatedAt);
             })
             .slice(0, topK);
 
@@ -1453,7 +1453,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             markupTokens.forEach(token => {
                 const fieldName = token.replace('{','').replace('}','');
                 const fieldValue = entityRecord.Get(fieldName);
-                temp = temp.replace(token, fieldValue ? fieldValue : '');
+                // Function replacement — field data may contain `$`. See issue #3171.
+                const replacement = fieldValue ? String(fieldValue) : '';
+                temp = temp.replace(token, () => replacement);
             });
         }
         return temp;

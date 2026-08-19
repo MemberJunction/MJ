@@ -1,18 +1,30 @@
-import { SetProvider, Metadata } from '@memberjunction/core';
+import { SetProvider, Metadata, UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
-import { UserCache } from '@memberjunction/generic-database-provider';
+// `UserCache` moved to generic-database-provider upstream (dialect-neutral Refresh); the rest of
+// this line is this branch's PG-parity work, which the merged body below still uses.
+import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import sql from 'mssql';
 import dotenv from 'dotenv';
 import path from 'path';
-import { loadMJConfig } from '../utils/config-loader';
+import { loadMJConfig, type MJConfig } from '../utils/config-loader';
 
-// Load environment variables from .env file
-// Note: config-loader.ts also loads dotenv with override:true, but we include it here
-// for completeness in case mj-provider is used standalone
-dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true, quiet: true });
+// Load environment variables from .env file.
+// `override` is deliberately FALSE so an explicitly-set variable wins over `.env`
+// — see the note in config-loader.ts, which is where that decision is explained.
+//
+// This call is effectively a no-op: config-loader is imported statically above, so
+// its own dotenv.config() has already run by the time this line executes, and with
+// override:false a second pass cannot change anything it already set. It is kept
+// only so the module states its own requirement rather than inheriting one
+// silently. (It is NOT a standalone-use safety net, as this comment used to
+// claim — a static import makes standalone use impossible to reach.)
+dotenv.config({ path: path.resolve(process.cwd(), '.env'), quiet: true });
 
 let isInitialized = false;
 let connectionPool: sql.ConnectionPool | null = null;
+/** Set only on the PostgreSQL path; there is no mssql pool to close in that case. */
+let pgProvider: { Close?: () => Promise<void> } | null = null;
 
 export async function initializeMJProvider(): Promise<void> {
   if (isInitialized) {
@@ -80,36 +92,46 @@ For security, use environment variables:
   }`);
     }
 
-    // Create SQL Server connection
-    console.log(`Connecting to database: ${dbName} on ${dbHost || 'localhost'}`);
-    const sqlConfig: sql.config = {
-      server: dbHost || 'localhost',
-      port: typeof dbPort === 'string' ? parseInt(dbPort) : (dbPort || 1433),
-      database: dbName,
-      user: dbUsername,
-      password: dbPassword,
-      options: {
-        encrypt: true,
-        trustServerCertificate: true,
-        enableArithAbort: true,
-      },
-      pool: {
-        max: 10,
-        min: 2,
-        idleTimeoutMillis: 30000,
-      },
-    };
+    // Which backend? mj.config.cjs wins; DB_PLATFORM is the fallback for configs predating the
+    // key. Every other MJ entry point (MJCLI, MetadataSync, MJServer, CodeGenLib) resolves the
+    // platform this way — until now the testing CLI was the one that did not, which is why
+    // `mj test` could never run against PostgreSQL (issue #3257).
+    const platform = config.dbPlatform ?? resolveDbPlatformFromEnv() ?? 'sqlserver';
 
-    connectionPool = new sql.ConnectionPool(sqlConfig);
-    await connectionPool.connect();
+    if (platform === 'postgresql') {
+      await initializePostgresProvider({ dbName, dbHost, dbPort, dbUsername, dbPassword, dbSchema });
+    } else {
+      // Create SQL Server connection
+      console.log(`Connecting to database: ${dbName} on ${dbHost || 'localhost'}`);
+      const sqlConfig: sql.config = {
+        server: dbHost || 'localhost',
+        port: typeof dbPort === 'string' ? parseInt(dbPort) : (dbPort || 1433),
+        database: dbName,
+        user: dbUsername,
+        password: dbPassword,
+        options: {
+          encrypt: true,
+          trustServerCertificate: true,
+          enableArithAbort: true,
+        },
+        pool: {
+          max: 10,
+          min: 2,
+          idleTimeoutMillis: 30000,
+        },
+      };
 
-    const providerConfig = new SQLServerProviderConfigData(
-      connectionPool,
-      dbSchema || '__mj',
-      180000
-    );
+      connectionPool = new sql.ConnectionPool(sqlConfig);
+      await connectionPool.connect();
 
-    await setupSQLServerClient(providerConfig);
+      const providerConfig = new SQLServerProviderConfigData(
+        connectionPool,
+        dbSchema || '__mj',
+        180000
+      );
+
+      await setupSQLServerClient(providerConfig);
+    }
 
     // Debug: Log entity counts
     const md = new Metadata(); // global-provider-ok: CLI tool, single-provider context
@@ -164,12 +186,81 @@ For debugging, run with --verbose flag for detailed error information.`);
   }
 }
 
+/** Connection details shared by both platform initializers. */
+type ResolvedDbConfig = {
+  dbName: string;
+  dbHost?: string;
+  dbPort?: number | string;
+  dbUsername?: string;
+  dbPassword?: string;
+  dbSchema?: string;
+};
+
+/**
+ * PostgreSQL provider setup for the testing CLI.
+ *
+ * The provider is imported dynamically and declared in optionalDependencies so SQL-Server-only
+ * consumers of this published package never have to resolve `pg` — the same category-2 exception
+ * `@memberjunction/testing-integration` already takes for its own PG bootstrap.
+ */
+async function initializePostgresProvider(cfg: ResolvedDbConfig): Promise<void> {
+  const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
+
+  const coreSchema = cfg.dbSchema || '__mj';
+  console.log(`Connecting to PostgreSQL database: ${cfg.dbName} on ${cfg.dbHost || 'localhost'}`);
+
+  const provider = new PostgreSQLDataProvider();
+  await provider.Config(new PostgreSQLProviderConfigData(
+    {
+      Host: cfg.dbHost || 'localhost',
+      Port: typeof cfg.dbPort === 'string' ? parseInt(cfg.dbPort) : (cfg.dbPort || 5432),
+      Database: cfg.dbName,
+      User: cfg.dbUsername ?? '',
+      Password: cfg.dbPassword ?? '',
+      MaxConnections: 10,
+      MinConnections: 2,
+    },
+    coreSchema,
+    1, // must be > 0 or PostgreSQLDataProvider skips the initial metadata load
+  ));
+  SetProvider(provider as unknown as IMetadataProvider);
+  pgProvider = provider as unknown as { Close?: () => Promise<void> };
+
+  await refreshUserCacheFromPG(provider, coreSchema);
+}
+
+/**
+ * Populate UserCache from PG `vwUsers`/`vwUserRoles`.
+ *
+ * This path exists because the rows have to be stitched here: the `UserInfo[]` is built before
+ * there is a `DatabaseProviderBase` to hand `UserCache.Refresh`, and it also swallows its own
+ * errors, which is why an unpopulated cache presents as "no users" rather than as a failure.
+ * MJServer and MetadataSync each carry a private copy of this for the same reason; consolidating
+ * the three belongs in the package that owns the cache and is filed separately.
+ *
+ * The HAND-OFF, though, now goes through `UserCache.SetUsers` rather than assigning the private
+ * `_users` field by string index. That cast type-checked forever and failed silently — rename the
+ * field and the cache is never populated, with no compile error and the symptom surfacing
+ * arbitrarily far away. The public seam makes the rename a build error.
+ */
+async function refreshUserCacheFromPG(provider: { ExecuteSQL: <T>(sql: string) => Promise<T[]> }, coreSchema: string): Promise<void> {
+  const users = await provider.ExecuteSQL<Record<string, unknown>>(`SELECT * FROM "${coreSchema}"."vwUsers"`);
+  const roles = await provider.ExecuteSQL<Record<string, unknown>>(`SELECT * FROM "${coreSchema}"."vwUserRoles"`);
+
+  const userInfos = (users ?? []).map(u => new UserInfo(
+    Metadata.Provider, // global-provider-ok: dedicated single-provider CLI process, just installed above
+    { ...u, UserRoles: (roles ?? []).filter(r => UUIDsEqual(r.UserID as string, u.ID as string)) }
+  ));
+  UserCache.Instance.SetUsers(userInfos);
+}
+
 export function getConnectionPool(): sql.ConnectionPool {
   if (!connectionPool) {
     throw new Error(`❌ MJ Provider not initialized
 
 Problem: Database connection not established
-Likely cause: initializeMJProvider() was not called
+Likely cause: initializeMJProvider() was not called, or this run is on PostgreSQL
+              (there is no mssql pool on that platform)
 
 This is an internal error. Please report this issue.`);
   }
@@ -182,6 +273,11 @@ export async function closeMJProvider(): Promise<void> {
     connectionPool = null;
     isInitialized = false;
   }
+  if (pgProvider) {
+    await pgProvider.Close?.();
+    pgProvider = null;
+    isInitialized = false;
+  }
 }
 
 /**
@@ -191,6 +287,17 @@ export async function closeMJProvider(): Promise<void> {
 export async function getContextUser(): Promise<import('@memberjunction/core').UserInfo> {
   // Try to get the System user like other CLIs do
   let user = UserCache.Instance.UserByName("System", false);
+
+  // Then the well-known System ID, then the first active Owner. `Type` is space-padded in both
+  // ledgers (`'Owner          '`) and UserInfo never trims it, so trim before comparing. Ordering
+  // the fallbacks this way keeps the resolved user identical on both platforms, rather than
+  // depending on whatever row the database happens to return first.
+  if (!user) {
+    user = UserCache.Instance.GetSystemUser();
+  }
+  if (!user) {
+    user = UserCache.Instance.Users?.find(u => u.IsActive && u.Type?.trim() === 'Owner');
+  }
 
   if (!user) {
     // Fallback to first available user if System user doesn't exist

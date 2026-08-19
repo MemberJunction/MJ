@@ -184,9 +184,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Archive Configuration Entities','ArchiveConfigurationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Archive Configuration Entities')"
+                [NewRecordValues]="NewRecordValues('MJ: Archive Configuration Entities','ArchiveConfigurationID')"
                 [AllowLoad]="IsSectionExpanded('mJArchiveConfigurationEntities')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJArchiveConfigurationEntities', $event.totalRowCount)"
                 >
@@ -209,9 +209,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Archive Runs','ArchiveConfigurationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Archive Runs')"
+                [NewRecordValues]="NewRecordValues('MJ: Archive Runs','ArchiveConfigurationID')"
                 [AllowLoad]="IsSectionExpanded('mJArchiveRuns')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJArchiveRuns', $event.totalRowCount)"
                 >

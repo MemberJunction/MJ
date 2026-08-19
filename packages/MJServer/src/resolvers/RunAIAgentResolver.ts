@@ -387,7 +387,9 @@ export class RunAIAgentResolver extends ResolverBase {
         planMode?: boolean,
         /** Skill IDs the user requested (via `/skill-name`) — threaded into ExecuteAgentParams.requestedSkillIDs.
          *  The framework intersects them with the agent's accepted skills AND the user's Run permission. */
-        requestedSkillIDs?: string[]
+        requestedSkillIDs?: string[],
+        /** JSON `{ paused?: boolean }` — seeds `$.debug` on a submitted task graph at insert. */
+        taskGraphDebug?: string
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
         
@@ -441,6 +443,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 configurationId: configurationId,
                 planMode: planMode,
                 requestedSkillIDs: requestedSkillIDs,
+                taskGraphDebug: parseTaskGraphDebug(taskGraphDebug),
                 data: parsedData,
                 context: {
                     dataSource: dataSource
@@ -632,7 +635,9 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('planMode', { nullable: true }) planMode?: boolean,
         /** Skill IDs the user requested — symmetric with RunAIAgentFromConversationDetail. Intersected
          *  server-side with the agent's accepted skills AND the user's Run permission. */
-        @Arg('requestedSkillIDs', () => [String], { nullable: true }) requestedSkillIDs?: string[]
+        @Arg('requestedSkillIDs', () => [String], { nullable: true }) requestedSkillIDs?: string[],
+        /** JSON `{ paused?: boolean }` — start-paused for a Flow agent that submits a graph. */
+        @Arg('taskGraphDebug', { nullable: true }) taskGraphDebug?: string
     ): Promise<AIAgentRunResult> {
         // Check API key scope authorization for agent execution
         await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
@@ -646,7 +651,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
                 data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
                 conversationDetailId, createArtifacts || false, createNotification || false,
-                sourceArtifactId, sourceArtifactVersionId, undefined /*conversationId*/, planMode, requestedSkillIDs
+                sourceArtifactId, sourceArtifactVersionId, undefined /*conversationId*/, planMode, requestedSkillIDs, taskGraphDebug
             );
 
             LogStatus(`🔥 Fire-and-forget: Agent ${agentId} execution started in background for session ${sessionId}`);
@@ -680,7 +685,8 @@ export class RunAIAgentResolver extends ResolverBase {
             undefined, // conversationId (not pre-resolved on this path)
             undefined, // runRef
             planMode,
-            requestedSkillIDs
+            requestedSkillIDs,
+            taskGraphDebug
         );
     }
 
@@ -1276,7 +1282,8 @@ export class RunAIAgentResolver extends ResolverBase {
         /** Per-request Plan Mode toggle — threaded through to ExecuteAgentParams.planMode. */
         planMode?: boolean,
         /** Skill IDs the user requested — threaded through to ExecuteAgentParams.requestedSkillIDs. */
-        requestedSkillIDs?: string[]
+        requestedSkillIDs?: string[],
+        taskGraphDebug?: string
     ): void {
         // Ref the liveness pulse reads to enrich heartbeats once the run is created.
         const runRef: { current: MJAIAgentRunEntityExtended | null } = { current: null };
@@ -1295,7 +1302,7 @@ export class RunAIAgentResolver extends ResolverBase {
             p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
             data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
             configurationId, conversationDetailId, createArtifacts, createNotification,
-            sourceArtifactId, sourceArtifactVersionId, conversationId, runRef, planMode, requestedSkillIDs
+            sourceArtifactId, sourceArtifactVersionId, conversationId, runRef, planMode, requestedSkillIDs, taskGraphDebug
         ).catch((error: unknown) => {
             // Background execution failed unexpectedly (executeAIAgent has its own try-catch,
             // so this would only fire for truly unexpected errors).
@@ -1587,4 +1594,12 @@ export class RunAIAgentResolver extends ResolverBase {
         }
     }
 
+}
+
+function parseTaskGraphDebug(raw?: string): { paused?: boolean } | undefined {
+    if (!raw) return undefined;
+    const parsed: unknown = SafeJSONParse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+    const paused = (parsed as { paused?: unknown }).paused;
+    return paused === true ? { paused: true } : undefined;
 }

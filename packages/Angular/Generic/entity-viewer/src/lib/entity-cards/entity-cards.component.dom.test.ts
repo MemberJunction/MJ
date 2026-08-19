@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { EntityInfo } from '@memberjunction/core';
+
+// jsdom does not implement scrollIntoView; the component calls it from a deferred
+// setTimeout (scrollToSelectedCard), which otherwise fires AFTER a test completes and
+// surfaces as an unhandled TypeError when the worker lives long enough.
+Element.prototype.scrollIntoView = vi.fn();
 import { renderComponentFixture, query, queryAll, text, capture, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
 import { EntityCardsComponent } from './entity-cards.component';
 import type { CardTemplate } from '../types';

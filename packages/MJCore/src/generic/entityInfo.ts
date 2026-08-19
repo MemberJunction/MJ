@@ -9,6 +9,15 @@ import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
 import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/global"
+import {
+    ParseEntityConfiguration,
+    ParseEntityRelationshipConfiguration,
+    ParseEntityFieldConfiguration,
+    ReadRelationshipJoinFields,
+    type IEntityConfiguration,
+    type IEntityRelationshipConfiguration,
+    type IEntityFieldConfiguration,
+} from "./entityConfiguration"
 
 /**
  * Valid values for EntityField.ExtendedType.
@@ -108,6 +117,16 @@ export class EntityRelationshipInfo extends BaseInfo  {
     AutoUpdateFromSchema: boolean = true
 
     /**
+     * Comma-delimited list of extra related-entity fields to project in base views.
+     */
+    AdditionalFieldsToInclude: string = null
+
+    /**
+     * Whether CodeGen automatically updates AdditionalFieldsToInclude from schema metadata.
+     */
+    AutoUpdateAdditionalFieldsToInclude: boolean = true
+
+    /**
     * * Field Name: RelatedRecordCollection
     * * SQL Data Type: nvarchar(MAX), nullable
     *
@@ -128,6 +147,47 @@ export class EntityRelationshipInfo extends BaseInfo  {
     * @see guides/TRANSACTIONS_AND_BATCHING_GUIDE.md
     */
     RelatedRecordCollection: string = null
+
+    /**
+     * Raw string representation of Configuration from metadata.
+     */
+    protected _configuration: string = null;
+    private _configurationObject: IEntityRelationshipConfiguration | null | undefined = undefined;
+
+    /**
+     * Optional JSON configuration bag (shape = {@link IEntityRelationshipConfiguration}).
+     * Nested `UI.inclusion` is Primary, More, or None (omit = Auto ranker).
+     * `UI.FormRole` is an accepted alias (`Detail` = More). Distinct from
+     * RelatedRecordCollection, DisplayComponentConfiguration, and AdditionalFieldsToInclude.
+     * Parsed lazily on first access and cached using {@link SafeJSONParse}.
+     *
+     * @see packages/MJCore/src/generic/entityConfiguration.ts
+     */
+    get Configuration(): IEntityRelationshipConfiguration | null {
+        if (this._configurationObject === undefined) {
+            this._configurationObject = this._configuration ? SafeJSONParse<IEntityRelationshipConfiguration>(this._configuration, false) : null;
+        }
+        return this._configurationObject;
+    }
+    set Configuration(value: string | IEntityRelationshipConfiguration | null) {
+        if (typeof value === 'string') {
+            this._configuration = value;
+            this._configurationObject = undefined;
+        } else if (value && typeof value === 'object') {
+            this._configurationObject = value;
+            this._configuration = JSON.stringify(value);
+        } else {
+            this._configuration = null;
+            this._configurationObject = null;
+        }
+    }
+
+    /**
+     * Parsed {@link Configuration}. Null when the column is empty or not valid JSON.
+     */
+    get ConfigurationObject(): IEntityRelationshipConfiguration | null {
+        return this.Configuration;
+    }
 
     // virtual fields - returned by the database VIEW
     Entity: string = null 
@@ -525,6 +585,18 @@ export class EntityFieldInfo extends BaseInfo {
     DisplayName: string = null 
     Description: string = null 
     /**
+     * Whether CodeGen automatically updates Description from the underlying schema object.
+     */
+    AutoUpdateDescription: boolean = true
+    /**
+     * Whether CodeGen automatically updates UserSearchPredicateAPI from schema heuristics.
+     */
+    AutoUpdateUserSearchPredicate: boolean = true
+    /**
+     * Whether CodeGen automatically updates FullTextSearchEnabled from schema indexes.
+     */
+    AutoUpdateFullTextSearch: boolean = true 
+    /**
      * If true, the field is the primary key for the entity. There must be one primary key field per entity.
      */
     IsPrimaryKey: boolean = null
@@ -596,6 +668,22 @@ export class EntityFieldInfo extends BaseInfo {
      */
     RelatedEntityJoinFields: string = null
     /**
+     * Optional JSON policy object declaring this foreign-key field as a first-class
+     * **embedded record** — a 1:1 peer that loads, validates and persists as one
+     * unit with its owner. Shape is `IEmbeddedRecordConfig` (`OnClear`, `LoadNested`).
+     *
+     * `RelatedEntityID` and this field's `Name` are the join; they are deliberately
+     * not repeated inside the JSON. `AllowsNull` on this same field decides whether
+     * `GetEntityObject` provisions the object (required FK) or the caller uses
+     * `{FieldName}_EnsureObject()` (nullable FK).
+     *
+     * `null` (the default, and every pre-feature row) means the field is an ordinary
+     * FK: nothing is generated and nothing is constructed at `GetEntityObject` time.
+     *
+     * @see packages/MJCore/docs/embedded-records.md
+     */
+    EmbeddedRecord: string = null
+    /**
      * The name of the TypeScript interface/type for this JSON field.
      * When set, CodeGen will emit a strongly-typed getter/setter using this type
      * instead of the default string getter/setter.
@@ -612,6 +700,57 @@ export class EntityFieldInfo extends BaseInfo {
      * Can include imports, multiple types, or any valid TypeScript.
      */
     JSONTypeDefinition: string = null;
+
+    /**
+     * Raw string representation of Configuration from metadata.
+     */
+    protected _configuration: string = null;
+    private _configurationObject: IEntityFieldConfiguration | null | undefined = undefined;
+
+    /**
+     * Optional JSON configuration bag (shape = {@link IEntityFieldConfiguration}).
+     * Defines field-level configurations such as Hierarchy options (IsHierarchy, MaxDepth).
+     * Parsed lazily on first access and cached using {@link SafeJSONParse}.
+     */
+    get Configuration(): IEntityFieldConfiguration | null {
+        if (this._configurationObject === undefined) {
+            this._configurationObject = this._configuration ? SafeJSONParse<IEntityFieldConfiguration>(this._configuration, false) : null;
+        }
+        return this._configurationObject;
+    }
+    set Configuration(value: string | IEntityFieldConfiguration | null) {
+        if (typeof value === 'string') {
+            this._configuration = value;
+            this._configurationObject = undefined;
+        } else if (value && typeof value === 'object') {
+            this._configurationObject = value;
+            this._configuration = JSON.stringify(value);
+        } else {
+            this._configuration = null;
+            this._configurationObject = null;
+        }
+    }
+
+    /**
+     * Parsed {@link Configuration}. Null when the column is empty or not valid JSON.
+     */
+    get ConfigurationObject(): IEntityFieldConfiguration | null {
+        return this.Configuration;
+    }
+
+    /**
+     * Returns true if this field is explicitly configured as an intentional recursive tree hierarchy.
+     */
+    get IsHierarchy(): boolean {
+        return this.ConfigurationObject?.Hierarchy?.IsHierarchy === true;
+    }
+
+    /**
+     * Maximum recursion depth configured for this hierarchy field (defaults to 100).
+     */
+    get HierarchyMaxDepth(): number {
+        return this.ConfigurationObject?.Hierarchy?.MaxDepth ?? 100;
+    }
 
     RelatedEntityDisplayType: 'Search' | 'Dropdown' = null
     EntityIDFieldName: string = null
@@ -1663,9 +1802,21 @@ export class EntityInfo extends BaseInfo {
      */
     AllowUserSearchAPI: boolean = false
     /**
-     * Whether full-text search is enabled for this entity
+     * Whether full text search is enabled for this entity
      */
-    FullTextSearchEnabled: boolean = false
+    public FullTextSearchEnabled: boolean = null
+    /**
+     * Whether CodeGen automatically updates FullTextSearchEnabled from database catalog/index availability.
+     */
+    public AutoUpdateFullTextSearch: boolean = true
+    /**
+     * Whether CodeGen automatically updates AllowUserSearchAPI from schema rules.
+     */
+    public AutoUpdateAllowUserSearchAPI: boolean = true
+    /**
+     * Whether external changes to records are detected.
+     */
+    public DetectExternalChanges: boolean = false
     /**
      * Name of the SQL Server full-text catalog used for searching
      */
@@ -1769,6 +1920,46 @@ export class EntityInfo extends BaseInfo {
      * CSS class or icon identifier for displaying this entity in the UI
      */
     Icon: string = null
+
+    /**
+     * Raw string representation of Configuration from metadata.
+     */
+    protected _configuration: string = null;
+    private _configurationObject: IEntityConfiguration | null | undefined = undefined;
+
+    /**
+     * Optional JSON configuration bag (shape = {@link IEntityConfiguration}).
+     * Nested `UI.Form` holds generated-form chrome: layout, auto left-nav
+     * threshold, related-role policy, and the Primary related budget.
+     * Parsed lazily on first access and cached using {@link SafeJSONParse}.
+     *
+     * @see packages/MJCore/src/generic/entityConfiguration.ts
+     */
+    get Configuration(): IEntityConfiguration | null {
+        if (this._configurationObject === undefined) {
+            this._configurationObject = this._configuration ? SafeJSONParse<IEntityConfiguration>(this._configuration, false) : null;
+        }
+        return this._configurationObject;
+    }
+    set Configuration(value: string | IEntityConfiguration | null) {
+        if (typeof value === 'string') {
+            this._configuration = value;
+            this._configurationObject = undefined;
+        } else if (value && typeof value === 'object') {
+            this._configurationObject = value;
+            this._configuration = JSON.stringify(value);
+        } else {
+            this._configuration = null;
+            this._configurationObject = null;
+        }
+    }
+
+    /**
+     * Parsed {@link Configuration}. Null when the column is empty or not valid JSON.
+     */
+    get ConfigurationObject(): IEntityConfiguration | null {
+        return this.Configuration;
+    }
     /**
      * Date and time when this entity was created
      */
@@ -2527,6 +2718,15 @@ export class EntityInfo extends BaseInfo {
      * @returns 
      */
     public static BuildRelationshipViewParams(record: BaseEntity, relationship: EntityRelationshipInfo, filter?: string, maxRecords?: number): RunViewParams {
+        const joinFields = ReadRelationshipJoinFields(relationship.Configuration);
+        if (joinFields && joinFields.length > 1) {
+            const multi = EntityInfo.BuildRelationshipViewParamsForJoinFields(record, relationship.RelatedEntity, joinFields);
+            if (filter && filter.length > 0 && multi.ExtraFilter) {
+                multi.ExtraFilter = `(${multi.ExtraFilter}) AND (${filter})`;
+            }
+            if (maxRecords && maxRecords > 0) multi.MaxRows = maxRecords;
+            return multi;
+        }
         const params: RunViewParams = {}
         let quotes: string = '';
         let keyValue: string = '';
@@ -2567,21 +2767,79 @@ export class EntityInfo extends BaseInfo {
 
         return params;
     }
+
+    /**
+     * One related-entity grid over several join fields (Bill-To OR Ship-To).
+     */
+    public static BuildRelationshipViewParamsForJoinFields(
+        record: BaseEntity,
+        relatedEntityName: string,
+        joinFields: readonly string[],
+    ): RunViewParams {
+        const fields = joinFields.map((f) => f.trim()).filter((f) => f.length > 0);
+        if (fields.length === 0) return { EntityName: relatedEntityName };
+        if (fields.length === 1) {
+            const rel = record.EntityInfo.RelatedEntities.find((r) =>
+                r.RelatedEntity.trim().toLowerCase() === relatedEntityName.trim().toLowerCase()
+                && r.RelatedEntityJoinField.trim().toLowerCase() === fields[0].toLowerCase(),
+            );
+            if (rel) return EntityInfo.BuildRelationshipViewParams(record, rel);
+        }
+
+        const firstKey = record.FirstPrimaryKey;
+        const keyValue = firstKey.Value;
+        const quotes = keyValue && firstKey.NeedsQuotes ? "'" : '';
+        const clauses = fields.map((field) => `[${field}] = ${quotes}${keyValue}${quotes}`);
+        return {
+            EntityName: relatedEntityName,
+            ExtraFilter: clauses.join(' OR '),
+        };
+    }
     
     /**
-     * Builds a simple javascript object that will pre-populate a new record in the related entity with values that link back to the specified record. 
-     * This is useful, for example, when creating a new contact from an account, we want to pre-populate the account ID in the new contact record
+     * Default field values for a new related record so it links back to `record`.
+     * When the relationship's Configuration declares `UI.join.fields`, every
+     * listed FK is set (Bill-To AND Ship-To). Otherwise only
+     * `RelatedEntityJoinField` is set.
      */
-    public static BuildRelationshipNewRecordValues(record: BaseEntity, relationship: EntityRelationshipInfo): any {
-        // we want to build a simple javascript object that will pre-populate a new record in the related entity with values that link
-        // abck to the current record. This is useful for example when creating a new contact from an account, we want to pre-populate the
-        // account ID in the new contact record
-        const obj: any = {};
-        if (record && relationship) {
-            const keyField = relationship.EntityKeyField && relationship.EntityKeyField.trim().length > 0 ? relationship.EntityKeyField : record.FirstPrimaryKey.Name;
-            obj[relationship.RelatedEntityJoinField] = record.Get(keyField);
+    public static BuildRelationshipNewRecordValues(record: BaseEntity, relationship: EntityRelationshipInfo): Record<string, unknown> {
+        if (!record || !relationship) return {};
+        const joinFields = ReadRelationshipJoinFields(relationship.Configuration);
+        if (joinFields && joinFields.length > 0) {
+            return EntityInfo.BuildRelationshipNewRecordValuesForJoinFields(record, joinFields, relationship);
+        }
+        const joinField = (relationship.RelatedEntityJoinField ?? '').trim();
+        if (!joinField) return {};
+        return { [joinField]: EntityInfo.resolveRelationshipKeyValue(record, relationship) };
+    }
+
+    /**
+     * Default field values for a new related record, setting every listed join
+     * field to the parent key. Use this when one grid filters on several FKs
+     * (Bill-To OR Ship-To) so "New" still auto-links the child to this parent.
+     */
+    public static BuildRelationshipNewRecordValuesForJoinFields(
+        record: BaseEntity,
+        joinFields: readonly string[],
+        relationship?: EntityRelationshipInfo,
+    ): Record<string, unknown> {
+        if (!record) return {};
+        const fields = joinFields.map((f) => f.trim()).filter((f) => f.length > 0);
+        if (fields.length === 0) return {};
+        const keyValue = EntityInfo.resolveRelationshipKeyValue(record, relationship);
+        const obj: Record<string, unknown> = {};
+        for (const field of fields) {
+            obj[field] = keyValue;
         }
         return obj;
+    }
+
+    private static resolveRelationshipKeyValue(record: BaseEntity, relationship?: EntityRelationshipInfo): unknown {
+        const explicit = relationship?.EntityKeyField?.trim();
+        if (explicit) return record.Get(explicit);
+        const first = record.FirstPrimaryKey;
+        if (first?.Name) return record.Get(first.Name);
+        return first?.Value;
     }
 
     /**
@@ -2735,8 +2993,11 @@ export class EntityInfo extends BaseInfo {
                     // Fall back to exact match if no custom expression defined
                     return `${fieldExpression} = '${escapedValue}'`;
                 }
-                const normalizedField = expr.replace(/\{\{FieldName\}\}/g, fieldExpression);
-                const normalizedValue = expr.replace(/\{\{FieldName\}\}/g, `'${escapedValue}'`);
+                // Replacement functions: `escapedValue` is a data value, so `$&`/`` $` ``/
+                // `$'`/`$$` in it would otherwise splice the custom expression's own text
+                // into the SQL literal. See issue #3171.
+                const normalizedField = expr.replace(/\{\{FieldName\}\}/g, () => fieldExpression);
+                const normalizedValue = expr.replace(/\{\{FieldName\}\}/g, () => `'${escapedValue}'`);
                 return `${normalizedField} = ${normalizedValue}`;
             }
             default:
@@ -2774,7 +3035,8 @@ export class EntityInfo extends BaseInfo {
             case 'Custom': {
                 const expr = organicKey.CustomNormalizationExpression;
                 if (!expr) return fieldExpression;
-                return expr.replace(/\{\{FieldName\}\}/g, fieldExpression);
+                // Replacement function — see WrapWithNormalization (#3171).
+                return expr.replace(/\{\{FieldName\}\}/g, () => fieldExpression);
             }
             default: return fieldExpression;
         }
@@ -2792,7 +3054,8 @@ export class EntityInfo extends BaseInfo {
             case 'Custom': {
                 const expr = organicKey.CustomNormalizationExpression;
                 if (!expr) return `'${escapedValue}'`;
-                return expr.replace(/\{\{FieldName\}\}/g, `'${escapedValue}'`);
+                // Replacement function — see WrapWithNormalization (#3171).
+                return expr.replace(/\{\{FieldName\}\}/g, () => `'${escapedValue}'`);
             }
             default: return `'${escapedValue}'`;
         }

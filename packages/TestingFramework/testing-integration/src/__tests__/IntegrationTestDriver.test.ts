@@ -80,13 +80,21 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(result.oracleResults.find(o => o.oracleType === 'unitmix.B')?.message).toBe('boom');
     });
 
-    it('RequiresMutation checks are skipped unless the selector opts in', async () => {
+    it('RequiresMutation checks are recorded as SKIPPED (never silently dropped) unless the selector opts in', async () => {
         const driver = new IntegrationTestDriver();
         const off = await driver.Execute(makeContext({ checks: [{ type: 'unitmut' }] }));
-        expect(off.oracleResults.map(o => o.oracleType)).toEqual(['unitmut.A']);
+        // The gated check appears in the results as a skipped entry — visible, not vanished.
+        expect(off.oracleResults.map(o => o.oracleType)).toEqual(['unitmut.A', 'unitmut.M']);
+        const skippedEntry = off.oracleResults.find(o => o.oracleType === 'unitmut.M');
+        expect((skippedEntry?.details as Record<string, unknown>)?.Skipped).toBe(true);
+        expect(off.totalChecks).toBe(1);          // executed only
+        expect(off.skippedChecks).toBe(1);
+        expect(off.status).toBe('Passed');        // skips never fail a run that executed green
 
         const on = await driver.Execute(makeContext({ checks: [{ type: 'unitmut', config: { runMutationTests: true } }] }));
         expect(on.oracleResults.map(o => o.oracleType)).toEqual(['unitmut.A', 'unitmut.M']);
+        expect(on.skippedChecks).toBe(0);
+        expect(on.totalChecks).toBe(2);
     });
 
     it('RequiresMutation checks also run when RUN_MUTATION_TESTS=1 (env, no selector opt-in)', async () => {
@@ -96,12 +104,13 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitmut.A', 'unitmut.M']);
     });
 
-    it("a live-model Test with RUN_AGENT_TESTS=0 skip-passes with a single 'gate' oracle (explicit opt-out)", async () => {
+    it("a live-model Test with RUN_AGENT_TESTS=0 reports a REAL 'Skipped' status with a single 'gate' oracle (explicit opt-out)", async () => {
         process.env.RUN_AGENT_TESTS = '0';
         const driver = new IntegrationTestDriver();
         const result = await driver.Execute(makeContext({ tier: 'live-model', checks: [{ type: 'unitpass' }] }));
-        expect(result.status).toBe('Passed');
-        expect(result.totalChecks).toBe(1);
+        expect(result.status).toBe('Skipped');    // Track A/A1: a gated run must never report Passed
+        expect(result.totalChecks).toBe(0);       // nothing executed
+        expect(result.skippedChecks).toBe(1);
         expect(result.oracleResults[0].oracleType).toBe('gate');
         expect(result.oracleResults[0].message).toContain('RUN_AGENT_TESTS');
     });
@@ -113,10 +122,11 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitpass.A', 'unitpass.B']);
     });
 
-    it("a mutation-tier Test without RUN_MUTATION_TESTS skip-passes with a 'gate' oracle", async () => {
+    it("a mutation-tier Test without RUN_MUTATION_TESTS reports 'Skipped' with a 'gate' oracle", async () => {
         const driver = new IntegrationTestDriver();
         const result = await driver.Execute(makeContext({ tier: 'mutation', checks: [{ type: 'unitpass' }] }));
-        expect(result.status).toBe('Passed');
+        expect(result.status).toBe('Skipped');
+        expect(result.skippedChecks).toBe(1);
         expect(result.oracleResults[0].oracleType).toBe('gate');
         expect(result.oracleResults[0].message).toContain('RUN_MUTATION_TESTS');
     });
@@ -136,10 +146,12 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(result.oracleResults[0].oracleType).toBe('nope');
     });
 
-    it('multiple bundles run in declared order, results concatenated', async () => {
+    it('multiple bundles run in declared order, results concatenated (skipped entries in place)', async () => {
         const driver = new IntegrationTestDriver();
         const result = await driver.Execute(makeContext({ checks: [{ type: 'unitmut' }, { type: 'unitpass' }] }));
-        expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitmut.A', 'unitpass.A', 'unitpass.B']);
+        expect(result.oracleResults.map(o => o.oracleType)).toEqual(['unitmut.A', 'unitmut.M', 'unitpass.A', 'unitpass.B']);
+        expect(result.skippedChecks).toBe(1); // unitmut.M is mutation-gated → visible skip
+        expect(result.totalChecks).toBe(3);
     });
 
     it('a server bundle inside an already-claimed process (live MJAPI) → Error pointing to the CLI, never throws', async () => {
@@ -180,11 +192,12 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(result.score).toBe(0);
     });
 
-    it('env gate unmet → Passed skip with a single "gate" oracle, never throws', async () => {
+    it('env gate unmet → REAL Skipped result with a single "gate" oracle, never throws', async () => {
         delete process.env.UNIT_GATE;
         const driver = new IntegrationTestDriver();
         const result = await driver.Execute(makeContext({ checks: [{ type: 'unitpass' }], requiresEnv: 'UNIT_GATE' }));
-        expect(result.status).toBe('Passed');
+        expect(result.status).toBe('Skipped');
+        expect(result.skippedChecks).toBe(1);
         expect(result.oracleResults).toHaveLength(1);
         expect(result.oracleResults[0].oracleType).toBe('gate');
     });

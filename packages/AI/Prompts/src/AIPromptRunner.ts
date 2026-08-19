@@ -2952,7 +2952,11 @@ export class AIPromptRunner {
           let systemContent = systemPromptText;
           if (prompt.AssistantPrefill && prompt.PrefillFallbackMode === 'SystemInstruction') {
             const fallbackTemplate = this.resolvePrefillFallbackText(model, vendorId);
-            const fallbackInstruction = fallbackTemplate.replace(/\{\{prefill\}\}/g, prompt.AssistantPrefill);
+            // Function replacement: prefill text is authored content that routinely
+            // contains `$` (LaTeX `$$`, currency, JSON fragments), and a string
+            // replacement would expand it. See issue #3171.
+            const prefill = prompt.AssistantPrefill;
+            const fallbackInstruction = fallbackTemplate.replace(/\{\{prefill\}\}/g, () => prefill);
             systemContent += '\n\n' + fallbackInstruction;
           }
           messages.push({
@@ -4191,7 +4195,9 @@ export class AIPromptRunner {
       // Append to the existing system message rather than adding a new one,
       // since some providers only support a single system message entry.
       const fallbackTemplate = this.resolvePrefillFallbackText(model, vendorId);
-      const fallbackInstruction = fallbackTemplate.replace(/\{\{prefill\}\}/g, prefillText);
+      // Function replacement — prefill text routinely contains `$` (LaTeX `$$`,
+      // currency, JSON). See issue #3171.
+      const fallbackInstruction = fallbackTemplate.replace(/\{\{prefill\}\}/g, () => prefillText);
 
       const existingSystemMsg = chatParams.messages.find(m => m.role === ChatMessageRole.system);
       if (existingSystemMsg && typeof existingSystemMsg.content === 'string') {

@@ -17,7 +17,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "devDependencies": {
     "@memberjunction/cli": "6.1.0-edge.2",
     "dotenv": "17.2.4",
