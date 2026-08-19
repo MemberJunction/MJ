@@ -85,6 +85,7 @@ export {
     AddServerDynamicPackages,
     AddClientDynamicPackages,
     RemoveServerDynamicPackages,
+    PruneDynamicPackagesNotInManifest,
     ToggleServerDynamicPackages
 } from './install/config-manager.js';
 export type { DynamicPackageEntry, ConfigOperationResult } from './install/config-manager.js';
