@@ -505,7 +505,11 @@ jobs:
   # release commit + tag to the line branch -> GitHub Release (never latest) ->
   # dispatch the docs deploy (the one step publish-lts.yml never had; docs.yml
   # cannot watch for this run, see that step's comment).
-  # `latest` NEVER moves here; certification moves it via ci/dist-tag-all.mjs.
+  # The PUBLISH never moves `latest` — it publishes under lts-<line> and asserts
+  # afterwards that `latest` did not budge. A separate final step then advances
+  # `latest` if, and only if, it already points at this same line (Craig's ruling:
+  # 5.51.1 superseding 5.51.0 is the legitimate latest). Assigning `latest` to a
+  # line for the first time remains certification's, via ci/dist-tag-all.mjs.
   #
   # The runbook's prohibition on `workflow_dispatch`ing the routine publish path
   # from a line branch still stands and is not what this is: the line branch is
@@ -692,7 +696,9 @@ jobs:
       # The registry is the only signal that cannot be lied to (changesets exits 0
       # on its own errors; log-grep assertions only prove what was printed). Assert
       # the line dist-tag actually reached the new version, then that `latest` is
-      # untouched.
+      # untouched. "Untouched" means by the PUBLISH: a publish that moves `latest`
+      # as a side effect is the failure this catches. The deliberate, guarded
+      # advance happens in its own step further down, after the tag and release.
       - name: Verify the publish reached npm and latest did not move
         run: |
           set -euo pipefail
@@ -745,6 +751,88 @@ jobs:
           fi
           gh release create "$VERSION" --title "$VERSION" --generate-notes --latest=false \
             --target "$LINE" --repo "${{ github.repository }}"
+
+      # Craig's ruling: when npm `latest` already points at this line, the line's
+      # new release IS the legitimate latest and should carry the tag — 5.51.1
+      # superseding 5.51.0 rather than leaving installs on a patch that has been
+      # replaced. What must never happen is dragging `latest` BACKWARDS off a newer
+      # line: once latest is 6.1.x, an lts/5 patch leaves it alone forever.
+      #
+      # So this advances `latest` within a line it already points at, and does
+      # nothing otherwise. Certification still owns the FIRST assignment of latest
+      # to a line (ci/dist-tag-all.mjs, LTS process §4.3) — that is a human
+      # judgement about a certified build, not a consequence of publishing.
+      #
+      # Ownership rule: a bare-major line (lts/5) owns every 5.x, because major 5
+      # has no dotted lines; a dotted line (lts/6.1) owns 6.1.x only. Both reduce
+      # to "does the current latest start with <line id>." — an equivalence that
+      # would break if a dotted line were ever cut inside a major that also has a
+      # bare-major line, so the guard below checks for that rather than assuming it.
+      - name: Advance npm 'latest' if it already points at this line
+        env:
+          NPM_TOKEN: ${{ secrets.CRAIG_BC_NPM_TOKEN }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          set -euo pipefail
+          NEW="${VERSION#v}"
+          LINE_ID="${LINE#lts/}"
+
+          CURRENT=$(npm view @memberjunction/core dist-tags --json | jq -r '.latest // empty')
+          if [ -z "$CURRENT" ]; then
+            echo "::notice::npm 'latest' is unset — leaving it that way. Assigning latest to a line for the first time is certification's call (ci/dist-tag-all.mjs); this step only advances it within a line."
+            exit 0
+          fi
+
+          case "$LINE_ID" in
+            *.*) ;;
+            *)
+              if git ls-remote --heads origin | grep -qE "refs/heads/lts/${LINE_ID}\.[0-9]+$"; then
+                echo "::error::$LINE is a bare-major line but dotted lines exist inside major $LINE_ID, so ownership of ${LINE_ID}.x versions is ambiguous. Refusing to touch 'latest' — move it deliberately with ci/dist-tag-all.mjs if that is what you want."
+                exit 1
+              fi
+              ;;
+          esac
+
+          case "$CURRENT" in
+            "$LINE_ID".*) ;;
+            *)
+              echo "::notice::npm 'latest' is $CURRENT, which is not on line $LINE — leaving it alone. A line release never moves 'latest' off a newer line."
+              exit 0
+              ;;
+          esac
+
+          if [ "$CURRENT" = "$NEW" ]; then
+            echo "::notice::npm 'latest' is already $NEW — nothing to do (re-run of a completed publish)."
+            exit 0
+          fi
+          if [ "$(printf '%s\n%s\n' "$CURRENT" "$NEW" | sort -V | tail -1)" != "$NEW" ]; then
+            echo "::error::Refusing to move 'latest' backwards: it is at $CURRENT and this release is $NEW."
+            exit 1
+          fi
+
+          # npm trusted publishing (OIDC) is NOT usable here, and this is verified
+          # rather than assumed: in the npm CLI, lib/utils/oidc.js is required by
+          # lib/commands/publish.js alone — the exchange runs inside the publish
+          # command and sets the minted token in THAT invocation's config.
+          # lib/commands/dist-tag.js has no OIDC path, so a separate
+          # "npm dist-tag add" process authenticates only with a real credential.
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error::'latest' should advance from $CURRENT to $NEW, but no npm credential is available. Trusted publishing covers npm publish ONLY (see the comment above this step), so the dist-tag move needs the CRAIG_BC_NPM_TOKEN secret to carry a token with read+write on the @memberjunction scope. Nothing is wrong with the release itself — it is published, tagged and verified. Either fix the secret and re-run this workflow (every step in this job is re-run tolerant), or move the tag by hand: node ci/dist-tag-all.mjs --version $NEW --tag latest, run from a checkout of $VERSION."
+            exit 1
+          fi
+
+          # Keep the credential out of the repo tree — this job commits and pushes.
+          printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$RUNNER_TEMP/.npmrc"
+          export npm_config_userconfig="$RUNNER_TEMP/.npmrc"
+
+          # ci/dist-tag-all.mjs enumerates workspace packages from the working
+          # directory, which is why its header insists on the released tree: run
+          # from a later ref it would miss packages added since the release and fail
+          # permanently on packages that post-date it. This checkout IS that tree.
+          # It moves the tag on every package and then re-reads each one, exiting
+          # non-zero unless both passes are clean.
+          node ci/dist-tag-all.mjs --version "$NEW" --tag latest
+          echo "::notice::npm 'latest' advanced $CURRENT -> $NEW across the line's packages."
 
       # Docs follow releases, and a line release reaches docs.yml ONLY through
       # this dispatch: docs.yml listens for workflow_run on `main` alone, by
