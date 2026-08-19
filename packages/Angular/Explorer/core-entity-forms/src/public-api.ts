@@ -52,3 +52,6 @@ export { NewAgentDialogService } from './lib/custom/AIAgents/new-agent-dialog.se
 
 // Flow Agent components
 export { FlowAgentFormSectionComponent } from './lib/custom/AIAgents/FlowAgentType/flow-agent-form-section.component';
+
+// Visual Hierarchy & Taxonomy Form Panels
+export * from './lib/custom/HierarchyPanels/hierarchy-form-panels';
