@@ -29,6 +29,15 @@
         {
           "fields": {
             "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search"
+          },
+          "primaryKey": {
+            "ID": "CB66E6E9-3699-496D-A91C-F00AE27ADD98"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Summarize Content"
           },
           "primaryKey": {
