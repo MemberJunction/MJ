@@ -10,7 +10,8 @@ export type StandardToolbarItemKey =
   | 'history'
   | 'list'
   | 'tags'
-  | 'attachments';
+  | 'attachments'
+  | 'refresh';
 
 /**
  * Union of standard toolbar item keys and any custom button key.

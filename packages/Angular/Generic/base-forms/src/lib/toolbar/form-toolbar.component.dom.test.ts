@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { BaseEntity, EntityInfo } from '@memberjunction/core';
 import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
 import { MjFormToolbarComponent } from './form-toolbar.component';
-import type { BeforeSaveEventArgs } from '../types/form-events';
+import type { BeforeSaveEventArgs, BeforeRefreshEventArgs } from '../types/form-events';
 
 /**
  * DOM coverage for <mj-form-toolbar> — the action bar CodeGen renders on every entity form (~6× direct,
@@ -16,6 +16,7 @@ import type { BeforeSaveEventArgs } from '../types/form-events';
 const ENTITY_INFO = { TrackRecordChanges: true, ParentChain: [], ChildEntities: [], Fields: [], NameField: null } as unknown as EntityInfo;
 const RECORD = {
   EntityInfo: ENTITY_INFO,
+  IsSaved: true,
   ISAChild: null,
   ISAChildren: [],
   Get: () => null,
@@ -42,10 +43,11 @@ const btn = (f: Fx, sel: string) => query(f, sel) as HTMLElement | null;
 
 describe('MjFormToolbarComponent (DOM)', () => {
   describe('view mode', () => {
-    it('renders the edit / delete / favorite / history / list / tags actions', () => {
+    it('renders the edit / delete / refresh / favorite / history / list / tags actions', () => {
       const f = render();
       expect(btn(f, 'button[title="Edit this Record"]')).not.toBeNull();
       expect(btn(f, 'button[title="Delete this Record"]')).not.toBeNull();
+      expect(btn(f, 'button[title="Refresh record from database"]')).not.toBeNull();
       expect(btn(f, 'button[title="Make Favorite"]')).not.toBeNull();
       expect(btn(f, '.mj-forms-btn--history')).not.toBeNull();
       expect(btn(f, '.mj-forms-btn--list')).not.toBeNull();
@@ -55,6 +57,16 @@ describe('MjFormToolbarComponent (DOM)', () => {
       const f = render({ UserCanEdit: false, UserCanDelete: false });
       expect(btn(f, 'button[title="Edit this Record"]')).toBeNull();
       expect(btn(f, 'button[title="Delete this Record"]')).toBeNull();
+    });
+
+    it('hides the refresh button when ShowRefreshButton is false', () => {
+      const f = render({ Config: { ShowRefreshButton: false } });
+      expect(btn(f, 'button[title="Refresh record from database"]')).toBeNull();
+    });
+
+    it('hides the refresh button when record is unsaved', () => {
+      const f = render({ Record: { ...RECORD, IsSaved: false } });
+      expect(btn(f, 'button[title="Refresh record from database"]')).toBeNull();
     });
 
     it('hides the history button when the entity does not track changes', () => {
@@ -67,6 +79,31 @@ describe('MjFormToolbarComponent (DOM)', () => {
       const out = capture(f.componentInstance.EditModeChange);
       btn(f, 'button[title="Edit this Record"]')!.click();
       expect(out).toEqual([true]);
+    });
+
+    it('emits RefreshRequested and BeforeRefresh when refresh is clicked', () => {
+      const f = render();
+      const refreshOut = capture(f.componentInstance.RefreshRequested);
+      const beforeOut = capture(f.componentInstance.BeforeRefresh);
+      btn(f, 'button[title="Refresh record from database"]')!.click();
+      expect(beforeOut.length).toBe(1);
+      expect(refreshOut.length).toBe(1);
+    });
+
+    it('does not emit RefreshRequested when BeforeRefresh handler cancels', () => {
+      const f = render();
+      f.componentInstance.BeforeRefresh.subscribe((e: BeforeRefreshEventArgs) => (e.Cancel = true));
+      const refreshOut = capture(f.componentInstance.RefreshRequested);
+      btn(f, 'button[title="Refresh record from database"]')!.click();
+      expect(refreshOut.length).toBe(0);
+    });
+
+    it('disables the refresh button and shows spinner when IsRefreshing is true', () => {
+      const f = render({ IsRefreshing: true });
+      const refreshBtn = btn(f, 'button[title="Refresh record from database"]');
+      expect(refreshBtn).not.toBeNull();
+      expect((refreshBtn as HTMLButtonElement).disabled).toBe(true);
+      expect(query(f, 'button[title="Refresh record from database"] .fa-spinner')).not.toBeNull();
     });
 
     it('emits FavoriteToggled when the favorite button is clicked', () => {
@@ -116,6 +153,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
       expect(btn(f, 'button[title="Save Changes"]')).not.toBeNull();
       expect(btn(f, 'button[title="Discard Changes"]')).not.toBeNull();
       expect(btn(f, 'button[title="Edit this Record"]')).toBeNull();
+      expect(btn(f, 'button[title="Refresh record from database"]')).toBeNull();
     });
 
     it('emits SaveRequested (after the microtask) when Save is clicked with no Form bound', async () => {

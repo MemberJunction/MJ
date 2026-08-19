@@ -21,7 +21,7 @@ class ToolbarStub {
   @Input() Record: unknown; @Input() EditMode = false; @Input() UserCanEdit = false; @Input() UserCanDelete = false;
   @Input() IsFavorite = false; @Input() FavoriteInitDone = false; @Input() IsDirty = false; @Input() DirtyFieldNames: unknown;
   @Input() ListCount = 0; @Input() TagCount = 0; @Input() AttachmentCount = 0; @Input() AttachmentsAvailable = false; @Input() IsAttachmentsPanelOpen = false; @Input() VersionCount = 0; @Input() EntityInfo: unknown; @Input() Config: unknown;
-  @Input() IsSaving = false; @Input() VisibleSectionCount = 0; @Input() TotalSectionCount = 0; @Input() ExpandedSectionCount = 0;
+  @Input() IsSaving = false; @Input() IsRefreshing = false; @Input() VisibleSectionCount = 0; @Input() TotalSectionCount = 0; @Input() ExpandedSectionCount = 0;
   @Input() SearchFilter = ''; @Input() ShowEmptyFields = false; @Input() WidthMode = ''; @Input() HasCustomSectionOrder = false;
   @Input() Variants: unknown; @Input() CurrentVariantID: unknown;
   @Input() RegisteredItems: unknown; @Input() ItemOverrides: unknown; @Input() FormComponent: unknown;
@@ -30,6 +30,8 @@ class ToolbarStub {
   @Output() EditModeChange = new EventEmitter<boolean>();
   @Output() BeforeSave = new EventEmitter<unknown>();
   @Output() SaveRequested = new EventEmitter<void>();
+  @Output() BeforeRefresh = new EventEmitter<unknown>();
+  @Output() RefreshRequested = new EventEmitter<void>();
   @Output() CancelRequested = new EventEmitter<void>();
   @Output() DeleteRequested = new EventEmitter<void>();
   @Output() ToolbarItemClick = new EventEmitter<unknown>();
@@ -84,10 +86,11 @@ describe('MjRecordFormContainerComponent (DOM)', () => {
   });
 
   it('wires the effective state inputs onto the toolbar', () => {
-    const t = toolbar(render({ EditMode: true, UserCanEdit: true, IsDirty: true }));
+    const t = toolbar(render({ EditMode: true, UserCanEdit: true, IsDirty: true, IsRefreshing: true }));
     expect(t.EditMode).toBe(true);
     expect(t.UserCanEdit).toBe(true);
     expect(t.IsDirty).toBe(true);
+    expect(t.IsRefreshing).toBe(true);
     expect(t.Record).toBe(RECORD);
   });
 
@@ -95,6 +98,13 @@ describe('MjRecordFormContainerComponent (DOM)', () => {
     const f = render();
     const out = capture(f.componentInstance.SaveRequested);
     toolbar(f).SaveRequested.emit();
+    expect(out.length).toBe(1);
+  });
+
+  it('re-emits RefreshRequested from the toolbar (no FormComponent → container emits)', () => {
+    const f = render();
+    const out = capture(f.componentInstance.RefreshRequested);
+    toolbar(f).RefreshRequested.emit();
     expect(out.length).toBe(1);
   });
 
@@ -117,6 +127,14 @@ describe('MjRecordFormContainerComponent (DOM)', () => {
     const out = capture(f.componentInstance.BeforeSave);
     const evt = { cancel: false } as unknown as Parameters<typeof f.componentInstance.BeforeSave.emit>[0];
     toolbar(f).BeforeSave.emit(evt);
+    expect(out).toEqual([evt]);
+  });
+
+  it('passes the BeforeRefresh event straight through', () => {
+    const f = render();
+    const out = capture(f.componentInstance.BeforeRefresh);
+    const evt = { Cancel: false } as unknown as Parameters<typeof f.componentInstance.BeforeRefresh.emit>[0];
+    toolbar(f).BeforeRefresh.emit(evt);
     expect(out).toEqual([evt]);
   });
   // NOTE: the <mj-form-panel-slot> host renders only when the form has resolved sections/panels
