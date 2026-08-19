@@ -3694,7 +3694,11 @@ export abstract class BaseEntity<T = unknown> {
     private finalizeSave(data: any, saveSubType: BaseEntityEvent["saveSubType"]): boolean {
         if (data) {
             this.init(); // wipe out the current data to flush out the DIRTY flags, load the ID as part of this too
-            this.SetMany(data, false, true, true); // set the new values from the data returned from the save, this will also reset the old values
+            const fieldData = (data instanceof BaseEntity || (data && typeof data.GetAll === 'function')) ? data.GetAll() : data;
+            // IS-A GetAll() merges the parent, including parent virtuals this entity
+            // does not own (e.g. OrderHeader on Event Order Line). Keep only columns
+            // this entity defines, and ignore anything leftover.
+            this.SetMany(this.ownedFieldsFrom(fieldData), true, true, true);
             this._everSaved = true; // Mark as saved after successful save
             const result = this.LatestResult;
             if (result)
