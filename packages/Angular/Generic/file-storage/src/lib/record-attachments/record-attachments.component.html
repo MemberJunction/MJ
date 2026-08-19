@@ -213,6 +213,121 @@
 
     </div>
 
+    <!-- ====================================================================
+         EDIT ATTACHMENT DETAILS SUB-PANEL (Slide-in inside slide-panel)
+         ==================================================================== -->
+    @if (EditMetadataModalOpen && EditMetadataItem) {
+      <div class="mj-record-attachments-subpanel">
+        <!-- Sub-Panel Top Navigation Bar -->
+        <div class="mj-subpanel-header">
+          <button type="button" class="mj-subpanel-back-btn" (click)="CloseEditMetadataModal()" title="Back to attachments">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span>Back</span>
+          </button>
+          <div class="mj-subpanel-title">
+            <i class="fa-solid fa-pen-to-square"></i>
+            <span>Attachment Details</span>
+          </div>
+          <button type="button" class="mj-subpanel-close-btn" (click)="CloseEditMetadataModal()" title="Close details">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Sub-Panel Body -->
+        <div class="mj-subpanel-body">
+          <!-- File Info Summary Hero -->
+          <div class="mj-subpanel-hero">
+            <div class="mj-subpanel-icon" [ngClass]="GetFileColorClass(EditMetadataItem)">
+              <i [class]="GetFileIcon(EditMetadataItem)"></i>
+            </div>
+            <div class="mj-subpanel-hero-info">
+              <div class="mj-subpanel-hero-name" [title]="EditMetadataItem.Name">{{ EditMetadataItem.Name }}</div>
+              <div class="mj-subpanel-hero-meta">
+                <span>{{ FormatSize(EditMetadataItem.FileSize) }}</span>
+                <span class="mj-subpanel-dot">&bull;</span>
+                <span>{{ EditMetadataItem.ContentType || 'Document' }}</span>
+                @if (EditMetadataItem.ProviderName) {
+                  <span class="mj-subpanel-dot">&bull;</span>
+                  <span class="mj-subpanel-storage-tag">{{ EditMetadataItem.ProviderName }}</span>
+                }
+              </div>
+            </div>
+          </div>
+
+          <!-- Edit Form -->
+          <div class="mj-subpanel-form">
+            <div class="mj-form-group">
+              <label class="mj-form-label">File Name</label>
+              <input
+                type="text"
+                class="mj-form-input"
+                [(ngModel)]="EditMetadataName"
+                placeholder="e.g. document.pdf"
+                (keydown.enter)="EditMetadataName.trim() && !IsLoading && SaveEditMetadata()"
+              />
+              <div class="mj-form-hint">Changing the name updates the display title across all record views.</div>
+            </div>
+
+            <div class="mj-form-group">
+              <label class="mj-form-label">Description (Optional)</label>
+              <textarea
+                class="mj-form-textarea"
+                [(ngModel)]="EditMetadataDescription"
+                rows="4"
+                placeholder="Add notes, tags, or context about this attachment..."
+              ></textarea>
+            </div>
+
+            <!-- Metadata Properties Card -->
+            <div class="mj-subpanel-details-card">
+              <div class="mj-details-card-title">Storage Information</div>
+              <div class="mj-details-row">
+                <span class="mj-details-label">Storage Account:</span>
+                <span class="mj-details-value">{{ EditMetadataItem.ProviderName || 'Default Storage' }}</span>
+              </div>
+              <div class="mj-details-row">
+                <span class="mj-details-label">Attached On:</span>
+                <span class="mj-details-value">{{ EditMetadataItem.CreatedAt | date:'medium' }}</span>
+              </div>
+              <div class="mj-details-row">
+                <span class="mj-details-label">Status:</span>
+                <span class="mj-details-badge">{{ EditMetadataItem.Status || 'Active' }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sub-Panel Footer Actions -->
+        <div class="mj-subpanel-footer">
+          <button type="button" class="mj-btn mj-btn-sm mj-btn-flat" (click)="CloseEditMetadataModal()">
+            Cancel
+          </button>
+          <div class="mj-subpanel-footer-right">
+            @if (AllowDownload) {
+              <button
+                type="button"
+                class="mj-btn mj-btn-sm mj-btn-secondary"
+                (click)="DownloadAttachment(EditMetadataItem)"
+                title="Open in new tab"
+              >
+                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                <span>Open</span>
+              </button>
+            }
+            <button
+              type="button"
+              class="mj-btn mj-btn-sm mj-btn-primary"
+              (click)="SaveEditMetadata()"
+              [disabled]="!EditMetadataName.trim() || IsLoading"
+            >
+              <i class="fa-solid fa-check"></i>
+              <span>{{ IsLoading ? 'Saving...' : 'Save Changes' }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
   </div>
 
 </mj-slide-panel>
@@ -326,44 +441,6 @@
         </div>
       </div>
 
-    </div>
-  </div>
-}
-
-<!-- ====================================================================
-     EDIT METADATA MODAL
-     ==================================================================== -->
-@if (EditMetadataModalOpen && EditMetadataItem) {
-  <div class="mj-preview-modal-backdrop" (click)="CloseEditMetadataModal()">
-    <div class="mj-edit-metadata-dialog" (click)="$event.stopPropagation()">
-      <div class="mj-preview-dialog-header">
-        <div class="mj-preview-dialog-title">
-          <i class="fa-solid fa-pen-to-square" style="color: var(--mj-brand-primary);"></i>
-          <span>Edit Attachment Details</span>
-        </div>
-        <button type="button" class="mj-preview-close-btn" (click)="CloseEditMetadataModal()">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-
-      <div class="mj-edit-metadata-body">
-        <div class="mj-form-group">
-          <label class="mj-form-label">File Name</label>
-          <input type="text" class="mj-form-input" [(ngModel)]="EditMetadataName" placeholder="File name" />
-        </div>
-        <div class="mj-form-group">
-          <label class="mj-form-label">Description (Optional)</label>
-          <textarea class="mj-form-textarea" [(ngModel)]="EditMetadataDescription" rows="3" placeholder="Enter brief description..."></textarea>
-        </div>
-      </div>
-
-      <div class="mj-preview-dialog-footer">
-        <button type="button" class="mj-btn mj-btn-sm mj-btn-flat" (click)="CloseEditMetadataModal()">Cancel</button>
-        <button type="button" class="mj-btn mj-btn-sm mj-btn-primary" (click)="SaveEditMetadata()" [disabled]="!EditMetadataName.trim() || IsLoading">
-          <i class="fa-solid fa-check"></i>
-          <span>Save Changes</span>
-        </button>
-      </div>
     </div>
   </div>
 }
