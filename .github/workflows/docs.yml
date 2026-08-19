@@ -5,12 +5,29 @@ name: Update package documentation
 #
 #   /v5/…  ← content at lts/5 (one set per lts/* branch — the branch IS the
 #            line's certification artifact, so no ref is hardcoded here)
-#   /v6/…  ← content at next (the Edge line; major from the newest v*-edge tag)
+#   /v6/…  ← content at MAIN (the Edge line's released state; the major itself
+#            comes from the newest v*-edge tag)
 #   /      ← redirect to the newest LTS set
 #   404    ← forwards legacy pre-versioning URLs into the newest LTS set
 #
-# Every build uses the docs-site/ TOOLING from next (overlaid onto the content
-# checkout), so ingest/site fixes apply to all versions without cherry-picks.
+# EVERY docs set's CONTENT is built from a RELEASED ref — never from next: main
+# for the Edge line, the lts/N branch for each line. main is caught up by the act
+# of releasing, so the Edge set documents what users can actually install, and a
+# docs deploy no longer depends on next compiling at all. (That dependency was
+# not theoretical: the first chained line-release deploy, run 32208676764, failed
+# in "Build v6 (next)" on an unrelated next-only type break, and the whole site's
+# deploy was skipped because `deploy` needs `build`.)
+#
+# What comes from where — the ONE seam in this design:
+#   content ref (main, lts/N)  everything ingest reads out of the repo: guides/,
+#                              root docs, packages/**/README.md, releases/,
+#                              .claude/skills/, the built packages, the TypeDoc
+#                              API reference, and the commit its GitHub links pin
+#   docs-site/ from next       the Astro app, Starlight component overrides,
+#                              src/lib/* rendering logic, the hand-authored pages
+#                              under docs-site/src/content/docs/, and ingest
+#                              itself — overlaid onto every content checkout so
+#                              site fixes never need cherry-picking to a line
 # Because this file lives on the default branch (next), the workflow_run
 # trigger fires from here regardless of what main or lts/* carry.
 
@@ -19,8 +36,10 @@ on:
   # side effect of merging. Between releases both `main` and the npm registry
   # lag `next`, so a merge-triggered deploy publishes authoritative-looking
   # documentation — canonical links into `main` included — for bits nobody can
-  # install yet. The resolve job below hard-fails a trigger that did not
-  # conclude `success`.
+  # install yet. The content refs above enforce the same thing from the other
+  # direction: even a deploy triggered off-cycle can only publish released
+  # content. The resolve job below hard-fails a trigger that did not conclude
+  # `success`.
   #
   # `main` ONLY, and `next` is deliberately absent: no docs deploy is ever
   # triggered by an event on next (the trigger removed in #3911 does not come
@@ -109,7 +128,9 @@ jobs:
           # of `sort -n` (sort -n orders 6.10 before 6.9), and the 404
           # forwarder's `^(\/v\d+)\/` deep-link regex.
           mapfile -t LTS < <(git ls-remote --heads origin 'lts/*' | sed -E 's#.*refs/heads/lts/##' | grep -E '^[0-9]+$' | sort -n)
-          # Edge set: built from next; its major comes from the newest edge tag.
+          # Edge set: the major comes from the newest edge TAG (tags are pushed by
+          # the publish workflow, so this is released state too), and its content
+          # is built from main — see the ref below.
           EDGE_MAJOR=$(git ls-remote --tags origin 'v*-edge.*' | sed -E 's#.*refs/tags/v##; s#\^\{\}$##' | sort -uV | tail -1 | cut -d. -f1)
 
           MATRIX='[]'
@@ -119,7 +140,10 @@ jobs:
             VERSIONS=$(jq -c --arg id "v$major" --arg label "v$major (LTS)" '. + [{id: $id, label: $label}]' <<<"$VERSIONS")
           done
           if [ -n "$EDGE_MAJOR" ] && ! printf '%s\n' ${LTS[@]+"${LTS[@]}"} | grep -qx "$EDGE_MAJOR"; then
-            MATRIX=$(jq -c --arg id "v$EDGE_MAJOR" '. + [{id: $id, ref: "next"}]' <<<"$MATRIX")
+            # main, NOT next: the Edge line's docs describe the newest RELEASED
+            # Edge build, which is exactly what main carries after publish.yml
+            # pushes the release commit there.
+            MATRIX=$(jq -c --arg id "v$EDGE_MAJOR" '. + [{id: $id, ref: "main"}]' <<<"$MATRIX")
             VERSIONS=$(jq -c --arg id "v$EDGE_MAJOR" --arg label "v$EDGE_MAJOR (Edge)" '. + [{id: $id, label: $label}]' <<<"$VERSIONS")
           else
             echo "::warning::No distinct Edge line to publish (edge major: '$EDGE_MAJOR', LTS lines: ${LTS[*]:-none}) — an lts/N branch supersedes the Edge set for the same major."
@@ -150,19 +174,51 @@ jobs:
         include: ${{ fromJSON(needs.resolve.outputs.matrix) }}
     steps:
       # fetch-depth 0 serves two needs: Starlight's lastUpdated reads per-file
-      # git history, and the full fetch brings origin/next for the tooling
-      # overlay below.
+      # git history, and the full fetch brings the triggering commit (next's head
+      # in normal operation) into this checkout so the tooling overlay below can
+      # reach it. Now that no content ref is ever `next`, that second need is the
+      # only reason next appears in this job at all — do not narrow the fetch.
       - name: Checkout content ref
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ matrix.ref }}
 
-      # The site tooling (ingest, Astro config, hand-authored pages) always
-      # comes from the commit that triggered this run — next in normal
-      # operation — whatever ref the content is at. This is what makes tooling
-      # fixes (e.g. the internal-page exclusions) apply to every version
-      # without cherry-picking to lts/* branches.
+      # The site tooling (ingest, Astro config, src/lib rendering logic, and the
+      # hand-authored pages under docs-site/src/content/docs/) always comes from
+      # the commit that triggered this run — next in normal operation — whatever
+      # ref the content is at. This is what makes tooling fixes (e.g. the
+      # internal-page exclusions) apply to every version without cherry-picking
+      # to lts/* branches.
+      #
+      # It is also the one place where the released-content rule does not reach,
+      # and the asymmetry is worth knowing before you write docs: a change to
+      # guides/ or a package README publishes only once it reaches a released ref,
+      # while a change to a page inside docs-site/ publishes on the next docs
+      # deploy. Nothing here reads product code, so the overlay cannot resurrect
+      # the next-must-compile dependency this design removes.
+      #
+      # RETIRING THIS STEP (the goal — page-affecting source should come from a
+      # released ref too). It is really a compatibility shim for lts/5, which was
+      # cut before versioned docs existed: that branch's docs-site is 16 files
+      # behind, with no DOCS_VERSIONS support and no ThemeSelect override, so
+      # without the overlay /v5 would lose its version switcher outright. Lines
+      # cut from next after this point carry a current docs-site by construction,
+      # so the shim ages out with lts/5.
+      #
+      # For the Edge set the overlay is redundant with the release flow — main
+      # receives next's docs-site at every release — but it CANNOT be dropped
+      # yet: main's docs-site has no src/lib/license-line.mjs (so /v6 would lose
+      # the ISC-vs-BUSL distinction entirely) and no mjcertified.mdx, which the
+      # BUSL Additional Use Grant names by URL and the deploy job's /mjcertified
+      # redirect points at. Dropping it today would 404 that front door.
+      #
+      # So the gate is mechanical: once main's docs-site carries mjcertified.mdx,
+      # src/lib/license-line.mjs, src/lib/documented-line.mjs and the ThemeSelect
+      # override — which the next Edge release delivers on its own — this step can
+      # take `if: matrix.ref != 'main'` and /v6 renders entirely from released
+      # code. Check with:
+      #   git ls-tree -r origin/main docs-site/ | grep -E 'mjcertified|license-line|documented-line|ThemeSelect'
       - name: Overlay docs-site tooling from the triggering commit
         run: |
           set -euo pipefail
