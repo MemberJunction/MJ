@@ -9,10 +9,6 @@
  * @since 2.49.0
  */
 
-// CI CACHE PROBE — TEMPORARY, REVERT BEFORE MERGE.
-// Touching this file invalidates @memberjunction/ai-agents and its 36 dependents
-// (37 of 310 packages), to measure the warm-cache cost of a mid-sized invalidation.
-
 export * from './agent-types/base-agent-type';
 export * from './agent-types/loop-agent-response-type';
 export * from './agent-types/loop-agent-prompt-params';
