@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChange
 import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
 import { FileStorageEngineBase, StorageAccountWithProvider } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
  * Represents a file or folder item in the grid
@@ -220,6 +221,11 @@ export class FileGridComponent implements OnInit, OnChanges {
    * GraphQL client for file storage operations
    */
   private storageClient: GraphQLFileStorageClient;
+
+  /**
+   * Global notifications service for user toast feedback
+   */
+  protected notifications = inject(MJNotificationService);
 
   constructor() {
     this.storageClient = new GraphQLFileStorageClient(GraphQLDataProvider.Instance);
@@ -507,22 +513,14 @@ export class FileGridComponent implements OnInit, OnChanges {
         link.click();
         document.body.removeChild(link);
 
-        console.log('[FileGrid] File download initiated:', item.name);
+        this.notifications.CreateSimpleNotification(`Downloading ${item.name}...`, 'info');
       } else {
-        console.error('[FileGrid] Failed to get download URL');
-        this.errorMessage = 'Failed to generate download URL';
+        this.notifications.CreateSimpleNotification('Failed to generate download URL', 'error');
       }
     } catch (error) {
       console.error('[FileGrid] Error downloading file:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.errorMessage = `Failed to download file: ${errorMessage}`;
-
-      // Clear error after 5 seconds
-      setTimeout(() => {
-        if (this.errorMessage?.startsWith('Failed to download')) {
-          this.errorMessage = null;
-        }
-      }, 5000);
+      this.notifications.CreateSimpleNotification(`Failed to download ${item.name}: ${errorMessage}`, 'error');
     }
   }
 
@@ -885,9 +883,12 @@ export class FileGridComponent implements OnInit, OnChanges {
       if (success) {
         console.log('[FileGrid] Folder created successfully:', folderPath);
 
+        const createdName = this.newFolderName.trim();
         // Close dialog and refresh
         this.showNewFolderDialog = false;
         this.newFolderName = '';
+
+        this.notifications.CreateSimpleNotification(`Created folder "${createdName}"`, 'success');
 
         // Notify parent that folder structure changed
         this.folderStructureChanged.emit();
@@ -895,19 +896,12 @@ export class FileGridComponent implements OnInit, OnChanges {
         // Refresh the file grid
         this.loadItems();
       } else {
-        this.errorMessage = 'Failed to create folder';
+        this.notifications.CreateSimpleNotification('Failed to create folder', 'error');
       }
     } catch (error) {
       console.error('[FileGrid] Error creating folder:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.errorMessage = `Failed to create folder: ${errorMessage}`;
-
-      // Clear error after 5 seconds
-      setTimeout(() => {
-        if (this.errorMessage?.startsWith('Failed to create')) {
-          this.errorMessage = null;
-        }
-      }, 5000);
+      this.notifications.CreateSimpleNotification(`Failed to create folder: ${errorMessage}`, 'error');
     } finally {
       this.isCreatingFolder = false;
     }
@@ -971,13 +965,7 @@ export class FileGridComponent implements OnInit, OnChanges {
 
         // Check if we deleted a folder (before clearing itemToDelete)
         const wasFolder = this.itemToDelete.type === 'folder';
-
-        console.log('[FileGrid] Item details:', {
-          type: this.itemToDelete.type,
-          name: this.itemToDelete.name,
-          key: this.itemToDelete.key,
-          wasFolder
-        });
+        const deletedName = this.itemToDelete.name;
 
         // Close dialog
         this.showDeleteDialog = false;
@@ -985,6 +973,8 @@ export class FileGridComponent implements OnInit, OnChanges {
 
         // Clear selection
         this.selectedItems = [];
+
+        this.notifications.CreateSimpleNotification(`Deleted "${deletedName}"`, 'info');
 
         // If we deleted a folder, notify parent that folder structure changed
         if (wasFolder) {
@@ -997,19 +987,12 @@ export class FileGridComponent implements OnInit, OnChanges {
         this.loadItems();
       } else {
         console.error('[FileGrid] Delete operation returned false');
-        this.errorMessage = `Failed to delete ${this.itemToDelete.type}`;
+        this.notifications.CreateSimpleNotification(`Failed to delete ${this.itemToDelete.type}`, 'error');
       }
     } catch (error) {
       console.error('[FileGrid] Error deleting item:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.errorMessage = `Failed to delete: ${errorMessage}`;
-
-      // Clear error after 5 seconds
-      setTimeout(() => {
-        if (this.errorMessage?.startsWith('Failed to delete')) {
-          this.errorMessage = null;
-        }
-      }, 5000);
+      this.notifications.CreateSimpleNotification(`Failed to delete: ${errorMessage}`, 'error');
     } finally {
       this.isDeleting = false;
     }
@@ -1087,6 +1070,8 @@ export class FileGridComponent implements OnInit, OnChanges {
 
         // Check if we renamed a folder (before clearing itemToRename)
         const wasFolder = this.itemToRename.type === 'folder';
+        const oldName = this.itemToRename.name;
+        const newName = this.newItemName.trim();
 
         // Close dialog
         this.showRenameDialog = false;
@@ -1095,6 +1080,8 @@ export class FileGridComponent implements OnInit, OnChanges {
 
         // Clear selection
         this.selectedItems = [];
+
+        this.notifications.CreateSimpleNotification(`Renamed "${oldName}" to "${newName}"`, 'success');
 
         // If we renamed a folder, notify parent that folder structure changed
         if (wasFolder) {
@@ -1107,19 +1094,12 @@ export class FileGridComponent implements OnInit, OnChanges {
         this.loadItems();
       } else {
         console.error('[FileGrid] Rename operation returned false');
-        this.errorMessage = `Failed to rename ${this.itemToRename.type}`;
+        this.notifications.CreateSimpleNotification(`Failed to rename ${this.itemToRename.type}`, 'error');
       }
     } catch (error) {
       console.error('[FileGrid] Error renaming item:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.errorMessage = `Failed to rename: ${errorMessage}`;
-
-      // Clear error after 5 seconds
-      setTimeout(() => {
-        if (this.errorMessage?.startsWith('Failed to rename')) {
-          this.errorMessage = null;
-        }
-      }, 5000);
+      this.notifications.CreateSimpleNotification(`Failed to rename: ${errorMessage}`, 'error');
     } finally {
       this.isRenaming = false;
     }
@@ -1144,12 +1124,7 @@ export class FileGridComponent implements OnInit, OnChanges {
 
     // Can only download files, not folders
     if (item.type === 'folder') {
-      this.errorMessage = 'Cannot download folders. Please select a file.';
-      setTimeout(() => {
-        if (this.errorMessage?.includes('Cannot download folders')) {
-          this.errorMessage = null;
-        }
-      }, 3000);
+      this.notifications.CreateSimpleNotification('Cannot download folders. Please select a file.', 'warning');
       return;
     }
 
@@ -1178,20 +1153,15 @@ export class FileGridComponent implements OnInit, OnChanges {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+
+        this.notifications.CreateSimpleNotification(`Downloading ${item.name}...`, 'info');
       } else {
-        this.errorMessage = 'Failed to create download URL';
+        this.notifications.CreateSimpleNotification('Failed to create download URL', 'error');
       }
     } catch (error) {
       console.error('[FileGrid] Error downloading file:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.errorMessage = `Failed to download: ${errorMessage}`;
-
-      // Clear error after 5 seconds
-      setTimeout(() => {
-        if (this.errorMessage?.startsWith('Failed to download')) {
-          this.errorMessage = null;
-        }
-      }, 5000);
+      this.notifications.CreateSimpleNotification(`Failed to download: ${errorMessage}`, 'error');
     }
   }
 
@@ -1253,21 +1223,17 @@ export class FileGridComponent implements OnInit, OnChanges {
         // Clear selection
         this.selectedItems = [];
 
+        this.notifications.CreateSimpleNotification('Item copied successfully', 'success');
+
         // Refresh the file grid
         this.loadItems();
       } else {
-        this.errorMessage = 'Failed to copy item';
+        this.notifications.CreateSimpleNotification('Failed to copy item', 'error');
       }
     } catch (error) {
       console.error('[FileGrid] Error copying item:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.errorMessage = `Failed to copy: ${errorMessage}`;
-
-      setTimeout(() => {
-        if (this.errorMessage?.startsWith('Failed to copy')) {
-          this.errorMessage = null;
-        }
-      }, 5000);
+      this.notifications.CreateSimpleNotification(`Failed to copy: ${errorMessage}`, 'error');
     } finally {
       this.isCopying = false;
     }
@@ -1337,6 +1303,8 @@ export class FileGridComponent implements OnInit, OnChanges {
         // Clear selection
         this.selectedItems = [];
 
+        this.notifications.CreateSimpleNotification('Item moved successfully', 'success');
+
         // If we moved a folder, notify parent that folder structure changed
         if (wasFolder) {
           this.folderStructureChanged.emit();
@@ -1345,18 +1313,12 @@ export class FileGridComponent implements OnInit, OnChanges {
         // Refresh the file grid
         this.loadItems();
       } else {
-        this.errorMessage = 'Failed to move item';
+        this.notifications.CreateSimpleNotification('Failed to move item', 'error');
       }
     } catch (error) {
       console.error('[FileGrid] Error moving item:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.errorMessage = `Failed to move: ${errorMessage}`;
-
-      setTimeout(() => {
-        if (this.errorMessage?.startsWith('Failed to move')) {
-          this.errorMessage = null;
-        }
-      }, 5000);
+      this.notifications.CreateSimpleNotification(`Failed to move: ${errorMessage}`, 'error');
     } finally {
       this.isMoving = false;
     }
@@ -1425,12 +1387,7 @@ export class FileGridComponent implements OnInit, OnChanges {
         .filter(a => !UUIDsEqual(a.account.ID, this.account?.account.ID));
 
       if (this.availableAccounts.length === 0) {
-        this.errorMessage = 'No other storage accounts available';
-        setTimeout(() => {
-          if (this.errorMessage?.includes('No other storage accounts')) {
-            this.errorMessage = null;
-          }
-        }, 3000);
+        this.notifications.CreateSimpleNotification('No other storage accounts available', 'warning');
         return;
       }
 
@@ -1442,7 +1399,7 @@ export class FileGridComponent implements OnInit, OnChanges {
 
     } catch (error) {
       console.error('[FileGrid] Error loading accounts:', error);
-      this.errorMessage = 'Failed to load storage accounts';
+      this.notifications.CreateSimpleNotification('Failed to load storage accounts', 'error');
     }
   }
 
@@ -1531,18 +1488,12 @@ export class FileGridComponent implements OnInit, OnChanges {
 
       // Show results
       if (failedCopies.length === 0) {
-        this.errorMessage = `Successfully copied to ${successfulCopies.length} account${successfulCopies.length > 1 ? 's' : ''}: ${successfulCopies.join(', ')}`;
+        this.notifications.CreateSimpleNotification(`Successfully copied to ${successfulCopies.length} account${successfulCopies.length > 1 ? 's' : ''}`, 'success');
       } else if (successfulCopies.length === 0) {
-        this.errorMessage = `Copy failed for all accounts: ${failedCopies.map(f => `${f.account} (${f.error})`).join(', ')}`;
+        this.notifications.CreateSimpleNotification(`Copy failed for all accounts: ${failedCopies.map(f => f.account).join(', ')}`, 'error');
       } else {
-        this.errorMessage = `Copied to ${successfulCopies.length} account(s). Failed: ${failedCopies.map(f => f.account).join(', ')}`;
+        this.notifications.CreateSimpleNotification(`Copied to ${successfulCopies.length} account(s). Failed: ${failedCopies.map(f => f.account).join(', ')}`, 'warning');
       }
-
-      setTimeout(() => {
-        if (this.errorMessage?.includes('copied') || this.errorMessage?.includes('Copy failed')) {
-          this.errorMessage = null;
-        }
-      }, 5000);
 
       // Close dialog
       this.showCopyToProviderDialog = false;
@@ -1554,13 +1505,7 @@ export class FileGridComponent implements OnInit, OnChanges {
     } catch (error) {
       console.error('[FileGrid] Error copying to accounts:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      this.errorMessage = `Copy failed: ${errorMessage}`;
-
-      setTimeout(() => {
-        if (this.errorMessage?.startsWith('Copy failed')) {
-          this.errorMessage = null;
-        }
-      }, 5000);
+      this.notifications.CreateSimpleNotification(`Copy failed: ${errorMessage}`, 'error');
     } finally {
       this.isCopyingToAccount = false;
       this.copyToAccountProgress = null;
