@@ -30,6 +30,7 @@ import {
 } from './types/form-types';
 import { FormStateService } from './form-state.service';
 import { EntityFormConfig } from './types/entity-form-config';
+import { FormToolbarItemConfig, FormToolbarItemKey, FormToolbarItemClickEventArgs } from './types/form-toolbar-item';
 import { CollectFormPanelRegistrations } from './panel-slot/collect-form-panel-registrations';
 import { ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
 
@@ -125,6 +126,94 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   private _pendingRecords: PendingRecordItem[] = [];
+  private _registeredToolbarItems = new Map<string, FormToolbarItemConfig>();
+  private _toolbarItemOverrides = new Map<string, Partial<FormToolbarItemConfig>>();
+
+  /**
+   * Registers a dynamic toolbar action item / button.
+   * Can be called during ngOnInit or at runtime.
+   */
+  public RegisterToolbarItem(item: FormToolbarItemConfig): void {
+    this._registeredToolbarItems.set(item.Key, { ...item });
+    this.cdr?.markForCheck();
+  }
+
+  /**
+   * Unregisters a previously registered dynamic toolbar item by key.
+   */
+  public UnregisterToolbarItem(key: string): void {
+    if (this._registeredToolbarItems.delete(key)) {
+      this.cdr?.markForCheck();
+    }
+  }
+
+  /**
+   * Configures overrides for any toolbar item (standard built-in items like 'edit',
+   * 'delete', 'favorite', 'history', etc., or custom items).
+   * Allows dynamically changing visibility, disabled state, tooltips, order, icon, etc.
+   */
+  public ConfigureToolbarItem(key: FormToolbarItemKey, overrides: Partial<FormToolbarItemConfig>): void {
+    const existing = this._toolbarItemOverrides.get(key) || {};
+    this._toolbarItemOverrides.set(key, { ...existing, ...overrides });
+    this.cdr?.markForCheck();
+  }
+
+  /**
+   * Dynamically hides a toolbar item by key.
+   */
+  public HideToolbarItem(key: FormToolbarItemKey): void {
+    this.ConfigureToolbarItem(key, { Visible: false });
+  }
+
+  /**
+   * Dynamically shows a toolbar item by key.
+   */
+  public ShowToolbarItem(key: FormToolbarItemKey): void {
+    this.ConfigureToolbarItem(key, { Visible: true });
+  }
+
+  /**
+   * Dynamically disables a toolbar item by key, with an optional reason string for the tooltip.
+   */
+  public DisableToolbarItem(key: FormToolbarItemKey, reason?: string): void {
+    this.ConfigureToolbarItem(key, { Disabled: reason ?? true });
+  }
+
+  /**
+   * Dynamically enables a toolbar item by key.
+   */
+  public EnableToolbarItem(key: FormToolbarItemKey): void {
+    this.ConfigureToolbarItem(key, { Disabled: false });
+  }
+
+  /**
+   * Sets the numeric display order for a toolbar item (lower numbers appear earlier).
+   */
+  public SetToolbarItemOrder(key: FormToolbarItemKey, order: number): void {
+    this.ConfigureToolbarItem(key, { Order: order });
+  }
+
+  /**
+   * Returns all dynamically registered toolbar items.
+   */
+  public get RegisteredToolbarItems(): FormToolbarItemConfig[] {
+    return Array.from(this._registeredToolbarItems.values());
+  }
+
+  /**
+   * Returns the map of toolbar item overrides.
+   */
+  public get ToolbarItemOverrides(): ReadonlyMap<string, Partial<FormToolbarItemConfig>> {
+    return this._toolbarItemOverrides;
+  }
+
+  /**
+   * Hook invoked when a custom or dynamic toolbar item is clicked.
+   * Subclasses can override this method to handle custom button clicks.
+   */
+  public OnCustomToolbarButtonClick(event: FormToolbarItemClickEventArgs): void {
+    // Subclasses can override
+  }
 
   // #region Injected Dependencies (no constructor params)
 
