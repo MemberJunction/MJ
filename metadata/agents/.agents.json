@@ -99,6 +99,16 @@
             "lastModified": "2026-03-26T22:05:20.166Z",
             "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "86C17097-6AE5-49AA-85BD-219475209C5F"
+          }
         }
       ]
     },
@@ -224,6 +234,16 @@
           "sync": {
             "lastModified": "2026-03-26T22:05:20.309Z",
             "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "EE1105BD-90BC-4809-9835-1FA7A09F3CFA"
           }
         }
       ]
@@ -517,6 +537,16 @@
             "lastModified": "2026-03-26T22:05:20.506Z",
             "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "990A4AE4-68EC-4512-ADE8-5870D24ABB03"
+          }
         }
       ]
     },
@@ -627,6 +657,16 @@
                 "sync": {
                   "lastModified": "2026-03-26T22:05:20.648Z",
                   "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "67C18238-9098-4739-B876-66752DC62A91"
                 }
               },
               {
@@ -789,6 +829,16 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4C091053-1930-4699-84DF-05EAFD4A1611"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
                   "ActionID": "@lookup:MJ: Actions.Name=Text Analyzer",
                   "Status": "Active"
                 },
@@ -899,6 +949,16 @@
                 "sync": {
                   "lastModified": "2026-03-26T22:05:20.827Z",
                   "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "778700FB-C6C6-44FA-B078-7ABB876DBEBE"
                 }
               },
               {

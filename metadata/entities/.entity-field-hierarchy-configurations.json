@@ -53,54 +53,6 @@
   },
   {
     "fields": {
-      "Name": "MJ: Resource Types"
-    },
-    "relatedEntities": {
-      "MJ: Entity Fields": [
-        {
-          "fields": {
-            "Configuration": {
-              "Hierarchy": {
-                "IsHierarchy": true
-              }
-            }
-          },
-          "primaryKey": {
-            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Resource Types&Name=ParentID"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=MJ: Resource Types"
-    }
-  },
-  {
-    "fields": {
-      "Name": "MJ: Roles"
-    },
-    "relatedEntities": {
-      "MJ: Entity Fields": [
-        {
-          "fields": {
-            "Configuration": {
-              "Hierarchy": {
-                "IsHierarchy": true
-              }
-            }
-          },
-          "primaryKey": {
-            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Roles&Name=ParentID"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=MJ: Roles"
-    }
-  },
-  {
-    "fields": {
       "Name": "MJ: Dashboard Categories"
     },
     "relatedEntities": {
@@ -317,7 +269,7 @@
   },
   {
     "fields": {
-      "Name": "MJ: Prompt Categories"
+      "Name": "MJ: AI Prompt Categories"
     },
     "relatedEntities": {
       "MJ: Entity Fields": [
@@ -330,13 +282,13 @@
             }
           },
           "primaryKey": {
-            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Prompt Categories&Name=ParentID"
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Prompt Categories&Name=ParentID"
           }
         }
       ]
     },
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=MJ: Prompt Categories"
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Prompt Categories"
     }
   },
   {
@@ -361,30 +313,6 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Tags"
-    }
-  },
-  {
-    "fields": {
-      "Name": "MJ: Tests"
-    },
-    "relatedEntities": {
-      "MJ: Entity Fields": [
-        {
-          "fields": {
-            "Configuration": {
-              "Hierarchy": {
-                "IsHierarchy": true
-              }
-            }
-          },
-          "primaryKey": {
-            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tests&Name=ParentID"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=MJ: Tests"
     }
   },
   {
