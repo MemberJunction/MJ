@@ -1,5 +1,5 @@
 import { Arg, Ctx, Query, Resolver, Field, Int, InputType } from 'type-graphql';
-import { DatabasePlatform, LogError } from '@memberjunction/core';
+import { DatabasePlatform, LogError, UserInfo } from '@memberjunction/core';
 import { SQLExpressionValidator } from '@memberjunction/global';
 import { RenderPipeline } from '@memberjunction/generic-database-provider';
 import { AppContext } from '../types.js';
@@ -54,6 +54,17 @@ export class AdhocQueryResolver extends ResolverBase {
             const validation = validator.validateFullQuery(input.SQL);
             if (!validation.valid) {
                 return this.buildErrorResult(validation.error || 'SQL validation failed');
+            }
+
+            // 1b. SECURITY: ad-hoc SQL runs raw SELECT directly on the read-only pool — it does
+            // NOT pass through RunView, entity permissions, row-level security, or magic-link
+            // scope. A scope-limited principal (an anonymous magic-link guest or a resource-scoped
+            // magic-link session) must therefore NOT be able to run it, or it would read the entire
+            // database outside its granted scope. Block those principals explicitly. Normal
+            // authenticated users are unaffected.
+            const adhocUser: UserInfo | undefined = context.userPayload?.userRecord;
+            if (adhocUser?.IsMagicLinkAnonymous || adhocUser?.MagicLinkScope) {
+                return this.buildErrorResult('Ad-hoc SQL execution is not permitted for scope-limited sessions.');
             }
 
             // 2. Get READ-ONLY data source (no fallback to read-write)
