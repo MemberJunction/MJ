@@ -10,12 +10,13 @@ name: Update package documentation
 #   /      ← redirect to the newest LTS set
 #   404    ← forwards legacy pre-versioning URLs into the newest LTS set
 #
-# EVERY docs set is built from a RELEASED ref — never from next. main is caught
-# up by the act of releasing, so the Edge set documents what users can actually
-# install, and a docs deploy no longer depends on next compiling at all. (That
-# dependency was not theoretical: the first chained line-release deploy, run
-# 32208676764, failed in "Build v6 (next)" on an unrelated next-only type break,
-# and the whole site's deploy was skipped because `deploy` needs `build`.)
+# EVERY docs set's CONTENT is built from a RELEASED ref — never from next: main
+# for the Edge line, the lts/N branch for each line. main is caught up by the act
+# of releasing, so the Edge set documents what users can actually install, and a
+# docs deploy no longer depends on next compiling at all. (That dependency was
+# not theoretical: the first chained line-release deploy, run 32208676764, failed
+# in "Build v6 (next)" on an unrelated next-only type break, and the whole site's
+# deploy was skipped because `deploy` needs `build`.)
 #
 # What comes from where — the ONE seam in this design:
 #   content ref (main, lts/N)  everything ingest reads out of the repo: guides/,
@@ -196,6 +197,28 @@ jobs:
       # while a change to a page inside docs-site/ publishes on the next docs
       # deploy. Nothing here reads product code, so the overlay cannot resurrect
       # the next-must-compile dependency this design removes.
+      #
+      # RETIRING THIS STEP (the goal — page-affecting source should come from a
+      # released ref too). It is really a compatibility shim for lts/5, which was
+      # cut before versioned docs existed: that branch's docs-site is 16 files
+      # behind, with no DOCS_VERSIONS support and no ThemeSelect override, so
+      # without the overlay /v5 would lose its version switcher outright. Lines
+      # cut from next after this point carry a current docs-site by construction,
+      # so the shim ages out with lts/5.
+      #
+      # For the Edge set the overlay is redundant with the release flow — main
+      # receives next's docs-site at every release — but it CANNOT be dropped
+      # yet: main's docs-site has no src/lib/license-line.mjs (so /v6 would lose
+      # the ISC-vs-BUSL distinction entirely) and no mjcertified.mdx, which the
+      # BUSL Additional Use Grant names by URL and the deploy job's /mjcertified
+      # redirect points at. Dropping it today would 404 that front door.
+      #
+      # So the gate is mechanical: once main's docs-site carries mjcertified.mdx,
+      # src/lib/license-line.mjs, src/lib/documented-line.mjs and the ThemeSelect
+      # override — which the next Edge release delivers on its own — this step can
+      # take `if: matrix.ref != 'main'` and /v6 renders entirely from released
+      # code. Check with:
+      #   git ls-tree -r origin/main docs-site/ | grep -E 'mjcertified|license-line|documented-line|ThemeSelect'
       - name: Overlay docs-site tooling from the triggering commit
         run: |
           set -euo pipefail
