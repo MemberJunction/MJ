@@ -631,8 +631,8 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
         console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Converting '${file.name}' to base64...`);
         const base64Data = await this.fileToBase64(file);
 
-        this.UploadStatusText = `Uploading ${file.name} (${fileIndex}/${files.length}) to storage...`;
-        this.UploadProgressPercent = progressBase + Math.round((1 / files.length) * 50);
+        this.UploadStatusText = `Uploading ${file.name} (${fileIndex}/${files.length})...`;
+        this.UploadProgressPercent = Math.max(5, progressBase + 2);
         this.cdr.markForCheck();
 
         const input = {
@@ -651,7 +651,24 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
           Base64Length: input.Base64Data.length
         });
 
-        const gqlResult = await GraphQLDataProvider.ExecuteGQL(UploadStorageFileMutation, { input });
+        const gqlResult = await GraphQLDataProvider.ExecuteGQLWithProgress(
+          UploadStorageFileMutation,
+          { input },
+          (progress) => {
+            const singleFileSlice = 85 / files.length;
+            const currentFileBase = (i / files.length) * 100;
+            const computedPercent = Math.min(95, Math.round(currentFileBase + (progress.percent * singleFileSlice / 100)));
+            this.UploadProgressPercent = computedPercent;
+            const loadedStr = FormatAttachmentFileSize(progress.loaded);
+            const totalStr = FormatAttachmentFileSize(progress.total);
+            if (progress.percent < 100) {
+              this.UploadStatusText = `Uploading ${file.name} (${fileIndex}/${files.length}): ${loadedStr} / ${totalStr} (${progress.percent}%)...`;
+            } else {
+              this.UploadStatusText = `Processing ${file.name} on storage server...`;
+            }
+            this.cdr.markForCheck();
+          }
+        );
         console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] GraphQL response:`, gqlResult);
 
         const parsed = UploadStorageFileMutationSchema.safeParse(gqlResult);
@@ -667,7 +684,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
         console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] File uploaded with FileID '${fileId}'. Loading file entity & creating record link...`);
 
         this.UploadStatusText = `Linking ${file.name} to record...`;
-        this.UploadProgressPercent = progressBase + Math.round((1 / files.length) * 80);
+        this.UploadProgressPercent = progressBase + Math.round((1 / files.length) * 95);
         this.cdr.markForCheck();
 
         const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files');
