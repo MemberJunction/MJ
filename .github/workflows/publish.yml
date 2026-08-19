@@ -292,6 +292,52 @@ jobs:
             fi
           fi
 
+      # `pnpm run version` above rewrote ~300 manifests and nothing regenerated
+      # pnpm-lock.yaml, so every edge release since the pnpm cutover pushed a main
+      # whose lockfile still named the PREVIOUS version. Measured on v6.1.0-edge.2:
+      # 2287 stale specifiers across 291 of 307 importers, one homogeneous class
+      # (edge.1 -> edge.2). The `pnpm install --frozen-lockfile` at the top of this
+      # job cannot help — it runs before the bump. `ci/merge_main_and_update_lock.mjs`
+      # does refresh, but only after `git checkout next`, so next got reconciled and
+      # main never did. It stayed invisible until docs began building /v6 from main
+      # and the frozen install there failed with ERR_PNPM_OUTDATED_LOCKFILE.
+      #
+      # Mirrors the publish-lts job's "Version (normal mode) and refresh lockfile":
+      # refresh, then commit the lockfile as its own [skip ci] commit so it travels
+      # with the release commit ci/commit_push.mjs pushes, instead of depending on
+      # that script's `git add ./*` sweep to catch it.
+      #
+      # --no-frozen-lockfile is load-bearing, not decoration: pnpm treats
+      # frozen-lockfile as true whenever CI is set, so a BARE `pnpm install` here
+      # exits 1 with ERR_PNPM_OUTDATED_LOCKFILE (verified directly against pnpm,
+      # alongside --frozen-lockfile which fails the same way). It is also a REAL
+      # install, never --lockfile-only: that flag writes a lockfile without proving
+      # it installs, and this repo has already been burned by it — an 827-package
+      # drift during the npm->pnpm cutover.
+      #
+      # Internal deps do not need the registry for this: pnpm-workspace.yaml sets
+      # linkWorkspacePackages: true, so the freshly bumped @memberjunction/*
+      # specifiers resolve to `link:` entries locally. That is what makes a refresh
+      # possible here at all, before anything is published.
+      - name: Refresh pnpm-lock.yaml for the version bump
+        if: ${{ env.BRANCH == 'main' }}
+        run: |
+          set -euo pipefail
+          pnpm install --no-frozen-lockfile
+          if git diff --quiet -- pnpm-lock.yaml; then
+            echo "::notice::pnpm-lock.yaml already matched the bumped manifests — nothing to commit."
+          else
+            git --no-pager diff --stat -- pnpm-lock.yaml
+            git add pnpm-lock.yaml
+            git commit -m "chore: lockfile for release [skip ci]"
+            echo "::notice::Committed the refreshed pnpm-lock.yaml — ci/commit_push.mjs pushes it with the release commit."
+          fi
+          # A frozen install is the only proof the lockfile is actually in sync —
+          # the same posture as verifying a publish against the registry rather
+          # than against a log line. This runs BEFORE the npm publish, so a missed
+          # refresh fails the release instead of shipping another broken main.
+          pnpm install --frozen-lockfile
+
       - name: Build packages
         run: pnpm run build
 
@@ -590,11 +636,19 @@ jobs:
       # `.changeset/config.json` sets "commit": true, so `changeset version`
       # commits the bump itself; the lockfile it leaves behind does not, hence
       # the explicit second commit.
+      #
+      # The pnpm refresh is a REAL install (`--no-frozen-lockfile`), matching the
+      # edge path above. It was `--lockfile-only`, which does work here — that flag
+      # implies non-frozen, so it is not blocked by pnpm's CI frozen default — but
+      # it writes a lockfile without proving the lockfile installs, and it leaves
+      # node_modules describing the pre-bump manifests for the build that follows.
+      # Project rule from the npm->pnpm cutover: never --lockfile-only (it drifted
+      # 827 packages). npm-era lines keep `npm install`, which has no frozen default.
       - name: Version (normal mode) and refresh lockfile
         id: version
         run: |
           ${{ steps.pm.outputs.PM }} run version
-          ${{ steps.pm.outputs.PM == 'pnpm' && 'pnpm install --lockfile-only' || 'npm install' }}
+          ${{ steps.pm.outputs.PM == 'pnpm' && 'pnpm install --no-frozen-lockfile' || 'npm install' }}
           LOCK=${{ steps.pm.outputs.PM == 'pnpm' && 'pnpm-lock.yaml' || 'package-lock.json' }}
           if ! git diff --quiet -- "$LOCK"; then
             git add "$LOCK"
