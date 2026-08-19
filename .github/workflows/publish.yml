@@ -424,7 +424,9 @@ jobs:
   # Sequence: guards -> checkout the line -> era-detect the package manager ->
   # changeset version (normal, non-pre mode) -> lockfile refresh as its own
   # [skip ci] commit -> build -> changeset publish --tag lts-<line> -> push the
-  # release commit + tag to the line branch -> GitHub Release (never latest).
+  # release commit + tag to the line branch -> GitHub Release (never latest) ->
+  # dispatch the docs deploy (the one step publish-lts.yml never had; docs.yml
+  # cannot watch for this run, see that step's comment).
   # `latest` NEVER moves here; certification moves it via ci/dist-tag-all.mjs.
   #
   # The runbook's prohibition on `workflow_dispatch`ing the routine publish path
@@ -441,6 +443,15 @@ jobs:
     # pushes the same ~300 packages serially after a full build, so it carries
     # the same exposure; 45 minutes was never measured against it.
     timeout-minutes: 120
+    # Job-level permissions REPLACE the workflow-level block rather than merging
+    # with it, so the two the job already relies on are restated: contents for
+    # checkout, id-token for npm trusted publishing. The delta is one scope —
+    # actions: write, for the docs dispatch in the last step — and it is scoped
+    # to this job so the edge path never gains the ability to start workflows.
+    permissions:
+      contents: write
+      id-token: write
+      actions: write
     runs-on: ubuntu-latest
     env:
       LINE: ${{ github.event.inputs.line_branch }}
@@ -644,5 +655,26 @@ jobs:
           fi
           gh release create "$VERSION" --title "$VERSION" --generate-notes --latest=false \
             --target "$LINE" --repo "${{ github.repository }}"
+
+      # Docs follow releases, and a line release reaches docs.yml ONLY through
+      # this dispatch: docs.yml listens for workflow_run on `main` alone, by
+      # ruling — no docs deploy is ever triggered by an event on `next`, and this
+      # run reports branch `next` because the line is a parameter.
+      #
+      # Two things make this the last step rather than an earlier one. Steps only
+      # run when every previous step succeeded, so a failed publish, a failed
+      # registry verification, a failed push or a failed release cannot deploy
+      # docs. And docs.yml builds each line's content from the LINE BRANCH, so
+      # dispatching before the release commit was pushed would publish the
+      # previous state of the line.
+      #
+      # github.token can start this run: workflow_dispatch is one of the two
+      # documented exceptions to GitHub's "events triggered by GITHUB_TOKEN do
+      # not create a workflow run" recursion suppression. Same pattern, same
+      # command as lts/5's thin docs dispatcher.
+      - name: Deploy docs for the new line release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run docs.yml --repo "$GITHUB_REPOSITORY" --ref next
 
 

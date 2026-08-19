@@ -22,25 +22,28 @@ on:
   # install yet. The resolve job below hard-fails a trigger that did not
   # conclude `success`.
   #
-  # Both publish paths now live in publish.yml (npm's OIDC trust is bound to
-  # that filename), so the branch list is what distinguishes them:
-  #   main    the Edge line publishes on a push to main
-  #   next    an LTS line release is DISPATCHED from next with a line_branch
-  #           input — the line is a parameter, so the run reports branch `next`
-  #   lts/*   belt and braces for a publish dispatched from a line branch
-  #           itself (the retired publish-lts.yml's shape, and lts/5 still
-  #           carries an older publish.yml that could be dispatched by hand)
-  # A publish.yml run on `next` cannot arise any other way: its only non-dispatch
-  # trigger is a push to main.
+  # `main` ONLY, and `next` is deliberately absent: no docs deploy is ever
+  # triggered by an event on next (the trigger removed in #3911 does not come
+  # back through a branch filter). The Edge line publishes on a push to main and
+  # is covered here.
+  #
+  # An LTS line release does NOT arrive here as a workflow_run. It is dispatched
+  # from next's ref (publish.yml's publish-lts job, the line being a parameter),
+  # so matching it would mean listening to `next`. Instead that job CHAINS into
+  # the workflow_dispatch below as its own final step, after the release commit
+  # and tag are on the line branch — which is also the only ordering that builds
+  # the released content rather than the previous line state.
   workflow_run:
     workflows:
-      - Build and publish new package versions  # publish.yml — Edge line AND LTS lines
-    branches: [main, next, 'lts/*']
+      - Build and publish new package versions  # publish.yml — the Edge line, on main
+    branches: [main]
     types:
       - completed
 
-  # Manual escape hatch: re-deploy a docs-only fix without waiting for a
-  # release, and the only way to exercise the full pipeline from a branch.
+  # Two callers: an operator re-deploying a docs-only fix without waiting for a
+  # release (also the only way to exercise the full pipeline from a branch), and
+  # publish.yml's publish-lts job chaining a deploy after a line release. lts/5's
+  # thin docs dispatcher forwards its docs-content pushes here the same way.
   workflow_dispatch: {}
 
 permissions:
