@@ -109,4 +109,19 @@ describe('UploadTokenManager', () => {
       vi.useRealTimers();
     }
   });
+
+  it('normalizes UUIDs when verifying claiming user', () => {
+    const buf = Buffer.from('uuid test data');
+    const token = UploadTokenManager.Instance.Stage({
+      buffer: buf,
+      fileName: 'uuid.txt',
+      mimeType: 'text/plain',
+      userId: '4A68B0D7-49EE-4D56-82DE-92F66627EE2B',
+    });
+
+    // Claim with lowercase UUID
+    const consumed = UploadTokenManager.Instance.Consume(token, '4a68b0d7-49ee-4d56-82de-92f66627ee2b');
+    expect(consumed).not.toBeNull();
+    expect(consumed?.buffer.toString('utf-8')).toBe('uuid test data');
+  });
 });

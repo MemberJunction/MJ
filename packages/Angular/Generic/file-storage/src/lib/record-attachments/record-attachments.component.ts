@@ -111,6 +111,26 @@ const UploadStorageFileMutationSchema = z.object({
   }),
 });
 
+const CreateUploadStageTokenMutation = `
+  mutation CreateUploadStageToken {
+    CreateUploadStageToken {
+      Success
+      Token
+      Url
+      ErrorMessage
+    }
+  }
+`;
+
+const CreateUploadStageTokenMutationSchema = z.object({
+  CreateUploadStageToken: z.object({
+    Success: z.boolean(),
+    Token: z.string().optional().nullable(),
+    Url: z.string().optional().nullable(),
+    ErrorMessage: z.string().optional().nullable(),
+  }),
+});
+
 const FileDownloadQuery = gql`
   query FileDownloadUrl($FileID: String!) {
     MJFile(ID: $FileID) {
@@ -732,12 +752,23 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
         // ─────────────────────────────────────────────────────────────────────
         if (!directUploadSucceeded || !fileId) {
           try {
+            // Mint a cryptographically signed media-upload staging token
+            const mintResult = await GraphQLDataProvider.ExecuteGQL(CreateUploadStageTokenMutation, {});
+            const parsedMint = CreateUploadStageTokenMutationSchema.safeParse(mintResult);
+            const stageToken = parsedMint.success && parsedMint.data.CreateUploadStageToken.Success
+              ? parsedMint.data.CreateUploadStageToken.Token
+              : null;
+
+            if (!stageToken) {
+              throw new Error('Failed to obtain authenticated upload staging token.');
+            }
+
             console.log(`[RecordAttachmentsComponent] [${fileIndex}/${files.length}] Staging binary bytes via /media/upload-stage...`);
             this.UploadStatusText = `Uploading ${file.name} (${fileIndex}/${files.length})...`;
             this.UploadProgressPercent = Math.max(5, progressBase + 2);
             this.cdr.markForCheck();
 
-            const uploadToken = await this.uploadBinaryStage(file, (loaded, total) => {
+            const uploadToken = await this.uploadBinaryStage(file, stageToken, (loaded, total) => {
               const singleFileSlice = 85 / files.length;
               const currentFileBase = (i / files.length) * 100;
               const percent = Math.round((loaded / total) * 100);
@@ -1371,10 +1402,12 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
 
   /**
    * Performs an authenticated raw binary streaming upload to the /media/upload-stage REST endpoint.
+   * Uses the cryptographically signed media-upload token minted by CreateUploadStageToken.
    * Returns an ephemeral single-use upload token to pass to the GraphQL UploadStorageFile mutation.
    */
   private uploadBinaryStage(
     file: File,
+    stageToken: string,
     onProgress?: (loaded: number, total: number) => void
   ): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -1387,11 +1420,8 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
       const xhr = new XMLHttpRequest();
       xhr.open('POST', uploadUrl, true);
 
-      // Auth header
-      const token = GraphQLDataProvider.Instance?.ConfigData?.Token;
-      if (token) {
-        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      }
+      // Signed media-upload token
+      xhr.setRequestHeader('Authorization', `Bearer ${stageToken}`);
 
       // Metadata headers
       xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');

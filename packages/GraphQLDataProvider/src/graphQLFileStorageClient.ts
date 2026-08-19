@@ -256,7 +256,6 @@ export class GraphQLFileStorageClient {
                 success: !!data.UploadUrl,
                 uploadUrl: data.UploadUrl || '',
                 providerKey: data.ProviderKey,
-                httpMethod: 'PUT',
             };
         } catch (e) {
             const error = e as Error;
