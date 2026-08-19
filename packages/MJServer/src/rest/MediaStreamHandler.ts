@@ -69,47 +69,33 @@ export function createMediaStreamRouter(): Router {
  *
  * Accepts raw file binary bytes directly in request body, stages in UploadTokenManager
  * memory cache, and returns an ephemeral single-use upload token for the GraphQL mutation.
+ *
+ * Security: Requires a cryptographically signed media-upload token minted by `CreateUploadStageToken`
+ * (verified via `MediaAccessKeyManager.Instance.VerifyUpload`).
  */
 async function handleUploadStageRequest(req: Request, res: Response): Promise<void> {
   // Never let CDNs or shared caches retain upload endpoints
   res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
 
-  // 1. Resolve user from Authorization header or ?token=
+  // 1. Resolve signed upload token from Authorization header or ?token=
   const authHeader = req.headers.authorization || '';
   const queryToken = typeof req.query.token === 'string' ? req.query.token : '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : (authHeader || queryToken);
 
-  let userId: string | null = null;
-
-  if (token) {
-    // Check if token was minted by MediaAccessKeyManager
-    const uploadVerify = MediaAccessKeyManager.Instance.VerifyUpload(token);
-    if (uploadVerify.Valid && uploadVerify.UserId) {
-      userId = uploadVerify.UserId;
-    } else {
-      // Check standard session JWT
-      try {
-        const decoded = jwt.decode(token);
-        if (typeof decoded === 'object' && decoded !== null) {
-          const d = decoded as { email?: string; preferred_username?: string; sub?: string; user_id?: string; ID?: string; id?: string };
-          const email = (d.email || d.preferred_username || '').trim().toLowerCase();
-          const sub = d.sub || d.user_id || d.ID || d.id || '';
-
-          const cachedUser = UserCache.Instance.Users.find(
-            (u) => (email && u.Email?.toLowerCase() === email) || (sub && UUIDsEqual(u.ID, sub))
-          );
-          userId = cachedUser ? cachedUser.ID : sub || null;
-        }
-      } catch {
-        // invalid token
-      }
-    }
-  }
-
-  if (!userId) {
-    res.status(401).json({ Success: false, ErrorMessage: 'Authentication required.' });
+  if (!token) {
+    res.status(401).json({ Success: false, ErrorMessage: 'Authentication token required.' });
     return;
   }
+
+  // Cryptographically verify token signature, expiry, and 'media-upload' typ claim
+  const uploadVerify = MediaAccessKeyManager.Instance.VerifyUpload(token);
+  if (!uploadVerify.Valid || !uploadVerify.UserId) {
+    res.status(401).json({ Success: false, ErrorMessage: 'Invalid or expired upload token.' });
+    return;
+  }
+
+  const userId = uploadVerify.UserId;
 
   // 2. Validate binary body
   const buffer = req.body as Buffer;
@@ -118,7 +104,7 @@ async function handleUploadStageRequest(req: Request, res: Response): Promise<vo
     return;
   }
 
-  // 3. Extract metadata
+  // 3. Extract and sanitize metadata
   const rawFileName = (req.headers['x-file-name'] as string) || (req.query.fileName as string) || 'upload.bin';
   let fileName = 'upload.bin';
   try {
@@ -126,6 +112,8 @@ async function handleUploadStageRequest(req: Request, res: Response): Promise<vo
   } catch {
     fileName = rawFileName;
   }
+  // Sanitize filename: remove directory traversal, leading slashes, control chars
+  fileName = fileName.replace(/[/\\]+/g, '_').replace(/^\.+/, '').replace(/[\x00-\x1f\x7f]/g, '').trim() || 'upload.bin';
 
   const mimeType = (req.headers['content-type'] as string) || (req.query.mimeType as string) || 'application/octet-stream';
 
@@ -272,6 +260,7 @@ async function serveViaStream(res: Response, source: FileBytesSource, rangeHeade
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Content-Type', result.ContentType ?? source.contentType);
   res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(source.fileName)}"`);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   if (result.ContentLength != null) {
     res.setHeader('Content-Length', String(result.ContentLength));
   }
@@ -305,6 +294,7 @@ async function serveViaBuffer(res: Response, source: FileBytesSource, rangeHeade
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Content-Type', source.contentType);
   res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(source.fileName)}"`);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
 
   if (!rangeHeader) {
     res.status(200);

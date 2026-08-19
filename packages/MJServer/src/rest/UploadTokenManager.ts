@@ -14,7 +14,7 @@
  * @module @memberjunction/server/rest/UploadTokenManager
  */
 
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { randomBytes } from 'node:crypto';
 
@@ -33,6 +33,16 @@ export interface StagedUploadEntry {
   timer: NodeJS.Timeout;
 }
 
+/**
+ * Ephemeral In-Memory Staged Upload Token Manager.
+ *
+ * Architecture & Deployment Topology Note:
+ * This implementation maintains staged buffers in-process RAM with a 5-minute sliding TTL.
+ * In a clustered/multi-replica deployment behind a load balancer, sticky sessions (or routing
+ * the subsequent GraphQL `UploadStorageFile` commit to the same node) are recommended.
+ * For shared-memory multi-node clustering, an external ephemeral store (such as Redis)
+ * can be plugged in behind this interface.
+ */
 export class UploadTokenManager extends BaseSingleton<UploadTokenManager> {
   private readonly _staged = new Map<string, StagedUploadEntry>();
   private _totalMemoryBytes = 0;
@@ -125,8 +135,8 @@ export class UploadTokenManager extends BaseSingleton<UploadTokenManager> {
 
     const entry = this._staged.get(token)!;
 
-    // Security check: verify user ownership
-    if (claimingUserId && entry.userId && entry.userId !== claimingUserId) {
+    // Security check: verify user ownership using UUIDsEqual for robust ID normalization
+    if (claimingUserId && entry.userId && !UUIDsEqual(entry.userId, claimingUserId)) {
       LogError(`[UploadTokenManager] Security violation: User '${claimingUserId}' attempted to claim upload token owned by User '${entry.userId}'.`);
       // Evict immediately to prevent further probing
       this.Evict(token);

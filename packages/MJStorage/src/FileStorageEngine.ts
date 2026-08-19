@@ -390,9 +390,11 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         // 2. Initialize driver
         const driver = await this.GetDriver(resolved.account.ID, contextUser);
 
-        // 3. Upload
-        const pathPrefix = options.pathPrefix ?? `artifacts/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}`;
-        const storagePath = `${pathPrefix}/${fileName}`;
+        // 3. Upload with sanitized path prefix and file name (prevents directory traversal and control characters)
+        const cleanFileName = fileName.replace(/[/\\]+/g, '_').replace(/^\.+/, '').replace(/[\x00-\x1f\x7f]/g, '').trim() || 'file';
+        const rawPrefix = options.pathPrefix ?? `artifacts/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}`;
+        const cleanPrefix = rawPrefix.replace(/\.\./g, '').replace(/^[/\\]+/, '').replace(/[\x00-\x1f\x7f]/g, '').replace(/[/\\]+/g, '/').replace(/\/+$/, '') || 'artifacts';
+        const storagePath = `${cleanPrefix}/${cleanFileName}`;
         const uploaded = await driver.PutObject(storagePath, content, mimeType);
         if (!uploaded) {
             throw new Error(`FileStorageEngine.UploadFile: PutObject returned false for path '${storagePath}'`);
@@ -400,7 +402,7 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
 
         // 4. Create MJ: Files record
         const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
-        fileEntity.Name = fileName;
+        fileEntity.Name = cleanFileName;
         fileEntity.ContentType = mimeType;
         fileEntity.ProviderID = resolved.provider.ID;
         fileEntity.ProviderKey = storagePath;

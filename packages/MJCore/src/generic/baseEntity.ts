@@ -1217,6 +1217,9 @@ export abstract class BaseEntity<T = unknown> {
 
         this._childEntity = childEntity;
 
+        // Capture any pending modifications on this entity or its ancestors before child InnerLoad
+        const dirtySnapshots = this.captureChainDirtyState();
+
         // Load the child's record using our shared PK
         const loaded = await childEntity.InnerLoad(this.PrimaryKey);
         if (!loaded) {
@@ -1225,9 +1228,36 @@ export abstract class BaseEntity<T = unknown> {
             return;
         }
 
+        // Re-apply any pending modifications so child hydration does not overwrite unsaved in-memory edits
+        this.restoreChainDirtyState(dirtySnapshots);
+
         // Recursively discover grandchildren (child may also be a parent type)
         // InitializeChildEntity is idempotent via _childEntityDiscoveryDone flag
         await childEntity.InitializeChildEntity();
+    }
+
+    private captureChainDirtyState(): Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }> {
+        const snapshots: Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }> = [];
+        let curr: BaseEntity | null = this;
+        while (curr) {
+            const dirtyFields = curr.Fields.filter(f => f.Dirty).map(f => ({
+                name: f.Name,
+                value: f.Value,
+            }));
+            if (dirtyFields.length > 0) {
+                snapshots.push({ entity: curr, dirtyFields });
+            }
+            curr = curr._parentEntity;
+        }
+        return snapshots;
+    }
+
+    private restoreChainDirtyState(snapshots: Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }>): void {
+        for (const snap of snapshots) {
+            for (const df of snap.dirtyFields) {
+                snap.entity.Set(df.name, df.value);
+            }
+        }
     }
 
     /**

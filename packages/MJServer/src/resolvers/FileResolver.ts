@@ -93,6 +93,21 @@ export class UploadStorageFilePayload {
 }
 
 @ObjectType()
+export class CreateUploadStageTokenPayload {
+  @Field(() => Boolean)
+  Success: boolean;
+
+  @Field(() => String, { nullable: true })
+  Token?: string;
+
+  @Field(() => String, { nullable: true })
+  Url?: string;
+
+  @Field(() => String, { nullable: true })
+  ErrorMessage?: string;
+}
+
+@ObjectType()
 export class CreateFilePayload {
   @Field(() => MJFile_)
   File: MJFile_;
@@ -920,33 +935,53 @@ export class FileResolver extends FileResolverBase {
     };
   }
 
+  /**
+   * Mints a cryptographically signed, short-lived media-upload token for staging raw binary files.
+   * Checks user permissions on `MJ: Files` before issuing.
+   */
+  @Mutation(() => CreateUploadStageTokenPayload)
+  async CreateUploadStageToken(
+    @Ctx() context: AppContext
+  ): Promise<CreateUploadStageTokenPayload> {
+    try {
+      const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+      const user = this.GetUserFromPayload(context.userPayload);
+
+      // Permission check on MJ: Files
+      const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
+      fileEntity.CheckPermissions(EntityPermissionType.Create, true);
+
+      const mint = MediaAccessKeyManager.Instance.SignUpload(user.ID);
+
+      return {
+        Success: true,
+        Token: mint.Token,
+        Url: `/media/upload-stage?token=${mint.Token}`,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        Success: false,
+        ErrorMessage: message,
+      };
+    }
+  }
+
   @Mutation(() => Boolean)
   async DeleteStorageObject(@Arg('input', () => DeleteStorageObjectInput) input: DeleteStorageObjectInput, @Ctx() context: AppContext) {
-    console.log('[FileResolver] DeleteStorageObject called:', input);
-
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
 
     // Load the account and its provider
     const { account, provider: providerEntity } = await this.loadAccountAndProvider(input.AccountID, context);
 
-    console.log('[FileResolver] Provider loaded:', {
-      providerID: providerEntity.ID,
-      providerName: providerEntity.Name,
-      serverDriverKey: providerEntity.ServerDriverKey,
-    });
-
     // Check permissions
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Delete, true);
 
-    console.log('[FileResolver] Permissions checked, calling deleteObject...');
-
     // Delete the object with extended user context (includes account for credential lookup)
     const userContext = this.buildExtendedUserContext(context, account);
     const success = await deleteObject(providerEntity, input.ObjectName, userContext);
-
-    console.log('[FileResolver] deleteObject returned:', success);
 
     return success;
   }
