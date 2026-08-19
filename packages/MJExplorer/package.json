@@ -87,6 +87,7 @@
     "@types/react": "^19.2.13",
     "@types/react-dom": "^19.2.3",
     "@workos-inc/authkit-js": "^0.20.1",
+    "acorn": "^8.15.0",
     "ag-grid-angular": "^35.0.1",
     "ag-grid-community": "^35.0.1",
     "ajv": "^8.17.1",
